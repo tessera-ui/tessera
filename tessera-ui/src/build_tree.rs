@@ -566,7 +566,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                     with_context_snapshot(&replay_snapshot.context, || {
                         with_replay_scope(
                             replay_snapshot.instance_logic_id,
-                            &replay_snapshot.group_path,
+                            replay_snapshot.group_path,
                             replay_snapshot.instance_key_override,
                             || crate::component_call::run_component(replay),
                         );

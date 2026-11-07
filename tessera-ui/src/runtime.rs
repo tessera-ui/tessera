@@ -601,7 +601,7 @@ pub(crate) struct StructureReconcileResult {
 #[derive(Clone)]
 pub(crate) struct ReplayNodeSnapshot {
     pub instance_logic_id: u64,
-    pub group_path: Vec<u64>,
+    pub group_path: GroupPath,
     pub instance_key_override: Option<u64>,
     pub context: ContextMap,
     pub replay: ComponentReplayData,
@@ -950,12 +950,12 @@ fn take_next_node_instance_logic_id_override() -> Option<u64> {
 /// - a one-shot instance-logic-id override for the replayed component root
 pub(crate) fn with_replay_scope<R>(
     instance_logic_id: u64,
-    group_path: &[u64],
+    group_path: GroupPath,
     instance_key_override: Option<u64>,
     f: impl FnOnce() -> R,
 ) -> R {
     struct ReplayScopeGuard {
-        group_path: Vec<u64>,
+        group_path: GroupPath,
         key_override: Option<u64>,
         logic_id_override: Option<u64>,
     }
@@ -963,7 +963,7 @@ pub(crate) fn with_replay_scope<R>(
     impl Drop for ReplayScopeGuard {
         fn drop(&mut self) {
             with_execution_context_mut(|context| {
-                std::mem::swap(&mut context.group_path_stack, &mut self.group_path);
+                context.group_path = self.group_path;
                 context.instance_key_override = self.key_override;
                 context.next_node_instance_logic_id_override = self.logic_id_override;
             });
@@ -971,7 +971,7 @@ pub(crate) fn with_replay_scope<R>(
     }
 
     let _guard = with_execution_context_mut(|context| ReplayScopeGuard {
-        group_path: std::mem::replace(&mut context.group_path_stack, group_path.to_vec()),
+        group_path: std::mem::replace(&mut context.group_path, group_path),
         key_override: std::mem::replace(&mut context.instance_key_override, instance_key_override),
         logic_id_override: context
             .next_node_instance_logic_id_override
@@ -1871,7 +1871,7 @@ fn record_component_replay_snapshot(runtime: &TesseraRuntime) {
 
     let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
         instance_logic_id: node.instance_logic_id,
-        group_path: context.group_path_stack.clone(),
+        group_path: context.group_path,
         instance_key_override: context.instance_key_override,
         context: context.context_map.clone(),
         replay,
@@ -2764,8 +2764,8 @@ fn reserve_component_identity_in(context: &mut ExecutionContext, component_type_
     }
     let parent_call_index = next_child_instance_call_index(context);
     let parent_instance_logic_id = context.instance_logic_id_stack.last().copied().unwrap_or(0);
-    let group_path_hash = hash_components(&[&context.group_path_stack[..]]);
-    let has_group_path = !context.group_path_stack.is_empty();
+    let group_path_hash = context.group_path.digest();
+    let has_group_path = !context.group_path.is_empty();
     let key_override = context.instance_key_override;
 
     // Combine component_type_id with parent_instance_logic_id, the current
@@ -2950,7 +2950,7 @@ pub(crate) fn current_instance_key() -> u64 {
 }
 
 fn instance_key_in(context: &ExecutionContext, logic_id: u64) -> u64 {
-    let group_path_hash = hash_components(&[&context.group_path_stack[..]]);
+    let group_path_hash = context.group_path.digest();
     hash_components(&[&logic_id, &group_path_hash])
 }
 
@@ -2976,36 +2976,30 @@ pub(crate) fn current_phase() -> Option<RuntimePhase> {
     with_execution_context(|context| context.phase_stack.last().copied())
 }
 
-/// Push a group id onto the active session's control-flow stack.
-pub(crate) fn push_group_id(group_id: u64) {
-    with_execution_context_mut(|context| {
-        context.group_path_stack.push(group_id);
-    });
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct GroupPath(Option<u64>);
+
+impl GroupPath {
+    pub(crate) fn extend(self, group_id: u64) -> Self {
+        Self(Some(hash_components(&[&(self.0, group_id)])))
+    }
+
+    fn digest(self) -> u64 {
+        self.0.unwrap_or_default()
+    }
+
+    fn is_empty(self) -> bool {
+        self.0.is_none()
+    }
 }
 
-/// Pop a group id from the active session's control-flow stack.
-pub(crate) fn pop_group_id(expected_group_id: u64) {
-    with_execution_context_mut(|context| {
-        if let Some(popped) = context.group_path_stack.pop() {
-            debug_assert_eq!(
-                popped, expected_group_id,
-                "Unbalanced GroupGuard stack: expected {}, got {}",
-                expected_group_id, popped
-            );
-        } else {
-            debug_assert!(false, "Attempted to pop GroupGuard from an empty stack");
-        }
-    });
-}
-
-/// Get a clone of the current control-flow path.
 #[cfg(test)]
-fn current_group_path() -> Vec<u64> {
-    with_execution_context(|context| context.group_path_stack.clone())
+fn current_group_path() -> GroupPath {
+    with_execution_context(|context| context.group_path)
 }
 
 fn current_group_path_hash() -> u64 {
-    with_execution_context(|context| hash_components(&[&context.group_path_stack[..]]))
+    with_execution_context(|context| context.group_path.digest())
 }
 
 fn state_value<T: Send + Sync + 'static>(
@@ -3322,7 +3316,7 @@ fn current_instance_key_override() -> Option<u64> {
 /// A guard pushes the provided group id when constructed and pops it when
 /// dropped, ensuring grouping stays balanced even with early returns or panics.
 pub struct GroupGuard {
-    group_id: u64,
+    _path: PathGroupGuard,
 }
 
 impl GroupGuard {
@@ -3362,16 +3356,15 @@ impl GroupGuard {
     }
 
     fn keyed(group_id: u64) -> Self {
-        push_group_id(group_id);
+        let path = PathGroupGuard::new(group_id);
         push_order_frame();
-        Self { group_id }
+        Self { _path: path }
     }
 }
 
 impl Drop for GroupGuard {
     fn drop(&mut self) {
         pop_order_frame("ORDER_FRAME_STACK underflow: attempted to pop GroupGuard frame");
-        pop_group_id(self.group_id);
     }
 }
 
@@ -3382,21 +3375,33 @@ impl Drop for GroupGuard {
 /// Repeated iterations therefore continue consuming sibling call indices from
 /// the surrounding component scope instead of restarting from zero each time.
 pub struct PathGroupGuard {
-    group_id: u64,
+    previous: GroupPath,
+    #[cfg(debug_assertions)]
+    entered: GroupPath,
 }
 
 impl PathGroupGuard {
     /// Push a group id onto the current component's group stack without
     /// resetting local call-order counters.
     pub fn new(group_id: u64) -> Self {
-        push_group_id(group_id);
-        Self { group_id }
+        with_execution_context_mut(|context| {
+            let entered = context.group_path.extend(group_id);
+            Self {
+                previous: std::mem::replace(&mut context.group_path, entered),
+                #[cfg(debug_assertions)]
+                entered,
+            }
+        })
     }
 }
 
 impl Drop for PathGroupGuard {
     fn drop(&mut self) {
-        pop_group_id(self.group_id);
+        with_execution_context_mut(|context| {
+            #[cfg(debug_assertions)]
+            debug_assert_eq!(context.group_path, self.entered, "Unbalanced group scope");
+            context.group_path = self.previous;
+        });
     }
 }
 
@@ -4078,7 +4083,7 @@ mod tests {
                 instance_key,
                 ReplayNodeSnapshot {
                     instance_logic_id: 0,
-                    group_path: Vec::new(),
+                    group_path: GroupPath::default(),
                     instance_key_override: None,
                     context: ContextMap::default(),
                     replay,
@@ -4396,9 +4401,11 @@ mod tests {
     fn with_replay_scope_restores_group_path_and_override() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        with_execution_context_mut(|context| {
-            context.group_path_stack = vec![1, 2, 3];
-        });
+        let _outer = PathGroupGuard::new(1);
+        let _middle = PathGroupGuard::new(2);
+        let _inner = PathGroupGuard::new(3);
+        let original = current_group_path();
+        let replay = GroupPath::default().extend(7).extend(8);
         with_execution_context_mut(|context| {
             context.instance_key_override = Some(5);
         });
@@ -4406,14 +4413,14 @@ mod tests {
             context.next_node_instance_logic_id_override = Some(9);
         });
 
-        with_replay_scope(42, &[7, 8], Some(11), || {
-            assert_eq!(current_group_path(), vec![7, 8]);
+        with_replay_scope(42, replay, Some(11), || {
+            assert_eq!(current_group_path(), replay);
             assert_eq!(current_instance_key_override(), Some(11));
             assert_eq!(take_next_node_instance_logic_id_override(), Some(42));
             assert_eq!(take_next_node_instance_logic_id_override(), None);
         });
 
-        assert_eq!(current_group_path(), vec![1, 2, 3]);
+        assert_eq!(current_group_path(), original);
         assert_eq!(current_instance_key_override(), Some(5));
         let restored_override =
             with_execution_context(|context| context.next_node_instance_logic_id_override);
@@ -4424,9 +4431,9 @@ mod tests {
     fn with_replay_scope_restores_on_panic() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        with_execution_context_mut(|context| {
-            context.group_path_stack = vec![5];
-        });
+        let _outer = PathGroupGuard::new(5);
+        let original = current_group_path();
+        let replay = GroupPath::default().extend(10);
         with_execution_context_mut(|context| {
             context.instance_key_override = Some(13);
         });
@@ -4435,15 +4442,15 @@ mod tests {
         });
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            with_replay_scope(77, &[10], Some(17), || {
-                assert_eq!(current_group_path(), vec![10]);
+            with_replay_scope(77, replay, Some(17), || {
+                assert_eq!(current_group_path(), replay);
                 assert_eq!(current_instance_key_override(), Some(17));
                 panic!("expected panic");
             });
         }));
         assert!(result.is_err());
 
-        assert_eq!(current_group_path(), vec![5]);
+        assert_eq!(current_group_path(), original);
         assert_eq!(current_instance_key_override(), Some(13));
         let restored_override =
             with_execution_context(|context| context.next_node_instance_logic_id_override);

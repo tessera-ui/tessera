@@ -4,14 +4,17 @@ use rustc_hash::FxHashSet as HashSet;
 use smallvec::SmallVec;
 
 use crate::{
-    NodeId, context::ContextMap, focus::FocusOwner, runtime::RuntimePhase,
+    NodeId,
+    context::ContextMap,
+    focus::FocusOwner,
+    runtime::{GroupPath, RuntimePhase},
     session::with_active_execution_context,
 };
 
 #[derive(Default)]
 pub(crate) struct ExecutionContext {
     pub(crate) node_context_stack: Vec<NodeId>,
-    pub(crate) group_path_stack: Vec<u64>,
+    pub(crate) group_path: GroupPath,
     pub(crate) instance_logic_id_stack: Vec<u64>,
     pub(crate) phase_stack: Vec<RuntimePhase>,
     pub(crate) order_frame_stack: Vec<OrderFrame>,

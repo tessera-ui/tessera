@@ -20,7 +20,10 @@ use crate::{
     context::{ContextMap, with_context_snapshot},
     execution_context::{OrderFrame, with_execution_context, with_execution_context_mut},
     prop::{ComponentReplayData, ErasedComponentRunner, ErasedProp, Prop},
-    runtime::{TesseraRuntime, ensure_build_phase, reserve_component_identity, with_replay_scope},
+    runtime::{
+        GroupPath, TesseraRuntime, ensure_build_phase, reserve_component_identity,
+        with_replay_scope,
+    },
 };
 
 type PropUpdate = Box<dyn FnOnce(&mut dyn Any) + Send + Sync>;
@@ -34,7 +37,7 @@ struct PendingCall {
     identity: u64,
     prop_owner: u64,
     creator: u64,
-    group_path: Vec<u64>,
+    group_path: GroupPath,
     key_override: Option<u64>,
     context: ContextMap,
     props: Arc<dyn ErasedProp>,
@@ -303,7 +306,7 @@ fn register_erased_call(
             .last()
             .copied()
             .unwrap_or(0),
-        group_path: context.group_path_stack.clone(),
+        group_path: context.group_path,
         key_override: context.instance_key_override,
         context: context.context_map.clone(),
         props,
@@ -411,14 +414,14 @@ impl Drop for ParentGuard {
 }
 
 struct PropScopeGuard {
-    group_path: Vec<u64>,
+    group_path: GroupPath,
     key_override: Option<u64>,
 }
 
 impl Drop for PropScopeGuard {
     fn drop(&mut self) {
         with_execution_context_mut(|context| {
-            context.group_path_stack = std::mem::take(&mut self.group_path);
+            context.group_path = self.group_path;
             context.instance_key_override = self.key_override;
             context.instance_logic_id_stack.pop();
             context.current_component_instance_stack.pop();
@@ -466,7 +469,10 @@ fn execute_call(call: PendingCall) {
                 context.current_component_instance_stack.push(creator);
                 context.order_frame_stack.push(OrderFrame::default());
                 (
-                    std::mem::replace(&mut context.group_path_stack, vec![hasher.finish()]),
+                    std::mem::replace(
+                        &mut context.group_path,
+                        GroupPath::default().extend(hasher.finish()),
+                    ),
                     std::mem::replace(&mut context.instance_key_override, key_override),
                 )
             });
@@ -476,7 +482,7 @@ fn execute_call(call: PendingCall) {
             };
             update(pending_props_mut(&mut props).as_any_mut());
         }
-        with_replay_scope(identity, &group_path, key_override, || {
+        with_replay_scope(identity, group_path, key_override, || {
             run_component(&ComponentReplayData { runner, props });
         });
     });
