@@ -416,7 +416,7 @@ fn build_node(
     inherited_tooltip: Option<&str>,
 ) -> Option<(Node, bool)> {
     let metadata = metadatas.get(&node_id)?;
-    let accessibility_node = metadata.accessibility.clone();
+    let accessibility_node = metadata.accessibility.as_deref().cloned();
     let tooltip_description = accessibility_node.as_ref().and_then(|node| {
         (node.focusable && node.description.is_none())
             .then(|| inherited_tooltip.map(str::to_owned))
@@ -781,7 +781,7 @@ pub fn dispatch_action(
                     semantics.focusable && !semantics.disabled && !semantics.hidden
                 })
         });
-        let registration = tree[node_id].get().focus_registration;
+        let registration = tree[node_id].get().interaction().focus_registration;
         if eligible && let Some(registration) = registration {
             focus_owner.record_accessibility_focus(crate::time::Instant::now());
             focus_owner.request_focus(registration.id);
@@ -833,22 +833,7 @@ mod tests {
             children_scale: 1.0,
             instance_logic_id: 0,
             instance_key: 0,
-            pointer_preview_handlers: Vec::new(),
-            pointer_handlers: Vec::new(),
-            pointer_final_handlers: Vec::new(),
-            keyboard_preview_handlers: Vec::new(),
-            keyboard_handlers: Vec::new(),
-            ime_preview_handlers: Vec::new(),
-            ime_handlers: Vec::new(),
-            focus_requester_binding: None,
-            focus_registration: None,
-            focus_restorer_fallback: None,
-            focus_traversal_policy: None,
-            focus_changed_handler: None,
-            focus_event_handler: None,
-            focus_beyond_bounds_handler: None,
-            focus_reveal_handler: None,
-            globally_positioned_handlers: Vec::new(),
+            interaction: None,
             layout_coordinate_space: false,
             modifier: Modifier::default(),
             layout_node: Box::new(DefaultLayoutNode),
@@ -861,7 +846,7 @@ mod tests {
             parent.append(id, tree);
         }
         let mut metadata = ComponentNodeMetaData::none();
-        metadata.accessibility = accessibility;
+        metadata.accessibility = accessibility.map(Box::new);
         metadata.abs_position = Some(PxPosition::new(Px(10), Px(20)));
         metadata.computed_data = Some(ComputedData {
             width: Px(40),
@@ -1742,8 +1727,11 @@ mod tests {
             Some(AccessibilityNode::new().with_role(Role::Button).focusable()),
         );
         let requester = FocusRequester::new();
-        tree[target].get_mut().focus_requester_binding = Some(requester);
-        tree[target].get_mut().focus_registration =
+        tree[target]
+            .get_mut()
+            .interaction_mut()
+            .focus_requester_binding = Some(requester);
+        tree[target].get_mut().interaction_mut().focus_registration =
             Some(FocusRegistration::target(FocusNode::new()));
         metadatas
             .get_mut(&target)

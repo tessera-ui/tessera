@@ -1329,13 +1329,14 @@ impl FocusOwner {
                 continue;
             };
             let node = node_ref.get();
-            let Some(registration) = node.focus_registration else {
+            let interaction = node.interaction();
+            let Some(registration) = interaction.focus_registration else {
                 continue;
             };
             let mut parent = ROOT_SCOPE_ID;
             let mut scope = ROOT_SCOPE_ID;
             for ancestor in node_id.ancestors(tree).skip(1) {
-                if let Some(registration) = tree[ancestor].get().focus_registration {
+                if let Some(registration) = tree[ancestor].get().interaction().focus_registration {
                     if parent == ROOT_SCOPE_ID {
                         parent = registration.id;
                     }
@@ -1353,10 +1354,11 @@ impl FocusOwner {
             entry.last_parent = parent;
             entry.last_scope_parent = scope;
             entry.props = registration.properties;
-            entry.traversal_policy = node.focus_traversal_policy;
+            entry.traversal_policy = interaction.focus_traversal_policy;
             entry.restorer_fallback = (registration.kind == FocusRegistrationKind::Scope)
                 .then(|| {
-                    node.focus_restorer_fallback
+                    interaction
+                        .focus_restorer_fallback
                         .map(|fallback| fallback.requester_id())
                 })
                 .flatten();
@@ -1388,7 +1390,7 @@ impl FocusOwner {
                 .or_default()
                 .insert((order, registration.id), registration.id);
             self.children_by_parent.entry(registration.id).or_default();
-            if let Some(requester) = node.focus_requester_binding {
+            if let Some(requester) = interaction.focus_requester_binding {
                 let requester = requester.requester_id();
                 let previous = self.requester_bindings.insert(requester, registration.id);
                 requesters.entry(requester).or_insert(previous);
@@ -1459,7 +1461,7 @@ impl FocusOwner {
                     let node = tree.get(id)?;
                     node.parent()?;
                     if node.get().role != NodeRole::Layout
-                        && node.get().focus_registration.is_none()
+                        && node.get().interaction().focus_registration.is_none()
                     {
                         return None;
                     }

@@ -929,7 +929,6 @@ impl ComponentTree {
                 metadata.placement_order = previous.placement_order;
                 metadata.base_abs_position = previous.base_abs_position;
                 metadata.local_to_window = previous.local_to_window;
-                metadata.input_local_positions = previous.input_local_positions;
                 metadata.input_transforms = previous.input_transforms;
                 metadata.event_clip_bounds = previous.event_clip_bounds;
                 metadata.abs_position = previous.abs_position;
@@ -1165,31 +1164,20 @@ impl ComponentTree {
         if let Some(node_id) = self.node_queue.pop() {
             self.refresh_layout_children(node_id);
             let node = self.tree[node_id].get();
-            let observes_window = node
-                .globally_positioned_handlers
+            let interaction = node.interaction();
+            let position_observers = &interaction.globally_positioned_handlers;
+            let observes_window = position_observers
                 .iter()
                 .any(|handler| !matches!(handler, GloballyPositionedHandler::Size(_)));
             let metadata = self.metadatas.entry_or_default(node_id);
-            metadata.observes_size = node
-                .globally_positioned_handlers
+            metadata.observes_size = position_observers
                 .iter()
                 .any(|handler| matches!(handler, GloballyPositionedHandler::Size(_)));
-            metadata.observes_geometry = !node.pointer_preview_handlers.is_empty()
-                || !node.pointer_handlers.is_empty()
-                || !node.pointer_final_handlers.is_empty()
-                || !node.keyboard_preview_handlers.is_empty()
-                || !node.keyboard_handlers.is_empty()
-                || !node.ime_preview_handlers.is_empty()
-                || !node.ime_handlers.is_empty()
-                || node.focus_registration.is_some()
+            metadata.observes_geometry = interaction.observes_input_geometry()
                 || observes_window
                 || node.layout_coordinate_space
                 || node.modifier.has_input_geometry();
-            if !self.tree[node_id]
-                .get()
-                .globally_positioned_handlers
-                .is_empty()
-            {
+            if !position_observers.is_empty() {
                 self.position_observer_nodes.insert(node_id);
                 self.pending_position_observers.insert(node_id);
                 if observes_window {
@@ -1359,6 +1347,7 @@ impl ComponentTree {
     fn sync_observer_space(&mut self, node_id: NodeId) {
         let space = self.tree.get(node_id).and_then(|node| {
             node.get()
+                .interaction()
                 .globally_positioned_handlers
                 .iter()
                 .any(|handler| matches!(handler, GloballyPositionedHandler::InSpace(_)))
@@ -1396,6 +1385,7 @@ impl ComponentTree {
                     .filter(|id| {
                         self.tree.get(**id).is_some_and(|node| {
                             node.get()
+                                .interaction()
                                 .globally_positioned_handlers
                                 .iter()
                                 .any(|handler| {
@@ -1454,7 +1444,7 @@ impl ComponentTree {
                 continue;
             };
             let node = node_ref.get();
-            if node.globally_positioned_handlers.is_empty() {
+            if node.interaction().globally_positioned_handlers.is_empty() {
                 continue;
             }
             let Some(metadata) = self.metadatas.get(&node_id) else {
@@ -1464,7 +1454,7 @@ impl ComponentTree {
                 if let Some(previous) = self.last_global_rects.remove(&node.instance_key) {
                     let mut geometry = previous.geometry;
                     geometry.visible = None;
-                    for handler in &node.globally_positioned_handlers {
+                    for handler in &node.interaction().globally_positioned_handlers {
                         if matches!(handler, GloballyPositionedHandler::Visible(_))
                             && previous.geometry.visible.is_some()
                         {
@@ -1509,6 +1499,7 @@ impl ComponentTree {
                     local_to_window: transform,
                 },
                 in_space: if node
+                    .interaction()
                     .globally_positioned_handlers
                     .iter()
                     .any(|handler| matches!(handler, GloballyPositionedHandler::InSpace(_)))
@@ -1519,7 +1510,7 @@ impl ComponentTree {
                 },
             };
             let previous = self.last_global_rects.get(&node.instance_key);
-            for handler in &node.globally_positioned_handlers {
+            for handler in &node.interaction().globally_positioned_handlers {
                 if previous.is_none_or(|previous| {
                     handler.changed(previous.geometry, geometry)
                         || !previous.handlers.contains(handler)
@@ -1531,7 +1522,12 @@ impl ComponentTree {
                 node.instance_key,
                 GlobalPositionSnapshot {
                     geometry,
-                    handlers: node.globally_positioned_handlers.iter().copied().collect(),
+                    handlers: node
+                        .interaction()
+                        .globally_positioned_handlers
+                        .iter()
+                        .copied()
+                        .collect(),
                 },
             );
         }
@@ -1571,7 +1567,7 @@ impl ComponentTree {
             let node = node_ref.get();
 
             if notification.changed
-                && let Some(handler) = &node.focus_changed_handler
+                && let Some(handler) = &node.interaction().focus_changed_handler
             {
                 invocations.push(PendingFocusCallbackInvocation::new(
                     *handler,
@@ -1579,7 +1575,7 @@ impl ComponentTree {
                     notification.direction,
                 ));
             }
-            if let Some(handler) = &node.focus_event_handler {
+            if let Some(handler) = &node.interaction().focus_event_handler {
                 invocations.push(PendingFocusCallbackInvocation::new(
                     *handler,
                     notification.state,
@@ -1811,7 +1807,7 @@ impl ComponentTree {
                 node_id,
                 PointerEventPass::Initial,
             );
-            let handlers = &node.pointer_preview_handlers;
+            let handlers = &node.interaction().pointer_preview_handlers;
             for handler in handlers {
                 let mut dispatch_ctx = PointerInputDispatchContext {
                     tree: &self.tree,
@@ -1857,7 +1853,7 @@ impl ComponentTree {
                 node_id,
                 PointerEventPass::Main,
             );
-            let handlers = &node.pointer_handlers;
+            let handlers = &node.interaction().pointer_handlers;
             for handler in handlers {
                 let mut dispatch_ctx = PointerInputDispatchContext {
                     tree: &self.tree,
@@ -1903,7 +1899,7 @@ impl ComponentTree {
                 node_id,
                 PointerEventPass::Final,
             );
-            let handlers = &node.pointer_final_handlers;
+            let handlers = &node.interaction().pointer_final_handlers;
             for handler in handlers {
                 let mut dispatch_ctx = PointerInputDispatchContext {
                     tree: &self.tree,
@@ -1956,7 +1952,7 @@ impl ComponentTree {
                     });
                 }
             }
-            for handler in &node.keyboard_preview_handlers {
+            for handler in &node.interaction().keyboard_preview_handlers {
                 run_keyboard_input_for_node(&mut context, node_id, handler.as_ref());
             }
         }
@@ -1971,7 +1967,7 @@ impl ComponentTree {
                     });
                 }
             }
-            for handler in &node.keyboard_handlers {
+            for handler in &node.interaction().keyboard_handlers {
                 run_keyboard_input_for_node(&mut context, node_id, handler.as_ref());
             }
         }
@@ -2053,7 +2049,7 @@ impl ComponentTree {
                     );
                 }
             }
-            for handler in &node.ime_preview_handlers {
+            for handler in &node.interaction().ime_preview_handlers {
                 run_ime_input_for_node(
                     &self.tree,
                     &self.metadatas,
@@ -2084,7 +2080,7 @@ impl ComponentTree {
                     );
                 }
             }
-            for handler in &node.ime_handlers {
+            for handler in &node.interaction().ime_handlers {
                 run_ime_input_for_node(
                     &self.tree,
                     &self.metadatas,
@@ -2782,9 +2778,7 @@ fn bounds_hit_path(
                 | OrderedModifierAction::PointerFinalInput(_)
         )
     });
-    let has_pointer_handler = !node_data.pointer_preview_handlers.is_empty()
-        || !node_data.pointer_handlers.is_empty()
-        || !node_data.pointer_final_handlers.is_empty();
+    let has_pointer_handler = node_data.interaction().has_pointer_handlers();
     if !has_pointer_modifier && !has_pointer_handler {
         return None;
     }
@@ -3503,7 +3497,7 @@ fn dispatch_focus_beyond_bounds_request(
             break;
         };
         let node = node_ref.get();
-        if let Some(handler) = &node.focus_beyond_bounds_handler
+        if let Some(handler) = &node.interaction().focus_beyond_bounds_handler
             && handler.call(direction)
         {
             return true;
@@ -3557,7 +3551,7 @@ fn dispatch_focus_reveal_request(
             continue;
         };
         let node = node_ref.get();
-        if let Some(handler) = &node.focus_reveal_handler {
+        if let Some(handler) = &node.interaction().focus_reveal_handler {
             let metadata = metadatas
                 .get(&node_id)
                 .expect("Reveal container must have metadata");
@@ -3920,6 +3914,7 @@ fn prepare_layout_metadata_for_node(
         })
         .flatten();
     let local_position = if let Some(position) = cached_position {
+        metadata.input_transforms.set_parent(parent_transform);
         position
     } else {
         let _phase = push_phase(RuntimePhase::Place);
@@ -3931,9 +3926,9 @@ fn prepare_layout_metadata_for_node(
         let (position, inputs) = node
             .modifier
             .resolve_placement(rel_pos, node.instance_logic_id);
-        if metadata.input_local_positions.as_ref() != inputs.as_slice() {
-            metadata.input_local_positions = inputs.into();
-        }
+        metadata
+            .input_transforms
+            .set_positions(parent_transform, inputs);
         position
     };
     let local_to_window = parent_transform.with_local_origin(local_position);
@@ -3950,12 +3945,6 @@ fn prepare_layout_metadata_for_node(
             .expect("Composed child transform must remain finite and invertible")
     };
     metadata.local_to_window = Some(local_to_window);
-    if !metadata.input_local_positions.is_empty() {
-        metadata.input_transforms =
-            node::InputTransforms::new(parent_transform, metadata.input_local_positions.clone());
-    } else if !metadata.input_transforms.is_empty() {
-        metadata.input_transforms = node::InputTransforms::default();
-    }
     let cumulative_opacity = current_opacity * metadata.opacity;
     metadata.base_abs_position = Some(base_self_position);
     metadata.abs_position = Some(self_position);
@@ -4308,22 +4297,7 @@ mod tests {
             children_scale: 1.0,
             instance_logic_id,
             instance_key,
-            pointer_preview_handlers: Vec::new(),
-            pointer_handlers: Vec::new(),
-            pointer_final_handlers: Vec::new(),
-            keyboard_preview_handlers: Vec::new(),
-            keyboard_handlers: Vec::new(),
-            ime_preview_handlers: Vec::new(),
-            ime_handlers: Vec::new(),
-            focus_requester_binding: None,
-            focus_registration: None,
-            focus_restorer_fallback: None,
-            focus_traversal_policy: None,
-            focus_changed_handler: None,
-            focus_event_handler: None,
-            focus_beyond_bounds_handler: None,
-            focus_reveal_handler: None,
-            globally_positioned_handlers: Vec::new(),
+            interaction: None,
             layout_coordinate_space: false,
             modifier: Modifier::default(),
             layout_node: Box::new(DefaultLayoutNode),
@@ -4347,7 +4321,10 @@ mod tests {
         let pinned = tree.add_node(node("pinned", 3, 3));
         let inner = tree.add_node(node("inner", 4, 4));
         let mut control = node("control", 5, 5);
-        control.pointer_handlers.push(Box::new(|_| {}));
+        control
+            .interaction_mut()
+            .pointer_handlers
+            .push(Box::new(|_| {}));
         let leaf = tree.add_node(control);
         for _ in 0..5 {
             tree.pop_node();
@@ -4509,11 +4486,11 @@ mod tests {
         probe.scroll.set(0);
         let mut tree = ComponentTree::new();
         let mut viewport = node("viewport", 1, 1);
-        viewport.focus_reveal_handler = probe.handler.get();
+        viewport.interaction_mut().focus_reveal_handler = probe.handler.get();
         let root = tree.add_node(viewport);
         let focus = FocusRegistration::target(FocusNode::new());
         let mut target = node("focused control", 2, 2);
-        target.focus_registration = Some(focus);
+        target.interaction_mut().focus_registration = Some(focus);
         let target = tree.add_node(target);
         tree.pop_node();
         tree.pop_node();
@@ -4688,7 +4665,7 @@ mod tests {
                 }
 
                 let mut target = node("delayed focus target", 3, 3);
-                target.focus_registration = Some(delayed);
+                target.interaction_mut().focus_registration = Some(delayed);
                 let target = tree.add_node(target);
                 tree.pop_node();
                 root.append(target, &mut tree.tree);
@@ -5108,14 +5085,14 @@ mod tests {
         tree.add_node(node_with_role("content", NodeRole::Composition, 4, 4));
         let leaf_focus = FocusRegistration::target(FocusNode::new());
         let mut leaf_node = node("leaf", 5, 5);
-        leaf_node.focus_registration = Some(leaf_focus);
+        leaf_node.interaction_mut().focus_registration = Some(leaf_focus);
         let leaf = tree.add_node(leaf_node);
         for _ in 0..4 {
             tree.pop_node();
         }
         let outside_focus = FocusRegistration::target(FocusNode::new());
         let mut outside_node = node("outside", 6, 6);
-        outside_node.focus_registration = Some(outside_focus);
+        outside_node.interaction_mut().focus_registration = Some(outside_focus);
         let outside = tree.add_node(outside_node);
         tree.pop_node();
         tree.pop_node();
@@ -5129,11 +5106,11 @@ mod tests {
         tree.metadatas.entry_or_default(outside).rel_position =
             Some(PxPosition::new(Px(240), Px(240)));
         tree.metadatas.entry_or_default(root).clips_children = true;
-        tree.metadatas.entry_or_default(leaf).accessibility = Some(
+        tree.metadatas.entry_or_default(leaf).accessibility = Some(Box::new(
             crate::accessibility::AccessibilityNode::new()
                 .with_role(accesskit::Role::Button)
                 .with_label("Panel action"),
-        );
+        ));
         for position in [Some(20), None, Some(40)] {
             tree.metadatas.mark_geometry_dirty(panel);
             tree.metadatas.entry_or_default(panel).rel_position =
@@ -5281,9 +5258,17 @@ mod tests {
                     }
                 });
                 match pass {
-                    PointerEventPass::Initial => target.pointer_preview_handlers.push(handler),
-                    PointerEventPass::Main => target.pointer_handlers.push(handler),
-                    PointerEventPass::Final => target.pointer_final_handlers.push(handler),
+                    PointerEventPass::Initial => target
+                        .interaction_mut()
+                        .pointer_preview_handlers
+                        .push(handler),
+                    PointerEventPass::Main => {
+                        target.interaction_mut().pointer_handlers.push(handler)
+                    }
+                    PointerEventPass::Final => target
+                        .interaction_mut()
+                        .pointer_final_handlers
+                        .push(handler),
                 }
             }
             let id = tree.add_node(target);
@@ -5476,7 +5461,7 @@ mod tests {
         for index in 0..2 {
             let registration = FocusRegistration::target(FocusNode::new());
             let mut target = node("target", index + 2, index + 2);
-            target.focus_registration = Some(registration);
+            target.interaction_mut().focus_registration = Some(registration);
             let node_id = tree.add_node(target);
             targets.push((node_id, registration.id));
             tree.pop_node();
@@ -5588,6 +5573,7 @@ mod tests {
             .get_mut(targets[0].0)
             .unwrap()
             .get_mut()
+            .interaction_mut()
             .focus_registration
             .as_mut()
             .unwrap()
@@ -5600,6 +5586,7 @@ mod tests {
             .get_mut(targets[0].0)
             .unwrap()
             .get_mut()
+            .interaction_mut()
             .focus_registration
             .as_mut()
             .unwrap()
@@ -5619,12 +5606,14 @@ mod tests {
         let mut tree = ComponentTree::new();
         let root = tree.add_node(node("root", 1, 1));
         let mut trigger = node("trigger", 2, 2);
-        trigger.focus_registration = Some(FocusRegistration::target(FocusNode::new()));
+        trigger.interaction_mut().focus_registration =
+            Some(FocusRegistration::target(FocusNode::new()));
         let trigger = tree.add_node(trigger);
         tree.pop_node();
         let popup = tree.add_node(node("popup", 3, 3));
         let mut action = node("action", 4, 4);
-        action.focus_registration = Some(FocusRegistration::target(FocusNode::new()));
+        action.interaction_mut().focus_registration =
+            Some(FocusRegistration::target(FocusNode::new()));
         let action = tree.add_node(action);
         tree.pop_node();
         tree.pop_node();
@@ -5665,14 +5654,14 @@ mod tests {
         let root = tree.add_node(node("root", 1, 1));
         let scope = FocusRegistration::scope(FocusScopeNode::new());
         let mut container = node("scope", 2, 2);
-        container.focus_registration = Some(scope);
+        container.interaction_mut().focus_registration = Some(scope);
         tree.add_node(container);
         let mut targets = Vec::new();
         for index in 0..3 {
             let mut registration = FocusRegistration::target(FocusNode::new());
             registration.properties.skip_traversal = index == 1;
             let mut target = node("target", index + 3, index + 3);
-            target.focus_registration = Some(registration);
+            target.interaction_mut().focus_registration = Some(registration);
             targets.push((tree.add_node(target), registration.id));
             tree.pop_node();
         }
@@ -5708,6 +5697,7 @@ mod tests {
         for index in [0, 2] {
             tree.tree[targets[index].0]
                 .get_mut()
+                .interaction_mut()
                 .focus_registration
                 .as_mut()
                 .unwrap()
@@ -5751,17 +5741,18 @@ mod tests {
         let scope = FocusRegistration::scope(FocusScopeNode::new());
         let fallback = FocusRequester::new();
         let mut container = node("scope", 2, 2);
-        container.focus_registration = Some(scope);
-        container.focus_restorer_fallback = Some(fallback);
+        container.interaction_mut().focus_registration = Some(scope);
+        container.interaction_mut().focus_restorer_fallback = Some(fallback);
         tree.add_node(container);
         let removed = FocusRegistration::target(FocusNode::new());
         let mut target = node("removed", 3, 3);
-        target.focus_registration = Some(removed);
+        target.interaction_mut().focus_registration = Some(removed);
         let removed_node = tree.add_node(target);
         tree.pop_node();
         let mut target = node("survivor", 4, 4);
-        target.focus_registration = Some(FocusRegistration::target(FocusNode::new()));
-        target.focus_requester_binding = Some(fallback);
+        target.interaction_mut().focus_registration =
+            Some(FocusRegistration::target(FocusNode::new()));
+        target.interaction_mut().focus_requester_binding = Some(fallback);
         let survivor = tree.add_node(target);
         tree.pop_node();
         tree.pop_node();
@@ -5786,11 +5777,12 @@ mod tests {
         let mut tree = ComponentTree::new();
         let root = tree.add_node(node("root", 1, 1));
         let mut container = node_with_role("scope", NodeRole::Composition, 2, 2);
-        container.focus_registration = Some(FocusRegistration::scope(FocusScopeNode::new()));
+        container.interaction_mut().focus_registration =
+            Some(FocusRegistration::scope(FocusScopeNode::new()));
         let scope = tree.add_node(container);
         let registration = FocusRegistration::target(FocusNode::new());
         let mut target = node("target", 3, 3);
-        target.focus_registration = Some(registration);
+        target.interaction_mut().focus_registration = Some(registration);
         let target = tree.add_node(target);
         for _ in 0..3 {
             tree.pop_node();
@@ -5832,17 +5824,17 @@ mod tests {
         let root = tree.add_node(node("root", 1, 1));
         let scope = FocusRegistration::scope(FocusScopeNode::new());
         let mut container = node("scope", 2, 2);
-        container.focus_registration = Some(scope);
+        container.interaction_mut().focus_registration = Some(scope);
         tree.add_node(container);
         let inside = FocusRegistration::target(FocusNode::new());
         let mut target = node("inside", 3, 3);
-        target.focus_registration = Some(inside);
+        target.interaction_mut().focus_registration = Some(inside);
         tree.add_node(target);
         tree.pop_node();
         tree.pop_node();
         let outside = FocusRegistration::target(FocusNode::new());
         let mut target = node("outside", 4, 4);
-        target.focus_registration = Some(outside);
+        target.interaction_mut().focus_registration = Some(outside);
         let outside_node = tree.add_node(target);
         tree.pop_node();
         tree.pop_node();
@@ -6004,29 +5996,39 @@ mod tests {
         let root = tree.add_node(node("root", 1, 1));
         for index in 0..2 {
             let mut input = node("input", index + 2, index + 2);
-            input.focus_registration = Some(FocusRegistration::target(FocusNode::new()));
+            input.interaction_mut().focus_registration =
+                Some(FocusRegistration::target(FocusNode::new()));
             let keys = Arc::clone(&delivered);
-            input.keyboard_handlers.push(Box::new(move |input| {
-                for _ in input.keyboard_events.drain(..) {
-                    keys.lock().unwrap().push((index, "key".into()));
-                }
-            }));
-            let delivered = Arc::clone(&delivered);
-            input.ime_handlers.push(Box::new(move |input| {
-                for event in input.ime_events.drain(..) {
-                    if let winit::event::Ime::Commit(text) = event {
-                        delivered.lock().unwrap().push((index, text));
+            input
+                .interaction_mut()
+                .keyboard_handlers
+                .push(Box::new(move |input| {
+                    for _ in input.keyboard_events.drain(..) {
+                        keys.lock().unwrap().push((index, "key".into()));
                     }
-                }
-            }));
+                }));
+            let delivered = Arc::clone(&delivered);
+            input
+                .interaction_mut()
+                .ime_handlers
+                .push(Box::new(move |input| {
+                    for event in input.ime_events.drain(..) {
+                        if let winit::event::Ime::Commit(text) = event {
+                            delivered.lock().unwrap().push((index, text));
+                        }
+                    }
+                }));
             tree.add_node(input);
             if index == 1 {
                 let mut content = node("content", 10, 10);
-                content.pointer_handlers.push(Box::new(|mut input| {
-                    input
-                        .ime_session()
-                        .show(ImeRequest::new(PxSize::new(Px(1), Px(1))));
-                }));
+                content
+                    .interaction_mut()
+                    .pointer_handlers
+                    .push(Box::new(|mut input| {
+                        input
+                            .ime_session()
+                            .show(ImeRequest::new(PxSize::new(Px(1), Px(1))));
+                    }));
                 tree.add_node(content);
                 tree.pop_node();
             }
@@ -6085,18 +6087,23 @@ mod tests {
             [(1, "before".into()), (1, "key".into()), (1, "after".into())]
         );
         let inputs: Vec<_> = root.children(&tree.tree).collect();
-        tree.tree.get_mut(inputs[0]).unwrap().get_mut().ime_handlers =
-            vec![Box::new(|mut input| {
-                assert!(crate::FocusManager::current().move_focus(FocusDirection::Next));
-                input
-                    .ime_session()
-                    .update(ImeRequest::new(PxSize::new(Px(1), Px(1))));
-                input.block_ime();
-            })];
+        tree.tree
+            .get_mut(inputs[0])
+            .unwrap()
+            .get_mut()
+            .interaction_mut()
+            .ime_handlers = vec![Box::new(|mut input| {
+            assert!(crate::FocusManager::current().move_focus(FocusDirection::Next));
+            input
+                .ime_session()
+                .update(ImeRequest::new(PxSize::new(Px(1), Px(1))));
+            input.block_ime();
+        })];
         tree.tree
             .get_mut(inputs[1])
             .unwrap()
             .get_mut()
+            .interaction_mut()
             .ime_handlers
             .push(Box::new(|mut input| {
                 input
@@ -6146,16 +6153,21 @@ mod tests {
             );
             assert_eq!(requests.ime_request.unwrap().change_cause, expected);
         }
-        tree.tree.get_mut(inputs[0]).unwrap().get_mut().ime_handlers =
-            vec![Box::new(|mut input| {
-                input
-                    .ime_session()
-                    .update(ImeRequest::new(PxSize::new(Px(1), Px(1))));
-            })];
+        tree.tree
+            .get_mut(inputs[0])
+            .unwrap()
+            .get_mut()
+            .interaction_mut()
+            .ime_handlers = vec![Box::new(|mut input| {
+            input
+                .ime_session()
+                .update(ImeRequest::new(PxSize::new(Px(1), Px(1))));
+        })];
         tree.tree
             .get_mut(root)
             .unwrap()
             .get_mut()
+            .interaction_mut()
             .ime_preview_handlers = vec![Box::new(|_| {
             assert!(crate::FocusManager::current().move_focus(FocusDirection::Next));
         })];

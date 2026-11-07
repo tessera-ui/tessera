@@ -121,9 +121,7 @@ impl PointerIndex {
                 .is_some_and(|node| {
                     let node = node.get();
                     node.role == NodeRole::Layout
-                        && (!node.pointer_preview_handlers.is_empty()
-                            || !node.pointer_handlers.is_empty()
-                            || !node.pointer_final_handlers.is_empty()
+                        && (node.interaction().has_pointer_handlers()
                             || node.modifier.has_pointer_input())
                 });
             if eligible {
@@ -184,14 +182,12 @@ impl PointerIndex {
                 }
                 continue;
             }
-            let raw_input = !node.pointer_preview_handlers.is_empty()
-                || !node.pointer_handlers.is_empty()
-                || !node.pointer_final_handlers.is_empty();
+            let raw_input = node.interaction().has_pointer_handlers();
             let Some(metadata) = metadatas.get(&id) else {
                 self.remove(id);
                 continue;
             };
-            if !raw_input && metadata.input_local_positions.is_empty() {
+            if !raw_input && metadata.input_transforms.is_empty() {
                 if self.entries.contains_key(&id) {
                     self.remove(id);
                 }

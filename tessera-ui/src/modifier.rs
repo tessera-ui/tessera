@@ -394,7 +394,7 @@ pub(crate) enum FocusModifierRegistration {
 enum FocusModifierOp {
     Requester(FocusRequester),
     Registration(FocusModifierRegistration),
-    Properties(FocusProperties),
+    Properties(Arc<FocusProperties>),
     PreferredTabStop(bool),
     TraversalPolicy(FocusTraversalPolicy),
     ChangedHandler(CallbackWith<FocusState>),
@@ -558,10 +558,12 @@ pub(crate) enum OrderedModifierAction {
 enum ModifierElement {
     Empty,
     Action(ModifierAction),
-    Combined {
-        outer: Box<ModifierElement>,
-        inner: Box<ModifierElement>,
-    },
+    Combined(Arc<ModifierCombination>),
+}
+
+struct ModifierCombination {
+    outer: ModifierElement,
+    inner: ModifierElement,
 }
 
 impl Default for ModifierElement {
@@ -579,10 +581,7 @@ impl ModifierElement {
         match (self, inner) {
             (lhs, Self::Empty) => lhs,
             (Self::Empty, rhs) => rhs,
-            (outer, inner) => Self::Combined {
-                outer: Box::new(outer),
-                inner: Box::new(inner),
-            },
+            (outer, inner) => Self::Combined(Arc::new(ModifierCombination { outer, inner })),
         }
     }
 
@@ -593,9 +592,9 @@ impl ModifierElement {
         match self {
             Self::Empty => {}
             Self::Action(action) => visit(action),
-            Self::Combined { outer, inner } => {
-                outer.fold_actions(visit);
-                inner.fold_actions(visit);
+            Self::Combined(combination) => {
+                combination.outer.fold_actions(visit);
+                combination.inner.fold_actions(visit);
             }
         }
     }
@@ -607,9 +606,9 @@ impl ModifierElement {
         match self {
             Self::Empty => {}
             Self::Action(action) => visit(action.clone()),
-            Self::Combined { outer, inner } => {
-                inner.for_each_action_outer_first(visit);
-                outer.for_each_action_outer_first(visit);
+            Self::Combined(combination) => {
+                combination.inner.for_each_action_outer_first(visit);
+                combination.outer.for_each_action_outer_first(visit);
             }
         }
     }
@@ -938,7 +937,7 @@ impl Modifier {
     }
 
     fn push_focus_properties(self, properties: FocusProperties) -> Self {
-        self.push_focus_op(FocusModifierOp::Properties(properties))
+        self.push_focus_op(FocusModifierOp::Properties(Arc::new(properties)))
     }
 
     fn push_focus_traversal_policy(self, policy: FocusTraversalPolicy) -> Self {
@@ -1019,7 +1018,8 @@ impl Modifier {
                     node.materialize(&mut context)
                         .map(|modifier| modifier.materialize(instance, owner, &path).element)
                 }
-                ModifierElement::Combined { outer, inner } => {
+                ModifierElement::Combined(combination) => {
+                    let ModifierCombination { outer, inner } = combination.as_ref();
                     let first = expand(outer, instance, owner, path, positions);
                     let second = expand(inner, instance, owner, path, positions);
                     if first.is_none() && second.is_none() {
@@ -1027,8 +1027,8 @@ impl Modifier {
                     }
                     Some(
                         first
-                            .unwrap_or_else(|| outer.as_ref().clone())
-                            .then(second.unwrap_or_else(|| inner.as_ref().clone())),
+                            .unwrap_or_else(|| outer.clone())
+                            .then(second.unwrap_or_else(|| inner.clone())),
                     )
                 }
             }
@@ -1855,7 +1855,7 @@ fn apply_focus_op(runtime: runtime::FocusModifierRuntime<'_>, op: FocusModifierO
     match op {
         FocusModifierOp::Requester(requester) => runtime.bind_requester(requester),
         FocusModifierOp::Registration(registration) => runtime.ensure_registration(registration),
-        FocusModifierOp::Properties(properties) => runtime.set_properties(properties),
+        FocusModifierOp::Properties(properties) => runtime.set_properties(*properties),
         FocusModifierOp::PreferredTabStop(preferred) => runtime.set_preferred_tab_stop(preferred),
         FocusModifierOp::TraversalPolicy(policy) => runtime.set_traversal_policy(policy),
         FocusModifierOp::ChangedHandler(handler) => runtime.set_changed_handler(handler),

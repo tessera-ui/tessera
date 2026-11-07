@@ -75,7 +75,7 @@ impl ComponentTree {
                     semantics.tooltip.clone(),
                 ));
             }
-            if let Some(focus) = node.focus_registration {
+            if let Some(focus) = node.interaction().focus_registration {
                 result.focus.push((focus.id, focus.kind));
             }
         }

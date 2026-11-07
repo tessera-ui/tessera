@@ -39,6 +39,17 @@ Queued runtime wakes are ignored if their invalidations have already been
 consumed. Pending layout, paint, animation, dispatcher, clipboard, and focus
 work still requests another frame.
 
+## Retained runtime storage
+
+Context snapshots share their bindings until replay needs to remap or remove a
+binding. Modifier snapshots share immutable chain links. The scene stores empty
+and single-child branches inline and uses persistent ordered maps for wider
+branches so updating one child can preserve the previous frame's snapshot.
+
+Nodes allocate interaction data and accessibility descriptions only when used.
+Pointer modifier positions are shared between the node and dispatch plans, and
+nodes without pointer modifiers need no position buffer.
+
 ## Shared GPU resources
 
 Use `GraphicsDevice::frame_buffer` for transient uniform and storage data. Each

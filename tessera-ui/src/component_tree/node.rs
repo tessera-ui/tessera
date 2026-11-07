@@ -63,6 +63,33 @@ pub(crate) struct ComponentNode {
     pub(crate) instance_logic_id: u64,
     /// Stable instance identifier for this node in the current frame.
     pub(crate) instance_key: u64,
+    pub(crate) interaction: Option<Box<NodeInteraction>>,
+    pub(crate) layout_coordinate_space: bool,
+    /// Node-local modifier chain attached during build.
+    pub(crate) modifier: Modifier,
+    /// The unified layout node applied at the innermost layer.
+    pub(crate) layout_node: Box<dyn LayoutModifierDyn>,
+    /// Draw modifier node used to record draw and compute commands.
+    pub(crate) draw_node: Box<dyn DrawModifierNode>,
+    /// Optional replay metadata for subtree-level rerun.
+    pub(crate) replay: Option<crate::prop::ComponentReplayData>,
+    /// Whether props are equal to the previous frame snapshot.
+    pub(crate) props_unchanged_from_previous: bool,
+}
+
+impl ComponentNode {
+    pub(crate) fn interaction(&self) -> &NodeInteraction {
+        static EMPTY: NodeInteraction = NodeInteraction::EMPTY;
+        self.interaction.as_deref().unwrap_or(&EMPTY)
+    }
+
+    pub(crate) fn interaction_mut(&mut self) -> &mut NodeInteraction {
+        self.interaction
+            .get_or_insert_with(|| Box::new(NodeInteraction::EMPTY))
+    }
+}
+
+pub(crate) struct NodeInteraction {
     /// Pointer input handlers for capture stage (root to leaf).
     pub(crate) pointer_preview_handlers: Vec<Box<PointerInputHandlerFn>>,
     /// Pointer input handlers for bubble stage (leaf to root).
@@ -97,25 +124,68 @@ pub(crate) struct ComponentNode {
     pub(crate) focus_reveal_handler: Option<FocusRevealHandler>,
     /// Callbacks notified when this node's window rectangle changes.
     pub(crate) globally_positioned_handlers: Vec<GloballyPositionedHandler>,
-    pub(crate) layout_coordinate_space: bool,
-    /// Node-local modifier chain attached during build.
-    pub(crate) modifier: Modifier,
-    /// The unified layout node applied at the innermost layer.
-    pub(crate) layout_node: Box<dyn LayoutModifierDyn>,
-    /// Draw modifier node used to record draw and compute commands.
-    pub(crate) draw_node: Box<dyn DrawModifierNode>,
-    /// Optional replay metadata for subtree-level rerun.
-    pub(crate) replay: Option<crate::prop::ComponentReplayData>,
-    /// Whether props are equal to the previous frame snapshot.
-    pub(crate) props_unchanged_from_previous: bool,
+}
+
+impl NodeInteraction {
+    const EMPTY: Self = Self {
+        pointer_preview_handlers: Vec::new(),
+        pointer_handlers: Vec::new(),
+        pointer_final_handlers: Vec::new(),
+        keyboard_preview_handlers: Vec::new(),
+        keyboard_handlers: Vec::new(),
+        ime_preview_handlers: Vec::new(),
+        ime_handlers: Vec::new(),
+        focus_requester_binding: None,
+        focus_registration: None,
+        focus_restorer_fallback: None,
+        focus_traversal_policy: None,
+        focus_changed_handler: None,
+        focus_event_handler: None,
+        focus_beyond_bounds_handler: None,
+        focus_reveal_handler: None,
+        globally_positioned_handlers: Vec::new(),
+    };
+
+    pub(super) fn has_pointer_handlers(&self) -> bool {
+        !self.pointer_preview_handlers.is_empty()
+            || !self.pointer_handlers.is_empty()
+            || !self.pointer_final_handlers.is_empty()
+    }
+
+    pub(super) fn observes_input_geometry(&self) -> bool {
+        self.has_pointer_handlers()
+            || !self.keyboard_preview_handlers.is_empty()
+            || !self.keyboard_handlers.is_empty()
+            || !self.ime_preview_handlers.is_empty()
+            || !self.ime_handlers.is_empty()
+            || self.focus_registration.is_some()
+    }
 }
 
 #[derive(Clone, Default)]
 pub(crate) struct InputTransforms(Option<(crate::LocalToWindow, Arc<[PxPosition]>)>);
 
 impl InputTransforms {
-    pub(super) fn new(parent: crate::LocalToWindow, positions: Arc<[PxPosition]>) -> Self {
-        Self((!positions.is_empty()).then_some((parent, positions)))
+    pub(super) fn set_parent(&mut self, parent: crate::LocalToWindow) {
+        if let Some((current, _)) = &mut self.0 {
+            *current = parent;
+        }
+    }
+
+    pub(super) fn set_positions(
+        &mut self,
+        parent: crate::LocalToWindow,
+        positions: Vec<PxPosition>,
+    ) {
+        if positions.is_empty() {
+            self.0 = None;
+        } else if let Some((current_parent, current_positions)) = &mut self.0
+            && current_positions.as_ref() == positions.as_slice()
+        {
+            *current_parent = parent;
+        } else {
+            self.0 = Some((parent, positions.into()));
+        }
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -155,7 +225,6 @@ pub(crate) struct ComponentNodeMetaData {
     /// None if the node is not drawn yet.
     pub base_abs_position: Option<PxPosition>,
     pub local_to_window: Option<crate::LocalToWindow>,
-    pub(super) input_local_positions: Arc<[PxPosition]>,
     pub input_transforms: InputTransforms,
     pub event_clip_bounds: Option<crate::FloatRect>,
     /// The node's start position, relative to the root window.
@@ -179,7 +248,7 @@ pub(crate) struct ComponentNodeMetaData {
     /// Opacity multiplier applied to this node and its descendants.
     pub opacity: f32,
     /// Accessibility information for this node.
-    pub accessibility: Option<AccessibilityNode>,
+    pub accessibility: Option<Box<AccessibilityNode>>,
     /// Handler for accessibility actions on this node.
     pub accessibility_action_handler: Option<AccessibilityActionHandler>,
 }
@@ -201,7 +270,6 @@ impl ComponentNodeMetaData {
             rel_position: None,
             base_abs_position: None,
             local_to_window: None,
-            input_local_positions: Arc::from([]),
             input_transforms: InputTransforms::default(),
             event_clip_bounds: None,
             abs_position: None,

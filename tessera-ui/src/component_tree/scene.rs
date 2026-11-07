@@ -34,20 +34,160 @@ struct SceneDraw {
 struct SceneRope {
     draw: Option<Arc<SceneDraw>>,
     clip: Option<SceneClip>,
-    children: OrdMap<usize, Arc<SceneRope>>,
+    children: SceneChildren,
     bounds: Option<PxRect>,
+}
+
+enum SceneChildren {
+    Empty,
+    One(Arc<SceneRope>),
+    Many(OrdMap<usize, Arc<SceneRope>>),
+}
+
+impl SceneChildren {
+    fn values(&self) -> impl Iterator<Item = &Arc<SceneRope>> {
+        let (one, many) = match self {
+            Self::Empty => (None, None),
+            Self::One(child) => (Some(child), None),
+            Self::Many(children) => (None, Some(children)),
+        };
+        one.into_iter()
+            .chain(many.into_iter().flat_map(OrdMap::values))
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Empty, Self::Empty) => true,
+            (Self::One(a), Self::One(b)) => Arc::ptr_eq(a, b),
+            (Self::Many(a), Self::Many(b)) => a.ptr_eq(b),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Default)]
+enum BranchChildren {
+    #[default]
+    Empty,
+    One {
+        id: NodeId,
+        output: Option<Arc<SceneRope>>,
+    },
+    Many(Box<WideBranchChildren>),
+}
+
+#[derive(Default)]
+struct WideBranchChildren {
+    indices: HashMap<NodeId, usize>,
+    outputs: OrdMap<usize, Arc<SceneRope>>,
+}
+
+impl BranchChildren {
+    fn rebuild(
+        &mut self,
+        mut ids: impl Iterator<Item = NodeId>,
+        output: impl Fn(NodeId) -> Option<Arc<SceneRope>>,
+    ) {
+        let Some(first) = ids.next() else {
+            *self = Self::Empty;
+            return;
+        };
+        let Some(second) = ids.next() else {
+            *self = Self::One {
+                id: first,
+                output: output(first),
+            };
+            return;
+        };
+        let mut many = match std::mem::take(self) {
+            Self::Many(mut many) => {
+                many.indices.clear();
+                many.outputs.clear();
+                many
+            }
+            _ => Box::<WideBranchChildren>::default(),
+        };
+        for (index, id) in [first, second].into_iter().chain(ids).enumerate() {
+            many.indices.insert(id, index);
+            if let Some(rope) = output(id) {
+                many.outputs.insert(index, rope);
+            }
+        }
+        *self = Self::Many(many);
+    }
+
+    fn single(&self) -> Option<NodeId> {
+        match self {
+            Self::One { id, .. } => Some(*id),
+            _ => None,
+        }
+    }
+
+    fn update_output(&mut self, id: NodeId, output: Option<&Arc<SceneRope>>) {
+        match self {
+            Self::One {
+                id: child,
+                output: previous,
+            } if *child == id => {
+                *previous = output.cloned();
+            }
+            Self::Many(many) => {
+                let Some(&index) = many.indices.get(&id) else {
+                    return;
+                };
+                match output {
+                    Some(output)
+                        if many
+                            .outputs
+                            .get(&index)
+                            .is_none_or(|previous| !Arc::ptr_eq(previous, output)) =>
+                    {
+                        many.outputs.insert(index, Arc::clone(output));
+                    }
+                    None if many.outputs.contains_key(&index) => {
+                        many.outputs.remove(&index);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn snapshot(&self) -> SceneChildren {
+        match self {
+            Self::Empty | Self::One { output: None, .. } => SceneChildren::Empty,
+            Self::One {
+                output: Some(rope), ..
+            } => SceneChildren::One(Arc::clone(rope)),
+            Self::Many(many) => match many.outputs.len() {
+                0 => SceneChildren::Empty,
+                1 => SceneChildren::One(Arc::clone(many.outputs.values().next().unwrap())),
+                _ => SceneChildren::Many(many.outputs.clone()),
+            },
+        }
+    }
 }
 
 #[derive(Default)]
 struct SceneBranch {
     parent: Option<NodeId>,
     depth: usize,
-    child_indices: HashMap<NodeId, usize>,
-    children: OrdMap<usize, Arc<SceneRope>>,
+    children: BranchChildren,
     draw: Option<Arc<SceneDraw>>,
     clip: Option<SceneClip>,
     output: Option<Arc<SceneRope>>,
     culled: bool,
+}
+
+impl SceneBranch {
+    fn transparent_child(&self) -> Option<NodeId> {
+        if self.draw.is_none() && self.clip.is_none() {
+            self.children.single()
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Default)]
@@ -65,8 +205,8 @@ impl FrameScene {
             let branch = self.branches.get(&node_id)?;
             // Transparent composition wrappers have no geometry journal of
             // their own.
-            if branch.draw.is_none() && branch.clip.is_none() && branch.child_indices.len() == 1 {
-                node_id = *branch.child_indices.keys().next()?;
+            if let Some(child) = branch.transparent_child() {
+                node_id = child;
             } else if branch.culled {
                 return None;
             } else {
@@ -176,11 +316,11 @@ impl FrameScene {
                 if !visited.insert(ancestor) {
                     break;
                 }
-                let transparent = self.branches.get(&ancestor).is_some_and(|branch| {
-                    branch.draw.is_none()
-                        && branch.clip.is_none()
-                        && branch.child_indices.len() == 1
-                });
+                let transparent = self
+                    .branches
+                    .get(&ancestor)
+                    .and_then(SceneBranch::transparent_child)
+                    .is_some();
                 if !transparent || own_changes.contains(&ancestor) || structural.contains(&ancestor)
                 {
                     dirty.insert(ancestor);
@@ -224,17 +364,11 @@ impl FrameScene {
             branch.parent = node.parent();
             branch.depth = depth;
             if structural.contains(&node_id) {
-                branch.child_indices.clear();
-                branch.children.clear();
-                for (index, child) in node_id.children(tree).enumerate() {
-                    branch.child_indices.insert(child, index);
-                    if let Some(output) = self.output(child) {
-                        branch.children.insert(index, output);
-                    }
-                }
+                branch
+                    .children
+                    .rebuild(node_id.children(tree), |child| self.output(child));
             }
-            let was_transparent =
-                branch.draw.is_none() && branch.clip.is_none() && branch.child_indices.len() == 1;
+            let was_transparent = branch.transparent_child().is_some();
             if own_changes.contains(&node_id) {
                 let fragment_changed =
                     changed.contains(&node_id) || metadata.paint_changed.contains(&node_id);
@@ -290,18 +424,16 @@ impl FrameScene {
                             )
                     });
             }
-            let is_transparent =
-                branch.draw.is_none() && branch.clip.is_none() && branch.child_indices.len() == 1;
-            if was_transparent != is_transparent && branch.child_indices.len() == 1 {
+            let is_transparent = branch.transparent_child().is_some();
+            if was_transparent != is_transparent
+                && let Some(child) = branch.children.single()
+            {
                 // Flattened wrappers can bypass child-output maintenance while
                 // descendants change visibility. Materializing the wrapper must
                 // use the current child output rather than that stale cache.
-                let (&child, &index) = branch.child_indices.iter().next().unwrap();
-                if let Some(output) = self.output(child) {
-                    branch.children.insert(index, output);
-                } else {
-                    branch.children.remove(&index);
-                }
+                branch
+                    .children
+                    .update_output(child, self.output(child).as_ref());
             }
             let hidden = node.get().role == NodeRole::Layout
                 && metadata
@@ -313,13 +445,17 @@ impl FrameScene {
             } else {
                 self.geometry_consumers.remove(&node_id);
             }
+            let children = branch.children.snapshot();
             branch.output = if branch.culled
                 || (branch.draw.as_ref().is_none_or(|draw| !draw.visible)
-                    && branch.children.is_empty())
+                    && matches!(children, SceneChildren::Empty))
             {
                 None
-            } else if branch.draw.is_none() && branch.clip.is_none() && branch.children.len() == 1 {
-                branch.children.values().next().cloned()
+            } else if branch.draw.is_none()
+                && branch.clip.is_none()
+                && let SceneChildren::One(rope) = children
+            {
+                Some(rope)
             } else if let Some(previous) = &branch.output
                 && previous.clip == branch.clip
                 && match (&previous.draw, &branch.draw) {
@@ -327,13 +463,12 @@ impl FrameScene {
                     (None, None) => true,
                     _ => false,
                 }
-                && previous.children.ptr_eq(&branch.children)
+                && previous.children.ptr_eq(&children)
             {
                 Some(Arc::clone(previous))
             } else {
                 Some(Arc::new(SceneRope {
-                    bounds: branch
-                        .children
+                    bounds: children
                         .values()
                         .filter_map(|rope| rope.bounds)
                         .chain(
@@ -346,7 +481,7 @@ impl FrameScene {
                         .reduce(|a, b| a.union(&b)),
                     draw: branch.draw.clone(),
                     clip: branch.clip,
-                    children: branch.children.clone(),
+                    children,
                 }))
             };
             if affects_pixels
@@ -362,20 +497,8 @@ impl FrameScene {
                     parent = tree.get(id).and_then(|node| node.parent());
                     continue;
                 }
-                if let Some(parent) = self.branches.get_mut(&id)
-                    && let Some(&index) = parent.child_indices.get(&child)
-                {
-                    if let Some(output) = &branch.output {
-                        if parent
-                            .children
-                            .get(&index)
-                            .is_none_or(|previous| !Arc::ptr_eq(previous, output))
-                        {
-                            parent.children.insert(index, Arc::clone(output));
-                        }
-                    } else if parent.children.contains_key(&index) {
-                        parent.children.remove(&index);
-                    }
+                if let Some(parent) = self.branches.get_mut(&id) {
+                    parent.children.update_output(child, branch.output.as_ref());
                 }
                 break;
             }
@@ -484,5 +607,101 @@ impl SceneRope {
         if self.clip.is_some() {
             builder.push_clip_pop();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        __private::{finish_component_node, register_layout_node},
+        DrawCommand, Px, RuntimeSession,
+        component_tree::{ComponentTree, ComputedData, node::place_node, populate_layout_metadata},
+        runtime::TesseraRuntime,
+    };
+
+    #[derive(Clone)]
+    struct Marker(u32);
+
+    impl DrawCommand for Marker {
+        fn apply_opacity(&mut self, _: f32) {}
+    }
+
+    fn drawing(graph: &RenderGraph) -> Vec<(u32, PxPosition)> {
+        graph
+            .ops()
+            .iter()
+            .filter_map(|op| {
+                let marker = op.command.downcast_draw_ref::<Marker>()?;
+                Some((marker.0, op.geometry.window_origin()))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn retained_scene_preserves_draw_order_and_geometry_across_child_count_changes() {
+        let session = RuntimeSession::new();
+        let _runtime_scope = session.enter();
+        let root = register_layout_node("root", 0);
+        let first = register_layout_node("first", 0);
+        finish_component_node();
+        let second = register_layout_node("second", 0);
+        finish_component_node();
+        finish_component_node();
+
+        TesseraRuntime::with_mut(|runtime| {
+            let tree = &mut runtime.component_tree;
+            let viewport = PxSize::new(Px(100), Px(100));
+            for (id, value) in [(root, 0), (first, 1), (second, 2)] {
+                let metadata = tree.metadatas.entry_or_default(id);
+                metadata.computed_data = Some(ComputedData {
+                    width: Px(16),
+                    height: Px(16),
+                });
+                metadata.rel_position = Some(PxPosition::ZERO);
+                metadata.fragment.push_draw_command(Marker(value));
+            }
+            let mut scene = FrameScene::default();
+            let frame = |scene: &mut FrameScene,
+                         tree: &mut ComponentTree,
+                         changed: &[NodeId],
+                         removed: &[NodeId]| {
+                populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+                let (graph, _) = scene.update(
+                    root,
+                    &tree.tree,
+                    &tree.metadatas,
+                    &changed.iter().copied().collect(),
+                    &removed.iter().copied().collect(),
+                    viewport,
+                );
+                tree.metadatas.geometry_changed.clear();
+                graph
+            };
+
+            let initial = frame(&mut scene, tree, &[root, first, second], &[]);
+            let previous_root = Arc::clone(scene.root.as_ref().unwrap());
+            let zero = PxPosition::ZERO;
+            assert_eq!(drawing(&initial), [(0, zero), (1, zero), (2, zero)]);
+
+            let translated = PxPosition::new(Px(20), Px(0));
+            place_node(second, translated, 0, &mut tree.metadatas);
+            let moved = frame(&mut scene, tree, &[], &[]);
+            assert_eq!(drawing(&moved), [(0, zero), (1, zero), (2, translated)]);
+
+            first.detach(&mut tree.tree);
+            let one_child = frame(&mut scene, tree, &[], &[first]);
+            assert_eq!(drawing(&one_child), [(0, zero), (2, translated)]);
+
+            root.append(first, &mut tree.tree);
+            let reordered = frame(&mut scene, tree, &[first], &[]);
+            assert_eq!(drawing(&reordered), [(0, zero), (2, translated), (1, zero)]);
+            let mut builder = RenderGraphBuilder::new();
+            previous_root.emit(&mut builder);
+            assert_eq!(
+                drawing(&builder.finish()),
+                [(0, zero), (1, zero), (2, zero)]
+            );
+        });
     }
 }

@@ -2381,7 +2381,9 @@ impl TesseraRuntime {
         handler: crate::component_tree::GloballyPositionedHandler,
     ) {
         if let Some(node) = self.component_tree.current_node_mut() {
-            node.globally_positioned_handlers.push(handler);
+            node.interaction_mut()
+                .globally_positioned_handlers
+                .push(handler);
         } else {
             debug_assert!(
                 false,
@@ -2394,7 +2396,7 @@ impl TesseraRuntime {
         if let Some(node_id) = current_node_id()
             && let Some(metadata) = self.component_tree.metadatas_mut().get_mut(&node_id)
         {
-            metadata.accessibility = accessibility;
+            metadata.accessibility = accessibility.map(Box::new);
         } else {
             debug_assert!(
                 false,
@@ -2421,7 +2423,7 @@ impl TesseraRuntime {
 
     pub(crate) fn bind_current_focus_requester(&mut self, requester: FocusRequester) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            current.focus_requester_binding = Some(requester);
+            current.interaction_mut().focus_requester_binding = Some(requester);
         } else {
             debug_assert!(
                 false,
@@ -2432,8 +2434,9 @@ impl TesseraRuntime {
 
     pub(crate) fn ensure_current_focus_target(&mut self, node: FocusNode) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            if current.focus_registration.is_none() {
-                current.focus_registration = Some(FocusRegistration::target(node));
+            if current.interaction().focus_registration.is_none() {
+                current.interaction_mut().focus_registration =
+                    Some(FocusRegistration::target(node));
             }
         } else {
             debug_assert!(
@@ -2445,8 +2448,9 @@ impl TesseraRuntime {
 
     pub(crate) fn ensure_current_focus_scope(&mut self, scope: FocusScopeNode) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            if current.focus_registration.is_none() {
-                current.focus_registration = Some(FocusRegistration::scope(scope));
+            if current.interaction().focus_registration.is_none() {
+                current.interaction_mut().focus_registration =
+                    Some(FocusRegistration::scope(scope));
             }
         } else {
             debug_assert!(
@@ -2458,8 +2462,9 @@ impl TesseraRuntime {
 
     pub(crate) fn ensure_current_focus_group(&mut self, group: FocusGroupNode) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            if current.focus_registration.is_none() {
-                current.focus_registration = Some(FocusRegistration::group(group));
+            if current.interaction().focus_registration.is_none() {
+                current.interaction_mut().focus_registration =
+                    Some(FocusRegistration::group(group));
             }
         } else {
             debug_assert!(
@@ -2470,26 +2475,38 @@ impl TesseraRuntime {
     }
 
     pub(crate) fn current_focus_target_handle(&self) -> Option<FocusNode> {
-        let registration = self.component_tree.current_node()?.focus_registration?;
+        let registration = self
+            .component_tree
+            .current_node()?
+            .interaction()
+            .focus_registration?;
         (registration.kind == FocusRegistrationKind::Target)
             .then(|| FocusNode::from_handle_id(registration.id))
     }
 
     pub(crate) fn current_focus_scope_handle(&self) -> Option<FocusScopeNode> {
-        let registration = self.component_tree.current_node()?.focus_registration?;
+        let registration = self
+            .component_tree
+            .current_node()?
+            .interaction()
+            .focus_registration?;
         (registration.kind == FocusRegistrationKind::Scope)
             .then(|| FocusScopeNode::from_handle_id(registration.id))
     }
 
     pub(crate) fn current_focus_group_handle(&self) -> Option<FocusGroupNode> {
-        let registration = self.component_tree.current_node()?.focus_registration?;
+        let registration = self
+            .component_tree
+            .current_node()?
+            .interaction()
+            .focus_registration?;
         (registration.kind == FocusRegistrationKind::Group)
             .then(|| FocusGroupNode::from_handle_id(registration.id))
     }
 
     pub(crate) fn set_current_focus_properties(&mut self, properties: FocusProperties) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            if let Some(registration) = current.focus_registration.as_mut() {
+            if let Some(registration) = current.interaction_mut().focus_registration.as_mut() {
                 registration.properties = properties;
             } else {
                 debug_assert!(
@@ -2509,7 +2526,7 @@ impl TesseraRuntime {
         let registration = self
             .component_tree
             .current_node_mut()
-            .and_then(|node| node.focus_registration.as_mut());
+            .and_then(|node| node.interaction_mut().focus_registration.as_mut());
         if let Some(registration) = registration {
             registration.properties.preferred_tab_stop = preferred;
         } else {
@@ -2519,13 +2536,17 @@ impl TesseraRuntime {
 
     pub(crate) fn set_current_focus_traversal_policy(&mut self, policy: FocusTraversalPolicy) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            if current.focus_registration.is_some_and(|registration| {
-                matches!(
-                    registration.kind,
-                    FocusRegistrationKind::Scope | FocusRegistrationKind::Group
-                )
-            }) {
-                current.focus_traversal_policy = Some(policy);
+            if current
+                .interaction()
+                .focus_registration
+                .is_some_and(|registration| {
+                    matches!(
+                        registration.kind,
+                        FocusRegistrationKind::Scope | FocusRegistrationKind::Group
+                    )
+                })
+            {
+                current.interaction_mut().focus_traversal_policy = Some(policy);
             } else {
                 debug_assert!(
                     false,
@@ -2542,7 +2563,7 @@ impl TesseraRuntime {
 
     pub(crate) fn set_current_focus_changed_handler(&mut self, handler: CallbackWith<FocusState>) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            current.focus_changed_handler = Some(handler);
+            current.interaction_mut().focus_changed_handler = Some(handler);
         } else {
             debug_assert!(
                 false,
@@ -2553,7 +2574,7 @@ impl TesseraRuntime {
 
     pub(crate) fn set_current_focus_event_handler(&mut self, handler: CallbackWith<FocusState>) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            current.focus_event_handler = Some(handler);
+            current.interaction_mut().focus_event_handler = Some(handler);
         } else {
             debug_assert!(
                 false,
@@ -2567,7 +2588,7 @@ impl TesseraRuntime {
         handler: CallbackWith<FocusDirection, bool>,
     ) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            current.focus_beyond_bounds_handler = Some(handler);
+            current.interaction_mut().focus_beyond_bounds_handler = Some(handler);
         } else {
             debug_assert!(
                 false,
@@ -2581,7 +2602,7 @@ impl TesseraRuntime {
         handler: CallbackWith<FocusRevealRequest, bool>,
     ) {
         if let Some(current) = self.component_tree.current_node_mut() {
-            current.focus_reveal_handler = Some(handler);
+            current.interaction_mut().focus_reveal_handler = Some(handler);
         } else {
             debug_assert!(
                 false,
@@ -2593,10 +2614,11 @@ impl TesseraRuntime {
     pub(crate) fn set_current_focus_restorer_fallback(&mut self, fallback: FocusRequester) {
         if let Some(current) = self.component_tree.current_node_mut() {
             if current
+                .interaction()
                 .focus_registration
                 .is_some_and(|registration| registration.kind == FocusRegistrationKind::Scope)
             {
-                current.focus_restorer_fallback = Some(fallback);
+                current.interaction_mut().focus_restorer_fallback = Some(fallback);
             } else {
                 debug_assert!(
                     false,
@@ -4319,22 +4341,7 @@ mod tests {
                 children_scale: 1.0,
                 instance_logic_id: 0,
                 instance_key: 0,
-                pointer_preview_handlers: Vec::new(),
-                pointer_handlers: Vec::new(),
-                pointer_final_handlers: Vec::new(),
-                keyboard_preview_handlers: Vec::new(),
-                keyboard_handlers: Vec::new(),
-                ime_preview_handlers: Vec::new(),
-                ime_handlers: Vec::new(),
-                focus_requester_binding: None,
-                focus_registration: None,
-                focus_restorer_fallback: None,
-                focus_traversal_policy: None,
-                focus_changed_handler: None,
-                focus_event_handler: None,
-                focus_beyond_bounds_handler: None,
-                focus_reveal_handler: None,
-                globally_positioned_handlers: Vec::new(),
+                interaction: None,
                 layout_coordinate_space: false,
                 modifier: Modifier::default(),
                 layout_node: Box::new(DefaultLayoutNode),
@@ -4738,22 +4745,7 @@ mod tests {
                 children_scale: 1.0,
                 instance_logic_id: 0,
                 instance_key: 0,
-                pointer_preview_handlers: Vec::new(),
-                pointer_handlers: Vec::new(),
-                pointer_final_handlers: Vec::new(),
-                keyboard_preview_handlers: Vec::new(),
-                keyboard_handlers: Vec::new(),
-                ime_preview_handlers: Vec::new(),
-                ime_handlers: Vec::new(),
-                focus_requester_binding: None,
-                focus_registration: None,
-                focus_restorer_fallback: None,
-                focus_traversal_policy: None,
-                focus_changed_handler: None,
-                focus_event_handler: None,
-                focus_beyond_bounds_handler: None,
-                focus_reveal_handler: None,
-                globally_positioned_handlers: Vec::new(),
+                interaction: None,
                 layout_coordinate_space: false,
                 modifier: Modifier::default(),
                 layout_node: Box::new(DefaultLayoutNode),

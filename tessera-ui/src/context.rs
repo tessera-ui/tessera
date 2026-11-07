@@ -163,41 +163,52 @@ pub(crate) fn current_context_map() -> ContextMap {
     })
 }
 
-fn resolve_snapshot_entry(entry: ContextSnapshotEntry) -> Option<ContextSnapshotEntry> {
-    with_slot_table(|table| {
-        let live_entry = table.entries.get(entry.slot as usize);
-        if let Some(live_entry) = live_entry
-            && live_entry.value.is_some()
-            && live_entry.key == entry.key
-        {
-            return Some(ContextSnapshotEntry {
-                slot: entry.slot,
-                generation: live_entry.generation,
-                key: entry.key,
-            });
-        }
-
-        let slot = table.key_to_slot.get(&entry.key).copied()?;
-        let live_entry = table.entries.get(slot as usize)?;
-        live_entry.value.as_ref()?;
-        Some(ContextSnapshotEntry {
-            slot,
+fn resolve_snapshot_entry(
+    table: &SlotTable,
+    entry: ContextSnapshotEntry,
+) -> Option<ContextSnapshotEntry> {
+    let live_entry = table.entries.get(entry.slot as usize);
+    if let Some(live_entry) = live_entry
+        && live_entry.value.is_some()
+        && live_entry.key == entry.key
+    {
+        return Some(ContextSnapshotEntry {
+            slot: entry.slot,
             generation: live_entry.generation,
             key: entry.key,
-        })
+        });
+    }
+
+    let slot = table.key_to_slot.get(&entry.key).copied()?;
+    let live_entry = table.entries.get(slot as usize)?;
+    live_entry.value.as_ref()?;
+    Some(ContextSnapshotEntry {
+        slot,
+        generation: live_entry.generation,
+        key: entry.key,
     })
 }
 
 fn normalize_context_snapshot(snapshot: &ContextMap) -> ContextMap {
-    snapshot
-        .iter()
-        .fold(ContextMap::new(), |acc, (type_id, entry)| {
-            if let Some(resolved) = resolve_snapshot_entry(*entry) {
-                acc.update(*type_id, resolved)
-            } else {
-                acc
+    let mut normalized = snapshot.clone();
+    if snapshot.is_empty() {
+        return normalized;
+    }
+
+    with_slot_table(|table| {
+        for (&type_id, &entry) in snapshot {
+            match resolve_snapshot_entry(table, entry) {
+                Some(resolved) if resolved != entry => {
+                    normalized.insert(type_id, resolved);
+                }
+                Some(_) => {}
+                None => {
+                    normalized.remove(&type_id);
+                }
             }
-        })
+        }
+    });
+    normalized
 }
 
 pub(crate) fn begin_frame_component_context_tracking() {
@@ -246,7 +257,7 @@ where
         let map = tracker.previous_by_instance_key.get(&instance_key)?;
         map.get(&TypeId::of::<T>())
             .copied()
-            .and_then(resolve_snapshot_entry)
+            .and_then(|entry| with_slot_table(|table| resolve_snapshot_entry(table, entry)))
             .map(|entry| Context::new(entry.slot, entry.generation))
     })
 }
@@ -856,6 +867,24 @@ mod tests {
         with_execution_context(|context| {
             assert_eq!(context.context_stack, original_stack);
         });
+    }
+
+    #[test]
+    fn with_context_snapshot_shares_live_bindings() {
+        #[crate::tessera]
+        fn context_provider() {
+            super::provide_context(
+                || 42_u8,
+                || {
+                    let snapshot = super::current_context_map();
+                    with_context_snapshot(&snapshot, || {
+                        assert!(snapshot.ptr_eq(&super::current_context_map()));
+                    });
+                },
+            );
+        }
+
+        crate::testing::layout_test(|| context_provider()).run();
     }
 
     #[test]

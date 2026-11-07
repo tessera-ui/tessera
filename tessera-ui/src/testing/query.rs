@@ -117,7 +117,7 @@ impl ComponentSnapshot {
                             .fn_name
                             .clone(),
                         coordinates,
-                        semantics: data.and_then(|data| data.accessibility.clone()),
+                        semantics: data.and_then(|data| data.accessibility.as_deref().cloned()),
                     }
                 })
                 .collect();
