@@ -366,15 +366,16 @@ impl tessera_ui::LayoutModifierNode for ParagraphLayout {
                 result.place_child(child, PxPosition::from_f32_xy(bounds.x, bounds.y));
             }
         }
+        let [width, height] = paragraph.data.measure_info().size;
         Ok(result.with_size(ComputedData {
             width: input
                 .parent_constraint()
                 .width()
-                .clamp(tessera_ui::Px(paragraph.data.size[0] as i32)),
+                .clamp(tessera_ui::Px(width as i32)),
             height: input
                 .parent_constraint()
                 .height()
-                .clamp(tessera_ui::Px(paragraph.data.size[1] as i32)),
+                .clamp(tessera_ui::Px(height as i32)),
         }))
     }
 }

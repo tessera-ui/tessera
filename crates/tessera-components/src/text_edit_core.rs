@@ -3450,10 +3450,11 @@ fn measured_editor_size(
     constraint: &TextConstraint,
     single_line: bool,
 ) -> ComputedData {
-    let height = constraint.max_height.map_or(text.size[1], |height| {
-        text.size[1].min(Px::from_f32(height).abs())
-    });
-    let width = Px::from(text.size[0]) + CURSOR_WIDTH.to_px();
+    let [width, height] = text.measure_info().size;
+    let height = constraint
+        .max_height
+        .map_or(height, |max| height.min(Px::from_f32(max).abs()));
+    let width = Px::from(width) + CURSOR_WIDTH.to_px();
     let width = if single_line {
         constraint
             .max_width
@@ -3819,7 +3820,7 @@ mod tests {
             let before = controller.with(|controller| {
                 (
                     controller.text_cache_key(),
-                    controller.current_text_data().unwrap().size,
+                    controller.current_text_data().unwrap().measure_info().size,
                     controller.current_cursor_rect(),
                     controller.layout_state.ime_rect(),
                     controller
@@ -3835,7 +3836,7 @@ mod tests {
             let after = controller.with(|controller| {
                 (
                     controller.text_cache_key(),
-                    controller.current_text_data().unwrap().size,
+                    controller.current_text_data().unwrap().measure_info().size,
                     controller.current_cursor_rect(),
                     controller.layout_state.ime_rect(),
                     controller
@@ -3941,7 +3942,8 @@ mod tests {
             );
 
             let controller = probe.controller.get().expect("editor controller");
-            let initial_width = controller.with(|c| c.current_text_data().unwrap().size[0]);
+            let initial_width =
+                controller.with(|c| c.current_text_data().unwrap().measure_info().size[0]);
             controller.with_mut(|c| c.set_text("a much longer value"));
             for frame in 12..16 {
                 let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
@@ -3952,7 +3954,10 @@ mod tests {
                     .count("editor_cache_contents", tessera_ui::WorkPhase::Build)
                     > settled_builds
             );
-            assert!(controller.with(|c| c.current_text_data().unwrap().size[0]) > initial_width);
+            assert!(
+                controller.with(|c| c.current_text_data().unwrap().measure_info().size[0])
+                    > initial_width
+            );
         }
     }
 
@@ -5418,8 +5423,9 @@ mod tests {
         assert!(
             controller
                 .text_data(constraint.clone(), controller.prepare_display())
+                .measure_info()
                 .size[0]
-                > before.size[0]
+                > before.measure_info().size[0]
         );
         controller.set_text("Roboto");
         let _ = controller.text_data(constraint, controller.prepare_display());

@@ -19,7 +19,7 @@ use super::command::{TextCommand, TextConstraint};
 struct TextResources {
     font_system: Arc<RwLock<glyphon::FontSystem>>,
     // A cache entry must not extend the lifetime of the glyphs it indexes.
-    short_layouts: Mutex<LruCache<TextLayoutKey, Weak<glyphon::Buffer>>>,
+    short_layouts: Mutex<LruCache<TextLayoutKey, Weak<ShapedText>>>,
 }
 
 const SHORT_LAYOUT_CAPACITY: NonZeroUsize = NonZeroUsize::new(1024).unwrap();
@@ -269,15 +269,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
 /// Text data for rendering, including buffer and size.
 #[derive(Debug, Clone)]
 pub struct TextData {
-    text_buffer: Arc<glyphon::Buffer>,
-    /// text area size
-    pub size: [u32; 2],
-    /// Baseline offset of the first visible line, relative to the text origin.
-    pub first_baseline: f32,
-    /// Baseline offset of the last visible line, relative to the text origin.
-    pub last_baseline: f32,
-    /// Number of visible layout lines.
-    pub line_count: u32,
+    layout: Arc<ShapedText>,
     base_color: Color,
     current_color: Color,
     text: Arc<str>,
@@ -289,6 +281,24 @@ pub struct TextData {
     span_opacity: f32,
 }
 
+#[derive(Debug, Clone)]
+struct ShapedText {
+    buffer: glyphon::Buffer,
+    measure: TextMeasureInfo,
+}
+
+impl ShapedText {
+    fn new(buffer: glyphon::Buffer) -> Self {
+        let measure = TextMeasureInfo::from_buffer(&buffer);
+        Self { buffer, measure }
+    }
+
+    fn reshape(&mut self) {
+        self.buffer.shape_until_scroll(&mut shaping_fonts(), false);
+        self.measure = TextMeasureInfo::from_buffer(&self.buffer);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct StyledLineIdentity {
     text: String,
@@ -297,7 +307,7 @@ struct StyledLineIdentity {
     layout: Vec<glyphon::LayoutLine>,
 }
 
-/// Measurement result returned by `TextData::measure()`.
+/// Measurements of the visible glyph layout.
 #[derive(Debug, Clone, PartialEq, Copy)]
 #[allow(dead_code)]
 pub struct TextMeasureInfo {
@@ -311,12 +321,47 @@ pub struct TextMeasureInfo {
     pub line_count: u32,
 }
 
+impl TextMeasureInfo {
+    fn from_buffer(buffer: &glyphon::Buffer) -> Self {
+        let mut width = 0.0_f32;
+        let mut first_baseline = 0.0;
+        let mut last_baseline = 0.0;
+        let mut line_count = 0;
+        for run in buffer.layout_runs() {
+            width = width.max(run.line_w);
+            if line_count == 0 {
+                first_baseline = run.line_y;
+            }
+            last_baseline = run.line_y;
+            line_count += 1;
+        }
+        if buffer.lines.iter().any(|line| {
+            matches!(
+                line.align(),
+                Some(
+                    glyphon::cosmic_text::Align::Center
+                        | glyphon::cosmic_text::Align::Right
+                        | glyphon::cosmic_text::Align::End
+                )
+            )
+        }) {
+            width = buffer.size().0.unwrap_or(width);
+        }
+        Self {
+            size: [
+                width.ceil() as u32,
+                (line_count as f32 * buffer.metrics().line_height).ceil() as u32,
+            ],
+            first_baseline,
+            last_baseline,
+            line_count,
+        }
+    }
+}
+
 impl PartialEq for TextData {
     fn eq(&self, other: &Self) -> bool {
-        self.size == other.size
-            && self.first_baseline == other.first_baseline
-            && self.last_baseline == other.last_baseline
-            && self.line_count == other.line_count
+        self.layout.measure == other.layout.measure
             && self.base_color == other.base_color
             && self.current_color == other.current_color
             && self.text == other.text
@@ -325,9 +370,9 @@ impl PartialEq for TextData {
             && self.font == other.font
             && self.styled_identity == other.styled_identity
             && self.span_opacity == other.span_opacity
-            && self.text_buffer.wrap() == other.text_buffer.wrap()
-            && self.text_buffer.ellipsize() == other.text_buffer.ellipsize()
-            && self.text_buffer.scroll() == other.text_buffer.scroll()
+            && self.layout.buffer.wrap() == other.layout.buffer.wrap()
+            && self.layout.buffer.ellipsize() == other.layout.buffer.ellipsize()
+            && self.layout.buffer.scroll() == other.layout.buffer.scroll()
     }
 }
 
@@ -377,24 +422,21 @@ impl TextData {
                 .get(key)
                 .and_then(Weak::upgrade)
         });
-        let text_buffer = cached.unwrap_or_else(|| {
+        let layout = cached.unwrap_or_else(|| {
             let mut fonts = resources.font_system.write();
             let buffer =
                 Self::build_buffer(&mut fonts, &text, font_size, line_height, font, &constraint);
+            let layout = Arc::new(ShapedText::new(buffer));
             if let Some(key) = key {
                 resources
                     .short_layouts
                     .lock()
-                    .put(key, Arc::downgrade(&buffer));
+                    .put(key, Arc::downgrade(&layout));
             }
-            buffer
+            layout
         });
-        let mut data = Self {
-            text_buffer,
-            size: [0; 2],
-            first_baseline: 0.0,
-            last_baseline: 0.0,
-            line_count: 0,
+        Self {
+            layout,
             base_color: color,
             current_color: color,
             text,
@@ -404,49 +446,16 @@ impl TextData {
             styled_identity: None,
             base_span_colors: None,
             span_opacity: 1.0,
-        };
-        data.measure_layout();
-        data
+        }
     }
 
     /// Lays out the shaped text again for a new constraint without reshaping.
     pub(crate) fn relayout(&mut self, constraint: &TextConstraint) {
-        let buffer = Arc::make_mut(&mut self.text_buffer);
-        buffer.set_size(constraint.max_width, constraint.max_height);
-        buffer.shape_until_scroll(&mut shaping_fonts(), false);
-        self.measure_layout();
-    }
-
-    fn measure_layout(&mut self) {
-        let buffer = &self.text_buffer;
-        let mut width = 0.0_f32;
-        self.first_baseline = 0.0;
-        self.last_baseline = 0.0;
-        self.line_count = 0;
-        for run in buffer.layout_runs() {
-            width = width.max(run.line_w);
-            if self.line_count == 0 {
-                self.first_baseline = run.line_y;
-            }
-            self.last_baseline = run.line_y;
-            self.line_count += 1;
-        }
-        if buffer.lines.iter().any(|line| {
-            matches!(
-                line.align(),
-                Some(
-                    glyphon::cosmic_text::Align::Center
-                        | glyphon::cosmic_text::Align::Right
-                        | glyphon::cosmic_text::Align::End
-                )
-            )
-        }) {
-            width = buffer.size().0.unwrap_or(width);
-        }
-        self.size = [
-            width.ceil() as u32,
-            (self.line_count as f32 * buffer.metrics().line_height).ceil() as u32,
-        ];
+        let layout = Arc::make_mut(&mut self.layout);
+        layout
+            .buffer
+            .set_size(constraint.max_width, constraint.max_height);
+        layout.reshape();
     }
 
     /// Builds [`TextData`] directly from a pre-shaped glyphon buffer.
@@ -468,12 +477,8 @@ impl TextData {
             .flat_map(|line| line.glyphs.iter().map(|glyph| glyph.color_opt))
             .collect();
         let metrics = text_buffer.metrics();
-        let mut data = Self {
-            text_buffer: Arc::new(text_buffer),
-            size: [0; 2],
-            first_baseline: 0.0,
-            last_baseline: 0.0,
-            line_count: 0,
+        Self {
+            layout: Arc::new(ShapedText::new(text_buffer)),
             base_color: Color::WHITE,
             current_color: Color::WHITE,
             text: Arc::from(""),
@@ -490,22 +495,21 @@ impl TextData {
                 .any(Option::is_some)
                 .then(|| Arc::new(base_span_colors)),
             span_opacity: 1.0,
-        };
-        data.measure_layout();
-        data
+        }
     }
 
     /// Get the glyphon text area from the text data
     fn text_area(&'_ self, start_pos: PxPosition, scale: f32) -> glyphon::TextArea<'_> {
+        let [width, height] = self.layout.measure.size;
         let bounds = glyphon::TextBounds {
             left: start_pos.x.floor() as i32,
             top: start_pos.y.floor() as i32,
-            right: (start_pos.x + self.size[0] as f32 * scale).ceil() as i32,
-            bottom: (start_pos.y + self.size[1] as f32 * scale).ceil() as i32,
+            right: (start_pos.x + width as f32 * scale).ceil() as i32,
+            bottom: (start_pos.y + height as f32 * scale).ceil() as i32,
         };
         glyphon::TextArea {
-            buffer: &self.text_buffer,
-            left: start_pos.x - self.text_buffer.scroll().horizontal * scale,
+            buffer: &self.layout.buffer,
+            left: start_pos.x - self.layout.buffer.scroll().horizontal * scale,
             top: start_pos.y,
             scale,
             bounds,
@@ -515,13 +519,12 @@ impl TextData {
     }
 
     pub(crate) fn set_scroll(&mut self, scroll: glyphon::cosmic_text::Scroll) {
-        if self.text_buffer.scroll() == scroll {
+        if self.layout.buffer.scroll() == scroll {
             return;
         }
-        let buffer = Arc::make_mut(&mut self.text_buffer);
-        buffer.set_scroll(scroll);
-        buffer.shape_until_scroll(&mut shaping_fonts(), false);
-        self.measure_layout();
+        let layout = Arc::make_mut(&mut self.layout);
+        layout.buffer.set_scroll(scroll);
+        layout.reshape();
     }
 
     fn build_buffer(
@@ -531,7 +534,7 @@ impl TextData {
         line_height: f32,
         font: TextFont,
         constraint: &TextConstraint,
-    ) -> Arc<glyphon::Buffer> {
+    ) -> glyphon::Buffer {
         let mut text_buffer = glyphon::Buffer::new_empty(glyphon::Metrics::new(size, line_height));
         if constraint.single_line {
             text_buffer.set_wrap(glyphon::Wrap::None);
@@ -558,7 +561,7 @@ impl TextData {
             None,
         );
         text_buffer.shape_until_scroll(font_system, false);
-        Arc::new(text_buffer)
+        text_buffer
     }
 
     pub(crate) fn set_color(&mut self, color: Color) {
@@ -567,12 +570,7 @@ impl TextData {
     }
 
     pub(crate) fn measure_info(&self) -> TextMeasureInfo {
-        TextMeasureInfo {
-            size: self.size,
-            first_baseline: self.first_baseline,
-            last_baseline: self.last_baseline,
-            line_count: self.line_count,
-        }
+        self.layout.measure
     }
 
     pub(crate) fn apply_opacity(&mut self, opacity: f32) {
@@ -591,7 +589,7 @@ impl TextData {
         self.current_color = target_color;
         if let Some(colors) = &self.base_span_colors {
             let mut colors = colors.iter();
-            for line in &mut Arc::make_mut(&mut self.text_buffer).lines {
+            for line in &mut Arc::make_mut(&mut self.layout).buffer.lines {
                 line.map_layout_glyph_colors(|_| {
                     colors.next().copied().flatten().map(|color| {
                         glyphon::Color::rgba(
@@ -636,7 +634,8 @@ mod tests {
         };
         let original = shape(Color::BLACK, None);
         let other_color = shape(Color::WHITE, None);
-        assert!(Arc::ptr_eq(&original.text_buffer, &other_color.text_buffer));
+        assert!(Arc::ptr_eq(&original.layout, &other_color.layout));
+        assert_eq!(original.measure_info(), other_color.measure_info());
         let origin = tessera_ui::PxPosition::ZERO;
         assert_ne!(
             original.text_area(origin, 1.0).default_color,
@@ -644,18 +643,18 @@ mod tests {
         );
 
         let narrower = shape(Color::BLACK, Some(10.0));
-        assert_eq!(narrower.text_buffer.size().0, Some(10.0));
-        let previous_buffer = Arc::downgrade(&original.text_buffer);
+        assert_eq!(narrower.layout.buffer.size().0, Some(10.0));
+        let previous_layout = Arc::downgrade(&original.layout);
         drop(original);
         drop(other_color);
-        assert!(previous_buffer.upgrade().is_none());
+        assert!(previous_layout.upgrade().is_none());
 
         let original = shape(Color::BLACK, None);
         write_font_system()
             .db_mut()
             .set_sans_serif_family("Tessera test family");
         let updated = shape(Color::BLACK, None);
-        assert!(!Arc::ptr_eq(&original.text_buffer, &updated.text_buffer));
+        assert!(!Arc::ptr_eq(&original.layout, &updated.layout));
     }
 
     #[test]
@@ -722,8 +721,8 @@ mod tests {
                 ..Default::default()
             },
         );
-        let before = TextData::from_buffer(shaped.text_buffer.as_ref().clone());
-        let mut buffer = shaped.text_buffer.as_ref().clone();
+        let before = TextData::from_buffer(shaped.layout.buffer.clone());
+        let mut buffer = shaped.layout.buffer.clone();
         let mut scroll = buffer.scroll();
         scroll.horizontal = 13.5;
         buffer.set_scroll(scroll);
@@ -757,7 +756,7 @@ mod tests {
             style,
             TextConstraint::default(),
         );
-        let width = alpha.size[0] as f32 + beta.size[0] as f32 / 2.0;
+        let width = alpha.measure_info().size[0] as f32 + beta.measure_info().size[0] as f32 / 2.0;
         let phrase = TextData::shape(
             "alpha beta".to_string(),
             Color::BLACK,
@@ -768,7 +767,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let runs: Vec<_> = phrase.text_buffer.layout_runs().collect();
+        let runs: Vec<_> = phrase.layout.buffer.layout_runs().collect();
         assert_eq!(runs.len(), 2);
         assert!(runs[0].glyphs.iter().all(|glyph| glyph.end <= 6));
         assert_eq!(runs[1].glyphs[0].start, 6);
@@ -801,7 +800,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let runs: Vec<_> = long.text_buffer.layout_runs().collect();
+        let runs: Vec<_> = long.layout.buffer.layout_runs().collect();
         assert!(runs.len() > 1);
         assert!(runs.iter().all(|run| run.line_w <= width + 1.0));
     }
