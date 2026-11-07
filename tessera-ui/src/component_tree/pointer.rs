@@ -15,7 +15,7 @@ use crate::{NodeId, PxPosition, PxSize, modifier::OrderedModifierAction, time::I
 
 use super::{
     ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, PointerDispatchPlan, PointerNodePlan,
-    bounds_hit_path, record_frame_stage, resolve_node_input_context_with_name,
+    bounds_hit_path, record_frame_stage, resolve_node_input_context,
 };
 
 const CELL_SIZE: f32 = 256.0;
@@ -152,7 +152,7 @@ impl PointerIndex {
             for &id in &structural {
                 if let Some(node) = tree.get(id).filter(|node| !node.is_removed()) {
                     *structural_nodes
-                        .entry(node.get().fn_name.as_str())
+                        .entry(node.get().fn_name)
                         .or_insert(0_usize) += 1;
                 } else {
                     stale += 1;
@@ -202,15 +202,11 @@ impl PointerIndex {
                 .map_or(Coverage::Hidden, |entry| entry.coverage);
             let was_exposed = previous_coverage != Coverage::Hidden;
             let retained = previous.filter(|_| !structural.contains(&id));
-            let (mut retained_plan, retained_order) = match retained {
+            let (retained_plan, retained_order) = match retained {
                 Some(entry) => (Some(entry.plan), Some(entry.order)),
                 None => (None, None),
             };
-            let fn_name = retained_plan.as_mut().map_or_else(String::new, |plan| {
-                std::mem::take(&mut Arc::make_mut(plan).context.fn_name)
-            });
-            let Some(context) = resolve_node_input_context_with_name(tree, metadatas, id, fn_name)
-            else {
+            let Some(context) = resolve_node_input_context(tree, metadatas, id) else {
                 self.update_coverage(id, previous_coverage, Coverage::Hidden);
                 continue;
             };

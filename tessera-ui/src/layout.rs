@@ -286,7 +286,7 @@ impl<'a> MeasureScope<'a> {
                         let ancestry = owner
                             .into_iter()
                             .flat_map(|id| id.ancestors(self.tree))
-                            .map(|id| (id, self.tree[id].get().fn_name.clone()))
+                            .map(|id| (id, self.tree[id].get().fn_name))
                             .collect::<Vec<_>>();
                         panic!(
                             "Direct child layout node must exist: child={node_id:?}, owner={owner:?}, ancestry={ancestry:?}"

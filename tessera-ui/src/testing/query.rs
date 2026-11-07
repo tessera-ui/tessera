@@ -42,7 +42,7 @@ pub struct ComponentSnapshot {
 pub struct ComponentSnapshotNode {
     id: NodeId,
     parent: Option<NodeId>,
-    name: String,
+    name: &'static str,
     instance: u64,
     coordinates: Option<LayoutCoordinates>,
     semantics: Option<AccessibilityNode>,
@@ -61,7 +61,7 @@ impl ComponentSnapshotNode {
 
     /// Returns the component function name.
     pub fn name(&self) -> &str {
-        &self.name
+        self.name
     }
 
     /// Returns the observed window bounds in physical pixels.
@@ -90,6 +90,7 @@ impl ComponentSnapshot {
                 .into_iter()
                 .flat_map(|root| root.descendants(tree))
                 .map(|id| {
+                    let node = tree.get(id).expect("snapshot component").get();
                     let data = metadata.get(&id);
                     let coordinates = data.and_then(|data| {
                         let size = data.computed_data?;
@@ -105,17 +106,8 @@ impl ComponentSnapshot {
                     ComponentSnapshotNode {
                         id,
                         parent: id.ancestors(tree).nth(1),
-                        instance: tree
-                            .get(id)
-                            .expect("snapshot component")
-                            .get()
-                            .instance_logic_id,
-                        name: tree
-                            .get(id)
-                            .expect("snapshot component")
-                            .get()
-                            .fn_name
-                            .clone(),
+                        instance: node.instance_logic_id,
+                        name: node.fn_name,
                         coordinates,
                         semantics: data.and_then(|data| data.accessibility.as_deref().cloned()),
                     }

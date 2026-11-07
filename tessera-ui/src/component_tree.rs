@@ -1643,7 +1643,7 @@ impl ComponentTree {
                 NodeMeta {
                     node_id: node_id.to_string(),
                     parent: node.parent().map(|id| id.to_string()),
-                    fn_name: Some(node.get().fn_name.clone()),
+                    fn_name: Some(node.get().fn_name.to_owned()),
                     abs_pos: metadata
                         .and_then(|metadata| metadata.abs_position)
                         .map(|position| (position.x_px().0, position.y_px().0)),
@@ -2031,7 +2031,7 @@ impl ComponentTree {
                     let _node = push_current_node_with_instance_logic_id(
                         node_id,
                         context.instance_logic_id,
-                        &context.fn_name,
+                        context.fn_name,
                     );
                     let _instance = push_current_component_instance_key(boundary);
                     let _phase = push_phase(RuntimePhase::Input);
@@ -2638,7 +2638,7 @@ struct NodeInputContext {
     node_computed_data: ComputedData,
     instance_logic_id: u64,
     instance_key: u64,
-    fn_name: String,
+    fn_name: &'static str,
     parent_id: Option<indextree::NodeId>,
 }
 
@@ -2646,15 +2646,6 @@ fn resolve_node_input_context(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
     node_id: indextree::NodeId,
-) -> Option<NodeInputContext> {
-    resolve_node_input_context_with_name(tree, metadatas, node_id, String::new())
-}
-
-fn resolve_node_input_context_with_name(
-    tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
-    node_id: indextree::NodeId,
-    mut fn_name: String,
 ) -> Option<NodeInputContext> {
     let Some(node_ref) = tree.get(node_id) else {
         warn!("Node not found for node {node_id:?}; skipping input handling");
@@ -2687,7 +2678,6 @@ fn resolve_node_input_context_with_name(
     };
     let instance_logic_id = node.instance_logic_id;
     let instance_key = node.instance_key;
-    fn_name.clone_from(&node.fn_name);
     let parent_id = node_ref.parent();
 
     Some(NodeInputContext {
@@ -2702,7 +2692,7 @@ fn resolve_node_input_context_with_name(
         node_computed_data,
         instance_logic_id,
         instance_key,
-        fn_name,
+        fn_name: node.fn_name,
         parent_id,
     })
 }
@@ -3226,12 +3216,12 @@ fn run_pointer_input_for_node<F>(
         ProfilerPhase::Input,
         Some(node_id),
         parent_id,
-        Some(fn_name.as_str()),
+        Some(fn_name),
     ));
     let replay_boundary_instance_key =
         nearest_replay_boundary_instance_key(node_id, dispatch_ctx.tree);
     let _node_ctx_guard =
-        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name.as_str());
+        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name);
     let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
     let _phase_guard = push_phase(RuntimePhase::Input);
     let _focus_owner_guard = bind_focus_owner(dispatch_ctx.focus_owner);
@@ -3331,12 +3321,12 @@ fn run_keyboard_input_for_node<F>(
         ProfilerPhase::Input,
         Some(node_id),
         parent_id,
-        Some(fn_name.as_str()),
+        Some(fn_name),
     ));
     let replay_boundary_instance_key =
         nearest_replay_boundary_instance_key(node_id, dispatch_ctx.tree);
     let _node_ctx_guard =
-        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name.as_str());
+        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name);
     let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
     let _phase_guard = push_phase(RuntimePhase::Input);
     let _focus_owner_guard = bind_focus_owner(dispatch_ctx.focus_owner);
@@ -3398,11 +3388,11 @@ fn run_ime_input_for_node<F>(
         ProfilerPhase::Input,
         Some(node_id),
         parent_id,
-        Some(fn_name.as_str()),
+        Some(fn_name),
     ));
     let replay_boundary_instance_key = nearest_replay_boundary_instance_key(node_id, tree);
     let _node_ctx_guard =
-        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name.as_str());
+        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name);
     let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
     let _phase_guard = push_phase(RuntimePhase::Input);
     let _focus_owner_guard = bind_focus_owner(focus_owner);
@@ -3761,7 +3751,7 @@ fn record_layout_commands(
                 ProfilerPhase::Record,
                 Some(node_id),
                 parent_id,
-                Some(node.get().fn_name.as_str()),
+                Some(node.get().fn_name),
             ))
         };
         // Recording also runs on layout cache hits, so visual state must be
@@ -4313,7 +4303,7 @@ mod tests {
     };
 
     fn node_with_role(
-        name: &str,
+        name: &'static str,
         role: NodeRole,
         instance_logic_id: u64,
         instance_key: u64,
@@ -4325,7 +4315,7 @@ mod tests {
         }
     }
 
-    fn node(name: &str, instance_logic_id: u64, instance_key: u64) -> ComponentNode {
+    fn node(name: &'static str, instance_logic_id: u64, instance_key: u64) -> ComponentNode {
         node_with_role(name, NodeRole::Layout, instance_logic_id, instance_key)
     }
 
@@ -6252,7 +6242,7 @@ mod tests {
 
         let root_children = root
             .children(tree.tree())
-            .map(|id| tree.get(id).expect("child must exist").fn_name.clone())
+            .map(|id| tree.get(id).expect("child must exist").fn_name)
             .collect::<Vec<_>>();
         assert_eq!(root_children, vec!["new_a", "new_b", "second"]);
         #[cfg(feature = "profiling")]
@@ -6306,7 +6296,7 @@ mod tests {
 
         let root_children = root
             .children(tree.tree())
-            .map(|id| tree.get(id).expect("child must exist").fn_name.clone())
+            .map(|id| tree.get(id).expect("child must exist").fn_name)
             .collect::<Vec<_>>();
         assert_eq!(root_children, vec!["first", "second"]);
         #[cfg(feature = "profiling")]

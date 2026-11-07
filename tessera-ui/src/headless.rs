@@ -797,9 +797,7 @@ fn snapshot_node(
 ) -> Value {
     *counter += 1;
     let node = tree.get(node_id);
-    let fn_name = node
-        .map(|node| node.get().fn_name.clone())
-        .unwrap_or_else(|| "<unknown>".to_string());
+    let fn_name = node.map_or("<unknown>", |node| node.get().fn_name);
     let role = node
         .map(|node| format!("{:?}", node.get().role))
         .unwrap_or_else(|| "<unknown>".to_string());

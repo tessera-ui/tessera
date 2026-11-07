@@ -2859,7 +2859,7 @@ impl Drop for ComponentNodeScope {
 }
 
 /// Enter the build scope for one registered component call.
-pub fn begin_component_node(name: &str, component_type_id: u64) -> ComponentNodeScope {
+pub fn begin_component_node(name: &'static str, component_type_id: u64) -> ComponentNodeScope {
     let phase = push_phase(RuntimePhase::Build);
     let node = new_build_node(name, NodeRole::Composition, component_type_id);
     let instance_logic_id = node.instance_logic_id;
@@ -2875,7 +2875,7 @@ pub fn begin_component_node(name: &str, component_type_id: u64) -> ComponentNode
     }
 }
 
-fn new_build_node(name: &str, role: NodeRole, component_type_id: u64) -> ComponentNode {
+fn new_build_node(name: &'static str, role: NodeRole, component_type_id: u64) -> ComponentNode {
     let (instance_logic_id, instance_key) = with_execution_context_mut(|context| {
         let logic_id = reserve_component_identity_in(context, component_type_id);
         (logic_id, instance_key_in(context, logic_id))
@@ -2886,7 +2886,7 @@ fn new_build_node(name: &str, role: NodeRole, component_type_id: u64) -> Compone
     node
 }
 
-pub(crate) fn begin_layout_node(name: &str, component_type_id: u64) -> LayoutNodeScope {
+pub(crate) fn begin_layout_node(name: &'static str, component_type_id: u64) -> LayoutNodeScope {
     let node = new_build_node(name, NodeRole::Layout, component_type_id);
     let instance_logic_id = node.instance_logic_id;
     let (id, previous) =

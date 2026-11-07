@@ -53,7 +53,7 @@ pub(crate) enum NodeRole {
 
 pub(crate) struct ComponentNode {
     /// Component function's name, for debugging purposes.
-    pub(crate) fn_name: String,
+    pub(crate) fn_name: &'static str,
     /// Whether this tree node represents a composition boundary or an explicit
     /// layout node.
     pub(crate) role: NodeRole,
@@ -80,9 +80,9 @@ pub(crate) struct ComponentNode {
 }
 
 impl ComponentNode {
-    pub(crate) fn new(fn_name: &str, role: NodeRole) -> Self {
+    pub(crate) fn new(fn_name: &'static str, role: NodeRole) -> Self {
         Self {
-            fn_name: fn_name.to_owned(),
+            fn_name,
             role,
             layout_children: None,
             sibling_index: None,
@@ -1168,7 +1168,7 @@ pub(crate) fn measure_node(
         ProfilerPhase::Measure,
         Some(node_id),
         node_data_ref.parent(),
-        Some(node_data.fn_name.as_str()),
+        Some(node_data.fn_name),
     ));
 
     #[cfg(feature = "profiling")]
@@ -1190,7 +1190,7 @@ pub(crate) fn measure_node(
     let _node_ctx_guard = push_current_node_with_instance_logic_id(
         node_id,
         node_data.instance_logic_id,
-        node_data.fn_name.as_str(),
+        node_data.fn_name,
     );
     let replay_boundary_instance_key = nearest_replay_boundary_instance_key(node_id, tree);
     let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);

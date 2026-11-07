@@ -63,9 +63,10 @@ tracks only semantic nodes and the window root. A deactivated adapter releases
 its index and stops collecting changes until publication resumes.
 
 Composition wrappers without semantics need no geometry metadata outside the
-root. Layout nodes keep one snapshot of their policy inputs. Cached child
-measurements share their storage across placement updates, and leaf layouts
-need no child storage.
+root. Component nodes and input dispatch plans borrow static function names.
+Layout nodes keep one snapshot of their policy inputs. Cached child measurements
+share their storage across placement updates, and leaf layouts need no child
+storage.
 
 Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements share that refresh. Consumers compare

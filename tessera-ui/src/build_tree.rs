@@ -274,7 +274,7 @@ fn missing_replay_snapshot_panic_message(instance_key: u64) -> String {
             };
             let current = current_ref.get();
             if nearest_replayable_ancestor.is_none() && current.replay_boundary {
-                nearest_replayable_ancestor = Some((current.instance_key, current.fn_name.clone()));
+                nearest_replayable_ancestor = Some((current.instance_key, current.fn_name));
             }
 
             ancestry.push(format!(
@@ -455,9 +455,9 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                                 .component_tree
                                 .find_node_id_by_instance_key(key)
                                 .and_then(|id| runtime.component_tree.get(id))
-                                .map(|node| node.fn_name.as_str())
+                                .map(|node| node.fn_name)
                                 .unwrap_or("<missing>");
-                            (key, name.to_owned())
+                            (key, name)
                         })
                         .collect::<Vec<_>>()
                 });
@@ -492,7 +492,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                                     .component_tree
                                     .find_node_id_by_instance_key(*instance_key)
                                     .and_then(|id| runtime.component_tree.get(id))
-                                    .map(|node| node.fn_name.clone())
+                                    .map(|node| node.fn_name)
                             })
                         })
                         .flatten();
@@ -540,7 +540,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                         tracing::debug!(
                             target: "tessera_ui::replay",
                             instance_key,
-                            fn_name = trace_name.as_deref().unwrap_or("<missing>"),
+                            fn_name = trace_name.unwrap_or("<missing>"),
                             detach_ns,
                             compose_ns,
                             attach_ns = attach_timer.map(|timer| timer.elapsed().as_nanos()),
