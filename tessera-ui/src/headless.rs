@@ -28,11 +28,12 @@ use crate::{
     render_module::RenderModule,
     renderer::{
         MAX_FRAME_SETTLING_RETRIES, RenderCore, TesseraConfig, core::OffscreenReadbackError,
-        focus_settling_can_progress,
+        frame_settling_can_progress,
     },
     runtime::{
-        TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
-        has_pending_build_invalidations, has_pending_layout_invalidations,
+        TesseraRuntime, begin_frame_build_invalidations, begin_frame_clock,
+        clear_persistent_focus_handles, clear_redraw_waker, has_pending_build_invalidations,
+        has_pending_layout_invalidations, has_ready_build_invalidations,
         prune_persistent_focus_handles, reset_build_invalidations, reset_component_replay_tracking,
         reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
         reset_render_slot_read_dependencies, reset_state_read_dependencies,
@@ -513,6 +514,7 @@ impl HeadlessRenderer {
         #[cfg(feature = "profiling")]
         let frame_timer = Instant::now();
         begin_frame_clock(frame_time);
+        begin_frame_build_invalidations();
         crate::asset::settle();
         // Tick frame-nanos receivers before the build so their state writes are
         // consumed by the current recomposition pass.
@@ -520,6 +522,8 @@ impl HeadlessRenderer {
 
         let mut _build_tree_result = build_component_tree(&self.entry);
 
+        #[cfg(feature = "profiling")]
+        let initial_build_duration = _build_tree_result.duration();
         #[cfg(feature = "profiling")]
         let draw_timer = Instant::now();
         let cursor_position = self.cursor.position();
@@ -561,11 +565,11 @@ impl HeadlessRenderer {
                     runtime.component_tree.has_pending_focus_reveal()
                 });
             let focus_retry = next_move.is_some() || next_reveal || next_keyboard;
-            if !focus_retry && !has_pending_layout_invalidations() {
+            if !focus_retry && !frame_settling_can_progress(false) {
                 break graph;
             }
             if retries >= MAX_FRAME_SETTLING_RETRIES
-                || (focus_retry && !focus_settling_can_progress(next_keyboard))
+                || (focus_retry && !frame_settling_can_progress(next_keyboard))
             {
                 if next_reveal
                     && (has_pending_build_invalidations() || has_pending_layout_invalidations())
@@ -582,14 +586,18 @@ impl HeadlessRenderer {
             retries += 1;
             retry_focus_move = next_move;
             retry_focus_reveal = next_reveal;
-            if focus_retry {
+            if focus_retry || has_ready_build_invalidations() {
                 _build_tree_result.absorb_retry(build_component_tree(&self.entry));
             }
         };
         self.diagnostics = _diagnostics;
         prune_persistent_focus_handles();
         #[cfg(feature = "profiling")]
-        let draw_duration = draw_timer.elapsed();
+        let draw_duration = draw_timer.elapsed().saturating_sub(
+            _build_tree_result
+                .duration()
+                .saturating_sub(initial_build_duration),
+        );
 
         #[cfg(feature = "profiling")]
         let render_timer = Instant::now();

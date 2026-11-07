@@ -225,6 +225,7 @@ where
     session.current_frame_nanos = frame_nanos;
     let frame_time = session.frame_origin + Duration::from_nanos(frame_nanos);
     begin_frame_clock(frame_time);
+    crate::runtime::begin_frame_build_invalidations();
     #[cfg(not(target_family = "wasm"))]
     crate::asset::settle();
     // Match renderer frame order so frame callbacks update state before build.
@@ -262,10 +263,13 @@ where
         frame_diagnostics.accumulate_pass(diagnostics);
         flush_pending_focus_callbacks();
         crate::component_tree::flush_pending_globally_positioned_callbacks();
-        if !crate::runtime::has_pending_layout_invalidations()
+        if !crate::renderer::frame_settling_can_progress(false)
             || retry == crate::renderer::MAX_FRAME_SETTLING_RETRIES
         {
             break;
+        }
+        if crate::runtime::has_ready_build_invalidations() {
+            let _ = build_component_tree(&session.content);
         }
     }
 
@@ -845,6 +849,84 @@ mod tests {
         pump_layout_test_session(&mut session, 33_333_334)
             .node("measure-only")
             .width(120);
+    }
+
+    #[tessera(crate)]
+    fn layout_dependent_build_fixture(probe: MeasureProbe) {
+        let width = remember(|| 40);
+        let observed_width = remember(|| 0);
+        probe.width.set(Some(width));
+        receive_frame_nanos(|_| FrameNanosControl::Continue);
+        crate::layout::layout()
+            .policy(MeasureOnlyWidthPolicy { width })
+            .modifier(
+                Modifier::new().on_layout_size_changed(move |size: crate::PxSize| {
+                    if observed_width.get() != size.width.0 {
+                        observed_width.set(size.width.0);
+                    }
+                }),
+            );
+        crate::layout::layout()
+            .policy(FixedSizePolicy {
+                width: observed_width.get(),
+                height: 20,
+            })
+            .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
+                tag: "layout-dependent-build".into(),
+            }));
+    }
+
+    #[test]
+    fn layout_observer_build_updates_settle_before_the_frame_finishes() {
+        let probe = MeasureProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test(|| layout_dependent_build_fixture(probe.clone())).viewport_px(200, 100),
+        );
+        pump_layout_test_session(&mut session, 0)
+            .node("layout-dependent-build")
+            .width(40);
+        let width = probe.width.get().unwrap();
+        session.run(|| width.set(80));
+        pump_layout_test_session(&mut session, 16_666_667)
+            .node("layout-dependent-build")
+            .width(80);
+        assert_eq!(session.frame_clock_diagnostics().callbacks_executed, 1);
+        assert!(!session.run(|| crate::renderer::frame_settling_can_progress(false)));
+        pump_layout_test_session(&mut session, 33_333_334)
+            .node("layout-dependent-build")
+            .width(80);
+        assert_eq!(session.frame_clock_diagnostics().callbacks_executed, 1);
+        assert!(!session.run(|| crate::renderer::frame_settling_can_progress(false)));
+    }
+
+    #[tessera(crate)]
+    fn layout_feedback_fixture(probe: super::TestProbe<Option<State<i32>>>) {
+        let width = remember(|| 1);
+        probe.set(Some(width));
+        crate::layout::layout()
+            .policy(FixedSizePolicy {
+                width: width.get(),
+                height: 20,
+            })
+            .modifier(
+                Modifier::new()
+                    .on_layout_size_changed(move |size: crate::PxSize| width.set(size.width.0 + 1)),
+            );
+    }
+
+    #[test]
+    fn nonconverging_layout_build_feedback_yields_at_the_frame_retry_limit() {
+        let probe = super::TestProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test(|| layout_feedback_fixture(probe.clone())).viewport_px(200, 100),
+        );
+        pump_layout_test_session(&mut session, 0);
+        let width = probe.get().unwrap();
+        assert_eq!(
+            session.run(|| width.get()),
+            crate::renderer::MAX_FRAME_SETTLING_RETRIES as i32 + 2
+        );
+        assert!(session.run(crate::runtime::has_pending_build_invalidations));
     }
 
     #[derive(Clone, PartialEq)]

@@ -127,7 +127,12 @@ fn check_motion(samples: u32) {
     assert_eq!((thumb(&renderer)[0], thumb(&renderer)[2]), (4, 56));
     renderer.pointer_move(MOUSE_POINTER_ID, outside);
     renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
-    renderer.render_frames(2);
+    renderer.step_frame();
+    assert_eq!(
+        (thumb(&renderer)[0], thumb(&renderer)[2]),
+        (4, 56),
+        "release starts from the pressed geometry without advancing the clock twice"
+    );
     renderer.render_frames(5);
     assert_eq!((thumb(&renderer)[0], thumb(&renderer)[2]), (10, 43));
     renderer.render_frames(100);

@@ -405,21 +405,24 @@ impl tessera_ui::LayoutModifierNode for LazyGridLayout {
 /// use tessera_components::{
 ///     lazy_grid::{GridCells, lazy_vertical_grid},
 ///     text::text,
+///     theme::material_theme,
 /// };
 /// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
 /// fn demo() {
-///     lazy_vertical_grid()
-///         .columns(GridCells::fixed(2))
-///         .overscan(0)
-///         .items(4, move |i| {
-///             text(format!("Tile {i}")).modifier(
-///                 Modifier::new().semantics(SemanticsArgs {
-///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
-///                 })
-///             );
-///         });
+///     material_theme().child(|| {
+///         lazy_vertical_grid()
+///             .columns(GridCells::fixed(2))
+///             .overscan(0)
+///             .items(4, move |i| {
+///                 text(format!("Tile {i}")).modifier(
+///                     Modifier::new().semantics(SemanticsArgs {
+///                         test_tag: Some(format!("tile-{i}")), ..Default::default()
+///                     })
+///                 );
+///             });
+///     });
 /// }
 ///
 /// let snapshot = tessera_ui::testing::layout_test(demo).run();
@@ -595,21 +598,24 @@ fn lazy_grid_slots(args: LazyGridSlotsArgs, axis: LazyGridAxis) {
 /// use tessera_components::{
 ///     lazy_grid::{GridCells, lazy_horizontal_grid},
 ///     text::text,
+///     theme::material_theme,
 /// };
 /// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
 /// fn demo() {
-///     lazy_horizontal_grid()
-///         .rows(GridCells::fixed(2))
-///         .overscan(0)
-///         .items(3, move |i| {
-///             text(format!("Tile {i}")).modifier(
-///                 Modifier::new().semantics(SemanticsArgs {
-///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
-///                 })
-///             );
-///         });
+///     material_theme().child(|| {
+///         lazy_horizontal_grid()
+///             .rows(GridCells::fixed(2))
+///             .overscan(0)
+///             .items(3, move |i| {
+///                 text(format!("Tile {i}")).modifier(
+///                     Modifier::new().semantics(SemanticsArgs {
+///                         test_tag: Some(format!("tile-{i}")), ..Default::default()
+///                     })
+///                 );
+///             });
+///     });
 /// }
 ///
 /// let snapshot = tessera_ui::testing::layout_test(demo).run();
@@ -1639,7 +1645,7 @@ mod tests {
         scroll_controller.with_mut(|c| {
             c.set_visible_size_for_test(ComputedData {
                 width: Px::new(60),
-                height: Px::new(60),
+                height: Px::new(28),
             });
             c.set_scroll_position(target_position);
         });
@@ -1648,7 +1654,7 @@ mod tests {
             .scrollbar_behavior(ScrollBarBehavior::Hidden)
             .modifier(Modifier::new().constrain(
                 Some(AxisConstraint::exact(Px::new(60))),
-                Some(AxisConstraint::exact(Px::new(60))),
+                Some(AxisConstraint::exact(Px::new(28))),
             ))
             .vertical(true)
             .horizontal(false)

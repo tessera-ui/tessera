@@ -39,6 +39,12 @@ Queued runtime wakes are ignored if their invalidations have already been
 consumed. Pending layout, paint, animation, dispatcher, clipboard, and focus
 work still requests another frame.
 
+Input and layout-observer state writes settle through bounded build/layout
+retries before presentation. Retries do not advance the frame clock or replay
+consumed input. Build-time feedback to an already executed boundary remains
+deferred until the next frame, and nonconverging layout feedback yields after
+the retry limit instead of monopolizing the event loop.
+
 ## Retained runtime storage
 
 Context snapshots share their bindings until replay needs to remap or remove a

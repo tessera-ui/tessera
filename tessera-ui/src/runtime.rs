@@ -675,6 +675,7 @@ pub(crate) fn remove_previous_component_replay_nodes(instance_keys: &HashSet<u64
 struct BuildInvalidationTracker {
     dirty_instance_keys: HashSet<u64>,
     cross_instance_dirty_instance_keys: HashSet<u64>,
+    deferred_instance_keys: HashSet<u64>,
 }
 
 #[derive(Default)]
@@ -1029,7 +1030,8 @@ fn consume_pending_build_invalidation(instance_key: u64) -> bool {
 
 pub(crate) fn record_replay_boundary_invalidation_for_instance_key(instance_key: u64) {
     let inserted = with_build_invalidation_tracker_mut(|tracker| {
-        tracker.dirty_instance_keys.insert(instance_key)
+        !tracker.deferred_instance_keys.contains(&instance_key)
+            && tracker.dirty_instance_keys.insert(instance_key)
     });
     if inserted {
         schedule_runtime_redraw();
@@ -1038,6 +1040,9 @@ pub(crate) fn record_replay_boundary_invalidation_for_instance_key(instance_key:
 
 pub(crate) fn record_cross_instance_build_invalidation(instance_key: u64) {
     with_build_invalidation_tracker_mut(|tracker| {
+        if tracker.deferred_instance_keys.contains(&instance_key) {
+            return;
+        }
         tracker.dirty_instance_keys.insert(instance_key);
         tracker
             .cross_instance_dirty_instance_keys
@@ -1052,9 +1057,11 @@ pub(crate) fn defer_build_invalidations(instance_keys: &HashSet<u64>) {
         return;
     }
     with_build_invalidation_tracker_mut(|tracker| {
-        tracker
-            .dirty_instance_keys
-            .extend(instance_keys.iter().copied());
+        for key in instance_keys {
+            tracker.dirty_instance_keys.remove(key);
+            tracker.cross_instance_dirty_instance_keys.remove(key);
+            tracker.deferred_instance_keys.insert(*key);
+        }
     });
     schedule_runtime_redraw();
 }
@@ -1424,6 +1431,14 @@ pub(crate) fn take_build_invalidations() -> BuildInvalidationSet {
     })
 }
 
+pub(crate) fn begin_frame_build_invalidations() {
+    with_build_invalidation_tracker_mut(|tracker| {
+        tracker
+            .dirty_instance_keys
+            .extend(tracker.deferred_instance_keys.drain());
+    });
+}
+
 pub(crate) fn reset_build_invalidations() {
     with_build_invalidation_tracker_mut(|tracker| {
         *tracker = BuildInvalidationTracker::default();
@@ -1438,11 +1453,18 @@ pub(crate) fn remove_build_invalidations(instance_keys: &HashSet<u64>) {
         for key in instance_keys {
             tracker.dirty_instance_keys.remove(key);
             tracker.cross_instance_dirty_instance_keys.remove(key);
+            tracker.deferred_instance_keys.remove(key);
         }
     });
 }
 
 pub(crate) fn has_pending_build_invalidations() -> bool {
+    with_build_invalidation_tracker(|tracker| {
+        !tracker.dirty_instance_keys.is_empty() || !tracker.deferred_instance_keys.is_empty()
+    })
+}
+
+pub(crate) fn has_ready_build_invalidations() -> bool {
     with_build_invalidation_tracker(|tracker| !tracker.dirty_instance_keys.is_empty())
 }
 

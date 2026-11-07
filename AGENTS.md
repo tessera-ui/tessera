@@ -200,6 +200,7 @@ programming contract; the guidelines below also govern framework implementation.
   scroll deltas share nested-scroll dispatch, and zero-velocity releases still
   notify nested-scroll completion. Advance inertia from the framework frame clock.
 - When opening or closing focusable content, use `FocusManager::defer_keyboard_until_layout` to preserve subsequent keys until the new layout and focus callbacks finish. Ordinary text-input updates must not introduce a layout barrier.
+- Settle input and layout-observer state writes through bounded build/layout retries before presentation without repeating frame ticks or consumed input. Keep build-time feedback to already executed boundaries deferred until the next frame, independently of layout settling.
 
 ---
 
