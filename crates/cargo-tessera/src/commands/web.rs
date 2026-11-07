@@ -244,7 +244,9 @@ fn web_build_command(project_dir: &Path, release: bool, features: &[String]) -> 
         ] {
             cmd.env(name, std::env::var(name).unwrap_or_else(|_| default.into()));
         }
-        cmd.arg("--release");
+        // wasm-bindgen needs target_features before wasm-opt runs.
+        cmd.env("CARGO_PROFILE_RELEASE_STRIP", "none")
+            .arg("--release");
     }
 
     if !features.is_empty() {
