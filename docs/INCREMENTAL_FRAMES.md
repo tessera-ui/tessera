@@ -42,13 +42,19 @@ work still requests another frame.
 ## Retained runtime storage
 
 Context snapshots share their bindings until replay needs to remap or remove a
-binding. Modifier snapshots share immutable chain links. The scene stores empty
-and single-child branches inline and uses persistent ordered maps for wider
-branches so updating one child can preserve the previous frame's snapshot.
+binding. Context and keyed scopes restore their prior bindings when they exit.
+Modifier snapshots share immutable chain links. The scene stores empty and
+single-child branches inline and uses persistent ordered maps for wider branches
+so updating one child can preserve the previous frame's snapshot.
 
 Nodes allocate interaction data and accessibility descriptions only when used.
 Pointer modifier positions are shared between the node and dispatch plans, and
 nodes without pointer modifiers need no position buffer.
+
+Composition wrappers without semantics need no geometry metadata outside the
+root. Layout nodes keep one snapshot of their policy inputs. Cached child
+measurements share their storage across placement updates, and leaf layouts
+need no child storage.
 
 ## Shared GPU resources
 

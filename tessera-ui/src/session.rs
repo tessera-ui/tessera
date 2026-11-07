@@ -7,11 +7,12 @@
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
-    collections::HashMap,
     marker::PhantomData,
     rc::{Rc, Weak},
     sync::Arc,
 };
+
+use rustc_hash::FxHashMap as HashMap;
 
 #[derive(Default)]
 struct Resources {
@@ -81,7 +82,26 @@ impl RuntimeSession {
 
     /// Returns a resource that stays on this session's UI thread.
     pub fn local_resource<T: Default + 'static>(&self) -> Rc<T> {
-        self.run(local_runtime_resource::<T>)
+        self.run(|| self.local_resource_in_session())
+    }
+
+    fn local_resource_in_session<T: Default + 'static>(&self) -> Rc<T> {
+        let key = TypeId::of::<T>();
+        if let Some(resource) = self.0.resources.borrow().local.get(&key).cloned() {
+            return Rc::downcast(resource).unwrap_or_else(|_| unreachable!());
+        }
+        let resource = Rc::new(T::default());
+        let stored = {
+            let mut resources = self.0.resources.borrow_mut();
+            if let Some(stored) = resources.local.get(&key) {
+                stored.clone()
+            } else {
+                resources.local.insert(key, resource.clone());
+                resources.order.push((key, false));
+                resource.clone()
+            }
+        };
+        Rc::downcast(stored).unwrap_or_else(|_| unreachable!())
     }
 
     /// Returns this session's identity for correlating observations.
@@ -202,8 +222,8 @@ impl<T: Default + 'static> SessionLocal<T> {
     }
 
     pub(crate) fn try_with<R>(&self, read: impl FnOnce(&T) -> R) -> Result<R, ()> {
-        let _session = RuntimeSession::current().ok_or(())?;
-        let resource = local_runtime_resource::<T>();
+        let session = RuntimeSession::current().ok_or(())?;
+        let resource = session.local_resource_in_session::<T>();
         Ok(read(&resource))
     }
 }
@@ -269,22 +289,7 @@ pub fn local_runtime_resource<T: Default + 'static>() -> Rc<T> {
     let Some(session) = RuntimeSession::current() else {
         return Rc::new(T::default());
     };
-    let key = TypeId::of::<T>();
-    if let Some(resource) = session.0.resources.borrow().local.get(&key).cloned() {
-        return Rc::downcast(resource).unwrap_or_else(|_| unreachable!());
-    }
-    let resource = Rc::new(T::default());
-    let stored = {
-        let mut resources = session.0.resources.borrow_mut();
-        if let Some(stored) = resources.local.get(&key) {
-            stored.clone()
-        } else {
-            resources.local.insert(key, resource.clone());
-            resources.order.push((key, false));
-            resource.clone()
-        }
-    };
-    Rc::downcast(stored).unwrap_or_else(|_| unreachable!())
+    session.local_resource_in_session()
 }
 
 #[cfg(all(test, feature = "testing"))]

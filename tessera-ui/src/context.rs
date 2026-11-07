@@ -154,13 +154,7 @@ const CONTEXT_GLOBALS: crate::session::SessionLocal<ContextGlobals> =
     crate::session::SessionLocal::new();
 
 pub(crate) fn current_context_map() -> ContextMap {
-    with_execution_context(|context| {
-        context
-            .context_stack
-            .last()
-            .cloned()
-            .unwrap_or_else(ContextMap::new)
-    })
+    with_execution_context(|context| context.context_map.clone())
 }
 
 fn resolve_snapshot_entry(
@@ -312,28 +306,23 @@ pub(crate) fn record_current_context_snapshot_for(instance_key: u64) {
 }
 
 pub(crate) fn with_context_snapshot<R>(snapshot: &ContextMap, f: impl FnOnce() -> R) -> R {
-    struct ContextSnapshotGuard {
-        previous_stack: Option<Vec<ContextMap>>,
-    }
+    with_context_map(normalize_context_snapshot(snapshot), f)
+}
 
-    impl Drop for ContextSnapshotGuard {
+fn with_context_map<R>(map: ContextMap, f: impl FnOnce() -> R) -> R {
+    struct RestoreContext(ContextMap);
+
+    impl Drop for RestoreContext {
         fn drop(&mut self) {
-            if let Some(previous_stack) = self.previous_stack.take() {
-                with_execution_context_mut(|context| {
-                    context.context_stack = previous_stack;
-                });
-            }
+            with_execution_context_mut(|context| {
+                std::mem::swap(&mut context.context_map, &mut self.0);
+            });
         }
     }
 
-    let normalized_snapshot = normalize_context_snapshot(snapshot);
-    let previous_stack = with_execution_context_mut(|context| {
-        std::mem::replace(&mut context.context_stack, vec![normalized_snapshot])
-    });
-    let _guard = ContextSnapshotGuard {
-        previous_stack: Some(previous_stack),
-    };
-
+    let previous =
+        with_execution_context_mut(|context| std::mem::replace(&mut context.context_map, map));
+    let _restore = RestoreContext(previous);
     f()
 }
 
@@ -374,10 +363,7 @@ fn context_read_subscribers(slot: u32, generation: u64) -> Vec<u64> {
 pub(crate) fn begin_recompose_context_slot_epoch() {
     // Start a new context-slot epoch for the current recomposition pass.
     with_slot_table_mut(SlotTable::begin_epoch);
-    with_execution_context_mut(|context| {
-        context.context_stack.clear();
-        context.context_stack.push(ContextMap::new());
-    });
+    with_execution_context_mut(|context| context.context_map = ContextMap::new());
 }
 
 pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
@@ -586,35 +572,6 @@ where
     }
 }
 
-fn push_context_layer(type_id: TypeId, slot: u32, generation: u64, key: SlotKey) {
-    with_execution_context_mut(|context| {
-        let parent = context
-            .context_stack
-            .last()
-            .cloned()
-            .unwrap_or_else(ContextMap::new);
-        let next = parent.update(
-            type_id,
-            ContextSnapshotEntry {
-                slot,
-                generation,
-                key,
-            },
-        );
-        context.context_stack.push(next);
-    });
-}
-
-fn pop_context_layer() {
-    with_execution_context_mut(|context| {
-        let popped = context.context_stack.pop();
-        debug_assert!(popped.is_some(), "Context stack underflow");
-        if context.context_stack.is_empty() {
-            context.context_stack.push(ContextMap::new());
-        }
-    });
-}
-
 /// Provides a typed context value for the duration of the given closure.
 ///
 /// The `init` closure is evaluated only when the context slot is created (or
@@ -712,19 +669,15 @@ where
         })
     };
 
-    push_context_layer(type_id, slot, generation, slot_key);
-
-    struct ContextScopeGuard;
-    impl Drop for ContextScopeGuard {
-        fn drop(&mut self) {
-            pop_context_layer();
-        }
-    }
-
-    let guard = ContextScopeGuard;
-    let result = f();
-    drop(guard);
-    result
+    let map = current_context_map().update(
+        type_id,
+        ContextSnapshotEntry {
+            slot,
+            generation,
+            key: slot_key,
+        },
+    );
+    with_context_map(map, f)
 }
 
 /// Reads inherited visual defaults from the current build scope.
@@ -737,11 +690,9 @@ where
     ensure_build_phase();
 
     with_execution_context(|context| {
-        let map = context
-            .context_stack
-            .last()
-            .expect("Context stack must always contain at least one layer");
-        map.get(&TypeId::of::<T>())
+        context
+            .context_map
+            .get(&TypeId::of::<T>())
             .copied()
             .map(|entry| Context::new(entry.slot, entry.generation))
     })
@@ -766,9 +717,6 @@ mod tests {
     fn reset_test_state() {
         with_slot_table_mut(|table| *table = SlotTable::default());
         reset_execution_context();
-        with_execution_context_mut(|context| {
-            context.context_stack = vec![ContextMap::new()];
-        });
     }
 
     #[test]
@@ -818,7 +766,7 @@ mod tests {
     }
 
     #[test]
-    fn with_context_snapshot_restores_stack_after_panic() {
+    fn with_context_snapshot_restores_bindings_after_panic() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         reset_test_state();
@@ -836,9 +784,8 @@ mod tests {
                 },
             },
         );
-        let original_stack = vec![base_layer, parent_layer];
         with_execution_context_mut(|context| {
-            context.context_stack = original_stack.clone();
+            context.context_map = parent_layer.clone();
         });
 
         let snapshot = ContextMap::new().update(
@@ -856,8 +803,7 @@ mod tests {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             with_context_snapshot(&snapshot, || {
                 with_execution_context(|context| {
-                    assert_eq!(context.context_stack.len(), 1);
-                    assert!(context.context_stack.last().is_some());
+                    assert!(context.context_map.is_empty());
                 });
                 panic!("expected panic in context snapshot test");
             });
@@ -865,7 +811,7 @@ mod tests {
         assert!(result.is_err());
 
         with_execution_context(|context| {
-            assert_eq!(context.context_stack, original_stack);
+            assert_eq!(context.context_map, parent_layer);
         });
     }
 

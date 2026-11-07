@@ -546,8 +546,7 @@ impl<T> RenderSlotWithCell<T> {
 
 #[derive(Default)]
 struct LayoutDirtyTracker {
-    previous_layout_inputs_by_node: HashMap<u64, LayoutInputSnapshot>,
-    frame_layout_inputs_by_node: HashMap<u64, LayoutInputSnapshot>,
+    layout_inputs_by_node: HashMap<u64, LayoutInputSnapshot>,
     pending_measure_self_dirty_nodes: HashSet<u64>,
     ready_measure_self_dirty_nodes: HashSet<u64>,
     pending_placement_self_dirty_nodes: HashSet<u64>,
@@ -927,51 +926,28 @@ pub(crate) fn with_replay_scope<R>(
     f: impl FnOnce() -> R,
 ) -> R {
     struct ReplayScopeGuard {
-        previous_group_path: Option<Vec<u64>>,
-        previous_instance_key_stack: Option<Vec<u64>>,
-        previous_instance_logic_id_override: Option<Option<u64>>,
+        group_path: Vec<u64>,
+        key_override: Option<u64>,
+        logic_id_override: Option<u64>,
     }
 
     impl Drop for ReplayScopeGuard {
         fn drop(&mut self) {
-            if let Some(previous_group_path) = self.previous_group_path.take() {
-                with_execution_context_mut(|context| {
-                    context.group_path_stack = previous_group_path;
-                });
-            }
-            if let Some(previous_instance_key_stack) = self.previous_instance_key_stack.take() {
-                with_execution_context_mut(|context| {
-                    context.instance_key_stack = previous_instance_key_stack;
-                });
-            }
-            if let Some(previous_instance_logic_id_override) =
-                self.previous_instance_logic_id_override.take()
-            {
-                with_execution_context_mut(|context| {
-                    context.next_node_instance_logic_id_override =
-                        previous_instance_logic_id_override;
-                });
-            }
+            with_execution_context_mut(|context| {
+                std::mem::swap(&mut context.group_path_stack, &mut self.group_path);
+                context.instance_key_override = self.key_override;
+                context.next_node_instance_logic_id_override = self.logic_id_override;
+            });
         }
     }
 
-    let previous_group_path = with_execution_context_mut(|context| {
-        std::mem::replace(&mut context.group_path_stack, group_path.to_vec())
-    });
-    let previous_instance_key_stack = with_execution_context_mut(|context| {
-        let next_stack = instance_key_override.into_iter().collect::<Vec<_>>();
-        std::mem::replace(&mut context.instance_key_stack, next_stack)
-    });
-    let previous_instance_logic_id_override = with_execution_context_mut(|context| {
-        context
+    let _guard = with_execution_context_mut(|context| ReplayScopeGuard {
+        group_path: std::mem::replace(&mut context.group_path_stack, group_path.to_vec()),
+        key_override: std::mem::replace(&mut context.instance_key_override, instance_key_override),
+        logic_id_override: context
             .next_node_instance_logic_id_override
-            .replace(instance_logic_id)
+            .replace(instance_logic_id),
     });
-    let _guard = ReplayScopeGuard {
-        previous_group_path: Some(previous_group_path),
-        previous_instance_key_stack: Some(previous_instance_key_stack),
-        previous_instance_logic_id_override: Some(previous_instance_logic_id_override),
-    };
 
     f()
 }
@@ -1762,50 +1738,39 @@ fn record_layout_policy_dirty(
         return;
     }
     with_layout_dirty_tracker_mut(|tracker| {
-        let (
-            measure_changed,
-            placement_changed,
-            transform_changed,
-            parent_data_changed,
-            next_layout_inputs,
-        ) = match tracker.previous_layout_inputs_by_node.remove(&instance_key) {
-            Some(previous) => {
-                let measure_changed = !previous.policy.dyn_measure_eq(layout_policy)
-                    || !previous.modifier.layout_measure_eq(modifier);
-                let placement_changed = !previous.policy.dyn_placement_eq(layout_policy)
-                    || !previous.modifier.layout_placement_eq(modifier);
-                let transform_changed = !previous.modifier.position_eq(modifier);
-                let parent_data_changed = !previous.modifier.parent_data_eq(modifier);
-                if !measure_changed
-                    && !placement_changed
-                    && !transform_changed
-                    && !parent_data_changed
-                {
-                    (false, false, false, false, previous)
-                } else {
+        let snapshot = || LayoutInputSnapshot {
+            policy: layout_policy.clone_box(),
+            modifier: modifier.clone(),
+        };
+        let (measure_changed, placement_changed, transform_changed, parent_data_changed) =
+            match tracker.layout_inputs_by_node.entry(instance_key) {
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    let previous = entry.get();
+                    let measure_changed = !previous.policy.dyn_measure_eq(layout_policy)
+                        || !previous.modifier.layout_measure_eq(modifier);
+                    let placement_changed = !previous.policy.dyn_placement_eq(layout_policy)
+                        || !previous.modifier.layout_placement_eq(modifier);
+                    let transform_changed = !previous.modifier.position_eq(modifier);
+                    let parent_data_changed = !previous.modifier.parent_data_eq(modifier);
+                    if measure_changed
+                        || placement_changed
+                        || transform_changed
+                        || parent_data_changed
+                    {
+                        entry.insert(snapshot());
+                    }
                     (
                         measure_changed,
                         placement_changed,
                         transform_changed,
                         parent_data_changed,
-                        LayoutInputSnapshot {
-                            policy: layout_policy.clone_box(),
-                            modifier: modifier.clone(),
-                        },
                     )
                 }
-            }
-            None => (
-                true,
-                true,
-                true,
-                true,
-                LayoutInputSnapshot {
-                    policy: layout_policy.clone_box(),
-                    modifier: modifier.clone(),
-                },
-            ),
-        };
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(snapshot());
+                    (true, true, true, true)
+                }
+            };
         if measure_changed {
             tracker
                 .pending_measure_self_dirty_nodes
@@ -1821,9 +1786,6 @@ fn record_layout_policy_dirty(
         if transform_changed {
             tracker.pending_transform_dirty_nodes.insert(instance_key);
         }
-        tracker
-            .frame_layout_inputs_by_node
-            .insert(instance_key, next_layout_inputs);
     });
 }
 
@@ -1842,7 +1804,6 @@ pub(crate) fn begin_frame_layout_dirty_tracking() {
             .extend(std::mem::take(
                 &mut tracker.pending_placement_self_dirty_nodes,
             ));
-        tracker.frame_layout_inputs_by_node.clear();
     });
 }
 
@@ -1858,9 +1819,6 @@ pub(crate) fn finalize_frame_layout_dirty_tracking() {
             .extend(std::mem::take(
                 &mut tracker.pending_placement_self_dirty_nodes,
             ));
-        tracker
-            .previous_layout_inputs_by_node
-            .extend(std::mem::take(&mut tracker.frame_layout_inputs_by_node));
     });
 }
 
@@ -1957,7 +1915,7 @@ pub(crate) fn remove_layout_structure(instance_keys: &HashSet<u64>) {
     with_layout_dirty_tracker_mut(|tracker| {
         for key in instance_keys {
             tracker.previous_children_by_node.remove(key);
-            tracker.previous_layout_inputs_by_node.remove(key);
+            tracker.layout_inputs_by_node.remove(key);
             tracker.structural_changes.removed_nodes.insert(*key);
             tracker.structural_changes.changed_nodes.remove(key);
         }
@@ -2392,32 +2350,26 @@ impl TesseraRuntime {
         }
     }
 
-    pub(crate) fn set_current_accessibility(&mut self, accessibility: Option<AccessibilityNode>) {
-        if let Some(node_id) = current_node_id()
-            && let Some(metadata) = self.component_tree.metadatas_mut().get_mut(&node_id)
-        {
-            metadata.accessibility = accessibility.map(Box::new);
-        } else {
-            debug_assert!(
-                false,
-                "set_current_accessibility must be called inside a component build"
-            );
-        }
-    }
-
-    pub(crate) fn set_current_accessibility_action_handler(
+    pub(crate) fn set_current_accessibility(
         &mut self,
+        accessibility: Option<AccessibilityNode>,
         handler: Option<AccessibilityActionHandler>,
     ) {
-        if let Some(node_id) = current_node_id()
-            && let Some(metadata) = self.component_tree.metadatas_mut().get_mut(&node_id)
-        {
-            metadata.accessibility_action_handler = handler;
-        } else {
+        let Some(node_id) = current_node_id() else {
             debug_assert!(
                 false,
-                "set_current_accessibility_action_handler must be called inside a component build"
+                "accessibility must be attached inside a component build"
             );
+            return;
+        };
+        let metadatas = self.component_tree.metadatas_mut();
+        if accessibility.is_some() || handler.is_some() {
+            let metadata = metadatas.entry_or_default(node_id);
+            metadata.accessibility = accessibility.map(Box::new);
+            metadata.accessibility_action_handler = handler;
+        } else if let Some(metadata) = metadatas.get_mut(&node_id) {
+            metadata.accessibility = None;
+            metadata.accessibility_action_handler = None;
         }
     }
 
@@ -2635,11 +2587,13 @@ impl TesseraRuntime {
 
     pub(crate) fn finalize_current_layout_policy_dirty(&mut self) {
         if let Some(node) = self.component_tree.current_node() {
-            record_layout_policy_dirty(
-                node.instance_key,
-                node.layout_node.as_ref(),
-                &node.modifier,
-            );
+            if node.role == crate::component_tree::NodeRole::Layout {
+                record_layout_policy_dirty(
+                    node.instance_key,
+                    node.layout_node.as_ref(),
+                    &node.modifier,
+                );
+            }
         } else {
             debug_assert!(
                 false,
@@ -3331,7 +3285,7 @@ where
 }
 
 pub(crate) fn current_instance_key_override() -> Option<u64> {
-    with_execution_context(|context| context.instance_key_stack.last().copied())
+    with_execution_context(|context| context.instance_key_override)
 }
 
 /// RAII guard that tracks control-flow grouping for the current component node.
@@ -3420,22 +3374,22 @@ impl Drop for PathGroupGuard {
 /// RAII guard that sets a stable instance key for the duration of a block.
 pub struct InstanceKeyGuard {
     key_hash: u64,
+    previous: Option<u64>,
 }
 
 impl InstanceKeyGuard {
     /// Push a key hash for instance identity.
     pub fn new(key_hash: u64) -> Self {
-        with_execution_context_mut(|context| {
-            context.instance_key_stack.push(key_hash);
-        });
-        Self { key_hash }
+        let previous =
+            with_execution_context_mut(|context| context.instance_key_override.replace(key_hash));
+        Self { key_hash, previous }
     }
 }
 
 impl Drop for InstanceKeyGuard {
     fn drop(&mut self) {
         with_execution_context_mut(|context| {
-            let popped = context.instance_key_stack.pop();
+            let popped = std::mem::replace(&mut context.instance_key_override, self.previous);
             debug_assert_eq!(
                 popped,
                 Some(self.key_hash),
@@ -4419,7 +4373,7 @@ mod tests {
             context.group_path_stack = vec![1, 2, 3];
         });
         with_execution_context_mut(|context| {
-            context.instance_key_stack = vec![5];
+            context.instance_key_override = Some(5);
         });
         with_execution_context_mut(|context| {
             context.next_node_instance_logic_id_override = Some(9);
@@ -4447,7 +4401,7 @@ mod tests {
             context.group_path_stack = vec![5];
         });
         with_execution_context_mut(|context| {
-            context.instance_key_stack = vec![13];
+            context.instance_key_override = Some(13);
         });
         with_execution_context_mut(|context| {
             context.next_node_instance_logic_id_override = None;

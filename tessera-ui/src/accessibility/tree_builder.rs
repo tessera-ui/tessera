@@ -178,11 +178,12 @@ impl AccessibilityIndex {
                 {
                     self.ancestor_visits += 1;
                 }
-                let Some(metadata) = metadatas.get(&ancestor) else {
-                    visible = false;
-                    break;
-                };
+                let metadata = metadatas.get(&ancestor);
                 if tree[ancestor].get().role == NodeRole::Layout {
+                    let Some(metadata) = metadata else {
+                        visible = false;
+                        break;
+                    };
                     // Overlaid content can change paint order without changing
                     // logical reading order.
                     skip_composition_order = metadata.placement_order.is_some();
@@ -190,16 +191,15 @@ impl AccessibilityIndex {
                         || order.get(&ancestor).copied().unwrap_or_default(),
                         |order| usize::try_from(order).unwrap_or(usize::MAX),
                     ));
+                    if ancestor != root && metadata.abs_position.is_none() {
+                        visible = false;
+                    }
                 } else if !skip_composition_order {
                     path.push(order.get(&ancestor).copied().unwrap_or_default());
                 }
-                if ancestor != root
-                    && tree[ancestor].get().role == NodeRole::Layout
-                    && metadata.abs_position.is_none()
+                if let Some(semantics) =
+                    metadata.and_then(|metadata| metadata.accessibility.as_deref())
                 {
-                    visible = false;
-                }
-                if let Some(semantics) = &metadata.accessibility {
                     if tooltip.is_none() {
                         tooltip = semantics.tooltip.as_deref();
                     }
@@ -758,13 +758,13 @@ pub fn dispatch_action(
         return false;
     };
     for ancestor in target.ancestors(tree) {
-        let Some(metadata) = metadatas.get(&ancestor) else {
-            return false;
-        };
-        if tree[ancestor].get().role == NodeRole::Layout && metadata.abs_position.is_none() {
+        let metadata = metadatas.get(&ancestor);
+        if tree[ancestor].get().role == NodeRole::Layout
+            && metadata.is_none_or(|metadata| metadata.abs_position.is_none())
+        {
             return false;
         }
-        if let Some(semantics) = &metadata.accessibility
+        if let Some(semantics) = metadata.and_then(|metadata| metadata.accessibility.as_deref())
             && (semantics.hidden || (ancestor != target && !semantics.merge_descendants))
         {
             return false;
@@ -812,7 +812,7 @@ mod tests {
     use crate::{
         Modifier, Px,
         accessibility::AccessibilityNode,
-        component_tree::{ComponentNode, ComponentNodeMetaData, NodeRole},
+        component_tree::{ComponentNode, NodeRole},
         layout::{DefaultLayoutNode, NoopDrawModifier},
     };
 
@@ -845,14 +845,13 @@ mod tests {
         if let Some(parent) = parent {
             parent.append(id, tree);
         }
-        let mut metadata = ComponentNodeMetaData::none();
+        let metadata = metadatas.entry_or_default(id);
         metadata.accessibility = accessibility.map(Box::new);
         metadata.abs_position = Some(PxPosition::new(Px(10), Px(20)));
         metadata.computed_data = Some(ComputedData {
             width: Px(40),
             height: Px(50),
         });
-        metadatas.insert(id, metadata);
         id
     }
 
@@ -1273,6 +1272,8 @@ mod tests {
         let navigation_wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
         tree[content_wrapper].get_mut().role = NodeRole::Composition;
         tree[navigation_wrapper].get_mut().role = NodeRole::Composition;
+        metadatas.remove(&content_wrapper);
+        metadatas.remove(&navigation_wrapper);
         let content = append_node(
             &mut tree,
             &mut metadatas,
@@ -1443,10 +1444,13 @@ mod tests {
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
         let decoration = append_node(&mut tree, &mut metadatas, Some(root), None);
+        let wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
+        tree[wrapper].get_mut().role = NodeRole::Composition;
+        metadatas.remove(&wrapper);
         let slider = append_node(
             &mut tree,
             &mut metadatas,
-            Some(root),
+            Some(wrapper),
             Some(AccessibilityNode::new().with_role(Role::Slider).focused()),
         );
         tree[slider].get_mut().instance_key = 700;

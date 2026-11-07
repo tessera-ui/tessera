@@ -1092,8 +1092,8 @@ impl Modifier {
         }
 
         TesseraRuntime::with_mut(|runtime| {
-            runtime.set_current_accessibility(has_semantics.then_some(accessibility));
-            runtime.set_current_accessibility_action_handler(action_handler);
+            runtime
+                .set_current_accessibility(has_semantics.then_some(accessibility), action_handler);
         });
     }
 

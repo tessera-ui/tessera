@@ -50,12 +50,9 @@ use crate::profiler::{NodeMeta, Phase as ProfilerPhase, ScopeGuard as ProfilerSc
 pub(crate) struct LayoutSnapshotEntry {
     pub constraint_key: Constraint,
     pub consumed_insets: crate::Insets,
-    pub child_insets: Arc<[crate::Insets]>,
+    children: node::CachedLayoutChildren,
     pub layout_result: LayoutResult,
-    pub base_placements: Arc<[(u64, PxPosition)]>,
-    pub child_constraints: Arc<[Constraint]>,
-    pub child_sizes: Arc<[ComputedData]>,
-    pub child_indices: Arc<HashMap<u64, usize>>,
+    pub base_placements: Option<Arc<[(u64, PxPosition)]>>,
     pub intrinsic_dependencies: bool,
     pub draw_layout: NodeDrawLayout,
 }
@@ -601,7 +598,7 @@ pub(crate) struct ReplayReplaceResult {
 pub(crate) struct ReplayReplaceContext {
     parent_id: indextree::NodeId,
     next_sibling: Option<indextree::NodeId>,
-    existing_children: HashSet<indextree::NodeId>,
+    last_existing_child: Option<indextree::NodeId>,
     previous_queue: Vec<indextree::NodeId>,
     detached_root_id: indextree::NodeId,
 }
@@ -792,30 +789,20 @@ impl ComponentTree {
             return Err(ReplayReplaceError::RootNodeNotReplaceable);
         };
 
-        let mut next_sibling = None;
-        let mut seen_target = false;
-        for child in parent_id.children(&self.tree) {
-            if seen_target {
-                next_sibling = Some(child);
-                break;
-            }
-            if child == target_node_id {
-                seen_target = true;
-            }
-        }
+        let next_sibling = target_node_id.next_sibling(&self.tree);
 
         self.replay_detached_root = Some(target_node_id);
         self.replay_retained_roots.clear();
         self.begin_replay_ancestry(target_node_id, parent_id);
         target_node_id.detach(&mut self.tree);
 
-        let existing_children = parent_id.children(&self.tree).collect();
+        let last_existing_child = parent_id.last_child(&self.tree);
 
         let previous_queue = std::mem::replace(&mut self.node_queue, vec![parent_id]);
         Ok(ReplayReplaceContext {
             parent_id,
             next_sibling,
-            existing_children,
+            last_existing_child,
             previous_queue,
             detached_root_id: target_node_id,
         })
@@ -828,15 +815,20 @@ impl ComponentTree {
         let ReplayReplaceContext {
             parent_id,
             next_sibling,
-            existing_children,
+            last_existing_child,
             previous_queue,
             detached_root_id,
         } = context;
 
-        let mut inserted_root_ids = parent_id
-            .children(&self.tree)
-            .filter(|child_id| !existing_children.contains(child_id))
-            .collect::<Vec<_>>();
+        // A replay appends its replacement roots after the surviving siblings.
+        let first_inserted = match last_existing_child {
+            Some(child) => child.next_sibling(&self.tree),
+            None => parent_id.first_child(&self.tree),
+        };
+        let inserted_root_ids = first_inserted
+            .into_iter()
+            .flat_map(|child| child.following_siblings(&self.tree))
+            .collect::<SmallVec<[_; 1]>>();
         if inserted_root_ids.is_empty() {
             self.replay_ancestry = replay::ReplayAncestry::default();
             self.replay_detached_root = None;
@@ -846,15 +838,9 @@ impl ComponentTree {
         }
 
         if let Some(next_sibling) = next_sibling {
-            for inserted_root_id in &inserted_root_ids {
-                if *inserted_root_id != next_sibling {
-                    next_sibling.insert_before(*inserted_root_id, &mut self.tree);
-                }
+            for &inserted_root_id in &inserted_root_ids {
+                next_sibling.insert_before(inserted_root_id, &mut self.tree);
             }
-            inserted_root_ids = parent_id
-                .children(&self.tree)
-                .filter(|child_id| !existing_children.contains(child_id))
-                .collect::<Vec<_>>();
         }
 
         let detached_root_reused = inserted_root_ids.contains(&detached_root_id);
@@ -864,7 +850,7 @@ impl ComponentTree {
         let mut inserted_instance_logic_ids = HashSet::default();
         let mut reused_instance_logic_ids = HashSet::default();
         let mut replaced_nodes = Vec::new();
-        let mut pending = inserted_root_ids.clone();
+        let mut pending: SmallVec<[_; 8]> = inserted_root_ids.into_iter().collect();
         while let Some(id) = pending.pop() {
             let retained = self.replay_retained_roots.contains(&id);
             if !retained {
@@ -889,18 +875,14 @@ impl ComponentTree {
         if !detached_root_reused {
             for id in detached_root_id.descendants(&self.tree) {
                 let node = self.tree[id].get();
-                removed_instance_keys.insert(node.instance_key);
-                removed_instance_logic_ids.insert(node.instance_logic_id);
+                if !inserted_instance_keys.contains(&node.instance_key) {
+                    removed_instance_keys.insert(node.instance_key);
+                }
+                if !inserted_instance_logic_ids.contains(&node.instance_logic_id) {
+                    removed_instance_logic_ids.insert(node.instance_logic_id);
+                }
             }
         }
-        let removed_instance_keys = removed_instance_keys
-            .difference(&inserted_instance_keys)
-            .copied()
-            .collect::<HashSet<_>>();
-        let removed_instance_logic_ids = removed_instance_logic_ids
-            .difference(&inserted_instance_logic_ids)
-            .copied()
-            .collect::<HashSet<_>>();
         for (old_id, new_id) in replaced_nodes {
             let input_geometry_changed = self
                 .tree
@@ -1143,6 +1125,7 @@ impl ComponentTree {
     /// policy, and handlers.
     pub(crate) fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
         let instance_key = node_component.instance_key;
+        let needs_geometry = node_component.role == NodeRole::Layout || self.node_queue.is_empty();
         self.preserve_replay_candidate(instance_key);
         let new_node_id = self.tree.new_node(node_component);
         self.changed_frame_nodes.insert(new_node_id);
@@ -1153,8 +1136,9 @@ impl ComponentTree {
         if let Some(current_node_id) = self.node_queue.last_mut() {
             current_node_id.append(new_node_id, &mut self.tree);
         }
-        let metadata = ComponentNodeMetaData::none();
-        self.metadatas.insert(new_node_id, metadata);
+        if needs_geometry {
+            self.metadatas.entry_or_default(new_node_id);
+        }
         self.node_queue.push(new_node_id);
         new_node_id
     }
@@ -1169,14 +1153,15 @@ impl ComponentTree {
             let observes_window = position_observers
                 .iter()
                 .any(|handler| !matches!(handler, GloballyPositionedHandler::Size(_)));
-            let metadata = self.metadatas.entry_or_default(node_id);
-            metadata.observes_size = position_observers
-                .iter()
-                .any(|handler| matches!(handler, GloballyPositionedHandler::Size(_)));
-            metadata.observes_geometry = interaction.observes_input_geometry()
-                || observes_window
-                || node.layout_coordinate_space
-                || node.modifier.has_input_geometry();
+            if let Some(metadata) = self.metadatas.get_mut(&node_id) {
+                metadata.observes_size = position_observers
+                    .iter()
+                    .any(|handler| matches!(handler, GloballyPositionedHandler::Size(_)));
+                metadata.observes_geometry = interaction.observes_input_geometry()
+                    || observes_window
+                    || node.layout_coordinate_space
+                    || node.modifier.has_input_geometry();
+            }
             if !position_observers.is_empty() {
                 self.position_observer_nodes.insert(node_id);
                 self.pending_position_observers.insert(node_id);

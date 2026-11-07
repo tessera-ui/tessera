@@ -395,14 +395,14 @@ impl Drop for ParentGuard {
 
 struct PropScopeGuard {
     group_path: Vec<u64>,
-    key_stack: Vec<u64>,
+    key_override: Option<u64>,
 }
 
 impl Drop for PropScopeGuard {
     fn drop(&mut self) {
         with_execution_context_mut(|context| {
             context.group_path_stack = std::mem::take(&mut self.group_path);
-            context.instance_key_stack = std::mem::take(&mut self.key_stack);
+            context.instance_key_override = self.key_override;
             context.instance_logic_id_stack.pop();
             context.current_component_instance_stack.pop();
             context.order_frame_stack.pop();
@@ -432,21 +432,18 @@ fn execute_call(id: u64) {
         for (property, occurrence, update) in call.updates.drain(..) {
             let mut hasher = FxHasher::default();
             (call.identity, call.name, property, occurrence).hash(&mut hasher);
-            let (group_path, key_stack) = with_execution_context_mut(|context| {
+            let (group_path, key_override) = with_execution_context_mut(|context| {
                 context.instance_logic_id_stack.push(call.prop_owner);
                 context.current_component_instance_stack.push(call.creator);
                 context.order_frame_stack.push(OrderFrame::default());
                 (
                     std::mem::replace(&mut context.group_path_stack, vec![hasher.finish()]),
-                    std::mem::replace(
-                        &mut context.instance_key_stack,
-                        call.key_override.into_iter().collect(),
-                    ),
+                    std::mem::replace(&mut context.instance_key_override, call.key_override),
                 )
             });
             let _guard = PropScopeGuard {
                 group_path,
-                key_stack,
+                key_override,
             };
             update(call.props.as_any_mut());
         }
