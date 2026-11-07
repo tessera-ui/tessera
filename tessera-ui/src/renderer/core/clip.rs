@@ -224,10 +224,6 @@ impl ShapeClipper {
         target.view.clone()
     }
 
-    pub(super) fn reset_targets(&mut self) {
-        self.stencils.clear();
-    }
-
     pub(super) fn restore(&self, pass: &mut wgpu::RenderPass<'_>, size: PxSize, apply_clip: bool) {
         if apply_clip {
             let mut depth = 0;

@@ -453,7 +453,7 @@ impl RenderCore {
         #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
     ) {
         let render_start = Instant::now();
-        let output_view = self.targets.offscreen_copy.clone();
+        let output_view = self.offscreen_copy().clone();
         self.render_into_view(
             execution,
             &output_view,
@@ -682,7 +682,14 @@ impl RenderCore {
     /// RGBA8 presentation bytes are sRGB-encoded even when the output texture
     /// uses a non-sRGB format, matching PNG and most image consumers.
     pub fn read_offscreen_rgba(&self) -> Result<Vec<u8>, OffscreenReadbackError> {
-        self.read_texture_rgba(self.targets.offscreen_copy.texture())
+        self.read_texture_rgba(self.offscreen_copy().texture())
+    }
+
+    fn offscreen_copy(&self) -> &wgpu::TextureView {
+        self.targets
+            .offscreen_copy
+            .as_ref()
+            .expect("offscreen cores own a copy target")
     }
 
     fn read_texture_rgba(
@@ -807,9 +814,22 @@ impl RenderCore {
 
                 let final_view = match write_resource {
                     RenderResourceId::SceneColor => {
+                        let create = |label| {
+                            RenderCore::create_compute_pass_target(
+                                state.device,
+                                state.config,
+                                label,
+                            )
+                        };
                         let mut targets = ComputeTargets::Scene {
-                            front: &mut state.compute.target_a,
-                            back: &mut state.compute.target_b,
+                            front: state
+                                .compute
+                                .target_a
+                                .get_or_insert_with(|| create("Compute A")),
+                            back: state
+                                .compute
+                                .target_b
+                                .get_or_insert_with(|| create("Compute B")),
                         };
                         let needs_scene_prefill = read_resource == RenderResourceId::SceneColor
                             && !matches!(*scene_source, SceneSource::Compute);
@@ -974,7 +994,17 @@ impl RenderCore {
                     && write_resource == RenderResourceId::SceneColor
                     && matches!(*scene_source, SceneSource::Offscreen)
                 {
-                    let sample_view = state.targets.scene_sample.clone();
+                    let sample_view = state
+                        .targets
+                        .scene_sample
+                        .get_or_insert_with(|| {
+                            RenderCore::create_pass_target(
+                                state.device,
+                                state.config,
+                                "Scene Sample",
+                            )
+                        })
+                        .clone();
                     let sample_rect = scene_sampling_rect(&pass.draws, target_size);
                     Self::blit_to_view(BlitParams {
                         encoder,
@@ -1669,14 +1699,13 @@ mod tests {
             1,
             crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
         ));
+        let scene_sample =
+            RenderCore::create_pass_target(&core.device, &core.draw_config, "Sample");
+        let compute = RenderCore::create_compute_pass_target(&core.device, &core.config, "A");
         for (target, pipeline, expected) in [
-            (&core.targets.scene_sample, &core.blit.pipeline, 128_u8),
-            (&core.compute.target_a, &core.blit.pipeline_rgba, 55),
-            (
-                &core.targets.offscreen_copy,
-                &core.blit.present_pipeline,
-                128,
-            ),
+            (&scene_sample, &core.blit.pipeline, 128_u8),
+            (&compute, &core.blit.pipeline_rgba, 55),
+            (core.offscreen_copy(), &core.blit.present_pipeline, 128),
         ] {
             let mut encoder = core.device.create_command_encoder(&Default::default());
             {

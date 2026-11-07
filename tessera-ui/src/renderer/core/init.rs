@@ -139,9 +139,12 @@ impl RenderCore {
             required_features,
             required_limits: required_limits.clone(),
             label: None,
-            // Growing blocks keep upload heaps resident after transient staging.
+            // Fixed blocks keep upload heaps from growing after transient staging,
+            // and are large enough that full-window MSAA and stencil targets are
+            // suballocated, so resizes reuse heap memory instead of creating
+            // dedicated heaps.
             memory_hints: wgpu::MemoryHints::Manual {
-                suballocated_device_memory_block_size: 8 << 20..8 << 20,
+                suballocated_device_memory_block_size: 64 << 20..64 << 20,
             },
             trace: wgpu::Trace::Off,
             experimental_features: wgpu::ExperimentalFeatures::default(),
@@ -361,22 +364,10 @@ impl RenderCore {
         let (msaa_texture, msaa_view) =
             Self::make_msaa_resources(&device, sample_count, &draw_config);
 
-        // Create Pass Targets (Offscreen and Compute)
         let offscreen_texture = Self::create_pass_target(&device, &draw_config, "Offscreen");
-        let offscreen_copy_texture = Self::create_pass_target(&device, &config, "Offscreen Copy");
-        let scene_sample_texture = Self::create_pass_target(&device, &draw_config, "Scene Sample");
-        let compute_target_a = Self::create_compute_pass_target(
-            &device,
-            &config,
-            TextureFormat::Rgba8Unorm,
-            "Compute A",
-        );
-        let compute_target_b = Self::create_compute_pass_target(
-            &device,
-            &config,
-            TextureFormat::Rgba8Unorm,
-            "Compute B",
-        );
+        let offscreen_copy_texture = surface
+            .is_none()
+            .then(|| Self::create_pass_target(&device, &config, "Offscreen Copy"));
 
         let drawer = Drawer::new();
 
@@ -513,15 +504,15 @@ impl RenderCore {
         let targets = FrameTargets {
             offscreen: offscreen_texture,
             offscreen_copy: offscreen_copy_texture,
-            scene_sample: scene_sample_texture,
+            scene_sample: None,
             msaa_texture,
             msaa_view,
             sample_count,
         };
 
         let compute = ComputeState {
-            target_a: compute_target_a,
-            target_b: compute_target_b,
+            target_a: None,
+            target_b: None,
             resource_manager: ComputeResourceManager::new(),
         };
 
@@ -577,7 +568,7 @@ impl RenderCore {
         }
     }
 
-    fn create_pass_target(
+    pub(super) fn create_pass_target(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
         label_suffix: &str,
@@ -605,10 +596,9 @@ impl RenderCore {
         texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    fn create_compute_pass_target(
+    pub(super) fn create_compute_pass_target(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
-        format: TextureFormat,
         label_suffix: &str,
     ) -> wgpu::TextureView {
         let label = format!("Compute {label_suffix} Texture");
@@ -622,7 +612,7 @@ impl RenderCore {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format,
+            format: TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::STORAGE_BINDING
@@ -690,32 +680,28 @@ impl RenderCore {
     pub(crate) fn rebuild_pass_targets(&mut self) {
         self.draw_config.width = self.config.width;
         self.draw_config.height = self.config.height;
-        self.local_textures.clear();
-        self.pipelines.clipper.reset_targets();
         self.targets.offscreen.texture().destroy();
-        self.targets.offscreen_copy.texture().destroy();
-        self.targets.scene_sample.texture().destroy();
-        self.compute.target_a.texture().destroy();
-        self.compute.target_b.texture().destroy();
+        for view in [
+            self.targets.offscreen_copy.take(),
+            self.targets.scene_sample.take(),
+            self.compute.target_a.take(),
+            self.compute.target_b.take(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            view.texture().destroy();
+        }
 
         self.targets.offscreen =
             Self::create_pass_target(&self.device, &self.draw_config, "Offscreen");
-        self.targets.offscreen_copy =
-            Self::create_pass_target(&self.device, &self.config, "Offscreen Copy");
-        self.targets.scene_sample =
-            Self::create_pass_target(&self.device, &self.draw_config, "Scene Sample");
-        self.compute.target_a = Self::create_compute_pass_target(
-            &self.device,
-            &self.config,
-            TextureFormat::Rgba8Unorm,
-            "Compute A",
-        );
-        self.compute.target_b = Self::create_compute_pass_target(
-            &self.device,
-            &self.config,
-            TextureFormat::Rgba8Unorm,
-            "Compute B",
-        );
+        if self.surface.is_none() {
+            self.targets.offscreen_copy = Some(Self::create_pass_target(
+                &self.device,
+                &self.config,
+                "Offscreen Copy",
+            ));
+        }
 
         if self.targets.sample_count > 1 {
             if let Some(t) = self.targets.msaa_texture.take() {

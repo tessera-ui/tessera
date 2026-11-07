@@ -38,10 +38,12 @@ struct RenderPipelines {
     composite_registry: CompositePipelineRegistry,
 }
 
+// Effect-only targets are created on first use so window resizes do not
+// allocate full-window textures that the current scene never samples.
 struct FrameTargets {
     offscreen: wgpu::TextureView,
-    offscreen_copy: wgpu::TextureView,
-    scene_sample: wgpu::TextureView,
+    offscreen_copy: Option<wgpu::TextureView>,
+    scene_sample: Option<wgpu::TextureView>,
     msaa_texture: Option<wgpu::Texture>,
     msaa_view: Option<wgpu::TextureView>,
     sample_count: u32,
@@ -88,8 +90,8 @@ impl std::fmt::Display for OffscreenReadbackError {
 impl std::error::Error for OffscreenReadbackError {}
 
 struct ComputeState {
-    target_a: wgpu::TextureView,
-    target_b: wgpu::TextureView,
+    target_a: Option<wgpu::TextureView>,
+    target_b: Option<wgpu::TextureView>,
     resource_manager: ComputeResourceManager,
 }
 
@@ -186,11 +188,11 @@ impl LocalTexturePool {
         Self { slots: Vec::new() }
     }
 
-    fn clear(&mut self) {
-        self.slots.clear();
-    }
-
-    fn begin_frame(&mut self, _current_frame: u64) {
+    fn begin_frame(&mut self, current_frame: u64) {
+        // Sizes from earlier layouts, such as before a window resize, are
+        // released once they stop being used.
+        self.slots
+            .retain(|slot| current_frame.wrapping_sub(slot.last_used_frame) <= 2);
         for slot in &mut self.slots {
             slot.in_use = false;
         }
