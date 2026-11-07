@@ -112,6 +112,7 @@ def ios(udid, bundle):
     try:
         verify(read, lambda: run("xcrun", "simctl", "launch", udid, "com.apple.mobilesafari"), launch)
         assert launch().split(":")[-1].strip() == pid, "Application restarted instead of resuming"
+        run("xcrun", "simctl", "io", udid, "screenshot", str(output / "ios-portrait.png"))
         run("xcrun", "simctl", "terminate", udid, identifier)
     except Exception:
         for path in (stdout, stderr):
