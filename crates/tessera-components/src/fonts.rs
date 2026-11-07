@@ -1,7 +1,8 @@
 //! Fonts loaded on demand when text uses their family or Unicode ranges.
 //!
 //! Text uses system fonts unless an application registers [`Fonts`] or a
-//! [`FontStylesheet`] at its entry. Web builds load default fonts from a CDN.
+//! [`FontStylesheet`] at its entry. Web builds bundle a startup font and load
+//! additional fonts from a CDN.
 
 use std::{borrow::Cow, cell::RefCell, io, rc::Rc, sync::Arc};
 

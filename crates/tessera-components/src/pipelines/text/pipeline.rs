@@ -50,6 +50,10 @@ fn system_fonts() -> glyphon::FontSystem {
 
     let mut fonts = glyphon::FontSystem::new();
     let db = fonts.db_mut();
+    #[cfg(target_family = "wasm")]
+    db.load_font_source(fontdb::Source::Binary(Arc::new(
+        &include_bytes!("../../../assets/Roboto-Regular.ttf")[..],
+    )));
     let fallback = PlatformFallback.common_fallback().first().copied();
     #[cfg(target_os = "android")]
     db.load_fonts_dir("/system/fonts");
