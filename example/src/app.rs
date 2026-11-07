@@ -373,6 +373,112 @@ mod tests {
 
     use super::*;
 
+    fn click_action(
+        snapshot: &tessera_ui::testing::AccessibilitySnapshot,
+        label: &str,
+    ) -> ActionRequest {
+        let (id, _) = snapshot
+            .nodes()
+            .iter()
+            .find(|(_, node)| crate::has_label(node, label) && node.supports_action(Action::Click))
+            .unwrap_or_else(|| panic!("missing action {label}"));
+        ActionRequest {
+            action: Action::Click,
+            target_tree: TreeId::ROOT,
+            target_node: *id,
+            data: None,
+        }
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    #[ignore = "requires a native GPU adapter for pointer-driven app navigation"]
+    fn leaving_material_directory_through_the_app_drawer_keeps_destinations_live() {
+        fn click(renderer: &mut tessera_ui::HeadlessRenderer, label: &str) {
+            let snapshot = renderer.inspect_accessibility().unwrap();
+            let (_, node) = snapshot
+                .reading_order()
+                .find(|(_, node)| {
+                    crate::has_label(node, label)
+                        && node.supports_action(Action::Click)
+                        && !node.is_hidden()
+                        && node.bounds().is_some()
+                })
+                .unwrap_or_else(|| panic!("missing visible navigation action {label}"));
+            let bounds = node.bounds().unwrap();
+            let point = tessera_ui::PxPosition::from_f32_xy(
+                ((bounds.x0 + bounds.x1) * 0.5) as f32,
+                ((bounds.y0 + bounds.y1) * 0.5) as f32,
+            );
+            renderer.pointer_press(
+                tessera_ui::MOUSE_POINTER_ID,
+                point,
+                tessera_ui::PressKeyEventType::Left,
+            );
+            renderer.pointer_release(
+                tessera_ui::MOUSE_POINTER_ID,
+                point,
+                tessera_ui::PressKeyEventType::Left,
+            );
+            renderer.render_frames(1);
+            renderer.render_frames(24);
+        }
+
+        for sample_count in [1, 4] {
+            let navigation = TestProbe::default();
+            let observed = navigation.clone();
+            let mut renderer = tessera_ui::EntryPoint::new(move || {
+                app_fixture(observed.clone());
+            })
+            .package(tessera_components::ComponentsPackage)
+            .package(crate::res::i18n())
+            .package(crate::pages::FONTS)
+            .package(crate::pages::custom_shader::CustomShaderPackage)
+            .into_headless(tessera_ui::HeadlessConfig {
+                width: 1200,
+                height: 800,
+                sample_count,
+                ..Default::default()
+            })
+            .unwrap();
+            renderer.render_frames(8);
+            let handles = navigation.get().unwrap();
+            for label in [
+                "Home",
+                "Glass components",
+                "Custom shader",
+                "Material components",
+            ] {
+                if !handles.directory.with(SideSheetController::is_open) {
+                    click(&mut renderer, "Open navigation drawer");
+                }
+                click(&mut renderer, "Material components");
+                assert!(
+                    handles
+                        .router
+                        .with(RouterController::current_is::<MaterialComponentsPageDestination>)
+                );
+                click(&mut renderer, "Open navigation drawer");
+                click(&mut renderer, label);
+                assert!(handles.router.with(|router| match label {
+                    "Home" => router.current_is::<HomePageDestination>(),
+                    "Glass components" => router.current_is::<GlassComponentsPageDestination>(),
+                    "Custom shader" => router.current_is::<CustomShaderPageDestination>(),
+                    "Material components" =>
+                        router.current_is::<MaterialComponentsPageDestination>(),
+                    _ => unreachable!(),
+                }));
+                assert!(
+                    renderer
+                        .read_pixels()
+                        .unwrap()
+                        .chunks_exact(4)
+                        .any(|pixel| pixel[3] > 0)
+                );
+            }
+        }
+    }
+
     #[test]
     fn system_back_returns_from_a_component_article_to_the_directory() {
         use tessera_ui::system_back::{BackSwipeEdge, SystemBackEvent};
@@ -382,32 +488,16 @@ mod tests {
             layout_test(|| app_fixture(navigation.clone())).viewport_px(1200, 1600),
         );
         session.run(|| tessera_ui::EntryRegistry::new().register_package(crate::res::i18n()));
-        let click = |snapshot: &tessera_ui::testing::AccessibilitySnapshot, label| {
-            let (id, _) = snapshot
-                .nodes()
-                .iter()
-                .find(|(_, node)| {
-                    crate::has_label(node, label) && node.supports_action(Action::Click)
-                })
-                .unwrap_or_else(|| panic!("missing action {label}"));
-            ActionRequest {
-                action: Action::Click,
-                target_tree: TreeId::ROOT,
-                target_node: *id,
-                data: None,
-            }
-        };
-
         pump_layout_test_session(&mut session, 0);
         let router = navigation.get().unwrap().router;
-        let directory = click(
+        let directory = click_action(
             &session.inspect_accessibility().unwrap(),
             "Material components",
         );
         assert!(session.dispatch_accessibility_action(directory));
         pump_layout_test_session(&mut session, 1_000_000_000);
         pump_layout_test_session(&mut session, 2_000_000_000);
-        let article = click(
+        let article = click_action(
             &session.inspect_accessibility().unwrap(),
             "Open Button groups specifications",
         );
@@ -432,7 +522,7 @@ mod tests {
         assert!(session.run(|| {
             router.with(RouterController::current_is::<MaterialComponentsPageDestination>)
         }));
-        let article = click(
+        let article = click_action(
             &session.inspect_accessibility().unwrap(),
             "Open Button groups specifications",
         );
