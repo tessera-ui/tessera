@@ -551,7 +551,7 @@ struct LayoutDirtyTracker {
     ready_measure_self_dirty_nodes: HashSet<u64>,
     pending_placement_self_dirty_nodes: HashSet<u64>,
     ready_placement_self_dirty_nodes: HashSet<u64>,
-    previous_children_by_node: HashMap<u64, Vec<u64>>,
+    previous_children_by_node: HashMap<u64, Box<[u64]>>,
     structural_changes: StructureReconcileResult,
     pending_parent_data_dirty_nodes: HashSet<u64>,
     pending_transform_dirty_nodes: HashSet<u64>,
@@ -1878,16 +1878,27 @@ fn record_component_replay_snapshot(runtime: &TesseraRuntime, node_id: NodeId) {
     });
 }
 
-pub(crate) fn record_layout_structure(instance_key: u64, children: Vec<u64>) {
+pub(crate) fn record_layout_structure(
+    instance_key: u64,
+    children: impl ExactSizeIterator<Item = u64> + Clone,
+) {
     with_layout_dirty_tracker_mut(|tracker| {
-        if tracker.previous_children_by_node.get(&instance_key) != Some(&children) {
+        let previous = tracker
+            .previous_children_by_node
+            .get(&instance_key)
+            .map_or(&[][..], Box::as_ref);
+        if !previous.iter().copied().eq(children.clone()) {
             tracker
                 .structural_changes
                 .changed_nodes
                 .insert(instance_key);
-            tracker
-                .previous_children_by_node
-                .insert(instance_key, children);
+            if children.len() == 0 {
+                tracker.previous_children_by_node.remove(&instance_key);
+            } else {
+                tracker
+                    .previous_children_by_node
+                    .insert(instance_key, children.collect());
+            }
         }
         tracker
             .structural_changes
@@ -1897,6 +1908,9 @@ pub(crate) fn record_layout_structure(instance_key: u64, children: Vec<u64>) {
 }
 
 pub(crate) fn remove_layout_structure(instance_keys: &HashSet<u64>) {
+    if instance_keys.is_empty() {
+        return;
+    }
     with_layout_dirty_tracker_mut(|tracker| {
         for key in instance_keys {
             tracker.previous_children_by_node.remove(key);

@@ -15,8 +15,7 @@ use super::ComponentTree;
 
 #[derive(Default)]
 pub(super) struct ReplayAncestry {
-    detached_root: Option<NodeId>,
-    external_ancestors: Vec<NodeId>,
+    detached_parent: Option<NodeId>,
     reused: HashMap<NodeId, ConsumerAncestry>,
 }
 
@@ -29,24 +28,21 @@ struct ConsumerAncestry {
 }
 
 impl ComponentTree {
-    pub(super) fn begin_replay_ancestry(&mut self, root: NodeId, parent: NodeId) {
-        self.replay_ancestry = ReplayAncestry {
-            detached_root: Some(root),
-            external_ancestors: parent.ancestors(&self.tree).collect(),
-            reused: HashMap::default(),
-        };
+    pub(super) fn begin_replay_ancestry(&mut self, parent: NodeId) {
+        self.replay_ancestry.detached_parent = Some(parent);
     }
 
     pub(super) fn capture_reused_ancestry(&mut self, root: NodeId) {
-        let ancestry = self.consumer_ancestry(root, true);
+        let ancestry = self.consumer_ancestry(root, self.replay_ancestry.detached_parent);
         self.replay_ancestry.reused.insert(root, ancestry);
     }
 
-    fn consumer_ancestry(&self, root: NodeId, detached: bool) -> ConsumerAncestry {
-        let mut ancestors = root.ancestors(&self.tree).collect::<Vec<_>>();
-        if detached && ancestors.last().copied() == self.replay_ancestry.detached_root {
-            ancestors.extend(self.replay_ancestry.external_ancestors.iter().copied());
-        }
+    fn consumer_ancestry(&self, root: NodeId, detached_parent: Option<NodeId>) -> ConsumerAncestry {
+        let ancestors = root.ancestors(&self.tree).chain(
+            detached_parent
+                .into_iter()
+                .flat_map(|id| id.ancestors(&self.tree)),
+        );
         let mut result = ConsumerAncestry {
             order: Vec::new(),
             semantics: Vec::new(),
@@ -83,12 +79,12 @@ impl ComponentTree {
     }
 
     pub(super) fn finish_replay_ancestry(&mut self) {
-        let reused = std::mem::take(&mut self.replay_ancestry.reused);
-        for (root, previous) in reused {
+        let mut reused = std::mem::take(&mut self.replay_ancestry.reused);
+        for (root, previous) in reused.drain() {
             if self.tree.get(root).is_none_or(|node| node.is_removed()) {
                 continue;
             }
-            let current = self.consumer_ancestry(root, false);
+            let current = self.consumer_ancestry(root, None);
             if current.coordinate_space != previous.coordinate_space {
                 self.pending_position_observers.extend(
                     root.descendants(&self.tree)
@@ -110,6 +106,7 @@ impl ComponentTree {
                     .extend(root.descendants(&self.tree));
             }
         }
-        self.replay_ancestry = ReplayAncestry::default();
+        self.replay_ancestry.detached_parent = None;
+        self.replay_ancestry.reused = reused;
     }
 }

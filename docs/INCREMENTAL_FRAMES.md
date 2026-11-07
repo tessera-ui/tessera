@@ -56,6 +56,10 @@ root. Layout nodes keep one snapshot of their policy inputs. Cached child
 measurements share their storage across placement updates, and leaf layouts
 need no child storage.
 
+Each replay round refreshes affected parent layout lists from the deepest
+parent outward. Sibling replacements share that refresh. Consumers compare
+retained ancestry after the round's order is available.
+
 ## Shared GPU resources
 
 Use `GraphicsDevice::frame_buffer` for transient uniform and storage data. Each

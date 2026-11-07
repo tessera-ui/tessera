@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     ops::{Add, AddAssign},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use indextree::NodeId;
@@ -323,7 +323,16 @@ pub(crate) fn direct_layout_children(node_id: NodeId, tree: &ComponentNodeTree) 
     for child_id in node_id.children(tree) {
         collect(child_id, tree, &mut children);
     }
-    children.into()
+    share_layout_children(children)
+}
+
+pub(super) fn share_layout_children(children: Vec<NodeId>) -> Arc<[NodeId]> {
+    static EMPTY: OnceLock<Arc<[NodeId]>> = OnceLock::new();
+    if children.is_empty() {
+        Arc::clone(EMPTY.get_or_init(|| Arc::from([])))
+    } else {
+        children.into()
+    }
 }
 
 fn reset_frame_metadata(node_id: NodeId, component_node_metadatas: &mut ComponentNodeMetaDatas) {

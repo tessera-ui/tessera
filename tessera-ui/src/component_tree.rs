@@ -4,7 +4,12 @@ mod pointer;
 mod replay;
 mod scene;
 
-use std::{cell::Cell, collections::VecDeque, num::NonZero, sync::Arc};
+use std::{
+    cell::Cell,
+    collections::{BinaryHeap, VecDeque},
+    num::NonZero,
+    sync::Arc,
+};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use smallvec::SmallVec;
@@ -550,6 +555,7 @@ pub struct ComponentTree {
     replay_detached_root: Option<NodeId>,
     replay_retained_roots: HashSet<NodeId>,
     replay_ancestry: replay::ReplayAncestry,
+    replay_changed_parents: HashSet<NodeId>,
     node_ids_by_instance_key: HashMap<u64, indextree::NodeId>,
     composition_order: HashMap<NodeId, usize>,
     changed_frame_nodes: HashSet<NodeId>,
@@ -632,6 +638,7 @@ impl ComponentTree {
             replay_detached_root: None,
             replay_retained_roots: HashSet::default(),
             replay_ancestry: replay::ReplayAncestry::default(),
+            replay_changed_parents: HashSet::default(),
             node_ids_by_instance_key: HashMap::default(),
             composition_order: HashMap::default(),
             changed_frame_nodes: HashSet::default(),
@@ -680,6 +687,7 @@ impl ComponentTree {
         self.replay_detached_root = None;
         self.replay_retained_roots.clear();
         self.replay_ancestry = replay::ReplayAncestry::default();
+        self.replay_changed_parents.clear();
         self.node_ids_by_instance_key.clear();
         self.last_global_rects.clear();
         self.observer_viewport = None;
@@ -793,7 +801,7 @@ impl ComponentTree {
 
         self.replay_detached_root = Some(target_node_id);
         self.replay_retained_roots.clear();
-        self.begin_replay_ancestry(target_node_id, parent_id);
+        self.begin_replay_ancestry(parent_id);
         target_node_id.detach(&mut self.tree);
 
         let last_existing_child = parent_id.last_child(&self.tree);
@@ -959,37 +967,7 @@ impl ComponentTree {
         self.replay_detached_root = None;
         self.replay_retained_roots.clear();
 
-        #[cfg(feature = "profiling")]
-        let previous_parent_len = self.tree[parent_id].get().subtree_len;
-        let layout_changed = self.refresh_layout_children(parent_id);
-        #[cfg(feature = "profiling")]
-        let current_parent_len = self.tree[parent_id].get().subtree_len;
-        let mut refresh_adjacency =
-            layout_changed && self.tree[parent_id].get().role != NodeRole::Layout;
-        let mut ancestor = self.tree[parent_id].parent();
-        while let Some(node_id) = ancestor {
-            if refresh_adjacency {
-                refresh_adjacency = self.refresh_layout_children(node_id)
-                    && self.tree[node_id].get().role != NodeRole::Layout;
-            } else {
-                #[cfg(feature = "profiling")]
-                {
-                    if previous_parent_len == current_parent_len {
-                        break;
-                    }
-                    let node = self.tree[node_id].get_mut();
-                    node.subtree_len = node
-                        .subtree_len
-                        .saturating_sub(previous_parent_len)
-                        .saturating_add(current_parent_len);
-                }
-                #[cfg(not(feature = "profiling"))]
-                break;
-            }
-            ancestor = self.tree.get(node_id).and_then(|node| node.parent());
-        }
-
-        self.finish_replay_ancestry();
+        self.replay_changed_parents.insert(parent_id);
         self.node_queue = previous_queue;
         Ok(ReplayReplaceResult {
             removed_instance_keys,
@@ -999,6 +977,33 @@ impl ComponentTree {
             inserted_instance_logic_ids,
             reused_instance_logic_ids,
         })
+    }
+
+    pub(crate) fn finish_replay_round(&mut self) {
+        let mut scheduled = std::mem::take(&mut self.replay_changed_parents);
+        // Flattened layout children must be current before refreshing their parent.
+        let mut pending: BinaryHeap<_> = scheduled
+            .iter()
+            .map(|&id| (id.ancestors(&self.tree).count(), id))
+            .collect();
+        while let Some((depth, id)) = pending.pop() {
+            #[cfg(feature = "profiling")]
+            let previous_len = self.tree[id].get().subtree_len;
+            let changed = self.refresh_layout_children(id);
+            let node = &self.tree[id];
+            let propagate = changed && node.get().role == NodeRole::Composition;
+            #[cfg(feature = "profiling")]
+            let propagate = propagate || previous_len != node.get().subtree_len;
+            if propagate
+                && let Some(parent) = node.parent()
+                && scheduled.insert(parent)
+            {
+                pending.push((depth - 1, parent));
+            }
+        }
+        scheduled.clear();
+        self.replay_changed_parents = scheduled;
+        self.finish_replay_ancestry();
     }
 
     pub(crate) fn replace_build_parent(&mut self, parent: Option<NodeId>) -> Option<Vec<NodeId>> {
@@ -1196,20 +1201,23 @@ impl ComponentTree {
                 children.extend(direct_layout_children(child_id, &self.tree).iter().copied());
             }
         }
-        let keys = children
-            .iter()
-            .map(|id| self.tree[*id].get().instance_key)
-            .collect();
+        let node_ref = &self.tree[node_id];
+        let node = node_ref.get();
+        let changed = node.layout_children.as_deref() != Some(children.as_slice());
+        if changed && (node.role == NodeRole::Layout || node_ref.parent().is_none()) {
+            crate::runtime::record_layout_structure(
+                node.instance_key,
+                children.iter().map(|id| self.tree[*id].get().instance_key),
+            );
+        }
         let node = self.tree[node_id].get_mut();
         #[cfg(feature = "profiling")]
         {
             node.subtree_len = subtree_len;
         }
-        let changed = node.layout_children.as_deref() != Some(children.as_slice());
         if changed {
-            node.layout_children = Some(children.into());
+            node.layout_children = Some(node::share_layout_children(children));
         }
-        crate::runtime::record_layout_structure(node.instance_key, keys);
         changed
     }
 
@@ -6215,6 +6223,7 @@ mod tests {
             Ok(result) => result,
             Err(_) => panic!("finish replace should succeed"),
         };
+        tree.finish_replay_round();
 
         let root_children = root
             .children(tree.tree())
@@ -6268,6 +6277,7 @@ mod tests {
             Ok(result) => result,
             Err(_) => panic!("finish replace should succeed"),
         };
+        tree.finish_replay_round();
 
         let root_children = root
             .children(tree.tree())
@@ -6318,6 +6328,7 @@ mod tests {
             });
             tree.pop_node();
             assert!(tree.finish_replace_subtree(context).is_ok());
+            tree.finish_replay_round();
             assert_eq!(direct_layout_children(root, &tree.tree).as_ref(), &[outer]);
             assert_eq!(direct_layout_children(outer, &tree.tree).as_ref(), &[inner]);
             let expected = extra.map_or_else(|| vec![leaf], |extra| vec![leaf, extra]);
@@ -6370,6 +6381,14 @@ mod tests {
         tree.pop_node();
         tree.pop_node();
         assert!(tree.finish_replace_subtree(context).is_ok());
+
+        let context = tree
+            .begin_replace_subtree_by_instance_key(2)
+            .unwrap_or_else(|_| panic!("first layout exists"));
+        let layout_a = tree.add_node(node("replaced_layout_a", 2, 2));
+        tree.pop_node();
+        assert!(tree.finish_replace_subtree(context).is_ok());
+        tree.finish_replay_round();
         assert_eq!(
             direct_layout_children(root, tree.tree()).as_ref(),
             &[layout_a, layout_b, layout_c]
@@ -6386,6 +6405,7 @@ mod tests {
         }
         tree.pop_node();
         assert!(tree.finish_replace_subtree(context).is_ok());
+        tree.finish_replay_round();
         assert_eq!(
             direct_layout_children(root, tree.tree()).as_ref(),
             &[layout_a, layout_c, layout_b]
