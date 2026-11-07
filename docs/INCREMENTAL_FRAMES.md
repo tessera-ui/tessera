@@ -86,8 +86,6 @@ included in `render_build_passes_ns`; `render_prepare_ns` is not emitted for a
 separate pre-render ordering step.
 
 Windowed `frame_total_ns` includes pending surface and render-target resize work.
-Enable `tessera_ui::resize_cost=debug` tracing to separate surface configuration
-from target rebuilding; the trace also reports whether configuration was needed.
 
 Component build durations include child builds; do not sum nested samples as
 exclusive CPU time. Compare frame latency with tracing disabled separately from

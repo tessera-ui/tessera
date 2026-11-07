@@ -638,8 +638,6 @@ impl RenderCore {
 
     fn apply_resize(&mut self, force: bool) {
         if self.size.width > 0 && self.size.height > 0 {
-            let timer = tracing::enabled!(target: "tessera_ui::resize_cost", tracing::Level::DEBUG)
-                .then(crate::time::Instant::now);
             let limit = self.device.limits().max_texture_dimension_2d;
             // DirectComposition clips the unscaled visual to the HWND client area.
             // Other presentation systems can stretch it and need exact extents.
@@ -664,23 +662,7 @@ impl RenderCore {
                     surface.configure(&self.device, &self.config);
                 }
             }
-            let configured = timer.map(|timer| timer.elapsed());
             self.rebuild_pass_targets(force);
-            if let Some(timer) = timer {
-                let configured = configured.unwrap();
-                tracing::debug!(
-                    target: "tessera_ui::resize_cost",
-                    width = self.draw_config.width,
-                    height = self.draw_config.height,
-                    surface_width = self.config.width,
-                    surface_height = self.config.height,
-                    surface_reconfigured = configure && self.surface.is_some(),
-                    present_mode = ?self.config.present_mode,
-                    surface_configure_ns = configured.as_nanos(),
-                    target_rebuild_ns = timer.elapsed().saturating_sub(configured).as_nanos(),
-                    "resize_prepare_cpu"
-                );
-            }
         }
     }
 
