@@ -1,7 +1,9 @@
-use tessera_components::{modifier::ModifierExt as _, shape_def::Shape};
+use tessera_components::{
+    material_icons::{filled, outlined},
+    modifier::ModifierExt as _,
+    shape_def::Shape,
+};
 use tessera_ui::{Asset, Color, Dp, Modifier};
-
-use crate::res::material_spec::tab_symbols as assets;
 
 use super::srgb;
 
@@ -130,41 +132,17 @@ pub(super) fn font_family(selected: bool, hovered: bool, pressed: bool) -> &'sta
     }
 }
 
-pub(super) fn asset(index: usize, selected: bool, hovered: bool, pressed: bool) -> Asset {
-    let assets = [
-        assets::INFO_0_400_SVG,
-        assets::INFO_0_600_SVG,
-        assets::INFO_0_300_SVG,
-        assets::INFO_1_400_SVG,
-        assets::INFO_1_600_SVG,
-        assets::INFO_1_300_SVG,
-        assets::STYLE_0_400_SVG,
-        assets::STYLE_0_600_SVG,
-        assets::STYLE_0_300_SVG,
-        assets::STYLE_1_400_SVG,
-        assets::STYLE_1_600_SVG,
-        assets::STYLE_1_300_SVG,
-        assets::DESIGN_SERVICES_0_400_SVG,
-        assets::DESIGN_SERVICES_0_600_SVG,
-        assets::DESIGN_SERVICES_0_300_SVG,
-        assets::DESIGN_SERVICES_1_400_SVG,
-        assets::DESIGN_SERVICES_1_600_SVG,
-        assets::DESIGN_SERVICES_1_300_SVG,
-        assets::ACCESSIBILITY_NEW_0_400_SVG,
-        assets::ACCESSIBILITY_NEW_0_600_SVG,
-        assets::ACCESSIBILITY_NEW_0_300_SVG,
-        assets::ACCESSIBILITY_NEW_1_400_SVG,
-        assets::ACCESSIBILITY_NEW_1_600_SVG,
-        assets::ACCESSIBILITY_NEW_1_300_SVG,
-    ];
-    let state = if pressed {
-        2
-    } else if hovered {
-        1
-    } else {
-        0
-    };
-    assets[index * 6 + usize::from(selected) * 3 + state]
+pub(super) fn asset(index: usize, selected: bool) -> Asset {
+    let (outlined, filled) = [
+        (outlined::INFO_SVG, filled::INFO_SVG),
+        (outlined::STYLE_SVG, filled::STYLE_SVG),
+        (outlined::DESIGN_SERVICES_SVG, filled::DESIGN_SERVICES_SVG),
+        (
+            outlined::ACCESSIBILITY_NEW_SVG,
+            filled::ACCESSIBILITY_NEW_SVG,
+        ),
+    ][index];
+    if selected { filled } else { outlined }
 }
 
 pub(super) fn focus_modifier(modifier: Modifier, visible: bool, hovered: bool) -> Modifier {

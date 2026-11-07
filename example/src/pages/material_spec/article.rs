@@ -829,9 +829,7 @@ fn article_tab_strip(
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .children(move || {
                                 icon()
-                                    .painter(article_tab_visual::asset(
-                                        index, active, hovered, pressed,
-                                    ))
+                                    .painter(article_tab_visual::asset(index, active))
                                     .size(Dp(24.0))
                                     .tint(article_tab_visual::foreground(active, hovered, pressed));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));

@@ -5,7 +5,7 @@ permissions = []
 dir = "assets"
 
 [assets.tree_shaking]
-exclude = []
+exclude = ["material_spec/SOURCES.md", "material_spec/GoogleSans-OFL.txt"]
 
 [i18n]
 fallback = "en"
