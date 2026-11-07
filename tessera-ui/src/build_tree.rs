@@ -190,38 +190,45 @@ impl BuildTreeResult {
     }
 }
 
-fn collect_dirty_replay_roots(dirty_instance_keys: &HashSet<u64>) -> Vec<u64> {
+struct ReplayPlan {
+    live: HashSet<u64>,
+    roots: Vec<u64>,
+    recompose_root: bool,
+}
+
+fn plan_dirty_replay(dirty_instance_keys: &HashSet<u64>) -> ReplayPlan {
     TesseraRuntime::with(|runtime| {
+        let component_tree = &runtime.component_tree;
+        let tree = component_tree.tree();
+        let live: HashSet<_> = dirty_instance_keys
+            .iter()
+            .copied()
+            .filter(|key| component_tree.find_node_id_by_instance_key(*key).is_some())
+            .collect();
         let mut roots = Vec::new();
-        let tree = runtime.component_tree.tree();
-        for instance_key in dirty_instance_keys {
-            let node_id = runtime
-                .component_tree
-                .find_node_id_by_instance_key(*instance_key)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "missing node for dirty instance key {instance_key}; this violates replay invariants"
-                    )
-                });
-
-            let mut has_dirty_ancestor = false;
-            let mut parent_id = tree.get(node_id).and_then(|node| node.parent());
-            while let Some(pid) = parent_id {
-                let Some(parent_node) = tree.get(pid) else {
-                    break;
+        for &key in &live {
+            let id = component_tree
+                .find_node_id_by_instance_key(key)
+                .expect("dirty component was verified live");
+            let Some(parent) = tree.get(id).and_then(|node| node.parent()) else {
+                return ReplayPlan {
+                    live,
+                    roots: Vec::new(),
+                    recompose_root: true,
                 };
-                if dirty_instance_keys.contains(&parent_node.get().instance_key) {
-                    has_dirty_ancestor = true;
-                    break;
-                }
-                parent_id = parent_node.parent();
-            }
-
-            if !has_dirty_ancestor {
-                roots.push(*instance_key);
+            };
+            if !parent
+                .ancestors(tree)
+                .any(|id| live.contains(&tree[id].get().instance_key))
+            {
+                roots.push(key);
             }
         }
-        roots
+        ReplayPlan {
+            live,
+            roots,
+            recompose_root: false,
+        }
     })
 }
 
@@ -298,40 +305,6 @@ fn missing_replay_snapshot_panic_message(instance_key: u64) -> String {
     });
 
     message
-}
-
-fn retain_live_dirty_instance_keys(dirty_instance_keys: &HashSet<u64>) -> HashSet<u64> {
-    TesseraRuntime::with(|runtime| {
-        dirty_instance_keys
-            .iter()
-            .copied()
-            .filter(|instance_key| {
-                runtime
-                    .component_tree
-                    .find_node_id_by_instance_key(*instance_key)
-                    .is_some()
-            })
-            .collect()
-    })
-}
-
-fn dirty_roots_include_tree_root(dirty_roots: &[u64]) -> bool {
-    TesseraRuntime::with(|runtime| {
-        let tree = runtime.component_tree.tree();
-        dirty_roots.iter().any(|instance_key| {
-            let node_id = runtime
-                .component_tree
-                .find_node_id_by_instance_key(*instance_key)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "missing node for dirty instance key {instance_key}; this violates replay invariants"
-                    )
-                });
-            tree.get(node_id)
-                .and_then(|node| node.parent())
-                .is_none()
-        })
-    })
 }
 
 #[cfg(feature = "profiling")]
@@ -428,16 +401,14 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             return result;
         }
 
-        let initial_live_dirty_instance_keys =
-            retain_live_dirty_instance_keys(&invalidations.dirty_instance_keys);
-        let initial_dirty_roots = collect_dirty_replay_roots(&initial_live_dirty_instance_keys);
-        if dirty_roots_include_tree_root(&initial_dirty_roots) {
+        let mut plan = plan_dirty_replay(&invalidations.dirty_instance_keys);
+        if plan.recompose_root {
             let result = run_root_recompose();
             #[cfg(feature = "debug-dirty-overlay")]
             let result = result.with_dirty_replay_info(had_invalidations, Vec::new());
             return result;
         }
-        if initial_dirty_roots.is_empty() {
+        if plan.roots.is_empty() {
             debug!("Skipping component tree build: no dirty replay roots");
             let result = BuildTreeResult::skip_no_invalidation();
             #[cfg(feature = "debug-dirty-overlay")]
@@ -469,9 +440,12 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         // Executed boundaries cannot replay again in this frame. Forward slot
         // dependencies may span more rounds than their nesting depth suggests;
         // only backwards writes need to be deferred to the next frame.
-        while !pending_dirty_instance_keys.is_empty() {
-            let live_dirty_instance_keys =
-                retain_live_dirty_instance_keys(&pending_dirty_instance_keys);
+        loop {
+            let ReplayPlan {
+                live: live_dirty_instance_keys,
+                roots: dirty_roots,
+                recompose_root,
+            } = plan;
             if tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG) {
                 let dirty = TesseraRuntime::with(|runtime| {
                     live_dirty_instance_keys
@@ -489,16 +463,11 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                 });
                 tracing::debug!(target: "tessera_ui::replay", ?dirty, "replay_dirty_boundaries");
             }
-            if live_dirty_instance_keys.is_empty() {
-                break;
-            }
-
-            let dirty_roots = collect_dirty_replay_roots(&live_dirty_instance_keys);
-            if dirty_roots.is_empty() {
-                break;
-            }
-            if dirty_roots_include_tree_root(&dirty_roots) {
+            if recompose_root {
                 fallback_to_root_recompose = true;
+                break;
+            }
+            if dirty_roots.is_empty() {
                 break;
             }
             let replay_snapshots = previous_component_replay_nodes(&dirty_roots)
@@ -626,6 +595,10 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                 !stale_instance_keys.contains(instance_key)
                     && !executed_instance_keys.contains(instance_key)
             });
+            if pending_dirty_instance_keys.is_empty() {
+                break;
+            }
+            plan = plan_dirty_replay(&pending_dirty_instance_keys);
         }
 
         if fallback_to_root_recompose {
