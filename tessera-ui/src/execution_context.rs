@@ -1,9 +1,12 @@
-use std::{cell::RefCell, ptr::NonNull, sync::Arc};
+use std::{ptr::NonNull, sync::Arc};
 
 use rustc_hash::FxHashSet as HashSet;
 use smallvec::SmallVec;
 
-use crate::{NodeId, context::ContextMap, focus::FocusOwner, runtime::RuntimePhase};
+use crate::{
+    NodeId, context::ContextMap, focus::FocusOwner, runtime::RuntimePhase,
+    session::with_active_execution_context,
+};
 
 #[derive(Default)]
 pub(crate) struct ExecutionContext {
@@ -33,15 +36,12 @@ pub(crate) struct OrderFrame {
     pub(crate) group_occurrences: SmallVec<[(u64, u64); 4]>,
 }
 
-const EXECUTION_CONTEXT: crate::session::SessionLocal<RefCell<ExecutionContext>> =
-    crate::session::SessionLocal::new();
-
 pub(crate) fn with_execution_context<R>(f: impl FnOnce(&ExecutionContext) -> R) -> R {
-    EXECUTION_CONTEXT.with(|context| f(&context.borrow()))
+    with_active_execution_context(|context| f(&context.borrow()))
 }
 
 pub(crate) fn with_execution_context_mut<R>(f: impl FnOnce(&mut ExecutionContext) -> R) -> R {
-    EXECUTION_CONTEXT.with(|context| f(&mut context.borrow_mut()))
+    with_active_execution_context(|context| f(&mut context.borrow_mut()))
 }
 
 #[cfg(test)]

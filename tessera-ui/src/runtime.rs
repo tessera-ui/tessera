@@ -18,7 +18,9 @@ use crate::{
     NodeId,
     accessibility::{AccessibilityActionHandler, AccessibilityNode},
     component_tree::ComponentTree,
-    execution_context::{OrderFrame, with_execution_context, with_execution_context_mut},
+    execution_context::{
+        ExecutionContext, OrderFrame, with_execution_context, with_execution_context_mut,
+    },
     focus::{
         FocusDirection, FocusGroupNode, FocusHandleId, FocusNode, FocusProperties,
         FocusRegistration, FocusRegistrationKind, FocusRequester, FocusRequesterId,
@@ -102,15 +104,13 @@ fn salt_order_counter(salt: u64, counter: u64) -> u64 {
     }
 }
 
-fn next_child_instance_call_index() -> u64 {
-    with_execution_context_mut(|context| {
-        let Some(frame) = context.order_frame_stack.last_mut() else {
-            return 0;
-        };
-        let index = frame.instance;
-        frame.instance = frame.instance.wrapping_add(1);
-        salt_order_counter(frame.occurrence_salt, index)
-    })
+fn next_child_instance_call_index(context: &mut ExecutionContext) -> u64 {
+    let Some(frame) = context.order_frame_stack.last_mut() else {
+        return 0;
+    };
+    let index = frame.instance;
+    frame.instance = frame.instance.wrapping_add(1);
+    salt_order_counter(frame.occurrence_salt, index)
 }
 
 pub(crate) fn compute_context_slot_key() -> (u64, u64) {
@@ -904,6 +904,7 @@ pub(crate) fn clear_persistent_focus_handles() {
     with_persistent_focus_handle_store_mut(PersistentFocusHandleStore::clear);
 }
 
+#[cfg(test)]
 fn take_next_node_instance_logic_id_override() -> Option<u64> {
     with_execution_context_mut(|context| context.next_node_instance_logic_id_override.take())
 }
@@ -2591,7 +2592,6 @@ impl TesseraRuntime {
 /// Nested components push their id and pop on drop, forming a stack.
 pub struct NodeContextGuard {
     popped: bool,
-    instance_logic_id_popped: bool,
     #[cfg(feature = "profiling")]
     profiling_guard: Option<crate::profiler::ScopeGuard>,
 }
@@ -2649,13 +2649,13 @@ impl Drop for PhaseGuard {
 impl NodeContextGuard {
     /// Pop the current node id immediately. Usually you rely on `Drop` instead.
     pub fn pop(mut self) {
+        self.leave();
+    }
+
+    fn leave(&mut self) {
         if !self.popped {
-            pop_current_node();
             self.popped = true;
-        }
-        if !self.instance_logic_id_popped {
-            pop_instance_logic_id();
-            self.instance_logic_id_popped = true;
+            pop_current_node();
         }
     }
 }
@@ -2666,14 +2666,7 @@ impl Drop for NodeContextGuard {
         {
             let _ = self.profiling_guard.take();
         }
-        if !self.popped {
-            pop_current_node();
-            self.popped = true;
-        }
-        if !self.instance_logic_id_popped {
-            pop_instance_logic_id();
-            self.instance_logic_id_popped = true;
-        }
+        self.leave();
     }
 }
 
@@ -2730,16 +2723,18 @@ pub(crate) fn current_measured_node_instance_key() -> Option<u64> {
 }
 
 pub(crate) fn reserve_component_identity(component_type_id: u64) -> u64 {
-    if let Some(identity) = take_next_node_instance_logic_id_override() {
+    with_execution_context_mut(|context| reserve_component_identity_in(context, component_type_id))
+}
+
+fn reserve_component_identity_in(context: &mut ExecutionContext, component_type_id: u64) -> u64 {
+    if let Some(identity) = context.next_node_instance_logic_id_override.take() {
         return identity;
     }
-    let parent_call_index = next_child_instance_call_index();
-    let parent_instance_logic_id = with_execution_context(|context| {
-        context.instance_logic_id_stack.last().copied().unwrap_or(0)
-    });
-
-    let group_path_hash = current_group_path_hash();
-    let has_group_path = with_execution_context(|context| !context.group_path_stack.is_empty());
+    let parent_call_index = next_child_instance_call_index(context);
+    let parent_instance_logic_id = context.instance_logic_id_stack.last().copied().unwrap_or(0);
+    let group_path_hash = hash_components(&[&context.group_path_stack[..]]);
+    let has_group_path = !context.group_path_stack.is_empty();
+    let key_override = context.instance_key_override;
 
     // Combine component_type_id with parent_instance_logic_id, the current
     // control-flow group path, and the call index local to that group. This
@@ -2749,7 +2744,7 @@ pub(crate) fn reserve_component_identity(component_type_id: u64) -> u64 {
     //    even when each group starts its local call index from zero
     // 3. Components in different container instances get different logic_ids
     //    (via parent_instance_logic_id)
-    let instance_salt = if let Some(key_hash) = current_instance_key_override() {
+    let instance_salt = if let Some(key_hash) = key_override {
         hash_components(&[&key_hash, &group_path_hash, &parent_call_index])
     } else if has_group_path {
         hash_components(&[&group_path_hash, &parent_call_index])
@@ -2759,7 +2754,7 @@ pub(crate) fn reserve_component_identity(component_type_id: u64) -> u64 {
 
     if parent_call_index == 0
         && parent_instance_logic_id == 0
-        && current_instance_key_override().is_none()
+        && key_override.is_none()
         && !has_group_path
     {
         component_type_id
@@ -2778,37 +2773,9 @@ pub fn push_current_node(
     component_type_id: u64,
     fn_name: &str,
 ) -> NodeContextGuard {
-    #[cfg(not(feature = "profiling"))]
-    let _ = fn_name;
-    #[allow(unused_variables)]
-    let parent_node_id = with_execution_context_mut(|context| {
-        let parent = context.node_context_stack.last().copied();
-        context.node_context_stack.push(node_id);
-        parent
-    });
-
-    let instance_logic_id = reserve_component_identity(component_type_id);
-
-    with_execution_context_mut(|context| {
-        context.instance_logic_id_stack.push(instance_logic_id);
-    });
-
-    push_order_frame();
-
-    #[cfg(feature = "profiling")]
-    let profiling_guard = match current_phase() {
-        Some(RuntimePhase::Build) => {
-            crate::profiler::make_build_scope_guard(node_id, parent_node_id, fn_name)
-        }
-        _ => None,
-    };
-
-    NodeContextGuard {
-        popped: false,
-        instance_logic_id_popped: false,
-        #[cfg(feature = "profiling")]
-        profiling_guard,
-    }
+    enter_node_context(node_id, fn_name, |context| {
+        reserve_component_identity_in(context, component_type_id)
+    })
 }
 
 /// Push the given node id with an already resolved instance logic id.
@@ -2821,35 +2788,38 @@ pub fn push_current_node_with_instance_logic_id(
     instance_logic_id: u64,
     fn_name: &str,
 ) -> NodeContextGuard {
+    enter_node_context(node_id, fn_name, |context| {
+        next_child_instance_call_index(context);
+        instance_logic_id
+    })
+}
+
+fn enter_node_context(
+    node_id: NodeId,
+    fn_name: &str,
+    resolve_identity: impl FnOnce(&mut ExecutionContext) -> u64,
+) -> NodeContextGuard {
     #[cfg(not(feature = "profiling"))]
     let _ = fn_name;
     #[allow(unused_variables)]
-    let parent_node_id = with_execution_context_mut(|context| {
+    let (parent_node_id, phase) = with_execution_context_mut(|context| {
         let parent = context.node_context_stack.last().copied();
+        let identity = resolve_identity(context);
         context.node_context_stack.push(node_id);
-        parent
+        context.instance_logic_id_stack.push(identity);
+        context.order_frame_stack.push(OrderFrame::default());
+        (parent, context.phase_stack.last().copied())
     });
-
-    let _ = next_child_instance_call_index();
-
-    with_execution_context_mut(|context| {
-        context.instance_logic_id_stack.push(instance_logic_id);
-    });
-    push_order_frame();
-
-    #[cfg(feature = "profiling")]
-    let profiling_guard = match current_phase() {
-        Some(RuntimePhase::Build) => {
-            crate::profiler::make_build_scope_guard(node_id, parent_node_id, fn_name)
-        }
-        _ => None,
-    };
 
     NodeContextGuard {
         popped: false,
-        instance_logic_id_popped: false,
         #[cfg(feature = "profiling")]
-        profiling_guard,
+        profiling_guard: match phase {
+            Some(RuntimePhase::Build) => {
+                crate::profiler::make_build_scope_guard(node_id, parent_node_id, fn_name)
+            }
+            _ => None,
+        },
     }
 }
 
@@ -2878,8 +2848,10 @@ fn pop_current_node() {
             popped.is_some(),
             "Attempted to pop current node from an empty stack"
         );
+        let order_frame = context.order_frame_stack.pop();
+        debug_assert!(order_frame.is_some(), "component order frame must exist");
+        context.instance_logic_id_stack.pop();
     });
-    pop_order_frame("ORDER_FRAME_STACK underflow: attempted to pop from empty stack");
 }
 
 /// Get the node id at the top of the active session's component stack.
@@ -2899,16 +2871,14 @@ pub(crate) fn current_instance_logic_id() -> u64 {
 
 /// Returns the instance key for the current component call site.
 pub(crate) fn current_instance_key() -> u64 {
-    let instance_logic_id = current_instance_logic_id_opt()
-        .expect("current_instance_key must be called inside a component");
-    let group_path_hash = current_group_path_hash();
-    hash_components(&[&instance_logic_id, &group_path_hash])
-}
-
-fn pop_instance_logic_id() {
-    with_execution_context_mut(|context| {
-        let _ = context.instance_logic_id_stack.pop();
-    });
+    with_execution_context(|context| {
+        let instance_logic_id = context
+            .instance_logic_id_stack
+            .last()
+            .expect("current_instance_key must be called inside a component");
+        let group_path_hash = hash_components(&[&context.group_path_stack[..]]);
+        hash_components(&[instance_logic_id, &group_path_hash])
+    })
 }
 
 /// Push an execution phase for the current thread.
@@ -3269,7 +3239,8 @@ where
     resolve_state_key(slot_key, retained, init)
 }
 
-pub(crate) fn current_instance_key_override() -> Option<u64> {
+#[cfg(test)]
+fn current_instance_key_override() -> Option<u64> {
     with_execution_context(|context| context.instance_key_override)
 }
 

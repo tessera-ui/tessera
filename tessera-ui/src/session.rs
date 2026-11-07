@@ -6,13 +6,15 @@
 
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
+    cell::{OnceCell, RefCell},
     marker::PhantomData,
     rc::{Rc, Weak},
     sync::Arc,
 };
 
 use rustc_hash::FxHashMap as HashMap;
+
+use crate::execution_context::ExecutionContext;
 
 #[derive(Default)]
 struct Resources {
@@ -25,6 +27,7 @@ pub(crate) struct SessionState {
     identity: u128,
     root_claimed: std::cell::Cell<bool>,
     closing: std::cell::Cell<bool>,
+    execution_context: OnceCell<RefCell<ExecutionContext>>,
     resources: RefCell<Resources>,
     previous: RefCell<Weak<SessionState>>,
 }
@@ -114,6 +117,7 @@ impl RuntimeSession {
             identity: uuid::Uuid::new_v4().as_u128(),
             root_claimed: std::cell::Cell::new(false),
             closing: std::cell::Cell::new(false),
+            execution_context: OnceCell::new(),
             resources: RefCell::new(Resources::default()),
             previous: RefCell::new(Weak::new()),
         }))
@@ -166,6 +170,13 @@ impl RuntimeSession {
 
 pub(crate) fn current_session_identity() -> Option<u128> {
     RuntimeSession::current().map(|session| session.0.identity)
+}
+
+pub(crate) fn with_active_execution_context<R>(
+    read: impl FnOnce(&RefCell<ExecutionContext>) -> R,
+) -> R {
+    let session = RuntimeSession::current().expect("a runtime session must be active");
+    read(session.0.execution_context.get_or_init(RefCell::default))
 }
 
 impl Drop for RuntimeSession {
