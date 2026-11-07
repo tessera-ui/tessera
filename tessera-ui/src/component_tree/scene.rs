@@ -17,7 +17,7 @@ use crate::{
 
 use super::{
     ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
-    direct_layout_children, geometry_parent, record_frame_stage,
+    direct_layout_children, geometry_parent, node_map::DenseNodeMap, record_frame_stage,
 };
 
 #[derive(PartialEq)]
@@ -194,93 +194,6 @@ impl SceneBranch {
     }
 }
 
-const BRANCH_PAGE_SIZE: usize = 64;
-
-struct BranchPage {
-    entries: [Option<(NodeId, SceneBranch)>; BRANCH_PAGE_SIZE],
-    occupied: usize,
-}
-
-impl Default for BranchPage {
-    fn default() -> Self {
-        Self {
-            entries: std::array::from_fn(|_| None),
-            occupied: 0,
-        }
-    }
-}
-
-#[derive(Default)]
-struct SceneBranches {
-    pages: Vec<Option<Box<BranchPage>>>,
-}
-
-impl SceneBranches {
-    fn address(id: NodeId) -> (usize, usize) {
-        let index = usize::from(id) - 1;
-        (index / BRANCH_PAGE_SIZE, index % BRANCH_PAGE_SIZE)
-    }
-
-    fn get(&self, id: NodeId) -> Option<&SceneBranch> {
-        let (page, index) = Self::address(id);
-        let (stored, branch) = self.pages.get(page)?.as_ref()?.entries[index].as_ref()?;
-        (*stored == id).then_some(branch)
-    }
-
-    fn get_mut(&mut self, id: NodeId) -> Option<&mut SceneBranch> {
-        let (page, index) = Self::address(id);
-        let (stored, branch) = self.pages.get_mut(page)?.as_mut()?.entries[index].as_mut()?;
-        (*stored == id).then_some(branch)
-    }
-
-    fn take(&mut self, id: NodeId) -> Option<SceneBranch> {
-        let (page, index) = Self::address(id);
-        let page = self.pages.get_mut(page)?.as_mut()?;
-        let entry = &mut page.entries[index];
-        if entry.as_ref().is_some_and(|(stored, _)| *stored == id) {
-            page.occupied -= 1;
-            entry.take().map(|(_, branch)| branch)
-        } else {
-            None
-        }
-    }
-
-    fn remove(&mut self, id: NodeId) -> bool {
-        if self.take(id).is_none() {
-            return false;
-        }
-        let (page, _) = Self::address(id);
-        if let Some(entry) = self.pages.get_mut(page)
-            && entry.as_ref().is_some_and(|page| page.occupied == 0)
-        {
-            *entry = None;
-            while self.pages.last().is_some_and(Option::is_none) {
-                self.pages.pop();
-            }
-        }
-        true
-    }
-
-    fn insert(&mut self, id: NodeId, branch: SceneBranch) {
-        let (page, index) = Self::address(id);
-        if page >= self.pages.len() {
-            self.pages.resize_with(page + 1, || None);
-        }
-        let page = self.pages[page].get_or_insert_with(Box::default);
-        if page.entries[index].replace((id, branch)).is_none() {
-            page.occupied += 1;
-        }
-    }
-
-    fn iter(&self) -> impl Iterator<Item = (NodeId, &SceneBranch)> {
-        self.pages
-            .iter()
-            .flatten()
-            .flat_map(|page| page.entries.iter().flatten())
-            .map(|(id, branch)| (*id, branch))
-    }
-}
-
 #[derive(Default)]
 struct BranchChange {
     own: bool,
@@ -297,7 +210,7 @@ impl BranchChange {
 
 #[derive(Default)]
 pub(super) struct FrameScene {
-    branches: SceneBranches,
+    branches: DenseNodeMap<SceneBranch>,
     geometry_consumers: HashSet<NodeId>,
     structure_changed: HashSet<NodeId>,
     root: Option<Arc<SceneRope>>,
@@ -368,7 +281,7 @@ impl FrameScene {
             }
         }
         for node_id in removed {
-            if self.branches.remove(*node_id) {
+            if self.branches.remove(*node_id).is_some() {
                 self.geometry_consumers.remove(node_id);
             }
         }
@@ -483,7 +396,11 @@ impl FrameScene {
         for (node_id, parent) in ordered.into_iter().rev() {
             let change = &changes[&node_id];
             let node = &tree[node_id];
-            let mut branch = self.branches.take(node_id).unwrap_or_default();
+            let mut branch = self
+                .branches
+                .get_mut(node_id)
+                .map(std::mem::take)
+                .unwrap_or_default();
             let affects_pixels = change.affects_pixels();
             if affects_pixels
                 && let Some(bounds) = branch.output.as_ref().and_then(|rope| rope.bounds)
@@ -651,6 +568,9 @@ impl FrameScene {
                 break;
             }
             self.branches.insert(node_id, branch);
+        }
+        if !removed.is_empty() {
+            self.branches.trim_spare_capacity();
         }
         record_frame_stage(&mut stage_timer, "scene_branches");
         let next_root = self.output(root);

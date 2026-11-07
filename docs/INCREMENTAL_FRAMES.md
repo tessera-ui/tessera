@@ -58,8 +58,8 @@ identity, which pending calls and replay snapshots store by value.
 Modifier snapshots share immutable chain links. The scene stores empty and
 single-child branches inline and uses persistent ordered maps for wider branches
 so updating one child can preserve the previous frame's snapshot.
-Scene branches use indexed pages with generation checks, and culling uses the
-inherited clip bounds computed by layout.
+Scene branches and layout metadata use dense node tables with generation checks.
+Scene culling uses the inherited clip bounds computed by layout.
 
 Nodes allocate interaction data, accessibility descriptions, and shape clip
 regions only when used.
