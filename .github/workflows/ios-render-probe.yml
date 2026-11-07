@@ -22,7 +22,40 @@ jobs:
         with:
           python-version: '3.12'
       - name: Build iOS app
-        run: cargo tessera ios build -p example --profiling-output acceptance.jsonl
+        shell: bash
+        run: |
+          case "$(uname -m)" in
+            arm64) target=aarch64-apple-ios-sim ;;
+            x86_64) target=x86_64-apple-ios ;;
+          esac
+          rustup target add "$target"
+          IPHONEOS_DEPLOYMENT_TARGET=15.0 TESSERA_ASSET_BACKEND=embed \
+            cargo build --locked -p example --target "$target" --features tessera-ui/profiling
+          bundle="target/packages/example/ios/$target/example.app"
+          mkdir -p "$bundle"
+          cp "target/$target/debug/example" "$bundle/example"
+          python3 - "$bundle/Info.plist" <<'PYTHON'
+          import plistlib
+          import sys
+          from pathlib import Path
+          Path(sys.argv[1]).write_bytes(plistlib.dumps({
+              "CFBundleName": "Tessera UI Examples",
+              "CFBundleIdentifier": "dev.tessera.example",
+              "CFBundleExecutable": "example",
+              "CFBundlePackageType": "APPL",
+              "CFBundleSupportedPlatforms": ["iPhoneSimulator"],
+              "CFBundleVersion": "1.0",
+              "MinimumOSVersion": "15.0",
+              "UILaunchScreen": {},
+              "UISupportedInterfaceOrientations": [
+                  "UIInterfaceOrientationPortrait",
+                  "UIInterfaceOrientationLandscapeLeft",
+                  "UIInterfaceOrientationLandscapeRight",
+              ],
+              "UIDeviceFamily": [1, 2],
+          }))
+          PYTHON
+          codesign --force --sign - "$bundle"
       - name: Run and capture iOS example
         run: python3 scripts/test-apple-ime.py target/packages/example/ios/*/example.app
       - uses: actions/upload-artifact@v4
