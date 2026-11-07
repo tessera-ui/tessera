@@ -2227,12 +2227,6 @@ impl TesseraRuntime {
         self.window_size
     }
 
-    /// Sets identity fields for the current component node.
-    pub(crate) fn set_current_node_identity(&mut self, instance_key: u64, instance_logic_id: u64) {
-        self.component_tree
-            .set_current_node_identity(instance_key, instance_logic_id);
-    }
-
     /// Stores replay metadata for the current component node.
     pub(crate) fn set_current_component_replay<P>(
         &mut self,
@@ -2875,14 +2869,58 @@ impl Drop for LayoutNodeScope {
     }
 }
 
-pub(crate) fn begin_layout_node(name: &str, component_type_id: u64) -> LayoutNodeScope {
+/// A component build scope that restores the previous node and build context on exit.
+pub struct ComponentNodeScope {
+    instance_logic_id: u64,
+    _instance: CurrentComponentInstanceGuard,
+    _context: NodeContextGuard,
+    _phase: PhaseGuard,
+}
+
+impl ComponentNodeScope {
+    /// Return the identity of the component in this scope.
+    pub fn instance_logic_id(&self) -> u64 {
+        self.instance_logic_id
+    }
+}
+
+impl Drop for ComponentNodeScope {
+    fn drop(&mut self) {
+        TesseraRuntime::with_mut(|runtime| runtime.component_tree.pop_node());
+    }
+}
+
+/// Enter the build scope for one registered component call.
+pub fn begin_component_node(name: &str, component_type_id: u64) -> ComponentNodeScope {
+    let phase = push_phase(RuntimePhase::Build);
+    let node = new_build_node(name, NodeRole::Composition, component_type_id);
+    let instance_logic_id = node.instance_logic_id;
+    let instance_key = node.instance_key;
+    let id = TesseraRuntime::with_mut(|runtime| runtime.component_tree.add_node(node));
+    let context = enter_node_context(id, name, |_| instance_logic_id);
+    let instance = push_current_component_instance_key(instance_key);
+    ComponentNodeScope {
+        instance_logic_id,
+        _instance: instance,
+        _context: context,
+        _phase: phase,
+    }
+}
+
+fn new_build_node(name: &str, role: NodeRole, component_type_id: u64) -> ComponentNode {
     let (instance_logic_id, instance_key) = with_execution_context_mut(|context| {
         let logic_id = reserve_component_identity_in(context, component_type_id);
         (logic_id, instance_key_in(context, logic_id))
     });
-    let mut node = ComponentNode::new(name, NodeRole::Layout);
+    let mut node = ComponentNode::new(name, role);
     node.instance_logic_id = instance_logic_id;
     node.instance_key = instance_key;
+    node
+}
+
+pub(crate) fn begin_layout_node(name: &str, component_type_id: u64) -> LayoutNodeScope {
+    let node = new_build_node(name, NodeRole::Layout, component_type_id);
+    let instance_logic_id = node.instance_logic_id;
     let (id, previous) =
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.add_layout_node(node));
     LayoutNodeScope {

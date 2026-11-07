@@ -343,15 +343,6 @@ impl Parse for ShardMacroArgs {
     }
 }
 
-fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_macro2::TokenStream {
-    quote! {
-        #crate_path::__private::register_component_node(
-            stringify!(#fn_name),
-            __tessera_component_type_id,
-        )
-    }
-}
-
 /// Parse and validate strict component props signature:
 /// `fn component()` or `fn component(foo: T, bar: U)`.
 enum ComponentPropSignature {
@@ -997,7 +988,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let where_clause = &generics.where_clause;
     let (impl_generics, ty_generics, _) = generics.split_for_impl();
 
-    let register_tokens = register_node_tokens(&crate_path, fn_name);
     let fields = match &prop_signature {
         ComponentPropSignature::Unit => &[][..],
         ComponentPropSignature::Params(fields) => fields.as_slice(),
@@ -1153,42 +1143,9 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             fn #impl_ident #item_generics(__tessera_props: &#props_ident #ty_generics) #where_clause {
-                let __tessera_component_type_id: u64 = #component_type_id_tokens;
-                let __tessera_phase_guard = {
-                    use #crate_path::__private::{RuntimePhase, push_phase};
-                    push_phase(RuntimePhase::Build)
-                };
-                let __tessera_fn_name: &str = stringify!(#fn_name);
-                let __tessera_node_id = #register_tokens;
-
-                let _node_ctx_guard = {
-                    use #crate_path::__private::push_current_node;
-                    push_current_node(
-                        __tessera_node_id,
-                        __tessera_component_type_id,
-                        __tessera_fn_name,
-                    )
-                };
-
-                let __tessera_instance_key: u64 = #crate_path::__private::current_instance_key();
-                let __tessera_instance_logic_id: u64 =
-                    #crate_path::__private::current_instance_logic_id();
-                let _instance_ctx_guard = {
-                    use #crate_path::__private::push_current_component_instance_key;
-                    push_current_component_instance_key(__tessera_instance_key)
-                };
-                let _component_scope_guard = {
-                    struct ComponentScopeGuard;
-                    impl Drop for ComponentScopeGuard {
-                        fn drop(&mut self) {
-                            #crate_path::__private::finish_component_node();
-                        }
-                    }
-                    ComponentScopeGuard
-                };
-                #crate_path::__private::set_current_node_identity(
-                    __tessera_instance_key,
-                    __tessera_instance_logic_id,
+                let __tessera_scope = #crate_path::__private::begin_component_node(
+                    stringify!(#fn_name),
+                    #component_type_id_tokens,
                 );
                 #prop_assert_tokens
                 #replay_tokens
@@ -1196,7 +1153,10 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     return;
                 }
                 #crate_path::__private::with_pending_scope(|| {
-                    #crate_path::__private::record_component_execution(stringify!(#fn_name), __tessera_instance_logic_id);
+                    #crate_path::__private::record_component_execution(
+                        stringify!(#fn_name),
+                        __tessera_scope.instance_logic_id(),
+                    );
                     #(#field_resolutions)*
                     #fn_block;
                 });

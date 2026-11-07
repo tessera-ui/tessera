@@ -2,12 +2,7 @@
 
 use std::sync::Arc;
 
-use indextree::NodeId;
-
-use crate::{
-    component_tree::{ComponentNode, NodeRole},
-    runtime::TesseraRuntime,
-};
+use crate::runtime::TesseraRuntime;
 
 pub use crate::{
     component_call::{
@@ -17,7 +12,8 @@ pub use crate::{
     prop::{ErasedComponentRunner, Prop, make_component_runner},
     runtime::{
         CurrentComponentInstanceGuard, GroupGuard, NodeContextGuard, PathGroupGuard, PhaseGuard,
-        RuntimePhase, push_current_component_instance_key, push_current_node, push_phase,
+        RuntimePhase, begin_component_node, push_current_component_instance_key, push_current_node,
+        push_phase,
     },
     session::{local_runtime_resource, runtime_resource},
 };
@@ -53,35 +49,6 @@ where
     T: Send + Sync + 'static,
 {
     crate::context::context_from_previous_snapshot_for_instance(instance_key)
-}
-
-pub fn register_component_node(fn_name: &str, _component_type_id: u64) -> NodeId {
-    TesseraRuntime::with_mut(|runtime| {
-        runtime
-            .component_tree
-            .add_node(ComponentNode::new(fn_name, NodeRole::Composition))
-    })
-}
-
-pub fn register_layout_node(fn_name: &str, _component_type_id: u64) -> NodeId {
-    TesseraRuntime::with_mut(|runtime| {
-        runtime
-            .component_tree
-            .add_node(ComponentNode::new(fn_name, NodeRole::Layout))
-    })
-}
-
-pub fn finish_component_node() {
-    TesseraRuntime::with_mut(|runtime| {
-        runtime.finalize_current_layout_policy_dirty();
-        runtime.component_tree.pop_node();
-    });
-}
-
-pub fn set_current_node_identity(instance_key: u64, instance_logic_id: u64) {
-    TesseraRuntime::with_mut(|runtime| {
-        runtime.set_current_node_identity(instance_key, instance_logic_id);
-    });
 }
 
 pub fn set_current_component_replay<P>(runner: Arc<dyn ErasedComponentRunner>, props: &P) -> bool

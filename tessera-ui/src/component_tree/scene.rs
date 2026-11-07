@@ -696,9 +696,10 @@ impl SceneRope {
 mod tests {
     use super::*;
     use crate::{
-        __private::{finish_component_node, register_layout_node},
         DrawCommand, Px, RuntimeSession,
-        component_tree::{ComponentTree, ComputedData, node::place_node, populate_layout_metadata},
+        component_tree::{
+            ComponentNode, ComponentTree, ComputedData, node::place_node, populate_layout_metadata,
+        },
         runtime::TesseraRuntime,
     };
 
@@ -724,15 +725,14 @@ mod tests {
     fn retained_scene_preserves_draw_order_and_geometry_across_child_count_changes() {
         let session = RuntimeSession::new();
         let _runtime_scope = session.enter();
-        let root = register_layout_node("root", 0);
-        let first = register_layout_node("first", 0);
-        finish_component_node();
-        let second = register_layout_node("second", 0);
-        finish_component_node();
-        finish_component_node();
-
         TesseraRuntime::with_mut(|runtime| {
             let tree = &mut runtime.component_tree;
+            let root = tree.add_node(ComponentNode::new("root", NodeRole::Layout));
+            let first = tree.add_node(ComponentNode::new("first", NodeRole::Layout));
+            tree.pop_node();
+            let second = tree.add_node(ComponentNode::new("second", NodeRole::Layout));
+            tree.pop_node();
+            tree.pop_node();
             let viewport = PxSize::new(Px(100), Px(100));
             for (id, value) in [(root, 0), (first, 1), (second, 2)] {
                 let metadata = tree.metadatas.entry_or_default(id);
@@ -792,10 +792,7 @@ mod tests {
             first.remove_subtree(&mut tree.tree);
             let replacement = tree
                 .tree
-                .new_node(crate::component_tree::ComponentNode::new(
-                    "replacement",
-                    NodeRole::Layout,
-                ));
+                .new_node(ComponentNode::new("replacement", NodeRole::Layout));
             assert_eq!(usize::from(first), usize::from(replacement));
             assert_ne!(first, replacement);
             root.append(replacement, &mut tree.tree);

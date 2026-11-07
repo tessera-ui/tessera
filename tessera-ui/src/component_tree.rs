@@ -1040,24 +1040,6 @@ impl ComponentTree {
         self.get_mut(*node_id)
     }
 
-    pub(crate) fn set_current_node_identity(&mut self, instance_key: u64, instance_logic_id: u64) {
-        self.preserve_replay_candidate(instance_key);
-        if let Some(&node_id) = self.node_queue.last() {
-            let node = self.tree[node_id].get_mut();
-            if self.node_ids_by_instance_key.get(&node.instance_key) == Some(&node_id) {
-                self.node_ids_by_instance_key.remove(&node.instance_key);
-            }
-            node.instance_key = instance_key;
-            node.instance_logic_id = instance_logic_id;
-            self.node_ids_by_instance_key.insert(instance_key, node_id);
-        } else {
-            debug_assert!(
-                false,
-                "set_current_node_identity requires a component build"
-            );
-        }
-    }
-
     fn replay_candidate(&self, instance_key: u64) -> Option<NodeId> {
         let root = self.replay_detached_root?;
         let id = self
