@@ -2135,15 +2135,14 @@ where
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let _session = self.session.enter();
-        if let Some(app) = self.app.as_ref() {
+        if cfg!(target_os = "ios") && self.redraw_request_pending.load(Ordering::Acquire) {
+            // UIKit can coalesce view redraws while the Metal sublayer presents.
+            self.handle_redraw_requested(event_loop);
+        } else if let Some(app) = self.app.as_ref() {
             crate::window_insets::platform::refresh(app.window(), event_loop);
         }
         #[cfg(target_os = "ios")]
         {
-            // UIKit can coalesce view redraws while the Metal sublayer presents.
-            if self.redraw_request_pending.load(Ordering::Acquire) {
-                self.handle_redraw_requested(event_loop);
-            }
             let flow = if self.redraw_request_pending.load(Ordering::Acquire) {
                 ControlFlow::Poll
             } else {

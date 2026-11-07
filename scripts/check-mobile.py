@@ -56,10 +56,12 @@ def verify(read, background, foreground, *, require_runtime_redraw=False):
     def ready(records):
         if not require_runtime_redraw:
             return valid(frame(records))
-        frames = (record for record in records if record.get("type") == "frame")
+        frames = (
+            record for record in records if record.get("type") == "frame" and valid(record)
+        )
         next(frames, None)
         return any(
-            "runtime_invalidation" in record.get("redraw_reasons", []) and valid(record)
+            "runtime_invalidation" in record.get("redraw_reasons", [])
             for record in frames
         )
 
