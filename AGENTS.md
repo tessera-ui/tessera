@@ -222,6 +222,7 @@ programming contract; the guidelines below also govern framework implementation.
   - Documentation format should pass markdown lint if possible
 - **Comment Policy**:
   - Documentation comments (`//!`, `///`) are written for end users. Describe purpose, behavior, and usage. Do **not** include implementation details, internal architecture notes, or references to upstream/source code (e.g., “ported from Compose”, file paths, commit hashes).
+  - Keep documentation DRY. State each fact once, where users look for it. Do **not** restate what names, types, and signatures already convey, and do not repeat item docs in module, field, or impl docs. Crate-private items, private fields, and test modules need no doc comments unless they record behavior that is not obvious from the code.
   - Non-documentation comments (`//`, `/* */`) are allowed only when necessary to explain *why* a piece of code is written a certain way (non-obvious tradeoffs, invariants, safety/performance constraints). Do **not** restate what the code does.
   - Any other commentary-style comments are not allowed.
 
@@ -348,13 +349,15 @@ improve readability and enable testable examples.
 
 ### Module docs
 
-- Module docs must follow this exact 5-line template:
+- Public component modules use this 5-line template:
   1. `//! <short description>`
   2. `//!`
   3. `//! ## Usage`
   4. `//!`
   5. `//! <one-line app-level usage scenario>` (e.g., alerts, confirmations, multi-step forms, or interactive controls).
 - `//! ## Usage` must be on its own line and must be followed by a blank `//!` line (do not inline the usage sentence on the same line).
+- Other public modules use a one-line summary when a usage section would only repeat it or the docs of the items they contain.
+- Crate-private modules and test modules do not need module docs.
 
 Example:
 
