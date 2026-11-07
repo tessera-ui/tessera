@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Dp, DrawModifierContent, DrawModifierContext,
-    DrawModifierNode, FocusManager, FrameNanosControl, Modifier, PointerInput,
-    PointerInputModifierNode, PxPosition, SemanticsModifierNode, State, current_frame_nanos, key,
+    AccessibilityActionHandler, AccessibilityNode, Dp, FocusManager, FrameNanosControl, Modifier,
+    PointerInput, PointerInputModifierNode, PxPosition, SemanticsModifierNode, State,
+    current_frame_nanos, key,
     layout::layout,
     modifier::{ModifierCapabilityExt as _, PlacementModifierNode},
     provide_context, receive_frame_nanos, remember,
@@ -96,11 +96,8 @@ pub(super) fn route_display(controller: State<RouterController>) {
             BackSwipeEdge::Left => 1.0,
             BackSwipeEdge::Right => -1.0,
         };
-        let motion = RouteMotion {
-            offset: Dp(72.0 * f64::from(gesture.progress) * direction),
-            opacity: 1.0 - 0.45 * gesture.progress,
-        };
-        foreground = foreground.push_placement(motion).push_draw(motion);
+        let offset = Dp(72.0 * f64::from(gesture.progress) * direction);
+        foreground = foreground.push_placement(RouteOffset(offset));
     }
     layout().child(move || {
         if let Some((id, previous)) = &previous {
@@ -167,23 +164,11 @@ impl PointerInputModifierNode for HiddenRoute {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-struct RouteMotion {
-    offset: Dp,
-    opacity: f32,
-}
+struct RouteOffset(Dp);
 
-impl PlacementModifierNode for RouteMotion {
+impl PlacementModifierNode for RouteOffset {
     fn transform_position(&self, position: PxPosition) -> PxPosition {
-        PxPosition::from_f32_xy(position.x + self.offset.to_pixels_f64() as f32, position.y)
-    }
-}
-
-impl DrawModifierNode for RouteMotion {
-    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
-        ctx.render_input
-            .metadata_mut()
-            .multiply_opacity(self.opacity);
-        content.draw(ctx.render_input);
+        PxPosition::from_f32_xy(position.x + self.0.to_pixels_f64() as f32, position.y)
     }
 }
 
