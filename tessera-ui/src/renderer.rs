@@ -1500,7 +1500,10 @@ where
     /// frame.
     fn apply_pending_window_size(&mut self) {
         let _session = self.session.enter();
-        let live_size = self.app.as_ref().map(|app| app.window().inner_size());
+        let live_size = self
+            .app
+            .as_ref()
+            .map(|app| window_drawable_size(app.window()));
         let size = resolve_startup_window_size(self.pending_window_size.take(), live_size);
         let Some(size) = size else {
             return;
@@ -1898,6 +1901,18 @@ fn canvas_physical_size(logical: [f64; 2], density: f64) -> Option<winit::dpi::P
     ))
 }
 
+fn window_drawable_size(window: &Window) -> winit::dpi::PhysicalSize<u32> {
+    // UIKit draws across the entire window, while Winit's inner size excludes the safe area.
+    #[cfg(target_os = "ios")]
+    {
+        window.outer_size()
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        window.inner_size()
+    }
+}
+
 // Resize events may arrive before the asynchronous web render core is ready.
 fn resolve_startup_window_size(
     pending: Option<winit::dpi::PhysicalSize<u32>>,
@@ -2120,8 +2135,20 @@ where
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let _session = self.session.enter();
-        if let Some(app) = self.app.as_ref() {
+        if cfg!(target_os = "ios") && self.redraw_request_pending.load(Ordering::Acquire) {
+            // UIKit can coalesce view redraws while the Metal sublayer presents.
+            self.handle_redraw_requested(event_loop);
+        } else if let Some(app) = self.app.as_ref() {
             crate::window_insets::platform::refresh(app.window(), event_loop);
+        }
+        #[cfg(target_os = "ios")]
+        {
+            let flow = if self.redraw_request_pending.load(Ordering::Acquire) {
+                ControlFlow::Poll
+            } else {
+                ControlFlow::Wait
+            };
+            event_loop.set_control_flow(flow);
         }
     }
 
@@ -2202,7 +2229,11 @@ where
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 set_scale_factor(scale_factor);
                 #[cfg(target_family = "wasm")]
-                if let Some(size) = self.app.as_ref().map(|app| app.window().inner_size()) {
+                if let Some(size) = self
+                    .app
+                    .as_ref()
+                    .map(|app| window_drawable_size(app.window()))
+                {
                     self.handle_resized(size);
                 }
                 if let Some(app) = self.app.as_ref() {

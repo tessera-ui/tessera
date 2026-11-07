@@ -10,6 +10,7 @@ use crate::{
     pipeline_cache::initialize_cache,
     renderer::{
         compute::ComputePipelineRegistry, drawer::Drawer, external::ExternalTextureRegistry,
+        window_drawable_size,
     },
 };
 
@@ -206,7 +207,7 @@ impl RenderCore {
         window_transparent: bool,
         max_bindings: u32,
     ) -> Self {
-        let size = window.inner_size();
+        let size = window_drawable_size(&window);
         let scale_factor = window.scale_factor();
         Self::new_inner(
             Some(window),

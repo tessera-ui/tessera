@@ -21,13 +21,25 @@ impl Default for TextResources {
         use glyphon::cosmic_text::{Fallback, PlatformFallback};
 
         let mut fonts = glyphon::FontSystem::new();
+        let db = fonts.db_mut();
+        let fallback = PlatformFallback.common_fallback().first().copied();
         #[cfg(target_os = "android")]
-        {
-            fonts.db_mut().load_fonts_dir("/system/fonts");
-            fonts.db_mut().set_sans_serif_family("Roboto");
-        }
-        if let Some(family) = PlatformFallback.common_fallback().first() {
-            fonts.db_mut().set_sans_serif_family(*family);
+        db.load_fonts_dir("/system/fonts");
+        #[cfg(target_os = "android")]
+        let fallback = fallback.or(Some("Roboto"));
+        #[cfg(target_os = "ios")]
+        let fallback = [".SF UI", ".SF NS", "Helvetica Neue", "Helvetica", "Arial"]
+            .into_iter()
+            .find(|name| {
+                db.query(&fontdb::Query {
+                    families: &[fontdb::Family::Name(name)],
+                    ..Default::default()
+                })
+                .is_some()
+            })
+            .or(fallback);
+        if let Some(family) = fallback {
+            db.set_sans_serif_family(family);
         }
         Self {
             font_system: Arc::new(RwLock::new(fonts)),
