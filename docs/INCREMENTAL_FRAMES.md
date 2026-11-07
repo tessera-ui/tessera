@@ -45,6 +45,7 @@ work still requests another frame.
 
 ## Retained runtime storage
 
+The session owns its core runtime tables directly and initializes them on first access.
 Replay snapshots share finalized props and inherited context maps. Empty
 contexts need no binding storage. Context and keyed scopes restore their prior
 bindings when they exit. Control-flow scopes extend and restore a compact path

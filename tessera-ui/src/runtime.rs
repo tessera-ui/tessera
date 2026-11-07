@@ -30,6 +30,7 @@ use crate::{
     layout::LayoutModifierHandle,
     modifier::{DrawModifierNode, Modifier},
     prop::{CallbackWith, ComponentReplayData, ErasedProp, Prop},
+    session::{try_with_runtime_globals, with_runtime_globals},
     time::Instant,
 };
 
@@ -421,11 +422,11 @@ fn prune_focus_entry<T: Copy>(
 }
 
 fn with_slot_table<R>(f: impl FnOnce(&SlotTable) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&globals.slot_table.borrow()))
+    with_runtime_globals(|globals| f(&globals.slot_table.borrow()))
 }
 
 fn with_slot_table_mut<R>(f: impl FnOnce(&mut SlotTable) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.slot_table.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.slot_table.borrow_mut()))
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -614,11 +615,11 @@ struct ComponentReplayTracker {
 }
 
 fn with_component_replay_tracker<R>(f: impl FnOnce(&ComponentReplayTracker) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&globals.component_replay_tracker.borrow()))
+    with_runtime_globals(|globals| f(&globals.component_replay_tracker.borrow()))
 }
 
 fn with_component_replay_tracker_mut<R>(f: impl FnOnce(&mut ComponentReplayTracker) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.component_replay_tracker.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.component_replay_tracker.borrow_mut()))
 }
 
 pub(crate) fn begin_frame_component_replay_tracking() {
@@ -754,47 +755,47 @@ struct RenderSlotReadDependencyTracker {
 type RedrawWaker = Arc<dyn Fn() + Send + Sync + 'static>;
 
 fn with_build_invalidation_tracker<R>(f: impl FnOnce(&BuildInvalidationTracker) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&globals.build_invalidation_tracker.borrow()))
+    with_runtime_globals(|globals| f(&globals.build_invalidation_tracker.borrow()))
 }
 
 fn with_build_invalidation_tracker_mut<R>(f: impl FnOnce(&mut BuildInvalidationTracker) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.build_invalidation_tracker.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.build_invalidation_tracker.borrow_mut()))
 }
 
 fn with_state_read_dependency_tracker_mut<R>(
     f: impl FnOnce(&mut StateReadDependencyTracker) -> R,
 ) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.state_read_dependency_tracker.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.state_read_dependency_tracker.borrow_mut()))
 }
 
 fn with_focus_read_dependency_tracker<R>(f: impl FnOnce(&FocusReadDependencyTracker) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&globals.focus_read_dependency_tracker.borrow()))
+    with_runtime_globals(|globals| f(&globals.focus_read_dependency_tracker.borrow()))
 }
 
 fn with_focus_read_dependency_tracker_mut<R>(
     f: impl FnOnce(&mut FocusReadDependencyTracker) -> R,
 ) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.focus_read_dependency_tracker.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.focus_read_dependency_tracker.borrow_mut()))
 }
 
 fn with_render_slot_read_dependency_tracker<R>(
     f: impl FnOnce(&RenderSlotReadDependencyTracker) -> R,
 ) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&globals.render_slot_read_dependency_tracker.borrow()))
+    with_runtime_globals(|globals| f(&globals.render_slot_read_dependency_tracker.borrow()))
 }
 
 fn with_render_slot_read_dependency_tracker_mut<R>(
     f: impl FnOnce(&mut RenderSlotReadDependencyTracker) -> R,
 ) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.render_slot_read_dependency_tracker.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.render_slot_read_dependency_tracker.borrow_mut()))
 }
 
 fn with_redraw_waker<R>(f: impl FnOnce(&Option<RedrawWaker>) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&globals.redraw_waker.borrow()))
+    with_runtime_globals(|globals| f(&globals.redraw_waker.borrow()))
 }
 
 fn with_redraw_waker_mut<R>(f: impl FnOnce(&mut Option<RedrawWaker>) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.redraw_waker.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.redraw_waker.borrow_mut()))
 }
 
 pub(crate) fn schedule_runtime_redraw() {
@@ -821,13 +822,13 @@ pub(crate) fn current_replay_boundary_instance_key_from_scope() -> Option<u64> {
 }
 
 fn with_persistent_focus_handle_store<R>(f: impl FnOnce(&PersistentFocusHandleStore) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&globals.persistent_focus_handle_store.borrow()))
+    with_runtime_globals(|globals| f(&globals.persistent_focus_handle_store.borrow()))
 }
 
 fn with_persistent_focus_handle_store_mut<R>(
     f: impl FnOnce(&mut PersistentFocusHandleStore) -> R,
 ) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.persistent_focus_handle_store.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.persistent_focus_handle_store.borrow_mut()))
 }
 
 fn current_persistent_focus_handle_key<K: Hash>(slot_key: K) -> PersistentFocusHandleKey {
@@ -1456,11 +1457,11 @@ struct FrameNanosReceiver {
 }
 
 fn with_frame_clock_tracker<R>(f: impl FnOnce(&FrameClockTracker) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&globals.frame_clock_tracker.borrow()))
+    with_runtime_globals(|globals| f(&globals.frame_clock_tracker.borrow()))
 }
 
 fn with_frame_clock_tracker_mut<R>(f: impl FnOnce(&mut FrameClockTracker) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.frame_clock_tracker.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.frame_clock_tracker.borrow_mut()))
 }
 
 pub(crate) fn begin_frame_clock(now: Instant) {
@@ -1725,7 +1726,7 @@ pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64
 }
 
 fn with_layout_dirty_tracker_mut<R>(f: impl FnOnce(&mut LayoutDirtyTracker) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&mut globals.layout_dirty_tracker.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.layout_dirty_tracker.borrow_mut()))
 }
 
 fn record_layout_policy_dirty(
@@ -1991,16 +1992,15 @@ where
         if crate::session::current_session_identity() != Some(self.session) {
             return false;
         }
-        RUNTIME_GLOBALS
-            .try_with(|globals| {
-                let table = globals.slot_table.borrow();
-                let Some(entry) = table.entries.get(self.slot) else {
-                    return false;
-                };
+        try_with_runtime_globals(|globals| {
+            let table = globals.slot_table.borrow();
+            let Some(entry) = table.entries.get(self.slot) else {
+                return false;
+            };
 
-                entry.generation == self.generation && entry.key.type_id == TypeId::of::<T>()
-            })
-            .unwrap_or(false)
+            entry.generation == self.generation && entry.key.type_id == TypeId::of::<T>()
+        })
+        .unwrap_or(false)
     }
 
     /// Execute a closure with a shared reference to the stored value.
@@ -2113,7 +2113,7 @@ fn publish_state_write(slot: SlotHandle, generation: u64) {
         }
     });
     let key = StateReadDependencyKey { slot, generation };
-    let build_dirty = RUNTIME_GLOBALS.with(|globals| {
+    let build_dirty = with_runtime_globals(|globals| {
         let dependencies = globals.state_read_dependency_tracker.borrow();
         dependencies
             .readers_by_state
@@ -2131,7 +2131,7 @@ fn publish_state_write(slot: SlotHandle, generation: u64) {
     }
 }
 
-struct RuntimeGlobals {
+pub(crate) struct RuntimeGlobals {
     slot_table: RefCell<SlotTable>,
     component_replay_tracker: RefCell<ComponentReplayTracker>,
     build_invalidation_tracker: RefCell<BuildInvalidationTracker>,
@@ -2170,9 +2170,6 @@ impl Default for RuntimeGlobals {
         Self::new()
     }
 }
-const RUNTIME_GLOBALS: crate::session::SessionLocal<RuntimeGlobals> =
-    crate::session::SessionLocal::new();
-
 /// Runtime state container.
 #[derive(Default)]
 pub struct TesseraRuntime {
@@ -2192,7 +2189,7 @@ impl TesseraRuntime {
     where
         F: FnOnce(&Self) -> R,
     {
-        RUNTIME_GLOBALS.with(|globals| f(&globals.runtime.borrow()))
+        with_runtime_globals(|globals| f(&globals.runtime.borrow()))
     }
 
     /// Executes a closure with an exclusive, mutable reference to the runtime.
@@ -2200,7 +2197,7 @@ impl TesseraRuntime {
     where
         F: FnOnce(&mut Self) -> R,
     {
-        RUNTIME_GLOBALS.with(|globals| f(&mut globals.runtime.borrow_mut()))
+        with_runtime_globals(|globals| f(&mut globals.runtime.borrow_mut()))
     }
 
     /// Get the current window size in physical pixels.

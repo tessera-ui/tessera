@@ -14,7 +14,7 @@ use std::{
 
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::execution_context::ExecutionContext;
+use crate::{execution_context::ExecutionContext, runtime::RuntimeGlobals};
 
 #[derive(Default)]
 struct Resources {
@@ -28,6 +28,7 @@ pub(crate) struct SessionState {
     root_claimed: std::cell::Cell<bool>,
     closing: std::cell::Cell<bool>,
     execution_context: OnceCell<RefCell<ExecutionContext>>,
+    runtime_globals: OnceCell<Box<RuntimeGlobals>>,
     resources: RefCell<Resources>,
     previous: RefCell<Weak<SessionState>>,
 }
@@ -125,6 +126,7 @@ impl RuntimeSession {
             root_claimed: std::cell::Cell::new(false),
             closing: std::cell::Cell::new(false),
             execution_context: OnceCell::new(),
+            runtime_globals: OnceCell::new(),
             resources: RefCell::new(Resources::default()),
             previous: RefCell::new(Weak::new()),
         }))
@@ -181,6 +183,17 @@ pub(crate) fn with_active_execution_context<R>(
 ) -> R {
     let session = RuntimeSession::current().expect("a runtime session must be active");
     read(session.0.execution_context.get_or_init(RefCell::default))
+}
+
+pub(crate) fn with_runtime_globals<R>(read: impl FnOnce(&RuntimeGlobals) -> R) -> R {
+    try_with_runtime_globals(read).expect("a runtime session must be active")
+}
+
+pub(crate) fn try_with_runtime_globals<R>(
+    read: impl FnOnce(&RuntimeGlobals) -> R,
+) -> Result<R, ()> {
+    let session = RuntimeSession::current().ok_or(())?;
+    Ok(read(session.0.runtime_globals.get_or_init(Box::default)))
 }
 
 impl Drop for RuntimeSession {
