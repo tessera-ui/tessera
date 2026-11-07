@@ -103,7 +103,7 @@ pub struct I18nConfig {
 /// Asset directory and filtering configuration.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct AssetsConfig {
-    /// Asset paths embedded for immediate availability on every target.
+    /// Asset paths embedded in the binary on every target.
     #[serde(default)]
     pub embed: Vec<String>,
     /// Asset directory relative to the package root. Defaults to `assets`.
@@ -249,8 +249,8 @@ pub fn asset_namespace(package_name: &str, package_version: &str) -> String {
 
 /// Returns the content-addressed delivery path for an asset.
 pub fn platform_asset_path(namespace: &str, relative_path: &str, bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    format!("tessera/{namespace}/{digest:x}/{relative_path}")
+    let digest = hex::encode(Sha256::digest(bytes));
+    format!("tessera/{namespace}/{digest}/{relative_path}")
 }
 
 /// Resolves the configured asset directory path under `manifest_dir`.

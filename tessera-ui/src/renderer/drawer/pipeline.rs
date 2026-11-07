@@ -283,6 +283,7 @@ impl PipelineRegistry {
         config: &wgpu::SurfaceConfiguration,
         graphics: &crate::GraphicsDevice,
     ) {
+        graphics.begin_frame();
         for pipeline in self.pipelines.values_mut() {
             pipeline.begin_frame(&FrameContext {
                 graphics,

@@ -8,9 +8,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-fluent-bundle = "0.16"
-fluent-templates = { version = "0.15.1", default-features = false, features = ["macros", "walkdir"] }
-tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
+fluent-bundle.workspace = true
+fluent-templates = { workspace = true, features = ["macros", "walkdir"] }
+tessera-ui.workspace = true
 
 [dev-dependencies]
-tessera-ui = { path = "../../tessera-ui", features = ["testing"], version = "2.5.0" }
+tessera-ui = { workspace = true, features = ["testing"] }

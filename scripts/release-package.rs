@@ -541,7 +541,7 @@ fn verify(metadata: &Metadata) -> Result<()> {
                 let source = project.join("src/app.rs");
                 fs::write(&source, fs::read_to_string(&source)?.replace(
                     "text(\"Hello Tessera!\");",
-                    r#"let resource = tessera_ui::remember(|| crate::res::ACCEPTANCE_TXT.load()).get();
+                    r#"let resource = tessera_ui::remember(|| tessera_ui::Resource::load(crate::res::ACCEPTANCE_TXT, Ok)).get();
                     text(match resource.get() {
                         tessera_ui::LoadState::Ready(bytes) => String::from_utf8(bytes.to_vec()).expect("UTF-8 asset"),
                         _ => "Loading asset".to_owned(),

@@ -8,18 +8,18 @@ homepage.workspace = true
 description = "Platform services and plugins for Tessera."
 
 [dependencies]
-parking_lot = "0.12.5"
-tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
-tracing = "0.1.44"
+parking_lot.workspace = true
+tessera-ui.workspace = true
+tracing.workspace = true
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))'.dependencies]
-arboard = "3.6.1"
+arboard.workspace = true
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-wasm-bindgen-futures = "0.4.55"
-web-sys = { version = "0.3.93", features = ["Clipboard", "ClipboardEvent", "DataTransfer", "Document", "Event", "EventTarget", "HtmlCanvasElement", "KeyboardEvent", "Navigator", "Window"] }
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["Clipboard", "ClipboardEvent", "DataTransfer", "Document", "Event", "EventTarget", "HtmlCanvasElement", "KeyboardEvent", "Navigator", "Window"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
-objc2 = "0.6.3"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSDictionary", "NSString"] }
-objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["UIPasteboard"] }
+objc2 = { workspace = true, features = ["std"] }
+objc2-foundation = { workspace = true, features = ["std", "NSArray", "NSDictionary", "NSString"] }
+objc2-ui-kit = { workspace = true, features = ["UIPasteboard"] }

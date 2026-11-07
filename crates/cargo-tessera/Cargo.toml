@@ -16,64 +16,59 @@ name = "cargo-tessera"
 path = "src/main.rs"
 
 [dependencies]
-aho-corasick = "1.1"
-annotate-snippets = "0.12.17"
-anyhow = "1.0"
-cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", version = "0.1.0", default-features = false, features = [
-    "native-tls",
-] }
-cargo_metadata = "0.23"
-clap = { version = "4.5", features = ["derive", "cargo"] }
-comfy-table = "7.1"
-console = "0.16.2"
-csv = "1.3"
-dirs = "6"
-globset = "0.4"
-handlebars = "6"
-heck = "0.5"
-include_dir = "0.7"
-indicatif = "0.18.4"
-inquire = { version = "0.9.3", default-features = false, features = [
-    "crossterm",
-    "editor",
-] }
-notify = "8.2.0"
-owo-colors = "4.3"
-plist = "1.8"
-ra_ap_hir = "=0.0.358"
-ra_ap_hir_def = "=0.0.358"
-ra_ap_hir_expand = "=0.0.358"
-ra_ap_ide = "=0.0.358"
-ra_ap_base_db = "=0.0.358"
-ra_ap_cfg = "=0.0.358"
-ra_ap_intern = "=0.0.358"
-ra_ap_load-cargo = "=0.0.358"
-ra_ap_project_model = "=0.0.358"
-ra_ap_span = "=0.0.358"
-ra_ap_syntax = "=0.0.358"
-ra_ap_vfs = "=0.0.358"
-ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "layout-cache", "underline-color"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1", features = ["unbounded_depth"] }
-sha2 = "0.10"
-text-size = { version = "1.1", features = ["serde"] }
-tessera-build = { path = "../tessera-build", version = "0.1.0" }
-toml = "1.1.0"
-# The rust-analyzer lexer requires Unicode 17 in both Unicode dependencies.
-unicode-ident = "=1.0.24"
-unicode-properties = { version = "=0.1.4", default-features = false }
-unicode-width = "0.2"
-wasm-bindgen-cli-support = "0.2.114"
-interprocess = "2.4.4"
-tempfile = "3.27"
-rustfix = "0.9.8"
+aho-corasick.workspace = true
+annotate-snippets.workspace = true
+anyhow.workspace = true
+cargo_metadata.workspace = true
+cargo_mobile2 = { workspace = true, features = ["native-tls"] }
+clap = { workspace = true, features = ["derive", "cargo"] }
+comfy-table.workspace = true
+console.workspace = true
+csv.workspace = true
+dirs.workspace = true
+globset.workspace = true
+handlebars.workspace = true
+heck.workspace = true
+hex.workspace = true
+include_dir.workspace = true
+indicatif.workspace = true
+inquire = { workspace = true, features = ["crossterm", "editor"] }
+interprocess.workspace = true
+notify.workspace = true
+owo-colors.workspace = true
+plist.workspace = true
+ra_ap_base_db.workspace = true
+ra_ap_cfg.workspace = true
+ra_ap_hir.workspace = true
+ra_ap_hir_def.workspace = true
+ra_ap_hir_expand.workspace = true
+ra_ap_ide.workspace = true
+ra_ap_intern.workspace = true
+ra_ap_load-cargo.workspace = true
+ra_ap_project_model.workspace = true
+ra_ap_span.workspace = true
+ra_ap_syntax.workspace = true
+ra_ap_vfs.workspace = true
+ratatui = { workspace = true, features = ["crossterm", "layout-cache", "underline-color"] }
+rustfix.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["unbounded_depth"] }
+sha2.workspace = true
+tempfile.workspace = true
+tessera-build.workspace = true
+text-size = { workspace = true, features = ["serde"] }
+toml.workspace = true
+unicode-ident.workspace = true
+unicode-properties.workspace = true
+unicode-width.workspace = true
+wasm-bindgen-cli-support.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_Pipes"] }
+windows-sys = { workspace = true, features = ["Win32_System_Pipes"] }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc.workspace = true
 
 [dev-dependencies]
-tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
-tessera-components = { path = "../tessera-components", version = "2.7.0" }
+tessera-components.workspace = true
+tessera-ui.workspace = true

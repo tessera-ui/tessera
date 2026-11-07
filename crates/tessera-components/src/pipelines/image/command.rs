@@ -11,7 +11,7 @@ use tessera_ui::DrawCommand;
 /// pixel storage; independently allocated images compare by dimensions and pixels.
 #[derive(Debug, Clone)]
 pub struct ImageData {
-    /// Raw RGBA pixel buffer.
+    /// Premultiplied sRGB RGBA pixels.
     pub data: Arc<Vec<u8>>,
     /// Image width in pixels.
     pub width: u32,
@@ -21,15 +21,41 @@ pub struct ImageData {
 }
 
 impl ImageData {
-    /// Builds image data from an RGBA buffer.
+    /// Builds image data from straight-alpha sRGB RGBA pixels.
     pub fn from_rgba(data: impl Into<Arc<Vec<u8>>>, width: u32, height: u32) -> Self {
-        let data = data.into();
+        let mut data: Arc<Vec<u8>> = data.into();
+        if data.chunks_exact(4).any(|pixel| pixel[3] != 255) {
+            premultiply(Arc::make_mut(&mut data).as_mut_slice());
+        }
         let content_hash = content_hash(data.as_ref());
         Self {
             data,
             width,
             height,
             content_hash,
+        }
+    }
+}
+
+fn premultiply(pixels: &mut [u8]) {
+    for pixel in pixels.chunks_exact_mut(4) {
+        let alpha = f32::from(pixel[3]) / 255.0;
+        if alpha == 1.0 {
+            continue;
+        }
+        for channel in &mut pixel[..3] {
+            let srgb = f32::from(*channel) / 255.0;
+            let linear = if srgb <= 0.04045 {
+                srgb / 12.92
+            } else {
+                ((srgb + 0.055) / 1.055).powf(2.4)
+            } * alpha;
+            let encoded = if linear <= 0.0031308 {
+                linear * 12.92
+            } else {
+                1.055 * linear.powf(1.0 / 2.4) - 0.055
+            };
+            *channel = (encoded * 255.0).round() as u8;
         }
     }
 }
@@ -88,6 +114,17 @@ mod tests {
         let mut collision = ImageData::from_rgba(vec![0, 0, 255, 255], 1, 1);
         collision.content_hash = first.content_hash;
         assert_ne!(first, collision);
+    }
+
+    #[test]
+    fn construction_premultiplies_in_linear_light_and_keeps_opaque_buffers() {
+        let opaque = Arc::new(vec![128, 64, 192, 255]);
+        assert!(Arc::ptr_eq(
+            &ImageData::from_rgba(Arc::clone(&opaque), 1, 1).data,
+            &opaque
+        ));
+        let translucent = ImageData::from_rgba(vec![255, 0, 0, 128, 255, 128, 64, 0], 2, 1);
+        assert_eq!(*translucent.data, [188, 0, 0, 128, 0, 0, 0, 0]);
     }
 
     #[test]

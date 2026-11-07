@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env, fs,
-    io::{self, Write},
+    io::Write,
     path::Path,
 };
 
@@ -53,16 +53,13 @@ pub(super) struct Cache<'a> {
 }
 
 fn fingerprint(value: impl Serialize) -> String {
-    format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(&value).expect("cache input"))
-    )
+    hex::encode(Sha256::digest(
+        serde_json::to_vec(&value).expect("cache input"),
+    ))
 }
 
 fn file_hash(path: &Path) -> Option<String> {
-    let mut hash = Sha256::new();
-    io::copy(&mut fs::File::open(path).ok()?, &mut hash).ok()?;
-    Some(format!("{:x}", hash.finalize()))
+    Some(hex::encode(Sha256::digest(fs::read(path).ok()?)))
 }
 
 fn cargo_inputs(

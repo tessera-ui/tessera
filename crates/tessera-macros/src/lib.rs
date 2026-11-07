@@ -957,7 +957,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     if input_fn.sig.constness.is_some()
         || input_fn.sig.asyncness.is_some()
-        || input_fn.sig.unsafety.is_some()
+        || !matches!(input_fn.sig.safety, syn::Safety::Default)
         || input_fn.sig.abi.is_some()
         || input_fn.sig.variadic.is_some()
     {

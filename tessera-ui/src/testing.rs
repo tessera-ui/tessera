@@ -220,6 +220,8 @@ where
     session.current_frame_nanos = frame_nanos;
     let frame_time = session.frame_origin + Duration::from_nanos(frame_nanos);
     begin_frame_clock(frame_time);
+    #[cfg(not(target_family = "wasm"))]
+    crate::asset::settle();
     // Match renderer frame order so frame callbacks update state before build.
     tick_frame_nanos_receivers();
     let _ = build_component_tree(&session.content);
@@ -266,6 +268,16 @@ where
     session.work = crate::work::finish();
     session.work_totals.record(&session.work);
     session.frame_clock_diagnostics = crate::runtime::frame_clock_diagnostics();
+    #[cfg(not(target_family = "wasm"))]
+    if crate::asset::in_flight() {
+        drop(_session);
+        return pump_layout_test_session_with_input(
+            session,
+            frame_nanos,
+            Vec::new(),
+            cursor_position,
+        );
+    }
     LayoutSnapshot::capture()
 }
 

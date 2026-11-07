@@ -1269,7 +1269,9 @@ Fps: {:.2}
         // End of frame cleanup
         args.cursor_state.frame_cleanup();
 
-        let runtime_pending_work = RuntimePendingWork::capture(pending_keyboard_retry);
+        let mut runtime_pending_work = RuntimePendingWork::capture(pending_keyboard_retry);
+        runtime_pending_work.invalidation_pending |=
+            args.app.resources().graphics.take_deferred_upload();
 
         RenderFrameOutcome {
             accessibility_update,

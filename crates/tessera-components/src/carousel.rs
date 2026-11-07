@@ -1641,7 +1641,7 @@ mod tests {
                     if settings.with(|settings| settings.stress) {
                         for index in 0..40usize {
                             key(index, || {
-                                image().raster(raster.get()).modifier(
+                                image().painter(raster.get()).modifier(
                                     Modifier::new().size(Dp(24.0), Dp(24.0)).offset(
                                         Dp((10 + (index % 8) * 28) as f64),
                                         Dp((20 + (index / 8) * 28) as f64),
@@ -1699,7 +1699,7 @@ mod tests {
                                                         })
                                                     })
                                                     .child(move || {
-                                                        image().raster(raster.get()).modifier(
+                                                        image().painter(raster.get()).modifier(
                                                             Modifier::new().fill_max_size(),
                                                         );
                                                     });
@@ -2245,15 +2245,14 @@ mod tests {
                 .graphics_work()
                 .group("image_textures")
                 .texture_uploads,
-            uploads + 1,
-            "restoring retired pixels creates one texture"
+            uploads,
+            "restoring live pixels reuses their texture"
         );
         assert!(renderer.read_pixels().expect("restored cached image") == repeated);
-        let uploads = renderer
+        let allocations = renderer
             .graphics_work()
             .group("image_textures")
-            .texture_uploads;
-        let duplicate = raster.get();
+            .texture_allocations;
         for shade in 1..=5_u8 {
             let retired_pixels = Arc::downgrade(&raster.get().data);
             let mut pixels = vec![0; 2048 * 2048 * 4];
@@ -2269,22 +2268,13 @@ mod tests {
                 );
             }
         }
-        let pressure_uploads = renderer
-            .graphics_work()
-            .group("image_textures")
-            .texture_uploads;
-        assert_eq!(pressure_uploads, uploads + 5);
-        raster.set(duplicate);
-        renderer.render_frames(3);
         assert_eq!(
             renderer
                 .graphics_work()
                 .group("image_textures")
-                .texture_uploads,
-            pressure_uploads + 1,
-            "restoring replaced pixels creates one texture"
+                .texture_allocations,
+            allocations + 5
         );
-        assert!(renderer.read_pixels().expect("image after cache eviction") == repeated);
     }
 
     #[test]

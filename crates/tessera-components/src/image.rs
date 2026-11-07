@@ -3,93 +3,28 @@
 //! ## Usage
 //!
 //! Use to display images from pre-decoded data or bytes/assets loaded once.
-use std::path::{Path, PathBuf};
-
-use image::GenericImageView;
 use tessera_ui::{
     Color, ComputedData, LayoutResult, MeasurementError, Modifier, Px,
     layout::{MeasureScope, layout},
     tessera,
 };
 
-pub use image::ImageError as ImageLoadError;
-
 use crate::{
-    image_vector::{ImageVectorLoadError, TintMode, TryIntoImageVectorData},
-    painter::{Painter, PainterLoadError, TryIntoPainter},
-    pipelines::{
-        image::command::ImageCommand,
-        image_vector::command::{ImageVectorCommand, ImageVectorData},
-    },
+    image_vector::TintMode,
+    painter::Painter,
+    pipelines::{image::command::ImageCommand, image_vector::command::ImageVectorCommand},
 };
 
 pub use crate::pipelines::image::command::ImageData;
-
-/// Converts a source into decoded raster image data.
-pub trait TryIntoImageData {
-    /// Convert this source into decoded image data.
-    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError>;
-}
 
 fn placeholder_image_data() -> ImageData {
     ImageData::from_rgba(vec![0, 0, 0, 0], 1, 1)
 }
 
-fn decode_dynamic_image(decoded: image::DynamicImage) -> ImageData {
+pub(crate) fn decode_raster(bytes: &[u8]) -> Result<ImageData, image::ImageError> {
+    let decoded = image::load_from_memory(bytes)?.into_rgba8();
     let (width, height) = decoded.dimensions();
-    ImageData::from_rgba(decoded.into_rgba8().into_raw(), width, height)
-}
-
-fn decode_image_from_bytes(bytes: &[u8]) -> Result<ImageData, ImageLoadError> {
-    let decoded = image::load_from_memory(bytes)?;
-    Ok(decode_dynamic_image(decoded))
-}
-
-fn decode_image_from_path(path: &Path) -> Result<ImageData, ImageLoadError> {
-    let decoded = image::open(path)?;
-    Ok(decode_dynamic_image(decoded))
-}
-
-impl TryIntoImageData for ImageData {
-    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
-        Ok(self)
-    }
-}
-
-impl TryIntoImageData for Vec<u8> {
-    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
-        decode_image_from_bytes(&self)
-    }
-}
-
-impl TryIntoImageData for &[u8] {
-    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
-        decode_image_from_bytes(self)
-    }
-}
-
-impl TryIntoImageData for String {
-    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
-        decode_image_from_path(Path::new(&self))
-    }
-}
-
-impl TryIntoImageData for &str {
-    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
-        decode_image_from_path(Path::new(self))
-    }
-}
-
-impl TryIntoImageData for PathBuf {
-    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
-        decode_image_from_path(self.as_path())
-    }
-}
-
-impl TryIntoImageData for &Path {
-    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
-        decode_image_from_path(self)
-    }
+    Ok(ImageData::from_rgba(decoded.into_raw(), width, height))
 }
 
 impl ImageBuilder {
@@ -99,55 +34,6 @@ impl ImageBuilder {
         self.props
             .configure("painter", move |props| props.painter = value);
         Self { props: self.props }
-    }
-
-    /// Decodes image content from any supported source.
-    pub fn try_painter<T>(&self, source: T) -> Result<Self, PainterLoadError>
-    where
-        T: TryIntoPainter,
-    {
-        let value = Some(source.try_into_painter()?);
-        self.props
-            .configure("painter", move |props| props.painter = value);
-        Ok(Self { props: self.props })
-    }
-
-    /// Replaces the image data with already-decoded raster pixels.
-    pub fn raster(&self, data: impl Into<ImageData>) -> Self {
-        let value = Some(Painter::Raster(data.into()));
-        self.props
-            .configure("painter", move |props| props.painter = value);
-        Self { props: self.props }
-    }
-
-    /// Replaces the image content with already-decoded vector geometry.
-    pub fn vector(&self, data: impl Into<ImageVectorData>) -> Self {
-        let value = Some(Painter::Vector(data.into()));
-        self.props
-            .configure("painter", move |props| props.painter = value);
-        Self { props: self.props }
-    }
-
-    /// Decodes raster image data from bytes/path/asset input and stores it.
-    pub fn try_raster<T>(&self, source: T) -> Result<Self, ImageLoadError>
-    where
-        T: TryIntoImageData,
-    {
-        let value = Some(Painter::Raster(source.try_into_image_data()?));
-        self.props
-            .configure("painter", move |props| props.painter = value);
-        Ok(Self { props: self.props })
-    }
-
-    /// Decodes vector image data from bytes/path input and stores it.
-    pub fn try_vector<T>(&self, source: T) -> Result<Self, ImageVectorLoadError>
-    where
-        T: TryIntoImageVectorData,
-    {
-        let value = Some(Painter::Vector(source.try_into_image_vector_data()?));
-        self.props
-            .configure("painter", move |props| props.painter = value);
-        Ok(Self { props: self.props })
     }
 }
 
@@ -159,7 +45,7 @@ struct ImageLayout {
 impl tessera_ui::LayoutModifierNode for ImageLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (intrinsic_width, intrinsic_height) = match &self.painter {
-            Painter::Asset(_) => (Px::ZERO, Px::ZERO),
+            Painter::Source(_) => (Px::ZERO, Px::ZERO),
             Painter::Vector(data) => (
                 clamp_f32_to_px(data.viewport_width),
                 clamp_f32_to_px(data.viewport_height),
@@ -182,7 +68,7 @@ impl tessera_ui::DrawModifierNode for ImageLayout {
     ) {
         let input = &mut *ctx.render_input;
         match &self.painter {
-            Painter::Asset(_) => {}
+            Painter::Source(_) => {}
             Painter::Raster(data) => {
                 let image_command = ImageCommand {
                     data: data.clone(),

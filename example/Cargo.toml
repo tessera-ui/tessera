@@ -21,17 +21,17 @@ path = "src/main.rs"
 md3-diagnostics = []
 
 [dependencies]
-tessera-shard = { path = "../crates/tessera-shard", version = "0.4.2" }
-tessera-ui = { path = "../tessera-ui", features = ["headless"], version = "2.5.0" }
-tessera-components = { path = "../crates/tessera-components", version = "2.7.0" }
-tessera-platform = { path = "../crates/tessera-platform", version = "0.1.0" }
-tessera-i18n = { path = "../crates/tessera-i18n", version = "0.1.0" }
+tessera-components.workspace = true
+tessera-i18n.workspace = true
+tessera-platform.workspace = true
+tessera-shard.workspace = true
+tessera-ui = { workspace = true, features = ["headless"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-wasm-bindgen = "0.2.105"
+wasm-bindgen.workspace = true
 
 [build-dependencies]
-tessera-build = { path = "../crates/tessera-build", version = "0.1.0" }
+tessera-build.workspace = true
 
 [dev-dependencies]
-tessera-ui = { path = "../tessera-ui", features = ["testing"], version = "2.5.0" }
+tessera-ui = { workspace = true, features = ["testing"] }

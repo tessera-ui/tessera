@@ -48,7 +48,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Asset paths embedded for immediate availability on every target."
+          "description": "Asset paths embedded in the binary on every target."
         }
       }
     },

@@ -924,7 +924,7 @@ fn chip_avatar(painter: Option<Painter>, alpha: Option<f32>) {
         return;
     };
     let (width, height) = match &painter {
-        Painter::Asset(_) => unreachable!("painter is resolved"),
+        Painter::Source(_) => unreachable!("painter is resolved"),
         Painter::Raster(data) => (f64::from(data.width), f64::from(data.height)),
         Painter::Vector(data) => (
             f64::from(data.viewport_width),

@@ -118,10 +118,6 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
         self.atlas.trim();
     }
 
-    fn end_frame(&mut self, _context: &FrameContext<'_>) {
-        self.renderers.truncate(self.next_renderer);
-    }
-
     fn draw(&mut self, context: &mut DrawContext<TextCommand>) {
         if context.commands.is_empty() {
             return;

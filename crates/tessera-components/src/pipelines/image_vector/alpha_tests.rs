@@ -7,7 +7,6 @@ use crate::{
     alignment::Alignment,
     boxed::boxed,
     image::{ImageData, image},
-    image_vector::TryIntoImageVectorData as _,
     modifier::ModifierExt as _,
 };
 
@@ -29,12 +28,10 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
         size: Some(size),
     });
     let translucent = remember(|| {
-        b"<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='#ff0000' fill-opacity='.5'/></svg>".as_slice()
-        .try_into_image_vector_data().expect("Inline translucent vector")
+        crate::image_vector::decode_vector(b"<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='#ff0000' fill-opacity='.5'/></svg>".as_slice()).expect("Inline translucent vector")
     });
     let opaque = remember(|| {
-        b"<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='#ff0000'/></svg>".as_slice()
-        .try_into_image_vector_data().expect("Inline opaque vector")
+        crate::image_vector::decode_vector(b"<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='#ff0000'/></svg>".as_slice()).expect("Inline opaque vector")
     });
     boxed()
         .alignment(Alignment::TopStart)

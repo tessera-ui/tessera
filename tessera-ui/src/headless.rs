@@ -509,6 +509,7 @@ impl HeadlessRenderer {
         #[cfg(feature = "profiling")]
         let frame_timer = Instant::now();
         begin_frame_clock(frame_time);
+        crate::asset::settle();
         // Tick frame-nanos receivers before the build so their state writes are
         // consumed by the current recomposition pass.
         tick_frame_nanos_receivers();

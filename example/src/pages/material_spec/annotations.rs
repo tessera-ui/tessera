@@ -4,8 +4,8 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     image::image,
-    image_vector::TryIntoImageVectorData as _,
     modifier::{ModifierExt as _, SemanticsArgs},
+    painter::Painter,
     shape_def::Shape,
     text::text,
 };
@@ -176,17 +176,17 @@ pub(super) fn lines(width: Dp, height: Dp, svg: String) {
     if svg.trim().is_empty() {
         return;
     }
-    let vector = remember_with_key((width.0.to_bits(), height.0.to_bits(), svg.clone()), || {
-        format!(
-            "<svg xmlns='http://www.w3.org/2000/svg' width='{}' height='{}'>{svg}</svg>",
-            width.0.max(1.0),
-            height.0.max(1.0)
-        )
-        .into_bytes()
-        .try_into_image_vector_data()
-        .expect("annotation geometry")
-    })
-    .get();
+    let vector: Painter =
+        remember_with_key((width.0.to_bits(), height.0.to_bits(), svg.clone()), || {
+            format!(
+                "<svg xmlns='http://www.w3.org/2000/svg' width='{}' height='{}'>{svg}</svg>",
+                width.0.max(1.0),
+                height.0.max(1.0)
+            )
+            .into_bytes()
+            .into()
+        })
+        .get();
     image()
         .painter(vector)
         .modifier(Modifier::new().size(width, height));

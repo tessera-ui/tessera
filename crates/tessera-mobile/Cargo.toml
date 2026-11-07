@@ -59,47 +59,47 @@ native-tls = ["ureq/native-tls"]
 default = ["cli", "native-tls"]
 
 [dependencies]
-include_dir = "0.7"
-handlebars = "6"
-serde_json = "1"
-colored = "3.1"
-deunicode = "1.4"
-dunce = "1.0"
-english-numbers = "0.3"
-env_logger = { version = "0.11", optional = true }
-heck = "0.5"
-home = "0.5"
-ignore = "0.4"
-java-properties = "2"
-log = "0.4"
-once-cell-regex = "0.2"
-path_abs = "0.5"
-serde = { version = "1.0", features = ["derive"] }
-structopt = { version = "0.3", optional = true }
-textwrap = { version = "0.16", features = ["terminal_size"] }
-thiserror = "2.0"
-toml = { version = "1.1", features = ["preserve_order"] }
-duct = "1.1"
-which = "8"
-os_pipe = "1"
+colored.workspace = true
+deunicode.workspace = true
+duct.workspace = true
+dunce.workspace = true
+english-numbers.workspace = true
+env_logger = { workspace = true, optional = true }
+handlebars.workspace = true
+heck.workspace = true
+home.workspace = true
+ignore.workspace = true
+include_dir.workspace = true
+java-properties.workspace = true
+log.workspace = true
+once-cell-regex.workspace = true
+os_pipe.workspace = true
+path_abs.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+structopt = { workspace = true, optional = true }
+textwrap = { workspace = true, features = ["terminal_size"] }
+thiserror.workspace = true
+toml = { workspace = true, features = ["preserve_order"] }
+which.workspace = true
 
 [dev-dependencies]
-rstest = "0.26"
+rstest.workspace = true
 
 [target."cfg(target_os = \"macos\")".dependencies]
-core-foundation = "0.10"
-x509-certificate = "0.25"
-os_info = "3"
-plist = "1"
+core-foundation.workspace = true
+os_info.workspace = true
+plist.workspace = true
+x509-certificate.workspace = true
 
 [target."cfg(not(target_os = \"macos\"))".dependencies]
-ureq = { version = "3", default-features = false, features = ["gzip"] }
+ureq = { workspace = true, features = ["gzip"] }
 
 [target."cfg(unix)".dependencies]
-libc = "0.2"
+libc.workspace = true
 
 [target."cfg(windows)".dependencies.windows]
-version = "0.62.2"
+workspace = true
 features = [
   "Win32_Foundation",
   "Win32_Security",
@@ -115,13 +115,13 @@ features = [
 ]
 
 [target."cfg(windows)".build-dependencies]
-embed-resource = { version = "3", optional = true }
+embed-resource = { workspace = true, optional = true }
 
 [build-dependencies]
-home = { version = "0.5", optional = true }
-dunce = { version = "1", optional = true }
-handlebars = { version = "6", optional = true }
-log = { version = "0.4", optional = true }
-serde = { version = "1", optional = true }
-serde_json = { version = "1", optional = true }
-thiserror = { version = "2", optional = true }
+dunce = { workspace = true, optional = true }
+handlebars = { workspace = true, optional = true }
+home = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }

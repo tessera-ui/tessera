@@ -23,6 +23,157 @@ edition = "2024"
 repository = "https://github.com/tessera-ui/tessera"
 homepage = "https://tessera-ui.github.io"
 
+# Shared dependency requirements for Tessera-owned crates.
+#
+# - Write full `major.minor.patch` caret requirements at the oldest version that
+#   is known to build; CI verifies them with `-Z direct-minimal-versions`.
+# - Do not use open or upper-bounded ranges. Crates whose types are passed to
+#   each other must stay on requirements that resolve to one shared version.
+# - Declare `default-features = false` here when any member needs it; members
+#   then opt into the features they use.
+[workspace.dependencies]
+tessera-build = { path = "crates/tessera-build", version = "0.1.0" }
+tessera-components = { path = "crates/tessera-components", version = "2.7.0" }
+tessera-foundation = { path = "crates/tessera-foundation", version = "0.1.0" }
+tessera-i18n = { path = "crates/tessera-i18n", version = "0.1.0" }
+tessera-macros = { path = "crates/tessera-macros", version = "0.4.4" }
+tessera-platform = { path = "crates/tessera-platform", version = "0.1.0" }
+tessera-shard = { path = "crates/tessera-shard", version = "0.4.2" }
+tessera-ui = { path = "tessera-ui", version = "2.5.0" }
+accesskit = { path = "crates/tessera-accesskit/accesskit", version = "0.25.2" }
+accesskit_winit = { package = "tessera-accesskit-winit", path = "crates/tessera-accesskit/adapters/winit", version = "0.34.2" }
+cargo_mobile2 = { package = "tessera-mobile", path = "crates/tessera-mobile", version = "0.1.0", default-features = false }
+glyphon = { package = "tessera-glyphon", path = "crates/tessera-glyphon", version = "0.12.0" }
+winit = { package = "tessera-winit", path = "crates/tessera-winit", version = "0.30.13" }
+
+aho-corasick = "1.1.5"
+annotate-snippets = "0.12.17"
+anyhow = "1.0.104"
+arboard = "3.7.0"
+bytemuck = "1.25.2"
+cargo_metadata = "0.23.1"
+clap = "4.6.7"
+colored = "3.1.1"
+comfy-table = "8.0.1"
+console = "0.16.6"
+console_error_panic_hook = "0.1.7"
+core-foundation = "0.10.1"
+csv = "1.4.0"
+deunicode = "1.6.2"
+dirs = "7.0.0"
+downcast-rs = "2.0.2"
+duct = "1.1.2"
+dunce = "1.0.5"
+dyn-clone = "1.0.20"
+embed-resource = "3.0.12"
+# `glam` implements `encase::ShaderType` through its `encase-013` feature.
+encase = "0.13.0"
+glam = "0.34.2"
+english-numbers = "0.3.3"
+env_logger = "0.11.11"
+etagere = "0.3.0"
+fluent-bundle = "0.16.0"
+fluent-templates = { version = "0.15.1", default-features = false }
+futures-util = "0.3.34"
+globset = "0.4.21"
+handlebars = "6.4.4"
+heck = "0.5.0"
+hex = "0.4.3"
+home = "0.5.12"
+ignore = "0.4.34"
+im = "15.1.0"
+image = { version = "0.25.10", default-features = false }
+include_dir = "0.7.4"
+indextree = "4.9.2"
+indicatif = "0.18.6"
+inquire = { version = "0.9.4", default-features = false }
+interprocess = "2.4.7"
+java-properties = "2.0.0"
+# `tessera-ui` re-exports `jni` types; 0.22 is a breaking API rewrite.
+jni = "0.21.1"
+js-sys = "0.3.107"
+libc = "0.2.191"
+log = "0.4.35"
+lru = "0.19.0"
+lyon_geom = "1.0.20"
+lyon_path = "1.0.19"
+lyon_tessellation = "1.0.23"
+material-color-utilities = "1.0.0-dev.18"
+ndk-context = "0.1.1"
+ndk-sys = "0.6.0"
+notify = "8.2.1"
+objc2 = { version = "0.6.5", default-features = false }
+objc2-app-kit = { version = "0.3.2", default-features = false }
+objc2-foundation = { version = "0.3.2", default-features = false }
+objc2-quartz-core = { version = "0.3.2", default-features = false }
+objc2-ui-kit = { version = "0.3.2", default-features = false }
+once-cell-regex = "0.2.1"
+os_info = "3.15.0"
+os_pipe = "1.2.3"
+owo-colors = "4.4.0"
+parking_lot = "0.13.0"
+path_abs = "0.5.1"
+plist = "1.10.3"
+pollster = "1.0.1"
+# `prettyplease` formats `syn` syntax trees, so both must share a major version.
+prettyplease = "0.3.0"
+proc-macro2 = "1.0.107"
+quote = "1.0.47"
+syn = "3.0.9"
+# rust-analyzer library crates are published in lockstep and must match exactly.
+ra_ap_base_db = "=0.0.358"
+ra_ap_cfg = "=0.0.358"
+ra_ap_hir = "=0.0.358"
+ra_ap_hir_def = "=0.0.358"
+ra_ap_hir_expand = "=0.0.358"
+ra_ap_ide = "=0.0.358"
+ra_ap_intern = "=0.0.358"
+ra_ap_load-cargo = "=0.0.358"
+ra_ap_project_model = "=0.0.358"
+ra_ap_span = "=0.0.358"
+ra_ap_syntax = "=0.0.358"
+ra_ap_vfs = "=0.0.358"
+# The rust-analyzer lexer requires Unicode 17 in both Unicode dependencies.
+unicode-ident = "=1.0.24"
+unicode-properties = { version = "=0.1.4", default-features = false }
+ratatui = { version = "0.30.2", default-features = false }
+rstest = "0.28.0"
+rustc-hash = "2.1.3"
+rustfix = "0.9.8"
+serde = "1.0.229"
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+slotmap = "1.1.1"
+smallvec = "1.16.5"
+structopt = "0.3.26"
+tempfile = "3.27.0"
+text-size = "1.1.1"
+textwrap = "0.16.4"
+thiserror = "2.0.21"
+tokio = "1.54.1"
+toml = "1.2.1"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", default-features = false }
+unicode-linebreak = "0.1.5"
+unicode-segmentation = "1.13.3"
+unicode-width = "0.2.3"
+ureq = { version = "3.5.1", default-features = false }
+usvg = { version = "0.49.0", default-features = false }
+uuid = "1.29.1"
+# `cargo-tessera web` runs `wasm-bindgen-cli-support` against the application's
+# `wasm-bindgen`; keep the wasm-bindgen family on the same release.
+wasm-bindgen = "0.2.130"
+wasm-bindgen-cli-support = "0.2.130"
+wasm-bindgen-futures = "0.4.80"
+web-sys = "0.3.107"
+web-time = "1.1.0"
+wgpu = "30.0.1"
+which = "8.0.6"
+windows = "0.62.2"
+windows-sys = "0.61.2"
+wuff = { version = "0.2.10", default-features = false }
+x509-certificate = "0.25.0"
+
 [profile.release]
 codegen-units = 16
 lto = "thin"

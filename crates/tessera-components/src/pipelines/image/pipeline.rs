@@ -1,8 +1,10 @@
 use std::{
-    borrow::Cow,
     collections::HashMap,
     num::NonZeroU64,
-    sync::{Arc, Weak},
+    sync::{
+        Arc, Weak,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 
 use encase::{ShaderType, UniformBuffer};
@@ -24,13 +26,60 @@ struct ImageUniforms {
 }
 
 struct ImageResources {
+    texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
+    uploaded_rows: AtomicU32,
+}
+
+impl ImageResources {
+    /// Uploads rows within the frame budget and reports whether all rows are
+    /// uploaded.
+    fn upload(&self, graphics: &tessera_ui::GraphicsDevice, data: &ImageData) -> bool {
+        let start = self.uploaded_rows.load(Ordering::Relaxed);
+        if start == data.height {
+            return true;
+        }
+        let row_bytes = 4 * data.width;
+        let rows = (graphics.upload_budget() / u64::from(row_bytes))
+            .min(u64::from(data.height - start)) as u32;
+        let end = start + rows;
+        if rows > 0 {
+            graphics.write_texture(
+                "image_textures",
+                wgpu::TexelCopyTextureInfo {
+                    texture: &self.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: start,
+                        z: 0,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &data.data[(start * row_bytes) as usize..(end * row_bytes) as usize],
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(row_bytes),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d {
+                    width: data.width,
+                    height: rows,
+                    depth_or_array_layers: 1,
+                },
+            );
+            self.uploaded_rows.store(end, Ordering::Relaxed);
+        }
+        if end < data.height {
+            graphics.defer_upload();
+        }
+        end == data.height
+    }
 }
 
 struct CachedImage {
     pixels: Weak<Vec<u8>>,
     content_hash: u64,
-    last_used: u64,
     resources: Arc<ImageResources>,
 }
 
@@ -44,7 +93,6 @@ pub struct ImagePipeline {
     uniform_capacity: u64,
     uniform_used: u64,
     sampler: wgpu::Sampler,
-    frame: u64,
     quad_vertex_buffer: Arc<wgpu::Buffer>,
     quad_index_buffer: Arc<wgpu::Buffer>,
     resources: HashMap<(usize, u32, u32), CachedImage>,
@@ -160,7 +208,6 @@ impl ImagePipeline {
             uniform_capacity: 4096,
             uniform_used: 0,
             sampler,
-            frame: 0,
             quad_vertex_buffer: Arc::clone(shared_quad.vertex()),
             quad_index_buffer: Arc::clone(shared_quad.index()),
             resources: HashMap::new(),
@@ -171,7 +218,7 @@ impl ImagePipeline {
         &mut self,
         device: &tessera_ui::GraphicsDevice,
         data: &ImageData,
-    ) -> &ImageResources {
+    ) -> Arc<ImageResources> {
         let identity = (Arc::as_ptr(&data.data) as usize, data.width, data.height);
         if !self.resources.contains_key(&identity) {
             let shared = self
@@ -200,14 +247,11 @@ impl ImagePipeline {
                 CachedImage {
                     pixels: Arc::downgrade(&data.data),
                     content_hash: data.content_hash,
-                    last_used: self.frame,
                     resources,
                 },
             );
         }
-        let cached = self.resources.get_mut(&identity).expect("cached image");
-        cached.last_used = self.frame;
-        &cached.resources
+        Arc::clone(&self.resources[&identity].resources)
     }
 
     fn uniform_resources(
@@ -284,23 +328,6 @@ impl ImagePipeline {
             },
         );
 
-        device.write_texture(
-            "image_textures",
-            wgpu::TexelCopyTextureInfo {
-                texture: &diffuse_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &premultiply_rgba(&data.data),
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * data.width),
-                rows_per_image: Some(data.height),
-            },
-            texture_size,
-        );
-
         let diffuse_texture_view =
             diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -319,7 +346,9 @@ impl ImagePipeline {
         });
 
         ImageResources {
+            texture: diffuse_texture,
             bind_group: diffuse_bind_group,
+            uploaded_rows: AtomicU32::new(0),
         }
     }
 }
@@ -327,12 +356,11 @@ impl ImagePipeline {
 impl DrawablePipeline<ImageCommand> for ImagePipeline {
     fn begin_frame(&mut self, _context: &FrameContext<'_>) {
         self.uniform_used = 0;
-        self.frame = self.frame.wrapping_add(1);
     }
 
     fn end_frame(&mut self, _context: &FrameContext<'_>) {
         self.resources
-            .retain(|_, resource| resource.last_used == self.frame);
+            .retain(|_, resource| resource.pixels.strong_count() > 0);
     }
 
     fn draw(&mut self, context: &mut DrawContext<ImageCommand>) {
@@ -345,6 +373,10 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
             .set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
         for (command, geometry) in context.commands.iter() {
+            let resource = self.get_or_create_resources(context.graphics, &command.data);
+            if !resource.upload(context.graphics, &command.data) {
+                continue;
+            }
             let uniforms = Self::compute_uniforms(*geometry, context.target_size, command.opacity);
 
             let mut buffer = UniformBuffer::new(Vec::new());
@@ -376,63 +408,10 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
                 &self.uniform_group,
                 &[u32::try_from(offset).expect("image instance offset")],
             );
-            let resource = self.get_or_create_resources(context.graphics, &command.data);
             context
                 .render_pass
                 .set_bind_group(1, &resource.bind_group, &[]);
             context.render_pass.draw_indexed(0..6, 0, 0..1);
         }
-    }
-}
-
-fn premultiply_rgba(bytes: &[u8]) -> Cow<'_, [u8]> {
-    if bytes.chunks_exact(4).all(|pixel| pixel[3] == 255) {
-        return Cow::Borrowed(bytes);
-    }
-    let mut result = bytes.to_vec();
-    for pixel in result.chunks_exact_mut(4) {
-        if pixel[3] == 255 {
-            continue;
-        }
-        if pixel[3] == 0 {
-            pixel[..3].fill(0);
-            continue;
-        }
-        let alpha = f32::from(pixel[3]) / 255.0;
-        for channel in &mut pixel[..3] {
-            let srgb = f32::from(*channel) / 255.0;
-            let linear = if srgb <= 0.04045 {
-                srgb / 12.92
-            } else {
-                ((srgb + 0.055) / 1.055).powf(2.4)
-            } * alpha;
-            let encoded = if linear <= 0.0031308 {
-                linear * 12.92
-            } else {
-                1.055 * linear.powf(1.0 / 2.4) - 0.055
-            };
-            *channel = (encoded * 255.0).round().clamp(0.0, 255.0) as u8;
-        }
-    }
-    Cow::Owned(result)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn opaque_pixels_reuse_the_original_bytes() {
-        let bytes = [128, 64, 192, 255];
-        assert!(matches!(premultiply_rgba(&bytes), Cow::Borrowed(_)));
-    }
-
-    #[test]
-    fn transparent_pixels_are_premultiplied_in_linear_light() {
-        assert_eq!(
-            premultiply_rgba(&[255, 0, 0, 128]).as_ref(),
-            [188, 0, 0, 128]
-        );
-        assert_eq!(premultiply_rgba(&[255, 128, 64, 0]).as_ref(), [0, 0, 0, 0]);
     }
 }

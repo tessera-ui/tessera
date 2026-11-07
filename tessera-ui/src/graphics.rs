@@ -4,7 +4,13 @@
 //!
 //! Reuse pipeline buffers and inspect actual resource allocations and uploads.
 
-use std::{ops::Deref, sync::Arc};
+use std::{
+    ops::Deref,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
+};
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -93,6 +99,13 @@ pub struct GraphicsDevice {
     device: wgpu::Device,
     queue: wgpu::Queue,
     work: Arc<Mutex<GraphicsWorkDiagnostics>>,
+    frame_uploads: Arc<FrameUploads>,
+}
+
+#[derive(Debug, Default)]
+struct FrameUploads {
+    bytes: AtomicU64,
+    deferred: AtomicBool,
 }
 
 impl GraphicsDevice {
@@ -104,6 +117,7 @@ impl GraphicsDevice {
                 owner: uuid::Uuid::new_v4().as_u128(),
                 groups: FxHashMap::default(),
             })),
+            frame_uploads: Arc::default(),
         }
     }
 
@@ -115,6 +129,27 @@ impl GraphicsDevice {
     /// Returns the upload queue used by this renderer.
     pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
+    }
+
+    /// Texture bytes that can still be uploaded in the current frame.
+    ///
+    /// Spread larger uploads over several frames, and call
+    /// [`Self::defer_upload`] while some remain.
+    pub fn upload_budget(&self) -> u64 {
+        FRAME_UPLOAD_BUDGET.saturating_sub(self.frame_uploads.bytes.load(Ordering::Relaxed))
+    }
+
+    /// Requests another frame to continue uploads deferred by the budget.
+    pub fn defer_upload(&self) {
+        self.frame_uploads.deferred.store(true, Ordering::Relaxed);
+    }
+
+    pub(crate) fn begin_frame(&self) {
+        self.frame_uploads.bytes.store(0, Ordering::Relaxed);
+    }
+
+    pub(crate) fn take_deferred_upload(&self) -> bool {
+        self.frame_uploads.deferred.swap(false, Ordering::Relaxed)
     }
 
     /// Captures actual operations performed through this graphics service.
@@ -227,12 +262,17 @@ impl GraphicsDevice {
             }
             None => self.queue.write_texture(destination, data, layout, size),
         }
+        self.frame_uploads
+            .bytes
+            .fetch_add(data.len() as u64, Ordering::Relaxed);
         let mut work = self.work.lock();
         let group = work.groups.entry(group).or_default();
         group.texture_uploads += 1;
         group.texture_uploaded_bytes += data.len() as u64;
     }
 }
+
+const FRAME_UPLOAD_BUDGET: u64 = 4 << 20;
 
 // Each queue upload stages its bytes in host-visible memory. Large single
 // uploads get dedicated upload heaps that drivers may keep resident after the

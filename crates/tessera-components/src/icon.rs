@@ -12,12 +12,12 @@ use tessera_ui::{
 };
 
 use crate::{
-    image::{ImageLoadError, TryIntoImageData, clamp_f32_to_px},
-    image_vector::{ImageVectorLoadError, TintMode, TryIntoImageVectorData},
-    painter::{Painter, PainterLoadError, TryIntoPainter},
+    image::clamp_f32_to_px,
+    image_vector::TintMode,
+    painter::Painter,
     pipelines::{
         image::command::{ImageCommand, ImageData},
-        image_vector::command::{ImageVectorCommand, ImageVectorData},
+        image_vector::command::ImageVectorCommand,
     },
     theme::{ContentColor, MaterialTheme},
 };
@@ -48,55 +48,6 @@ impl IconBuilder {
             .configure("content", move |props| props.content = value);
         Self { props: self.props }
     }
-
-    /// Decodes icon content from any supported source.
-    pub fn try_painter<T>(&self, source: T) -> Result<Self, PainterLoadError>
-    where
-        T: TryIntoPainter,
-    {
-        let value = Some(source.try_into_painter()?);
-        self.props
-            .configure("content", move |props| props.content = value);
-        Ok(Self { props: self.props })
-    }
-
-    /// Sets vector icon content using already-decoded vector geometry.
-    pub fn vector(&self, data: impl Into<ImageVectorData>) -> Self {
-        let value = Some(Painter::Vector(data.into()));
-        self.props
-            .configure("content", move |props| props.content = value);
-        Self { props: self.props }
-    }
-
-    /// Sets raster icon content using already-decoded image pixels.
-    pub fn raster(&self, data: impl Into<ImageData>) -> Self {
-        let value = Some(Painter::Raster(data.into()));
-        self.props
-            .configure("content", move |props| props.content = value);
-        Self { props: self.props }
-    }
-
-    /// Decodes vector icon content from bytes/path/asset input.
-    pub fn try_vector<T>(&self, source: T) -> Result<Self, ImageVectorLoadError>
-    where
-        T: TryIntoImageVectorData,
-    {
-        let value = Some(Painter::Vector(source.try_into_image_vector_data()?));
-        self.props
-            .configure("content", move |props| props.content = value);
-        Ok(Self { props: self.props })
-    }
-
-    /// Decodes raster icon content from bytes/path/asset input.
-    pub fn try_raster<T>(&self, source: T) -> Result<Self, ImageLoadError>
-    where
-        T: TryIntoImageData,
-    {
-        let value = Some(Painter::Raster(source.try_into_image_data()?));
-        self.props
-            .configure("content", move |props| props.content = value);
-        Ok(Self { props: self.props })
-    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -115,7 +66,8 @@ impl tessera_ui::LayoutModifierNode for IconLayout {
         self.size == other.size
             && self.width == other.width
             && self.height == other.height
-            && intrinsic_dimensions(&self.content) == intrinsic_dimensions(&other.content)
+            && (self.width.is_none() && self.height.is_none()
+                || intrinsic_dimensions(&self.content) == intrinsic_dimensions(&other.content))
     }
 
     fn placement_eq(&self, other: &Self) -> bool {
@@ -150,7 +102,7 @@ impl tessera_ui::DrawModifierNode for IconLayout {
         let input = &mut *ctx.render_input;
         let mut metadata = input.metadata_mut();
         match &self.content {
-            Painter::Asset(_) => {}
+            Painter::Source(_) => {}
             Painter::Vector(data) => {
                 let command = ImageVectorCommand {
                     data: data.clone(),
@@ -250,7 +202,7 @@ pub fn icon(
 
 fn intrinsic_dimensions(content: &Painter) -> (Px, Px) {
     match content {
-        Painter::Asset(_) => (Px::ZERO, Px::ZERO),
+        Painter::Source(_) => (Px::ZERO, Px::ZERO),
         Painter::Vector(data) => (
             clamp_f32_to_px(data.viewport_width),
             clamp_f32_to_px(data.viewport_height),

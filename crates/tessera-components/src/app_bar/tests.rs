@@ -4,7 +4,7 @@ use tessera_ui::{
     remember,
 };
 
-use crate::{icon_button::IconButtonColorStyle, painter::try_painter, theme::material_theme};
+use crate::{icon_button::IconButtonColorStyle, painter::Painter, theme::material_theme};
 
 use super::*;
 
@@ -46,7 +46,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(Settings::default);
     let clicks = remember(|| 0usize);
     let painter = remember(|| {
-        try_painter(br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0H24V24H0Z" fill="#000"/></svg>"##.as_slice()).expect("icon")
+        Painter::from(br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0H24V24H0Z" fill="#000"/></svg>"##.as_slice())
     });
     observed.with_mut(|handles| handles.settings = Some(settings));
     observed.with_mut(|handles| handles.clicks = Some(clicks));

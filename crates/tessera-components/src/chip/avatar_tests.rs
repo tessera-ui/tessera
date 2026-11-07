@@ -9,7 +9,6 @@ use tessera_ui::{Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, r
 use crate::{
     column::column,
     image::ImageData,
-    image_vector::TryIntoImageVectorData as _,
     material_icons::filled,
     modifier::{ModifierExt as _, SemanticsArgs},
     painter::Painter,
@@ -41,7 +40,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
             Painter::from(ImageData::from_rgba(landscape, 4, 2)),
             Painter::from(ImageData::from_rgba(portrait, 2, 4)),
             Painter::from(r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path fill="#0000ff" d="M0 0H24V24H0Z"/></svg>"##
-                .as_bytes().try_into_image_vector_data().expect("avatar vector")),
+                .as_bytes()),
         ]
     });
     probe.set(Some(settings));

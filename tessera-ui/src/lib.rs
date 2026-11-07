@@ -81,7 +81,7 @@ pub use winit;
 
 pub use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
-    asset::{Asset, FontAsset, LoadState, Resource},
+    asset::{Asset, FontAsset, LoadState, Resource, Source},
     clip::{ClipRegion, ClipShape, ui_stencil_state},
     clipboard::{
         ClipboardAction, ClipboardInput, ClipboardInputModifierNode, ClipboardResponse,

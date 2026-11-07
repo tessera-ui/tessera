@@ -8,16 +8,16 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-futures-util = "0.3.31"
-parking_lot = "0.12.5"
-tessera-macros = { path = "../tessera-macros", version = "0.4.4" }
-tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
+futures-util.workspace = true
+parking_lot.workspace = true
+tessera-macros.workspace = true
+tessera-ui.workspace = true
 
 [dev-dependencies]
-tessera-ui = { path = "../../tessera-ui", features = ["testing"], version = "2.5.0" }
+tessera-ui = { workspace = true, features = ["testing"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { version = "1.51.1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-wasm-bindgen-futures = "0.4.55"
+wasm-bindgen-futures.workspace = true

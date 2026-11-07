@@ -3,10 +3,10 @@
 //! Text uses system fonts unless an application registers [`Fonts`] or a
 //! [`FontStylesheet`] at its entry. Web builds load default fonts from a CDN.
 
-use std::{cell::RefCell, io, rc::Rc, sync::Arc};
+use std::{borrow::Cow, cell::RefCell, io, rc::Rc, sync::Arc};
 
-use glyphon::fontdb::{Database, FaceInfo, Source};
-use tessera_ui::{Asset, EntryRegistry, LoadState, Resource, TesseraPackage};
+use glyphon::fontdb::{self, Database, FaceInfo};
+use tessera_ui::{EntryRegistry, LoadState, Resource, Source, TesseraPackage};
 
 pub use tessera_ui::FontAsset as Font;
 
@@ -31,12 +31,13 @@ impl TesseraPackage for Fonts {
         let registry = registry();
         let mut registry = registry.borrow_mut();
         for font in self.0 {
+            let font = FontSource::from(*font);
             if !registry
                 .sources
                 .iter()
-                .any(|source| source.asset == font.asset)
+                .any(|source| source.source == font.source)
             {
-                registry.sources.push(*font);
+                registry.sources.push(font);
             }
         }
     }
@@ -70,15 +71,34 @@ struct FontFace {
     ranges: Vec<(u32, u32)>,
 }
 
+#[derive(Clone)]
+struct FontSource {
+    source: Source,
+    family: Cow<'static, str>,
+    fallback: Cow<'static, [(u32, u32)]>,
+    coverage: Cow<'static, [(u32, u32)]>,
+}
+
+impl From<Font> for FontSource {
+    fn from(font: Font) -> Self {
+        Self {
+            source: font.asset.into(),
+            family: font.family.into(),
+            fallback: font.fallback.into(),
+            coverage: font.coverage.into(),
+        }
+    }
+}
+
 struct FontRequest {
-    font: Font,
+    font: FontSource,
     faces: Resource<Arc<[FaceInfo]>>,
     /// Revision that installed the font; zero when it failed to load.
     installed: Option<u64>,
 }
 
 struct FontRegistry {
-    sources: Vec<Font>,
+    sources: Vec<FontSource>,
     stylesheets: Vec<Stylesheet>,
     requests: Vec<FontRequest>,
     revision: u64,
@@ -124,7 +144,7 @@ pub(crate) fn prepare(text: &str, style: TextStyle) -> Option<u64> {
     stylesheets.retain_mut(|sheet| {
         match sheet
             .faces
-            .get_or_insert_with(|| Asset::platform(sheet.url).load_with(parse_stylesheet))
+            .get_or_insert_with(|| Resource::load(sheet.url, parse_stylesheet))
             .get()
         {
             LoadState::Loading => {
@@ -143,13 +163,13 @@ pub(crate) fn prepare(text: &str, style: TextStyle) -> Option<u64> {
     for font in sources.iter().filter(|font| needed(font, family, text)) {
         let index = match requests
             .iter()
-            .position(|request| request.font.asset == font.asset)
+            .position(|request| request.font.source == font.source)
         {
             Some(index) => index,
             None => {
                 requests.push(FontRequest {
-                    font: *font,
-                    faces: font.asset.load_with(parse_font),
+                    font: font.clone(),
+                    faces: Resource::load(font.source.clone(), parse_font),
                     installed: None,
                 });
                 requests.len() - 1
@@ -173,7 +193,7 @@ pub(crate) fn prepare(text: &str, style: TextStyle) -> Option<u64> {
                         let existing = db
                             .faces()
                             .filter(|face| {
-                                face.families.iter().any(|(name, _)| name == font.family)
+                                face.families.iter().any(|(name, _)| *name == font.family)
                             })
                             .map(|face| face.id)
                             .collect::<Vec<_>>();
@@ -196,17 +216,17 @@ pub(crate) fn prepare(text: &str, style: TextStyle) -> Option<u64> {
     (!pending).then_some(key)
 }
 
-fn needed(font: &Font, family: Option<&str>, text: &str) -> bool {
+fn needed(font: &FontSource, family: Option<&str>, text: &str) -> bool {
     let contains = |ranges: &[(u32, u32)], c: char| {
         ranges
             .iter()
             .any(|&(start, end)| (start..=end).contains(&(c as u32)))
     };
-    let named = family == Some(font.family);
+    let named = family == Some(&*font.family);
     (named && font.coverage.is_empty())
         || text.chars().any(|c| {
-            (font.coverage.is_empty() || contains(font.coverage, c))
-                && (named || contains(font.fallback, c))
+            (font.coverage.is_empty() || contains(&font.coverage, c))
+                && (named || contains(&font.fallback, c))
         })
 }
 
@@ -219,7 +239,7 @@ fn parse_font(bytes: Arc<[u8]>) -> io::Result<Arc<[FaceInfo]>> {
         bytes
     };
     let mut db = Database::new();
-    db.load_font_source(Source::Binary(Arc::new(bytes)));
+    db.load_font_source(fontdb::Source::Binary(Arc::new(bytes)));
     let faces = db.faces().cloned().collect::<Arc<[_]>>();
     if faces.is_empty() {
         return Err(io::Error::other("font contains no supported faces"));
@@ -271,19 +291,18 @@ fn parse_stylesheet(bytes: Arc<[u8]>) -> io::Result<Arc<[FontFace]>> {
 }
 
 impl FontFace {
-    fn font(&self, stylesheet: &str) -> Font {
+    fn font(&self, stylesheet: &str) -> FontSource {
         let url = if self.src.contains("://") {
             self.src.clone()
         } else {
             let base = &stylesheet[..stylesheet.rfind('/').map_or(0, |end| end + 1)];
             format!("{base}{}", self.src.trim_start_matches("./"))
         };
-        let ranges: &'static [(u32, u32)] = Box::leak(self.ranges.clone().into_boxed_slice());
-        Font {
-            asset: Asset::platform(Box::leak(url.into_boxed_str())),
-            family: Box::leak(self.family.clone().into_boxed_str()),
-            fallback: ranges,
-            coverage: ranges,
+        FontSource {
+            source: url.into(),
+            family: self.family.clone().into(),
+            fallback: self.ranges.clone().into(),
+            coverage: self.ranges.clone().into(),
         }
     }
 }
@@ -308,16 +327,13 @@ mod tests {
             .iter()
             .map(|face| face.font("https://cdn.test/sans/index.css"))
             .collect::<Vec<_>>();
-        assert_eq!(
-            fonts[0].asset.path(),
-            "https://cdn.test/sans/files/latin.woff2"
-        );
+        assert!(fonts[0].source == Source::from("https://cdn.test/sans/files/latin.woff2"));
         assert_eq!(fonts[0].family, "Example Sans");
         assert_eq!(
-            fonts[0].coverage,
+            *fonts[0].coverage,
             [(0, 0xff), (0x400, 0x4ff), (0x2014, 0x2014)]
         );
-        assert_eq!(fonts[1].asset.path(), "https://cdn.test/other.ttf");
-        assert_eq!(fonts[1].coverage, [(0, 0x10ffff)]);
+        assert!(fonts[1].source == Source::from("https://cdn.test/other.ttf"));
+        assert_eq!(*fonts[1].coverage, [(0, 0x10ffff)]);
     }
 }

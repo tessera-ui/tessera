@@ -331,7 +331,7 @@ mod tests {
                                             .child(|| {});
                                     } else if stage.get() == 1 {
                                         crate::image::image()
-                                            .raster(raster.get())
+                                            .painter(raster.get())
                                             .modifier(Modifier::new().fill_max_size());
                                     } else {
                                         surface()

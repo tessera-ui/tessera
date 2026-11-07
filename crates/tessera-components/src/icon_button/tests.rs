@@ -5,9 +5,7 @@ use tessera_ui::{
     provide_context,
 };
 
-use crate::{
-    column::column, painter::try_painter, row::row, spacer::spacer, theme::material_theme,
-};
+use crate::{column::column, painter::Painter, row::row, spacer::spacer, theme::material_theme};
 
 use super::*;
 
@@ -72,7 +70,7 @@ fn fixture(probe: FixtureProbes) {
     let settings = remember(Settings::default);
     let clicks = remember(|| 0usize);
     let painter = remember(|| {
-        try_painter(br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0H24V24H0Z"/></svg>"#.as_slice()).unwrap()
+        Painter::from(br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0H24V24H0Z"/></svg>"#.as_slice())
     });
     probe.settings.set(Some(settings));
     probe.clicks.set(Some(clicks));

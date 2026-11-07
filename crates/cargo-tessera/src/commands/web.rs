@@ -28,7 +28,7 @@ use super::{
 };
 
 const INDEX_TEMPLATE: &str = include_str!("../../templates/basic/gen/web/index.html.hbs");
-const WASM_BINDGEN_DEP: &str = "wasm-bindgen = \"0.2.105\"";
+const WASM_BINDGEN_DEP: &str = "wasm-bindgen = \"0.2.130\"";
 const WASM_DEP_HEADER: &str = "[target.'cfg(target_family = \"wasm\")'.dependencies]";
 const README_WEB_SECTION: &str = r#"
 ## Running On Web

@@ -17,70 +17,70 @@ testing = []
 headless = ["serde", "serde_json", "wgpu/counters"]
 
 [dependencies]
-uuid = { version = "1.26.1", features = ["v4", "js"] }
-bytemuck = { version = "1.24.0", features = ["derive"] }
-tracing = "0.1.44"
-pollster = "0.4.0"
-wgpu = "30.0.1"
-indextree = "4.7.4"
-slotmap = "1.1.1"
-rustc-hash = "2.1.1"
-tessera-macros = { path = "../crates/tessera-macros", version = "0.4.4" }
-accesskit = { version = "0.25.2", path = "../crates/tessera-accesskit/accesskit" }
-accesskit_winit = { package = "tessera-accesskit-winit", version = "0.34.2", path = "../crates/tessera-accesskit/adapters/winit" }
-smallvec = "1.15.1"
-downcast-rs = "2.0.2"
-dyn-clone = "1.0.20"
-dirs = "6.0.0"
-im = "15.1.0"
-serde = { version = "1.0.228", features = ["derive"], optional = true }
-serde_json = { version = "1.0.149", optional = true }
-interprocess = { version = "2.4.4", optional = true }
+accesskit.workspace = true
+accesskit_winit.workspace = true
+bytemuck = { workspace = true, features = ["derive"] }
+dirs.workspace = true
+downcast-rs.workspace = true
+dyn-clone.workspace = true
+im.workspace = true
+indextree.workspace = true
+interprocess = { workspace = true, optional = true }
+pollster.workspace = true
+rustc-hash.workspace = true
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_json = { workspace = true, optional = true }
+slotmap.workspace = true
+smallvec.workspace = true
+tessera-macros.workspace = true
+tracing.workspace = true
+uuid = { workspace = true, features = ["v4", "js"] }
+wgpu.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }
+parking_lot = { workspace = true, features = ["deadlock_detection"] }
+tracing-subscriber = { workspace = true, features = ["ansi", "env-filter", "fmt", "smallvec", "std", "tracing-log"] }
 
 [target.'cfg(target_family = "unix")'.dependencies]
-libc = "0.2.185"
+libc.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62.2", features = ["Win32_System_Threading"] }
+windows = { workspace = true, features = ["Win32_System_Threading"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = { version = "0.6.3", default-features = false }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+objc2.workspace = true
+objc2-app-kit = { workspace = true, features = [
     "NSResponder",
     "NSView",
     "objc2-quartz-core",
 ] }
-objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
+objc2-quartz-core = { workspace = true, features = [
     "CALayer",
     "objc2-core-foundation",
 ] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-winit = { package = "tessera-winit", version = "0.30.13", path = "../crates/tessera-winit" }
+winit.workspace = true
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt", "tracing-log"] }
-parking_lot = "0.12.5"
-console_error_panic_hook = "0.1.7"
-js-sys = "0.3.93"
-wasm-bindgen = "0.2.116"
-web-sys = { version = "0.3.93", features = ["console", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "Window", "Response", "Url", "HtmlElement", "Event", "EventTarget", "DomRect", "VisualViewport"] }
-wasm-bindgen-futures = "0.4.55"
-web-time = "1.1.0"
+console_error_panic_hook.workspace = true
+js-sys.workspace = true
+parking_lot.workspace = true
+tracing-subscriber = { workspace = true, features = ["fmt", "tracing-log"] }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["console", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "Window", "Response", "Url", "HtmlElement", "Event", "EventTarget", "DomRect", "VisualViewport"] }
+web-time.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
-winit = { package = "tessera-winit", version = "0.30.13", path = "../crates/tessera-winit", features = ["android-game-activity"] }
-ndk-sys = "0.6.0"
-jni = "0.21.1"
-ndk-context = "0.1.1"
-
-[dev-dependencies]
-tempfile = "3.27"
+jni.workspace = true
+ndk-context.workspace = true
+ndk-sys.workspace = true
+winit = { workspace = true, features = ["android-game-activity"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
-objc2 = { version = "0.6.3", default-features = false }
-objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["UIGeometry", "UIView", "UIResponder", "UIKeyboardLayoutGuide", "UILayoutGuide", "UITrackingLayoutGuide", "objc2-core-foundation"] }
+objc2.workspace = true
+objc2-ui-kit = { workspace = true, features = ["UIGeometry", "UIView", "UIResponder", "UIKeyboardLayoutGuide", "UILayoutGuide", "UITrackingLayoutGuide", "objc2-core-foundation"] }
+
+[dev-dependencies]
+tempfile.workspace = true
