@@ -14,3 +14,5 @@ jniLibs
 .cxx
 local.properties
 /app/src/main/assets/tessera/
+
+/app/src/main/tessera-res/

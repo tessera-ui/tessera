@@ -2,3 +2,5 @@
 /gen/web/pkg-web
 Cargo.lock
 /gen/web/tessera
+
+/gen/web/app

@@ -196,6 +196,10 @@ pub(crate) fn resolve_profiler_output_path(config: &TesseraConfig) -> PathBuf {
 /// Window creation options for desktop platforms.
 #[derive(Debug, Clone)]
 pub struct WindowConfig {
+    /// Application identifier used to associate desktop windows with their launcher.
+    pub application_id: Option<String>,
+    /// Icon displayed by desktop window managers.
+    pub icon: Option<winit::window::Icon>,
     /// Whether to show the system window decorations (title bar and borders).
     pub decorations: bool,
     /// Whether the window supports transparency.
@@ -207,6 +211,8 @@ pub struct WindowConfig {
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
+            application_id: None,
+            icon: None,
             decorations: true,
             transparent: true,
             resizable: true,
@@ -1935,10 +1941,43 @@ where
         // Create a new window (initially hidden for AccessKit initialization)
         let window_attributes = Window::default_attributes()
             .with_title(&self.config.window_title)
+            .with_window_icon(self.config.window.icon.clone())
             .with_decorations(self.config.window.decorations)
             .with_resizable(self.config.window.resizable)
             .with_transparent(self.config.window.transparent)
             .with_visible(false); // Hide initially for AccessKit
+        #[cfg(target_os = "windows")]
+        let window_attributes = {
+            use winit::platform::windows::WindowAttributesExtWindows;
+            if let Some(identifier) = &self.config.window.application_id {
+                let identifier = windows::core::HSTRING::from(identifier);
+                if let Err(error) = unsafe {
+                    windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID(&identifier)
+                } {
+                    tracing::warn!(%error, "Failed to set application identity");
+                }
+            }
+            window_attributes.with_taskbar_icon(self.config.window.icon.clone())
+        };
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        ))]
+        let window_attributes = if let Some(identifier) = &self.config.window.application_id {
+            let attributes = winit::platform::wayland::WindowAttributesExtWayland::with_name(
+                window_attributes,
+                identifier,
+                identifier,
+            );
+            winit::platform::x11::WindowAttributesExtX11::with_name(
+                attributes, identifier, identifier,
+            )
+        } else {
+            window_attributes
+        };
         #[cfg(target_family = "wasm")]
         let window_attributes = {
             use winit::platform::web::WindowAttributesExtWebSys;

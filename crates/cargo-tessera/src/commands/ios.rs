@@ -12,7 +12,7 @@ use tessera_build::{AssetBackend, asset_files};
 
 use crate::output;
 
-use super::application::Application;
+use super::{app_assets, application::Application};
 
 #[derive(Args)]
 pub struct BuildOptions {
@@ -133,17 +133,10 @@ pub fn build(options: BuildOptions) -> Result<()> {
         "{}.{}.{}",
         app.package.version.major, app.package.version.minor, app.package.version.patch
     );
-    let name = app.config["productName"]
-        .as_str()
-        .context("productName must be a string")?;
     let minimum_version = deployment_target();
     let mut info = Dictionary::new();
     for (key, value) in [
-        ("CFBundleName", name),
-        ("CFBundleDisplayName", name),
         ("CFBundlePackageType", "APPL"),
-        ("CFBundleShortVersionString", version.as_str()),
-        ("CFBundleVersion", version.as_str()),
         ("MinimumOSVersion", minimum_version.as_str()),
     ] {
         info.insert(key.into(), value.into());
@@ -173,11 +166,25 @@ pub fn build(options: BuildOptions) -> Result<()> {
                 .into(),
         ),
     );
-    if let Some(catalog) = config.asset_catalog {
+    if let Some(path) = config.info_plist {
+        info.extend(
+            Value::from_file(project.join(path))?
+                .into_dictionary()
+                .context("Info.plist must be a dictionary")?,
+        );
+    }
+    let generated_catalog = app_assets::ios(&app.identity, &output)?;
+    let catalogs = config
+        .asset_catalog
+        .into_iter()
+        .map(|catalog| project.join(catalog))
+        .chain(generated_catalog)
+        .collect::<Vec<_>>();
+    if !catalogs.is_empty() {
         let partial = output.join(format!("{}-assets.plist", app.binary));
         run(Command::new("xcrun")
             .arg("actool")
-            .arg(project.join(catalog))
+            .args(catalogs)
             .arg("--compile")
             .arg(&bundle)
             .args([
@@ -200,21 +207,16 @@ pub fn build(options: BuildOptions) -> Result<()> {
                 .context("Invalid asset catalog metadata")?,
         );
     }
-    if let Some(path) = config.info_plist {
-        info.extend(
-            Value::from_file(project.join(path))?
-                .into_dictionary()
-                .context("Info.plist must be a dictionary")?,
-        );
+    for (key, value) in [
+        ("CFBundleName", app.identity.name.as_str()),
+        ("CFBundleDisplayName", app.identity.name.as_str()),
+        ("CFBundleShortVersionString", version.as_str()),
+        ("CFBundleVersion", version.as_str()),
+        ("CFBundleExecutable", app.binary.as_str()),
+        ("CFBundleIdentifier", app.identity.identifier.as_str()),
+    ] {
+        info.insert(key.into(), value.into());
     }
-    info.insert("CFBundleExecutable".into(), app.binary.as_str().into());
-    info.insert(
-        "CFBundleIdentifier".into(),
-        app.config["identifier"]
-            .as_str()
-            .context("identifier must be a string")?
-            .into(),
-    );
     Value::Dictionary(info).to_file_xml(bundle.join("Info.plist"))?;
     let provisioned = options.provisioning_profile.is_some();
     if let Some(profile) = options.provisioning_profile {

@@ -14,12 +14,15 @@ use cargo_metadata::MetadataCommand;
 use handlebars::Handlebars;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use serde_json::json;
-use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_resource_dirs};
+use tessera_build::{
+    AssetBackend, application::AppConfig, load_tessera_config_from_dir, resolve_resource_dirs,
+};
 use wasm_bindgen_cli_support::Bindgen;
 
 use crate::{call_guard, output};
 
 use super::{
+    app_assets,
     assets::{
         collect_platform_asset_candidates, collect_resolved_packages,
         collect_used_platform_asset_paths, sync_assets,
@@ -80,6 +83,12 @@ pub fn init(package: Option<&str>) -> Result<()> {
     changed |= ensure_lib_has_wasm_start(&project_dir)?;
     changed |= ensure_main_has_wasm_cfg(&project_dir)?;
     changed |= ensure_readme_has_web_section(&project_dir)?;
+    let identity = AppConfig::load(&project_dir, &metadata.package_name)?;
+    sync_web_application(
+        &identity,
+        &metadata.version,
+        &project_dir.join(WEB_HOST_DIR),
+    )?;
 
     if changed {
         output::status(
@@ -175,6 +184,10 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
     }
 
     let config = load_tessera_config_from_dir(&project_dir)?;
+    let identity = AppConfig::load(&project_dir, &metadata.package_name)?;
+    if let Some(icon) = identity.icon {
+        watcher.watch(&icon, RecursiveMode::NonRecursive)?;
+    }
     for directory in resolve_resource_dirs(&project_dir, config.as_ref()) {
         if directory.is_dir() {
             watcher.watch(&directory, RecursiveMode::Recursive)?;
@@ -198,7 +211,9 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
 
         if pending_change && last_change.elapsed() >= BUILD_DEBOUNCE_WINDOW {
             output::status("Building", "web app");
-            match build_project(&project_dir, &metadata, release, &[]) {
+            match load_project_metadata(&project_dir)
+                .and_then(|metadata| build_project(&project_dir, &metadata, release, &[]))
+            {
                 Ok(()) => output::status(
                     "Finished",
                     format!(
@@ -252,6 +267,13 @@ fn build_project(
     };
     options.release = release;
     call_guard::run(options)?;
+    ensure_index_html(project_dir, metadata)?;
+    let identity = AppConfig::load(project_dir, &metadata.package_name)?;
+    sync_web_application(
+        &identity,
+        &metadata.version,
+        &project_dir.join(WEB_HOST_DIR),
+    )?;
 
     let mut cmd = web_build_command(project_dir, release, features);
     let status = cmd
@@ -264,7 +286,12 @@ fn build_project(
     fs::create_dir_all(&output_dir)
         .with_context(|| format!("Failed to create {}", output_dir.display()))?;
 
-    let wasm_path = resolve_wasm_artifact_path(project_dir, metadata, release)?;
+    let profile = if release { "release" } else { "debug" };
+    let wasm_path = metadata
+        .target_dir
+        .join(WASM_TARGET)
+        .join(profile)
+        .join(format!("{}.wasm", metadata.lib_name.replace('-', "_")));
     if !wasm_path.exists() {
         bail!(
             "Compiled wasm artifact not found at {}",
@@ -329,10 +356,11 @@ fn build_project(
 }
 
 struct ProjectMetadata {
-    manifest_path: PathBuf,
+    target_dir: PathBuf,
     package_name: String,
     project_name_snake: String,
     lib_name: String,
+    version: String,
 }
 
 fn resolve_project_dir(package: Option<&str>) -> Result<PathBuf> {
@@ -376,33 +404,25 @@ fn load_project_metadata(project_dir: &Path) -> Result<ProjectMetadata> {
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| format!("{project_name_snake}_lib"));
 
-    Ok(ProjectMetadata {
-        manifest_path: cargo_toml_path,
-        package_name,
-        project_name_snake,
-        lib_name,
-    })
-}
-
-fn resolve_wasm_artifact_path(
-    _project_dir: &Path,
-    metadata: &ProjectMetadata,
-    release: bool,
-) -> Result<PathBuf> {
     let cargo_metadata = MetadataCommand::new()
-        .manifest_path(&metadata.manifest_path)
+        .manifest_path(&cargo_toml_path)
         .no_deps()
         .exec()
         .context("Failed to load cargo metadata for web build")?;
-
-    let profile_dir = if release { "release" } else { "debug" };
-    let artifact_name = format!("{}.wasm", metadata.lib_name.replace('-', "_"));
-    Ok(cargo_metadata
-        .target_directory
-        .as_std_path()
-        .join(WASM_TARGET)
-        .join(profile_dir)
-        .join(artifact_name))
+    let version = cargo_metadata
+        .packages
+        .iter()
+        .find(|package| package.name.as_str() == package_name)
+        .context("Web application package is missing from Cargo metadata")?
+        .version
+        .to_string();
+    Ok(ProjectMetadata {
+        target_dir: cargo_metadata.target_directory.into_std_path_buf(),
+        package_name,
+        project_name_snake,
+        lib_name,
+        version,
+    })
 }
 
 fn ensure_index_html(project_dir: &Path, metadata: &ProjectMetadata) -> Result<bool> {
@@ -443,6 +463,46 @@ fn ensure_index_html(project_dir: &Path, metadata: &ProjectMetadata) -> Result<b
     Ok(true)
 }
 
+fn sync_web_application(config: &AppConfig, version: &str, host: &Path) -> Result<()> {
+    let tags = app_assets::web(config, version, host)?;
+    let path = host.join("index.html");
+    let original = fs::read_to_string(&path)?;
+    let mut html = original.clone();
+    let start_marker = "<!-- tessera-app -->";
+    let end_marker = "<!-- /tessera-app -->";
+    if let Some(start) = html.find(start_marker) {
+        let end = html[start..]
+            .find(end_marker)
+            .context("Unclosed Tessera application metadata in index.html")?
+            + start
+            + end_marker.len();
+        let end = end + usize::from(html[end..].starts_with('\n'));
+        html.replace_range(start..end, "");
+    }
+    let lower = html.to_ascii_lowercase();
+    if let Some(start) = lower.find("<title>") {
+        let end = lower[start..]
+            .find("</title>")
+            .context("Unclosed title in index.html")?
+            + start
+            + "</title>".len();
+        html.replace_range(start..end, "");
+    }
+    let end = html
+        .to_ascii_lowercase()
+        .find("</head>")
+        .context("Web host index.html must contain </head>")?;
+    let name = handlebars::html_escape(&config.name);
+    html.insert_str(
+        end,
+        &format!("{start_marker}\n<title>{name}</title>\n{tags}\n{end_marker}\n"),
+    );
+    if html != original {
+        fs::write(path, html)?;
+    }
+    Ok(())
+}
+
 fn ensure_pkg_web_ignored(project_dir: &Path) -> Result<bool> {
     let path = project_dir.join(".gitignore");
     let original = fs::read_to_string(&path).or_else(|error| {
@@ -453,7 +513,7 @@ fn ensure_pkg_web_ignored(project_dir: &Path) -> Result<bool> {
         }
     })?;
     let mut content = original.clone();
-    for pattern in ["/gen/web/pkg-web", "/gen/web/tessera"] {
+    for pattern in ["/gen/web/pkg-web", "/gen/web/tessera", "/gen/web/app"] {
         if !content.lines().any(|line| line.trim() == pattern) {
             if !content.is_empty() && !content.ends_with('\n') {
                 content.push('\n');
@@ -763,6 +823,7 @@ fn content_type_for_path(path: &Path) -> &'static str {
         "js" => "text/javascript; charset=utf-8",
         "wasm" => "application/wasm",
         "json" => "application/json; charset=utf-8",
+        "webmanifest" => "application/manifest+json",
         "map" => "application/json; charset=utf-8",
         "css" => "text/css; charset=utf-8",
         "svg" => "image/svg+xml",
@@ -802,6 +863,27 @@ fn write_headers(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn application_metadata_updates_preserve_the_web_host() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("index.html");
+        fs::write(&path, "<!doctype html><html><head><title>Old</title><style>canvas{display:block}</style></head><body><canvas></canvas></body></html>").unwrap();
+        let mut config = AppConfig::load(directory.path(), "reader").unwrap();
+        config.name = "Reader & Notes".into();
+        sync_web_application(&config, "1.2.3", directory.path()).unwrap();
+        let first = fs::read_to_string(&path).unwrap();
+        sync_web_application(&config, "1.2.3", directory.path()).unwrap();
+        assert_eq!(first, fs::read_to_string(&path).unwrap());
+        assert!(first.contains("<title>Reader &amp; Notes</title>"));
+        assert!(first.contains("<style>canvas{display:block}</style>"));
+        assert!(first.contains("<body><canvas></canvas></body>"));
+        config.name = "New Name".into();
+        sync_web_application(&config, "1.2.3", directory.path()).unwrap();
+        let html = fs::read_to_string(path).unwrap();
+        assert_eq!(html.matches("<title>").count(), 1);
+        assert!(html.contains("<title>New Name</title>"));
+    }
 
     #[test]
     fn web_build_forwards_selected_features_without_changing_default_builds() {

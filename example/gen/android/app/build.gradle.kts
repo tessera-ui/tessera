@@ -5,13 +5,14 @@ plugins {
 
 android {
     namespace="com.tessera.example"
+    sourceSets.getByName("main").res.srcDir("src/main/tessera-res")
     compileSdk = 34
     defaultConfig {
         applicationId = "com.tessera.example"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 1001
+        versionName = "0.1.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

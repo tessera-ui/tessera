@@ -44,8 +44,9 @@ cargo tessera build --release --target x86_64-pc-windows-msvc
 
 桌面打包使用 `cargo tessera package -p my-app --release`，需先安装
 `cargo-packager`。`--formats` 可选择 `nsis,wix`、`app,dmg` 或
-`deb,appimage,pacman`；`--bin` 选择可执行文件。应用配置放在
-`[package.metadata.packager]`，资源自动分发到安装位置。
+`deb,appimage,pacman`；`--bin` 选择可执行文件。各平台统一从
+`tessera-app.toml` 读取 `name`、`identifier` 和 `icon`。图标支持方形 SVG（推荐）
+和 PNG，版本取自 Cargo。详见[应用打包配置](../README.md#package-a-desktop-application)。
 
 macOS 安装 Xcode 后可构建 iOS：
 
@@ -57,9 +58,9 @@ cargo tessera ios build -p my-app --release --device \
 ```
 
 默认输出当前主机的 Simulator `.app`，`--device` 输出 IPA。
-设备安装需要匹配的证书、描述文件及 entitlements。应用名称和标识符沿用
-`[package.metadata.packager]`；`[package.metadata.tessera.ios]` 可配置
-`info-plist`、`asset-catalog`、`entitlements`、`resources`，路径相对于包目录。
+设备安装需要匹配的证书、描述文件及 entitlements。
+`[package.metadata.tessera.ios]` 可配置 `info-plist`、`entitlements` 和
+`resources`，路径相对于包目录。
 `IPHONEOS_DEPLOYMENT_TARGET` 可覆盖默认的 iOS 15 最低版本。
 
 ### Android 构建（实验性）

@@ -88,6 +88,7 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
 
     let data = json!({
         "versions": dependency_versions()?,
+        "app_identifier": tessera_build::application::AppConfig::load(project_dir, &project_name)?.identifier,
         "project_name": project_name,
         "project_name_snake": project_name_snake,
         "lib_name": lib_name,

@@ -16,7 +16,7 @@ pub fn run() -> EntryPoint {
         .config(TesseraConfig {
             #[cfg(target_family = "wasm")]
             web: WebConfig::default().with_canvas_id(env!("CARGO_CRATE_NAME")),
-            ..Default::default()
+            ..res::application()
         })
         .package(tessera_components::ComponentsPackage)
 }

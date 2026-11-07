@@ -121,10 +121,40 @@ cargo tessera package -p my-app --release
 
 Choose formats with `--formats nsis,wix` (Windows), `app,dmg` (macOS), or
 `deb,appimage,pacman` (Linux). Use `--bin` for packages with multiple executables.
-Set application metadata in `[package.metadata.packager]`; binary and resource
-paths are supplied automatically. Packages are written to `target/packages/<package>`.
-See the [packager configuration](https://docs.crabnebula.dev/packager/configuration/)
-for icons, signing, installer settings, and additional resources.
+Set shared application metadata in `tessera-app.toml`:
+
+```toml
+name = "My App"
+identifier = "com.example.myapp"
+icon = "icon.svg"
+```
+
+`name` defaults to the Cargo package name. `identifier` is a reverse-domain name
+with ASCII alphanumeric segments starting with letters. Paths are relative to the
+package root. Icons must be square:
+
+| Source | Guidance |
+| --- | --- |
+| SVG | Recommended: scales to every output size. Convert text to paths and embed external resources. |
+| PNG | Supported raster alternative; use at least 1024 × 1024 pixels. |
+
+Tessera supplies platform icon formats, Android adaptive and monochrome icons,
+iOS app icons, and web favicon, touch icon, and manifest metadata. Opaque icons
+use a white background. Android adaptive artwork is inset to fit launcher masks;
+monochrome icons use the source alpha silhouette.
+
+The standard `tessera_build::build()` generates `res::application()`. Use it as
+renderer defaults (`..res::application()`) to apply the display name, desktop
+window icon, and launcher identifier. New projects include this setup.
+
+Versions come from Cargo. Android derives `versionCode` as
+`major * 1_000_000 + minor * 1_000 + patch + 1` (major < 2100, minor/patch < 1000);
+prerelease/build labels do not change this code. iOS uses the numeric version.
+
+Packages are written to `target/packages/<package>`. Binary and resource paths
+are supplied automatically. Use `[package.metadata.packager]` for
+[signing, installer settings, and additional resources](https://docs.crabnebula.dev/packager/configuration/).
+Shared names, identifiers, versions, and configured icons take precedence.
 
 ### Fix diagnostics
 
@@ -203,13 +233,12 @@ cargo tessera ios build -p my-app --release --device \
 
 The default target is the host's iOS Simulator. Device builds produce an IPA;
 installation requires a matching certificate, provisioning profile, and entitlements.
-Set application names and identifiers in `[package.metadata.packager]`.
+Application names, identifiers, and icons come from `tessera-app.toml`.
 Optional `[package.metadata.tessera.ios]` paths are relative to the package:
 
 ```toml
 [package.metadata.tessera.ios]
 info-plist = "ios/Info.plist"
-asset-catalog = "ios/Assets.xcassets"
 entitlements = "ios/app.entitlements"
 resources = "ios/resources"
 ```

@@ -9,12 +9,18 @@ description = "Build-time utilities for Tessera projects"
 
 [dependencies]
 anyhow.workspace = true
+embed-resource.workspace = true
 fluent-templates = { workspace = true, features = ["walkdir"] }
 hex.workspace = true
+image = { workspace = true, features = ["png", "ico"] }
 prettyplease.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
+resvg = { workspace = true, features = ["raster-images"] }
 serde = { workspace = true, features = ["derive"] }
 sha2.workspace = true
 syn = { workspace = true, features = ["full"] }
 toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

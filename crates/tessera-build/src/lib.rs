@@ -25,6 +25,7 @@ use quote::{format_ident, quote};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+pub mod application;
 mod localization;
 
 /// Environment variable selecting the asset backend (`embed` or `platform`).
@@ -275,7 +276,7 @@ pub fn resolve_resource_dirs(
         .chain(locales)
 }
 
-/// Generates bindings for configured assets and localization catalogs.
+/// Generates application defaults, asset bindings, and localization catalogs.
 ///
 /// The generated file is written to `OUT_DIR/tessera_assets.rs`.
 pub fn build() -> Result<()> {
@@ -316,6 +317,10 @@ pub fn build() -> Result<()> {
     }
 
     let mut generated = generate_asset_file(&entries, backend)?;
+    let application = application::generate(&manifest_dir, &out_dir, &package_name)?;
+    generated.push_str(&prettyplease::unparse(&syn::parse2::<syn::File>(
+        application,
+    )?));
     let catalogs = localization::generate(
         &manifest_dir,
         config.as_ref().and_then(|config| config.i18n.as_ref()),

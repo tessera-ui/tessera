@@ -1,2 +1,4 @@
 #:schema https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera-app.schema.json
 identifier = "com.tessera.example"
+name = "Tessera Example"
+icon = "../assets/logo.svg"

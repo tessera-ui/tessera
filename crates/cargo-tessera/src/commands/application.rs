@@ -4,7 +4,7 @@ use anyhow::{Context, Result, ensure};
 use cargo_metadata::{MetadataCommand, Package};
 use heck::ToLowerCamelCase;
 use serde_json::{Value, json};
-use tessera_build::AssetBackend;
+use tessera_build::{AssetBackend, application::AppConfig};
 
 use super::build;
 
@@ -13,6 +13,7 @@ pub(super) struct Application {
     pub binary: String,
     pub config: Value,
     pub target_dir: PathBuf,
+    pub identity: AppConfig,
 }
 
 impl Application {
@@ -27,6 +28,14 @@ impl Application {
             metadata.root_package()
         }
         .context("Select an application package with --package")?;
+        let identity = AppConfig::load(
+            package
+                .manifest_path
+                .parent()
+                .context("Missing package directory")?
+                .as_std_path(),
+            package.name.as_str(),
+        )?;
         let bins = package
             .targets
             .iter()
@@ -41,8 +50,6 @@ impl Application {
             "Unknown executable `{name}`"
         );
         let mut config = json!({
-            "productName": package.name.as_str(), "version": package.version.to_string(),
-            "identifier": format!("com.tessera.{}", package.name.replace('_', "-")),
             "description": package.description, "authors": package.authors, "homepage": package.homepage,
         });
         if let Some(custom) = package.metadata.get("packager") {
@@ -53,11 +60,16 @@ impl Application {
                 config[key.to_lower_camel_case()] = value.clone();
             }
         }
+        config["name"] = json!(package.name.as_str());
+        config["productName"] = json!(identity.name);
+        config["identifier"] = json!(identity.identifier);
+        config["version"] = json!(package.version.to_string());
         Ok(Self {
             package: package.clone(),
             binary: name.to_owned(),
             config,
             target_dir: metadata.target_directory.into_std_path_buf(),
+            identity,
         })
     }
 

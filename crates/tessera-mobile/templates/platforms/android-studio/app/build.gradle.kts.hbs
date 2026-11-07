@@ -7,13 +7,14 @@ plugins {
 android {
     namespace="{{app.identifier}}"{{#if has-asset-packs}}
     assetPacks += mutableSetOf({{quote-and-join-colon-prefix asset-packs}}){{/if}}
+    sourceSets.getByName("main").res.srcDir("src/main/tessera-res")
     compileSdk = 34
     defaultConfig {
         applicationId = "{{app.identifier}}"
         minSdk = {{android.min-sdk-version}}
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = {{version-code}}
+        versionName = "{{version}}"
     }{{#if android-vulkan-validation}}
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

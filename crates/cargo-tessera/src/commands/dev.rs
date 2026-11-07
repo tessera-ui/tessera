@@ -246,6 +246,11 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;
         }
     }
+    let identity =
+        tessera_build::application::AppConfig::load(&package_dir, package.unwrap_or("app"))?;
+    if let Some(icon) = identity.icon {
+        watcher.watch(&icon, RecursiveMode::NonRecursive)?;
+    }
     let config = load_tessera_config_from_dir(&package_dir)?;
     for directory in resolve_resource_dirs(&package_dir, config.as_ref()) {
         if directory.is_dir() {

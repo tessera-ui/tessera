@@ -34,6 +34,14 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,rust-script,cargo-packager
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install package inspection tools
+        run: python -m pip install Pillow resvg_py==0.5.0
+      - name: Install PE inspection tool
+        if: runner.os == 'Windows'
+        run: python -m pip install pefile==2024.8.26
       - name: Test and package example
         if: runner.os == 'Linux'
         run: |
@@ -43,6 +51,7 @@ jobs:
           cargo test --workspace --doc
           rust-script scripts/release-package.rs --check
           cargo tessera package -p example --formats deb
+          python scripts/check-package.py deb target/packages/example
       - name: Check scripts and formatting
         if: runner.os == 'Linux'
         run: |
@@ -55,12 +64,23 @@ jobs:
         run: |
           cargo test -p tessera-ui -p tessera-components --lib
           cargo tessera package -p example --formats nsis
-      - name: Package example and verify Apple IME
+      - name: Inspect the Windows installer
+        if: runner.os == 'Windows'
+        run: python scripts/check-package.py windows target/packages/example
+      - name: Package and inspect the macOS example
+        if: runner.os == 'macOS'
+        run: |
+          cargo tessera package -p example --formats app
+          python scripts/check-package.py macos target/packages/example/*.app
+      - name: Package and inspect the iOS Simulator example
         if: runner.os == 'macOS'
         run: |
           cargo tessera ios build -p example --profiling-output acceptance.jsonl
+          python scripts/check-package.py ios target/packages/example/ios/*/example.app
+      - name: Verify Apple IME and iOS application lifecycle
+        if: runner.os == 'macOS'
+        run: |
           python3 scripts/test-apple-ime.py target/packages/example/ios/*/example.app
-          cargo tessera package -p example --formats app
 
   check_minimal_versions:
     name: Check minimal dependency versions
@@ -92,8 +112,14 @@ jobs:
           target: wasm32-unknown-unknown
       - name: Install Binaryen
         run: sudo apt-get update && sudo apt-get install -y binaryen
-      - name: Build web example
-        run: cargo tessera web build --release -p example
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and inspect the Web example
+        run: |
+          python -m pip install Pillow resvg_py==0.5.0
+          cargo tessera web build --release -p example
+          python scripts/check-package.py web example/gen/web
 
   check_android:
     name: Check Android
@@ -112,13 +138,20 @@ jobs:
         id: setup-ndk
         with:
           ndk-version: r28c
-      - name: Build Android example
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install APK inspection tools
+        run: python -m pip install Pillow resvg_py==0.5.0
+      - name: Build and inspect Android APKs
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           cargo tessera android build --format apk -p example --arch arm64
+          python scripts/check-package.py android example/gen/android/app/build/outputs/apk
           cargo tessera android build --format apk -p example --arch x86_64 --profiling-output files/acceptance.jsonl
+          python scripts/check-package.py android example/gen/android/app/build/outputs/apk
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

@@ -1,4 +1,5 @@
 pub mod android;
+mod app_assets;
 mod application;
 mod assets;
 pub mod build;

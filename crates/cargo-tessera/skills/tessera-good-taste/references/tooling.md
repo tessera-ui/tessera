@@ -28,6 +28,11 @@ inline module tree for source overrides. Use `allow`, `warn`, `deny`, or `forbid
 nested settings override inherited levels unless forbidden.
 `--force-warn` and `--cap-lints` remain command-line controls.
 
+Set `name`, `identifier`, and `icon` in `tessera-app.toml` for every platform.
+Use a square SVG (recommended, with outlined text and embedded resources) or PNG
+(prefer at least 1024 × 1024). Versions come from Cargo. Use `..res::application()`
+as renderer defaults to apply the same name, icon, and launcher identity at runtime.
+
 The app templates generate a shared library entrypoint and a thin desktop binary.
 Use [headless sessions](headless.md) to render and interact without a window.
 

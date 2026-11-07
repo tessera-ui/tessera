@@ -829,6 +829,7 @@ dependencies = [
  "handlebars",
  "heck 0.5.0",
  "hex",
+ "image",
  "include_dir",
  "indicatif",
  "inquire",
@@ -1048,6 +1049,12 @@ dependencies = [
  "termcolor",
  "unicode-width 0.2.3",
 ]
+
+[[package]]
+name = "color_quant"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
 name = "colorchoice"
@@ -2446,6 +2453,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gif"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
+dependencies = [
+ "color_quant",
+ "weezl",
+]
+
+[[package]]
 name = "gimli"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2928,6 +2945,16 @@ dependencies = [
  "tiff",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "image-webp"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+dependencies = [
+ "byteorder-lite",
+ "quick-error",
 ]
 
 [[package]]
@@ -6169,12 +6196,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1572844b6727a1bf842190e9947641a68ac44bed83f50afb4bd1407a2564bee8"
 dependencies = [
  "bytemuck",
+ "gif",
+ "image-webp",
  "log",
  "pico-args",
  "rgb",
  "svgtypes",
  "tiny-skia 0.12.0",
  "usvg",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -7239,14 +7269,18 @@ name = "tessera-build"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "embed-resource",
  "fluent-templates",
  "hex",
+ "image",
  "prettyplease",
  "proc-macro2",
  "quote",
+ "resvg",
  "serde",
  "sha2 0.11.1",
  "syn 3.0.9",
+ "tempfile",
  "toml",
 ]
 

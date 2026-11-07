@@ -31,7 +31,9 @@ use handlebars::{Handlebars, handlebars_helper};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_resource_dirs};
+use tessera_build::{
+    AssetBackend, application::AppConfig, load_tessera_config_from_dir, resolve_resource_dirs,
+};
 
 use crate::{
     call_guard, output,
@@ -39,6 +41,7 @@ use crate::{
 };
 
 use super::{
+    app_assets,
     assets::{
         PlatformAssetCandidate, collect_platform_asset_candidates, collect_resolved_packages,
         collect_used_platform_asset_paths, sync_assets,
@@ -78,7 +81,7 @@ pub struct BuildOptions {
     pub asset_backend: Option<AssetBackend>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DevOptions {
     pub release: bool,
     pub arch: Option<String>,
@@ -111,6 +114,9 @@ struct AndroidContext {
     activity: String,
     config: AndroidConfig,
     metadata: AndroidMetadata,
+    identity: AppConfig,
+    version: String,
+    version_code: u32,
 }
 
 #[derive(Debug)]
@@ -231,28 +237,31 @@ impl AndroidContext {
             .unwrap_or_else(|| PathBuf::from("."))
             .canonicalize()
             .with_context(|| "Failed to resolve project root")?;
-        let app_toml = load_app_toml(&root_dir)?;
+        let identity = AppConfig::load(&root_dir, &package_name)?;
         let asset_backend = asset_backend_override.unwrap_or(AssetBackend::Platform);
-        let target_dir = MetadataCommand::new()
+        let cargo_metadata = MetadataCommand::new()
             .manifest_path(root_dir.join("Cargo.toml"))
             .exec()
-            .context("Failed to resolve Cargo target directory")?
-            .target_directory
-            .into_std_path_buf();
+            .context("Failed to resolve Cargo target directory")?;
+        let version = &cargo_metadata
+            .packages
+            .iter()
+            .find(|package| package.name.as_str() == package_name)
+            .context("Application package is missing from Cargo metadata")?
+            .version;
+        let version_code = android_version_code(version.major, version.minor, version.patch)?;
+        let version = version.to_string();
+        let target_dir = cargo_metadata.target_directory.into_std_path_buf();
 
         let tessera_permissions = collect_tessera_permissions(&root_dir, package_dir.as_ref())?;
-        let identifier = app_toml
-            .identifier
-            .clone()
-            .unwrap_or_else(|| default_identifier(&package_name));
         let lib_name = manifest
             .lib_name()
             .unwrap_or_else(|| package_name.replace('-', "_"));
         let raw_app = RawAppConfig {
             name: package_name.clone(),
             lib_name: Some(lib_name),
-            stylized_name: None,
-            identifier: sanitize_identifier(&identifier),
+            stylized_name: Some(identity.name.clone()),
+            identifier: identity.identifier.clone(),
             asset_dir: None,
             template_pack: None,
         };
@@ -331,6 +340,9 @@ impl AndroidContext {
             activity: DEFAULT_ANDROID_ACTIVITY.to_string(),
             config,
             metadata,
+            identity,
+            version,
+            version_code,
         })
     }
 
@@ -405,23 +417,12 @@ fn run_android_call_guard(ctx: &AndroidContext, target: Option<&str>) -> Result<
     })
 }
 
-fn default_identifier(package_name: &str) -> String {
-    let sanitized = package_name
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-        .collect::<String>();
-    format!("com.example.{sanitized}")
-}
-
-fn sanitize_identifier(identifier: &str) -> String {
-    identifier
-        .chars()
-        .map(|c| match c {
-            '-' => '_',
-            c if c.is_ascii_alphanumeric() || c == '_' || c == '.' => c,
-            _ => '_',
-        })
-        .collect()
+fn android_version_code(major: u64, minor: u64, patch: u64) -> Result<u32> {
+    anyhow::ensure!(
+        major < 2100 && minor < 1000 && patch < 1000,
+        "Android requires Cargo version major < 2100, minor < 1000 and patch < 1000"
+    );
+    Ok((major * 1_000_000 + minor * 1_000 + patch + 1) as u32)
 }
 
 fn normalize_android_profiling_output_path(path: &str, app_identifier: &str) -> String {
@@ -487,59 +488,9 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
         let asset_dir = ctx.config.project_dir().join("app/src/main/assets");
         fs::create_dir_all(&asset_dir)
             .with_context(|| format!("Failed to create assets dir {}", asset_dir.display()))?;
-    } else {
-        write_template_file(
-            &ANDROID_TEMPLATE_DIR,
-            Path::new("build.gradle.kts.hbs"),
-            ctx.config.project_dir().as_path(),
-            &handlebars,
-            &data,
-        )?;
-        write_template_file(
-            &ANDROID_TEMPLATE_DIR,
-            Path::new("settings.gradle.hbs"),
-            ctx.config.project_dir().as_path(),
-            &handlebars,
-            &data,
-        )?;
-        write_template_file(
-            &ANDROID_TEMPLATE_DIR,
-            Path::new("buildSrc/build.gradle.kts.hbs"),
-            ctx.config.project_dir().as_path(),
-            &handlebars,
-            &data,
-        )?;
-        write_template_file(
-            &ANDROID_TEMPLATE_DIR,
-            Path::new("buildSrc/src/main/kotlin/BuildTask.kt.hbs"),
-            ctx.config.project_dir().as_path(),
-            &handlebars,
-            &data,
-        )?;
-        write_template_file(
-            &ANDROID_TEMPLATE_DIR,
-            Path::new("buildSrc/src/main/kotlin/RustPlugin.kt.hbs"),
-            ctx.config.project_dir().as_path(),
-            &handlebars,
-            &data,
-        )?;
-        write_template_file(
-            &ANDROID_TEMPLATE_DIR,
-            Path::new("app/build.gradle.kts.hbs"),
-            ctx.config.project_dir().as_path(),
-            &handlebars,
-            &data,
-        )?;
-        write_template_file(
-            &ANDROID_TEMPLATE_DIR,
-            Path::new("app/src/main/java/TesseraGameActivity.java.hbs"),
-            ctx.config.project_dir().as_path(),
-            &handlebars,
-            &data,
-        )?;
     }
 
-    sync_android_plugins(&ctx.config.project_dir(), &android_plugins)?;
+    sync_android_project(&ctx)?;
 
     if !project_exists {
         output::status(
@@ -662,7 +613,7 @@ pub fn build(opts: BuildOptions) -> Result<()> {
 }
 
 pub fn dev(opts: DevOptions) -> Result<()> {
-    let ctx = AndroidContext::from_dev_opts(opts)?;
+    let ctx = AndroidContext::from_dev_opts(opts.clone())?;
     run_android_call_guard(&ctx, None)?;
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
@@ -671,7 +622,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
     }
     let device_id = ctx
         .device
-        .as_deref()
+        .clone()
         .ok_or_else(|| anyhow!("--device <adb_serial> is required for android dev"))?;
     sync_android_project(&ctx)?;
 
@@ -693,9 +644,6 @@ pub fn dev(opts: DevOptions) -> Result<()> {
         "Assets",
         format!("backend `{}`", ctx.asset_backend.as_str()),
     );
-
-    let env = android_runtime_env(&ctx)?;
-    let profile = ctx.profile();
 
     output::status("Watching", "for file changes");
 
@@ -736,6 +684,9 @@ pub fn dev(opts: DevOptions) -> Result<()> {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;
         }
     }
+    if let Some(icon) = &ctx.identity.icon {
+        watcher.watch(icon, RecursiveMode::NonRecursive)?;
+    }
     for directory in collect_resource_dirs(ctx.config.app().root_dir(), ctx.package_dir.as_ref())? {
         watcher.watch(&directory, RecursiveMode::Recursive)?;
     }
@@ -766,7 +717,13 @@ pub fn dev(opts: DevOptions) -> Result<()> {
 
             output::status("Deploying", "building and installing on device");
 
-            match run_once(&ctx, &env, profile, device_id, NoiseLevel::Polite) {
+            let deploy = || {
+                let ctx = AndroidContext::from_dev_opts(opts.clone())?;
+                sync_android_project(&ctx)?;
+                let env = android_runtime_env(&ctx)?;
+                run_once(&ctx, &env, ctx.profile(), &device_id, NoiseLevel::Polite)
+            };
+            match deploy() {
                 Ok(child) => {
                     run_child = Some(child);
                     pending_change = false;
@@ -950,6 +907,9 @@ fn build_android_template_data(
 
     Ok(json!({
         "app": app,
+        "version": ctx.version,
+        "version-code": ctx.version_code,
+        "app-icon": ctx.identity.icon.is_some(),
         "android": {
             "min-sdk-version": ctx.config.min_sdk_version(),
         },
@@ -1046,6 +1006,7 @@ fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
         &data,
     )?;
 
+    app_assets::android(&ctx.identity, &project_dir.join("app/src/main/tessera-res"))?;
     sync_android_plugins(&project_dir, &android_plugins)?;
     Ok(())
 }
@@ -1300,21 +1261,6 @@ struct AndroidManifestConfig {
     app_dependencies_platform: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize, Default)]
-struct AppToml {
-    identifier: Option<String>,
-}
-
-fn load_app_toml(root: &Path) -> Result<AppToml> {
-    let path = root.join("tessera-app.toml");
-    if !path.exists() {
-        return Ok(AppToml::default());
-    }
-    let contents =
-        fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
-    toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))
-}
-
 fn map_tessera_permissions(perms: &[String]) -> Result<Vec<String>> {
     let mut mapped = Vec::new();
     for perm in perms {
@@ -1340,4 +1286,22 @@ fn map_tessera_permissions(perms: &[String]) -> Result<Vec<String>> {
     mapped.sort();
     mapped.dedup();
     Ok(mapped)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cargo_versions_produce_positive_ordered_android_codes() {
+        assert_eq!(android_version_code(0, 0, 0).unwrap(), 1);
+        assert_eq!(android_version_code(1, 2, 3).unwrap(), 1_002_004);
+        assert!(
+            android_version_code(1, 999, 999).unwrap() < android_version_code(2, 0, 0).unwrap()
+        );
+        assert_eq!(android_version_code(2099, 999, 999).unwrap(), 2_100_000_000);
+        for (major, minor, patch) in [(2100, 0, 0), (0, 1000, 0), (0, 0, 1000), (u64::MAX, 0, 0)] {
+            assert!(android_version_code(major, minor, patch).is_err());
+        }
+    }
 }

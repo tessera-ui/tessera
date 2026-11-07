@@ -5,10 +5,20 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Application display name on every platform; defaults to the Cargo package name."
+    },
     "identifier": {
       "type": "string",
-      "description": "Application identifier/package name used for mobile platform manifests (for Android this is the applicationId).",
-      "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*$"
+      "description": "Reverse-domain application identifier shared by platform manifests and desktop launchers.",
+      "pattern": "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)+$"
+    },
+    "icon": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Square SVG (recommended) or PNG source relative to the package root. SVG text must be outlined and external resources embedded. PNG should be at least 1024 × 1024."
     }
   }
 }

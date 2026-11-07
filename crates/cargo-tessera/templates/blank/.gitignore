@@ -1,3 +1,5 @@
 /target
 /gen/web/pkg-web
 /gen/web/tessera
+
+/gen/web/app

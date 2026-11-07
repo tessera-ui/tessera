@@ -6,10 +6,7 @@ mod pages;
 mod render_precision_tests;
 pub mod res;
 
-use tessera_ui::{
-    EntryPoint,
-    renderer::{TesseraConfig, WindowConfig},
-};
+use tessera_ui::EntryPoint;
 
 use pages::custom_shader::CustomShaderPackage;
 
@@ -27,17 +24,15 @@ pub fn run() -> EntryPoint {
     let entry = md3_diagnostics::entry();
     #[cfg(not(all(target_family = "wasm", feature = "md3-diagnostics")))]
     let entry = EntryPoint::new(app);
+    let mut config = res::application();
+    config.sample_count = 4;
+    config.window.decorations = false;
+    #[cfg(target_family = "wasm")]
+    {
+        config.web = WebConfig::default().with_canvas_id(env!("CARGO_CRATE_NAME"));
+    }
     entry
-        .config(TesseraConfig {
-            sample_count: 4,
-            window: WindowConfig {
-                decorations: false,
-                ..Default::default()
-            },
-            #[cfg(target_family = "wasm")]
-            web: WebConfig::default().with_canvas_id(env!("CARGO_CRATE_NAME")),
-            ..Default::default()
-        })
+        .config(config)
         .package(tessera_components::ComponentsPackage)
         .package(res::i18n())
         .package(pages::FONTS)

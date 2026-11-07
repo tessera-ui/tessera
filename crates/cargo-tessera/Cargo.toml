@@ -30,6 +30,7 @@ globset.workspace = true
 handlebars.workspace = true
 heck.workspace = true
 hex.workspace = true
+image = { workspace = true, features = ["png"] }
 include_dir.workspace = true
 indicatif.workspace = true
 inquire = { workspace = true, features = ["crossterm", "editor"] }
