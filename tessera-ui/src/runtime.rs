@@ -30,7 +30,7 @@ use crate::{
     },
     layout::LayoutModifierHandle,
     modifier::{DrawModifierNode, Modifier},
-    prop::{CallbackWith, ComponentReplayData, ErasedProp, Prop},
+    prop::{CallbackWith, ErasedComponent, Prop},
     session::{try_with_runtime_globals, with_runtime_globals},
     time::Instant,
 };
@@ -606,7 +606,7 @@ pub(crate) struct ReplayNodeSnapshot {
     pub group_path: GroupPath,
     pub instance_key_override: Option<u64>,
     pub context: ContextMap,
-    pub replay: ComponentReplayData,
+    pub replay: Arc<dyn ErasedComponent>,
 }
 
 #[derive(Default)]
@@ -2779,21 +2779,16 @@ impl Drop for ComponentNodeScope {
 pub fn begin_component_node<P: Prop>(
     name: &'static str,
     component_type_id: u64,
-    props: &P,
-    run: fn(&P),
+    props: &Arc<P>,
 ) -> ComponentNodeScope {
-    begin_component_node_erased(name, component_type_id, props, &|| {
-        crate::component_call::active_component_replay(props).unwrap_or_else(|| {
-            ComponentReplayData::new(crate::prop::make_component_runner(run), props)
-        })
-    })
+    begin_component_node_erased(name, component_type_id, props.as_ref(), &|| props.clone())
 }
 
 fn begin_component_node_erased(
     name: &'static str,
     component_type_id: u64,
-    props: &dyn ErasedProp,
-    current_replay: &dyn Fn() -> ComponentReplayData,
+    props: &dyn ErasedComponent,
+    current_replay: &dyn Fn() -> Arc<dyn ErasedComponent>,
 ) -> ComponentNodeScope {
     let phase = push_phase(RuntimePhase::Build);
     let mut node = new_build_node(name, NodeRole::Composition, component_type_id);
@@ -2802,7 +2797,7 @@ fn begin_component_node_erased(
     let instance = push_current_component_instance_key(instance_key);
     let previous_replay = with_component_replay_tracker(|tracker| {
         let previous = tracker.previous_nodes.get(&instance_key)?;
-        (previous.instance_logic_id == instance_logic_id && previous.replay.props.equals(props))
+        (previous.instance_logic_id == instance_logic_id && previous.replay.equals(props))
             .then(|| previous.replay.clone())
     });
     let pending_dirty = consume_pending_build_invalidation(instance_key);
@@ -3902,7 +3897,7 @@ mod tests {
     };
     use crate::layout::MeasureScope;
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
-    use crate::prop::{CallbackWith, ComponentReplayData, RenderSlot, make_component_runner};
+    use crate::prop::{CallbackWith, RenderSlot};
     use crate::tessera;
 
     #[derive(Clone, Default, PartialEq)]
@@ -4063,7 +4058,17 @@ mod tests {
     }
 
     fn seed_previous_replay_snapshot(instance_key: u64) {
-        let replay = ComponentReplayData::new(make_component_runner::<()>(|_| {}), &());
+        #[derive(Clone)]
+        struct Noop;
+
+        impl Prop for Noop {
+            fn prop_eq(&self, _: &Self) -> bool {
+                true
+            }
+
+            fn run_component(self: Arc<Self>) {}
+        }
+
         with_component_replay_tracker_mut(|tracker| {
             tracker.previous_nodes.insert(
                 instance_key,
@@ -4072,7 +4077,7 @@ mod tests {
                     group_path: GroupPath::default(),
                     instance_key_override: None,
                     context: ContextMap::default(),
-                    replay,
+                    replay: Arc::new(Noop),
                 },
             );
         });

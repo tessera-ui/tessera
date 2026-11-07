@@ -20,7 +20,6 @@ use crate::{
     modifier::{
         DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutModifierNode, Modifier,
     },
-    prop::Prop,
     px::PxPosition,
     render_graph::RenderFragment,
     runtime::begin_layout_node,
@@ -939,12 +938,6 @@ impl PartialEq for LayoutModifierHandle {
     }
 }
 
-impl Prop for LayoutModifierHandle {
-    fn prop_eq(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
 impl<S> From<S> for LayoutModifierHandle
 where
     S: LayoutModifierNode + Clone + PartialEq,
@@ -983,12 +976,6 @@ impl Default for DrawModifierHandle {
 impl PartialEq for DrawModifierHandle {
     fn eq(&self, other: &Self) -> bool {
         self.node.dyn_eq(other.node.as_ref())
-    }
-}
-
-impl Prop for DrawModifierHandle {
-    fn prop_eq(&self, other: &Self) -> bool {
-        self == other
     }
 }
 

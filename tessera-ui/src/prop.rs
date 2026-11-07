@@ -456,27 +456,18 @@ impl<T> Eq for RenderSlotWith<T> {}
 pub trait Prop: Clone + Send + Sync + 'static {
     /// Compare current props with another props value.
     fn prop_eq(&self, other: &Self) -> bool;
+    /// Execute the component with these props.
+    fn run_component(self: Arc<Self>);
 }
 
-impl Prop for () {
-    fn prop_eq(&self, _other: &Self) -> bool {
-        true
-    }
-}
-
-/// Type-erased prop value used by the core replay path.
-pub trait ErasedProp: Send + Sync {
-    /// Access the concrete prop value as `Any`.
+pub(crate) trait ErasedComponent: Send + Sync {
     fn as_any(&self) -> &dyn Any;
-    /// Access the concrete prop value for configuration.
     fn as_any_mut(&mut self) -> &mut dyn Any;
-    /// Clone this erased prop object.
-    fn clone_box(&self) -> Box<dyn ErasedProp>;
-    /// Compare with another erased prop object.
-    fn equals(&self, other: &dyn ErasedProp) -> bool;
+    fn equals(&self, other: &dyn ErasedComponent) -> bool;
+    fn run(self: Arc<Self>);
 }
 
-impl<T> ErasedProp for T
+impl<T> ErasedComponent for T
 where
     T: Prop,
 {
@@ -488,69 +479,13 @@ where
         self
     }
 
-    fn clone_box(&self) -> Box<dyn ErasedProp> {
-        Box::new(self.clone())
-    }
-
-    fn equals(&self, other: &dyn ErasedProp) -> bool {
+    fn equals(&self, other: &dyn ErasedComponent) -> bool {
         let Some(other) = other.as_any().downcast_ref::<T>() else {
             return false;
         };
         self.prop_eq(other)
     }
-}
-
-/// Type-erased component runner used for replay.
-pub trait ErasedComponentRunner: Send + Sync {
-    /// Execute the component with erased props.
-    fn run(&self, props: &dyn ErasedProp);
-}
-
-struct ComponentRunner<P: Prop> {
-    run_fn: fn(&P),
-}
-
-impl<P> ErasedComponentRunner for ComponentRunner<P>
-where
-    P: Prop,
-{
-    fn run(&self, props: &dyn ErasedProp) {
-        let Some(props) = props.as_any().downcast_ref::<P>() else {
-            panic!(
-                "component runner props type mismatch: expected {}",
-                std::any::type_name::<P>()
-            );
-        };
-        (self.run_fn)(props);
-    }
-}
-
-/// Build a type-erased runner from a component function.
-pub fn make_component_runner<P>(run_fn: fn(&P)) -> Arc<dyn ErasedComponentRunner>
-where
-    P: Prop,
-{
-    Arc::new(ComponentRunner { run_fn })
-}
-
-/// Snapshot of a replayable component invocation.
-#[derive(Clone)]
-pub struct ComponentReplayData {
-    /// Type-erased component runner.
-    pub runner: Arc<dyn ErasedComponentRunner>,
-    /// Latest props snapshot.
-    pub props: Arc<dyn ErasedProp>,
-}
-
-impl ComponentReplayData {
-    /// Create replay data from typed props.
-    pub fn new<P>(runner: Arc<dyn ErasedComponentRunner>, props: &P) -> Self
-    where
-        P: Prop,
-    {
-        Self {
-            runner,
-            props: Arc::new(props.clone()),
-        }
+    fn run(self: Arc<Self>) {
+        self.run_component();
     }
 }

@@ -639,6 +639,7 @@ fn generate_props_clone_default_impls(
 
 fn generate_prop_like_impls(
     type_name: &Ident,
+    component_impl: &Ident,
     generics: &Generics,
     fields: &[PropFieldSpec],
     crate_path: &Path,
@@ -665,6 +666,10 @@ fn generate_prop_like_impls(
         impl #impl_generics #crate_path::__private::Prop for #type_name #ty_generics #where_clause {
             fn prop_eq(&self, other: &Self) -> bool {
                 <Self as ::core::cmp::PartialEq>::eq(self, other)
+            }
+
+            fn run_component(self: ::std::sync::Arc<Self>) {
+                #component_impl(&self);
             }
         }
     }
@@ -984,30 +989,20 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
         let has_generic_marker = marker_field_def.is_some();
         let prop_type: syn::Type = syn::parse_quote!(#props_ident #ty_generics);
         let uncached_type_id = component_type_id_tokens(fn_name, &prop_type);
-        let make_runner = quote! {
-            #crate_path::__private::make_component_runner::<#prop_type>(#impl_ident)
-        };
-        let (metadata, component_type_id_tokens, runner) = if generics.params.is_empty() {
+        let (metadata, component_type_id_tokens) = if generics.params.is_empty() {
             (
                 quote! {
                     impl #props_ident {
-                        fn __tessera_metadata() -> &'static (
-                            u64,
-                            ::std::sync::Arc<dyn #crate_path::__private::ErasedComponentRunner>,
-                        ) {
-                            static METADATA: ::std::sync::OnceLock<(
-                                u64,
-                                ::std::sync::Arc<dyn #crate_path::__private::ErasedComponentRunner>,
-                            )> = ::std::sync::OnceLock::new();
-                            METADATA.get_or_init(|| (#uncached_type_id, #make_runner))
+                        fn __tessera_type_id() -> u64 {
+                            static TYPE_ID: ::std::sync::OnceLock<u64> = ::std::sync::OnceLock::new();
+                            *TYPE_ID.get_or_init(|| #uncached_type_id)
                         }
                     }
                 },
-                quote! { #props_ident::__tessera_metadata().0 },
-                quote! { ::std::sync::Arc::clone(&#props_ident::__tessera_metadata().1) },
+                quote! { #props_ident::__tessera_type_id() },
             )
         } else {
-            (quote! {}, uncached_type_id, make_runner)
+            (quote! {}, uncached_type_id)
         };
         let field_idents: Vec<_> = fields.iter().map(|field| field.ident.clone()).collect();
         let required_fields: Vec<_> = fields
@@ -1098,7 +1093,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             })
             .collect();
         let prop_impl_tokens =
-            generate_prop_like_impls(&props_ident, generics, fields, &crate_path);
+            generate_prop_like_impls(&props_ident, &impl_ident, generics, fields, &crate_path);
         let builder_methods = match generate_builder_methods(fields, &crate_path) {
             Ok(methods) => methods,
             Err(err) => return err.to_compile_error().into(),
@@ -1142,19 +1137,17 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let __tessera_call = #crate_path::__private::register_component_call(
                         stringify!(#fn_name), #component_type_id_tokens,
                         #initial_props,
-                        #runner,
                     );
                 #(#constructor_assignments)*
                 #builder_ident { props: __tessera_call }
             }
 
-            fn #impl_ident #item_generics(__tessera_props: &#props_ident #ty_generics) #where_clause {
+            fn #impl_ident #item_generics(__tessera_props: &::std::sync::Arc<#props_ident #ty_generics>) #where_clause {
                 #prop_assert_tokens
                 let __tessera_scope = #crate_path::__private::begin_component_node(
                     stringify!(#fn_name),
                     #component_type_id_tokens,
                     __tessera_props,
-                    #impl_ident,
                 );
                 if __tessera_scope.is_retained() {
                     return;

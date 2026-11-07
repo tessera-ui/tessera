@@ -483,7 +483,6 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                         replayed_nodes = replayed_nodes
                             .saturating_add(subtree_node_count_by_instance_key(*instance_key));
                     }
-                    let replay = &replay_snapshot.replay;
                     let replay_trace =
                         tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG);
                     let trace_name = replay_trace
@@ -523,7 +522,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                             replay_snapshot.instance_logic_id,
                             replay_snapshot.group_path,
                             replay_snapshot.instance_key_override,
-                            || crate::component_call::run_component(replay),
+                            || replay_snapshot.replay.run(),
                         );
                     });
                     let compose_ns = compose_timer.map(|timer| timer.elapsed().as_nanos());

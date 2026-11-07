@@ -20,7 +20,7 @@ use crate::{
     NodeId,
     context::{ContextMap, with_context_snapshot},
     execution_context::{OrderFrame, with_execution_context, with_execution_context_mut},
-    prop::{ComponentReplayData, ErasedComponentRunner, ErasedProp, Prop},
+    prop::{ErasedComponent, Prop},
     runtime::{
         GroupPath, TesseraRuntime, ensure_build_phase, reserve_component_identity,
         with_replay_scope,
@@ -42,12 +42,11 @@ struct PendingCall {
     group_path: GroupPath,
     key_override: Option<u64>,
     context: ContextMap,
-    props: Arc<dyn ErasedProp>,
-    runner: Arc<dyn ErasedComponentRunner>,
+    props: Arc<dyn ErasedComponent>,
     updates: Vec<(&'static str, usize, PropUpdate)>,
 }
 
-fn pending_props_mut(props: &mut Arc<dyn ErasedProp>) -> &mut dyn ErasedProp {
+fn pending_props_mut(props: &mut Arc<dyn ErasedComponent>) -> &mut dyn ErasedComponent {
     Arc::get_mut(props).expect("pending props have a single owner")
 }
 
@@ -90,38 +89,10 @@ impl PendingCalls {
 #[derive(Default)]
 pub(crate) struct ComponentCalls {
     pending: RefCell<PendingCalls>,
-    active: RefCell<Option<ComponentReplayData>>,
 }
 
 fn with_pending_calls<R>(access: impl FnOnce(&RefCell<PendingCalls>) -> R) -> R {
     with_runtime_globals(|globals| access(&globals.component_calls.pending))
-}
-
-fn replace_active_component(component: Option<ComponentReplayData>) -> Option<ComponentReplayData> {
-    with_runtime_globals(|globals| globals.component_calls.active.replace(component))
-}
-
-pub(crate) fn active_component_replay<P: Prop>(props: &P) -> Option<ComponentReplayData> {
-    with_runtime_globals(|globals| {
-        let active = globals.component_calls.active.borrow();
-        let active = active.as_ref()?;
-        let active_props = active.props.as_any().downcast_ref::<P>()?;
-        std::ptr::eq(active_props, props).then(|| active.clone())
-    })
-}
-
-struct ActiveComponentGuard(Option<ComponentReplayData>);
-
-impl Drop for ActiveComponentGuard {
-    fn drop(&mut self) {
-        let removed = replace_active_component(self.0.take());
-        drop(removed);
-    }
-}
-
-pub(crate) fn run_component(component: &ComponentReplayData) {
-    let _guard = ActiveComponentGuard(replace_active_component(Some(component.clone())));
-    component.runner.run(component.props.as_ref());
 }
 
 /// A configuration handle to one registered component use.
@@ -289,9 +260,8 @@ pub fn register_component_call<P: Prop>(
     name: &'static str,
     component_type_id: u64,
     props: P,
-    runner: Arc<dyn ErasedComponentRunner>,
 ) -> ComponentCall<P> {
-    let id = register_erased_call(name, component_type_id, Arc::new(props), runner);
+    let id = register_erased_call(name, component_type_id, Arc::new(props));
     ComponentCall {
         session: crate::session::current_session_identity().expect("active component session"),
         id,
@@ -303,8 +273,7 @@ pub fn register_component_call<P: Prop>(
 fn register_erased_call(
     name: &'static str,
     component_type_id: u64,
-    props: Arc<dyn ErasedProp>,
-    runner: Arc<dyn ErasedComponentRunner>,
+    props: Arc<dyn ErasedComponent>,
 ) -> PendingToken {
     ensure_build_phase();
     with_pending_calls(|pending| {
@@ -329,7 +298,6 @@ fn register_erased_call(
             key_override: context.instance_key_override,
             context: context.context_map.clone(),
             props,
-            runner,
             updates: Vec::new(),
         });
         let mut pending = pending.borrow_mut();
@@ -469,7 +437,6 @@ fn execute_call(call: PendingCall) {
         key_override,
         context,
         mut props,
-        runner,
         updates,
     } = call;
     let _parent_guard = ParentGuard {
@@ -509,9 +476,7 @@ fn execute_call(call: PendingCall) {
             };
             update(pending_props_mut(&mut props).as_any_mut());
         }
-        with_replay_scope(identity, group_path, key_override, || {
-            run_component(&ComponentReplayData { runner, props });
-        });
+        with_replay_scope(identity, group_path, key_override, || props.run());
     });
 }
 
@@ -529,39 +494,42 @@ pub(crate) fn reset_pending_calls() {
 
 #[cfg(test)]
 mod tests {
-    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::{
+        panic::{AssertUnwindSafe, catch_unwind},
+        sync::Arc,
+    };
 
     use crate::{
         RenderSlot,
         execution_context::reset_execution_context,
-        prop::{ErasedComponentRunner, ErasedProp, Prop},
+        prop::Prop,
         runtime::{GroupGuard, RuntimePhase, push_phase, reset_slots},
     };
 
     use super::{ComponentCall, register_component_call, with_pending_scope};
 
-    #[derive(Clone, Default, PartialEq)]
+    #[derive(Clone)]
     struct Props {
         value: u32,
         slot: Option<RenderSlot>,
+        recorder: Recorder,
     }
 
     impl Prop for Props {
         fn prop_eq(&self, other: &Self) -> bool {
-            self == other
+            self.value == other.value && self.slot == other.slot
+        }
+
+        fn run_component(self: Arc<Self>) {
+            self.recorder
+                .observed
+                .with_mut(|values| values.push((self.value, self.slot)));
         }
     }
 
     #[derive(Clone, Default)]
     struct Recorder {
-        observed: crate::testing::TestProbe<Vec<Props>>,
-    }
-
-    impl ErasedComponentRunner for Recorder {
-        fn run(&self, props: &dyn ErasedProp) {
-            let props = props.as_any().downcast_ref::<Props>().unwrap();
-            self.observed.with_mut(|values| values.push(props.clone()));
-        }
+        observed: crate::testing::TestProbe<Vec<(u32, Option<RenderSlot>)>>,
     }
 
     impl Recorder {
@@ -569,8 +537,11 @@ mod tests {
             register_component_call(
                 "probe",
                 123,
-                Props { value, slot: None },
-                std::sync::Arc::new(self.clone()),
+                Props {
+                    value,
+                    slot: None,
+                    recorder: self.clone(),
+                },
             )
         }
 
@@ -583,7 +554,7 @@ mod tests {
 
         fn values(&self) -> Vec<u32> {
             self.observed
-                .with(|values| values.iter().map(|props| props.value).collect())
+                .with(|values| values.iter().map(|(value, _)| *value).collect())
         }
     }
 
@@ -665,9 +636,15 @@ mod tests {
             configure(a);
         });
         recorder.observed.with(|observed| {
-            assert!(first[0].slot == observed[0].slot);
-            assert!(first[1].slot == observed[1].slot);
-            assert!(observed[0].slot != observed[1].slot);
+            let [(_, first_slot), (_, second_slot)] = first.as_slice() else {
+                panic!("expected two recorded calls");
+            };
+            let [(_, observed_first), (_, observed_second)] = observed.as_slice() else {
+                panic!("expected two replayed calls");
+            };
+            assert!(first_slot == observed_first);
+            assert!(second_slot == observed_second);
+            assert!(observed_first != observed_second);
         });
     }
 
