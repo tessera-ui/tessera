@@ -13,7 +13,8 @@ use std::{
     sync::Arc,
 };
 
-use rustc_hash::{FxHashMap as HashMap, FxHasher};
+use rustc_hash::FxHasher;
+use slotmap::{SlotMap, new_key_type};
 
 use crate::{
     NodeId,
@@ -49,13 +50,40 @@ fn pending_props_mut(props: &mut Arc<dyn ErasedProp>) -> &mut dyn ErasedProp {
     Arc::get_mut(props).expect("pending props have a single owner")
 }
 
+new_key_type! {
+    struct PendingKey;
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct PendingToken {
+    key: PendingKey,
+    serial: u64,
+}
+
+struct PendingEntry {
+    serial: u64,
+    call: Option<PendingCall>,
+}
+
 #[derive(Default)]
 struct PendingCalls {
-    calls: HashMap<u64, PendingCall>,
-    scopes: Vec<VecDeque<u64>>,
-    recycled_queues: Vec<VecDeque<u64>>,
-    reset_generation: u64,
-    next_call_id: u64,
+    calls: SlotMap<PendingKey, PendingEntry>,
+    scopes: Vec<VecDeque<PendingToken>>,
+    recycled_queues: Vec<VecDeque<PendingToken>>,
+    next_serial: u64,
+}
+
+impl PendingCalls {
+    fn entry_mut(&mut self, token: PendingToken) -> Option<&mut PendingEntry> {
+        self.calls
+            .get_mut(token.key)
+            .filter(|entry| entry.serial == token.serial)
+    }
+
+    fn remove(&mut self, token: PendingToken) -> Option<PendingCall> {
+        self.entry_mut(token)?;
+        self.calls.remove(token.key)?.call
+    }
 }
 
 const PENDING_CALLS: crate::session::SessionLocal<RefCell<PendingCalls>> =
@@ -95,7 +123,7 @@ pub(crate) fn run_component(component: &ComponentReplayData) {
 /// A configuration handle to one registered component use.
 pub struct ComponentCall<P: Prop> {
     session: u128,
-    id: u64,
+    id: PendingToken,
     marker: PhantomData<fn(P)>,
 }
 
@@ -185,13 +213,13 @@ impl<P: Prop> ComponentCall<P> {
 }
 
 #[track_caller]
-fn store_update(id: u64, property: &'static str, append: bool, update: PropUpdate) {
+fn store_update(id: PendingToken, property: &'static str, append: bool, update: PropUpdate) {
     let previous = PENDING_CALLS.with(|calls| {
         let mut calls = calls.borrow_mut();
         let call = calls
-            .calls
-            .get_mut(&id)
-            .unwrap_or_else(|| panic!("component call {} is no longer Pending", id));
+            .entry_mut(id)
+            .and_then(|entry| entry.call.as_mut())
+            .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial));
         if append {
             let occurrence = call
                 .updates
@@ -218,24 +246,20 @@ fn store_update(id: u64, property: &'static str, append: bool, update: PropUpdat
 }
 
 struct ConfigurationGuard {
-    id: u64,
-    generation: u64,
+    id: PendingToken,
     call: Option<PendingCall>,
 }
 
 #[track_caller]
-fn begin_configuration(id: u64) -> ConfigurationGuard {
-    let (call, generation) = PENDING_CALLS.with(|calls| {
-        let mut calls = calls.borrow_mut();
-        let call = calls
-            .calls
-            .remove(&id)
-            .unwrap_or_else(|| panic!("component call {id} is no longer Pending"));
-        (call, calls.reset_generation)
+fn begin_configuration(id: PendingToken) -> ConfigurationGuard {
+    let call = PENDING_CALLS.with_borrow_mut(|calls| {
+        calls
+            .entry_mut(id)
+            .and_then(|entry| entry.call.take())
+            .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial))
     });
     ConfigurationGuard {
         id,
-        generation,
         call: Some(call),
     }
 }
@@ -246,12 +270,9 @@ fn clear_property_updates(call: &mut PendingCall, property: &'static str) {
 
 impl Drop for ConfigurationGuard {
     fn drop(&mut self) {
-        PENDING_CALLS.with(|calls| {
-            let mut calls = calls.borrow_mut();
-            if calls.reset_generation == self.generation {
-                calls
-                    .calls
-                    .insert(self.id, self.call.take().expect("active configuration"));
+        PENDING_CALLS.with_borrow_mut(|calls| {
+            if let Some(entry) = calls.entry_mut(self.id) {
+                entry.call = self.call.take();
             }
         });
     }
@@ -279,50 +300,51 @@ fn register_erased_call(
     component_type_id: u64,
     props: Arc<dyn ErasedProp>,
     runner: Arc<dyn ErasedComponentRunner>,
-) -> u64 {
+) -> PendingToken {
     ensure_build_phase();
-    let id = PENDING_CALLS.with(|calls| {
-        let mut calls = calls.borrow_mut();
+    PENDING_CALLS.with(|pending| {
         assert!(
-            !calls.scopes.is_empty(),
+            !pending.borrow().scopes.is_empty(),
             "component declarations require an active build fragment"
         );
-        calls.next_call_id = calls
-            .next_call_id
+        let identity = reserve_component_identity(component_type_id);
+        let parent = TesseraRuntime::with(|runtime| runtime.component_tree.current_build_node_id());
+        let call = with_execution_context(|context| PendingCall {
+            name,
+            parent,
+            execution_parent: context.node_context_stack.last().copied(),
+            identity,
+            prop_owner: context.instance_logic_id_stack.last().copied().unwrap_or(0),
+            creator: context
+                .current_component_instance_stack
+                .last()
+                .copied()
+                .unwrap_or(0),
+            group_path: context.group_path,
+            key_override: context.instance_key_override,
+            context: context.context_map.clone(),
+            props,
+            runner,
+            updates: Vec::new(),
+        });
+        let mut pending = pending.borrow_mut();
+        let serial = pending
+            .next_serial
             .checked_add(1)
             .expect("component call token space exhausted");
-        calls.next_call_id
-    });
-    let identity = reserve_component_identity(component_type_id);
-    let parent = TesseraRuntime::with(|runtime| runtime.component_tree.current_build_node_id());
-    let call = with_execution_context(|context| PendingCall {
-        name,
-        parent,
-        execution_parent: context.node_context_stack.last().copied(),
-        identity,
-        prop_owner: context.instance_logic_id_stack.last().copied().unwrap_or(0),
-        creator: context
-            .current_component_instance_stack
-            .last()
-            .copied()
-            .unwrap_or(0),
-        group_path: context.group_path,
-        key_override: context.instance_key_override,
-        context: context.context_map.clone(),
-        props,
-        runner,
-        updates: Vec::new(),
-    });
-    PENDING_CALLS.with(|calls| {
-        let mut calls = calls.borrow_mut();
-        calls
+        pending.next_serial = serial;
+        let key = pending.calls.insert(PendingEntry {
+            serial,
+            call: Some(call),
+        });
+        let token = PendingToken { key, serial };
+        pending
             .scopes
             .last_mut()
             .expect("active build fragment")
-            .push_back(id);
-        calls.calls.insert(id, call);
-    });
-    id
+            .push_back(token);
+        token
+    })
 }
 
 struct ScopeGuard {
@@ -336,7 +358,7 @@ impl Drop for ScopeGuard {
             let mut pending = calls.scopes.pop().expect("balanced build fragments");
             let abandoned = pending
                 .drain(..)
-                .filter_map(|id| calls.calls.remove(&id))
+                .filter_map(|id| calls.remove(id))
                 .collect::<Vec<_>>();
             if (1..=MAX_RECYCLED_QUEUE_CAPACITY).contains(&pending.capacity()) {
                 calls.recycled_queues.push(pending);
@@ -385,7 +407,7 @@ fn drain_pending_scope() {
     }
 }
 
-fn take_next_call() -> Option<(u64, Option<PendingCall>)> {
+fn take_next_call() -> Option<(PendingToken, Option<PendingCall>)> {
     PENDING_CALLS.with(|calls| {
         let mut calls = calls.borrow_mut();
         let id = calls
@@ -393,7 +415,7 @@ fn take_next_call() -> Option<(u64, Option<PendingCall>)> {
             .last_mut()
             .expect("active build fragment")
             .pop_front()?;
-        Some((id, calls.calls.remove(&id)))
+        Some((id, calls.remove(id)))
     })
 }
 
@@ -495,7 +517,6 @@ pub(crate) fn reset_pending_calls() {
             scope.clear();
         }
         calls.recycled_queues.clear();
-        calls.reset_generation = calls.reset_generation.wrapping_add(1);
         std::mem::take(&mut calls.calls)
     });
     drop(removed);
