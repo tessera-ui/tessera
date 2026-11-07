@@ -967,7 +967,7 @@ Fps: {:.2}
                     retry_focus_move,
                     retry_focus_reveal,
                     modifiers: args.keyboard_state.modifiers(),
-                    layout_dirty_nodes: &layout_dirty_nodes,
+                    layout_dirty_nodes,
                 },
                 crate::component_tree::ComputeMode::Full,
             )

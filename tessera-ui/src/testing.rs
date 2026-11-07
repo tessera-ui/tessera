@@ -253,7 +253,7 @@ where
                         retry_focus_move: None,
                         retry_focus_reveal: false,
                         modifiers: winit::keyboard::ModifiersState::default(),
-                        layout_dirty_nodes: &layout_dirty_nodes,
+                        layout_dirty_nodes,
                     },
                     ComputeMode::LayoutOnly,
                 );

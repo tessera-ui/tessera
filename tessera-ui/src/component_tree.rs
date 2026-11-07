@@ -493,7 +493,7 @@ impl LayoutContext<'_> {
 }
 
 /// Parameters for the compute function
-pub(crate) struct ComputeParams<'a> {
+pub(crate) struct ComputeParams {
     pub screen_size: PxSize,
     pub cursor_position: Option<PxPosition>,
     pub pointer_changes: Vec<PointerChange>,
@@ -502,7 +502,7 @@ pub(crate) struct ComputeParams<'a> {
     pub retry_focus_move: Option<FocusDirection>,
     pub retry_focus_reveal: bool,
     pub modifiers: winit::keyboard::ModifiersState,
-    pub layout_dirty_nodes: &'a LayoutDirtyNodes,
+    pub layout_dirty_nodes: LayoutDirtyNodes,
 }
 
 #[derive(Debug)]
@@ -2275,7 +2275,7 @@ impl ComponentTree {
     #[tracing::instrument(level = "debug", skip(self, params))]
     pub(crate) fn compute(
         &mut self,
-        params: ComputeParams<'_>,
+        params: ComputeParams,
         mode: ComputeMode,
     ) -> (
         RenderGraph,
@@ -2344,7 +2344,7 @@ impl ComponentTree {
         // instance keys would keep stale placement dirtiness alive.
         crate::runtime::remove_layout_state_read_dependencies(&removed_nodes);
 
-        let mut measure_self_nodes = layout_dirty_nodes.measure_self_nodes.clone();
+        let mut measure_self_nodes = layout_dirty_nodes.measure_self_nodes;
         for key in &layout_dirty_nodes.parent_data_nodes {
             if let Some(&node_id) = self.node_ids_by_instance_key.get(key) {
                 let mut parent = self.tree.get(node_id).and_then(|node| node.parent());
@@ -2365,19 +2365,13 @@ impl ComponentTree {
                 .count()) as u64;
         let dirty_nodes_structural = structural_dirty_nodes.len() as u64;
         let dirty_prepare_start = Instant::now();
-        // A node whose direct layout children changed must recompute
-        // placements: its cached placements are keyed by the previous
-        // children's instance keys, so reusing them against a different
-        // child set silently drops the new children and leaves them
-        // without a position.
-        let mut placement_dirty_nodes = layout_dirty_nodes.placement_self_nodes.clone();
-        placement_dirty_nodes.extend(structural_dirty_nodes.iter().copied());
+        // Remeasure structural changes so placements use the current child set.
         measure_self_nodes.extend(structural_dirty_nodes);
         let (dirty_nodes_effective, dirty_children) = collect_dirty_layout_paths(
             &self.tree,
             &self.node_ids_by_instance_key,
             &measure_self_nodes,
-            &placement_dirty_nodes,
+            &layout_dirty_nodes.placement_self_nodes,
         );
         let dirty_expand_ns = dirty_prepare_start.elapsed().as_nanos() as u64;
         record_frame_stage(&mut stage_timer, "layout_dirty_paths");
@@ -2413,7 +2407,7 @@ impl ComponentTree {
                 &consumed_insets,
                 &mut self.layout_snapshots,
                 &measure_self_nodes,
-                &placement_dirty_nodes,
+                &layout_dirty_nodes.placement_self_nodes,
                 &dirty_nodes_effective,
                 &dirty_children,
                 &mut diagnostics,
