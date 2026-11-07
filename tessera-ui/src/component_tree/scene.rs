@@ -277,6 +277,20 @@ impl SceneBranches {
 }
 
 #[derive(Default)]
+struct BranchChange {
+    own: bool,
+    structure: bool,
+    visited: bool,
+    dirty: bool,
+}
+
+impl BranchChange {
+    fn affects_pixels(&self) -> bool {
+        self.own || self.structure
+    }
+}
+
+#[derive(Default)]
 pub(super) struct FrameScene {
     branches: SceneBranches,
     geometry_consumers: HashSet<NodeId>,
@@ -314,8 +328,10 @@ impl FrameScene {
         let mut stage_timer =
             tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
                 .then(Instant::now);
-        let mut dirty = HashSet::default();
-        let mut structural = changed.clone();
+        let mut changes = HashMap::<NodeId, BranchChange>::with_capacity_and_hasher(
+            changed.len().max(metadata.paint_changed.len()),
+            Default::default(),
+        );
         let mut damage = None;
         for node_id in removed {
             if let Some(bounds) = self
@@ -330,10 +346,10 @@ impl FrameScene {
         for node_id in removed {
             let mut parent = self.branches.get(*node_id).and_then(|branch| branch.parent);
             if let Some(parent) = parent {
-                structural.insert(parent);
+                changes.entry(parent).or_default().structure = true;
             }
             while let Some(id) = parent {
-                if !dirty.insert(id) {
+                if std::mem::replace(&mut changes.entry(id).or_default().dirty, true) {
                     break;
                 }
                 parent = self.branches.get(id).and_then(|branch| branch.parent);
@@ -344,15 +360,16 @@ impl FrameScene {
             self.geometry_consumers.remove(node_id);
         }
         record_frame_stage(&mut stage_timer, "scene_removals");
-        let mut own_changes = changed.clone();
-        own_changes.extend(metadata.paint_changed.iter().copied());
+        for &id in &metadata.paint_changed {
+            changes.entry(id).or_default().own = true;
+        }
         let viewport_rect = PxRect::enclosing(PxPosition::ZERO, viewport);
         for &node_id in self
             .geometry_consumers
             .intersection(&metadata.geometry_changed)
         {
             let Some(branch) = self.branches.get(node_id) else {
-                own_changes.insert(node_id);
+                changes.entry(node_id).or_default().own = true;
                 continue;
             };
             let node_metadata = metadata.get(&node_id);
@@ -383,28 +400,35 @@ impl FrameScene {
             {
                 continue;
             }
-            own_changes.insert(node_id);
+            changes.entry(node_id).or_default().own = true;
         }
         if self.viewport != Some(viewport) {
-            own_changes.extend(
-                self.branches.iter().filter_map(|(id, branch)| {
-                    (branch.culled || branch.draw.is_some()).then_some(id)
-                }),
-            );
+            for (id, branch) in self.branches.iter() {
+                if branch.culled || branch.draw.is_some() {
+                    changes.entry(id).or_default().own = true;
+                }
+            }
         }
         for &node_id in changed {
+            let change = changes.entry(node_id).or_default();
+            change.own = true;
+            change.structure = true;
             if let Some(parent) = tree.get(node_id).and_then(|node| node.parent()) {
-                structural.insert(parent);
+                changes.entry(parent).or_default().structure = true;
             }
         }
         record_frame_stage(&mut stage_timer, "scene_candidates");
-        let mut visited = HashSet::default();
-        for &node_id in own_changes.iter().chain(structural.iter()) {
+        let candidates: Vec<_> = changes
+            .iter()
+            .filter_map(|(&id, change)| change.affects_pixels().then_some(id))
+            .collect();
+        for node_id in candidates {
             if tree.get(node_id).is_none_or(|node| node.is_removed()) {
                 continue;
             }
             for ancestor in node_id.ancestors(tree) {
-                if !visited.insert(ancestor) {
+                let change = changes.entry(ancestor).or_default();
+                if std::mem::replace(&mut change.visited, true) {
                     break;
                 }
                 let transparent = self
@@ -412,41 +436,40 @@ impl FrameScene {
                     .get(ancestor)
                     .and_then(SceneBranch::transparent_child)
                     .is_some();
-                if !transparent || own_changes.contains(&ancestor) || structural.contains(&ancestor)
-                {
-                    dirty.insert(ancestor);
-                }
+                change.dirty |= !transparent || change.affects_pixels();
             }
         }
         record_frame_stage(&mut stage_timer, "scene_ancestry");
-        let mut ordered = dirty
+        let mut ordered = changes
             .iter()
-            .copied()
-            .filter(|id| tree.get(*id).is_some_and(|node| !node.is_removed()))
-            .map(|id| {
+            .filter_map(|(&id, change)| {
+                (change.dirty && tree.get(id).is_some_and(|node| !node.is_removed()))
+                    .then_some((id, change))
+            })
+            .map(|(id, change)| {
                 let depth = self
                     .branches
                     .get(id)
                     .filter(|_| !changed.contains(&id))
                     .map_or_else(|| id.ancestors(tree).count(), |branch| branch.depth);
-                (id, depth)
+                (id, depth, change)
             })
             .collect::<Vec<_>>();
-        ordered.sort_unstable_by_key(|&(_, depth)| std::cmp::Reverse(depth));
+        ordered.sort_unstable_by_key(|&(_, depth, _)| std::cmp::Reverse(depth));
         record_frame_stage(&mut stage_timer, "scene_order");
         tracing::debug!(
             target: "tessera_ui::frame_cost",
-            structural_nodes = structural.len(),
+            structural_nodes = changes.values().filter(|change| change.structure).count(),
             geometry_changes = metadata.geometry_changed.len(),
-            own_changes = own_changes.len(),
+            own_changes = changes.values().filter(|change| change.own).count(),
             updated_branches = ordered.len(),
             "scene_update_work"
         );
         let updated = ordered.len() as u64;
-        for (node_id, depth) in ordered {
+        for (node_id, depth, change) in ordered {
             let node = &tree[node_id];
             let mut branch = self.branches.take(node_id).unwrap_or_default();
-            let affects_pixels = own_changes.contains(&node_id) || structural.contains(&node_id);
+            let affects_pixels = change.affects_pixels();
             if affects_pixels
                 && let Some(bounds) = branch.output.as_ref().and_then(|rope| rope.bounds)
             {
@@ -454,13 +477,13 @@ impl FrameScene {
             }
             branch.parent = node.parent();
             branch.depth = depth;
-            if structural.contains(&node_id) {
+            if change.structure {
                 branch
                     .children
                     .rebuild(node_id.children(tree), |child| self.output(child));
             }
             let was_transparent = branch.transparent_child().is_some();
-            if own_changes.contains(&node_id) {
+            if change.own {
                 let fragment_changed =
                     changed.contains(&node_id) || metadata.paint_changed.contains(&node_id);
                 let node_metadata = metadata.get(&node_id);
@@ -579,7 +602,7 @@ impl FrameScene {
             let mut child = node_id;
             let mut parent = branch.parent;
             while let Some(id) = parent {
-                if !dirty.contains(&id) {
+                if changes.get(&id).is_none_or(|change| !change.dirty) {
                     child = id;
                     parent = tree.get(id).and_then(|node| node.parent());
                     continue;
