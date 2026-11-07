@@ -43,6 +43,7 @@ work still requests another frame.
 
 Context snapshots share their bindings until replay needs to remap or remove a
 binding. Context and keyed scopes restore their prior bindings when they exit.
+Finalized component props are shared with the replay snapshot.
 Modifier snapshots share immutable chain links. The scene stores empty and
 single-child branches inline and uses persistent ordered maps for wider branches
 so updating one child can preserve the previous frame's snapshot.

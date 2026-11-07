@@ -632,14 +632,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                             replay_snapshot.instance_logic_id,
                             &replay_snapshot.group_path,
                             replay_snapshot.instance_key_override,
-                            || {
-                                crate::component_call::with_component_runner(
-                                    &replay.runner,
-                                    || {
-                                        replay.runner.run(replay.props.as_ref());
-                                    },
-                                );
-                            },
+                            || crate::component_call::run_component(replay),
                         );
                     });
                     let compose_ns = compose_timer.map(|timer| timer.elapsed().as_nanos());

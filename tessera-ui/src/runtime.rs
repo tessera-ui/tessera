@@ -2271,7 +2271,13 @@ impl TesseraRuntime {
                 node.replay = Some(replay);
                 node.props_unchanged_from_previous = true;
             } else {
-                node.replay = Some(ComponentReplayData::new(runner, props));
+                node.replay = Some(
+                    if let Some(props) = crate::component_call::active_component_props(props) {
+                        ComponentReplayData { runner, props }
+                    } else {
+                        ComponentReplayData::new(runner, props)
+                    },
+                );
                 node.props_unchanged_from_previous = false;
             }
         } else {

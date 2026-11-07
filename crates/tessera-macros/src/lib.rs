@@ -1009,7 +1009,32 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
         let (const_marker_defs, marker_field_def) = generic_marker_tokens(fn_name, generics);
         let has_generic_marker = marker_field_def.is_some();
         let prop_type: syn::Type = syn::parse_quote!(#props_ident #ty_generics);
-        let component_type_id_tokens = component_type_id_tokens(fn_name, &prop_type);
+        let uncached_type_id = component_type_id_tokens(fn_name, &prop_type);
+        let make_runner = quote! {
+            #crate_path::__private::make_component_runner::<#prop_type>(#impl_ident)
+        };
+        let (metadata, component_type_id_tokens, runner) = if generics.params.is_empty() {
+            (
+                quote! {
+                    impl #props_ident {
+                        fn __tessera_metadata() -> &'static (
+                            u64,
+                            ::std::sync::Arc<dyn #crate_path::__private::ErasedComponentRunner>,
+                        ) {
+                            static METADATA: ::std::sync::OnceLock<(
+                                u64,
+                                ::std::sync::Arc<dyn #crate_path::__private::ErasedComponentRunner>,
+                            )> = ::std::sync::OnceLock::new();
+                            METADATA.get_or_init(|| (#uncached_type_id, #make_runner))
+                        }
+                    }
+                },
+                quote! { #props_ident::__tessera_metadata().0 },
+                quote! { ::std::sync::Arc::clone(&#props_ident::__tessera_metadata().1) },
+            )
+        } else {
+            (quote! {}, uncached_type_id, make_runner)
+        };
         let field_idents: Vec<_> = fields.iter().map(|field| field.ident.clone()).collect();
         let required_fields: Vec<_> = fields
             .iter()
@@ -1103,6 +1128,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             #props_clone_default_impls
             #prop_impl_tokens
+            #metadata
 
             #[doc = concat!("Configuration handle returned by [`", stringify!(#fn_name), "`].")]
             #fn_vis struct #builder_ident #item_generics #where_clause {
@@ -1120,7 +1146,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let __tessera_call = #crate_path::__private::register_component_call(
                         stringify!(#fn_name), #component_type_id_tokens,
                         <#props_ident #ty_generics>::default(),
-                        #crate_path::__private::make_component_runner::<#prop_type>(#impl_ident),
+                        #runner,
                     );
                 #(#constructor_assignments)*
                 #builder_ident { props: __tessera_call }

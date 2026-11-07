@@ -19,7 +19,7 @@ use crate::{
     NodeId,
     context::{ContextMap, with_context_snapshot},
     execution_context::{OrderFrame, with_execution_context, with_execution_context_mut},
-    prop::{ErasedComponentRunner, ErasedProp, Prop},
+    prop::{ComponentReplayData, ErasedComponentRunner, ErasedProp, Prop},
     runtime::{TesseraRuntime, ensure_build_phase, reserve_component_identity, with_replay_scope},
 };
 
@@ -37,9 +37,13 @@ struct PendingCall {
     group_path: Vec<u64>,
     key_override: Option<u64>,
     context: ContextMap,
-    props: Box<dyn ErasedProp>,
+    props: Arc<dyn ErasedProp>,
     runner: Arc<dyn ErasedComponentRunner>,
     updates: Vec<(&'static str, usize, PropUpdate)>,
+}
+
+fn pending_props_mut(props: &mut Arc<dyn ErasedProp>) -> &mut dyn ErasedProp {
+    Arc::get_mut(props).expect("pending props have a single owner")
 }
 
 #[derive(Default)]
@@ -53,29 +57,36 @@ struct PendingCalls {
 
 const PENDING_CALLS: crate::session::SessionLocal<RefCell<PendingCalls>> =
     crate::session::SessionLocal::new();
-const ACTIVE_RUNNER: crate::session::SessionLocal<RefCell<Option<Arc<dyn ErasedComponentRunner>>>> =
+const ACTIVE_COMPONENT: crate::session::SessionLocal<RefCell<Option<ComponentReplayData>>> =
     crate::session::SessionLocal::new();
 
 /// Return the runner executing the current registered use.
 pub fn current_component_runner() -> Option<Arc<dyn ErasedComponentRunner>> {
-    ACTIVE_RUNNER.with(|runner| runner.borrow().clone())
+    ACTIVE_COMPONENT.with_borrow(|active| active.as_ref().map(|component| component.runner.clone()))
 }
 
-struct RunnerGuard(Option<Arc<dyn ErasedComponentRunner>>);
+pub(crate) fn active_component_props<P: Prop>(props: &P) -> Option<Arc<dyn ErasedProp>> {
+    ACTIVE_COMPONENT.with_borrow(|active| {
+        let active = active.as_ref()?;
+        let active_props = active.props.as_any().downcast_ref::<P>()?;
+        std::ptr::eq(active_props, props).then(|| Arc::clone(&active.props))
+    })
+}
 
-impl Drop for RunnerGuard {
+struct ActiveComponentGuard(Option<ComponentReplayData>);
+
+impl Drop for ActiveComponentGuard {
     fn drop(&mut self) {
-        let removed = ACTIVE_RUNNER.with(|runner| runner.replace(self.0.take()));
+        let removed = ACTIVE_COMPONENT.with(|active| active.replace(self.0.take()));
         drop(removed);
     }
 }
 
-pub(crate) fn with_component_runner<R>(
-    runner: &Arc<dyn ErasedComponentRunner>,
-    run: impl FnOnce() -> R,
-) -> R {
-    let _guard = RunnerGuard(ACTIVE_RUNNER.with(|active| active.replace(Some(Arc::clone(runner)))));
-    run()
+pub(crate) fn run_component(component: &ComponentReplayData) {
+    let _guard = ActiveComponentGuard(
+        ACTIVE_COMPONENT.with(|active| active.replace(Some(component.clone()))),
+    );
+    component.runner.run(component.props.as_ref());
 }
 
 /// A configuration handle to one registered component use.
@@ -112,7 +123,7 @@ impl<P: Prop> ComponentCall<P> {
         let call = guard.call.as_mut().expect("active configuration");
         clear_property_updates(call, property);
         update(
-            call.props
+            pending_props_mut(&mut call.props)
                 .as_any_mut()
                 .downcast_mut::<P>()
                 .expect("registered component props type"),
@@ -251,7 +262,7 @@ pub fn register_component_call<P: Prop>(
     props: P,
     runner: Arc<dyn ErasedComponentRunner>,
 ) -> ComponentCall<P> {
-    let id = register_erased_call(name, component_type_id, Box::new(props), runner);
+    let id = register_erased_call(name, component_type_id, Arc::new(props), runner);
     ComponentCall {
         session: crate::session::current_session_identity().expect("active component session"),
         id,
@@ -263,7 +274,7 @@ pub fn register_component_call<P: Prop>(
 fn register_erased_call(
     name: &'static str,
     component_type_id: u64,
-    props: Box<dyn ErasedProp>,
+    props: Arc<dyn ErasedProp>,
     runner: Arc<dyn ErasedComponentRunner>,
 ) -> u64 {
     ensure_build_phase();
@@ -416,43 +427,57 @@ impl Drop for PropScopeGuard {
     }
 }
 
-fn execute_call(mut call: PendingCall) {
+fn execute_call(call: PendingCall) {
+    let PendingCall {
+        name,
+        parent,
+        execution_parent,
+        identity,
+        prop_owner,
+        creator,
+        group_path,
+        key_override,
+        context,
+        mut props,
+        runner,
+        updates,
+    } = call;
     let _parent_guard = ParentGuard {
         queue: TesseraRuntime::with_mut(|runtime| {
-            runtime.component_tree.replace_build_parent(call.parent)
+            runtime.component_tree.replace_build_parent(parent)
         }),
         node_stack: with_execution_context_mut(|context| {
-            if context.node_context_stack.last().copied() == call.execution_parent {
+            if context.node_context_stack.last().copied() == execution_parent {
                 None
             } else {
                 Some(std::mem::replace(
                     &mut context.node_context_stack,
-                    call.execution_parent.into_iter().collect(),
+                    execution_parent.into_iter().collect(),
                 ))
             }
         }),
     };
-    with_context_snapshot(&call.context, || {
-        for (property, occurrence, update) in call.updates.drain(..) {
+    with_context_snapshot(&context, || {
+        for (property, occurrence, update) in updates {
             let mut hasher = FxHasher::default();
-            (call.identity, call.name, property, occurrence).hash(&mut hasher);
+            (identity, name, property, occurrence).hash(&mut hasher);
             let (group_path, key_override) = with_execution_context_mut(|context| {
-                context.instance_logic_id_stack.push(call.prop_owner);
-                context.current_component_instance_stack.push(call.creator);
+                context.instance_logic_id_stack.push(prop_owner);
+                context.current_component_instance_stack.push(creator);
                 context.order_frame_stack.push(OrderFrame::default());
                 (
                     std::mem::replace(&mut context.group_path_stack, vec![hasher.finish()]),
-                    std::mem::replace(&mut context.instance_key_override, call.key_override),
+                    std::mem::replace(&mut context.instance_key_override, key_override),
                 )
             });
             let _guard = PropScopeGuard {
                 group_path,
                 key_override,
             };
-            update(call.props.as_any_mut());
+            update(pending_props_mut(&mut props).as_any_mut());
         }
-        with_replay_scope(call.identity, &call.group_path, call.key_override, || {
-            with_component_runner(&call.runner, || call.runner.run(call.props.as_ref()));
+        with_replay_scope(identity, &group_path, key_override, || {
+            run_component(&ComponentReplayData { runner, props });
         });
     });
 }

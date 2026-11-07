@@ -6,7 +6,6 @@ use indextree::NodeId;
 
 use crate::{
     component_tree::{ComponentNode, NodeRole},
-    prop::ErasedComponentRunner,
     runtime::TesseraRuntime,
 };
 
@@ -15,7 +14,7 @@ pub use crate::{
         ComponentCall, current_component_runner, register_component_call, with_pending_scope,
     },
     layout::layout,
-    prop::{Prop, make_component_runner},
+    prop::{ErasedComponentRunner, Prop, make_component_runner},
     runtime::{
         CurrentComponentInstanceGuard, GroupGuard, NodeContextGuard, PathGroupGuard, PhaseGuard,
         RuntimePhase, push_current_component_instance_key, push_current_node, push_phase,
