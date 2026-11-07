@@ -1,8 +1,4 @@
-//! GPU timestamp measurements for headless profiling.
-//!
-//! ## Usage
-//!
-//! Compare GPU frame execution with CPU profiling in opt-in headless sessions.
+//! Opt-in GPU timestamp measurements for native profiling.
 
 use std::{sync::mpsc, time::Duration};
 
@@ -25,8 +21,12 @@ impl GpuTimingProbe {
         wgpu::Features::TIMESTAMP_QUERY.union(wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS);
 
     pub(super) fn requested() -> bool {
-        std::env::var("TESSERA_HEADLESS_GPU_TIMING")
-            .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        ["TESSERA_GPU_TIMING", "TESSERA_HEADLESS_GPU_TIMING"]
+            .into_iter()
+            .any(|name| {
+                std::env::var(name)
+                    .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            })
     }
 
     pub(super) fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
@@ -35,18 +35,18 @@ impl GpuTimingProbe {
 
     fn with_capacity(device: &wgpu::Device, timestamp_period: f64, capacity: u32) -> Self {
         let queries = device.create_query_set(&wgpu::QuerySetDescriptor {
-            label: Some("Headless GPU timestamps"),
+            label: Some("GPU timestamps"),
             ty: wgpu::QueryType::Timestamp,
             count: capacity,
         });
         let resolve = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Headless GPU timestamp resolve"),
+            label: Some("GPU timestamp resolve"),
             size: capacity as u64 * wgpu::QUERY_SIZE as u64,
             usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let readback = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Headless GPU timestamp readback"),
+            label: Some("GPU timestamp readback"),
             size: capacity as u64 * wgpu::QUERY_SIZE as u64,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
@@ -168,7 +168,7 @@ impl RenderCore {
         match result {
             Ok(duration) => Some(duration),
             Err(err) => {
-                tracing::warn!("Disabling headless GPU timing after readback failure: {err}");
+                tracing::warn!("Disabling GPU timing after readback failure: {err}");
                 self.gpu_timing = None;
                 None
             }

@@ -16,11 +16,7 @@ use super::{compute::ComputePipelineRegistry, drawer::Drawer};
 
 mod clip;
 mod frame;
-#[cfg(all(
-    feature = "profiling",
-    feature = "headless",
-    not(target_arch = "wasm32")
-))]
+#[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
 mod gpu_timing;
 mod init;
 
@@ -113,11 +109,7 @@ pub struct RenderCore {
     frame_index: u64,
     previous_graph: Option<crate::RenderGraph>,
     last_render_breakdown: Option<RenderTimingBreakdown>,
-    #[cfg(all(
-        feature = "profiling",
-        feature = "headless",
-        not(target_arch = "wasm32")
-    ))]
+    #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
     gpu_timing: Option<gpu_timing::GpuTimingProbe>,
 }
 

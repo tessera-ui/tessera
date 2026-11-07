@@ -227,11 +227,7 @@ impl RenderCore {
             });
 
         let encode_start = Instant::now();
-        #[cfg(all(
-            feature = "profiling",
-            feature = "headless",
-            not(target_arch = "wasm32")
-        ))]
+        #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
         if let Some(timing) = &mut self.gpu_timing {
             timing.begin(&self.device, &mut encoder, passes.len(), current_frame);
         }
@@ -300,11 +296,7 @@ impl RenderCore {
                 &mut clip_stack,
                 damage,
             );
-            #[cfg(all(
-                feature = "profiling",
-                feature = "headless",
-                not(target_arch = "wasm32")
-            ))]
+            #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
             if let Some(timing) = &mut self.gpu_timing {
                 timing.mark(&mut encoder, || match pass {
                     RenderPassPlan::Draw { reads_scene, .. } => {
@@ -352,11 +344,7 @@ impl RenderCore {
         );
         let encode = encode_start.elapsed();
 
-        #[cfg(all(
-            feature = "profiling",
-            feature = "headless",
-            not(target_arch = "wasm32")
-        ))]
+        #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
         if let Some(timing) = &mut self.gpu_timing {
             timing.finish(&mut encoder);
         }

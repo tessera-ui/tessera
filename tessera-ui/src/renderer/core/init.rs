@@ -88,7 +88,6 @@ impl RenderCore {
 
     async fn request_device_and_queue_for_adapter(
         adapter: &wgpu::Adapter,
-        _offscreen: bool,
         max_bindings: u32,
     ) -> (wgpu::Device, wgpu::Queue) {
         let mut required_limits = if cfg!(target_arch = "wasm32") {
@@ -106,17 +105,13 @@ impl RenderCore {
             .max_inter_stage_shader_variables
             .min(adapter.limits().max_inter_stage_shader_variables);
         let base_features = wgpu::Features::CLEAR_TEXTURE;
-        #[cfg(all(
-            feature = "profiling",
-            feature = "headless",
-            not(target_arch = "wasm32")
-        ))]
-        let base_features = if _offscreen && super::gpu_timing::GpuTimingProbe::requested() {
+        #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
+        let base_features = if super::gpu_timing::GpuTimingProbe::requested() {
             let features = super::gpu_timing::GpuTimingProbe::FEATURES;
             if adapter.features().contains(features) {
                 base_features | features
             } else {
-                tracing::warn!("Headless GPU timing is unsupported by this adapter");
+                tracing::warn!("GPU timing is unsupported by this adapter");
                 base_features
             }
         } else {
@@ -281,8 +276,7 @@ impl RenderCore {
         let adapter_info = adapter.get_info();
         info!("Using WGPU adapter: {adapter_info:#?}");
         let (device, queue) =
-            Self::request_device_and_queue_for_adapter(&adapter, surface.is_none(), max_bindings)
-                .await;
+            Self::request_device_and_queue_for_adapter(&adapter, max_bindings).await;
         // Offscreen cores have no surface capabilities to query.
         let config = match &surface {
             Some(surface) => {
@@ -537,13 +531,8 @@ impl RenderCore {
             dirty_overlay_pipeline,
         };
 
-        #[cfg(all(
-            feature = "profiling",
-            feature = "headless",
-            not(target_arch = "wasm32")
-        ))]
-        let gpu_timing = (surface.is_none()
-            && super::gpu_timing::GpuTimingProbe::requested()
+        #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
+        let gpu_timing = (super::gpu_timing::GpuTimingProbe::requested()
             && device
                 .features()
                 .contains(super::gpu_timing::GpuTimingProbe::FEATURES))
@@ -568,11 +557,7 @@ impl RenderCore {
             frame_index: 0,
             previous_graph: None,
             last_render_breakdown: None,
-            #[cfg(all(
-                feature = "profiling",
-                feature = "headless",
-                not(target_arch = "wasm32")
-            ))]
+            #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
             gpu_timing,
         }
     }

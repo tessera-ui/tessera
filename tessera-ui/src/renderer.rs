@@ -1236,6 +1236,12 @@ Fps: {:.2}
             let render_encode_ns = render_breakdown.map(|breakdown| breakdown.encode.as_nanos());
             let render_submit_ns = render_breakdown.map(|breakdown| breakdown.submit.as_nanos());
             let render_present_ns = render_breakdown.map(|breakdown| breakdown.present.as_nanos());
+            #[cfg(not(target_arch = "wasm32"))]
+            let render_gpu_ns = render_breakdown
+                .and_then(|_| args.app.read_gpu_time())
+                .map(|time| time.as_nanos());
+            #[cfg(target_arch = "wasm32")]
+            let render_gpu_ns = None;
             let inter_frame_wait_ns = (frame_idx > 0).then(|| frame_delta().as_nanos());
             let nodes = TesseraRuntime::with_mut(|rt| rt.component_tree.profiler_nodes());
             FrameMeta {
@@ -1252,7 +1258,7 @@ Fps: {:.2}
                 render_encode_ns,
                 render_submit_ns,
                 render_present_ns,
-                render_gpu_ns: None,
+                render_gpu_ns,
                 build_tree_time_ns: Some(build_tree_result.duration().as_nanos()),
                 draw_time_ns: Some(draw_cost.as_nanos()),
                 record_time_ns: Some(record_cost.as_nanos()),
@@ -1825,6 +1831,8 @@ where
             None => return,
         };
 
+        #[cfg(feature = "profiling")]
+        let frame_timer = Instant::now();
         crate::window_insets::platform::refresh(app.window(), event_loop);
         app.resize_if_needed();
         let accessibility_enabled =
@@ -1833,9 +1841,6 @@ where
         #[cfg(feature = "profiling")]
         let redraw_reasons = self.take_pending_redraw_reasons();
         let window_label = &self.config.window_title;
-        #[cfg(feature = "profiling")]
-        let frame_timer = Instant::now();
-
         let RenderFrameOutcome {
             accessibility_update,
             request_window_drag,
@@ -2366,11 +2371,13 @@ where
 
         match event {
             RendererUserEvent::RuntimeRedrawWake => {
+                // A frame can consume invalidations before their queued wake arrives.
+                let pending = RuntimePendingWork::capture(false);
+                if !pending.requires_redraw() {
+                    return;
+                }
                 #[cfg(feature = "profiling")]
-                self.request_redraw_with_reasons(
-                    WakeSource::Runtime,
-                    vec![RedrawReason::RuntimeInvalidation],
-                );
+                self.request_redraw_with_reasons(WakeSource::Runtime, pending.redraw_reasons());
                 #[cfg(not(feature = "profiling"))]
                 self.request_redraw_now();
             }

@@ -258,6 +258,7 @@ struct WorkerState {
 struct ProfilerSettings {
     path: RefCell<Option<PathBuf>>,
     frame: Cell<u64>,
+    #[cfg(all(feature = "headless", feature = "profiling"))]
     summary: Cell<bool>,
 }
 

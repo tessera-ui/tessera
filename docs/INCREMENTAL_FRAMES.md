@@ -35,6 +35,10 @@ is relative to the preceding scene update, so it cannot be reused after a droppe
 changed frame. This target-pixel reuse is not an independently compositable
 subtree cache and does not change per-command opacity into group opacity.
 
+Queued runtime wakes are ignored if their invalidations have already been
+consumed. Pending layout, paint, animation, dispatcher, clipboard, and focus
+work still requests another frame.
+
 ## Shared GPU resources
 
 Use `GraphicsDevice::frame_buffer` for transient uniform and storage data. Each
@@ -72,7 +76,16 @@ Render-graph ordering is deferred until the target needs scene work and is
 included in `render_build_passes_ns`; `render_prepare_ns` is not emitted for a
 separate pre-render ordering step.
 
+Windowed `frame_total_ns` includes pending surface and render-target resize work.
+
 Component build durations include child builds; do not sum nested samples as
 exclusive CPU time. Compare frame latency with tracing disabled separately from
 work counts. GPU execution requires timestamp-query measurements and cannot be
 inferred from CPU submission durations.
+
+With native `profiling` builds, set `TESSERA_GPU_TIMING=1` to capture
+`render_gpu_ns` in windowed or headless sessions. The existing
+`TESSERA_HEADLESS_GPU_TIMING` name remains supported. Timestamp readback waits for
+GPU completion, so use a separate run with both flags unset to measure frame
+cadence. These timestamps cover frame passes and output blitting, not prelude
+uploads, swapchain acquisition, or compositor presentation.
