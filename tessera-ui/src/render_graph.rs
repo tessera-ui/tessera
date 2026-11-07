@@ -6,11 +6,8 @@
 
 use std::{
     any::TypeId,
-    collections::{BinaryHeap, HashMap},
     sync::{Arc, OnceLock},
 };
-
-use smallvec::SmallVec;
 
 use crate::{
     Command, ComputeCommand, DrawCommand, DrawRegion, FloatRect, LocalToWindow, SampleRegion,
@@ -161,9 +158,31 @@ pub struct RenderGraph {
 
 #[derive(Default)]
 struct RenderGraphData {
-    ordered_ops: OnceLock<Vec<RenderGraphOp>>,
+    order_plan: OnceLock<Arc<RenderOrderPlan>>,
     ops: Vec<RenderGraphOp>,
     partial_redraw: bool,
+}
+
+struct RenderOrderPlan {
+    inputs: Box<[OpInfo]>,
+    indices: Box<[usize]>,
+}
+
+impl RenderOrderPlan {
+    fn new(ops: &[RenderGraphOp]) -> Self {
+        let inputs: Box<[_]> = ops.iter().map(OpInfo::new).collect();
+        let indices = order_indices(ops, &inputs).into_boxed_slice();
+        Self { inputs, indices }
+    }
+
+    fn matches(&self, ops: &[RenderGraphOp]) -> bool {
+        self.inputs.len() == ops.len()
+            && self
+                .inputs
+                .iter()
+                .zip(ops)
+                .all(|(input, op)| *input == OpInfo::new(op))
+    }
 }
 
 impl RenderGraph {
@@ -199,12 +218,26 @@ impl RenderGraph {
         &self.data.ops
     }
 
-    /// Returns the ops in execution order.
-    pub(crate) fn ordered_ops(&self) -> Vec<RenderGraphOp> {
-        self.data
-            .ordered_ops
-            .get_or_init(|| order_ops(self.data.ops.clone()))
-            .clone()
+    fn order_plan(&self, previous: Option<&Self>) -> &Arc<RenderOrderPlan> {
+        self.data.order_plan.get_or_init(|| {
+            if let Some(plan) = previous.and_then(|graph| graph.data.order_plan.get())
+                && plan.matches(&self.data.ops)
+            {
+                Arc::clone(plan)
+            } else {
+                Arc::new(RenderOrderPlan::new(&self.data.ops))
+            }
+        })
+    }
+
+    pub(crate) fn ordered_ops(
+        &self,
+        previous: Option<&Self>,
+    ) -> impl Iterator<Item = &RenderGraphOp> {
+        self.order_plan(previous)
+            .indices
+            .iter()
+            .map(|&index| &self.data.ops[index])
     }
 }
 
@@ -283,7 +316,7 @@ impl RenderGraphBuilder {
         });
         RenderGraph {
             data: Arc::new(RenderGraphData {
-                ordered_ops: OnceLock::new(),
+                order_plan: OnceLock::new(),
                 ops: self.ops,
                 partial_redraw,
             }),
@@ -293,130 +326,19 @@ impl RenderGraphBuilder {
     }
 }
 
+mod ordering;
+#[cfg(test)]
+mod retained_order_tests;
+
+use ordering::order_indices;
+
+#[cfg(test)]
 fn order_ops(ops: Vec<RenderGraphOp>) -> Vec<RenderGraphOp> {
-    if ops.is_empty() {
-        return ops;
-    }
-
-    let infos: Vec<OpInfo> = ops.iter().map(OpInfo::new).collect();
-    let mut potentials: HashMap<(OpCategory, TypeId), usize> = HashMap::new();
-    for info in &infos {
-        *potentials.entry((info.category, info.type_id)).or_insert(0) += 1;
-    }
-
-    let mut outgoing: Vec<SmallVec<[usize; 4]>> = vec![SmallVec::new(); ops.len()];
-    let mut in_degree = vec![0usize; ops.len()];
-
-    let by_sequence = sequence_order(&ops);
-
-    // State changes (clip push/pop) act as sequence-ordered
-    // barriers. Without this, ops in different clip scopes have no ordering
-    // edge and can be hoisted ahead of the background they must paint on top
-    // of, which reorders overlapping content incorrectly.
-    for (index, op) in ops.iter().enumerate() {
-        if !is_state_change(op) {
-            continue;
-        }
-        for other in 0..ops.len() {
-            if other == index {
-                continue;
-            }
-            if index < other {
-                add_edge(&mut outgoing, &mut in_degree, index, other);
-            } else {
-                add_edge(&mut outgoing, &mut in_degree, other, index);
-            }
-        }
-    }
-
-    let Some(intervals) = clip_intervals(&ops, &by_sequence) else {
-        return fallback_by_sequence(ops);
-    };
-
-    for interval in &intervals {
-        let members = &by_sequence[interval.start..interval.end];
-        let member_count = members.len();
-        let mut left_offset = 0;
-        while left_offset < member_count {
-            let left = members[left_offset];
-            let mut right_offset = left_offset + 1;
-            while right_offset < member_count {
-                let right = members[right_offset];
-                if needs_ordering(&infos[left], &infos[right], &ops[left], &ops[right]) {
-                    add_edge(&mut outgoing, &mut in_degree, left, right);
-                }
-                right_offset += 1;
-            }
-            left_offset += 1;
-        }
-        if let Some(pred) = interval.predecessor {
-            for &member in members {
-                add_edge(&mut outgoing, &mut in_degree, pred, member);
-            }
-        }
-    }
-
-    let mut ready = BinaryHeap::new();
-    for (idx, degree) in in_degree.iter().enumerate() {
-        if *degree == 0 {
-            ready.push(PriorityNode::new(idx, &infos, &potentials));
-        }
-    }
-
-    let mut ordered_indices = Vec::with_capacity(ops.len());
-    let mut last_type_id: Option<TypeId> = None;
-
-    while !ready.is_empty() {
-        let highest_category = ready.peek().map(|node| node.category);
-        let mut selected: Option<PriorityNode> = None;
-        if let (Some(last_type), Some(high_cat)) = (last_type_id, highest_category) {
-            let mut deferred = Vec::new();
-            while let Some(node) = ready.pop() {
-                if node.category == high_cat && node.type_id == last_type {
-                    selected = Some(node);
-                    break;
-                }
-                deferred.push(node);
-            }
-            for node in deferred {
-                ready.push(node);
-            }
-        }
-
-        let priority_node = selected.unwrap_or_else(|| {
-            ready
-                .pop()
-                .expect("ready queue should not be empty while sorting ops")
-        });
-        let u = priority_node.node_index;
-        ordered_indices.push(u);
-        match priority_node.category {
-            OpCategory::StateChange => last_type_id = None,
-            _ => last_type_id = Some(priority_node.type_id),
-        }
-
-        for &next in &outgoing[u] {
-            in_degree[next] -= 1;
-            if in_degree[next] == 0 {
-                ready.push(PriorityNode::new(next, &infos, &potentials));
-            }
-        }
-    }
-
-    if ordered_indices.len() != ops.len() {
-        return fallback_by_sequence(ops);
-    }
-
-    let mut ops = ops;
-    let mut ops_by_index: Vec<Option<RenderGraphOp>> = ops.drain(..).map(Some).collect();
-    let mut ordered = Vec::with_capacity(ordered_indices.len());
-    for index in ordered_indices {
-        if let Some(op) = ops_by_index[index].take() {
-            ordered.push(op);
-        }
-    }
-
-    ordered
+    let infos: Vec<_> = ops.iter().map(OpInfo::new).collect();
+    order_indices(&ops, &infos)
+        .into_iter()
+        .map(|index| ops[index].clone())
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -427,8 +349,10 @@ enum OpCategory {
     StateChange,
 }
 
+#[derive(PartialEq, Eq)]
 struct OpInfo {
     category: OpCategory,
+    command_kind: std::mem::Discriminant<Command>,
     type_id: TypeId,
     sequence_index: usize,
     read_rect: Option<PxRect>,
@@ -453,98 +377,13 @@ impl OpInfo {
 
         Self {
             category,
+            command_kind: std::mem::discriminant(&op.command),
             type_id: op.type_id,
             sequence_index: op.sequence_index,
             read_rect: scene_read_rect(op),
             write_rect: scene_write_rect(op),
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PriorityNode {
-    category: OpCategory,
-    type_id: TypeId,
-    original_index: usize,
-    node_index: usize,
-    batch_potential: usize,
-}
-
-impl PriorityNode {
-    fn new(
-        node_index: usize,
-        infos: &[OpInfo],
-        potentials: &HashMap<(OpCategory, TypeId), usize>,
-    ) -> Self {
-        let info = &infos[node_index];
-        let batch_potential = potentials
-            .get(&(info.category, info.type_id))
-            .copied()
-            .unwrap_or(1);
-        Self {
-            category: info.category,
-            type_id: info.type_id,
-            original_index: info.sequence_index,
-            node_index,
-            batch_potential,
-        }
-    }
-}
-
-impl Ord for PriorityNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.category
-            .cmp(&other.category)
-            .then_with(|| other.batch_potential.cmp(&self.batch_potential))
-            .then_with(|| other.original_index.cmp(&self.original_index))
-    }
-}
-
-impl PartialOrd for PriorityNode {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-fn add_edge(
-    outgoing: &mut [SmallVec<[usize; 4]>],
-    in_degree: &mut [usize],
-    from: usize,
-    to: usize,
-) {
-    if from == to || outgoing[from].contains(&to) {
-        return;
-    }
-    outgoing[from].push(to);
-    in_degree[to] += 1;
-}
-
-fn needs_ordering(
-    left: &OpInfo,
-    right: &OpInfo,
-    left_op: &RenderGraphOp,
-    right_op: &RenderGraphOp,
-) -> bool {
-    is_state_change(left_op) || is_state_change(right_op) || scene_conflict(left, right)
-}
-
-fn scene_conflict(left: &OpInfo, right: &OpInfo) -> bool {
-    if let (Some(write_left), Some(write_right)) = (left.write_rect, right.write_rect)
-        && !write_left.is_orthogonal(&write_right)
-    {
-        return true;
-    }
-    if let (Some(write_left), Some(read_right)) = (left.write_rect, right.read_rect)
-        && !write_left.is_orthogonal(&read_right)
-    {
-        return true;
-    }
-    if let (Some(read_left), Some(write_right)) = (left.read_rect, right.write_rect)
-        && !read_left.is_orthogonal(&write_right)
-    {
-        return true;
-    }
-    false
 }
 
 fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
@@ -590,90 +429,6 @@ fn is_state_change(op: &RenderGraphOp) -> bool {
         op.command,
         Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop
     )
-}
-
-fn sequence_order(ops: &[RenderGraphOp]) -> Vec<usize> {
-    let mut by_sequence: Vec<usize> = (0..ops.len()).collect();
-    by_sequence.sort_by_key(|idx| ops[*idx].sequence_index);
-    by_sequence
-}
-
-fn fallback_by_sequence(mut ops: Vec<RenderGraphOp>) -> Vec<RenderGraphOp> {
-    ops.sort_by_key(|op| op.sequence_index);
-    ops
-}
-
-struct ClipInterval {
-    start: usize,
-    end: usize,
-    predecessor: Option<usize>,
-}
-
-fn clip_intervals(ops: &[RenderGraphOp], by_sequence: &[usize]) -> Option<Vec<ClipInterval>> {
-    let mut intervals = Vec::new();
-    let mut stack_start: Vec<usize> = vec![0];
-    let mut stack_pred: Vec<Option<usize>> = vec![None];
-
-    for (cursor, &idx) in by_sequence.iter().enumerate() {
-        match &ops[idx].command {
-            Command::ClipPush(_) | Command::ShapeClipPush(_) => {
-                close_open_span(&mut intervals, &stack_start, &stack_pred, cursor);
-                stack_start.push(cursor + 1);
-                stack_pred.push(Some(idx));
-            }
-            Command::ClipPop => {
-                if stack_start.len() <= 1 {
-                    return None;
-                }
-                let start = stack_start.pop().expect("clip stack checked above");
-                let predecessor = stack_pred.pop().expect("clip stack checked above");
-                if cursor > start {
-                    intervals.push(ClipInterval {
-                        start,
-                        end: cursor,
-                        predecessor,
-                    });
-                }
-                let pop_pred = if cursor > start {
-                    Some(by_sequence[cursor - 1])
-                } else {
-                    predecessor
-                };
-                intervals.push(ClipInterval {
-                    start: cursor,
-                    end: cursor + 1,
-                    predecessor: pop_pred,
-                });
-                let parent = stack_start.len() - 1;
-                stack_start[parent] = cursor + 1;
-                stack_pred[parent] = Some(idx);
-            }
-            _ => {}
-        }
-    }
-
-    if stack_start.len() != 1 {
-        return None;
-    }
-    close_open_span(&mut intervals, &stack_start, &stack_pred, by_sequence.len());
-    Some(intervals)
-}
-
-fn close_open_span(
-    intervals: &mut Vec<ClipInterval>,
-    stack_start: &[usize],
-    stack_pred: &[Option<usize>],
-    cursor: usize,
-) {
-    let parent = stack_start.len() - 1;
-    let start = stack_start[parent];
-    if cursor > start {
-        intervals.push(ClipInterval {
-            start,
-            end: cursor,
-            predecessor: stack_pred[parent],
-        });
-    }
 }
 
 #[cfg(test)]
@@ -866,42 +621,6 @@ mod tests {
         }
     }
 
-    fn ordering_edge_count(ops: &[RenderGraphOp]) -> usize {
-        let infos: Vec<OpInfo> = ops.iter().map(OpInfo::new).collect();
-        let by_sequence = sequence_order(ops);
-        let intervals = clip_intervals(ops, &by_sequence).expect("closed clips");
-        let mut outgoing: Vec<SmallVec<[usize; 4]>> = vec![SmallVec::new(); ops.len()];
-        let mut in_degree = vec![0usize; ops.len()];
-        for interval in &intervals {
-            let members = &by_sequence[interval.start..interval.end];
-            let member_count = members.len();
-            let mut left_offset = 0;
-            while left_offset < member_count {
-                let left = members[left_offset];
-                let mut right_offset = left_offset + 1;
-                while right_offset < member_count {
-                    let right = members[right_offset];
-                    if needs_ordering(&infos[left], &infos[right], &ops[left], &ops[right]) {
-                        add_edge(&mut outgoing, &mut in_degree, left, right);
-                    }
-                    right_offset += 1;
-                }
-                left_offset += 1;
-            }
-            if let Some(pred) = interval.predecessor {
-                for &member in members {
-                    add_edge(&mut outgoing, &mut in_degree, pred, member);
-                }
-            }
-        }
-        outgoing.iter().map(SmallVec::len).sum()
-    }
-
-    fn legacy_state_change_edges(ops: &[RenderGraphOp]) -> usize {
-        let count = ops.len();
-        count.saturating_mul(count.saturating_sub(1)) / 2
-    }
-
     fn probe_id(op: &RenderGraphOp) -> u32 {
         match &op.command {
             Command::Draw(command) => command.downcast_ref::<ProbeDraw>().expect("probe").id,
@@ -910,7 +629,7 @@ mod tests {
     }
 
     #[test]
-    fn disjoint_clip_siblings_drop_cross_edges_but_keep_overlap_order() {
+    fn disjoint_clip_siblings_keep_every_draw_in_its_original_clip_scope() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let mut ops = Vec::new();
@@ -927,40 +646,75 @@ mod tests {
             sequence += 1;
         }
 
-        let edges = ordering_edge_count(&ops);
-        let legacy = legacy_state_change_edges(&ops);
-        assert!(
-            edges < legacy / 4,
-            "clip intervals should cut edges: {edges} vs legacy {legacy}"
-        );
-
         let ordered = order_ops(ops);
-        let ids: Vec<u32> = ordered
-            .iter()
-            .map(probe_id)
-            .filter(|id| *id != u32::MAX)
-            .collect();
-        assert_eq!(ids, (0..16).collect::<Vec<_>>());
+        assert_eq!(ordered.len(), 32);
+        for (scope, commands) in ordered.chunks_exact(4).enumerate() {
+            assert!(matches!(commands[0].command, Command::ClipPush(_)));
+            assert_eq!(probe_id(&commands[1]), (scope * 2) as u32);
+            assert_eq!(probe_id(&commands[2]), (scope * 2 + 1) as u32);
+            assert!(matches!(commands[3].command, Command::ClipPop));
+        }
     }
 
     #[test]
-    fn padded_local_sampling_keeps_padding_overlap() {
+    fn padded_local_sampling_cannot_move_before_the_draw_it_samples() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let left = padded_sample_op(1, 0, 0, 0, 10, 10, 8);
-        let right = draw_op(2, 1, 14, 0, 10, 10);
-        let infos = [OpInfo::new(&left), OpInfo::new(&right)];
-        let read = infos[0].read_rect.expect("padded read rect");
-        assert_eq!(read.x, Px::new(-8));
-        assert_eq!(read.width, Px::new(26));
-        assert!(
-            scene_conflict(&infos[0], &infos[1]),
-            "padding overlap must still order the later draw"
-        );
+        let mut ops = vec![draw_op(1, 0, 14, 0, 10, 10)];
+        for i in 1..24 {
+            ops.push(draw_op(i as u32 + 2, i, i as i32 * 50, 0, 10, 10));
+        }
+        ops.push(padded_sample_op(2, 24, 0, 0, 10, 10, 8));
 
-        let ordered = order_ops(vec![left, right]);
+        let ordered = order_ops(ops);
         assert_eq!(probe_id(&ordered[0]), 1);
         assert_eq!(probe_id(&ordered[1]), 2);
+    }
+
+    #[test]
+    fn touching_a_sample_region_does_not_prevent_reordering() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let earlier = draw_op(1, 0, 18, 0, 10, 10);
+        let later = padded_sample_op(2, 1, 0, 0, 10, 10, 8);
+        let ordered = order_ops(vec![earlier, later]);
+        assert_eq!(probe_id(&ordered[0]), 2);
+        assert_eq!(probe_id(&ordered[1]), 1);
+    }
+
+    #[test]
+    fn ready_draws_continue_a_batch_until_an_overlapping_draw_blocks_it() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let mut ops = vec![
+            draw_op(1, 0, 0, 0, 10, 10),
+            draw_op(2, 1, 20, 0, 10, 10),
+            draw_op(3, 2, 40, 0, 10, 10),
+            draw_op(4, 3, 60, 0, 10, 10),
+            draw_op(5, 4, 20, 0, 10, 10),
+            draw_op(6, 5, 80, 0, 10, 10),
+        ];
+        for index in [1, 3, 5] {
+            ops[index].type_id = TypeId::of::<u32>();
+        }
+
+        let ordered = order_ops(ops);
+        let ids: Vec<_> = ordered.iter().map(probe_id).collect();
+        assert_eq!(ids, [1, 3, 2, 4, 6, 5]);
+    }
+
+    #[test]
+    fn densely_overlapping_draws_fall_back_to_author_order() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let mut ops = vec![draw_op(0, 0, 100, 0, 10, 10)];
+        ops.push(padded_sample_op(1, 1, 200, 0, 10, 10, 5));
+        for i in 2..1026 {
+            ops.push(draw_op(i as u32, i, 0, 0, 10, 10));
+        }
+
+        let ordered = order_ops(ops);
+        assert!(ordered.iter().map(probe_id).eq(0..1026));
     }
 
     #[test]

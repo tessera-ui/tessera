@@ -207,7 +207,12 @@ impl RenderCore {
             .intersection(&target_rect)
             .unwrap_or(PxRect::ZERO);
         let mut passes = if damage.width > Px::ZERO && damage.height > Px::ZERO {
-            RenderPassGraph::build(graph.ordered_ops(), texture_size).into_passes()
+            RenderPassGraph::build(
+                graph.ordered_ops(self.previous_graph.as_ref()),
+                texture_size,
+                (!full_redraw).then_some(damage),
+            )
+            .into_passes()
         } else {
             Vec::new()
         };

@@ -14,7 +14,11 @@ pub(crate) struct RenderPassGraph {
 
 impl RenderPassGraph {
     /// Builds a render pass graph from ordered ops.
-    pub(crate) fn build(ops: Vec<RenderGraphOp>, texture_size: wgpu::Extent3d) -> Self {
+    pub(crate) fn build<'a>(
+        ops: impl IntoIterator<Item = &'a RenderGraphOp>,
+        texture_size: wgpu::Extent3d,
+        partial_damage: Option<PxRect>,
+    ) -> Self {
         let mut passes = Vec::new();
         let mut draw_builder = DrawPassBuilder::default();
         let mut compute_items = Vec::new();
@@ -26,9 +30,16 @@ impl RenderPassGraph {
                 type_id,
                 ..
             } = op;
+            let (geometry, type_id) = (*geometry, *type_id);
 
             match command {
                 Command::Draw(cmd) => {
+                    let draw_rect = extract_draw_rect(cmd.draw_region(), geometry, texture_size);
+                    if partial_damage
+                        .is_some_and(|damage| draw_rect.intersection(&damage).is_none())
+                    {
+                        continue;
+                    }
                     flush_compute_pass(&mut passes, &mut compute_items);
 
                     let sampling_rect = cmd
@@ -48,11 +59,10 @@ impl RenderPassGraph {
                     if let Some(rect) = sampling_rect {
                         draw_builder.sampling_rects.push(rect);
                     }
-                    let draw_rect = extract_draw_rect(cmd.draw_region(), geometry, texture_size);
                     draw_builder
                         .draws
                         .push(DrawOrClip::Draw(DrawCommandWithMetadata {
-                            command: cmd,
+                            command: cmd.clone(),
                             type_id,
                             geometry,
                             draw_rect,
@@ -64,7 +74,7 @@ impl RenderPassGraph {
                         extract_sampling_rect(Some(cmd.barrier()), geometry, texture_size);
                     let target_rect = extract_target_rect(geometry, texture_size);
                     compute_items.push(ComputePlanItem {
-                        command: cmd,
+                        command: cmd.clone(),
                         geometry,
                         target_rect,
                         sampling_rect,
@@ -73,8 +83,11 @@ impl RenderPassGraph {
                 Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => {
                     flush_compute_pass(&mut passes, &mut compute_items);
                     let clip = match command {
-                        Command::ClipPush(rect) => ClipOps::Push(rect),
-                        Command::ShapeClipPush(region) => ClipOps::ShapePush { region, index: 0 },
+                        Command::ClipPush(rect) => ClipOps::Push(*rect),
+                        Command::ShapeClipPush(region) => ClipOps::ShapePush {
+                            region: *region,
+                            index: 0,
+                        },
                         Command::ClipPop => ClipOps::Pop,
                         _ => unreachable!(),
                     };
@@ -258,7 +271,7 @@ mod tests {
             op(Command::ClipPop, 2, 0),
             op(Command::Draw(Box::new(ProbeDraw(true))), 3, 50),
         ];
-        let passes = RenderPassGraph::build(ops, target).into_passes();
+        let passes = RenderPassGraph::build(&ops, target, None).into_passes();
         assert_eq!(
             passes.len(),
             1,
@@ -268,6 +281,31 @@ mod tests {
             panic!("draw pass");
         };
         assert_eq!(draws.len(), 4);
+    }
+
+    #[test]
+    fn partial_damage_keeps_clip_transitions_and_only_materializes_intersecting_draws() {
+        let target = wgpu::Extent3d {
+            width: 100,
+            height: 100,
+            depth_or_array_layers: 1,
+        };
+        let damage = PxRect::new(Px(48), Px(0), Px(12), Px(10));
+        let ops = [
+            op(Command::Draw(Box::new(ProbeDraw(false))), 0, 0),
+            op(Command::ClipPush(damage), 1, 0),
+            op(Command::Draw(Box::new(ProbeDraw(false))), 2, 50),
+            op(Command::ClipPop, 3, 0),
+        ];
+        let passes = RenderPassGraph::build(&ops, target, Some(damage)).into_passes();
+        let [RenderPassPlan::Draw { draws, .. }] = passes.as_slice() else {
+            panic!("expected one draw pass");
+        };
+        assert!(matches!(
+            draws.as_slice(),
+            [DrawOrClip::Clip(ClipOps::Push(rect)), DrawOrClip::Draw(draw), DrawOrClip::Clip(ClipOps::Pop)]
+            if *rect == damage && draw.draw_rect.x == Px(50)
+        ));
     }
 
     #[test]
@@ -316,7 +354,7 @@ mod tests {
         let mut draw = op(Command::Draw(Box::new(ProbeDraw(true))), 1, 0);
         draw.geometry = geometry;
         let passes = RenderPassGraph::build(
-            vec![
+            &[
                 op(
                     Command::ClipPush(PxRect::new(Px(12), Px(24), Px(4), Px(4))),
                     0,
@@ -329,6 +367,7 @@ mod tests {
                 height: 200,
                 depth_or_array_layers: 1,
             },
+            None,
         )
         .into_passes();
         let draws = || {

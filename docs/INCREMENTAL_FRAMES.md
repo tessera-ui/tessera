@@ -85,6 +85,12 @@ Render-graph ordering is deferred until the target needs scene work and is
 included in `render_build_passes_ns`; `render_prepare_ns` is not emitted for a
 separate pre-render ordering step.
 
+Draw order can be reused across scene updates when the authoring sequence,
+pipeline types, clip transitions, and ordering bounds still match. The order
+plan contains indices into the current commands and does not retain prior paint
+payloads. For a partial redraw, pass planning keeps the clip stack and only
+copies draws that intersect the damage rectangle.
+
 Windowed `frame_total_ns` includes pending surface and render-target resize work.
 
 Component build durations include child builds; do not sum nested samples as
