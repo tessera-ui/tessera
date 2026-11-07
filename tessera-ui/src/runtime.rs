@@ -672,6 +672,20 @@ struct BuildInvalidationTracker {
     cross_instance_dirty_instance_keys: HashSet<u64>,
 }
 
+impl BuildInvalidationTracker {
+    fn invalidate(&mut self, readers: impl IntoIterator<Item = u64>, writer: Option<u64>) -> bool {
+        let mut wake = false;
+        for reader in readers {
+            wake |= self.dirty_instance_keys.insert(reader);
+            if writer.is_some_and(|writer| writer != reader) {
+                self.cross_instance_dirty_instance_keys.insert(reader);
+                wake = true;
+            }
+        }
+        wake
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct BuildInvalidationSet {
     pub dirty_instance_keys: HashSet<u64>,
@@ -723,10 +737,6 @@ fn with_build_invalidation_tracker<R>(f: impl FnOnce(&BuildInvalidationTracker) 
 
 fn with_build_invalidation_tracker_mut<R>(f: impl FnOnce(&mut BuildInvalidationTracker) -> R) -> R {
     RUNTIME_GLOBALS.with(|globals| f(&mut globals.build_invalidation_tracker.borrow_mut()))
-}
-
-fn with_state_read_dependency_tracker<R>(f: impl FnOnce(&StateReadDependencyTracker) -> R) -> R {
-    RUNTIME_GLOBALS.with(|globals| f(&globals.state_read_dependency_tracker.borrow()))
 }
 
 fn with_state_read_dependency_tracker_mut<R>(
@@ -1001,22 +1011,11 @@ fn consume_pending_build_invalidation(instance_key: u64) -> bool {
 }
 
 pub(crate) fn record_replay_boundary_invalidation_for_instance_key(instance_key: u64) {
-    let inserted = with_build_invalidation_tracker_mut(|tracker| {
-        tracker.dirty_instance_keys.insert(instance_key)
-    });
+    let inserted =
+        with_build_invalidation_tracker_mut(|tracker| tracker.invalidate([instance_key], None));
     if inserted {
         schedule_runtime_redraw();
     }
-}
-
-pub(crate) fn record_cross_instance_build_invalidation(instance_key: u64) {
-    with_build_invalidation_tracker_mut(|tracker| {
-        tracker.dirty_instance_keys.insert(instance_key);
-        tracker
-            .cross_instance_dirty_instance_keys
-            .insert(instance_key);
-    });
-    schedule_runtime_redraw();
 }
 
 /// Re-queues invalidations that could not be processed in the current frame.
@@ -1132,19 +1131,11 @@ fn track_layout_state_read_dependency(slot: SlotHandle, generation: u64, phase: 
     });
 }
 
-fn mark_layout_state_readers_dirty(slot: SlotHandle, generation: u64) {
-    let key = StateReadDependencyKey { slot, generation };
-    let readers = with_layout_dirty_tracker_mut(|tracker| {
-        tracker
-            .layout_readers_by_state
-            .get(&key)
-            .map(|readers| readers.iter().copied().collect::<Vec<_>>())
-            .unwrap_or_default()
-    });
-    if readers.is_empty() {
-        return;
-    }
+fn mark_layout_state_readers_dirty(key: StateReadDependencyKey) -> bool {
     with_layout_dirty_tracker_mut(|tracker| {
+        let Some(readers) = tracker.layout_readers_by_state.get(&key) else {
+            return false;
+        };
         for reader in readers {
             let target = match reader.phase {
                 ReadPhase::Measure => &mut tracker.pending_measure_self_dirty_nodes,
@@ -1155,8 +1146,8 @@ fn mark_layout_state_readers_dirty(slot: SlotHandle, generation: u64) {
             };
             target.insert(reader.instance_key);
         }
-    });
-    schedule_runtime_redraw();
+        !readers.is_empty()
+    })
 }
 
 pub(crate) fn clear_phase_state_reads(instance_key: u64, phase: ReadPhase) {
@@ -1191,17 +1182,6 @@ pub(crate) fn remove_layout_state_read_dependencies(instance_keys: &HashSet<u64>
             clear_phase_state_reads(instance_key, phase);
         }
     }
-}
-
-fn state_read_subscribers(slot: SlotHandle, generation: u64) -> Vec<u64> {
-    let key = StateReadDependencyKey { slot, generation };
-    with_state_read_dependency_tracker(|tracker| {
-        tracker
-            .readers_by_state
-            .get(&key)
-            .map(|readers| readers.iter().copied().collect())
-            .unwrap_or_default()
-    })
 }
 
 fn track_focus_dependency(kind: FocusReadDependencyKind) {
@@ -2116,25 +2096,34 @@ where
 }
 
 fn publish_state_write(slot: SlotHandle, generation: u64) {
-    let subscribers = state_read_subscribers(slot, generation);
     // A write performed while another component is building is a backwards
     // write for every other reader: they may already have been rebuilt in
     // this pass with the old value, so their invalidation must not be
     // treated as already covered by the current replay round.
-    let writer_instance_key = if matches!(current_phase(), Some(RuntimePhase::Build)) {
-        current_replay_boundary_instance_key_from_scope()
-    } else {
-        None
-    };
-    for instance_key in subscribers {
-        match writer_instance_key {
-            Some(writer) if writer != instance_key => {
-                record_cross_instance_build_invalidation(instance_key);
-            }
-            _ => record_replay_boundary_invalidation_for_instance_key(instance_key),
+    let writer_instance_key = with_execution_context(|context| {
+        if context.phase_stack.last() == Some(&RuntimePhase::Build) {
+            context.current_component_instance_stack.last().copied()
+        } else {
+            None
         }
+    });
+    let key = StateReadDependencyKey { slot, generation };
+    let build_dirty = RUNTIME_GLOBALS.with(|globals| {
+        let dependencies = globals.state_read_dependency_tracker.borrow();
+        dependencies
+            .readers_by_state
+            .get(&key)
+            .is_some_and(|readers| {
+                globals
+                    .build_invalidation_tracker
+                    .borrow_mut()
+                    .invalidate(readers.iter().copied(), writer_instance_key)
+            })
+    });
+    let layout_dirty = mark_layout_state_readers_dirty(key);
+    if build_dirty || layout_dirty {
+        schedule_runtime_redraw();
     }
-    mark_layout_state_readers_dirty(slot, generation);
 }
 
 struct RuntimeGlobals {
