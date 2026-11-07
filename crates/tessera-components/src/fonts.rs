@@ -1,14 +1,16 @@
-//! Fonts loaded when their family or fallback coverage is used.
+//! Fonts loaded on demand when text uses their family or Unicode ranges.
 //!
-//! Register additional fonts with [`Fonts`] at the application entry.
+//! Text uses system fonts unless an application registers [`Fonts`] or a
+//! [`FontStylesheet`] at its entry. Web builds load default fonts from a CDN.
 
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, io, rc::Rc, sync::Arc};
 
-use tessera_ui::{EntryRegistry, LoadState, Resource, TesseraPackage};
+use glyphon::fontdb::{Database, FaceInfo, Source};
+use tessera_ui::{Asset, EntryRegistry, LoadState, Resource, TesseraPackage};
 
 pub use tessera_ui::FontAsset as Font;
 
-use crate::{res, text::write_font_system, theme::TextStyle};
+use crate::{text::write_font_system, theme::TextStyle};
 
 /// An entry package supplying fonts on demand.
 pub struct Fonts(
@@ -16,9 +18,17 @@ pub struct Fonts(
     pub &'static [Font],
 );
 
+/// An entry package supplying the fonts declared by a CSS stylesheet's
+/// `@font-face` rules, such as a web font CDN. Each rule's file is fetched when
+/// text uses a character in its `unicode-range`.
+pub struct FontStylesheet(
+    /// Stylesheet URL.
+    pub &'static str,
+);
+
 impl TesseraPackage for Fonts {
     fn register(self, _: &mut EntryRegistry) {
-        let registry = tessera_ui::__private::local_runtime_resource::<RefCell<FontRegistry>>();
+        let registry = registry();
         let mut registry = registry.borrow_mut();
         for font in self.0 {
             if !registry
@@ -32,14 +42,44 @@ impl TesseraPackage for Fonts {
     }
 }
 
+impl TesseraPackage for FontStylesheet {
+    fn register(self, _: &mut EntryRegistry) {
+        let registry = registry();
+        let mut registry = registry.borrow_mut();
+        if !registry.stylesheets.iter().any(|sheet| sheet.url == self.0) {
+            registry.stylesheets.push(Stylesheet::new(self.0));
+        }
+    }
+}
+
+struct Stylesheet {
+    url: &'static str,
+    faces: Option<Resource<Arc<[FontFace]>>>,
+}
+
+impl Stylesheet {
+    fn new(url: &'static str) -> Self {
+        Self { url, faces: None }
+    }
+}
+
+#[derive(Clone)]
+struct FontFace {
+    family: String,
+    src: String,
+    ranges: Vec<(u32, u32)>,
+}
+
 struct FontRequest {
     font: Font,
-    resource: Resource<Arc<[u8]>>,
-    installed: Option<bool>,
+    faces: Resource<Arc<[FaceInfo]>>,
+    /// Revision that installed the font; zero when it failed to load.
+    installed: Option<u64>,
 }
 
 struct FontRegistry {
     sources: Vec<Font>,
+    stylesheets: Vec<Stylesheet>,
     requests: Vec<FontRequest>,
     revision: u64,
 }
@@ -47,122 +87,237 @@ struct FontRegistry {
 impl Default for FontRegistry {
     fn default() -> Self {
         Self {
-            sources: vec![
-                Font {
-                    asset: res::ROBOTO_REGULAR_TTF,
-                    family: "Roboto",
-                    coverage: &[],
-                    fallback: &[],
-                },
-                Font {
-                    asset: res::ROBOTO_MEDIUM_TTF,
-                    family: "Roboto",
-                    coverage: &[],
-                    fallback: &[],
-                },
-                Font {
-                    asset: res::ROBOTO_BOLD_TTF,
-                    family: "Roboto",
-                    coverage: &[],
-                    fallback: &[],
-                },
-                Font {
-                    asset: tessera_font_noto_color_emoji::NOTOCOLOREMOJI_COLRV0_TTF,
-                    family: "Noto Color Emoji",
-                    coverage: &[],
-                    fallback: &[
-                        (0x20e3, 0x20e3),
-                        (0x2300, 0x27ff),
-                        (0x2b00, 0x2bff),
-                        (0xfe0f, 0xfe0f),
-                        (0x1f000, 0x1faff),
-                    ],
-                },
+            sources: Vec::new(),
+            #[cfg(target_family = "wasm")]
+            stylesheets: [
+                "https://cdn.jsdelivr.net/npm/@fontsource-variable/roboto/index.css",
+                "https://cdn.jsdelivr.net/npm/@fontsource-variable/noto-sans-sc/index.css",
             ]
-            .into_iter()
-            .chain(tessera_font_noto_sans_sc::FONT_SUBSETS.iter().copied())
-            .collect(),
+            .map(Stylesheet::new)
+            .into(),
+            #[cfg(not(target_family = "wasm"))]
+            stylesheets: Vec::new(),
             requests: Vec::new(),
             revision: 0,
         }
     }
 }
 
-pub(crate) fn prepare(text: &str, style: TextStyle) -> u64 {
-    let registry = tessera_ui::__private::local_runtime_resource::<RefCell<FontRegistry>>();
-    {
-        let mut registry = registry.borrow_mut();
-        let family = style.font_family.unwrap_or("Roboto");
-        let FontRegistry {
-            sources, requests, ..
-        } = &mut *registry;
-        for font in sources.iter() {
-            if !requests
-                .iter()
-                .any(|request| request.font.asset == font.asset)
-                && (font.family == family && font.coverage.is_empty()
-                    || text.chars().any(|c| {
-                        let contains = |ranges: &[(u32, u32)]| {
-                            ranges
-                                .iter()
-                                .any(|&(start, end)| (start..=end).contains(&(c as u32)))
-                        };
-                        (font.coverage.is_empty() || contains(font.coverage))
-                            && (font.family == family || contains(font.fallback))
-                    }))
-            {
-                requests.push(FontRequest {
-                    font: *font,
-                    resource: font.asset.load(),
-                    installed: None,
-                });
-            }
-        }
-    }
-    revision()
+fn registry() -> Rc<RefCell<FontRegistry>> {
+    tessera_ui::__private::local_runtime_resource::<RefCell<FontRegistry>>()
 }
 
-pub(crate) fn revision() -> u64 {
-    let registry = tessera_ui::__private::local_runtime_resource::<RefCell<FontRegistry>>();
+/// Requests the fonts `text` needs and installs those that have loaded.
+///
+/// Returns `None` while any of them is loading; otherwise a value that changes
+/// only when a font relevant to `text` is installed.
+pub(crate) fn prepare(text: &str, style: TextStyle) -> Option<u64> {
+    let registry = registry();
     let mut registry = registry.borrow_mut();
-    for i in 0..registry.requests.len() {
-        if registry.requests[i].installed.is_some() {
-            continue;
-        }
-        let font = registry.requests[i].font;
-        let installed = match registry.requests[i].resource.get() {
-            LoadState::Loading => continue,
-            LoadState::Ready(bytes) => {
-                let replace = !registry.requests.iter().any(|request| {
-                    request.installed == Some(true) && request.font.family == font.family
-                });
-                let mut fonts = write_font_system();
-                let db = fonts.db_mut();
-                let existing = db
-                    .faces()
-                    .filter(|face| {
-                        replace && face.families.iter().any(|(name, _)| name == font.family)
-                    })
-                    .map(|face| face.id)
-                    .collect::<Vec<_>>();
-                let added = db.load_font_source(glyphon::fontdb::Source::Binary(Arc::new(bytes)));
-                if added.is_empty() {
-                    tracing::warn!(
-                        asset = font.asset.path(),
-                        "font contains no supported faces"
-                    );
-                    false
-                } else {
-                    for id in existing {
-                        db.remove_face(id);
-                    }
-                    registry.revision += 1;
-                    true
-                }
+    let FontRegistry {
+        sources,
+        stylesheets,
+        requests,
+        revision,
+    } = &mut *registry;
+    let mut pending = false;
+    stylesheets.retain_mut(|sheet| {
+        match sheet
+            .faces
+            .get_or_insert_with(|| Asset::platform(sheet.url).load_with(parse_stylesheet))
+            .get()
+        {
+            LoadState::Loading => {
+                pending = true;
+                return true;
             }
-            LoadState::Failed(_) => false,
+            LoadState::Ready(faces) => {
+                sources.extend(faces.iter().map(|face| face.font(sheet.url)));
+            }
+            LoadState::Failed(_) => {}
+        }
+        false
+    });
+    let family = style.font_family;
+    let mut key = 0;
+    for font in sources.iter().filter(|font| needed(font, family, text)) {
+        let index = match requests
+            .iter()
+            .position(|request| request.font.asset == font.asset)
+        {
+            Some(index) => index,
+            None => {
+                requests.push(FontRequest {
+                    font: *font,
+                    faces: font.asset.load_with(parse_font),
+                    installed: None,
+                });
+                requests.len() - 1
+            }
         };
-        registry.requests[i].installed = Some(installed);
+        let installed = match requests[index].installed {
+            Some(installed) => installed,
+            None => match requests[index].faces.get() {
+                LoadState::Loading => {
+                    pending = true;
+                    continue;
+                }
+                LoadState::Ready(faces) => {
+                    let replace = !requests.iter().any(|request| {
+                        request.installed.is_some_and(|installed| installed > 0)
+                            && request.font.family == font.family
+                    });
+                    let mut fonts = write_font_system();
+                    let db = fonts.db_mut();
+                    if replace {
+                        let existing = db
+                            .faces()
+                            .filter(|face| {
+                                face.families.iter().any(|(name, _)| name == font.family)
+                            })
+                            .map(|face| face.id)
+                            .collect::<Vec<_>>();
+                        for id in existing {
+                            db.remove_face(id);
+                        }
+                    }
+                    for face in faces.iter() {
+                        db.push_face_info(face.clone());
+                    }
+                    *revision += 1;
+                    *revision
+                }
+                LoadState::Failed(_) => 0,
+            },
+        };
+        requests[index].installed = Some(installed);
+        key = key.max(installed);
     }
-    registry.revision
+    (!pending).then_some(key)
+}
+
+fn needed(font: &Font, family: Option<&str>, text: &str) -> bool {
+    let contains = |ranges: &[(u32, u32)], c: char| {
+        ranges
+            .iter()
+            .any(|&(start, end)| (start..=end).contains(&(c as u32)))
+    };
+    let named = family == Some(font.family);
+    (named && font.coverage.is_empty())
+        || text.chars().any(|c| {
+            (font.coverage.is_empty() || contains(font.coverage, c))
+                && (named || contains(font.fallback, c))
+        })
+}
+
+fn parse_font(bytes: Arc<[u8]>) -> io::Result<Arc<[FaceInfo]>> {
+    let bytes: Arc<[u8]> = if bytes.starts_with(b"wOF2") {
+        wuff::decompress_woff2(&bytes)
+            .map_err(|error| io::Error::other(format!("{error:?}")))?
+            .into()
+    } else {
+        bytes
+    };
+    let mut db = Database::new();
+    db.load_font_source(Source::Binary(Arc::new(bytes)));
+    let faces = db.faces().cloned().collect::<Arc<[_]>>();
+    if faces.is_empty() {
+        return Err(io::Error::other("font contains no supported faces"));
+    }
+    Ok(faces)
+}
+
+fn parse_stylesheet(bytes: Arc<[u8]>) -> io::Result<Arc<[FontFace]>> {
+    let css = std::str::from_utf8(&bytes).map_err(io::Error::other)?;
+    Ok(css
+        .split("@font-face")
+        .skip(1)
+        .filter_map(|rule| {
+            let rule = &rule[rule.find('{')? + 1..rule.find('}')?];
+            let property = |name: &str| {
+                rule.split(';').find_map(|declaration| {
+                    let (key, value) = declaration.split_once(':')?;
+                    (key.trim() == name).then(|| value.trim())
+                })
+            };
+            let src = property("src")?;
+            let src = &src[src.find("url(")? + 4..];
+            let src = src[..src.find(')')?].trim_matches(['"', '\'']);
+            let ranges = property("unicode-range").map_or_else(
+                || vec![(0, 0x10ffff)],
+                |ranges| {
+                    ranges
+                        .split(',')
+                        .filter_map(|range| {
+                            let range = range.trim().strip_prefix("U+")?;
+                            let (start, end) = range.split_once('-').unwrap_or((range, range));
+                            let parse = |value: &str, fill| {
+                                u32::from_str_radix(&value.replace('?', fill), 16).ok()
+                            };
+                            Some((parse(start, "0")?, parse(end, "F")?))
+                        })
+                        .collect()
+                },
+            );
+            Some(FontFace {
+                family: property("font-family")?
+                    .trim_matches(['"', '\''])
+                    .to_owned(),
+                src: src.to_owned(),
+                ranges,
+            })
+        })
+        .collect())
+}
+
+impl FontFace {
+    fn font(&self, stylesheet: &str) -> Font {
+        let url = if self.src.contains("://") {
+            self.src.clone()
+        } else {
+            let base = &stylesheet[..stylesheet.rfind('/').map_or(0, |end| end + 1)];
+            format!("{base}{}", self.src.trim_start_matches("./"))
+        };
+        let ranges: &'static [(u32, u32)] = Box::leak(self.ranges.clone().into_boxed_slice());
+        Font {
+            asset: Asset::platform(Box::leak(url.into_boxed_str())),
+            family: Box::leak(self.family.clone().into_boxed_str()),
+            fallback: ranges,
+            coverage: ranges,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stylesheet_rules_resolve_files_and_unicode_ranges() {
+        let css = br#"
+            /* latin */
+            @font-face {
+              font-family: 'Example Sans';
+              src: url(./files/latin.woff2) format('woff2');
+              unicode-range: U+0000-00FF, U+4??, U+2014;
+            }
+            @font-face { font-family: "Other"; src: url("https://cdn.test/other.ttf"); }
+        "#;
+        let fonts = parse_stylesheet(Arc::from(&css[..]))
+            .unwrap()
+            .iter()
+            .map(|face| face.font("https://cdn.test/sans/index.css"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            fonts[0].asset.path(),
+            "https://cdn.test/sans/files/latin.woff2"
+        );
+        assert_eq!(fonts[0].family, "Example Sans");
+        assert_eq!(
+            fonts[0].coverage,
+            [(0, 0xff), (0x400, 0x4ff), (0x2014, 0x2014)]
+        );
+        assert_eq!(fonts[1].asset.path(), "https://cdn.test/other.ttf");
+        assert_eq!(fonts[1].coverage, [(0, 0x10ffff)]);
+    }
 }

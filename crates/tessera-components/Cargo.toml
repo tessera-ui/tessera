@@ -9,8 +9,6 @@ description = "Basic components for tessera-ui, using md3e design principles."
 build = "build.rs"
 
 [dependencies]
-tessera-font-noto-sans-sc = { path = "../tessera-font-noto-sans-sc", version = "0.1.0" }
-tessera-font-noto-color-emoji = { path = "../tessera-font-noto-color-emoji", version = "0.1.0" }
 bytemuck = "1.24.0"
 image = { version = "0.25.9", default-features = false, features = [
     "png",
@@ -24,6 +22,7 @@ tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
 tessera-i18n = { path = "../tessera-i18n", version = "0.1.0" }
 tessera-platform = { path = "../tessera-platform", version = "0.1.0" }
 unicode-linebreak = "0.1.5"
+wuff = { version = "0.2.10", default-features = false, features = ["brotli"] }
 unicode-segmentation = "1.12.0"
 encase = "0.12.0"
 glam = { version = "0.32.0", features = ["encase"] }

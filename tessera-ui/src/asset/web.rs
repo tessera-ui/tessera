@@ -10,12 +10,17 @@ pub(super) async fn read(path: &str) -> io::Result<Arc<[u8]>> {
         .document()
         .and_then(|document| document.base_uri().ok().flatten())
         .ok_or_else(|| io::Error::other("missing document base URL"))?;
-    let encoded = path
-        .split('/')
-        .map(|part| String::from(js_sys::encode_uri_component(part)))
-        .collect::<Vec<_>>()
-        .join("/");
-    let url = web_sys::Url::new_with_base(&encoded, &base).map_err(js_error)?;
+    let url = if path.contains("://") {
+        web_sys::Url::new(path)
+    } else {
+        let encoded = path
+            .split('/')
+            .map(|part| String::from(js_sys::encode_uri_component(part)))
+            .collect::<Vec<_>>()
+            .join("/");
+        web_sys::Url::new_with_base(&encoded, &base)
+    }
+    .map_err(js_error)?;
     let response = JsFuture::from(window.fetch_with_str(&url.href()))
         .await
         .map_err(js_error)?;

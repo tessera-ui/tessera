@@ -158,7 +158,7 @@ struct TextLayout {
 }
 
 struct CachedText {
-    fonts: u64,
+    fonts: Option<u64>,
     text: String,
     style: TextStyle,
     font_size_px: f32,
@@ -243,6 +243,7 @@ impl tessera_ui::DrawModifierNode for TextLayout {
             .shaped
             .lock()
             .as_ref()
+            .filter(|cached| cached.fonts.is_some())
             .map(|cached| cached.data.clone())
         else {
             return;

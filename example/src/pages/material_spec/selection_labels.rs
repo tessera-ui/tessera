@@ -30,7 +30,7 @@ fn style(size: f64, height: f64, weight: u16, tracking: f64) -> TextStyle {
         line_height: Some(Dp(height)),
         font_weight: weight,
         letter_spacing: Dp(tracking),
-        font_family: Some("Roboto"),
+        font_family: None,
     }
 }
 

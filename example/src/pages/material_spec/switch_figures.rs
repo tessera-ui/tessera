@@ -248,7 +248,6 @@ fn marker(number: usize, x: Dp, y: Dp, circular: bool) {
                 .style(TextStyle {
                     font_size: Dp(16.0),
                     line_height: Some(Dp(24.0)),
-                    font_family: Some("Roboto"),
                     ..Default::default()
                 })
                 .color(scheme.on_surface);

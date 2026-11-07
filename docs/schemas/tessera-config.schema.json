@@ -49,30 +49,6 @@
             "type": "string"
           },
           "description": "Asset paths embedded for immediate availability on every target."
-        },
-        "font-subsets": {
-          "type": "object",
-          "description": "Fonts split into on-demand Unicode subsets, keyed by asset path. Empty ranges select all supported characters.",
-          "additionalProperties": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "prefixItems": [
-                {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 1114111
-                },
-                {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 1114111
-                }
-              ],
-              "minItems": 2,
-              "maxItems": 2
-            }
-          }
         }
       }
     },

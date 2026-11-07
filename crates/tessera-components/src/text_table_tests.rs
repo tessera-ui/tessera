@@ -101,7 +101,6 @@ fn fixture(output: tessera_ui::testing::TestProbe<Option<Observed>>) {
                             .header_color_optional(header_color.get())
                             .modifier(Modifier::new().fill_max_width())
                             .style(TextStyle {
-                                font_family: Some("Roboto"),
                                 font_size: Dp(font_size.get()),
                                 line_height: Some(Dp(24.0)),
                                 ..Default::default()

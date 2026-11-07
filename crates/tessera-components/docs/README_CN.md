@@ -119,7 +119,7 @@ state outside virtualized items when that state must survive scrolling
 offscreen.
 
 `text`、`text_input` 和 `text_field` 可通过 `.style(...)` 设置排版。
-桌面、Android 和 WebAssembly 使用随库提供的 Roboto Regular、Medium 和 Bold 字体。
+文本使用系统字体，Web 构建从 CDN 加载字体。自定义字体在入口注册 `Fonts` 或 `FontStylesheet`。
 `MaterialTypography` 同时提供字号、行高、字重和字距；
 `theme.typography.emphasized()` 返回强调排版规格。
 自定义 `TextStyle` 字面量应继承主题中的文字样式，或用 `..Default::default()` 初始化新增属性。

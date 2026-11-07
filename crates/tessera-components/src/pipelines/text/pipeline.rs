@@ -18,8 +18,16 @@ struct TextResources {
 
 impl Default for TextResources {
     fn default() -> Self {
+        use glyphon::cosmic_text::{Fallback, PlatformFallback};
+
+        let mut fonts = glyphon::FontSystem::new();
+        #[cfg(target_os = "android")]
+        fonts.db_mut().load_fonts_dir("/system/fonts");
+        if let Some(family) = PlatformFallback.common_fallback().first() {
+            fonts.db_mut().set_sans_serif_family(*family);
+        }
         Self {
-            font_system: Arc::new(init_font_system(glyphon::FontSystem::new())),
+            font_system: Arc::new(RwLock::new(fonts)),
         }
     }
 }
@@ -46,35 +54,6 @@ struct TextFont {
     weight: u16,
     tracking: f32,
     family: Option<&'static str>,
-}
-
-fn init_font_system(mut fonts: glyphon::FontSystem) -> RwLock<glyphon::FontSystem> {
-    #[cfg(target_os = "android")]
-    fonts.db_mut().load_fonts_dir("/system/fonts");
-    let tessera_ui::LoadState::Ready(bytes) = crate::res::ROBOTO_REGULAR_TTF.load().get() else {
-        panic!("the default font must be embedded");
-    };
-    let existing = fonts
-        .db()
-        .faces()
-        .filter(|face| face.families.iter().any(|(name, _)| name == "Roboto"))
-        .map(|face| face.id)
-        .collect::<Vec<_>>();
-    for id in existing {
-        fonts.db_mut().remove_face(id);
-    }
-    fonts
-        .db_mut()
-        .load_font_source(fontdb::Source::Binary(Arc::new(bytes)));
-    fonts.db_mut().set_sans_serif_family("Roboto");
-    #[cfg(target_family = "wasm")]
-    {
-        fonts.db_mut().set_serif_family("Noto Sans SC");
-        fonts.db_mut().set_monospace_family("Noto Sans SC");
-        fonts.db_mut().set_cursive_family("Noto Sans SC");
-        fonts.db_mut().set_fantasy_family("Noto Sans SC");
-    }
-    RwLock::new(fonts)
 }
 
 /// Borrows the font system owned by the active runtime session.
@@ -541,11 +520,11 @@ impl TextData {
 
 #[cfg(test)]
 mod tests {
-    use tessera_ui::{Color, Dp};
+    use tessera_ui::Color;
 
     use crate::theme::MaterialTypography;
 
-    use super::{TextConstraint, TextData, read_font_system};
+    use super::{TextConstraint, TextData};
 
     #[test]
     fn retained_text_copies_share_shapes_and_isolate_scroll_and_opacity() {
@@ -674,103 +653,5 @@ mod tests {
         let runs: Vec<_> = long.text_buffer.layout_runs().collect();
         assert!(runs.len() > 1);
         assert!(runs.iter().all(|run| run.line_w <= width + 1.0));
-    }
-
-    #[test]
-    fn bundled_fonts_shape_latin_weights_and_chinese_without_system_fonts() {
-        let session = tessera_ui::RuntimeSession::new();
-        session.run(|| {
-            let db = glyphon::fontdb::Database::new();
-            *super::write_font_system() = super::init_font_system(
-                glyphon::FontSystem::new_with_locale_and_db("en-US".into(), db),
-            )
-            .into_inner();
-            assert!(
-                read_font_system()
-                    .db()
-                    .faces()
-                    .any(|face| face.families.iter().any(|(name, _)| name == "Roboto"))
-            );
-            let typography = MaterialTypography::default();
-            let shape = |content: &str, style| {
-                TextData::shape(
-                    content.to_owned(),
-                    Color::BLACK,
-                    style,
-                    TextConstraint::default(),
-                )
-            };
-            let regular = shape("Material typography", typography.body_large);
-            let medium = shape(
-                "Material typography",
-                crate::theme::TextStyle {
-                    font_weight: 500,
-                    ..typography.body_large
-                },
-            );
-            let untracked = shape(
-                "Material typography",
-                crate::theme::TextStyle {
-                    letter_spacing: Dp(0.0),
-                    ..typography.body_large
-                },
-            );
-            assert_eq!(regular.size[1], Dp(24.0).to_pixels_f32().ceil() as u32);
-            assert!(
-                regular.first_baseline > 0.0 && regular.first_baseline < regular.size[1] as f32
-            );
-            assert!(regular.size[0] > untracked.size[0]);
-            let chinese = shape("中文", typography.body_large);
-            let named = shape(
-                "中文",
-                crate::theme::TextStyle {
-                    font_family: Some("Noto Sans SC"),
-                    ..typography.body_large
-                },
-            );
-            let font_system = read_font_system();
-            let chinese_faces = font_system
-                .db()
-                .faces()
-                .filter(|face| face.families.iter().any(|(name, _)| name == "Noto Sans SC"))
-                .count();
-            assert_eq!(
-                chinese_faces, 2,
-                "only the two requested Unicode blocks should load"
-            );
-            let glyphs: Vec<_> = [&chinese, &named]
-                .into_iter()
-                .flat_map(|data| data.text_buffer.layout_runs().flat_map(|run| run.glyphs))
-                .collect();
-            assert_eq!(glyphs.len(), 4);
-            for glyph in glyphs {
-                assert_ne!(glyph.glyph_id, 0);
-                assert!(
-                    font_system
-                        .db()
-                        .face(glyph.font_id)
-                        .unwrap()
-                        .families
-                        .iter()
-                        .any(|(name, _)| name == "Noto Sans SC")
-                );
-            }
-            for (data, weight) in [(&regular, 400), (&medium, 500)] {
-                let glyph = &data.text_buffer.layout_runs().next().unwrap().glyphs[0];
-                let face = font_system.db().face(glyph.font_id).unwrap();
-                assert_eq!(face.weight.0, weight);
-                assert!(face.families.iter().any(|(family, _)| family == "Roboto"));
-            }
-            drop(font_system);
-            let standard = shape("、", typography.body_large);
-            let variant = shape("、\u{fe01}", typography.body_large);
-            let first =
-                |data: &TextData| data.text_buffer.layout_runs().next().unwrap().glyphs[0].glyph_id;
-            assert_ne!(
-                first(&standard),
-                first(&variant),
-                "CJK variation sequences must retain their glyphs"
-            );
-        });
     }
 }

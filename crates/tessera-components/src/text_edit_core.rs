@@ -463,7 +463,6 @@ struct PreviewReplaceResult {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct TextLayoutCacheKey {
-    fonts: u64,
     layout_version: u64,
     max_width_bits: Option<u32>,
     max_height_bits: Option<u32>,
@@ -472,7 +471,6 @@ struct TextLayoutCacheKey {
 impl TextLayoutCacheKey {
     fn new(layout_version: u64, constraint: &TextConstraint) -> Self {
         Self {
-            fonts: crate::fonts::revision(),
             layout_version,
             max_width_bits: constraint.max_width.map(f32::to_bits),
             max_height_bits: constraint.max_height.map(f32::to_bits),
@@ -1815,7 +1813,7 @@ impl TextLayoutState {
 /// user interaction state. It is designed to be shared between UI components
 /// via a `TextEditorController`.
 pub struct TextEditorController {
-    font_revision: u64,
+    fonts: Option<u64>,
     line_height: Px,
     blink_start_frame_nanos: u64,
     current_frame_nanos: u64,
@@ -2023,7 +2021,7 @@ impl TextEditorController {
         let cursor_color = Color::BLACK;
         Self {
             line_height: line_height_px,
-            font_revision: 0,
+            fonts: None,
             blink_start_frame_nanos: frame_nanos,
             current_frame_nanos: frame_nanos,
             focus_handler: FocusRequester::new(),
@@ -2064,18 +2062,28 @@ impl TextEditorController {
 
     fn prepare_display(&self) -> Option<TransformedText> {
         let raw = self.edit_state.text();
-        let display = self
-            .edit_state
+        self.edit_state
             .display_transform_ref()
             .map(|transform| transform.call(raw.clone()))
-            .filter(|display| display.text() != raw);
+            .filter(|display| display.text() != raw)
+    }
+
+    fn fonts_for(&self, display: Option<&TransformedText>) -> Option<u64> {
+        let raw = self.edit_state.text();
         crate::fonts::prepare(
-            display
-                .as_ref()
-                .map_or(raw.as_str(), |display| display.text()),
+            display.map_or(raw.as_str(), |display| display.text()),
             self.edit_state.style,
-        );
-        display
+        )
+    }
+
+    fn set_fonts(&mut self, fonts: Option<u64>) {
+        self.edit_state.editor.with_buffer_mut(|buffer| {
+            for line in &mut buffer.lines {
+                line.reset_shaping();
+            }
+        });
+        self.invalidate_text_layout();
+        self.fonts = fonts;
     }
 
     fn text_data(
@@ -2083,15 +2091,6 @@ impl TextEditorController {
         constraint: TextConstraint,
         display: Option<TransformedText>,
     ) -> TextData {
-        let fonts = crate::fonts::revision();
-        if self.font_revision != fonts {
-            self.edit_state.editor.with_buffer_mut(|buffer| {
-                for line in &mut buffer.lines {
-                    line.reset_shaping();
-                }
-            });
-            self.font_revision = fonts;
-        }
         if let Some(text_data) = self
             .layout_state
             .cached_text_data_for_constraint(&constraint, self.scroll_state.as_scroll())
@@ -3483,6 +3482,13 @@ impl PartialEq for TextEditLayout {
 impl tessera_ui::LayoutModifierNode for TextEditLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let display = self.controller.with(TextEditorController::prepare_display);
+        let fonts = self
+            .controller
+            .with(|controller| controller.fonts_for(display.as_ref()));
+        if self.controller.with(|controller| controller.fonts) != fonts {
+            self.controller
+                .with_mut(|controller| controller.set_fonts(fonts));
+        }
         let result = LayoutResult::default();
         let max_width_pixels: Option<Px> = input.parent_constraint().width().resolve_max();
         let max_height_pixels: Option<Px> = input.parent_constraint().height().resolve_max();

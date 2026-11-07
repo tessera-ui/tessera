@@ -1,6 +1,5 @@
 [assets]
 dir = "assets"
-embed = ["Roboto-Regular.ttf"]
 
 [assets.tree_shaking]
 exclude = ["*.LICENSE"]
