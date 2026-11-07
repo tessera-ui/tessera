@@ -207,6 +207,8 @@ programming contract; the guidelines below also govern framework implementation.
 - **Code Style**:
   - Keep general cleanup and style refactors within Tessera-owned crates; preserve submodule sources for upstream synchronization.
   - Publish forks with distinct package names, upstream library names, and versioned path dependencies.
+  - Declare dependencies of Tessera-owned crates in the root `[workspace.dependencies]` and inherit them with `workspace = true`, adding features locally. Submodule crates keep standalone manifests.
+  - Write dependency requirements as full `major.minor.patch` caret versions at the oldest version known to build. Do not use open or upper-bounded ranges; crates whose types are exchanged must resolve to one shared version, and exact `=` pins require a comment explaining the lockstep requirement. CI checks direct minimal versions.
   - Enforce `rustfmt edition 2024` default rules
   - `use` imports must be grouped in four sections (standard library, third-party crates, crate root, submodules), separated by one blank line, sorted alphabetically within each group, and merged by root path
   - All code, comments, and documentation comments must be in English (except for rare functional clarifications)
