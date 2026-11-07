@@ -11,7 +11,7 @@
 | Package a desktop app | `cargo tessera package -p my-app --release` (requires cargo-packager) |
 | Package for iOS | `cargo tessera ios build -p my-app --release` (macOS with Xcode; `--device` for IPA) |
 | Develop on web | `cargo tessera web dev` |
-| Build a web release | `cargo tessera web build --release` (requires Binaryen) |
+| Build a web release | `cargo tessera web build --release` (requires Binaryen 110 or newer) |
 | Initialize Android | `cargo tessera android init` |
 | Run on Android | `cargo tessera android dev --device DEVICE_ID` |
 

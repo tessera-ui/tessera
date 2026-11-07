@@ -111,8 +111,7 @@ jobs:
           toolchain: stable
           components: rust-src, rust-analyzer
           target: wasm32-unknown-unknown
-      - name: Install Binaryen
-        run: sudo apt-get update && sudo apt-get install -y binaryen
+      - uses: ./.github/actions/setup-binaryen
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -121,6 +120,7 @@ jobs:
           python -m pip install Pillow resvg_py==0.5.0
           cargo tessera web build --release -p example
           python scripts/check-package.py web example/gen/web
+          node scripts/check-web-wasm.mjs example/gen/web/pkg-web/example_lib_bg.wasm
 
   check_android:
     name: Check Android

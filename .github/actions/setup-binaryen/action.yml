@@ -1,0 +1,15 @@
+name: Set up Binaryen
+description: Install the Binaryen optimizer for Web release builds
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        version=130
+        archive="binaryen-version_${version}-x86_64-linux.tar.gz"
+        cd "$RUNNER_TEMP"
+        curl --fail --silent --show-error --location --retry 3 --output "$archive" \
+          "https://github.com/WebAssembly/binaryen/releases/download/version_${version}/$archive"
+        echo "0a18362361ad05465118cd8eeb72edaeec89de6894bc283576ef4e07aa3babcc  $archive" | sha256sum --check
+        tar -xzf "$archive"
+        echo "$RUNNER_TEMP/binaryen-version_${version}/bin" >> "$GITHUB_PATH"

@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use cargo_metadata::MetadataCommand;
 use handlebars::Handlebars;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
@@ -259,6 +259,20 @@ fn build_project(
     release: bool,
     features: &[String],
 ) -> Result<()> {
+    if release {
+        let version = Command::new("wasm-opt")
+            .arg("--version")
+            .output()
+            .context("Install Binaryen 110 or newer to build a web release")?;
+        let major = String::from_utf8_lossy(&version.stdout)
+            .split_whitespace()
+            .nth(2)
+            .and_then(|number| number.parse::<u32>().ok());
+        ensure!(
+            version.status.success() && major.is_some_and(|major| major >= 110),
+            "Web releases require Binaryen 110 or newer to preserve WebAssembly table exports"
+        );
+    }
     let mut options =
         call_guard::CheckOptions::new(Some(&metadata.package_name), Some(WASM_TARGET));
     options.features = call_guard::FeatureSelection::Selected {
@@ -336,7 +350,7 @@ fn build_project(
             .arg("-o")
             .arg(&optimized)
             .status()
-            .context("Install Binaryen (wasm-opt) to build a web release")?;
+            .context("Failed to run wasm-opt")?;
         if !status.success() {
             bail!("wasm-opt failed");
         }

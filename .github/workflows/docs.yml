@@ -34,14 +34,18 @@ jobs:
       - name: Build Documentation
         run: |
           cargo doc --all --no-deps
-      - name: Install Binaryen
-        run: sudo apt-get update && sudo apt-get install -y binaryen
+      - uses: ./.github/actions/setup-binaryen
       - name: Build Web Example
-        run: cargo +stable tessera web build --release -p example
+        run: |
+          cargo +stable tessera web build --release -p example
+          node scripts/check-web-wasm.mjs example/gen/web/pkg-web/example_lib_bg.wasm
       - name: Assemble Pages Site
         run: |
           mkdir -p target/doc/example
           cp -R example/gen/web/. target/doc/example/
+          bundle="pkg-web-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mv target/doc/example/pkg-web "target/doc/example/$bundle"
+          sed -i "s|\./pkg-web/|./$bundle/|g" target/doc/example/index.html
           cat <<'EOF' > target/doc/index.html
           <!doctype html>
           <html lang="en">
