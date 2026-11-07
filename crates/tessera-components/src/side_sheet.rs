@@ -18,7 +18,7 @@ use tessera_ui::{
 use crate::{
     animation::{
         sheet_drag::SheetDrag,
-        visibility_motion::{VisibilityMotion, VisibilitySample},
+        visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
     },
     modal_focus::{ModalFocusState, modal_focus_modifier},
     modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
@@ -442,7 +442,7 @@ pub fn modal_side_sheet_provider(
     side_sheet_provider_inner()
         .accessibility_label_optional(accessibility_label)
         .sheet_type(SideSheetType::Modal)
-        .on_close_request_shared(on_close_request.unwrap_or_default())
+        .on_close_request_optional(on_close_request)
         .position(position)
         .is_open(is_open)
         .max_width_optional(max_width)
@@ -531,7 +531,6 @@ fn side_sheet_provider_inner(
     let max_width = side_sheet_dimension(max_width, MAX_SHEET_WIDTH);
     let content_padding = side_sheet_dimension(content_padding, Dp(24.0));
     let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
-    let on_close_request = on_close_request.unwrap_or_default();
     let position = position.unwrap_or_default();
     let is_open = is_open.unwrap_or(false);
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
@@ -540,6 +539,13 @@ fn side_sheet_provider_inner(
     let controller = match external_controller {
         Some(value) => value,
         None => remember(|| SideSheetController::new(is_open)),
+    };
+    let on_close_request = if let Some(on_close_request) = on_close_request {
+        on_close_request
+    } else if external_controller.is_some() && sheet_type == SideSheetType::Modal {
+        Callback::new(move || controller.with_mut(SideSheetController::close))
+    } else {
+        Callback::default()
     };
 
     // In controlled mode (external controller provided), do not override
@@ -655,6 +661,15 @@ fn side_sheet_provider_render(
                 main_content,
                 show_side_sheet && sheet_type == SideSheetType::Modal,
             );
+            modal_back_handler(
+                is_open && sheet_type == SideSheetType::Modal,
+                on_close_request,
+            )
+            .on_preview(move |event| {
+                controller.with_mut(|controller| {
+                    controller.motion.preview_back(event, current_frame_nanos());
+                });
+            });
 
             if show_side_sheet {
                 match sheet_type {

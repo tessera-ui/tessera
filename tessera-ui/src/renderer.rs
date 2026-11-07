@@ -293,6 +293,8 @@ pub struct Renderer<F> {
     accessibility_adapter: Option<AccessKitAdapter>,
     accessibility_active: bool,
     event_loop_proxy: Option<winit::event_loop::EventLoopProxy<RendererUserEvent>>,
+    #[cfg(target_os = "android")]
+    android_back: Option<crate::android::system_back::BackBridge>,
     pending_desktop_window_action: Arc<RwLock<Option<DesktopWindowAction>>>,
     frame_index: u64,
     redraw_request_pending: Arc<AtomicBool>,
@@ -481,6 +483,8 @@ where
             .build()
             .unwrap();
         let event_loop_proxy = event_loop.create_proxy();
+        let android_back =
+            crate::android::system_back::BackBridge::new(&android_app, session.dispatcher());
         let app = None;
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
@@ -502,6 +506,7 @@ where
             accessibility_adapter: None,
             accessibility_active: false,
             event_loop_proxy: Some(event_loop_proxy),
+            android_back,
             pending_desktop_window_action: Arc::new(RwLock::new(None)),
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
@@ -1835,6 +1840,10 @@ where
         }
 
         self.app = Some(app);
+        #[cfg(target_os = "android")]
+        if let Some(back) = self.android_back.as_mut() {
+            back.set_enabled(crate::system_back::enabled());
+        }
 
         if runtime_pending_work.requires_redraw() {
             #[cfg(feature = "profiling")]
@@ -2080,6 +2089,11 @@ where
     fn suspended(&mut self, event_loop: &ActiveEventLoop) {
         let _session = self.session.enter();
         debug!("Suspending renderer; tearing down WGPU resources.");
+        #[cfg(target_os = "android")]
+        if let Some(back) = self.android_back.as_mut() {
+            back.set_enabled(false);
+            crate::system_back::dispatch(crate::system_back::SystemBackEvent::Cancelled);
+        }
         #[cfg(feature = "profiling")]
         submit_runtime_meta(RuntimeMeta {
             kind: RuntimeEventKind::Suspended,

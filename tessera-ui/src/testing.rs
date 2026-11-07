@@ -115,6 +115,11 @@ impl<F: Fn()> LayoutTestSession<F> {
         self.session.run(work)
     }
 
+    /// Delivers a system back event to this fixture's enabled back handler.
+    pub fn dispatch_system_back(&self, event: crate::system_back::SystemBackEvent) {
+        self.session.run(|| crate::system_back::dispatch(event));
+    }
+
     /// Captures component geometry, labels, and test tags in this fixture.
     pub fn inspect_components(&self) -> ComponentSnapshot {
         self.session.run(ComponentSnapshot::capture)

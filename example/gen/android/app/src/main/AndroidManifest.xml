@@ -5,6 +5,7 @@
         android:label="@string/tessera_app_name" android:theme="@style/AppTheme">
         <activity android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" android:exported="true"
             android:label="@string/tessera_app_name" android:name=".TesseraGameActivity"
+            android:enableOnBackInvokedCallback="true"
             android:windowLayoutInDisplayCutoutMode="shortEdges">
             <meta-data android:name="android.app.lib_name" android:value="example_lib" />
             <meta-data android:name="android.app.func_name" android:value="GameActivity_onCreate" />

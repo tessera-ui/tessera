@@ -1343,9 +1343,9 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 .into();
             }
             if lifecycle_name == "scope" {
-                quote! { #shard_crate_path::router::ShardStateLifeCycle::Scope }
+                quote! { #shard_crate_path::ShardStateLifeCycle::Scope }
             } else if lifecycle_name == "shard" {
-                quote! { #shard_crate_path::router::ShardStateLifeCycle::Shard }
+                quote! { #shard_crate_path::ShardStateLifeCycle::Shard }
             } else {
                 return syn::Error::new_spanned(
                     lifecycle,
@@ -1355,7 +1355,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 .into();
             }
         }
-        None => quote! { #shard_crate_path::router::ShardStateLifeCycle::Shard },
+        None => quote! { #shard_crate_path::ShardStateLifeCycle::Shard },
     };
 
     let func_body = func.block;
@@ -1467,10 +1467,12 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
                     let __router_controller = #router_controller_resolution;
                     #router_binding
-                    #shard_crate_path::__private::with_current_router_shard_state::<#state_type, _, _>(
+                    let __route_scope = #ui_crate_path::use_context::<#shard_crate_path::__private::RouteRenderScope>().map(|scope| scope.get());
+                    #shard_crate_path::__private::with_rendered_router_shard_state::<#state_type, _, _>(
                         SHARD_ID,
                         #state_lifecycle_tokens,
                         __router_controller,
+                        __route_scope,
                         |state| {
                             #func_body
                         },

@@ -5,6 +5,7 @@ use tessera_ui::{State, StateOwner};
 use crate::{RouterDestination, ShardState, ShardStateLifeCycle};
 
 struct RouteEntry {
+    id: u64,
     destination: Arc<dyn RouterDestination>,
     owner: StateOwner,
 }
@@ -12,6 +13,7 @@ struct RouteEntry {
 /// Owns the destination stack and reactive state for its routes.
 pub struct RouterController {
     route_stack: Vec<RouteEntry>,
+    next_route_id: u64,
     scope: StateOwner,
     marker: State<()>,
 }
@@ -23,6 +25,7 @@ impl RouterController {
         let marker = scope.state_with_key("controller", || ());
         Self {
             route_stack: Vec::new(),
+            next_route_id: 0,
             scope,
             marker,
         }
@@ -50,9 +53,11 @@ impl RouterController {
     /// Pushes a shared destination with its own state lifetime.
     pub fn push_shared(&mut self, destination: Arc<dyn RouterDestination>) {
         self.route_stack.push(RouteEntry {
+            id: self.next_route_id,
             destination,
             owner: StateOwner::new(),
         });
+        self.next_route_id += 1;
     }
 
     /// Pops the current destination and releases its route state.
@@ -100,21 +105,31 @@ impl RouterController {
             .is_some_and(|current| current.type_id() == std::any::TypeId::of::<D>())
     }
 
-    pub(crate) fn current_destination(
-        &self,
-    ) -> Option<Arc<dyn Fn(State<RouterController>) + Send + Sync>> {
+    pub(crate) fn route_at_depth(&self, depth: usize) -> Option<(u64, Arc<dyn RouterDestination>)> {
         self.route_stack
-            .last()
-            .map(|entry| entry.destination.exec_component_handle())
+            .iter()
+            .rev()
+            .nth(depth)
+            .map(|entry| (entry.id, entry.destination.clone()))
     }
 
     pub(crate) fn state_context(&self, lifecycle: ShardStateLifeCycle) -> (StateOwner, State<()>) {
+        self.route_state_context(lifecycle, None)
+    }
+
+    pub(crate) fn route_state_context(
+        &self,
+        lifecycle: ShardStateLifeCycle,
+        route: Option<u64>,
+    ) -> (StateOwner, State<()>) {
         let owner = match lifecycle {
             ShardStateLifeCycle::Scope => &self.scope,
             ShardStateLifeCycle::Shard => {
-                &self
-                    .route_stack
-                    .last()
+                let entry = match route {
+                    Some(id) => self.route_stack.iter().rev().find(|entry| entry.id == id),
+                    None => self.route_stack.last(),
+                };
+                &entry
                     .expect("route-scoped shard state requires a non-empty router stack")
                     .owner
             }

@@ -19,7 +19,10 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    animation::{self, SelectionAnimation},
+    animation::{
+        self, SelectionAnimation,
+        visibility_motion::{VisibilityMotion, modal_back_handler},
+    },
     badge::BadgeDefaults,
     column::column,
     modal_focus::{ModalFocusState, modal_focus_modifier},
@@ -971,9 +974,21 @@ pub fn modal_navigation_rail(
     let scope = remember(FocusScopeNode::new).get();
     let focus = remember(ModalFocusState::default);
     let was_open = remember(|| false);
+    let back_motion = remember(|| VisibilityMotion::new(true, true));
     let just_opened = is_open && !was_open.get();
     if was_open.get() != is_open {
         was_open.set(is_open);
+        back_motion.set(VisibilityMotion::new(true, true));
+    }
+    let back = back_motion.get().sample(current_frame_nanos());
+    if back.active {
+        receive_frame_nanos(move |frame| {
+            if back_motion.with(|motion| motion.sample(frame).active) {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
     }
     let modifier = modal_focus_modifier(Modifier::new(), focus, is_open, scope);
     layout()
@@ -981,9 +996,12 @@ pub fn modal_navigation_rail(
         .policy(ModalNavigationRailLayout)
         .child(move || {
             overlay_background(main_content, is_open);
+            modal_back_handler(is_open, on_close_request).on_preview(move |event| {
+                back_motion.with_mut(|motion| motion.preview_back(event, current_frame_nanos()));
+            });
             if is_open {
                 surface()
-                    .style(scheme.scrim.with_alpha(0.32).into())
+                    .style(scheme.scrim.with_alpha(0.32 * back.opacity).into())
                     .modifier(
                         Modifier::new()
                             .fill_max_size()
@@ -1027,7 +1045,12 @@ pub fn modal_navigation_rail(
                     scope.request_focus();
                 }
                 surface()
-                    .modifier(modifier.fill_max_size())
+                    .modifier(
+                        modifier
+                            .fill_max_size()
+                            .offset(Dp(-48.0 * f64::from(1.0 - back.position)), Dp::ZERO)
+                            .alpha(back.opacity),
+                    )
                     .style(scheme.surface_container_low.into())
                     .elevation(Dp(1.0))
                     .shape(Shape::RoundedRectangle {

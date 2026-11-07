@@ -26,7 +26,7 @@ use crate::{
     animation::{
         material_motion::{Scalar, Spec},
         sheet_drag::SheetDrag,
-        visibility_motion::{VisibilityMotion, VisibilitySample},
+        visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
     },
     column::column,
     modal_focus::{ModalFocusState, modal_focus_modifier},
@@ -858,6 +858,11 @@ pub fn bottom_sheet_provider(
         .child(move || {
             let bottom_sheet_content = bottom_sheet_content;
             overlay_background(main_content, show_bottom_sheet);
+            modal_back_handler(is_open, on_close_request).on_preview(move |event| {
+                controller.with_mut(|controller| {
+                    controller.motion.preview_back(event, current_frame_nanos());
+                });
+            });
 
             if !show_bottom_sheet {
                 return;

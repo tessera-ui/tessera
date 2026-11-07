@@ -17,7 +17,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    animation::visibility_motion::{VisibilityMotion, VisibilitySample},
+    animation::visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
     app_bar::top_app_bar,
     boxed::boxed,
     button::button,
@@ -478,6 +478,11 @@ fn dialog_provider_render(
     let modifier = modal_focus_modifier(Modifier::new(), focus_state, visible, focus_scope);
     layout().modifier(modifier).child(move || {
         overlay_background(main_content, visible);
+        modal_back_handler(is_open, on_close_request).on_preview(move |event| {
+            controller.with_mut(|controller| {
+                controller.motion.preview_back(event, current_frame_nanos());
+            });
+        });
         if is_open || is_animating {
             let content_alpha = visibility.opacity;
             let alpha = visibility.opacity * 0.32;

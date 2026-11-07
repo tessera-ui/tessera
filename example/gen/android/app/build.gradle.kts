@@ -53,6 +53,7 @@ rust {
 }
 
 dependencies {
+    implementation("androidx.activity:activity:1.8.0")
     implementation("androidx.games:games-activity:4.4.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation(project(":plugins:tessera_platform"))

@@ -5,6 +5,7 @@
     <application android:hasCode="{{has-code}}" android:supportsRtl="true" android:icon="@mipmap/{{#if app-icon}}tessera_icon{{else}}ic_launcher{{/if}}"
         android:label="@string/tessera_app_name" android:theme="@style/AppTheme">
         <activity android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" android:exported="true"
+            android:enableOnBackInvokedCallback="true"
             android:label="@string/tessera_app_name" android:name="{{android-app-activity-name}}"
             android:windowLayoutInDisplayCutoutMode="shortEdges">
             <meta-data android:name="android.app.lib_name" android:value="{{#if app.lib-name}}{{app.lib-name}}{{else}}{{snake-case app.name}}{{/if}}" />

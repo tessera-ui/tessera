@@ -2,6 +2,7 @@
 
 #[cfg(target_os = "android")]
 pub mod jni;
+pub(crate) mod system_back;
 
 #[cfg(target_os = "android")]
 pub use crate::{java_class, jni_bind};

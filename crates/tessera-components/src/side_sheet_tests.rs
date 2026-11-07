@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use tessera_ui::{
     CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier, PointerChange,
-    PressKeyEventType, PxPosition, RenderSlot, State, remember, tessera,
+    PressKeyEventType, PxPosition, RenderSlot, State, remember,
+    system_back::{BackSwipeEdge, SystemBackEvent},
+    tessera,
     testing::{
         layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
         start_layout_test_session,
@@ -173,6 +175,38 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
             }
         },
     );
+}
+
+#[test]
+fn modal_sheet_previews_back_without_closing_until_commit() {
+    let output = tessera_ui::testing::TestProbe::default();
+    let observed = output.clone();
+    let mut session = start_layout_test_session(layout_test(move || {
+        fixture((true, SideSheetPosition::Start, 600), observed.clone());
+    }));
+    let initial = pump_layout_test_session(&mut session, 0)
+        .node("sheet")
+        .bounds();
+    let open = output.get().open.expect("mounted sheet");
+    session.dispatch_system_back(SystemBackEvent::Started(BackSwipeEdge::Left));
+    session.dispatch_system_back(SystemBackEvent::Progress {
+        progress: 0.5,
+        edge: BackSwipeEdge::Left,
+    });
+    let preview = pump_layout_test_session(&mut session, 16_000_000)
+        .node("sheet")
+        .bounds();
+    assert!(preview.x < initial.x);
+    assert_eq!(preview.width, initial.width);
+    assert!(session.run(|| open.get()));
+
+    session.dispatch_system_back(SystemBackEvent::Cancelled);
+    let restored = pump_layout_test_session(&mut session, 1_000_000_000)
+        .node("sheet")
+        .bounds();
+    assert_eq!(restored, initial);
+    session.dispatch_system_back(SystemBackEvent::Committed);
+    assert!(!session.run(|| open.get()));
 }
 
 #[tessera]

@@ -2,25 +2,7 @@ use std::sync::Arc;
 
 use tessera_ui::{State, remember, tessera};
 
-use crate::{
-    router::{RouterController, RouterDestination},
-    state::{ShardState, ShardStateLifeCycle},
-};
-
-pub(crate) fn with_current_router_shard_state<T, F, R>(
-    shard_id: &str,
-    life_cycle: ShardStateLifeCycle,
-    controller: State<RouterController>,
-    f: F,
-) -> R
-where
-    T: Default + Send + Sync + 'static,
-    F: FnOnce(ShardState<T>) -> R,
-{
-    let (owner, marker) = controller.with(|router| router.state_context(life_cycle));
-    let value = owner.state_with_key(("shard", shard_id), T::default);
-    f(ShardState::new(value, marker))
-}
+use crate::router::{RouterController, RouterDestination, back::route_display};
 
 /// # shard_home
 ///
@@ -30,6 +12,8 @@ where
 /// ## Usage
 ///
 /// Mount the root route for an app shell.
+/// On Android, system back pops one route and a predictive gesture previews
+/// the previous route. Android handles back at the root of the stack.
 ///
 /// ## Parameters
 ///
@@ -77,10 +61,7 @@ pub fn shard_home(
         panic!("shard_home requires `root` when `controller` is not provided");
     }
 
-    let destination = controller
-        .with(RouterController::current_destination)
-        .expect("Router stack should not be empty");
-    destination(controller);
+    route_display(controller);
 }
 
 impl ShardHomeBuilder {
