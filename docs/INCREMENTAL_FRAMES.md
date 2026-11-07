@@ -23,6 +23,10 @@ clear that damage rectangle and replay intersecting commands in scene order,
 with the same shape clips, blending, and MSAA as a full redraw. Unchanged frames
 do not upload or draw scene batches; presentation still copies the scene target.
 
+The retained scene follows the layout tree. Changes to direct layout children
+update the parent branch, including when composition wrappers reorder retained
+children.
+
 Custom `DrawCommand` implementations are conservative by default. Override
 `supports_partial_redraw` only if every visual change invalidates the command's
 paint fragment or geometry, and `draw_region` bounds every pixel it can affect.

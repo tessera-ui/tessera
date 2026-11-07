@@ -1238,6 +1238,7 @@ impl ComponentTree {
         let node = node_ref.get();
         let changed = node.layout_children.as_deref() != Some(children.as_slice());
         if changed && (node.role == NodeRole::Layout || node_ref.parent().is_none()) {
+            self.frame_scene.invalidate_structure(node_id);
             crate::runtime::record_layout_structure(
                 node.instance_key,
                 children.iter().map(|id| self.tree[*id].get().instance_key),
@@ -2465,6 +2466,7 @@ impl ComponentTree {
             ComputeMode::Full => {}
             #[cfg(any(test, feature = "testing"))]
             ComputeMode::LayoutOnly => {
+                self.frame_scene.clear_structure_changes();
                 self.collect_globally_positioned_invocations(screen_size);
                 diagnostics_snapshot.accessibility_nodes_updated =
                     self.sync_accessibility(root_node, true) as u64;

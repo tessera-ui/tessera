@@ -16,7 +16,8 @@ use crate::{
 };
 
 use super::{
-    ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, record_frame_stage,
+    ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
+    direct_layout_children, geometry_parent, record_frame_stage,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -88,7 +89,7 @@ impl BranchChildren {
     fn rebuild(
         &mut self,
         mut ids: impl Iterator<Item = NodeId>,
-        output: impl Fn(NodeId) -> Option<Arc<SceneRope>>,
+        mut output: impl FnMut(NodeId) -> Option<Arc<SceneRope>>,
     ) {
         let Some(first) = ids.next() else {
             *self = Self::Empty;
@@ -174,7 +175,6 @@ impl BranchChildren {
 #[derive(Default)]
 struct SceneBranch {
     parent: Option<NodeId>,
-    depth: usize,
     children: BranchChildren,
     draw: Option<Arc<SceneDraw>>,
     clip: Option<SceneClip>,
@@ -243,8 +243,10 @@ impl SceneBranches {
         }
     }
 
-    fn remove(&mut self, id: NodeId) {
-        self.take(id);
+    fn remove(&mut self, id: NodeId) -> bool {
+        if self.take(id).is_none() {
+            return false;
+        }
         let (page, _) = Self::address(id);
         if let Some(entry) = self.pages.get_mut(page)
             && entry.as_ref().is_some_and(|page| page.occupied == 0)
@@ -254,6 +256,7 @@ impl SceneBranches {
                 self.pages.pop();
             }
         }
+        true
     }
 
     fn insert(&mut self, id: NodeId, branch: SceneBranch) {
@@ -294,20 +297,29 @@ impl BranchChange {
 pub(super) struct FrameScene {
     branches: SceneBranches,
     geometry_consumers: HashSet<NodeId>,
+    structure_changed: HashSet<NodeId>,
     root: Option<Arc<SceneRope>>,
     graph: Option<RenderGraph>,
     viewport: Option<PxSize>,
 }
 
 impl FrameScene {
+    pub(super) fn invalidate_structure(&mut self, id: NodeId) {
+        self.structure_changed.insert(id);
+    }
+
+    #[cfg(any(test, feature = "testing"))]
+    pub(super) fn clear_structure_changes(&mut self) {
+        self.structure_changed.clear();
+    }
+
     fn output(&self, mut node_id: NodeId) -> Option<Arc<SceneRope>> {
         loop {
             let branch = self.branches.get(node_id)?;
             if branch.culled {
                 return None;
             }
-            // Transparent composition wrappers have no geometry journal of
-            // their own.
+            // Draw-free, unclipped branches forward the current child output.
             if let Some(child) = branch.transparent_child() {
                 node_id = child;
             } else {
@@ -329,22 +341,20 @@ impl FrameScene {
             tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
                 .then(Instant::now);
         let mut changes = HashMap::<NodeId, BranchChange>::with_capacity_and_hasher(
-            changed.len().max(metadata.paint_changed.len()),
+            self.structure_changed
+                .len()
+                .max(metadata.paint_changed.len()),
             Default::default(),
         );
         let mut damage = None;
         for node_id in removed {
-            if let Some(bounds) = self
-                .branches
-                .get(*node_id)
-                .and_then(|branch| branch.output.as_ref())
-                .and_then(|rope| rope.bounds)
-            {
+            let Some(branch) = self.branches.get(*node_id) else {
+                continue;
+            };
+            if let Some(bounds) = branch.output.as_ref().and_then(|rope| rope.bounds) {
                 damage = Some(damage.map_or(bounds, |rect: PxRect| rect.union(&bounds)));
             }
-        }
-        for node_id in removed {
-            let mut parent = self.branches.get(*node_id).and_then(|branch| branch.parent);
+            let mut parent = branch.parent;
             if let Some(parent) = parent {
                 changes.entry(parent).or_default().structure = true;
             }
@@ -356,12 +366,15 @@ impl FrameScene {
             }
         }
         for node_id in removed {
-            self.branches.remove(*node_id);
-            self.geometry_consumers.remove(node_id);
+            if self.branches.remove(*node_id) {
+                self.geometry_consumers.remove(node_id);
+            }
         }
         record_frame_stage(&mut stage_timer, "scene_removals");
         for &id in &metadata.paint_changed {
-            changes.entry(id).or_default().own = true;
+            if is_scene_node(root, tree, id) {
+                changes.entry(id).or_default().own = true;
+            }
         }
         let viewport_rect = PxRect::enclosing(PxPosition::ZERO, viewport);
         for &node_id in self
@@ -409,11 +422,17 @@ impl FrameScene {
                 }
             }
         }
+        for id in self.structure_changed.drain() {
+            changes.entry(id).or_default().structure = true;
+        }
         for &node_id in changed {
+            if !is_scene_node(root, tree, node_id) {
+                continue;
+            }
             let change = changes.entry(node_id).or_default();
             change.own = true;
             change.structure = true;
-            if let Some(parent) = tree.get(node_id).and_then(|node| node.parent()) {
+            if let Some(parent) = geometry_parent(tree, node_id) {
                 changes.entry(parent).or_default().structure = true;
             }
         }
@@ -426,7 +445,7 @@ impl FrameScene {
             if tree.get(node_id).is_none_or(|node| node.is_removed()) {
                 continue;
             }
-            for ancestor in node_id.ancestors(tree) {
+            for ancestor in std::iter::successors(Some(node_id), |&id| geometry_parent(tree, id)) {
                 let change = changes.entry(ancestor).or_default();
                 if std::mem::replace(&mut change.visited, true) {
                     break;
@@ -447,11 +466,10 @@ impl FrameScene {
                     .then_some((id, change))
             })
             .map(|(id, change)| {
-                let depth = self
-                    .branches
-                    .get(id)
-                    .filter(|_| !changed.contains(&id))
-                    .map_or_else(|| id.ancestors(tree).count(), |branch| branch.depth);
+                let depth = id
+                    .ancestors(tree)
+                    .filter(|&id| id == root || tree[id].get().role == NodeRole::Layout)
+                    .count();
                 (id, depth, change)
             })
             .collect::<Vec<_>>();
@@ -466,7 +484,7 @@ impl FrameScene {
             "scene_update_work"
         );
         let updated = ordered.len() as u64;
-        for (node_id, depth, change) in ordered {
+        for (node_id, _, change) in ordered {
             let node = &tree[node_id];
             let mut branch = self.branches.take(node_id).unwrap_or_default();
             let affects_pixels = change.affects_pixels();
@@ -475,12 +493,17 @@ impl FrameScene {
             {
                 damage = Some(damage.map_or(bounds, |rect: PxRect| rect.union(&bounds)));
             }
-            branch.parent = node.parent();
-            branch.depth = depth;
+            branch.parent = geometry_parent(tree, node_id);
             if change.structure {
-                branch
-                    .children
-                    .rebuild(node_id.children(tree), |child| self.output(child));
+                branch.children.rebuild(
+                    direct_layout_children(node_id, tree).iter().copied(),
+                    |child| {
+                        if let Some(branch) = self.branches.get_mut(child) {
+                            branch.parent = Some(node_id);
+                        }
+                        self.output(child)
+                    },
+                );
             }
             let was_transparent = branch.transparent_child().is_some();
             if change.own {
@@ -604,7 +627,7 @@ impl FrameScene {
             while let Some(id) = parent {
                 if changes.get(&id).is_none_or(|change| !change.dirty) {
                     child = id;
-                    parent = tree.get(id).and_then(|node| node.parent());
+                    parent = geometry_parent(tree, id);
                     continue;
                 }
                 if let Some(parent) = self.branches.get_mut(id) {
@@ -676,6 +699,12 @@ fn fragment_bounds(
             bounds.intersection(&viewport)
         })
         .reduce(|a, b| a.union(&b))
+}
+
+fn is_scene_node(root: NodeId, tree: &ComponentNodeTree, id: NodeId) -> bool {
+    tree.get(id).is_some_and(|node| {
+        !node.is_removed() && (id == root || node.get().role == NodeRole::Layout)
+    })
 }
 
 fn fully_clipped(
@@ -751,7 +780,9 @@ mod tests {
         TesseraRuntime::with_mut(|runtime| {
             let tree = &mut runtime.component_tree;
             let root = tree.add_node(ComponentNode::new("root", NodeRole::Layout));
+            let wrapper = tree.add_node(ComponentNode::new("wrapper", NodeRole::Composition));
             let first = tree.add_node(ComponentNode::new("first", NodeRole::Layout));
+            tree.pop_node();
             tree.pop_node();
             let second = tree.add_node(ComponentNode::new("second", NodeRole::Layout));
             tree.pop_node();
@@ -766,13 +797,9 @@ mod tests {
                 metadata.rel_position = Some(PxPosition::ZERO);
                 metadata.fragment.push_draw_command(Marker(value));
             }
-            let mut scene = FrameScene::default();
-            let frame = |scene: &mut FrameScene,
-                         tree: &mut ComponentTree,
-                         changed: &[NodeId],
-                         removed: &[NodeId]| {
+            let frame = |tree: &mut ComponentTree, changed: &[NodeId], removed: &[NodeId]| {
                 populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
-                let (graph, _) = scene.update(
+                let (graph, _) = tree.frame_scene.update(
                     root,
                     &tree.tree,
                     &tree.metadatas,
@@ -784,28 +811,39 @@ mod tests {
                 graph
             };
 
-            let initial = frame(&mut scene, tree, &[root, first, second], &[]);
-            let previous_root = Arc::clone(scene.root.as_ref().unwrap());
+            let initial = frame(tree, &[root, wrapper, first, second], &[]);
+            let previous_root = Arc::clone(tree.frame_scene.root.as_ref().unwrap());
             let zero = PxPosition::ZERO;
             assert_eq!(drawing(&initial), [(0, zero), (1, zero), (2, zero)]);
 
             let translated = PxPosition::new(Px(20), Px(0));
             place_node(second, translated, 0, &mut tree.metadatas);
-            let moved = frame(&mut scene, tree, &[], &[]);
+            let moved = frame(tree, &[], &[]);
             assert_eq!(drawing(&moved), [(0, zero), (1, zero), (2, translated)]);
 
+            root.append(wrapper, &mut tree.tree);
+            tree.refresh_layout_children(root);
+            let reordered_wrapper = frame(tree, &[], &[]);
+            assert_eq!(
+                drawing(&reordered_wrapper),
+                [(0, zero), (2, translated), (1, zero)]
+            );
+
             first.detach(&mut tree.tree);
-            let one_child = frame(&mut scene, tree, &[], &[first]);
+            tree.refresh_layout_children(wrapper);
+            tree.refresh_layout_children(root);
+            let one_child = frame(tree, &[], &[first]);
             assert_eq!(drawing(&one_child), [(0, zero), (2, translated)]);
 
             root.append(first, &mut tree.tree);
-            let reordered = frame(&mut scene, tree, &[first], &[]);
+            tree.refresh_layout_children(root);
+            let reordered = frame(tree, &[first], &[]);
             assert_eq!(drawing(&reordered), [(0, zero), (2, translated), (1, zero)]);
 
             let offset = PxPosition::new(Px(4), Px(0));
             tree.metadatas.entry_or_default(first).fragment.ops_mut()[0].position_override =
                 Some(offset);
-            let repainted = frame(&mut scene, tree, &[first], &[]);
+            let repainted = frame(tree, &[first], &[]);
             assert_eq!(
                 drawing(&repainted),
                 [(0, zero), (2, translated), (1, offset)]
@@ -819,7 +857,7 @@ mod tests {
             assert_eq!(usize::from(first), usize::from(replacement));
             assert_ne!(first, replacement);
             root.append(replacement, &mut tree.tree);
-            tree.tree[root].get_mut().layout_children = None;
+            tree.refresh_layout_children(root);
             let metadata = tree.metadatas.entry_or_default(replacement);
             metadata.computed_data = Some(ComputedData {
                 width: Px(16),
@@ -828,7 +866,7 @@ mod tests {
             metadata.rel_position = Some(zero);
             metadata.fragment.push_draw_command(Marker(3));
             assert!(tree.metadatas.remove(&first).is_none());
-            let recycled = frame(&mut scene, tree, &[replacement], &[first]);
+            let recycled = frame(tree, &[replacement], &[first]);
             assert_eq!(drawing(&recycled), [(0, zero), (2, translated), (3, zero)]);
 
             let mut builder = RenderGraphBuilder::new();
