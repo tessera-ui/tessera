@@ -18,7 +18,7 @@ use tessera_ui::{
 use crate::{
     pipelines::text::{
         command::{TextCommand, TextConstraint},
-        pipeline::TextData,
+        pipeline::{TextData, TextMeasureInfo},
     },
     theme::{ContentColor, MaterialTheme, TextStyle},
 };
@@ -93,6 +93,7 @@ pub fn text(
         .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
         .unwrap_or_else(|| ContentColor::default().current);
     let size = size.unwrap_or(resolved_style.font_size);
+    let content = Arc::<str>::from(content);
     let semantics = TextSemantics {
         content: content.clone(),
         label: accessibility_label,
@@ -123,7 +124,7 @@ pub fn text(
 
 #[derive(Clone)]
 struct TextSemantics {
-    content: String,
+    content: Arc<str>,
     label: Option<String>,
     description: Option<String>,
 }
@@ -140,7 +141,7 @@ impl SemanticsModifierNode for TextSemantics {
         if let Some(label) = &self.label {
             accessibility.label = Some(label.clone());
         } else if accessibility.label.is_none() && !self.content.is_empty() {
-            accessibility.label = Some(self.content.clone());
+            accessibility.label = Some(self.content.to_string());
         }
         if let Some(description) = &self.description {
             accessibility.description = Some(description.clone());
@@ -150,7 +151,7 @@ impl SemanticsModifierNode for TextSemantics {
 
 #[derive(Clone)]
 struct TextLayout {
-    text: String,
+    text: Arc<str>,
     single_line: bool,
     color: Color,
     style: TextStyle,
@@ -159,7 +160,7 @@ struct TextLayout {
 
 struct CachedText {
     fonts: Option<u64>,
-    text: String,
+    text: Arc<str>,
     style: TextStyle,
     font_size_px: f32,
     constraint: TextConstraint,
@@ -173,7 +174,7 @@ impl PartialEq for TextLayout {
 }
 
 impl TextLayout {
-    fn shaped_text(&self, constraint: TextConstraint) -> TextData {
+    fn measure_text(&self, constraint: TextConstraint) -> TextMeasureInfo {
         let fonts = crate::fonts::prepare(&self.text, self.style);
         let mut cache = self.shaped.lock();
         let font_size_px = self.style.font_size.to_pixels_f32();
@@ -197,13 +198,20 @@ impl TextLayout {
                     style: self.style,
                     font_size_px,
                     constraint: constraint.clone(),
-                    data: TextData::shape(self.text.clone(), self.color, self.style, constraint),
+                    data: TextData::shape_prepared(
+                        self.text.clone(),
+                        self.color,
+                        self.style,
+                        constraint,
+                    ),
                 });
             }
         }
-        let mut data = cache.as_ref().expect("text must be shaped").data.clone();
-        data.set_color(self.color);
-        data
+        cache
+            .as_ref()
+            .expect("text must be shaped")
+            .data
+            .measure_info()
     }
 }
 
@@ -222,13 +230,11 @@ impl tessera_ui::LayoutModifierNode for TextLayout {
         let max_width = input.parent_constraint().width().resolve_max();
         let max_height = input.parent_constraint().height().resolve_max();
 
-        let info = self
-            .shaped_text(TextConstraint {
-                max_width: max_width.map(|px: Px| px.to_f32()),
-                max_height: max_height.map(|px: Px| px.to_f32()),
-                single_line: self.single_line,
-            })
-            .measure_info();
+        let info = self.measure_text(TextConstraint {
+            max_width: max_width.map(|px: Px| px.to_f32()),
+            max_height: max_height.map(|px: Px| px.to_f32()),
+            single_line: self.single_line,
+        });
 
         Ok(LayoutResult::new(ComputedData {
             width: input.parent_constraint().width().clamp(info.size[0].into()),

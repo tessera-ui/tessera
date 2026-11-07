@@ -253,7 +253,7 @@ pub struct TextData {
     pub line_count: u32,
     base_color: Color,
     current_color: Color,
-    text: String,
+    text: Arc<str>,
     font_size: f32,
     line_height: f32,
     font: TextFont,
@@ -313,6 +313,15 @@ impl TextData {
         constraint: TextConstraint,
     ) -> Self {
         crate::fonts::prepare(&text, style);
+        Self::shape_prepared(text.into(), color, style, constraint)
+    }
+
+    pub(crate) fn shape_prepared(
+        text: Arc<str>,
+        color: Color,
+        style: TextStyle,
+        constraint: TextConstraint,
+    ) -> Self {
         let font_size = style.font_size.to_pixels_f32();
         let line_height = style.line_height.unwrap_or(style.font_size).to_pixels_f32();
         let font = TextFont {
@@ -412,7 +421,7 @@ impl TextData {
             line_count: 0,
             base_color: Color::WHITE,
             current_color: Color::WHITE,
-            text: String::new(),
+            text: Arc::from(""),
             font_size: metrics.font_size,
             line_height: metrics.line_height,
             font: TextFont {
@@ -467,10 +476,9 @@ impl TextData {
         font: TextFont,
         constraint: &TextConstraint,
     ) -> glyphon::Buffer {
-        let mut text_buffer = glyphon::Buffer::new(
-            &mut write_font_system(),
-            glyphon::Metrics::new(size, line_height),
-        );
+        let mut font_system = write_font_system();
+        let mut text_buffer =
+            glyphon::Buffer::new(&mut font_system, glyphon::Metrics::new(size, line_height));
         if constraint.single_line {
             text_buffer.set_wrap(glyphon::Wrap::None);
             text_buffer.set_ellipsize(glyphon::cosmic_text::Ellipsize::End(
@@ -479,8 +487,7 @@ impl TextData {
         } else {
             text_buffer.set_wrap(glyphon::Wrap::WordOrGlyph);
         }
-        let single_line = constraint
-            .single_line
+        let single_line = (constraint.single_line && text.contains(['\r', '\n']))
             .then(|| text.replace(['\r', '\n'], " "));
         text_buffer.set_size(constraint.max_width, constraint.max_height);
         text_buffer.set_text(
@@ -496,7 +503,7 @@ impl TextData {
             glyphon::Shaping::Advanced,
             None,
         );
-        text_buffer.shape_until_scroll(&mut write_font_system(), false);
+        text_buffer.shape_until_scroll(&mut font_system, false);
         text_buffer
     }
 
