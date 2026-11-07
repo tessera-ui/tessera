@@ -47,6 +47,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
           export XDG_RUNTIME_DIR="$RUNNER_TEMP"
+          git -C crates/tessera-cosmic-text lfs pull
           cargo nextest run --workspace --run-ignored all --no-fail-fast --test-threads 2
           cargo test --workspace --doc
           rust-script scripts/release-package.rs --check
