@@ -4,15 +4,16 @@
 //!
 //! Layer top/bottom bars, floating buttons, and snackbars above app content.
 use tessera_ui::{
-    ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot,
+    Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    RenderSlot, WindowInsets,
     layout::{MeasureScope, layout},
-    tessera,
+    tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
     modifier::{ModifierExt as _, Padding},
+    theme::MaterialTheme,
 };
 
 fn center_axis(container: Px, child: Px) -> Px {
@@ -239,6 +240,11 @@ impl tessera_ui::LayoutModifierNode for ScaffoldLayout {
 /// ## Parameters
 ///
 /// - `modifier` — optional modifier chain applied to the scaffold container.
+/// - `window_insets` — optional window insets applied to all slots after
+///   subtracting insets consumed by ancestors. Use `WindowInsets::SafeDrawing`
+///   for a window-sized scaffold.
+/// - `container_color` — optional background color that extends under the
+///   insets. With window insets and a theme, defaults to the theme's surface.
 /// - `content_padding` — optional padding applied around the content area.
 /// - `content` — optional main content slot.
 /// - `top_bar` — optional top bar slot.
@@ -280,6 +286,8 @@ impl tessera_ui::LayoutModifierNode for ScaffoldLayout {
 #[tessera]
 pub fn scaffold(
     modifier: Option<Modifier>,
+    window_insets: Option<WindowInsets>,
+    container_color: Option<Color>,
     content_padding: Option<Padding>,
     content: Option<RenderSlot>,
     top_bar: Option<RenderSlot>,
@@ -291,7 +299,18 @@ pub fn scaffold(
     snackbar_alignment: Option<Alignment>,
     snackbar_offset: Option<[Dp; 2]>,
 ) {
-    let modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_size());
+    let mut modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_size());
+    let container_color = if container_color.is_none() && window_insets.is_some() {
+        use_context::<MaterialTheme>().map(|theme| theme.get().color_scheme.surface)
+    } else {
+        container_color
+    };
+    if let Some(color) = container_color {
+        modifier = modifier.background(color);
+    }
+    if let Some(insets) = window_insets {
+        modifier = modifier.window_insets_padding(insets);
+    }
     let content_padding = content_padding.unwrap_or(Padding::all(Dp(0.0)));
     let fab_alignment = floating_action_button_alignment.unwrap_or(Alignment::BottomEnd);
     let floating_action_button_offset = floating_action_button_offset.unwrap_or([Dp(0.0), Dp(0.0)]);
@@ -334,7 +353,8 @@ pub fn scaffold(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px,
+        ComputedData, Dp, Insets, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px,
+        WindowInsets,
         layout::{MeasureScope, layout},
         tessera,
     };
@@ -374,12 +394,13 @@ mod tests {
     }
 
     #[tessera]
-    fn scaffold_layout_case() {
+    fn scaffold_layout_case(insets: Option<WindowInsets>) {
         scaffold()
             .modifier(Modifier::new().constrain(
                 Some(tessera_ui::AxisConstraint::exact(Px::new(100))),
                 Some(tessera_ui::AxisConstraint::exact(Px::new(80))),
             ))
+            .window_insets_optional(insets)
             .top_bar(|| {
                 fixed_test_box()
                     .tag("scaffold_top".to_string())
@@ -411,6 +432,22 @@ mod tests {
                 node("scaffold_top").position(0, 0).size(100, 10);
                 node("scaffold_content").position(0, 10).size(20, 8);
                 node("scaffold_bottom").position(0, 68).size(100, 12);
+            }
+        }
+    }
+
+    #[test]
+    fn scaffold_positions_bars_and_content_inside_window_insets() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 100),
+            content: {
+                scaffold_layout_case()
+                    .insets(WindowInsets::Fixed(Insets::new(Dp::ZERO, Dp(10.0), Dp::ZERO, Dp(7.0))));
+            },
+            expect: {
+                node("scaffold_top").position(0, 10).size(100, 10);
+                node("scaffold_content").position(0, 20).size(20, 8);
+                node("scaffold_bottom").position(0, 61).size(100, 12);
             }
         }
     }

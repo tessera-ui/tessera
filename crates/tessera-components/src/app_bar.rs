@@ -5,10 +5,12 @@
 //! Show screen titles, navigation, and primary actions above page content.
 use tessera_foundation::gesture::DragAxis;
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
+    Asset, AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     layout::{MeasureScope, layout},
-    provide_context, remember, tessera, use_context,
+    provide_context, remember,
+    renderer::AppTitleBar,
+    tessera, use_context,
 };
 
 use crate::{
@@ -221,36 +223,51 @@ impl TopAppBarBuilder {
 
     /// Appends a desktop minimize window control button.
     pub fn window_control_minimize(&self) -> Self {
-        self.action(|| {
-            icon_button()
-                .standard()
-                .accessibility_label(I18N.text("md3-minimize-window"))
-                .icon(filled::MINIMIZE_SVG)
-                .on_click(tessera_platform::window::minimize);
-        })
+        self.action(|| window_control(WindowControl::Minimize))
     }
 
     /// Appends a desktop maximize or restore window control button.
     pub fn window_control_toggle_maximize(&self) -> Self {
-        self.action(|| {
-            icon_button()
-                .standard()
-                .accessibility_label(I18N.text("md3-toggle-maximize-window"))
-                .icon(filled::FULLSCREEN_SVG)
-                .on_click(tessera_platform::window::toggle_maximize);
-        })
+        self.action(|| window_control(WindowControl::Maximize))
     }
 
     /// Appends a desktop close window control button.
     pub fn window_control_close(&self) -> Self {
-        self.action(|| {
-            icon_button()
-                .standard()
-                .accessibility_label(I18N.text("md3-close-window"))
-                .icon(filled::CLOSE_SVG)
-                .on_click(tessera_platform::window::close);
-        })
+        self.action(|| window_control(WindowControl::Close))
     }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum WindowControl {
+    Minimize,
+    Maximize,
+    Close,
+}
+
+#[tessera]
+fn window_control(control: WindowControl) {
+    let (label, icon, action): (&str, Asset, fn()) = match control {
+        WindowControl::Minimize => (
+            "md3-minimize-window",
+            filled::MINIMIZE_SVG,
+            tessera_platform::window::minimize,
+        ),
+        WindowControl::Maximize => (
+            "md3-toggle-maximize-window",
+            filled::FULLSCREEN_SVG,
+            tessera_platform::window::toggle_maximize,
+        ),
+        WindowControl::Close => (
+            "md3-close-window",
+            filled::CLOSE_SVG,
+            tessera_platform::window::close,
+        ),
+    };
+    icon_button()
+        .standard()
+        .accessibility_label(I18N.text(label))
+        .icon(icon)
+        .on_click(action);
 }
 
 /// # top_app_bar
@@ -275,6 +292,8 @@ impl TopAppBarBuilder {
 ///   the title text while retaining the subtitle and alignment.
 /// - `title_area_modifier` — modifier chain applied to the title and subtitle
 ///   area.
+/// - `window_chrome` — use this bar as the title bar when the window is
+///   configured with `WindowConfig::with_app_titlebar`.
 /// - `navigation_icon` — optional leading icon slot.
 /// - `actions` — trailing action slots.
 /// - `navigation_icon_color` — optional color for the navigation icon slot.
@@ -334,6 +353,7 @@ pub fn top_app_bar(
     #[prop(into)] title: Option<String>,
     title_content: Option<RenderSlot>,
     title_area_modifier: Option<Modifier>,
+    window_chrome: Option<bool>,
     navigation_icon: Option<RenderSlot>,
     #[prop(skip_setter)] actions: Option<Vec<RenderSlot>>,
     navigation_icon_color: Option<Color>,
@@ -353,7 +373,21 @@ pub fn top_app_bar(
     let variant = variant.unwrap_or_default();
     let alignment = title_alignment.unwrap_or_default();
     let has_navigation = navigation_icon.is_some();
-    let actions = actions.unwrap_or_default();
+    let title_bar = if window_chrome.unwrap_or(false) {
+        AppTitleBar::current()
+    } else {
+        AppTitleBar::None
+    };
+    let mut actions = actions.unwrap_or_default();
+    if title_bar == AppTitleBar::Custom {
+        for control in [
+            WindowControl::Minimize,
+            WindowControl::Maximize,
+            WindowControl::Close,
+        ] {
+            actions.push(RenderSlot::new(move || window_control(control)));
+        }
+    }
     let has_actions = !actions.is_empty();
     let title = title.unwrap_or_default();
     let subtitle = subtitle.filter(|value| !value.is_empty());
@@ -385,6 +419,11 @@ pub fn top_app_bar(
         title_inset: title_inset.unwrap_or(AppBarDefaults::TITLE_INSET),
     };
     let title_area_modifier = title_area_modifier.unwrap_or_default();
+    let title_area_modifier = if title_bar == AppTitleBar::None {
+        title_area_modifier
+    } else {
+        title_area_modifier.window_drag_region()
+    };
     let actions_spacing = actions_spacing.unwrap_or(AppBarDefaults::ACTIONS_SPACING);
     let elevation = elevation.unwrap_or(AppBarDefaults::TOP_APP_BAR_ELEVATION);
     let fraction = scroll_state

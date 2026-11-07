@@ -7,9 +7,12 @@ pub mod core;
 pub mod drawer;
 pub mod external;
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    cell::Cell,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 pub use core::{RenderCore, RenderResources};
@@ -201,8 +204,9 @@ pub struct WindowConfig {
     pub icon: Option<winit::window::Icon>,
     /// Whether to show the system window decorations (title bar and borders).
     pub decorations: bool,
-    /// Draws macOS content behind a transparent title bar with native window controls.
-    /// Requires decorations; ignored on other platforms.
+    /// Integrates the title bar with app content. Keep decorations enabled for
+    /// native macOS controls and disable them to draw controls in the app bar on
+    /// other desktops. Use [`Self::with_app_titlebar`] to select these settings.
     pub integrated_titlebar: bool,
     /// Whether the window supports transparency.
     pub transparent: bool,
@@ -221,6 +225,57 @@ impl Default for WindowConfig {
             resizable: true,
         }
     }
+}
+
+impl WindowConfig {
+    /// Integrates the app bar with the desktop window. macOS keeps its native
+    /// controls. Other desktops can draw window controls in the app bar.
+    pub fn with_app_titlebar(mut self) -> Self {
+        if desktop_window_controls_available() {
+            self.decorations = cfg!(target_os = "macos");
+            self.integrated_titlebar = true;
+        }
+        self
+    }
+
+    fn app_titlebar(&self) -> AppTitleBar {
+        if !self.integrated_titlebar || !desktop_window_controls_available() {
+            AppTitleBar::None
+        } else if cfg!(target_os = "macos") && self.decorations {
+            AppTitleBar::Native
+        } else if !self.decorations {
+            AppTitleBar::Custom
+        } else {
+            AppTitleBar::None
+        }
+    }
+}
+
+/// The title bar integration available to the current app's content.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AppTitleBar {
+    /// The app bar has no window controls or drag region.
+    #[default]
+    None,
+    /// The app bar can drag the window while the OS draws the controls.
+    Native,
+    /// The app bar supplies both the drag region and the controls.
+    Custom,
+}
+
+impl AppTitleBar {
+    /// Reads the current window's title bar integration.
+    pub fn current() -> Self {
+        crate::local_runtime_resource::<Cell<Self>>().get()
+    }
+}
+
+const fn desktop_window_controls_available() -> bool {
+    !cfg!(any(
+        target_family = "wasm",
+        target_os = "android",
+        target_os = "ios"
+    ))
 }
 
 /// Web host configuration for browser platforms.
@@ -668,14 +723,6 @@ where
     F: Fn() -> Output,
 {
     const RESIZE_EDGE_THRESHOLD: f64 = 8.0;
-
-    const fn supports_native_window_frame_controls() -> bool {
-        !cfg!(any(
-            target_family = "wasm",
-            target_os = "android",
-            target_os = "ios"
-        ))
-    }
 
     #[cfg(target_os = "windows")]
     fn update_native_window_shape(&self, window: &Window) {
@@ -1241,14 +1288,9 @@ Fps: {:.2}
         // resize cursors
         let cursor_position = args.cursor_state.position();
         let window_size = args.app.size();
-        let resize_direction = (Self::supports_native_window_frame_controls() && !decorations)
-            .then(|| {
-                Self::cursor_resize_direction(
-                    cursor_position,
-                    window_size,
-                    Self::RESIZE_EDGE_THRESHOLD,
-                )
-            });
+        let resize_direction = (desktop_window_controls_available() && !decorations).then(|| {
+            Self::cursor_resize_direction(cursor_position, window_size, Self::RESIZE_EDGE_THRESHOLD)
+        });
 
         if let Some(direction) = resize_direction.flatten() {
             let icon = Self::cursor_icon_for_resize(direction);
@@ -1271,7 +1313,7 @@ Fps: {:.2}
         }
 
         let request_window_drag =
-            Self::supports_native_window_frame_controls() && window_requests.request_window_drag;
+            desktop_window_controls_available() && window_requests.request_window_drag;
 
         args.ime_bridge_state
             .sync_window(args.app.window(), window_requests.ime_request);
@@ -1467,7 +1509,7 @@ where
 
     fn apply_window_drag(&mut self, window: &Window) {
         let _session = self.session.enter();
-        if !Self::supports_native_window_frame_controls() {
+        if !desktop_window_controls_available() {
             return;
         }
         if let Err(err) = window.drag_window() {
@@ -1625,7 +1667,7 @@ where
         if matches!(
             event_content,
             CursorEventContent::Pressed(PressKeyEventType::Left)
-        ) && Self::supports_native_window_frame_controls()
+        ) && desktop_window_controls_available()
             && !self.config.window.decorations
             && let Some(app) = self.app.as_ref()
         {
@@ -1941,6 +1983,8 @@ where
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let _session = self.session.enter();
         event_loop.set_control_flow(ControlFlow::Wait);
+        let app_titlebar = self.config.window.app_titlebar();
+        crate::local_runtime_resource::<Cell<AppTitleBar>>().set(app_titlebar);
         #[cfg(feature = "profiling")]
         submit_runtime_meta(RuntimeMeta {
             kind: RuntimeEventKind::Resumed,
@@ -2005,7 +2049,7 @@ where
         let window_attributes = {
             use winit::platform::macos::WindowAttributesExtMacOS;
 
-            if self.config.window.integrated_titlebar && self.config.window.decorations {
+            if app_titlebar == AppTitleBar::Native {
                 window_attributes
                     .with_titlebar_transparent(true)
                     .with_title_hidden(true)

@@ -11,10 +11,10 @@ cargo run -p example
 
 ## Window rendering
 
-The window background extends behind system areas while interactive content uses
-`WindowInsets::SafeDrawing`. Android keeps its system bars transparent. macOS uses
-`WindowConfig::integrated_titlebar` to retain native window controls over the same
-background.
+The scaffold uses `window_insets(WindowInsets::SafeDrawing)` to keep controls
+clear of system areas while extending its background to the window edges.
+`WindowConfig::with_app_titlebar` and `top_app_bar().window_chrome(true)`
+integrate the desktop title bar, including the native controls on macOS.
 
 Run the safe-area rendering regression with a native GPU adapter (Metal on macOS):
 
