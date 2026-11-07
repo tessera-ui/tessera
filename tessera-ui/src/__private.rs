@@ -1,13 +1,7 @@
 #![allow(missing_docs)]
 
-use std::sync::Arc;
-
-use crate::runtime::TesseraRuntime;
-
 pub use crate::{
-    component_call::{
-        ComponentCall, current_component_runner, register_component_call, with_pending_scope,
-    },
+    component_call::{ComponentCall, register_component_call, with_pending_scope},
     layout::layout,
     prop::{ErasedComponentRunner, Prop, make_component_runner},
     runtime::{
@@ -49,11 +43,4 @@ where
     T: Send + Sync + 'static,
 {
     crate::context::context_from_previous_snapshot_for_instance(instance_key)
-}
-
-pub fn set_current_component_replay<P>(runner: Arc<dyn ErasedComponentRunner>, props: &P) -> bool
-where
-    P: crate::prop::Prop,
-{
-    TesseraRuntime::with_mut(|runtime| runtime.set_current_component_replay(runner, props))
 }

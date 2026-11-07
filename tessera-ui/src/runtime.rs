@@ -29,7 +29,7 @@ use crate::{
     },
     layout::LayoutModifierHandle,
     modifier::{DrawModifierNode, Modifier},
-    prop::{CallbackWith, ComponentReplayData, ErasedComponentRunner, Prop},
+    prop::{CallbackWith, ComponentReplayData, ErasedProp, Prop},
     time::Instant,
 };
 
@@ -2208,67 +2208,6 @@ impl TesseraRuntime {
         self.window_size
     }
 
-    /// Stores replay metadata for the current component node.
-    pub(crate) fn set_current_component_replay<P>(
-        &mut self,
-        runner: Arc<dyn ErasedComponentRunner>,
-        props: &P,
-    ) -> bool
-    where
-        P: Prop,
-    {
-        let Some(node) = self.component_tree.current_node() else {
-            debug_assert!(
-                false,
-                "set_current_component_replay must be called inside a component build"
-            );
-            return false;
-        };
-        let instance_key = node.instance_key;
-        let instance_logic_id = node.instance_logic_id;
-        let previous_replay = with_component_replay_tracker(|tracker| {
-            let previous = tracker.previous_nodes.get(&instance_key)?;
-            (previous.instance_logic_id == instance_logic_id && previous.replay.props.equals(props))
-                .then(|| previous.replay.clone())
-        });
-
-        let pending_dirty = consume_pending_build_invalidation(instance_key);
-        let props_unchanged = previous_replay.is_some();
-        let retained = props_unchanged
-            && !is_instance_key_build_dirty(instance_key)
-            && !pending_dirty
-            && self
-                .component_tree
-                .try_reuse_current_subtree(instance_key, instance_logic_id);
-
-        let node = self
-            .component_tree
-            .current_node_mut()
-            .expect("component replay requires a current node");
-        node.replay_boundary = true;
-        node.props_unchanged_from_previous = props_unchanged;
-
-        let replay = previous_replay.unwrap_or_else(|| {
-            if let Some(props) = crate::component_call::active_component_props(props) {
-                ComponentReplayData { runner, props }
-            } else {
-                ComponentReplayData::new(runner, props)
-            }
-        });
-        let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
-            instance_logic_id,
-            group_path: context.group_path,
-            instance_key_override: context.instance_key_override,
-            context: context.context_map.clone(),
-            replay,
-        });
-        let retired = with_component_replay_tracker_mut(|tracker| {
-            tracker.current_nodes.insert(instance_key, snapshot)
-        });
-        drop(retired);
-        retained
-    }
-
     pub(crate) fn set_current_children_scale(&mut self, scale: f32) {
         self.component_tree
             .current_node_mut()
@@ -2812,6 +2751,7 @@ impl Drop for LayoutNodeScope<'_> {
 /// A component build scope that restores the previous node and build context on exit.
 pub struct ComponentNodeScope {
     instance_logic_id: u64,
+    retained: bool,
     _instance: CurrentComponentInstanceGuard,
     _context: NodeContextGuard,
     _phase: PhaseGuard,
@@ -2822,6 +2762,11 @@ impl ComponentNodeScope {
     pub fn instance_logic_id(&self) -> u64 {
         self.instance_logic_id
     }
+
+    /// Returns whether the previous subtree is still valid for this call.
+    pub fn is_retained(&self) -> bool {
+        self.retained
+    }
 }
 
 impl Drop for ComponentNodeScope {
@@ -2831,20 +2776,74 @@ impl Drop for ComponentNodeScope {
 }
 
 /// Enter the build scope for one registered component call.
-pub fn begin_component_node(name: &'static str, component_type_id: u64) -> ComponentNodeScope {
+pub fn begin_component_node<P: Prop>(
+    name: &'static str,
+    component_type_id: u64,
+    props: &P,
+    run: fn(&P),
+) -> ComponentNodeScope {
+    begin_component_node_erased(name, component_type_id, props, &|| {
+        crate::component_call::active_component_replay(props).unwrap_or_else(|| {
+            ComponentReplayData::new(crate::prop::make_component_runner(run), props)
+        })
+    })
+}
+
+fn begin_component_node_erased(
+    name: &'static str,
+    component_type_id: u64,
+    props: &dyn ErasedProp,
+    current_replay: &dyn Fn() -> ComponentReplayData,
+) -> ComponentNodeScope {
     let phase = push_phase(RuntimePhase::Build);
-    let node = new_build_node(name, NodeRole::Composition, component_type_id);
+    let mut node = new_build_node(name, NodeRole::Composition, component_type_id);
     let instance_logic_id = node.instance_logic_id;
     let instance_key = node.instance_key;
-    let id = TesseraRuntime::with_mut(|runtime| runtime.component_tree.add_node(node));
-    let context = enter_node_context(id, name, |_| instance_logic_id);
     let instance = push_current_component_instance_key(instance_key);
-    ComponentNodeScope {
+    let previous_replay = with_component_replay_tracker(|tracker| {
+        let previous = tracker.previous_nodes.get(&instance_key)?;
+        (previous.instance_logic_id == instance_logic_id && previous.replay.props.equals(props))
+            .then(|| previous.replay.clone())
+    });
+    let pending_dirty = consume_pending_build_invalidation(instance_key);
+    let props_unchanged = previous_replay.is_some();
+    let can_retain =
+        props_unchanged && !pending_dirty && !is_instance_key_build_dirty(instance_key);
+    let (id, retained) = TesseraRuntime::with_mut(|runtime| {
+        let tree = &mut runtime.component_tree;
+        if can_retain
+            && let Some(id) = tree.attach_retained_subtree(instance_key, instance_logic_id)
+        {
+            let retained = tree.get_mut(id).expect("retained component node");
+            retained.replay_boundary = true;
+            retained.props_unchanged_from_previous = true;
+            return (id, true);
+        }
+        node.replay_boundary = true;
+        node.props_unchanged_from_previous = props_unchanged;
+        (tree.add_node(node), false)
+    });
+    let context = enter_node_context(id, name, |_| instance_logic_id);
+    let scope = ComponentNodeScope {
         instance_logic_id,
+        retained,
         _instance: instance,
         _context: context,
         _phase: phase,
-    }
+    };
+    let replay = previous_replay.unwrap_or_else(current_replay);
+    let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
+        instance_logic_id,
+        group_path: context.group_path,
+        instance_key_override: context.instance_key_override,
+        context: context.context_map.clone(),
+        replay,
+    });
+    let retired = with_component_replay_tracker_mut(|tracker| {
+        tracker.current_nodes.insert(instance_key, snapshot)
+    });
+    drop(retired);
+    scope
 }
 
 fn new_build_node(name: &'static str, role: NodeRole, component_type_id: u64) -> ComponentNode {

@@ -91,16 +91,11 @@ const PENDING_CALLS: crate::session::SessionLocal<RefCell<PendingCalls>> =
 const ACTIVE_COMPONENT: crate::session::SessionLocal<RefCell<Option<ComponentReplayData>>> =
     crate::session::SessionLocal::new();
 
-/// Return the runner executing the current registered use.
-pub fn current_component_runner() -> Option<Arc<dyn ErasedComponentRunner>> {
-    ACTIVE_COMPONENT.with_borrow(|active| active.as_ref().map(|component| component.runner.clone()))
-}
-
-pub(crate) fn active_component_props<P: Prop>(props: &P) -> Option<Arc<dyn ErasedProp>> {
+pub(crate) fn active_component_replay<P: Prop>(props: &P) -> Option<ComponentReplayData> {
     ACTIVE_COMPONENT.with_borrow(|active| {
         let active = active.as_ref()?;
         let active_props = active.props.as_any().downcast_ref::<P>()?;
-        std::ptr::eq(active_props, props).then(|| Arc::clone(&active.props))
+        std::ptr::eq(active_props, props).then(|| active.clone())
     })
 }
 

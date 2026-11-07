@@ -396,22 +396,6 @@ fn strict_prop_signature(sig: &syn::Signature) -> Result<ComponentPropSignature,
     Ok(ComponentPropSignature::Params(fields))
 }
 
-fn replay_register_tokens(
-    crate_path: &syn::Path,
-    runner_name: &syn::Ident,
-    prop_type: &syn::Type,
-    props_expr: proc_macro2::TokenStream,
-) -> proc_macro2::TokenStream {
-    quote! {
-        let __tessera_component_reused = {
-            let __tessera_runner = #crate_path::__private::current_component_runner().unwrap_or_else(|| {
-                #crate_path::__private::make_component_runner::<#prop_type>(#runner_name)
-            });
-            #crate_path::__private::set_current_component_replay(__tessera_runner, #props_expr)
-        };
-    }
-}
-
 fn prop_assert_tokens(crate_path: &syn::Path, prop_type: &syn::Type) -> proc_macro2::TokenStream {
     quote! {
         {
@@ -1120,12 +1104,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             Err(err) => return err.to_compile_error().into(),
         };
         let prop_assert_tokens = prop_assert_tokens(&crate_path, &prop_type);
-        let replay_tokens = replay_register_tokens(
-            &crate_path,
-            &impl_ident,
-            &prop_type,
-            quote!(__tessera_props),
-        );
         let marker_field_def = marker_field_def
             .map(|field| quote!(#field,))
             .unwrap_or_default();
@@ -1171,13 +1149,14 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             fn #impl_ident #item_generics(__tessera_props: &#props_ident #ty_generics) #where_clause {
+                #prop_assert_tokens
                 let __tessera_scope = #crate_path::__private::begin_component_node(
                     stringify!(#fn_name),
                     #component_type_id_tokens,
+                    __tessera_props,
+                    #impl_ident,
                 );
-                #prop_assert_tokens
-                #replay_tokens
-                if __tessera_component_reused {
+                if __tessera_scope.is_retained() {
                     return;
                 }
                 #crate_path::__private::with_pending_scope(|| {

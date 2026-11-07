@@ -74,6 +74,7 @@ Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements share that refresh. Consumers compare
 retained ancestry after the round's order is available.
 Subtree replacements reuse bounded temporary identity sets within each build.
+Retained subtrees attach directly without allocating a temporary tree node.
 Focus, pointer dispatch, and accessibility read sibling order from the same
 indices stored on the component nodes.
 The pointer index reads the geometry journal directly and refreshes plans for

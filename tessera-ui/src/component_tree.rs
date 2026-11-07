@@ -1073,50 +1073,22 @@ impl ComponentTree {
         }
     }
 
-    pub(crate) fn try_reuse_current_subtree(
+    pub(crate) fn attach_retained_subtree(
         &mut self,
         instance_key: u64,
         instance_logic_id: u64,
-    ) -> bool {
-        let Some(candidate_node_id) = self.replay_candidate(instance_key) else {
-            return false;
-        };
-        let Some(candidate_instance_logic_id) = self
-            .tree
-            .get(candidate_node_id)
-            .map(|node| node.get().instance_logic_id)
-        else {
-            self.replay_reuse_candidates.remove(&instance_key);
-            return false;
-        };
-        if candidate_instance_logic_id != instance_logic_id {
-            return false;
-        }
-        let Some(current_node_id) = self.node_queue.last().copied() else {
-            return false;
-        };
-        if current_node_id == candidate_node_id {
-            self.replay_reuse_candidates.remove(&instance_key);
-            return true;
+    ) -> Option<NodeId> {
+        let id = self.replay_candidate(instance_key)?;
+        if self.tree.get(id)?.get().instance_logic_id != instance_logic_id {
+            return None;
         }
 
-        self.capture_reused_ancestry(candidate_node_id);
-        self.replay_retained_roots.insert(candidate_node_id);
-        candidate_node_id.detach(&mut self.tree);
-        current_node_id.insert_before(candidate_node_id, &mut self.tree);
-        self.metadatas.remove(&current_node_id);
-        self.remove_position_observer(current_node_id);
-        self.changed_frame_nodes.remove(&current_node_id);
-        self.removed_frame_nodes.insert(current_node_id);
-        self.changed_frame_nodes.insert(candidate_node_id);
-        current_node_id.remove_subtree(&mut self.tree);
-        if let Some(current_node) = self.node_queue.last_mut() {
-            *current_node = candidate_node_id;
-        }
-        self.node_ids_by_instance_key
-            .insert(instance_key, candidate_node_id);
+        self.capture_reused_ancestry(id);
+        self.replay_retained_roots.insert(id);
+        id.detach(&mut self.tree);
+        self.attach_build_node(id);
         self.replay_reuse_candidates.remove(&instance_key);
-        true
+        Some(id)
     }
 
     /// Add a new node to the tree
@@ -6294,8 +6266,7 @@ mod tests {
             Err(_) => panic!("replace context should be created"),
         };
 
-        let _replacement = tree.add_node(node("replacement", 2, 2));
-        assert!(tree.try_reuse_current_subtree(2, 2));
+        assert_eq!(tree.attach_retained_subtree(2, 2), Some(_first));
         tree.pop_node();
 
         let mut replace_result = ReplayReplaceResult::default();
@@ -6320,6 +6291,7 @@ mod tests {
         assert_eq!(tree.find_node_id_by_instance_key(3), Some(_first_child));
         assert!(replace_result.reused_instance_logic_ids.contains(&2));
         assert_eq!(replace_result.reused_instance_logic_ids.len(), 1);
+        assert!(tree.removed_frame_nodes.is_empty());
         assert!(!replace_result.removed_instance_keys.contains(&2));
         assert!(!replace_result.removed_instance_keys.contains(&3));
         assert!(!replace_result.removed_instance_logic_ids.contains(&2));
@@ -6364,8 +6336,7 @@ mod tests {
                 .begin_replace_subtree_by_instance_key(4)
                 .unwrap_or_else(|_| panic!("wrapper exists"));
             let wrapper = tree.add_node(node_with_role("wrapper", NodeRole::Composition, 4, 4));
-            tree.add_node(node("leaf", 5, 5));
-            assert!(tree.try_reuse_current_subtree(5, 5));
+            assert_eq!(tree.attach_retained_subtree(5, 5), Some(leaf));
             tree.pop_node();
             let extra = add_extra.then(|| {
                 let extra = tree.add_node(node("extra", 6, 6));
@@ -6423,8 +6394,7 @@ mod tests {
             .begin_replace_subtree_by_instance_key(3)
             .unwrap_or_else(|_| panic!("wrapper exists"));
         tree.add_node(node_with_role("replacement", NodeRole::Composition, 9, 9));
-        tree.add_node(node("layout_b", 4, 4));
-        assert!(tree.try_reuse_current_subtree(4, 4));
+        assert_eq!(tree.attach_retained_subtree(4, 4), Some(layout_b));
         tree.pop_node();
         let layout_c = tree.add_node(node("layout_c", 10, 10));
         tree.pop_node();
@@ -6453,9 +6423,8 @@ mod tests {
             .begin_replace_subtree_by_instance_key(9)
             .unwrap_or_else(|_| panic!("replacement exists"));
         tree.add_node(node_with_role("reordered", NodeRole::Composition, 9, 9));
-        for (name, key) in [("layout_c", 10), ("layout_b", 4)] {
-            tree.add_node(node(name, key, key));
-            assert!(tree.try_reuse_current_subtree(key, key));
+        for (key, id) in [(10, layout_c), (4, layout_b)] {
+            assert_eq!(tree.attach_retained_subtree(key, key), Some(id));
             tree.pop_node();
         }
         tree.pop_node();
