@@ -17,6 +17,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{
     execution_context::{with_execution_context, with_execution_context_mut},
+    read_dependencies::ReadDependencies,
     runtime::{
         RuntimePhase, compute_context_slot_key, current_phase,
         current_replay_boundary_instance_key_from_scope, ensure_build_phase,
@@ -148,11 +149,7 @@ struct ContextReadDependencyKey {
     generation: u64,
 }
 
-#[derive(Default)]
-struct ContextReadDependencyTracker {
-    readers_by_context: HashMap<ContextReadDependencyKey, HashSet<u64>>,
-    contexts_by_reader: HashMap<u64, HashSet<ContextReadDependencyKey>>,
-}
+type ContextReadDependencyTracker = ReadDependencies<ContextReadDependencyKey, u64>;
 
 fn with_context_read_dependency_tracker<R>(
     f: impl FnOnce(&ContextReadDependencyTracker) -> R,
@@ -245,23 +242,7 @@ pub(crate) fn remove_context_read_dependencies(instance_keys: &HashSet<u64>) {
     if instance_keys.is_empty() {
         return;
     }
-    with_context_read_dependency_tracker_mut(|tracker| {
-        for instance_key in instance_keys {
-            let Some(context_keys) = tracker.contexts_by_reader.remove(instance_key) else {
-                continue;
-            };
-            for context_key in context_keys {
-                let mut remove_entry = false;
-                if let Some(readers) = tracker.readers_by_context.get_mut(&context_key) {
-                    readers.remove(instance_key);
-                    remove_entry = readers.is_empty();
-                }
-                if remove_entry {
-                    tracker.readers_by_context.remove(&context_key);
-                }
-            }
-        }
-    });
+    with_context_read_dependency_tracker_mut(|tracker| tracker.remove_readers(instance_keys));
 }
 
 pub(crate) fn reset_context_read_dependencies() {
@@ -300,27 +281,15 @@ fn track_context_read_dependency(slot: u32, generation: u64) {
     };
 
     let key = ContextReadDependencyKey { slot, generation };
-    with_context_read_dependency_tracker_mut(|tracker| {
-        tracker
-            .readers_by_context
-            .entry(key)
-            .or_default()
-            .insert(reader_instance_key);
-        tracker
-            .contexts_by_reader
-            .entry(reader_instance_key)
-            .or_default()
-            .insert(key);
-    });
+    with_context_read_dependency_tracker_mut(|tracker| tracker.record(key, reader_instance_key));
 }
 
 fn context_read_subscribers(slot: u32, generation: u64) -> Vec<u64> {
     let key = ContextReadDependencyKey { slot, generation };
     with_context_read_dependency_tracker(|tracker| {
         tracker
-            .readers_by_context
-            .get(&key)
-            .map(|readers| readers.iter().copied().collect())
+            .readers(&key)
+            .map(Iterator::collect)
             .unwrap_or_default()
     })
 }

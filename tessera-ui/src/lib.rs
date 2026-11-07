@@ -65,6 +65,7 @@ pub mod plugin;
 pub mod profiler;
 mod prop;
 pub mod px;
+mod read_dependencies;
 mod render_graph;
 pub mod render_module;
 mod render_pass;

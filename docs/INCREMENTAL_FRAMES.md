@@ -79,6 +79,8 @@ their storage across placement updates, and leaf layouts need no child storage.
 Parents with a single composition child can share its flattened layout child list.
 The same ancestor walk marks dirty layout paths and records the affected children
 for parents that can reuse their cached measurement.
+State, context, focus, and render-slot reads share a dependency index with inline
+storage for the first reader and dependency.
 
 Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements share that refresh. Consumers compare

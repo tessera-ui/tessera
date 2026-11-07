@@ -31,6 +31,7 @@ use crate::{
     layout::LayoutModifierHandle,
     modifier::{DrawModifierNode, Modifier},
     prop::{CallbackWith, ErasedComponent, Prop},
+    read_dependencies::ReadDependencies,
     session::{try_with_runtime_globals, with_runtime_globals},
     time::Instant,
 };
@@ -560,8 +561,7 @@ struct LayoutDirtyTracker {
     pending_transform_dirty_nodes: HashSet<u64>,
     pending_paint_dirty_nodes: HashSet<u64>,
     pending_pointer_dirty_nodes: HashSet<u64>,
-    layout_readers_by_state: HashMap<StateReadDependencyKey, HashSet<PhaseReader>>,
-    layout_states_by_reader: HashMap<PhaseReader, HashSet<StateReadDependencyKey>>,
+    state_reads: ReadDependencies<StateReadDependencyKey, PhaseReader>,
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
@@ -735,23 +735,11 @@ enum FocusReadDependencyKind {
     Requester(FocusRequesterId),
 }
 
-#[derive(Default)]
-struct StateReadDependencyTracker {
-    readers_by_state: HashMap<StateReadDependencyKey, HashSet<u64>>,
-    states_by_reader: HashMap<u64, HashSet<StateReadDependencyKey>>,
-}
+type StateReadDependencyTracker = ReadDependencies<StateReadDependencyKey, u64>;
 
-#[derive(Default)]
-struct FocusReadDependencyTracker {
-    readers_by_focus: HashMap<FocusReadDependencyKey, HashSet<u64>>,
-    focus_by_reader: HashMap<u64, HashSet<FocusReadDependencyKey>>,
-}
+type FocusReadDependencyTracker = ReadDependencies<FocusReadDependencyKey, u64>;
 
-#[derive(Default)]
-struct RenderSlotReadDependencyTracker {
-    readers_by_slot: HashMap<FunctorHandle, HashSet<u64>>,
-    slots_by_reader: HashMap<u64, HashSet<FunctorHandle>>,
-}
+type RenderSlotReadDependencyTracker = ReadDependencies<FunctorHandle, u64>;
 
 type RedrawWaker = Arc<dyn Fn() + Send + Sync + 'static>;
 
@@ -1100,25 +1088,7 @@ fn track_state_read_dependency(slot: SlotHandle, generation: u64) {
     };
 
     let key = StateReadDependencyKey { slot, generation };
-    with_state_read_dependency_tracker_mut(|tracker| {
-        if tracker
-            .readers_by_state
-            .get(&key)
-            .is_some_and(|readers| readers.contains(&reader_instance_key))
-        {
-            return;
-        }
-        tracker
-            .readers_by_state
-            .entry(key)
-            .or_default()
-            .insert(reader_instance_key);
-        tracker
-            .states_by_reader
-            .entry(reader_instance_key)
-            .or_default()
-            .insert(key);
-    });
+    with_state_read_dependency_tracker_mut(|tracker| tracker.record(key, reader_instance_key));
 }
 
 fn track_layout_state_read_dependency(slot: SlotHandle, generation: u64, phase: ReadPhase) {
@@ -1134,30 +1104,12 @@ fn track_layout_state_read_dependency(slot: SlotHandle, generation: u64, phase: 
         phase,
     };
     let key = StateReadDependencyKey { slot, generation };
-    with_layout_dirty_tracker_mut(|tracker| {
-        if tracker
-            .layout_readers_by_state
-            .get(&key)
-            .is_some_and(|readers| readers.contains(&reader_instance_key))
-        {
-            return;
-        }
-        tracker
-            .layout_readers_by_state
-            .entry(key)
-            .or_default()
-            .insert(reader_instance_key);
-        tracker
-            .layout_states_by_reader
-            .entry(reader_instance_key)
-            .or_default()
-            .insert(key);
-    });
+    with_layout_dirty_tracker_mut(|tracker| tracker.state_reads.record(key, reader_instance_key));
 }
 
 fn mark_layout_state_readers_dirty(key: StateReadDependencyKey) -> bool {
     with_layout_dirty_tracker_mut(|tracker| {
-        let Some(readers) = tracker.layout_readers_by_state.get(&key) else {
+        let Some(readers) = tracker.state_reads.readers(&key) else {
             return false;
         };
         for reader in readers {
@@ -1170,7 +1122,7 @@ fn mark_layout_state_readers_dirty(key: StateReadDependencyKey) -> bool {
             };
             target.insert(reader.instance_key);
         }
-        !readers.is_empty()
+        true
     })
 }
 
@@ -1180,17 +1132,7 @@ pub(crate) fn clear_phase_state_reads(instance_key: u64, phase: ReadPhase) {
             instance_key,
             phase,
         };
-        let Some(state_keys) = tracker.layout_states_by_reader.remove(&reader) else {
-            return;
-        };
-        for state_key in state_keys {
-            if let Some(readers) = tracker.layout_readers_by_state.get_mut(&state_key) {
-                readers.remove(&reader);
-                if readers.is_empty() {
-                    tracker.layout_readers_by_state.remove(&state_key);
-                }
-            }
-        }
+        tracker.state_reads.remove_reader(&reader);
     });
 }
 
@@ -1217,34 +1159,15 @@ fn track_focus_dependency(kind: FocusReadDependencyKind) {
     };
 
     let key = FocusReadDependencyKey { kind };
-    with_focus_read_dependency_tracker_mut(|tracker| {
-        if tracker
-            .readers_by_focus
-            .get(&key)
-            .is_some_and(|readers| readers.contains(&reader_instance_key))
-        {
-            return;
-        }
-        tracker
-            .readers_by_focus
-            .entry(key)
-            .or_default()
-            .insert(reader_instance_key);
-        tracker
-            .focus_by_reader
-            .entry(reader_instance_key)
-            .or_default()
-            .insert(key);
-    });
+    with_focus_read_dependency_tracker_mut(|tracker| tracker.record(key, reader_instance_key));
 }
 
 fn focus_read_subscribers_by_kind(kind: FocusReadDependencyKind) -> Vec<u64> {
     let key = FocusReadDependencyKey { kind };
     with_focus_read_dependency_tracker(|tracker| {
         tracker
-            .readers_by_focus
-            .get(&key)
-            .map(|readers| readers.iter().copied().collect())
+            .readers(&key)
+            .map(Iterator::collect)
             .unwrap_or_default()
     })
 }
@@ -1274,32 +1197,15 @@ pub(crate) fn track_render_slot_read_dependency(handle: FunctorHandle) {
     };
 
     with_render_slot_read_dependency_tracker_mut(|tracker| {
-        if tracker
-            .readers_by_slot
-            .get(&handle)
-            .is_some_and(|readers| readers.contains(&reader_instance_key))
-        {
-            return;
-        }
-        tracker
-            .readers_by_slot
-            .entry(handle)
-            .or_default()
-            .insert(reader_instance_key);
-        tracker
-            .slots_by_reader
-            .entry(reader_instance_key)
-            .or_default()
-            .insert(handle);
+        tracker.record(handle, reader_instance_key)
     });
 }
 
 fn render_slot_read_subscribers(handle: FunctorHandle) -> Vec<u64> {
     with_render_slot_read_dependency_tracker(|tracker| {
         tracker
-            .readers_by_slot
-            .get(&handle)
-            .map(|readers| readers.iter().copied().collect())
+            .readers(&handle)
+            .map(Iterator::collect)
             .unwrap_or_default()
     })
 }
@@ -1309,69 +1215,21 @@ pub(crate) fn remove_state_read_dependencies(instance_keys: &HashSet<u64>) {
     if instance_keys.is_empty() {
         return;
     }
-    with_state_read_dependency_tracker_mut(|tracker| {
-        for instance_key in instance_keys {
-            let Some(state_keys) = tracker.states_by_reader.remove(instance_key) else {
-                continue;
-            };
-            for state_key in state_keys {
-                let mut remove_entry = false;
-                if let Some(readers) = tracker.readers_by_state.get_mut(&state_key) {
-                    readers.remove(instance_key);
-                    remove_entry = readers.is_empty();
-                }
-                if remove_entry {
-                    tracker.readers_by_state.remove(&state_key);
-                }
-            }
-        }
-    });
+    with_state_read_dependency_tracker_mut(|tracker| tracker.remove_readers(instance_keys));
 }
 
 pub(crate) fn remove_focus_read_dependencies(instance_keys: &HashSet<u64>) {
     if instance_keys.is_empty() {
         return;
     }
-    with_focus_read_dependency_tracker_mut(|tracker| {
-        for instance_key in instance_keys {
-            let Some(focus_keys) = tracker.focus_by_reader.remove(instance_key) else {
-                continue;
-            };
-            for focus_key in focus_keys {
-                let mut remove_entry = false;
-                if let Some(readers) = tracker.readers_by_focus.get_mut(&focus_key) {
-                    readers.remove(instance_key);
-                    remove_entry = readers.is_empty();
-                }
-                if remove_entry {
-                    tracker.readers_by_focus.remove(&focus_key);
-                }
-            }
-        }
-    });
+    with_focus_read_dependency_tracker_mut(|tracker| tracker.remove_readers(instance_keys));
 }
 
 pub(crate) fn remove_render_slot_read_dependencies(instance_keys: &HashSet<u64>) {
     if instance_keys.is_empty() {
         return;
     }
-    with_render_slot_read_dependency_tracker_mut(|tracker| {
-        for instance_key in instance_keys {
-            let Some(slot_keys) = tracker.slots_by_reader.remove(instance_key) else {
-                continue;
-            };
-            for slot_key in slot_keys {
-                let mut remove_entry = false;
-                if let Some(readers) = tracker.readers_by_slot.get_mut(&slot_key) {
-                    readers.remove(instance_key);
-                    remove_entry = readers.is_empty();
-                }
-                if remove_entry {
-                    tracker.readers_by_slot.remove(&slot_key);
-                }
-            }
-        }
-    });
+    with_render_slot_read_dependency_tracker_mut(|tracker| tracker.remove_readers(instance_keys));
 }
 
 pub(crate) fn reset_state_read_dependencies() {
@@ -2116,15 +1974,12 @@ fn publish_state_write(slot: SlotHandle, generation: u64) {
     let key = StateReadDependencyKey { slot, generation };
     let build_dirty = with_runtime_globals(|globals| {
         let dependencies = globals.state_read_dependency_tracker.borrow();
-        dependencies
-            .readers_by_state
-            .get(&key)
-            .is_some_and(|readers| {
-                globals
-                    .build_invalidation_tracker
-                    .borrow_mut()
-                    .invalidate(readers.iter().copied(), writer_instance_key)
-            })
+        dependencies.readers(&key).is_some_and(|readers| {
+            globals
+                .build_invalidation_tracker
+                .borrow_mut()
+                .invalidate(readers, writer_instance_key)
+        })
     });
     let layout_dirty = mark_layout_state_readers_dirty(key);
     if build_dirty || layout_dirty {
