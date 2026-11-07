@@ -1039,7 +1039,14 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 entry_generics.params.push(syn::parse_quote!(#output));
             }
         }
-        let constructor_params_and_assignments: Vec<_> = match required_fields
+        // Conversions can run user code after registration. Preserve their
+        // order relative to later property assignments and their destructors.
+        let initial_count = required_fields
+            .iter()
+            .take_while(|field| field.helper.is_none() && !field.attrs.into)
+            .count();
+        let (initial_fields, pending_fields) = required_fields.split_at(initial_count);
+        let constructor_params_and_assignments: Vec<_> = match pending_fields
             .iter()
             .map(|field| generate_constructor_param_and_assignment(field, &crate_path))
             .collect::<syn::Result<Vec<_>>>()
@@ -1047,14 +1054,35 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             Ok(entries) => entries,
             Err(err) => return err.to_compile_error().into(),
         };
-        let constructor_params: Vec<_> = constructor_params_and_assignments
+        let constructor_params: Vec<_> = initial_fields
             .iter()
-            .map(|(param, _)| param.clone())
+            .map(|field| {
+                let ident = &field.ident;
+                let ty = &field.ty;
+                quote!(#ident: #ty)
+            })
+            .chain(
+                constructor_params_and_assignments
+                    .iter()
+                    .map(|(param, _)| param.clone()),
+            )
             .collect();
         let constructor_assignments: Vec<_> = constructor_params_and_assignments
             .iter()
             .map(|(_, assignment)| assignment.clone())
             .collect();
+        let initial_props = if initial_fields.is_empty() {
+            quote!(<#props_ident #ty_generics>::default())
+        } else {
+            let initializers = initial_fields.iter().map(|field| {
+                let ident = &field.ident;
+                quote!(#ident: Some(#ident),)
+            });
+            quote!(#props_ident {
+                #(#initializers)*
+                ..<#props_ident #ty_generics>::default()
+            })
+        };
         let field_defs: Vec<_> = fields
             .iter()
             .map(|field| {
@@ -1135,7 +1163,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             ) -> #builder_ident #ty_generics #where_clause {
                 let __tessera_call = #crate_path::__private::register_component_call(
                         stringify!(#fn_name), #component_type_id_tokens,
-                        <#props_ident #ty_generics>::default(),
+                        #initial_props,
                         #runner,
                     );
                 #(#constructor_assignments)*
