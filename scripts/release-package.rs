@@ -21,7 +21,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use cargo_metadata::{Metadata, MetadataCommand};
 use clap::Parser;
 use semver::Version;
@@ -613,7 +613,12 @@ fn verify(metadata: &Metadata) -> Result<()> {
             .arg(archive))?;
     }
     let executable = if cfg!(target_os = "linux") {
-        installed.join("usr/bin/app_basic")
+        let binaries =
+            fs::read_dir(installed.join("usr/bin"))?.collect::<std::io::Result<Vec<_>>>()?;
+        let [executable] = binaries.as_slice() else {
+            bail!("Expected one executable in the installed Debian scaffold");
+        };
+        executable.path()
     } else if cfg!(target_os = "macos") {
         output
             .join("app-basic.app/Contents/MacOS/app_basic")

@@ -27,14 +27,19 @@ fn png(icon: &AppIcon, path: &Path, size: u32, opaque: bool) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn desktop(config: &AppConfig, output: &Path) -> Result<Option<Vec<PathBuf>>> {
+pub(super) fn desktop(
+    config: &AppConfig,
+    output: &Path,
+    macos: bool,
+) -> Result<Option<Vec<PathBuf>>> {
     let Some(icon) = config.load_icon()? else {
         return Ok(None);
     };
     fs::create_dir_all(output)?;
     let mut paths = Vec::new();
     for size in [16, 32, 64, 128, 256, 512, 1024] {
-        let path = output.join(format!("icon-{size}.png"));
+        let suffix = if macos && size == 1024 { "@2x" } else { "" };
+        let path = output.join(format!("icon-{size}{suffix}.png"));
         png(&icon, &path, size, false)?;
         paths.push(path);
     }
@@ -190,7 +195,9 @@ mod tests {
         )
         .unwrap();
         let config = AppConfig::load(root, "fixture").unwrap();
-        let paths = desktop(&config, &root.join("desktop")).unwrap().unwrap();
+        let paths = desktop(&config, &root.join("desktop"), false)
+            .unwrap()
+            .unwrap();
         let ico = paths.last().unwrap();
         let windows = image::open(ico).unwrap().into_rgba8();
         assert_eq!(windows.dimensions(), (256, 256));

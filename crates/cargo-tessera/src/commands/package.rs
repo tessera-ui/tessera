@@ -68,7 +68,10 @@ pub fn execute(
                 .to_path_buf(),
         )
     };
-    if let Some(icons) = app_assets::desktop(&app.identity, &out.join("icons"))? {
+    let macos = target.map_or(cfg!(target_os = "macos"), |target| {
+        target.ends_with("-apple-darwin")
+    });
+    if let Some(icons) = app_assets::desktop(&app.identity, &out.join("icons"), macos)? {
         if target.map_or(cfg!(target_os = "windows"), |target| {
             target.contains("windows")
         }) {
