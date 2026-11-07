@@ -131,7 +131,7 @@ impl ShapeClipper {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        passes: &mut [RenderPassPlan],
+        passes: &mut [RenderPassPlan<'_>],
         viewport: [f32; 2],
     ) {
         self.stack.clear();

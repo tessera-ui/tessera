@@ -1,6 +1,5 @@
 use std::any::TypeId;
 
-use downcast_rs::Downcast;
 use smallvec::SmallVec;
 use tracing::{debug, error, warn};
 
@@ -29,7 +28,7 @@ enum SceneState {
     },
 }
 
-struct RenderPassParams<'a> {
+struct RenderPassParams<'a, 'commands> {
     msaa_view: Option<&'a wgpu::TextureView>,
     stencil_view: &'a wgpu::TextureView,
     clipper: &'a mut super::clip::ShapeClipper,
@@ -37,7 +36,7 @@ struct RenderPassParams<'a> {
     damage: PxRect,
     encoder: &'a mut wgpu::CommandEncoder,
     write_target: &'a wgpu::TextureView,
-    commands_in_pass: &'a mut SmallVec<[DrawOrClip; 32]>,
+    commands_in_pass: &'a mut SmallVec<[DrawOrClip<'commands>; 32]>,
     scene: Option<(&'a wgpu::TextureView, PxRect)>,
     drawer: &'a mut Drawer,
     graphics: &'a crate::GraphicsDevice,
@@ -292,20 +291,20 @@ impl RenderCore {
         let mut scene = SceneState::Offscreen;
         let mut scene_written = !full_redraw;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
-        for pass in &mut passes {
+        for mut pass in passes {
             let timing = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
             Self::execute_render_pass(
                 &mut state,
                 &mut encoder,
                 &mut scene,
                 &mut scene_written,
-                pass,
+                &mut pass,
                 &mut clip_stack,
                 damage,
             );
             #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
             if let Some(timing) = &mut self.gpu_timing {
-                timing.mark(&mut encoder, || match pass {
+                timing.mark(&mut encoder, || match &pass {
                     RenderPassPlan::Draw { reads_scene, .. } => {
                         format!("Draw reads_scene={reads_scene}")
                     }
@@ -490,7 +489,7 @@ impl RenderCore {
         encoder: &mut wgpu::CommandEncoder,
         scene: &mut SceneState,
         scene_written: &mut bool,
-        pass: &mut RenderPassPlan,
+        pass: &mut RenderPassPlan<'_>,
         clip_stack: &mut SmallVec<[PxRect; 16]>,
         damage: PxRect,
     ) {
@@ -587,7 +586,7 @@ impl RenderCore {
     fn filter_scene(
         state: &mut RenderCoreFrameState<'_>,
         encoder: &mut wgpu::CommandEncoder,
-        items: Vec<ComputePlanItem>,
+        items: Vec<ComputePlanItem<'_>>,
     ) -> Option<SceneState> {
         let target_size = state.target_size();
         let region = items
@@ -629,7 +628,7 @@ impl RenderCore {
             y: rect.y - region.y,
             ..rect
         };
-        let items: Vec<ComputePlanItem> = items
+        let items: Vec<ComputePlanItem<'_>> = items
             .into_iter()
             .map(|item| ComputePlanItem {
                 geometry: DrawGeometry::new(
@@ -670,7 +669,7 @@ impl RenderCore {
                 }
                 sampling.push(item.sampling_rect);
                 batch.push(ErasedComputeBatchItem {
-                    command: &*item.command,
+                    command: item.command,
                     geometry: item.geometry,
                     target_area: item.target_rect,
                 });
@@ -823,7 +822,7 @@ fn rects_overlap(a: PxRect, b: PxRect) -> bool {
     !(a_right <= b_left || b_right <= a_left || a_bottom <= b_top || b_bottom <= a_top)
 }
 
-fn render_current_pass(params: RenderPassParams<'_>) {
+fn render_current_pass(params: RenderPassParams<'_, '_>) {
     let RenderPassParams {
         msaa_view,
         stencil_view,
@@ -949,7 +948,7 @@ fn render_current_pass(params: RenderPassParams<'_>) {
         if !can_merge_into_batch(&last_command_type_id, cmd.type_id) && !buffer.is_empty() {
             flush!();
         }
-        buffer.push((cmd.command.as_ref(), cmd.geometry));
+        buffer.push((cmd.command, cmd.geometry));
         last_command_type_id = Some(cmd.type_id);
         current_batch_draw_rect = Some(merge_batch_rect(current_batch_draw_rect, cmd.draw_rect));
     }
@@ -1094,7 +1093,7 @@ fn merge_batch_rect(current: Option<PxRect>, next: PxRect) -> PxRect {
     current.map(|dr| dr.union(&next)).unwrap_or(next)
 }
 
-fn scene_sampling_rect(commands: &[DrawOrClip], target_size: PxSize) -> Option<PxRect> {
+fn scene_sampling_rect(commands: &[DrawOrClip<'_>], target_size: PxSize) -> Option<PxRect> {
     let target = PxRect::new(Px::ZERO, Px::ZERO, target_size.width, target_size.height);
     let mut captured = None;
     for command in commands {
@@ -1289,10 +1288,10 @@ mod tests {
         fn apply_opacity(&mut self, _opacity: f32) {}
     }
 
-    fn sampled_draw(region: Option<SampleRegion>, position: PxPosition) -> DrawOrClip {
+    fn sampled_draw(command: &SampleCommand, position: PxPosition) -> DrawOrClip<'_> {
         let size = PxSize::new(Px(50), Px(50));
         DrawOrClip::Draw(crate::render_pass::DrawCommandWithMetadata {
-            command: Box::new(SampleCommand(region)),
+            command,
             type_id: std::any::TypeId::of::<SampleCommand>(),
             geometry: DrawGeometry::from_position_size(position, size),
             draw_rect: PxRect::from_position_size(position, size),
@@ -1303,21 +1302,17 @@ mod tests {
     fn scene_capture_unions_sampling_regions_without_applying_draw_clips() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
+        let local = SampleCommand(Some(SampleRegion::uniform_padding_local(Px(10))));
+        let absolute = SampleCommand(Some(SampleRegion::Absolute(PxRect::new(
+            Px(300),
+            Px(100),
+            Px(20),
+            Px(20),
+        ))));
         let commands = [
             DrawOrClip::Clip(ClipOps::Push(PxRect::new(Px(100), Px(100), Px(1), Px(1)))),
-            sampled_draw(
-                Some(SampleRegion::uniform_padding_local(Px(10))),
-                PxPosition::new(Px(100), Px(100)),
-            ),
-            sampled_draw(
-                Some(SampleRegion::Absolute(PxRect::new(
-                    Px(300),
-                    Px(100),
-                    Px(20),
-                    Px(20),
-                ))),
-                PxPosition::ZERO,
-            ),
+            sampled_draw(&local, PxPosition::new(Px(100), Px(100))),
+            sampled_draw(&absolute, PxPosition::ZERO),
         ];
         assert_eq!(
             scene_sampling_rect(&commands, PxSize::new(Px(400), Px(400))),
@@ -1329,8 +1324,9 @@ mod tests {
     fn scene_capture_rounds_fractional_sampling_edges_outward() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
+        let local = SampleCommand(Some(SampleRegion::uniform_padding_local(Px(10))));
         let commands = [sampled_draw(
-            Some(SampleRegion::uniform_padding_local(Px(10))),
+            &local,
             PxPosition::from_f32_xy(100.25, 200.75),
         )];
         assert_eq!(
@@ -1343,10 +1339,8 @@ mod tests {
     fn scene_capture_clamps_regions_at_screen_edges() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let commands = [sampled_draw(
-            Some(SampleRegion::uniform_padding_local(Px(10))),
-            PxPosition::from_f32_xy(-5.25, -6.75),
-        )];
+        let local = SampleCommand(Some(SampleRegion::uniform_padding_local(Px(10))));
+        let commands = [sampled_draw(&local, PxPosition::from_f32_xy(-5.25, -6.75))];
         assert_eq!(
             scene_sampling_rect(&commands, PxSize::new(Px(400), Px(400))),
             Some(PxRect::new(Px::ZERO, Px::ZERO, Px(55), Px(54)))
@@ -1360,13 +1354,19 @@ mod tests {
         let target_size = PxSize::new(Px(400), Px(400));
         assert_eq!(
             scene_sampling_rect(
-                &[sampled_draw(Some(SampleRegion::Global), PxPosition::ZERO)],
+                &[sampled_draw(
+                    &SampleCommand(Some(SampleRegion::Global)),
+                    PxPosition::ZERO
+                )],
                 target_size
             ),
             Some(PxRect::new(Px::ZERO, Px::ZERO, Px(400), Px(400)))
         );
         assert_eq!(
-            scene_sampling_rect(&[sampled_draw(None, PxPosition::ZERO)], target_size),
+            scene_sampling_rect(
+                &[sampled_draw(&SampleCommand(None), PxPosition::ZERO)],
+                target_size
+            ),
             None
         );
     }

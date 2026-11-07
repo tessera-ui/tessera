@@ -24,7 +24,7 @@ enum SceneClip {
 }
 
 struct SceneDraw {
-    fragment: Arc<RenderFragment>,
+    fragment: RenderFragment,
     geometry: DrawGeometry,
     opacity: f32,
     visible: bool,
@@ -381,8 +381,8 @@ impl FrameScene {
                             .draw
                             .as_ref()
                             .filter(|_| !fragment_changed)
-                            .map(|draw| Arc::clone(&draw.fragment))
-                            .unwrap_or_else(|| Arc::new(metadata.fragment.clone()));
+                            .map(|draw| draw.fragment.clone())
+                            .unwrap_or_else(|| metadata.fragment.clone());
                         let geometry = DrawGeometry::new(prepared.size, prepared.local_to_window);
                         let visible = geometry.local_size.width.0 > 0
                             && geometry.local_size.height.0 > 0
@@ -392,7 +392,7 @@ impl FrameScene {
                                 .is_orthogonal(&viewport_rect);
                         let bounds = fragment_bounds(&fragment, geometry, viewport_rect);
                         if let Some(draw) = &branch.draw
-                            && Arc::ptr_eq(&draw.fragment, &fragment)
+                            && draw.fragment.shares_ops(&fragment)
                             && draw.geometry == geometry
                             && draw.opacity == prepared.cumulative_opacity
                             && draw.visible == visible
@@ -598,7 +598,7 @@ impl SceneRope {
         }
         if let Some(draw) = &self.draw {
             if draw.visible {
-                builder.append_fragment(draw.fragment.as_ref(), draw.geometry, draw.opacity);
+                builder.append_fragment(&draw.fragment, draw.geometry, draw.opacity);
             }
         }
         for child in self.children.values() {
@@ -696,6 +696,16 @@ mod tests {
             root.append(first, &mut tree.tree);
             let reordered = frame(&mut scene, tree, &[first], &[]);
             assert_eq!(drawing(&reordered), [(0, zero), (2, translated), (1, zero)]);
+
+            let offset = PxPosition::new(Px(4), Px(0));
+            tree.metadatas.entry_or_default(first).fragment.ops_mut()[0].position_override =
+                Some(offset);
+            let repainted = frame(&mut scene, tree, &[first], &[]);
+            assert_eq!(
+                drawing(&repainted),
+                [(0, zero), (2, translated), (1, offset)]
+            );
+
             let mut builder = RenderGraphBuilder::new();
             previous_root.emit(&mut builder);
             assert_eq!(

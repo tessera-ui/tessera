@@ -8,13 +8,13 @@ use crate::{
 };
 
 /// A pass planning result for the current frame.
-pub(crate) struct RenderPassGraph {
-    passes: Vec<RenderPassPlan>,
+pub(crate) struct RenderPassGraph<'a> {
+    passes: Vec<RenderPassPlan<'a>>,
 }
 
-impl RenderPassGraph {
+impl<'a> RenderPassGraph<'a> {
     /// Builds a render pass graph from ordered ops.
-    pub(crate) fn build<'a>(
+    pub(crate) fn build(
         ops: impl IntoIterator<Item = &'a RenderGraphOp>,
         texture_size: wgpu::Extent3d,
         partial_damage: Option<PxRect>,
@@ -62,7 +62,7 @@ impl RenderPassGraph {
                     draw_builder
                         .draws
                         .push(DrawOrClip::Draw(DrawCommandWithMetadata {
-                            command: cmd.clone(),
+                            command: cmd.as_ref(),
                             type_id,
                             geometry,
                             draw_rect,
@@ -74,7 +74,7 @@ impl RenderPassGraph {
                         extract_sampling_rect(Some(cmd.barrier()), geometry, texture_size);
                     let target_rect = extract_target_rect(geometry, texture_size);
                     compute_items.push(ComputePlanItem {
-                        command: cmd.clone(),
+                        command: cmd.as_ref(),
                         geometry,
                         target_rect,
                         sampling_rect,
@@ -103,31 +103,31 @@ impl RenderPassGraph {
     }
 
     /// Returns the render passes in submission order.
-    pub(crate) fn into_passes(self) -> Vec<RenderPassPlan> {
+    pub(crate) fn into_passes(self) -> Vec<RenderPassPlan<'a>> {
         self.passes
     }
 }
 
 /// A render pass plan with draw commands or compute work.
-pub(crate) enum RenderPassPlan {
+pub(crate) enum RenderPassPlan<'a> {
     /// Draws into the scene; `reads_scene` passes sample the scene first.
     Draw {
-        draws: SmallVec<[DrawOrClip; 32]>,
+        draws: SmallVec<[DrawOrClip<'a>; 32]>,
         reads_scene: bool,
     },
     /// Filters the scene for the draws that sample it next.
-    Compute(Vec<ComputePlanItem>),
+    Compute(Vec<ComputePlanItem<'a>>),
 }
 
 #[derive(Default)]
-struct DrawPassBuilder {
-    draws: SmallVec<[DrawOrClip; 32]>,
+struct DrawPassBuilder<'a> {
+    draws: SmallVec<[DrawOrClip<'a>; 32]>,
     sampling_rects: SmallVec<[PxRect; 16]>,
     reads_scene: bool,
 }
 
-impl DrawPassBuilder {
-    fn last_draw(&self) -> Option<&DrawCommandWithMetadata> {
+impl DrawPassBuilder<'_> {
+    fn last_draw(&self) -> Option<&DrawCommandWithMetadata<'_>> {
         self.draws.iter().rev().find_map(|command| match command {
             DrawOrClip::Draw(cmd) => Some(cmd),
             DrawOrClip::Clip(_) => None,
@@ -136,24 +136,24 @@ impl DrawPassBuilder {
 }
 
 /// Compute work required for a render pass.
-pub(crate) struct ComputePlanItem {
-    pub(crate) command: Box<dyn ComputeCommand>,
+pub(crate) struct ComputePlanItem<'a> {
+    pub(crate) command: &'a dyn ComputeCommand,
     pub(crate) geometry: DrawGeometry,
     pub(crate) target_rect: PxRect,
     pub(crate) sampling_rect: PxRect,
 }
 
 /// Metadata for draw commands submitted in a pass.
-pub(crate) struct DrawCommandWithMetadata {
-    pub(crate) command: Box<dyn DrawCommand>,
+pub(crate) struct DrawCommandWithMetadata<'a> {
+    pub(crate) command: &'a dyn DrawCommand,
     pub(crate) type_id: std::any::TypeId,
     pub(crate) geometry: DrawGeometry,
     pub(crate) draw_rect: PxRect,
 }
 
 /// Draw or clip operations inside a pass.
-pub(crate) enum DrawOrClip {
-    Draw(DrawCommandWithMetadata),
+pub(crate) enum DrawOrClip<'a> {
+    Draw(DrawCommandWithMetadata<'a>),
     Clip(ClipOps),
 }
 
@@ -353,15 +353,16 @@ mod tests {
         );
         let mut draw = op(Command::Draw(Box::new(ProbeDraw(true))), 1, 0);
         draw.geometry = geometry;
+        let ops = [
+            op(
+                Command::ClipPush(PxRect::new(Px(12), Px(24), Px(4), Px(4))),
+                0,
+                0,
+            ),
+            draw,
+        ];
         let passes = RenderPassGraph::build(
-            &[
-                op(
-                    Command::ClipPush(PxRect::new(Px(12), Px(24), Px(4), Px(4))),
-                    0,
-                    0,
-                ),
-                draw,
-            ],
+            &ops,
             wgpu::Extent3d {
                 width: 400,
                 height: 200,
@@ -443,7 +444,7 @@ mod tests {
 }
 
 fn should_start_new_pass(
-    last_draw: Option<&DrawCommandWithMetadata>,
+    last_draw: Option<&DrawCommandWithMetadata<'_>>,
     next_sampling_rect: Option<PxRect>,
     sampling_rects_in_pass: &[PxRect],
 ) -> bool {
@@ -458,7 +459,7 @@ fn should_start_new_pass(
             .all(|rect| rect.is_orthogonal(&next_sampling_rect))
 }
 
-fn flush_draw_pass(passes: &mut Vec<RenderPassPlan>, builder: &mut DrawPassBuilder) {
+fn flush_draw_pass<'a>(passes: &mut Vec<RenderPassPlan<'a>>, builder: &mut DrawPassBuilder<'a>) {
     let builder = std::mem::take(builder);
     if !builder.draws.is_empty() {
         passes.push(RenderPassPlan::Draw {
@@ -468,7 +469,10 @@ fn flush_draw_pass(passes: &mut Vec<RenderPassPlan>, builder: &mut DrawPassBuild
     }
 }
 
-fn flush_compute_pass(passes: &mut Vec<RenderPassPlan>, items: &mut Vec<ComputePlanItem>) {
+fn flush_compute_pass<'a>(
+    passes: &mut Vec<RenderPassPlan<'a>>,
+    items: &mut Vec<ComputePlanItem<'a>>,
+) {
     if !items.is_empty() {
         passes.push(RenderPassPlan::Compute(std::mem::take(items)));
     }

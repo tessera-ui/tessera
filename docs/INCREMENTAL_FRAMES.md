@@ -109,8 +109,9 @@ separate pre-render ordering step.
 Draw order can be reused across scene updates when the authoring sequence,
 pipeline types, clip transitions, and ordering bounds still match. The order
 plan contains indices into the current commands and does not retain prior paint
-payloads. For a partial redraw, pass planning keeps the clip stack and only
-copies draws that intersect the damage rectangle.
+payloads. Scene snapshots share recorded fragments until the fragment changes.
+Pass planning borrows commands from the graph. A partial redraw keeps the clip
+stack and only plans draws that intersect the damage rectangle.
 
 Windowed `frame_total_ns` includes pending surface and render-target resize work.
 

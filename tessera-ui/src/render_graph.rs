@@ -90,20 +90,22 @@ pub struct RenderFragmentOp {
 /// A per-component render fragment.
 #[derive(Default, Clone)]
 pub struct RenderFragment {
-    ops: Vec<RenderFragmentOp>,
+    ops: Option<Arc<Vec<RenderFragmentOp>>>,
 }
 
 impl RenderFragment {
     /// Returns fragment ops in insertion order.
     #[must_use]
     pub fn ops(&self) -> &[RenderFragmentOp] {
-        &self.ops
+        self.ops.as_deref().map_or(&[], Vec::as_slice)
     }
 
     /// Returns fragment ops in insertion order for local position overrides.
     #[must_use]
     pub fn ops_mut(&mut self) -> &mut [RenderFragmentOp] {
-        &mut self.ops
+        self.ops
+            .as_mut()
+            .map_or(&mut [], |ops| Arc::make_mut(ops).as_mut_slice())
     }
 
     /// Adds a draw command.
@@ -117,8 +119,9 @@ impl RenderFragment {
     }
 
     fn push_op(&mut self, command: Command, type_id: TypeId) -> u32 {
-        let index = self.ops.len() as u32;
-        self.ops.push(RenderFragmentOp {
+        let ops = Arc::make_mut(self.ops.get_or_insert_with(Arc::default));
+        let index = ops.len() as u32;
+        ops.push(RenderFragmentOp {
             command,
             type_id,
             size_override: None,
@@ -129,7 +132,19 @@ impl RenderFragment {
 
     /// Clears all ops in the fragment.
     pub fn clear(&mut self) {
-        self.ops.clear();
+        if let Some(ops) = self.ops.as_mut().and_then(Arc::get_mut) {
+            ops.clear();
+        } else {
+            self.ops = None;
+        }
+    }
+
+    pub(crate) fn shares_ops(&self, other: &Self) -> bool {
+        match (&self.ops, &other.ops) {
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        }
     }
 }
 
@@ -284,7 +299,7 @@ impl RenderGraphBuilder {
         geometry: DrawGeometry,
         opacity: f32,
     ) {
-        for op in &fragment.ops {
+        for op in fragment.ops() {
             let mut command = op.command.clone();
             if let Command::Draw(ref mut command) = command {
                 command.apply_opacity(opacity);
