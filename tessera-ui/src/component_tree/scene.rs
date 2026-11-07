@@ -549,7 +549,8 @@ impl FrameScene {
                     .filter(|prepared| prepared.clips_children)
                     .map(|prepared| {
                         node_metadata
-                            .and_then(|metadata| metadata.prepared_clip_region)
+                            .and_then(|metadata| metadata.prepared_clip_region())
+                            .copied()
                             .map_or_else(
                                 || {
                                     SceneClip::Rect(
@@ -835,14 +836,14 @@ mod tests {
         }
         let clip_metadata = tree.metadatas.entry_or_default(clip);
         clip_metadata.clips_children = true;
-        clip_metadata.clip_region = Some(ClipRegion {
+        clip_metadata.set_clip_region(Some(ClipRegion {
             position: zero,
             size: [16.0, 16.0],
             shape: crate::ClipShape::RoundedRectangle {
                 radii: [3.0; 4],
                 exponents: [2.0; 4],
             },
-        });
+        }));
         tree.metadatas
             .entry_or_default(changed)
             .fragment

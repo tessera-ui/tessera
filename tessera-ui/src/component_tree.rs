@@ -954,11 +954,10 @@ impl ComponentTree {
                 metadata.abs_position = previous.abs_position;
                 metadata.event_clip_rect = previous.event_clip_rect;
                 metadata.prepared_layout = previous.prepared_layout;
-                metadata.prepared_clip_region = previous.prepared_clip_region;
+                metadata.clip_regions = previous.clip_regions;
                 metadata.geometry_initialized =
                     previous.geometry_initialized && !input_geometry_changed;
                 metadata.clips_children = previous.clips_children;
-                metadata.clip_region = previous.clip_region;
                 metadata.opacity = previous.opacity;
                 metadata.has_shape_clipping = previous.has_shape_clipping;
                 if same_parent && metadata.geometry_initialized {
@@ -2717,7 +2716,7 @@ fn inside_shape_clips(
         let Some(metadata) = metadatas.get(&ancestor) else {
             return true;
         };
-        let (Some(region), Some(origin)) = (metadata.clip_region, metadata.abs_position) else {
+        let (Some(&region), Some(origin)) = (metadata.clip_region(), metadata.abs_position) else {
             return true;
         };
         let transform = metadata
@@ -3751,14 +3750,14 @@ fn record_layout_commands(
         let previous_visual = metadatas.get(&node_id).map(|metadata| {
             (
                 metadata.clips_children,
-                metadata.clip_region,
+                metadata.clip_region().copied(),
                 metadata.opacity,
             )
         });
         if let Some(metadata) = metadatas.get_mut(&node_id) {
             metadata.fragment = Default::default();
             metadata.clips_children = false;
-            metadata.clip_region = None;
+            metadata.set_clip_region(None);
             metadata.opacity = 1.0;
         }
         let mut input = RenderInput::new(node_id, metadatas);
@@ -3797,7 +3796,7 @@ fn record_layout_commands(
         let next_visual = metadatas.get(&node_id).map(|metadata| {
             (
                 metadata.clips_children,
-                metadata.clip_region,
+                metadata.clip_region().copied(),
                 metadata.opacity,
             )
         });
@@ -3902,7 +3901,7 @@ fn prepare_layout_metadata_for_node(
     parent_has_shape_clipping: bool,
     reuse_local_placement: bool,
 ) -> (Option<PreparedLayoutMetadata>, bool) {
-    metadata.has_shape_clipping = parent_has_shape_clipping || metadata.clip_region.is_some();
+    metadata.has_shape_clipping = parent_has_shape_clipping || metadata.clip_region().is_some();
     let rel_pos = match metadata.rel_position {
         Some(pos) => pos,
         None if is_root => PxPosition::ZERO,
@@ -3913,7 +3912,7 @@ fn prepare_layout_metadata_for_node(
             metadata.event_clip_bounds = None;
             metadata.event_clip_rect = None;
             metadata.prepared_layout = None;
-            metadata.prepared_clip_region = None;
+            metadata.set_prepared_clip_region(None);
             metadata.geometry_initialized = true;
             return (None, false);
         }
@@ -3974,13 +3973,13 @@ fn prepare_layout_metadata_for_node(
         .unwrap_or_default();
     let clips_children = metadata.clips_children;
     let clip_region = metadata
-        .clip_region
-        .map(|region| map_clip_region(region, local_to_window));
+        .clip_region()
+        .map(|&region| map_clip_region(region, local_to_window));
     let previous_shape = metadata
         .prepared_layout
         .as_ref()
         .filter(|layout| layout.clips_children)
-        .and(metadata.prepared_clip_region.as_ref());
+        .and(metadata.prepared_clip_region());
     let next_shape = clips_children.then_some(clip_region.as_ref()).flatten();
     let shape_changed = previous_shape != next_shape;
     let child_clip_bounds = if clips_children {
@@ -4022,9 +4021,7 @@ fn prepare_layout_metadata_for_node(
         has_shape_clipping: metadata.has_shape_clipping,
     };
     metadata.prepared_layout = Some(prepared);
-    if metadata.prepared_clip_region != clip_region {
-        metadata.prepared_clip_region = clip_region;
-    }
+    metadata.set_prepared_clip_region(clip_region);
     metadata.geometry_initialized = true;
     (Some(prepared), shape_changed)
 }
@@ -4396,7 +4393,7 @@ mod tests {
         };
         let metadata = tree.metadatas.entry_or_default(root);
         metadata.clips_children = true;
-        metadata.clip_region = Some(clip);
+        metadata.set_clip_region(Some(clip));
         tree.metadatas.mark_geometry_dirty(root);
         populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
         assert!(inside_shape_clips(
@@ -4407,17 +4404,31 @@ mod tests {
         ));
         tree.metadatas.geometry_changed.clear();
 
-        tree.metadatas.entry_or_default(root).clip_region = Some(crate::ClipRegion {
-            shape: crate::ClipShape::RoundedRectangle {
-                radii: [40.0; 4],
-                exponents: [2.0; 4],
-            },
-            ..clip
-        });
+        tree.metadatas
+            .entry_or_default(root)
+            .set_clip_region(Some(crate::ClipRegion {
+                shape: crate::ClipShape::RoundedRectangle {
+                    radii: [40.0; 4],
+                    exponents: [2.0; 4],
+                },
+                ..clip
+            }));
         tree.metadatas.mark_geometry_dirty(root);
         populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
         assert!(tree.metadatas.geometry_changed.contains(&leaf));
         assert!(!inside_shape_clips(
+            &tree.tree,
+            &tree.metadatas,
+            leaf,
+            PxPosition::new(Px(4), Px(4))
+        ));
+
+        tree.metadatas.geometry_changed.clear();
+        tree.metadatas.entry_or_default(root).set_clip_region(None);
+        tree.metadatas.mark_geometry_dirty(root);
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        assert!(tree.metadatas.geometry_changed.contains(&leaf));
+        assert!(inside_shape_clips(
             &tree.tree,
             &tree.metadatas,
             leaf,

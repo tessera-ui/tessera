@@ -10,7 +10,7 @@ use tracing::debug;
 use winit::window::CursorIcon;
 
 use crate::{
-    Px,
+    ClipRegion, Px,
     accessibility::{AccessibilityActionHandler, AccessibilityNode},
     cursor::{CursorEventContent, PointerChange},
     focus::{
@@ -226,7 +226,7 @@ impl InputTransforms {
 /// Contains metadata of the component node.
 pub(crate) struct ComponentNodeMetaData {
     pub(super) prepared_layout: Option<super::PreparedLayoutMetadata>,
-    pub(super) prepared_clip_region: Option<crate::ClipRegion>,
+    pub(super) clip_regions: Option<Box<ClipRegions>>,
     pub(super) geometry_initialized: bool,
     pub(super) observes_geometry: bool,
     pub(super) observes_size: bool,
@@ -265,8 +265,6 @@ pub(crate) struct ComponentNodeMetaData {
     pub(crate) fragment: RenderFragment,
     /// Whether this node clips its children.
     pub clips_children: bool,
-    /// Optional shape used to clip the node and its descendants.
-    pub clip_region: Option<crate::ClipRegion>,
     pub(crate) has_shape_clipping: bool,
     /// Opacity multiplier applied to this node and its descendants.
     pub opacity: f32,
@@ -276,12 +274,18 @@ pub(crate) struct ComponentNodeMetaData {
     pub accessibility_action_handler: Option<AccessibilityActionHandler>,
 }
 
+#[derive(Default)]
+pub(super) struct ClipRegions {
+    local: Option<ClipRegion>,
+    prepared: Option<ClipRegion>,
+}
+
 impl ComponentNodeMetaData {
     /// Creates a new `ComponentNodeMetaData` with default values.
     pub fn none() -> Self {
         Self {
             prepared_layout: None,
-            prepared_clip_region: None,
+            clip_regions: None,
             geometry_initialized: false,
             observes_geometry: false,
             observes_size: false,
@@ -299,7 +303,6 @@ impl ComponentNodeMetaData {
             event_clip_rect: None,
             fragment: RenderFragment::default(),
             clips_children: false,
-            clip_region: None,
             has_shape_clipping: false,
             opacity: 1.0,
             accessibility: None,
@@ -310,6 +313,33 @@ impl ComponentNodeMetaData {
     /// Returns a mutable render fragment for this node.
     pub fn fragment_mut(&mut self) -> &mut RenderFragment {
         &mut self.fragment
+    }
+
+    pub(crate) fn clip_region(&self) -> Option<&ClipRegion> {
+        self.clip_regions.as_ref()?.local.as_ref()
+    }
+
+    pub(crate) fn set_clip_region(&mut self, region: Option<ClipRegion>) {
+        if region.is_some() {
+            self.clip_regions.get_or_insert_with(Box::default).local = region;
+        } else if let Some(regions) = &mut self.clip_regions {
+            regions.local = None;
+        }
+    }
+
+    pub(super) fn prepared_clip_region(&self) -> Option<&ClipRegion> {
+        self.clip_regions.as_ref()?.prepared.as_ref()
+    }
+
+    pub(super) fn set_prepared_clip_region(&mut self, region: Option<ClipRegion>) {
+        if let Some(regions) = &mut self.clip_regions {
+            if regions.prepared != region {
+                regions.prepared = region;
+            }
+            if regions.local.is_none() && region.is_none() {
+                self.clip_regions = None;
+            }
+        }
     }
 }
 

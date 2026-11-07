@@ -704,7 +704,7 @@ fn clipped_shape_bounds(
         let Some(metadata) = metadatas.get(&ancestor) else {
             continue;
         };
-        let (Some(clip), Some(origin)) = (metadata.clip_region, metadata.abs_position) else {
+        let (Some(clip), Some(origin)) = (metadata.clip_region(), metadata.abs_position) else {
             continue;
         };
         let transform = metadata
@@ -1178,11 +1178,11 @@ mod tests {
             ),
         );
         let metadata = metadatas.get_mut(&wrapper).expect("wrapper metadata");
-        metadata.clip_region = Some(crate::ClipRegion {
+        metadata.set_clip_region(Some(crate::ClipRegion {
             position: PxPosition::from_f32_xy(5.0, 3.0),
             size: [10.25, 12.5],
             shape: crate::ClipShape::Ellipse,
-        });
+        }));
         metadata.has_shape_clipping = true;
         metadatas
             .get_mut(&child)

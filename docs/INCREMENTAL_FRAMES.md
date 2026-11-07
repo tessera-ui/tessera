@@ -61,7 +61,8 @@ so updating one child can preserve the previous frame's snapshot.
 Scene branches use indexed pages with generation checks, and culling uses the
 inherited clip bounds computed by layout.
 
-Nodes allocate interaction data and accessibility descriptions only when used.
+Nodes allocate interaction data, accessibility descriptions, and shape clip
+regions only when used.
 Pointer modifier positions are shared between the node and dispatch plans, and
 nodes without pointer modifiers need no position buffer.
 The accessibility index starts from the live tree on first publication and

@@ -798,7 +798,7 @@ impl RenderMetadataMut<'_> {
     pub fn set_clips_children(&mut self, clips_children: bool) {
         self.metadata.clips_children = clips_children;
         if clips_children
-            && self.metadata.clip_region.is_none()
+            && self.metadata.clip_region().is_none()
             && (self.draw_bounds.position != PxPosition::ZERO
                 || self.metadata.computed_data != Some(self.draw_bounds.size))
         {
@@ -815,11 +815,11 @@ impl RenderMetadataMut<'_> {
         let size = self
             .computed_data()
             .expect("shape clipping requires measured bounds");
-        self.metadata.clip_region = Some(crate::ClipRegion {
+        self.metadata.set_clip_region(Some(crate::ClipRegion {
             position: self.draw_bounds.position,
             size: [size.width.to_f32(), size.height.to_f32()],
             shape,
-        });
+        }));
     }
 
     /// Clips content to a fractional shape relative to the current drawing
@@ -827,7 +827,7 @@ impl RenderMetadataMut<'_> {
     pub fn set_clip_region(&mut self, mut region: crate::ClipRegion) {
         self.metadata.clips_children = true;
         region.position = region.position + self.draw_bounds.position;
-        self.metadata.clip_region = Some(region);
+        self.metadata.set_clip_region(Some(region));
     }
 
     /// Multiplies the current node opacity by the provided factor.
