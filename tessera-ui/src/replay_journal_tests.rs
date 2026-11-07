@@ -604,11 +604,21 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
     // reorder.
     pump_layout_test_session(&mut session, 8_000_000);
     let retained = retained_node_ids(&session);
+    let snapshot = session.inspect_components();
+    let retained_instances =
+        ["retained-0", "retained-1"].map(|tag| snapshot.tagged(tag).instance_id());
     let stabilized_builds = session
         .work_totals()
         .count("ordered_branch", crate::WorkPhase::Build);
     probe.reverse.get().expect("Reverse state").set(true);
     pump_layout_test_session(&mut session, 16_000_000);
+    assert_eq!(
+        retained_instances.map(|instance| session
+            .work()
+            .for_instance(instance, crate::WorkPhase::Measure)),
+        [0, 0],
+        "Reordering retained children with unchanged constraints must reuse their measurements"
+    );
     assert_eq!(
         session
             .work_totals()
