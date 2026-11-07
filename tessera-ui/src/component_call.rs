@@ -25,6 +25,7 @@ use crate::{
         GroupPath, TesseraRuntime, ensure_build_phase, reserve_component_identity,
         with_replay_scope,
     },
+    session::with_runtime_globals,
 };
 
 type PropUpdate = Box<dyn FnOnce(&mut dyn Any) + Send + Sync>;
@@ -86,13 +87,23 @@ impl PendingCalls {
     }
 }
 
-const PENDING_CALLS: crate::session::SessionLocal<RefCell<PendingCalls>> =
-    crate::session::SessionLocal::new();
-const ACTIVE_COMPONENT: crate::session::SessionLocal<RefCell<Option<ComponentReplayData>>> =
-    crate::session::SessionLocal::new();
+#[derive(Default)]
+pub(crate) struct ComponentCalls {
+    pending: RefCell<PendingCalls>,
+    active: RefCell<Option<ComponentReplayData>>,
+}
+
+fn with_pending_calls<R>(access: impl FnOnce(&RefCell<PendingCalls>) -> R) -> R {
+    with_runtime_globals(|globals| access(&globals.component_calls.pending))
+}
+
+fn replace_active_component(component: Option<ComponentReplayData>) -> Option<ComponentReplayData> {
+    with_runtime_globals(|globals| globals.component_calls.active.replace(component))
+}
 
 pub(crate) fn active_component_replay<P: Prop>(props: &P) -> Option<ComponentReplayData> {
-    ACTIVE_COMPONENT.with_borrow(|active| {
+    with_runtime_globals(|globals| {
+        let active = globals.component_calls.active.borrow();
         let active = active.as_ref()?;
         let active_props = active.props.as_any().downcast_ref::<P>()?;
         std::ptr::eq(active_props, props).then(|| active.clone())
@@ -103,15 +114,13 @@ struct ActiveComponentGuard(Option<ComponentReplayData>);
 
 impl Drop for ActiveComponentGuard {
     fn drop(&mut self) {
-        let removed = ACTIVE_COMPONENT.with(|active| active.replace(self.0.take()));
+        let removed = replace_active_component(self.0.take());
         drop(removed);
     }
 }
 
 pub(crate) fn run_component(component: &ComponentReplayData) {
-    let _guard = ActiveComponentGuard(
-        ACTIVE_COMPONENT.with(|active| active.replace(Some(component.clone()))),
-    );
+    let _guard = ActiveComponentGuard(replace_active_component(Some(component.clone())));
     component.runner.run(component.props.as_ref());
 }
 
@@ -209,7 +218,7 @@ impl<P: Prop> ComponentCall<P> {
 
 #[track_caller]
 fn store_update(id: PendingToken, property: &'static str, append: bool, update: PropUpdate) {
-    let previous = PENDING_CALLS.with(|calls| {
+    let previous = with_pending_calls(|calls| {
         let mut calls = calls.borrow_mut();
         let call = calls
             .entry_mut(id)
@@ -247,8 +256,9 @@ struct ConfigurationGuard {
 
 #[track_caller]
 fn begin_configuration(id: PendingToken) -> ConfigurationGuard {
-    let call = PENDING_CALLS.with_borrow_mut(|calls| {
+    let call = with_pending_calls(|calls| {
         calls
+            .borrow_mut()
             .entry_mut(id)
             .and_then(|entry| entry.call.take())
             .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial))
@@ -265,8 +275,8 @@ fn clear_property_updates(call: &mut PendingCall, property: &'static str) {
 
 impl Drop for ConfigurationGuard {
     fn drop(&mut self) {
-        PENDING_CALLS.with_borrow_mut(|calls| {
-            if let Some(entry) = calls.entry_mut(self.id) {
+        with_pending_calls(|calls| {
+            if let Some(entry) = calls.borrow_mut().entry_mut(self.id) {
                 entry.call = self.call.take();
             }
         });
@@ -297,7 +307,7 @@ fn register_erased_call(
     runner: Arc<dyn ErasedComponentRunner>,
 ) -> PendingToken {
     ensure_build_phase();
-    PENDING_CALLS.with(|pending| {
+    with_pending_calls(|pending| {
         assert!(
             !pending.borrow().scopes.is_empty(),
             "component declarations require an active build fragment"
@@ -348,7 +358,7 @@ struct ScopeGuard {
 
 impl Drop for ScopeGuard {
     fn drop(&mut self) {
-        let abandoned = PENDING_CALLS.with(|calls| {
+        let abandoned = with_pending_calls(|calls| {
             let mut calls = calls.borrow_mut();
             let mut pending = calls.scopes.pop().expect("balanced build fragments");
             let abandoned = pending
@@ -386,7 +396,7 @@ fn begin_pending_scope() -> ScopeGuard {
             false
         }
     });
-    PENDING_CALLS.with(|calls| {
+    with_pending_calls(|calls| {
         let mut calls = calls.borrow_mut();
         let queue = calls.recycled_queues.pop().unwrap_or_default();
         calls.scopes.push(queue);
@@ -403,7 +413,7 @@ fn drain_pending_scope() {
 }
 
 fn take_next_call() -> Option<(PendingToken, Option<PendingCall>)> {
-    PENDING_CALLS.with(|calls| {
+    with_pending_calls(|calls| {
         let mut calls = calls.borrow_mut();
         let id = calls
             .scopes
@@ -506,7 +516,7 @@ fn execute_call(call: PendingCall) {
 }
 
 pub(crate) fn reset_pending_calls() {
-    let removed = PENDING_CALLS.with(|calls| {
+    let removed = with_pending_calls(|calls| {
         let mut calls = calls.borrow_mut();
         for scope in &mut calls.scopes {
             scope.clear();

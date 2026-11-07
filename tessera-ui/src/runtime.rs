@@ -17,6 +17,7 @@ use smallvec::SmallVec;
 use crate::{
     NodeId,
     accessibility::{AccessibilityActionHandler, AccessibilityNode},
+    component_call::ComponentCalls,
     component_tree::{ComponentNode, ComponentTree, NodeRole, PreviousLayoutNode},
     context::ContextMap,
     execution_context::{
@@ -2132,6 +2133,7 @@ fn publish_state_write(slot: SlotHandle, generation: u64) {
 }
 
 pub(crate) struct RuntimeGlobals {
+    pub(crate) component_calls: ComponentCalls,
     slot_table: RefCell<SlotTable>,
     component_replay_tracker: RefCell<ComponentReplayTracker>,
     build_invalidation_tracker: RefCell<BuildInvalidationTracker>,
@@ -2148,6 +2150,7 @@ pub(crate) struct RuntimeGlobals {
 impl RuntimeGlobals {
     fn new() -> Self {
         Self {
+            component_calls: ComponentCalls::default(),
             slot_table: RefCell::new(SlotTable::default()),
             component_replay_tracker: RefCell::new(ComponentReplayTracker::default()),
             build_invalidation_tracker: RefCell::new(BuildInvalidationTracker::default()),
