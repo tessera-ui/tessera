@@ -33,6 +33,11 @@ type PropUpdate = Box<dyn FnOnce(&mut dyn Any) + Send + Sync>;
 const MAX_RECYCLED_QUEUE_CAPACITY: usize = 256;
 
 struct PendingCall {
+    declaration: PendingDeclaration,
+    configuration: PendingConfiguration,
+}
+
+struct PendingDeclaration {
     name: &'static str,
     parent: Option<NodeId>,
     execution_parent: Option<NodeId>,
@@ -42,6 +47,9 @@ struct PendingCall {
     group_path: GroupPath,
     key_override: Option<u64>,
     context: ContextMap,
+}
+
+struct PendingConfiguration {
     props: Arc<dyn ErasedComponent>,
     updates: Vec<(&'static str, usize, PropUpdate)>,
 }
@@ -62,7 +70,8 @@ struct PendingToken {
 
 struct PendingEntry {
     serial: u64,
-    call: Option<PendingCall>,
+    declaration: PendingDeclaration,
+    configuration: Option<PendingConfiguration>,
 }
 
 #[derive(Default)]
@@ -82,7 +91,11 @@ impl PendingCalls {
 
     fn remove(&mut self, token: PendingToken) -> Option<PendingCall> {
         self.entry_mut(token)?;
-        self.calls.remove(token.key)?.call
+        let entry = self.calls.remove(token.key)?;
+        Some(PendingCall {
+            declaration: entry.declaration,
+            configuration: entry.configuration?,
+        })
     }
 }
 
@@ -126,10 +139,10 @@ impl<P: Prop> ComponentCall<P> {
     {
         self.validate_session();
         let mut guard = begin_configuration(self.id);
-        let call = guard.call.as_mut().expect("active configuration");
-        clear_property_updates(call, property);
+        let configuration = guard.configuration.as_mut().expect("active configuration");
+        configuration.updates.retain(|entry| entry.0 != property);
         update(
-            pending_props_mut(&mut call.props)
+            pending_props_mut(&mut configuration.props)
                 .as_any_mut()
                 .downcast_mut::<P>()
                 .expect("registered component props type"),
@@ -191,29 +204,29 @@ impl<P: Prop> ComponentCall<P> {
 fn store_update(id: PendingToken, property: &'static str, append: bool, update: PropUpdate) {
     let previous = with_pending_calls(|calls| {
         let mut calls = calls.borrow_mut();
-        let call = calls
+        let configuration = calls
             .entry_mut(id)
-            .and_then(|entry| entry.call.as_mut())
+            .and_then(|entry| entry.configuration.as_mut())
             .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial));
         if append {
-            let occurrence = call
+            let occurrence = configuration
                 .updates
                 .iter()
                 .filter(|entry| entry.0 == property)
                 .count();
-            call.updates.push((property, occurrence, update));
+            configuration.updates.push((property, occurrence, update));
             Vec::new()
         } else {
             let mut previous = Vec::new();
             let mut index = 0;
-            while index < call.updates.len() {
-                if call.updates[index].0 == property {
-                    previous.push(call.updates.remove(index));
+            while index < configuration.updates.len() {
+                if configuration.updates[index].0 == property {
+                    previous.push(configuration.updates.remove(index));
                 } else {
                     index += 1;
                 }
             }
-            call.updates.push((property, 0, update));
+            configuration.updates.push((property, 0, update));
             previous
         }
     });
@@ -222,33 +235,29 @@ fn store_update(id: PendingToken, property: &'static str, append: bool, update: 
 
 struct ConfigurationGuard {
     id: PendingToken,
-    call: Option<PendingCall>,
+    configuration: Option<PendingConfiguration>,
 }
 
 #[track_caller]
 fn begin_configuration(id: PendingToken) -> ConfigurationGuard {
-    let call = with_pending_calls(|calls| {
+    let configuration = with_pending_calls(|calls| {
         calls
             .borrow_mut()
             .entry_mut(id)
-            .and_then(|entry| entry.call.take())
+            .and_then(|entry| entry.configuration.take())
             .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial))
     });
     ConfigurationGuard {
         id,
-        call: Some(call),
+        configuration: Some(configuration),
     }
-}
-
-fn clear_property_updates(call: &mut PendingCall, property: &'static str) {
-    call.updates.retain(|entry| entry.0 != property);
 }
 
 impl Drop for ConfigurationGuard {
     fn drop(&mut self) {
         with_pending_calls(|calls| {
             if let Some(entry) = calls.borrow_mut().entry_mut(self.id) {
-                entry.call = self.call.take();
+                entry.configuration = self.configuration.take();
             }
         });
     }
@@ -283,7 +292,7 @@ fn register_erased_call(
         );
         let identity = reserve_component_identity(component_type_id);
         let parent = TesseraRuntime::with(|runtime| runtime.component_tree.current_build_node_id());
-        let call = with_execution_context(|context| PendingCall {
+        let declaration = with_execution_context(|context| PendingDeclaration {
             name,
             parent,
             execution_parent: context.node_context_stack.last().copied(),
@@ -297,8 +306,6 @@ fn register_erased_call(
             group_path: context.group_path,
             key_override: context.instance_key_override,
             context: context.context_map.clone(),
-            props,
-            updates: Vec::new(),
         });
         let mut pending = pending.borrow_mut();
         let serial = pending
@@ -308,7 +315,11 @@ fn register_erased_call(
         pending.next_serial = serial;
         let key = pending.calls.insert(PendingEntry {
             serial,
-            call: Some(call),
+            declaration,
+            configuration: Some(PendingConfiguration {
+                props,
+                updates: Vec::new(),
+            }),
         });
         let token = PendingToken { key, serial };
         pending
@@ -426,7 +437,7 @@ impl Drop for PropScopeGuard {
 }
 
 fn execute_call(call: PendingCall) {
-    let PendingCall {
+    let PendingDeclaration {
         name,
         parent,
         execution_parent,
@@ -436,9 +447,8 @@ fn execute_call(call: PendingCall) {
         group_path,
         key_override,
         context,
-        mut props,
-        updates,
-    } = call;
+    } = call.declaration;
+    let PendingConfiguration { mut props, updates } = call.configuration;
     let _parent_guard = ParentGuard {
         queue: TesseraRuntime::with_mut(|runtime| {
             runtime.component_tree.replace_build_parent(parent)
@@ -682,8 +692,11 @@ mod tests {
         let recorder = Recorder::default();
         recorder.build(|| {
             let stale = recorder.declare(1);
-            reset_slots();
-            recorder.declare(2);
+            stale.configure("value", |props| {
+                reset_slots();
+                recorder.declare(2);
+                props.value = 99;
+            });
             assert!(
                 catch_unwind(AssertUnwindSafe(|| {
                     stale.configure("value", |props| props.value = 99);
