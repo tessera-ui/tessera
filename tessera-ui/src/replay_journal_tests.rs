@@ -643,6 +643,71 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
     );
 }
 
+#[tessera(crate)]
+fn optional_pointer_fixture(probe: ReplayProbe) {
+    let armed = remember(|| true);
+    probe.armed.set(Some(armed));
+    let modifier = Modifier::new().push_semantics(Tag {
+        key: "optional-pointer".into(),
+        label: "Pointer target".into(),
+    });
+    let modifier = if armed.get() {
+        modifier.push_pointer_input(Pointer(Some(0), probe.hits))
+    } else {
+        modifier
+    };
+    layout().policy(Overlap).modifier(modifier);
+}
+
+#[test]
+fn retained_layout_leaves_pointer_index_when_its_last_handler_is_removed() {
+    let probe = ReplayProbe::default();
+    let mut session = start_layout_test_session(
+        layout_test(|| {
+            let probe = probe.clone();
+            layout()
+                .policy(Overlap)
+                .child(move || optional_pointer_fixture(probe.clone()));
+        })
+        .viewport_px(100, 100),
+    );
+    pump_layout_test_session(&mut session, 0);
+    let layout_id = |session: &crate::testing::LayoutTestSession<_>| {
+        session
+            .inspect_components()
+            .tagged("optional-pointer")
+            .node_id()
+    };
+    let retained = layout_id(&session);
+    let position = PxPosition::from_f32_xy(10.0, 10.0);
+    let button = PressKeyEventType::Left;
+    for (frame, enabled, hits) in [(1, true, 1), (2, false, 1), (3, true, 2)] {
+        probe.armed.get().unwrap().set(enabled);
+        let timestamp = Instant::now();
+        let changes = [
+            CursorEventContent::Pressed(button),
+            CursorEventContent::Released(button),
+        ]
+        .map(|event| {
+            PointerChange::new(
+                timestamp,
+                crate::MOUSE_POINTER_ID,
+                event,
+                GestureState::TapCandidate,
+            )
+            .with_position(position)
+        });
+        pump_layout_test_session_with_input(
+            &mut session,
+            frame * 16_000_000,
+            changes.into(),
+            Some(position),
+        );
+        assert_eq!(layout_id(&session), retained);
+        assert_eq!(probe.hits.with(Vec::len), hits);
+    }
+}
+
 #[derive(Clone, PartialEq)]
 struct Hint(String);
 impl SemanticsModifierNode for Hint {

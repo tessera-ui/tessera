@@ -613,6 +613,7 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
         layout_test(|| inherited_translation_fixture(probe.clone())).viewport_px(300, 200),
     );
     pump_layout_test_session(&mut session, 0);
+    assert_eq!(session.diagnostics().unwrap().pointer_nodes_updated, 0);
     let snapshot = session.run(crate::testing::ComponentSnapshot::capture);
     let child = snapshot.tagged("geometry-child").instance_id();
     assert!(

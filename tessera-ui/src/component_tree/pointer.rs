@@ -84,8 +84,18 @@ impl PointerIndex {
         self.hit_cache.borrow_mut().clear();
         self.hit_candidates.set(0);
     }
-    pub(super) fn invalidate(&mut self, changed: &HashSet<NodeId>, removed: &HashSet<NodeId>) {
-        self.changed.extend(changed);
+    pub(super) fn invalidate(
+        &mut self,
+        tree: &ComponentNodeTree,
+        changed: &HashSet<NodeId>,
+        removed: &HashSet<NodeId>,
+    ) {
+        self.changed.extend(
+            changed
+                .iter()
+                .copied()
+                .filter(|id| self.eligible.contains(id) || has_pointer_input(tree, *id)),
+        );
         self.removed.extend(removed);
     }
 
@@ -93,18 +103,15 @@ impl PointerIndex {
         &mut self,
         tree: &ComponentNodeTree,
         metadatas: &ComponentNodeMetaDatas,
-        changed: &HashSet<NodeId>,
-        removed: &HashSet<NodeId>,
     ) -> usize {
         self.grid_additions = 0;
         self.grid_removals = 0;
         let mut stage_timer =
             tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
                 .then(Instant::now);
-        let mut removed = removed.clone();
-        removed.extend(std::mem::take(&mut self.removed));
+        let removed = std::mem::take(&mut self.removed);
         let structural = std::mem::take(&mut self.changed);
-        let geometry_count = changed.len();
+        let geometry = &metadatas.geometry_changed;
         // Retire removals before registering current structural nodes.
         // A tree reset can reuse identities present in both journals.
         for &id in &removed {
@@ -113,39 +120,30 @@ impl PointerIndex {
             self.hovered.remove(&id);
             self.pending.remove(&id);
         }
+        let mut updates = HashSet::default();
         for &id in &structural {
-            let eligible = tree
-                .get(id)
-                .filter(|node| !node.is_removed())
-                .is_some_and(|node| {
-                    let node = node.get();
-                    node.role == NodeRole::Layout
-                        && (node.interaction().has_pointer_handlers()
-                            || node.modifier.has_pointer_input())
-                });
-            if eligible {
+            if has_pointer_input(tree, id) {
                 self.eligible.insert(id);
-            } else {
-                self.eligible.remove(&id);
+                updates.insert(id);
+            } else if self.eligible.remove(&id) {
+                self.remove(id);
             }
         }
-        let mut updates = structural.clone();
-        if self.eligible.len() < changed.len() {
+        if self.eligible.len() < geometry.len() {
             updates.extend(
                 self.eligible
                     .iter()
-                    .filter(|id| changed.contains(id))
+                    .filter(|id| geometry.contains(id))
                     .copied(),
             );
         } else {
             updates.extend(
-                changed
+                geometry
                     .iter()
                     .filter(|id| self.eligible.contains(id))
                     .copied(),
             );
         }
-        let changed = updates;
         if tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::TRACE) {
             let mut structural_nodes = HashMap::default();
             let mut stale = 0_usize;
@@ -160,7 +158,7 @@ impl PointerIndex {
             }
             tracing::trace!(
                 target: "tessera_ui::frame_cost",
-                geometry = geometry_count,
+                geometry = geometry.len(),
                 structural = structural.len(),
                 removed = removed.len(),
                 stale,
@@ -169,7 +167,7 @@ impl PointerIndex {
             );
         }
         record_frame_stage(&mut stage_timer, "pointer_invalidations");
-        for &id in &changed {
+        for &id in &updates {
             let Some(node) = tree.get(id).filter(|node| !node.is_removed()) else {
                 self.remove(id);
                 continue;
@@ -312,7 +310,7 @@ impl PointerIndex {
         }
         record_frame_stage(&mut stage_timer, "pointer_index");
         tracing::debug!(target: "tessera_ui::frame_cost", additions = self.grid_additions, removals = self.grid_removals, "pointer_grid_changes");
-        changed.len()
+        updates.len()
     }
 
     fn remove(&mut self, id: NodeId) -> Option<Entry> {
@@ -446,6 +444,16 @@ impl PointerIndex {
             preorder,
         }
     }
+}
+
+fn has_pointer_input(tree: &ComponentNodeTree, id: NodeId) -> bool {
+    tree.get(id)
+        .filter(|node| !node.is_removed())
+        .is_some_and(|node| {
+            let node = node.get();
+            node.role == NodeRole::Layout
+                && (node.interaction().has_pointer_handlers() || node.modifier.has_pointer_input())
+        })
 }
 
 #[cfg(test)]

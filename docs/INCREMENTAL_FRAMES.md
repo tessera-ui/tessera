@@ -73,6 +73,8 @@ parent outward. Sibling replacements share that refresh. Consumers compare
 retained ancestry after the round's order is available.
 Focus, pointer dispatch, and accessibility read sibling order from the same
 indices stored on the component nodes.
+The pointer index reads the geometry journal directly and refreshes plans for
+nodes with pointer handlers or cursor modifiers.
 Rebuilt layout leaves with a matching instance keep their node IDs and cached
 geometry. Changes to input geometry or the parent invalidate placement.
 

@@ -1667,16 +1667,12 @@ impl ComponentTree {
         modifiers: winit::keyboard::ModifiersState,
     ) -> WindowRequests {
         let mut window_requests = WindowRequests::default();
-        self.pointer_index
-            .invalidate(&self.changed_frame_nodes, &self.removed_frame_nodes);
-        let mut changed = self.metadatas.geometry_changed.clone();
-        changed.extend(self.changed_frame_nodes.iter().copied());
-        self.pointer_work.0 = self.pointer_index.update(
+        self.pointer_index.invalidate(
             &self.tree,
-            &self.metadatas,
-            &changed,
+            &self.changed_frame_nodes,
             &self.removed_frame_nodes,
-        ) as u64;
+        );
+        self.pointer_work.0 = self.pointer_index.update(&self.tree, &self.metadatas) as u64;
         self.pointer_index.begin_dispatch();
         self.active_pointer_paths.retain(|_, path| {
             path.last().is_some_and(|key| {
@@ -2400,7 +2396,7 @@ impl ComponentTree {
             self.profiler_dirty_nodes.insert(root_node);
         }
         self.pointer_index
-            .invalidate(&changed_frame_nodes, &removed_frame_nodes);
+            .invalidate(&self.tree, &changed_frame_nodes, &removed_frame_nodes);
         self.accessibility_index
             .invalidate(&changed_frame_nodes, &removed_frame_nodes);
         self.focus_owner
