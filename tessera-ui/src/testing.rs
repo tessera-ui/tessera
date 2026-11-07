@@ -767,7 +767,10 @@ macro_rules! assert_layout {
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZero;
+    use std::{
+        num::NonZero,
+        sync::atomic::{AtomicBool, Ordering},
+    };
 
     use crate::{
         AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
@@ -2258,6 +2261,77 @@ mod tests {
             "a stable frame must resolve from the root layout cache without re-measuring"
         );
     }
+
+    #[derive(Default)]
+    struct PolicyWithLocalMeasurement(AtomicBool);
+
+    impl Clone for PolicyWithLocalMeasurement {
+        fn clone(&self) -> Self {
+            Self(AtomicBool::new(self.0.load(Ordering::Relaxed)))
+        }
+    }
+
+    impl PartialEq for PolicyWithLocalMeasurement {
+        fn eq(&self, other: &Self) -> bool {
+            self.0.load(Ordering::Relaxed) == other.0.load(Ordering::Relaxed)
+        }
+    }
+
+    impl LayoutModifierNode for PolicyWithLocalMeasurement {
+        fn measure(
+            &self,
+            _: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            self.0.store(true, Ordering::Relaxed);
+            Ok(LayoutResult::new(ComputedData {
+                width: Px(20),
+                height: Px(10),
+            }))
+        }
+    }
+
+    #[tessera(crate)]
+    fn policy_snapshot_fixture(probe: super::TestProbe<Option<State<bool>>>) {
+        let renamed = remember(|| false);
+        probe.set(Some(renamed));
+        let tag = if renamed.get() { "renamed" } else { "original" };
+        crate::layout::layout()
+            .policy(PolicyWithLocalMeasurement::default())
+            .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag: tag.into() }));
+    }
+
+    #[test]
+    fn measurement_local_policy_mutation_does_not_invalidate_a_semantics_only_replay() {
+        let probe = super::TestProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test(|| {
+                let probe = probe.clone();
+                crate::layout::layout().child(move || policy_snapshot_fixture(probe.clone()));
+            })
+            .viewport_px(100, 100),
+        );
+        pump_layout_test_session(&mut session, 0)
+            .node("original")
+            .size(20, 10);
+        assert!(
+            session
+                .work()
+                .executed::<PolicyWithLocalMeasurement>(crate::WorkPhase::Measure)
+                > 0
+        );
+
+        probe.get().unwrap().set(true);
+        pump_layout_test_session(&mut session, 16_000_000)
+            .node("renamed")
+            .size(20, 10);
+        assert_eq!(
+            session
+                .work()
+                .executed::<PolicyWithLocalMeasurement>(crate::WorkPhase::Measure),
+            0
+        );
+    }
+
     #[tessera(crate)]
     fn registered_handles_layout() {
         crate::layout::layout()

@@ -27,8 +27,8 @@ use crate::{
         FocusRegistration, FocusRegistrationKind, FocusRequester, FocusRequesterId,
         FocusRevealRequest, FocusScopeNode, FocusState, FocusTraversalPolicy,
     },
-    layout::LayoutModifierDyn,
-    modifier::Modifier,
+    layout::LayoutModifierHandle,
+    modifier::{DrawModifierNode, Modifier},
     prop::{CallbackWith, ComponentReplayData, ErasedComponentRunner, Prop},
     time::Instant,
 };
@@ -578,7 +578,7 @@ struct PhaseReader {
 }
 
 struct LayoutInputSnapshot {
-    policy: Box<dyn LayoutModifierDyn>,
+    policy: LayoutModifierHandle,
     modifier: Modifier,
 }
 
@@ -1730,7 +1730,7 @@ fn with_layout_dirty_tracker_mut<R>(f: impl FnOnce(&mut LayoutDirtyTracker) -> R
 
 fn record_layout_policy_dirty(
     instance_key: u64,
-    layout_policy: &dyn LayoutModifierDyn,
+    layout_policy: &LayoutModifierHandle,
     modifier: &Modifier,
 ) {
     if current_phase() != Some(RuntimePhase::Build) {
@@ -1738,16 +1738,18 @@ fn record_layout_policy_dirty(
     }
     with_layout_dirty_tracker_mut(|tracker| {
         let snapshot = || LayoutInputSnapshot {
-            policy: layout_policy.clone_box(),
+            policy: layout_policy.clone(),
             modifier: modifier.clone(),
         };
         let (measure_changed, placement_changed, transform_changed, parent_data_changed) =
             match tracker.layout_inputs_by_node.entry(instance_key) {
                 std::collections::hash_map::Entry::Occupied(mut entry) => {
                     let previous = entry.get();
-                    let measure_changed = !previous.policy.dyn_measure_eq(layout_policy)
+                    let previous_policy = previous.policy.as_policy();
+                    let policy = layout_policy.as_policy();
+                    let measure_changed = !previous_policy.dyn_measure_eq(policy)
                         || !previous.modifier.layout_measure_eq(modifier);
-                    let placement_changed = !previous.policy.dyn_placement_eq(layout_policy)
+                    let placement_changed = !previous_policy.dyn_placement_eq(policy)
                         || !previous.modifier.layout_placement_eq(modifier);
                     let transform_changed = !previous.modifier.position_eq(modifier);
                     let parent_data_changed = !previous.modifier.parent_data_eq(modifier);
@@ -2274,33 +2276,6 @@ impl TesseraRuntime {
             .children_scale = scale;
     }
 
-    /// Sets the unified layout node for the current component node.
-    pub(crate) fn set_current_layout_node_boxed(&mut self, policy: Box<dyn LayoutModifierDyn>) {
-        if let Some(node) = self.component_tree.current_node_mut() {
-            node.layout_node = policy;
-        } else {
-            debug_assert!(
-                false,
-                "set_current_layout_node_boxed must be called inside a component build"
-            );
-        }
-    }
-
-    /// Sets the draw modifier node for the current component node.
-    pub(crate) fn set_current_draw_node_boxed(
-        &mut self,
-        node: Box<dyn crate::modifier::DrawModifierNode>,
-    ) {
-        if let Some(current) = self.component_tree.current_node_mut() {
-            current.draw_node = node;
-        } else {
-            debug_assert!(
-                false,
-                "set_current_draw_node_boxed must be called inside a component build"
-            );
-        }
-    }
-
     /// Appends a modifier chain to the current component node.
     pub(crate) fn append_current_modifier(&mut self, modifier: Modifier) {
         if let Some(node) = self.component_tree.current_node_mut() {
@@ -2564,14 +2539,10 @@ impl TesseraRuntime {
         }
     }
 
-    pub(crate) fn finalize_current_layout_policy_dirty(&mut self) {
+    fn finalize_current_layout_policy_dirty(&mut self, policy: &LayoutModifierHandle) {
         if let Some(node) = self.component_tree.current_node() {
             if node.role == crate::component_tree::NodeRole::Layout {
-                record_layout_policy_dirty(
-                    node.instance_key,
-                    node.layout_node.as_ref(),
-                    &node.modifier,
-                );
+                record_layout_policy_dirty(node.instance_key, policy, &node.modifier);
             }
         } else {
             debug_assert!(
@@ -2817,13 +2788,14 @@ fn enter_node_context(
     }
 }
 
-pub(crate) struct LayoutNodeScope {
+pub(crate) struct LayoutNodeScope<'a> {
     id: NodeId,
     previous: Option<PreviousLayoutNode>,
+    policy: &'a LayoutModifierHandle,
     _context: NodeContextGuard,
 }
 
-impl Drop for LayoutNodeScope {
+impl Drop for LayoutNodeScope<'_> {
     fn drop(&mut self) {
         TesseraRuntime::with_mut(|runtime| {
             if let Some(previous) = &self.previous {
@@ -2831,7 +2803,7 @@ impl Drop for LayoutNodeScope {
                     .component_tree
                     .reconcile_layout_node(self.id, previous);
             }
-            runtime.finalize_current_layout_policy_dirty();
+            runtime.finalize_current_layout_policy_dirty(self.policy);
             runtime.component_tree.pop_node();
         });
     }
@@ -2886,14 +2858,23 @@ fn new_build_node(name: &'static str, role: NodeRole, component_type_id: u64) ->
     node
 }
 
-pub(crate) fn begin_layout_node(name: &'static str, component_type_id: u64) -> LayoutNodeScope {
-    let node = new_build_node(name, NodeRole::Layout, component_type_id);
+pub(crate) fn begin_layout_node<'a>(
+    name: &'static str,
+    component_type_id: u64,
+    policy: &'a LayoutModifierHandle,
+    draw: Box<dyn DrawModifierNode>,
+) -> LayoutNodeScope<'a> {
+    let mut node = new_build_node(name, NodeRole::Layout, component_type_id);
+    // The policy used for measurement may maintain a cache through its shared reference.
+    node.layout_node = policy.as_policy().clone_box();
+    node.draw_node = draw;
     let instance_logic_id = node.instance_logic_id;
     let (id, previous) =
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.add_layout_node(node));
     LayoutNodeScope {
         id,
         previous,
+        policy,
         _context: enter_node_context(id, name, |_| instance_logic_id),
     }
 }
@@ -4270,10 +4251,10 @@ mod tests {
             let _phase_guard = push_phase(RuntimePhase::Build);
             record_layout_policy_dirty(
                 1,
-                &DirtySplitPolicy {
+                &LayoutModifierHandle::from(DirtySplitPolicy {
                     measure_key: 0,
                     placement_key: 0,
-                },
+                }),
                 &Modifier::new(),
             );
         }
@@ -4287,10 +4268,10 @@ mod tests {
             let _phase_guard = push_phase(RuntimePhase::Build);
             record_layout_policy_dirty(
                 1,
-                &DirtySplitPolicy {
+                &LayoutModifierHandle::from(DirtySplitPolicy {
                     measure_key: 0,
                     placement_key: 1,
-                },
+                }),
                 &Modifier::new(),
             );
         }
@@ -4304,10 +4285,10 @@ mod tests {
             let _phase_guard = push_phase(RuntimePhase::Build);
             record_layout_policy_dirty(
                 1,
-                &DirtySplitPolicy {
+                &LayoutModifierHandle::from(DirtySplitPolicy {
                     measure_key: 1,
                     placement_key: 1,
-                },
+                }),
                 &Modifier::new(),
             );
         }
@@ -4360,10 +4341,10 @@ mod tests {
             let modifier = Modifier::new().push_layout(DirtyMeasureModifierNode { width: 10 });
             record_layout_policy_dirty(
                 1,
-                &DirtySplitPolicy {
+                &LayoutModifierHandle::from(DirtySplitPolicy {
                     measure_key: 0,
                     placement_key: 0,
-                },
+                }),
                 &modifier,
             );
         }
@@ -4376,10 +4357,10 @@ mod tests {
             let modifier = Modifier::new().push_layout(DirtyMeasureModifierNode { width: 20 });
             record_layout_policy_dirty(
                 1,
-                &DirtySplitPolicy {
+                &LayoutModifierHandle::from(DirtySplitPolicy {
                     measure_key: 0,
                     placement_key: 0,
-                },
+                }),
                 &modifier,
             );
         }

@@ -8,7 +8,7 @@ use std::{
     any::Any,
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
-    sync::OnceLock,
+    sync::{Arc, OnceLock},
 };
 
 use crate::{
@@ -23,7 +23,7 @@ use crate::{
     prop::Prop,
     px::PxPosition,
     render_graph::RenderFragment,
-    runtime::{TesseraRuntime, begin_layout_node},
+    runtime::begin_layout_node,
     tessera,
 };
 
@@ -922,28 +922,20 @@ impl Clone for Box<dyn LayoutModifierDyn> {
 /// Most callers do not construct this type directly. Instead, pass any
 /// [`LayoutModifierNode`] to the `policy(...)` builder method and rely on the
 /// `From<T>` conversion.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct LayoutModifierHandle {
-    node: Box<dyn LayoutModifierDyn>,
+    node: Option<Arc<dyn LayoutModifierDyn>>,
 }
 
 impl LayoutModifierHandle {
-    pub(crate) fn into_box(self) -> Box<dyn LayoutModifierDyn> {
-        self.node
-    }
-}
-
-impl Default for LayoutModifierHandle {
-    fn default() -> Self {
-        Self {
-            node: Box::new(DefaultLayoutNode),
-        }
+    pub(crate) fn as_policy(&self) -> &dyn LayoutModifierDyn {
+        self.node.as_deref().unwrap_or(&DefaultLayoutNode)
     }
 }
 
 impl PartialEq for LayoutModifierHandle {
     fn eq(&self, other: &Self) -> bool {
-        self.node.dyn_eq(other.node.as_ref())
+        self.as_policy().dyn_eq(other.as_policy())
     }
 }
 
@@ -959,7 +951,7 @@ where
 {
     fn from(node: S) -> Self {
         Self {
-            node: Box::new(node),
+            node: Some(Arc::new(node)),
         }
     }
 }
@@ -1093,15 +1085,16 @@ pub fn layout(
     modifier: Option<Modifier>,
     child: Option<RenderSlot>,
 ) {
-    let policy = policy.unwrap_or(LayoutModifierHandle::from(DefaultLayoutNode));
+    let policy = policy.unwrap_or_default();
     let draw = draw.unwrap_or(DrawModifierHandle::from(NoopDrawModifier));
     let modifier = modifier.unwrap_or_default();
-    let _layout_scope = begin_layout_node("layout", layout_node_component_type_id());
+    let _layout_scope = begin_layout_node(
+        "layout",
+        layout_node_component_type_id(),
+        &policy,
+        draw.into_node(),
+    );
     modifier.attach();
-    TesseraRuntime::with_mut(|runtime| {
-        runtime.set_current_layout_node_boxed(policy.into_box());
-        runtime.set_current_draw_node_boxed(draw.into_node());
-    });
     if let Some(child) = child {
         child.render();
     }
