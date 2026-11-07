@@ -120,14 +120,10 @@ impl RenderTextureDescKey {
     }
 }
 
-struct TextureHandle {
-    view: wgpu::TextureView,
-}
-
 struct LocalTextureSlot {
     desc: RenderTextureDescKey,
-    front: TextureHandle,
-    back: TextureHandle,
+    front: wgpu::TextureView,
+    back: Option<wgpu::TextureView>,
     msaa_view: Option<wgpu::TextureView>,
     in_use: bool,
     last_used_frame: u64,
@@ -135,15 +131,47 @@ struct LocalTextureSlot {
 
 impl LocalTextureSlot {
     fn front_view(&self) -> &wgpu::TextureView {
-        &self.front.view
+        &self.front
     }
 
-    fn back_view(&self) -> &wgpu::TextureView {
-        &self.back.view
+    fn back_view(&mut self, device: &wgpu::Device) -> wgpu::TextureView {
+        self.back
+            .get_or_insert_with(|| {
+                create_texture_view(
+                    device,
+                    &RenderTextureDesc {
+                        size: self.desc.size,
+                        format: self.desc.format,
+                    },
+                    "Local Back",
+                )
+            })
+            .clone()
     }
 
     fn swap_front_back(&mut self) {
-        std::mem::swap(&mut self.front, &mut self.back);
+        std::mem::swap(
+            &mut self.front,
+            self.back.as_mut().expect("compute back texture"),
+        );
+    }
+
+    fn msaa_view(&mut self, device: &wgpu::Device) -> Option<wgpu::TextureView> {
+        (self.desc.sample_count > 1).then(|| {
+            self.msaa_view
+                .get_or_insert_with(|| {
+                    create_msaa_view(
+                        device,
+                        &RenderTextureDesc {
+                            size: self.desc.size,
+                            format: self.desc.format,
+                        },
+                        self.desc.sample_count,
+                        "Local MSAA",
+                    )
+                })
+                .clone()
+        })
     }
 }
 
@@ -191,19 +219,11 @@ impl LocalTexturePool {
             .then(|| self.lru_unused_index())
             .flatten();
 
-        let front = create_local_texture(device, desc, "Local Front");
-        let back = create_local_texture(device, desc, "Local Back");
-        let msaa_view = if sample_count > 1 {
-            Some(create_msaa_view(device, desc, sample_count))
-        } else {
-            None
-        };
-
         let slot = LocalTextureSlot {
             desc: key,
-            front,
-            back,
-            msaa_view,
+            front: create_texture_view(device, desc, "Local Front"),
+            back: None,
+            msaa_view: None,
             in_use: true,
             last_used_frame: current_frame,
         };
@@ -236,11 +256,11 @@ impl LocalTexturePool {
     }
 }
 
-fn create_local_texture(
+pub(crate) fn create_texture_view(
     device: &wgpu::Device,
     desc: &RenderTextureDesc,
     label: &str,
-) -> TextureHandle {
+) -> wgpu::TextureView {
     let width = desc.size.width.positive().max(1);
     let height = desc.size.height.positive().max(1);
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -261,19 +281,19 @@ fn create_local_texture(
             | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    TextureHandle { view }
+    texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
-fn create_msaa_view(
+pub(crate) fn create_msaa_view(
     device: &wgpu::Device,
     desc: &RenderTextureDesc,
     sample_count: u32,
+    label: &str,
 ) -> wgpu::TextureView {
     let width = desc.size.width.positive().max(1);
     let height = desc.size.height.positive().max(1);
     let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("Local MSAA"),
+        label: Some(label),
         size: wgpu::Extent3d {
             width,
             height,
@@ -292,46 +312,27 @@ fn create_msaa_view(
 /// Render core holding device, surface, pipelines, and frame resources.
 pub struct RenderCore {
     graphics: crate::GraphicsDevice,
-    /// Window handle when rendering to a surface; `None` for offscreen cores.
     #[allow(unused)]
     window: Option<Arc<Window>>,
-    /// WGPU instance used to recreate surfaces when the swapchain is lost.
-    instance: wgpu::Instance,
-    /// WGPU device
+    pub(crate) instance: wgpu::Instance,
     device: wgpu::Device,
-    /// WGPU surface; `None` for offscreen cores that render without a window.
     surface: Option<wgpu::Surface<'static>>,
-    /// WGPU queue
     queue: wgpu::Queue,
-    /// Presentation and final output configuration.
     config: wgpu::SurfaceConfiguration,
-    /// Color-target configuration used for drawing.
     draw_config: wgpu::SurfaceConfiguration,
-    /// size of the window
     size: winit::dpi::PhysicalSize<u32>,
-    /// if size is changed
     size_changed: bool,
-    /// Draw and compute pipeline registries.
     pipelines: RenderPipelines,
 
-    /// WGPU pipeline cache for faster pipeline creation when supported.
     pipeline_cache: Option<wgpu::PipelineCache>,
-    /// Gpu adapter info
     adapter_info: wgpu::AdapterInfo,
 
-    /// Render target resources for the current frame.
     targets: FrameTargets,
-    /// Compute resources for ping-pong passes.
     compute: ComputeState,
-    /// Blit resources for partial copies.
     blit: BlitState,
-    /// Pool of local textures declared by render graph resources.
     local_textures: LocalTexturePool,
-    /// Registry of external textures owned by pipelines.
     external_textures: ExternalTextureRegistry,
-    /// Monotonic frame counter for resource eviction.
     frame_index: u64,
-    /// Timing breakdown for the last render call.
     last_render_breakdown: Option<RenderTimingBreakdown>,
     #[cfg(all(
         feature = "profiling",
@@ -437,10 +438,6 @@ impl RenderCore {
     }
 
     /// Registers a new drawable pipeline for a specific command type.
-    ///
-    /// This method takes ownership of the pipeline and wraps it in a
-    /// type-erased container that can be stored alongside other pipelines of
-    /// different types.
     pub fn register_draw_pipeline<T, P>(&mut self, pipeline: P)
     where
         T: DrawCommand + 'static,
@@ -450,10 +447,6 @@ impl RenderCore {
     }
 
     /// Registers a new compute pipeline for a specific command type.
-    ///
-    /// This method takes ownership of the pipeline and wraps it in a
-    /// type-erased container that can be stored alongside other pipelines of
-    /// different types.
     pub fn register_compute_pipeline<T, P>(&mut self, pipeline: P)
     where
         T: ComputeCommand + 'static,
@@ -527,6 +520,7 @@ mod tests {
             winit::dpi::PhysicalSize::new(1, 1),
             wgpu::TextureFormat::Rgba8Unorm,
             1,
+            crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
         ));
         let mut pool = LocalTexturePool::new();
         let texture = |width| RenderTextureDesc {

@@ -80,8 +80,8 @@ pub(super) fn page_media(title: &str) -> Option<PageMedia> {
             description: "ui-components-are-interactive-building-blocks-for-creating-a-user-interface-they-can-be-organ",
             slug: "components",
             asset: assets::COMPONENTS_PNG,
-            width: 3840.0,
-            height: 2160.0,
+            width: 2000.0,
+            height: 1125.0,
             thumbnail: None,
         },
         "ui-button-groups" => PageMedia {

@@ -37,7 +37,7 @@ fn placeholder_image_data() -> ImageData {
 
 fn decode_dynamic_image(decoded: image::DynamicImage) -> ImageData {
     let (width, height) = decoded.dimensions();
-    ImageData::from_rgba(decoded.to_rgba8().into_raw(), width, height)
+    ImageData::from_rgba(decoded.into_rgba8().into_raw(), width, height)
 }
 
 fn decode_image_from_bytes(bytes: &[u8]) -> Result<ImageData, ImageLoadError> {

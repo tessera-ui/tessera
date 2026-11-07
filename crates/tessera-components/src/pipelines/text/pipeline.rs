@@ -1,9 +1,3 @@
-//! Text shaping and rendering with session-owned font resources.
-//!
-//! ## Usage
-//!
-//! Measure and render labels, paragraphs, and editable text.
-
 use std::sync::Arc;
 
 use glyphon::fontdb;
@@ -97,21 +91,12 @@ pub fn write_font_system() -> ArcRwLockWriteGuard<RawRwLock, glyphon::FontSystem
         .write_arc()
 }
 
-/// A text renderer
-/// Pipeline for rendering text using the Glyphon engine.
-///
-/// This struct manages font atlas, cache, viewport, and swash cache for
-/// efficient text rendering.
+/// Renders shaped text with a shared glyph atlas.
 pub struct GlyphonTextRender {
-    /// Glyphon font atlas, a heavy-weight, shared resource.
     atlas: glyphon::TextAtlas,
-    /// Glyphon cache, a heavy-weight, shared resource.
     cache: glyphon::Cache,
-    /// Glyphon swash cache, a CPU-side cache for glyph rasterization.
     swash_cache: glyphon::SwashCache,
-    /// Multisample state for anti-aliasing.
     msaa: wgpu::MultisampleState,
-    /// Glyphon text renderer, responsible for rendering text.
     renderers: Vec<TextBatchResources>,
     next_renderer: usize,
 }
@@ -122,14 +107,7 @@ struct TextBatchResources {
 }
 
 impl GlyphonTextRender {
-    /// Creates a new text renderer pipeline.
-    ///
-    /// # Parameters
-    ///
-    /// - `gpu`: The wgpu device.
-    /// - `queue`: The wgpu queue.
-    /// - `config`: Surface configuration.
-    /// - `sample_count`: Multisample count for anti-aliasing.
+    /// Creates a text pipeline for the target format and sample count.
     pub fn new(
         gpu: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -137,23 +115,19 @@ impl GlyphonTextRender {
         sample_count: u32,
     ) -> Self {
         let cache = glyphon::Cache::new(gpu);
-        let mut atlas = glyphon::TextAtlas::new(gpu, queue, &cache, config.format);
-        let viewport = glyphon::Viewport::new(gpu, &cache);
+        let atlas = glyphon::TextAtlas::new(gpu, queue, &cache, config.format);
         let swash_cache = glyphon::SwashCache::new();
         let msaa = wgpu::MultisampleState {
             count: sample_count,
             mask: !0,
             alpha_to_coverage_enabled: false,
         };
-        let renderer =
-            glyphon::TextRenderer::new(&mut atlas, gpu, msaa, tessera_ui::ui_stencil_state());
-
         Self {
             atlas,
             cache,
             swash_cache,
             msaa,
-            renderers: vec![TextBatchResources { renderer, viewport }],
+            renderers: Vec::new(),
             next_renderer: 0,
         }
     }
@@ -162,6 +136,11 @@ impl GlyphonTextRender {
 impl DrawablePipeline<TextCommand> for GlyphonTextRender {
     fn begin_frame(&mut self, _context: &FrameContext<'_>) {
         self.next_renderer = 0;
+        self.atlas.trim();
+    }
+
+    fn end_frame(&mut self, _context: &FrameContext<'_>) {
+        self.renderers.truncate(self.next_renderer);
     }
 
     fn draw(&mut self, context: &mut DrawContext<TextCommand>) {
@@ -221,7 +200,6 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
 /// Text data for rendering, including buffer and size.
 #[derive(Debug, Clone)]
 pub struct TextData {
-    /// glyphon text buffer
     text_buffer: Arc<glyphon::Buffer>,
     /// text area size
     pub size: [u32; 2],

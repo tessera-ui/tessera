@@ -14,7 +14,7 @@ default = []
 profiling = ["serde", "serde_json", "interprocess"]
 debug-dirty-overlay = []
 testing = []
-headless = ["serde", "serde_json"]
+headless = ["serde", "serde_json", "wgpu/counters"]
 
 [dependencies]
 uuid = { version = "1.26.1", features = ["v4", "js"] }

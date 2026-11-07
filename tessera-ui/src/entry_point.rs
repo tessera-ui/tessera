@@ -81,6 +81,18 @@ impl EntryPoint {
         self
     }
 
+    /// Creates an offscreen renderer with this entry's packages and GPU settings.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn into_headless(
+        self,
+        mut config: crate::HeadlessConfig,
+    ) -> Result<crate::HeadlessRenderer, crate::headless::HeadlessError> {
+        let _session = self.session.enter();
+        config.sample_count = self.config.sample_count;
+        config.max_non_sampler_bindings = self.config.max_non_sampler_bindings;
+        crate::HeadlessRenderer::new(self.entry, self.registry.finish(), config)
+    }
+
     /// Runs the entry point on desktop platforms.
     #[cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))]
     pub fn run_desktop(self) -> Result<(), winit::error::EventLoopError> {

@@ -283,54 +283,44 @@ impl RenderPassClearState {
     }
 }
 
-trait ComputeTargets {
-    fn views(&self) -> (wgpu::TextureView, wgpu::TextureView);
-    fn swap(&mut self);
+enum ComputeTargets<'a> {
+    Scene {
+        front: &'a mut wgpu::TextureView,
+        back: &'a mut wgpu::TextureView,
+    },
+    Local {
+        slot: &'a mut LocalTextureSlot,
+        device: &'a wgpu::Device,
+    },
+    External {
+        slot: ExternalTextureSlotGuard<'a>,
+        device: &'a wgpu::Device,
+    },
 }
 
-struct SceneComputeTargets<'a> {
-    front: &'a mut wgpu::TextureView,
-    back: &'a mut wgpu::TextureView,
-}
+impl ComputeTargets<'_> {
+    fn front(&self) -> wgpu::TextureView {
+        match self {
+            Self::Scene { front, .. } => (**front).clone(),
+            Self::Local { slot, .. } => slot.front_view().clone(),
+            Self::External { slot, .. } => slot.front_view(),
+        }
+    }
 
-impl ComputeTargets for SceneComputeTargets<'_> {
-    fn views(&self) -> (wgpu::TextureView, wgpu::TextureView) {
-        (self.front.clone(), self.back.clone())
+    fn back(&mut self) -> wgpu::TextureView {
+        match self {
+            Self::Scene { back, .. } => (**back).clone(),
+            Self::Local { slot, device } => slot.back_view(device),
+            Self::External { slot, device } => slot.back_view(device),
+        }
     }
 
     fn swap(&mut self) {
-        std::mem::swap(self.front, self.back);
-    }
-}
-
-struct LocalComputeTargets<'a> {
-    slot: &'a mut LocalTextureSlot,
-}
-
-impl ComputeTargets for LocalComputeTargets<'_> {
-    fn views(&self) -> (wgpu::TextureView, wgpu::TextureView) {
-        (
-            self.slot.front_view().clone(),
-            self.slot.back_view().clone(),
-        )
-    }
-
-    fn swap(&mut self) {
-        self.slot.swap_front_back();
-    }
-}
-
-struct ExternalComputeTargets<'a> {
-    slot: ExternalTextureSlotGuard<'a>,
-}
-
-impl ComputeTargets for ExternalComputeTargets<'_> {
-    fn views(&self) -> (wgpu::TextureView, wgpu::TextureView) {
-        (self.slot.front_view(), self.slot.back_view())
-    }
-
-    fn swap(&mut self) {
-        self.slot.swap_front_back();
+        match self {
+            Self::Scene { front, back } => std::mem::swap(*front, *back),
+            Self::Local { slot, .. } => slot.swap_front_back(),
+            Self::External { slot, .. } => slot.swap_front_back(),
+        }
     }
 }
 
@@ -368,11 +358,6 @@ struct ComputePassParams<'a> {
 
 impl RenderCore {
     /// Render the surface using the unified command system.
-    ///
-    /// This method processes a stream of commands (both draw and compute) and
-    /// renders them to the surface using a multi-pass rendering approach
-    /// with offscreen texture. Commands that require barriers will trigger
-    /// texture copies between passes.
     ///
     /// # Arguments
     ///
@@ -822,14 +807,14 @@ impl RenderCore {
 
                 let final_view = match write_resource {
                     RenderResourceId::SceneColor => {
-                        let mut targets = SceneComputeTargets {
+                        let mut targets = ComputeTargets::Scene {
                             front: &mut state.compute.target_a,
                             back: &mut state.compute.target_b,
                         };
                         let needs_scene_prefill = read_resource == RenderResourceId::SceneColor
                             && !matches!(*scene_source, SceneSource::Compute);
                         if needs_scene_prefill {
-                            let (front_view, _) = targets.views();
+                            let front_view = targets.front();
                             Self::blit_to_view(BlitParams {
                                 encoder,
                                 device: state.device,
@@ -889,7 +874,10 @@ impl RenderCore {
                             height: slot.desc.size.height.positive().max(1),
                             depth_or_array_layers: 1,
                         };
-                        let mut targets = LocalComputeTargets { slot };
+                        let mut targets = ComputeTargets::Local {
+                            slot,
+                            device: state.device,
+                        };
                         do_compute_with_targets(
                             params,
                             input_view,
@@ -917,7 +905,10 @@ impl RenderCore {
                             height: size.height.positive().max(1),
                             depth_or_array_layers: 1,
                         };
-                        let mut targets = ExternalComputeTargets { slot };
+                        let mut targets = ComputeTargets::External {
+                            slot,
+                            device: state.device,
+                        };
                         do_compute_with_targets(
                             params,
                             input_view,
@@ -954,20 +945,20 @@ impl RenderCore {
                         ),
                     ),
                     RenderResourceId::Local(_) => {
-                        let Some(slot) = resources.local_slot(write_resource) else {
+                        let Some(slot) = resources.local_slot_mut(write_resource) else {
                             return;
                         };
                         (
                             slot.front_view().clone(),
-                            slot.msaa_view.clone(),
+                            slot.msaa_view(state.device),
                             slot.desc.size,
                         )
                     }
                     RenderResourceId::External(_) => {
-                        let Some(slot) = resources.external_slot(write_resource) else {
+                        let Some(mut slot) = resources.external_slot(write_resource) else {
                             return;
                         };
-                        (slot.front_view(), slot.msaa_view(), slot.size())
+                        (slot.front_view(), slot.msaa_view(state.device), slot.size())
                     }
                     RenderResourceId::SceneDepth => {
                         return;
@@ -1139,16 +1130,15 @@ impl RenderCore {
     }
 }
 
-fn do_compute_with_targets<T: ComputeTargets>(
+fn do_compute_with_targets(
     params: ComputePassParams<'_>,
     fixed_input_view: Option<wgpu::TextureView>,
-    targets: &mut T,
+    targets: &mut ComputeTargets<'_>,
     texture_size: wgpu::Extent3d,
     input_follows_front: bool,
 ) -> wgpu::TextureView {
     if params.commands.is_empty() {
-        let (front_view, _) = targets.views();
-        return front_view;
+        return targets.front();
     }
 
     let commands = &params.commands;
@@ -1195,7 +1185,7 @@ fn do_compute_with_targets<T: ComputeTargets>(
             cursor = index + 1;
         }
 
-        let (front_view, back_view) = targets.views();
+        let front_view = targets.front();
         let use_fixed_input = input_follows_front && fixed_input_view.is_some() && index == 0;
         let input_view = if use_fixed_input {
             fixed_input_view
@@ -1211,18 +1201,26 @@ fn do_compute_with_targets<T: ComputeTargets>(
                 .clone()
         };
 
-        let copy_source = if use_fixed_input {
-            fixed_input_view
-                .as_ref()
-                .expect("compute pass missing input view")
+        // Distinct graph IDs can still import the same external texture.
+        let in_place = !input_follows_front && input_view.texture() != front_view.texture();
+        let output_view = if in_place {
+            front_view.clone()
         } else {
-            &front_view
+            let back_view = targets.back();
+            let copy_source = if use_fixed_input {
+                fixed_input_view
+                    .as_ref()
+                    .expect("compute pass missing input view")
+            } else {
+                &front_view
+            };
+            params.encoder.copy_texture_to_texture(
+                copy_source.texture().as_image_copy(),
+                back_view.texture().as_image_copy(),
+                texture_size,
+            );
+            back_view
         };
-        params.encoder.copy_texture_to_texture(
-            copy_source.texture().as_image_copy(),
-            back_view.texture().as_image_copy(),
-            texture_size,
-        );
 
         {
             let mut cpass = params
@@ -1244,18 +1242,19 @@ fn do_compute_with_targets<T: ComputeTargets>(
                     compute_pass: &mut cpass,
                     resource_manager: params.resource_manager,
                     input_view: &input_view,
-                    output_view: &back_view,
+                    output_view: &output_view,
                 },
                 &batch_items,
             );
         }
 
-        targets.swap();
+        if !in_place {
+            targets.swap();
+        }
         index = cursor;
     }
 
-    let (front_view, _) = targets.views();
-    front_view
+    targets.front()
 }
 
 fn rects_overlap(a: PxRect, b: PxRect) -> bool {
@@ -1668,6 +1667,7 @@ mod tests {
             winit::dpi::PhysicalSize::new(1, 1),
             wgpu::TextureFormat::Rgba8Unorm,
             1,
+            crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
         ));
         for (target, pipeline, expected) in [
             (&core.targets.scene_sample, &core.blit.pipeline, 128_u8),

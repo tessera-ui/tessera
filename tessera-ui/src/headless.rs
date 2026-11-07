@@ -1,20 +1,4 @@
-//! Headless, session-based rendering support for Tessera applications.
-//!
-//! ## Usage
-//!
-//! Drive a Tessera application without a window: render frames into an
-//! offscreen target, inject synthetic pointer/IME input, and read the result
-//! back as RGBA8 pixels or a PNG file. This powers `cargo tessera headless`,
-//! which supervises one or more of these sessions over a JSONL stdio protocol.
-//!
-//! [`HeadlessRenderer`] is the library entry point; [`run_headless`] implements
-//! the worker side of the `cargo tessera headless` protocol and is invoked by
-//! [`crate::entry_point::EntryPoint::run_desktop`] when `TESSERA_HEADLESS` is
-//! set.
-//!
-//! Set `TESSERA_HEADLESS_PROFILE=summary` with profiling enabled to export
-//! frame timings and layout diagnostics without component trees. Explicit
-//! snapshots remain available through the session protocol.
+//! Offscreen rendering, input injection, and resource observations.
 
 use std::{
     io::{BufRead, BufReader, Write},
@@ -141,6 +125,8 @@ pub struct HeadlessConfig {
     pub scale_factor: f64,
     /// MSAA sample count for render pipelines.
     pub sample_count: u32,
+    /// Positive D3D12 non-sampler binding capacity; defaults to 65,536.
+    pub max_non_sampler_bindings: u32,
     /// Output texture format; RGBA8 is required for sRGB-encoded readback and
     /// PNG output.
     pub format: wgpu::TextureFormat,
@@ -155,6 +141,7 @@ impl Default for HeadlessConfig {
             height: 600,
             scale_factor: 1.0,
             sample_count: 1,
+            max_non_sampler_bindings: crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             frame_time: Duration::from_nanos(16_666_667),
         }
@@ -189,6 +176,49 @@ pub struct HeadlessRenderer {
 }
 
 impl HeadlessRenderer {
+    /// Returns the GPU instance for resource observations across renderer lifetimes.
+    pub fn gpu_instance(&self) -> &wgpu::Instance {
+        &self.core.instance
+    }
+
+    /// Waits for GPU completion and reports held resource handles and allocator usage.
+    ///
+    /// Allocator reservations include unused capacity and are not resident VRAM.
+    /// Unsupported byte counters and allocator reports are null.
+    pub fn resource_snapshot(&self) -> Result<Value, wgpu::PollError> {
+        let device = self.core.device();
+        device.poll(wgpu::PollType::wait_indefinitely())?;
+        let adapter = device.adapter_info();
+        let byte_counters = matches!(adapter.backend, wgpu::Backend::Vulkan | wgpu::Backend::Dx12);
+        let counters = device.get_internal_counters().hal;
+        let resources = self.core.instance.generate_report();
+        let allocator = device.generate_allocator_report().map(|report| {
+            json!({
+                "allocated_bytes": report.total_allocated_bytes,
+                "reserved_bytes": report.total_reserved_bytes,
+                "allocations": report.allocations.iter().map(|allocation| json!({
+                    "name": allocation.name,
+                    "bytes": allocation.size,
+                })).collect::<Vec<_>>(),
+            })
+        });
+        Ok(json!({
+            "adapter": adapter.name,
+            "backend": format!("{:?}", adapter.backend),
+            "max_non_sampler_bindings": device.limits().max_non_sampler_bindings,
+            "buffers": resources.as_ref().map(|r| r.hub.buffers.num_kept_from_user),
+            "textures": resources.as_ref().map(|r| r.hub.textures.num_kept_from_user),
+            "texture_views": resources.as_ref().map(|r| r.hub.texture_views.num_kept_from_user),
+            "bind_groups": resources.as_ref().map(|r| r.hub.bind_groups.num_kept_from_user),
+            "render_pipelines": resources.as_ref().map(|r| r.hub.render_pipelines.num_kept_from_user),
+            "compute_pipelines": resources.as_ref().map(|r| r.hub.compute_pipelines.num_kept_from_user),
+            "buffer_bytes": byte_counters.then(|| counters.buffer_memory.read()),
+            "texture_bytes": byte_counters.then(|| counters.texture_memory.read()),
+            "allocator": allocator,
+            "graphics_work": self.graphics_work(),
+        }))
+    }
+
     /// Captures cumulative resource creation and uploads performed by pipelines.
     pub fn graphics_work(&self) -> crate::GraphicsWorkDiagnostics {
         self.core.resources().graphics.diagnostics()
@@ -225,6 +255,7 @@ impl HeadlessRenderer {
             physical_size,
             config.format,
             config.sample_count,
+            config.max_non_sampler_bindings,
         ));
 
         let scale_factor = normalize_scale_factor(config.scale_factor);
@@ -451,6 +482,17 @@ impl HeadlessRenderer {
     /// Advances the virtual clock by one frame and renders it.
     pub fn step_frame(&mut self) {
         let _session = self.session.enter();
+        #[cfg(feature = "profiling")]
+        let wait_timer = Instant::now();
+        // Offscreen rendering has no swapchain to bound frames in flight.
+        if self.frame_index.is_multiple_of(2) {
+            self.core
+                .device()
+                .poll(wgpu::PollType::wait_indefinitely())
+                .expect("headless GPU frame completion failed");
+        }
+        #[cfg(feature = "profiling")]
+        let wait_duration = wait_timer.elapsed();
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.begin_frame_diagnostics());
         let graphics_before = self.graphics_work();
         crate::work::begin();
@@ -604,7 +646,7 @@ impl HeadlessRenderer {
                 frame_idx: self.frame_index,
                 build_mode: _build_tree_result.profiler_build_mode(),
                 redraw_reasons: Vec::new(),
-                inter_frame_wait_ns: None,
+                inter_frame_wait_ns: Some(wait_duration.as_nanos()),
                 partial_replay_nodes: _build_tree_result.partial_replay_nodes(),
                 total_nodes_before_build: _build_tree_result.total_nodes_before_build(),
                 render_time_ns: Some(render_duration.as_nanos()),
@@ -878,6 +920,7 @@ pub fn run_headless(
             .map(normalize_scale_factor)
             .unwrap_or(1.0),
         sample_count: config.sample_count.max(1),
+        max_non_sampler_bindings: config.max_non_sampler_bindings,
         ..HeadlessConfig::default()
     };
     let mut frame_time = headless_config.frame_time;
@@ -1017,6 +1060,13 @@ fn handle_request(
             let snapshot = renderer.snapshot();
             Ok((id, json!({"ok": true, "snapshot": snapshot})))
         }
+        WorkerRequest::Resources { id } => {
+            let response = match renderer.resource_snapshot() {
+                Ok(resources) => json!({"ok": true, "resources": resources}),
+                Err(error) => json!({"ok": false, "error": error.to_string()}),
+            };
+            Ok((id, response))
+        }
         WorkerRequest::Resize { id, width, height } => {
             renderer.resize(width, height);
             let size = renderer.physical_size();
@@ -1140,6 +1190,10 @@ enum WorkerRequest {
         out: Option<String>,
     },
     Snapshot {
+        #[serde(default)]
+        id: Option<u64>,
+    },
+    Resources {
         #[serde(default)]
         id: Option<u64>,
     },

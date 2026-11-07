@@ -7,12 +7,6 @@ use tessera_ui::DrawCommand;
 
 /// Image pixel data for rendering.
 ///
-/// # Fields
-///
-/// - `data`: Raw pixel data (RGBA).
-/// - `width`: Image width in pixels.
-/// - `height`: Image height in pixels.
-///
 /// Prefer [`ImageData::from_rgba`] to construct image content. Cloning shares
 /// pixel storage; independently allocated images compare by dimensions and pixels.
 #[derive(Debug, Clone)]
@@ -23,7 +17,7 @@ pub struct ImageData {
     pub width: u32,
     /// Image height in pixels.
     pub height: u32,
-    content_hash: u64,
+    pub(super) content_hash: u64,
 }
 
 impl ImageData {

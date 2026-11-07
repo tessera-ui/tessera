@@ -2227,11 +2227,17 @@ mod tests {
                 .texture_uploads,
             uploads
         );
+        let retired_pixels = Arc::downgrade(&original.data);
+        drop(original);
         settings.with_mut(|settings| {
             settings.stress = false;
             settings.count = 0;
         });
-        renderer.render_frames(130);
+        renderer.render_frames(2);
+        assert!(
+            retired_pixels.upgrade().is_none(),
+            "Unused image caches must release CPU pixels"
+        );
         settings.with_mut(|settings| settings.stress = true);
         renderer.render_frames(3);
         assert_eq!(
@@ -2239,18 +2245,29 @@ mod tests {
                 .graphics_work()
                 .group("image_textures")
                 .texture_uploads,
-            uploads,
-            "unused textures stay cached while they fit the byte budget"
+            uploads + 1,
+            "restoring retired pixels creates one texture"
         );
         assert!(renderer.read_pixels().expect("restored cached image") == repeated);
+        let uploads = renderer
+            .graphics_work()
+            .group("image_textures")
+            .texture_uploads;
         let duplicate = raster.get();
         for shade in 1..=5_u8 {
+            let retired_pixels = Arc::downgrade(&raster.get().data);
             let mut pixels = vec![0; 2048 * 2048 * 4];
             for pixel in pixels.chunks_exact_mut(4) {
                 pixel.copy_from_slice(&[shade * 31, 0, 0, 255]);
             }
             raster.set(ImageData::from_rgba(pixels, 2048, 2048));
             renderer.render_frames(2);
+            if shade > 1 {
+                assert!(
+                    retired_pixels.upgrade().is_none(),
+                    "Replaced images must release CPU pixels"
+                );
+            }
         }
         let pressure_uploads = renderer
             .graphics_work()
@@ -2265,7 +2282,7 @@ mod tests {
                 .group("image_textures")
                 .texture_uploads,
             pressure_uploads + 1,
-            "exceeding the byte budget evicts the oldest unused texture"
+            "restoring replaced pixels creates one texture"
         );
         assert!(renderer.read_pixels().expect("image after cache eviction") == repeated);
     }

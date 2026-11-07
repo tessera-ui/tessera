@@ -134,6 +134,7 @@ fn render<Output: 'static>(
             sample_count,
             scale_factor: 1.0,
             frame_time: Duration::from_millis(100),
+            ..Default::default()
         },
     )
     .unwrap_or_else(|error| panic!("GPU session for {format:?}, MSAA {sample_count}: {error}"));

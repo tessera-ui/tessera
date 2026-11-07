@@ -2,14 +2,15 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     flow_row::flow_row,
+    lazy_list::{LazyListController, lazy_column},
     modifier::{ModifierExt as _, SemanticsArgs},
-    scrollable::ScrollableController,
+    scrollable::{ScrollBarBehavior, ScrollableController},
     shape_def::Shape,
     surface::surface,
     text::text,
 };
 use tessera_ui::{
-    Callback, Dp, Modifier, State, modifier::FocusModifierExt as _, remember, tessera,
+    Callback, Dp, Modifier, Px, State, modifier::FocusModifierExt as _, remember, tessera,
 };
 
 use crate::res::I18N;
@@ -258,6 +259,7 @@ pub(super) fn component_pages(
         remember(|| None::<usize>)
     };
     let directory_scroll = remember(ScrollableController::new);
+    let directory_list = remember(LazyListController::new);
     let previous_article = Callback::new(move || {
         if let Some(index) = selected.get().and_then(|index| index.checked_sub(1)) {
             selected.set(Some(index));
@@ -273,6 +275,7 @@ pub(super) fn component_pages(
         }
     });
     let width = remember(|| Dp(900.0));
+    let height = remember(|| Px(1));
     if let Some(index) = selected.get() {
         let component = COMPONENTS[index];
         let route = ArticleRoute {
@@ -413,16 +416,31 @@ pub(super) fn component_pages(
         .modifier(Modifier::new().fill_max_size())
         .child(move || {
             super::scroll_viewport::spec_scroll_viewport(directory_scroll)
+                .scroll_content(false)
                 .viewport_modifier(Modifier::new().on_layout_coordinates(
                     move |coordinates: tessera_ui::LayoutCoordinates| {
                         let next = Dp::from(coordinates.local_size.width);
                         if width.get() != next {
                             width.set(next);
                         }
+                        let next = coordinates.local_size.height;
+                        if height.get() != next {
+                            height.set(next);
+                        }
                     },
                 ))
                 .children(move || {
-                    super::media::page_header("ui-components", "", width.get());
+                    let columns = directory_columns(width.get());
+                    let list = lazy_column()
+                        .modifier(Modifier::new().fill_max_size().weight(1.0))
+                        .controller(directory_list)
+                        .viewport_controller(directory_scroll)
+                        .scrollbar_behavior(ScrollBarBehavior::Hidden)
+                        .estimated_item_size(Dp(320.0))
+                        .max_viewport_main(height.get())
+                        .item(move || {
+                            super::media::page_header("ui-components", "", width.get());
+                        });
                     for (category, title) in [
                         "ui-buttons",
                         "ui-date-time-pickers",
@@ -434,22 +452,38 @@ pub(super) fn component_pages(
                     .into_iter()
                     .enumerate()
                     {
-                        gap(Dp(if category == 0 { 72.0 } else { 80.0 }));
-                        boxed()
-                            .modifier(Modifier::new().padding_symmetric(Dp(33.0), Dp::ZERO))
-                            .children(move || {
-                                heading(title.to_owned()).compact(width.get().0 <= 600.0);
+                        list.item(move || {
+                            column().children(move || {
+                                gap(Dp(if category == 0 { 72.0 } else { 80.0 }));
+                                boxed()
+                                    .modifier(Modifier::new().padding_symmetric(Dp(33.0), Dp::ZERO))
+                                    .children(move || {
+                                        heading(title.to_owned()).compact(width.get().0 <= 600.0);
+                                    });
+                                gap(Dp(24.0));
                             });
-                        gap(Dp(24.0));
+                        });
                         let entries = COMPONENTS
                             .iter()
                             .copied()
                             .enumerate()
                             .filter(|(_, component)| component.category == category)
                             .collect::<Vec<_>>();
-                        directory_group(entries, selected, width.get());
+                        let rows = entries.len().div_ceil(columns);
+                        for (row, entries) in entries.chunks(columns).enumerate() {
+                            let entries = entries.to_vec();
+                            list.item(move || {
+                                let entries = entries.clone();
+                                column().children(move || {
+                                    directory_group(entries.clone(), selected, width.get());
+                                    if row + 1 < rows {
+                                        gap(Dp(8.0));
+                                    }
+                                });
+                            });
+                        }
                     }
-                    gap(Dp(64.0));
+                    list.item(|| gap(Dp(64.0)));
                 });
         });
 }
@@ -462,13 +496,7 @@ pub(super) fn component_index(demo: usize) -> Option<usize> {
 
 #[tessera]
 fn directory_group(entries: Vec<(usize, Component)>, selected: State<Option<usize>>, width: Dp) {
-    let columns = if width.0 <= 600.0 {
-        1.0
-    } else if width.0 < 1295.0 {
-        2.0
-    } else {
-        3.0
-    };
+    let columns = directory_columns(width) as f64;
     let card_width = Dp(((width.0 - 16.0 - (columns - 1.0) * 8.0) / columns).max(0.0));
     flow_row()
         .modifier(
@@ -484,6 +512,16 @@ fn directory_group(entries: Vec<(usize, Component)>, selected: State<Option<usiz
                 component_card(component, index, selected, card_width);
             }
         });
+}
+
+fn directory_columns(width: Dp) -> usize {
+    if width.0 <= 600.0 {
+        1
+    } else if width.0 < 1295.0 {
+        2
+    } else {
+        3
+    }
 }
 
 #[tessera]
@@ -1494,8 +1532,8 @@ mod tests {
         renderer.render_frames(4);
         for demo in [2, 10, 11, 26, 27, 33, 34] {
             let component = COMPONENTS[component_index(demo).unwrap()];
-            let card = bounds(
-                &renderer,
+            let card = reveal_card(
+                &mut renderer,
                 &format!("Open {} specifications", I18N.text(component.title)),
             );
             click(&mut renderer, card);
@@ -2058,52 +2096,82 @@ mod tests {
         );
     }
 
-    fn assert_directory_packing(renderer: &HeadlessRenderer, columns: usize) -> Vec<f64> {
+    fn reveal_card(renderer: &mut HeadlessRenderer, label: &str) -> Rect {
+        let viewport = renderer.physical_size();
+        for step in 0..64 {
+            let target = renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .into_iter()
+                .find(|(_, node)| crate::has_label(node, label))
+                .and_then(|(_, node)| node.bounds());
+            let delta = if let Some(bounds) = target {
+                if bounds.y0 >= 64.0 && bounds.y1 <= f64::from(viewport.height) {
+                    return bounds;
+                }
+                (f64::from(viewport.height) * 0.5 - (bounds.y0 + bounds.y1) * 0.5) as f32
+            } else if step == 0 {
+                1_000_000.0
+            } else {
+                -(viewport.height as f32 * 0.7)
+            };
+            renderer.pointer_scroll(
+                MOUSE_POINTER_ID,
+                PxPosition::from_f32_xy(viewport.width as f32 * 0.5, viewport.height as f32 * 0.5),
+                0.0,
+                delta,
+            );
+            renderer.render_frames(40);
+        }
+        panic!("missing {label}");
+    }
+
+    fn assert_directory_packing(renderer: &HeadlessRenderer, columns: usize) {
         let nodes = renderer.accessibility_snapshot().unwrap().nodes;
         let gap = f64::from(tessera_ui::Px::from(Dp(8.0)).0);
-        let mut row_heights = Vec::new();
+        let mut observed = 0;
         for category in 0..6 {
             let cards = COMPONENTS
                 .iter()
                 .filter(|component| component.category == category)
-                .map(|component| {
+                .enumerate()
+                .filter_map(|(index, component)| {
                     let label = format!("Open {} specifications", I18N.text(component.title));
                     let mut matches = nodes
                         .iter()
-                        .filter(|(_, node)| crate::has_label(&node, label.as_str()));
-                    let card = matches
-                        .next()
-                        .unwrap_or_else(|| panic!("missing {label}"))
-                        .1
-                        .bounds()
-                        .unwrap();
+                        .filter(|(_, node)| crate::has_label(node, &label));
+                    let card = matches.next()?.1.bounds().unwrap();
                     assert!(matches.next().is_none(), "duplicate {label}");
-                    card
+                    Some((index, card))
                 })
                 .collect::<Vec<_>>();
-            for (index, card) in cards.iter().enumerate() {
-                let (row, column) = (index / columns, index % columns);
-                let row_start = cards[row * columns];
-                let context = format!("category {category} card {index} at {columns} columns");
-                assert_eq!(card.width(), cards[0].width(), "{context}: width");
-                assert_eq!(card.x0, cards[column].x0, "{context}: column");
-                assert_eq!(card.y0, row_start.y0, "{context}: row top");
-                assert_eq!(card.height(), row_start.height(), "{context}: row height");
-                if column > 0 {
-                    assert_eq!(card.x0, cards[index - 1].x1 + gap, "{context}: follows");
-                } else if row > 0 {
-                    assert_eq!(card.y0, cards[index - columns].y1 + gap, "{context}: wraps");
+            observed += cards.len();
+            for pair in cards.windows(2) {
+                let [(previous_index, previous), (index, card)] = pair else {
+                    unreachable!()
+                };
+                assert_eq!(card.width(), previous.width());
+                if index / columns == previous_index / columns {
+                    assert_eq!(card.y0, previous.y0);
+                    assert_eq!(card.height(), previous.height());
+                    assert_eq!(card.x0, previous.x1 + gap);
+                } else if index / columns == previous_index / columns + 1 {
+                    assert_eq!(card.y0, previous.y1 + gap);
+                    assert_eq!(
+                        card.x0,
+                        previous.x0 - (previous_index % columns) as f64 * (card.width() + gap)
+                    );
                 }
             }
-            row_heights.extend(cards.chunks(columns).map(|row| row[0].height()));
         }
-        row_heights
+        assert!(observed > 0, "directory cards must be mounted");
     }
 
     #[test]
     #[ignore = "requires a native GPU adapter; runs in a fresh child process"]
-    fn directory_packs_each_category_in_reading_order_across_breakpoints_and_resizes() {
-        let name = "pages::material_spec::catalog::tests::directory_packs_each_category_in_reading_order_across_breakpoints_and_resizes";
+    fn directory_packs_visible_rows_across_breakpoints_and_resizes() {
+        let name = "pages::material_spec::catalog::tests::directory_packs_visible_rows_across_breakpoints_and_resizes";
         if std::env::var("TESSERA_DIRECTORY_PACKING_TEST").as_deref() != Ok(name) {
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
@@ -2141,11 +2209,8 @@ mod tests {
         )
         .unwrap();
         renderer.render_frames(8);
-        let heights = assert_directory_packing(&renderer, 2);
-        assert!(
-            heights.iter().any(|height| *height != heights[0]),
-            "rows keep their natural content heights"
-        );
+        reveal_card(&mut renderer, "Open Button groups specifications");
+        assert_directory_packing(&renderer, 2);
         for (width, columns) in [
             (930, 2),
             (900, 1),
@@ -2159,6 +2224,7 @@ mod tests {
         ] {
             renderer.resize(width, 1200);
             renderer.render_frames(8);
+            reveal_card(&mut renderer, "Open Button groups specifications");
             assert_directory_packing(&renderer, columns);
         }
         let top = bounds(&renderer, "Open Button groups specifications");
@@ -2169,14 +2235,25 @@ mod tests {
             -1500.0,
         );
         renderer.render_frames(120);
-        assert!(bounds(&renderer, "Open Button groups specifications").y0 < top.y0);
+        assert!(
+            !renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(
+                    |(_, node)| crate::has_label(node, "Open Button groups specifications")
+                        && node.bounds() == Some(top)
+                )
+        );
         assert_directory_packing(&renderer, 2);
-        let cards = bounds(&renderer, "Open Cards specifications");
+        let cards = reveal_card(&mut renderer, "Open Cards specifications");
         click(&mut renderer, cards);
         renderer.render_frames(8);
         let back = bounds(&renderer, "Back to components");
         click(&mut renderer, back);
         renderer.render_frames(8);
+        reveal_card(&mut renderer, "Open Button groups specifications");
         assert_directory_packing(&renderer, 2);
     }
 }

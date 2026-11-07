@@ -235,6 +235,8 @@ impl WebConfig {
 pub struct TesseraConfig {
     /// MSAA sample count; defaults to `1` (disabled). The GPU must support the chosen count.
     pub sample_count: u32,
+    /// Positive D3D12 non-sampler binding capacity; defaults to 65,536. Larger budgets use more memory.
+    pub max_non_sampler_bindings: u32,
     /// The title of the application window.
     /// Defaults to "Tessera" if not specified.
     pub window_title: String,
@@ -248,11 +250,10 @@ pub struct TesseraConfig {
 }
 
 impl Default for TesseraConfig {
-    /// Creates a default configuration without MSAA and "Tessera" as the window
-    /// title.
     fn default() -> Self {
         Self {
             sample_count: 1,
+            max_non_sampler_bindings: DEFAULT_MAX_NON_SAMPLER_BINDINGS,
             window_title: "Tessera".to_string(),
             window: WindowConfig::default(),
             web: WebConfig::default(),
@@ -261,6 +262,8 @@ impl Default for TesseraConfig {
         }
     }
 }
+
+pub(crate) const DEFAULT_MAX_NON_SAMPLER_BINDINGS: u32 = 64 * 1024;
 
 /// Owns a UI window, rendering resources, and event processing.
 ///
@@ -1361,8 +1364,10 @@ where
         let pending_web_inits = self.pending_web_inits.clone();
         let sample_count = self.config.sample_count;
         let transparent = self.config.window.transparent;
+        let max_bindings = self.config.max_non_sampler_bindings;
         spawn_local(async move {
-            let render_core = RenderCore::new(window, sample_count, transparent).await;
+            let render_core =
+                RenderCore::new(window, sample_count, transparent, max_bindings).await;
             pending_web_inits.borrow_mut().push((epoch, render_core));
             let _ = proxy.send_event(RendererUserEvent::WebInitReady(epoch));
         });
@@ -1976,6 +1981,7 @@ where
                 window.clone(),
                 self.config.sample_count,
                 self.config.window.transparent,
+                self.config.max_non_sampler_bindings,
             ));
 
             // Register pipelines

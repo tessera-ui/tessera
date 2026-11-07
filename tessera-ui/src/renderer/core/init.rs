@@ -93,12 +93,16 @@ impl RenderCore {
     async fn request_device_and_queue_for_adapter(
         adapter: &wgpu::Adapter,
         _offscreen: bool,
+        max_bindings: u32,
     ) -> (wgpu::Device, wgpu::Queue) {
         let mut required_limits = if cfg!(target_arch = "wasm32") {
             wgpu::Limits::downlevel_webgl2_defaults()
         } else {
             wgpu::Limits::default()
         };
+        // D3D12 reserves the entire descriptor heap when the device is created.
+        required_limits.max_non_sampler_bindings =
+            max_bindings.min(adapter.limits().max_non_sampler_bindings);
         required_limits.max_uniform_buffer_binding_size = required_limits
             .max_uniform_buffer_binding_size
             .min(adapter.limits().max_uniform_buffer_binding_size);
@@ -134,7 +138,10 @@ impl RenderCore {
             required_features,
             required_limits: required_limits.clone(),
             label: None,
-            memory_hints: wgpu::MemoryHints::MemoryUsage,
+            // Growing blocks keep upload heaps resident after transient staging.
+            memory_hints: wgpu::MemoryHints::Manual {
+                suballocated_device_memory_block_size: 8 << 20..8 << 20,
+            },
             trace: wgpu::Trace::Off,
             experimental_features: wgpu::ExperimentalFeatures::default(),
         };
@@ -193,11 +200,11 @@ impl RenderCore {
         }
     }
 
-    /// Create a new render core as the root of Tessera.
     pub(crate) async fn new(
         window: Arc<Window>,
         sample_count: u32,
         window_transparent: bool,
+        max_bindings: u32,
     ) -> Self {
         let size = window.inner_size();
         let scale_factor = window.scale_factor();
@@ -208,23 +215,28 @@ impl RenderCore {
             None,
             sample_count,
             window_transparent,
+            max_bindings,
         )
         .await
     }
 
-    /// Create a render core that renders into an offscreen target without a
-    /// window or swapchain surface.
-    ///
-    /// The core renders into an internal offscreen texture; call
-    /// [`RenderCore::read_offscreen_rgba`] after a render to read the last
-    /// frame back as tightly packed RGBA8 pixels.
     #[cfg(all(feature = "headless", not(target_family = "wasm")))]
     pub(crate) async fn new_offscreen(
         size: winit::dpi::PhysicalSize<u32>,
         format: TextureFormat,
         sample_count: u32,
+        max_bindings: u32,
     ) -> Self {
-        Self::new_inner(None, size, 1.0, Some(format), sample_count, false).await
+        Self::new_inner(
+            None,
+            size,
+            1.0,
+            Some(format),
+            sample_count,
+            false,
+            max_bindings,
+        )
+        .await
     }
 
     async fn new_inner(
@@ -234,8 +246,8 @@ impl RenderCore {
         offscreen_format: Option<TextureFormat>,
         sample_count: u32,
         window_transparent: bool,
+        max_bindings: u32,
     ) -> Self {
-        // Looking for adapters
         let mut instance_desc = wgpu::InstanceDescriptor::new_without_display_handle();
         instance_desc.flags = wgpu::InstanceFlags::from_env_or_default();
         #[cfg(not(target_os = "windows"))]
@@ -250,9 +262,9 @@ impl RenderCore {
                     wgpu::Dx12SwapchainKind::DxgiFromVisual;
             }
         }
+        instance_desc.backends = wgpu::Backends::from_env().unwrap_or(instance_desc.backends);
         info!("Using WGPU instance config: {instance_desc:#?}");
         let instance: wgpu::Instance = wgpu::Instance::new(instance_desc);
-        // Create a surface when rendering to a window.
         let surface = match &window {
             Some(window) => match instance.create_surface(window.clone()) {
                 Ok(surface) => Some(surface),
@@ -263,29 +275,22 @@ impl RenderCore {
             },
             None => None,
         };
-        // Looking for a compatible adapter
         let adapter = match &surface {
             Some(surface) => Self::request_adapter_for_surface(&instance, surface).await,
             None => Self::request_adapter_offscreen(&instance).await,
         };
         let adapter_info = adapter.get_info();
         info!("Using WGPU adapter: {adapter_info:#?}");
-        // Create a device and queue
         let (device, queue) =
-            Self::request_device_and_queue_for_adapter(&adapter, surface.is_none()).await;
-        // Create the render configuration. Offscreen cores build the surface
-        // configuration by hand because there is no surface to query.
+            Self::request_device_and_queue_for_adapter(&adapter, surface.is_none(), max_bindings)
+                .await;
+        // Offscreen cores have no surface capabilities to query.
         let config = match &surface {
             Some(surface) => {
                 let caps = surface.get_capabilities(&adapter);
-                // Choose the present mode
                 let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
-                    // Fifo is the fallback, it is the most compatible and
-                    // stable
                     wgpu::PresentMode::Fifo
                 } else {
-                    // Immediate is the least preferred, it can cause tearing
-                    // and is not recommended
                     wgpu::PresentMode::Immediate
                 };
                 let alpha_mode = Self::pick_alpha_mode(&caps, window_transparent);

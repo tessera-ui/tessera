@@ -1,9 +1,3 @@
-//! Scrolling specification pages with a reserved classic track.
-//!
-//! ## Usage
-//!
-//! Browse long specifications without changing content width after layout.
-
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
@@ -20,21 +14,22 @@ const TRACK_WIDTH: Dp = Dp(15.0);
 pub(super) fn spec_scroll_viewport(
     controller: State<ScrollableController>,
     viewport_modifier: Option<Modifier>,
+    scroll_content: Option<bool>,
     children: Option<RenderSlot>,
 ) {
     let children = children.unwrap_or_default();
     let viewport_modifier = viewport_modifier.unwrap_or_default();
+    let viewport_modifier = viewport_modifier.fill_max_size().weight(1.0);
+    let viewport_modifier = if scroll_content.unwrap_or(true) {
+        viewport_modifier.vertical_scroll(controller)
+    } else {
+        viewport_modifier
+    };
     row()
         .modifier(Modifier::new().fill_max_size())
         .children(move || {
             column()
-                .modifier(
-                    viewport_modifier
-                        .clone()
-                        .fill_max_size()
-                        .weight(1.0)
-                        .vertical_scroll(controller),
-                )
+                .modifier(viewport_modifier.clone())
                 .children_shared(children);
             boxed()
                 .alignment(Alignment::TopStart)

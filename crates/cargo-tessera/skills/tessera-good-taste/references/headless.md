@@ -25,6 +25,9 @@ stdout response. Name a worker with `spawn`, then address it through `session`:
 ```
 
 Use `snapshot` for component bounds and accessibility labels, values, and state.
+Use `resources` to wait for GPU completion and inspect held GPU handles, allocated
+bytes, allocator reservations, and grouped graphics work. Sample worker process
+memory through the PID returned by `list`; reservations are not resident VRAM.
 Apply queued input with `render` before reading updated output. Use `text` with a
 `text` field for focused-editor input, and `input` with `kind: "scroll"` plus
 `delta_x` / `delta_y` for scrolling. Input positions are window coordinates.
@@ -37,7 +40,8 @@ Set `TESSERA_HEADLESS_SCALE_FACTOR` before starting the supervisor for DPI cases
 Each render advances the virtual clock by the configured frame step. See
 [CLI tools](tooling.md) for profiling capture and analysis.
 
-For in-process Rust tests, enable `testing` alongside `headless`. Give each fixture
+For in-process Rust tests, enable `testing` alongside `headless` and use
+`EntryPoint::into_headless` to exercise registered packages. Give each fixture
 explicit props and `TestProbe` observations. Query actual component coordinates
 with `inspect_components()` and published semantics with `inspect_accessibility()`.
 Use `work()` for executed phases and frame-clock and graphics diagnostics for

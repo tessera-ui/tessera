@@ -1,4 +1,4 @@
-use std::{collections::HashMap, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
 use encase::{ShaderType, UniformBuffer, internal::WriteInto};
 use lru::LruCache;
@@ -130,7 +130,6 @@ struct ResampleUniforms {
     scale: u32,
 }
 
-/// Compute pipeline handling downsample, blur, and upsample passes.
 pub struct BlurPipeline {
     downsample_pipeline: wgpu::ComputePipeline,
     blur_pipeline: wgpu::ComputePipeline,
@@ -138,12 +137,11 @@ pub struct BlurPipeline {
     resample_bind_group_layout: wgpu::BindGroupLayout,
     blur_bind_group_layout: wgpu::BindGroupLayout,
     downsample_sampler: wgpu::Sampler,
-    texture_pool: HashMap<(u32, u32), Vec<wgpu::Texture>>,
+    texture_pool: LruCache<(u32, u32), Vec<wgpu::Texture>>,
     weight_cache: LruCache<u32, WeightCacheEntry>,
 }
 
 impl BlurPipeline {
-    /// Builds the blur pipeline, optionally using an existing pipeline cache.
     pub fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let downsample_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blur Downsample Shader"),
@@ -309,7 +307,7 @@ impl BlurPipeline {
             resample_bind_group_layout,
             blur_bind_group_layout,
             downsample_sampler,
-            texture_pool: HashMap::new(),
+            texture_pool: LruCache::new(NonZeroUsize::new(8).unwrap()),
             weight_cache: LruCache::new(
                 NonZeroUsize::new(WEIGHT_CACHE_CAPACITY)
                     .expect("WEIGHT_CACHE_CAPACITY must be non-zero"),
@@ -347,7 +345,26 @@ impl BlurPipeline {
 
     fn release_texture(&mut self, texture: wgpu::Texture, width: u32, height: u32) {
         let key = Self::texture_key(width, height);
-        self.texture_pool.entry(key).or_default().push(texture);
+        const MAX_BYTES: u64 = 64 * 1024 * 1024;
+        let bytes = u64::from(key.0) * u64::from(key.1) * 4;
+        if bytes > MAX_BYTES {
+            return;
+        }
+        while self
+            .texture_pool
+            .iter()
+            .map(|(&(width, height), textures)| {
+                u64::from(width) * u64::from(height) * 4 * textures.len() as u64
+            })
+            .sum::<u64>()
+            + bytes
+            > MAX_BYTES
+        {
+            self.texture_pool.pop_lru();
+        }
+        self.texture_pool
+            .get_or_insert_mut(key, Vec::new)
+            .push(texture);
     }
 
     fn quantize_radius(radius: f32) -> u32 {
@@ -386,7 +403,6 @@ impl BlurPipeline {
 }
 
 impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
-    /// Dispatches one or more blur compute commands within the active pass.
     fn dispatch(&mut self, context: &mut ComputeContext<DualBlurCommand>) {
         for item in context.items {
             let coordinate_scale = item.geometry.local_to_window.scale();

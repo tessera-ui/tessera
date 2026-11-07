@@ -25,15 +25,13 @@ struct ImageUniforms {
 
 struct ImageResources {
     bind_group: wgpu::BindGroup,
-    last_used: u64,
-    bytes: u64,
 }
 
-struct ImageAlias {
-    // Keep allocation identities unique without retaining duplicate pixel
-    // buffers.
+struct CachedImage {
     pixels: Weak<Vec<u8>>,
-    key: ImageData,
+    content_hash: u64,
+    last_used: u64,
+    resources: Arc<ImageResources>,
 }
 
 /// Pipeline for rendering images in UI components.
@@ -47,11 +45,9 @@ pub struct ImagePipeline {
     uniform_used: u64,
     sampler: wgpu::Sampler,
     frame: u64,
-    cached_bytes: u64,
     quad_vertex_buffer: Arc<wgpu::Buffer>,
     quad_index_buffer: Arc<wgpu::Buffer>,
-    resources: HashMap<ImageData, ImageResources>,
-    aliases: HashMap<(usize, u32, u32), ImageAlias>,
+    resources: HashMap<(usize, u32, u32), CachedImage>,
 }
 
 impl ImagePipeline {
@@ -165,70 +161,53 @@ impl ImagePipeline {
             uniform_used: 0,
             sampler,
             frame: 0,
-            cached_bytes: 0,
             quad_vertex_buffer: Arc::clone(shared_quad.vertex()),
             quad_index_buffer: Arc::clone(shared_quad.index()),
             resources: HashMap::new(),
-            aliases: HashMap::new(),
         }
     }
 
-    /// Return existing resources for `data` or create them.
     fn get_or_create_resources(
         &mut self,
         device: &tessera_ui::GraphicsDevice,
         data: &ImageData,
     ) -> &ImageResources {
         let identity = (Arc::as_ptr(&data.data) as usize, data.width, data.height);
-        let key = if let Some(alias) = self.aliases.get(&identity) {
-            alias.key.clone()
-        } else {
-            let key = if let Some((key, _)) = self.resources.get_key_value(data) {
-                key.clone()
-            } else {
-                let bytes = u64::from(data.width) * u64::from(data.height) * 4;
-                while self.cached_bytes.saturating_add(bytes) > 64 * 1024 * 1024 {
-                    let oldest = self
-                        .resources
-                        .iter()
-                        .filter(|(_, resource)| resource.last_used != self.frame)
-                        .min_by_key(|(_, resource)| resource.last_used)
-                        .map(|(data, _)| data.clone());
-                    let Some(oldest) = oldest else {
-                        break;
+        if !self.resources.contains_key(&identity) {
+            let shared = self
+                .resources
+                .iter()
+                .find_map(|(&(_, width, height), cached)| {
+                    let pixels = cached.pixels.upgrade()?;
+                    let candidate = ImageData {
+                        data: pixels,
+                        width,
+                        height,
+                        content_hash: cached.content_hash,
                     };
-                    if let Some(resource) = self.resources.remove(&oldest) {
-                        self.cached_bytes = self.cached_bytes.saturating_sub(resource.bytes);
-                    }
-                    self.aliases.retain(|_, alias| {
-                        !Arc::ptr_eq(&alias.key.data, &oldest.data)
-                            || alias.key.width != oldest.width
-                            || alias.key.height != oldest.height
-                    });
-                }
-                let mut resource = Self::create_image_resources(
+                    (candidate == *data).then(|| Arc::clone(&cached.resources))
+                });
+            let resources = shared.unwrap_or_else(|| {
+                Arc::new(Self::create_image_resources(
                     device,
                     &self.bind_group_layout,
                     &self.sampler,
                     data,
-                );
-                resource.last_used = self.frame;
-                self.cached_bytes = self.cached_bytes.saturating_add(bytes);
-                self.resources.insert(data.clone(), resource);
-                data.clone()
-            };
-            self.aliases.insert(
+                ))
+            });
+            self.resources.insert(
                 identity,
-                ImageAlias {
+                CachedImage {
                     pixels: Arc::downgrade(&data.data),
-                    key: key.clone(),
+                    content_hash: data.content_hash,
+                    last_used: self.frame,
+                    resources,
                 },
             );
-            key
-        };
-        let resource = self.resources.get_mut(&key).expect("cached image");
-        resource.last_used = self.frame;
-        resource
+        }
+        let cached = self.resources.get_mut(&identity).expect("cached image");
+        cached.last_used = self.frame;
+        &cached.resources
     }
 
     fn uniform_resources(
@@ -260,7 +239,6 @@ impl ImagePipeline {
         (buffer, group)
     }
 
-    /// Compute the ImageUniforms for a given command size and position.
     fn compute_uniforms(
         geometry: tessera_ui::DrawGeometry,
         target_size: PxSize,
@@ -268,8 +246,6 @@ impl ImagePipeline {
     ) -> ImageUniforms {
         let start_pos = geometry.window_origin();
         let [width, height] = geometry.window_size();
-        // Convert pixel positions/sizes into normalized device coordinates and
-        // size ratios.
         let rect = [
             (start_pos.x / target_size.width.to_f32()) * 2.0 - 1.0
                 + (width / target_size.width.to_f32()),
@@ -283,8 +259,6 @@ impl ImagePipeline {
         ImageUniforms { rect, opacity }
     }
 
-    // Create GPU resources for an image. Kept as a single helper to avoid
-    // duplicating GPU setup logic while keeping `draw` concise.
     fn create_image_resources(
         device: &tessera_ui::GraphicsDevice,
         layout: &wgpu::BindGroupLayout,
@@ -346,8 +320,6 @@ impl ImagePipeline {
 
         ImageResources {
             bind_group: diffuse_bind_group,
-            last_used: 0,
-            bytes: u64::from(data.width) * u64::from(data.height) * 4,
         }
     }
 }
@@ -356,9 +328,11 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
     fn begin_frame(&mut self, _context: &FrameContext<'_>) {
         self.uniform_used = 0;
         self.frame = self.frame.wrapping_add(1);
-        self.aliases.retain(|_, alias| {
-            alias.pixels.strong_count() > 0 && self.resources.contains_key(&alias.key)
-        });
+    }
+
+    fn end_frame(&mut self, _context: &FrameContext<'_>) {
+        self.resources
+            .retain(|_, resource| resource.last_used == self.frame);
     }
 
     fn draw(&mut self, context: &mut DrawContext<ImageCommand>) {

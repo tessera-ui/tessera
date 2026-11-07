@@ -1,9 +1,3 @@
-//! Intrinsic translucent-vector and layer-opacity composition.
-//!
-//! ## Usage
-//!
-//! Preserve translucent vector color across atlas sampling and layer opacity.
-
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, tessera,
     testing::TestProbe,
@@ -21,15 +15,18 @@ use crate::{
 struct FixtureHandles {
     inverted: Option<State<bool>>,
     count: Option<State<usize>>,
+    size: Option<State<f64>>,
 }
 
 #[tessera]
 fn fixture(probe: TestProbe<FixtureHandles>) {
     let inverted = remember(|| false);
     let count = remember(|| 65_usize);
+    let size = remember(|| 8.0);
     probe.set(FixtureHandles {
         inverted: Some(inverted),
         count: Some(count),
+        size: Some(size),
     });
     let translucent = remember(|| {
         b"<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='#ff0000' fill-opacity='.5'/></svg>".as_slice()
@@ -67,7 +64,7 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
                             Dp(8.0 + (index % 13) as f64 * 12.0),
                             Dp(56.0 + (index / 13) as f64 * 12.0),
                         )
-                        .size(Dp(8.0), Dp(8.0)),
+                        .required_size(Dp(size.get()), Dp(size.get())),
                 );
             }
             image().painter(opaque.get()).modifier(
@@ -87,9 +84,9 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
 
 #[test]
 #[ignore = "requires a native GPU adapter for real raster/vector alpha comparison"]
-fn translucent_atlas_color_is_not_premultiplied_twice() {
+fn translucent_atlas_reuse_preserves_alpha_and_releases_unused_sizes() {
     crate::test_utils::run_isolated_test(
-        "pipelines::image_vector::alpha_tests::translucent_atlas_color_is_not_premultiplied_twice",
+        "pipelines::image_vector::alpha_tests::translucent_atlas_reuse_preserves_alpha_and_releases_unused_sizes",
         || {
             for samples in [1, 4] {
                 let probe = TestProbe::default();
@@ -181,6 +178,32 @@ fn translucent_atlas_color_is_not_premultiplied_twice() {
                 observed.get().count.unwrap().set(65);
                 renderer.render_frames(1);
                 assert_eq!(renderer.read_pixels().unwrap(), initial);
+                let baseline = renderer.resource_snapshot().unwrap();
+                for index in 0..24 {
+                    observed
+                        .get()
+                        .size
+                        .unwrap()
+                        .set(512.0 + index as f64 * 16.0);
+                    renderer.render_frames(3);
+                }
+                observed.get().size.unwrap().set(8.0);
+                renderer.render_frames(4);
+                assert_eq!(renderer.read_pixels().unwrap(), initial);
+                let settled = renderer.resource_snapshot().unwrap();
+                if let (Some(initial), Some(current)) = (
+                    baseline["texture_bytes"].as_u64(),
+                    settled["texture_bytes"].as_u64(),
+                ) {
+                    assert!(
+                        current <= initial,
+                        "Small vectors must release oversized atlas storage: {initial} -> {current}"
+                    );
+                }
+                assert!(
+                    settled["textures"].as_i64().unwrap() <= baseline["textures"].as_i64().unwrap(),
+                    "Unused vector sizes must release their atlas pages: {baseline} -> {settled}"
+                );
             }
         },
     );

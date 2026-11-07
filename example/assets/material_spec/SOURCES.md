@@ -5,7 +5,7 @@ Material Design makes its imagery available under CC BY 4.0 or Apache 2.0:
 https://m3.material.io/get-started
 https://creativecommons.org/licenses/by/4.0/
 
-Illustrations are copied without modifications. Runtime layout crops them to the displayed viewport.
+Illustrations are copied without modifications, except `components.png`, which is downscaled from 3840×2160 to 2000×1125. Runtime layout crops them to the displayed viewport.
 
 Photograph references retrieved on 2026-10-23 supply only clipped photographs in native figures.
 

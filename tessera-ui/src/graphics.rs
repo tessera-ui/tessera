@@ -12,6 +12,7 @@ use wgpu::util::DeviceExt as _;
 
 /// Actual resource operations for a pipeline's declared resource group.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "headless", derive(serde::Serialize))]
 pub struct GraphicsWork {
     /// Number of buffers created.
     pub buffer_allocations: usize,
@@ -29,7 +30,9 @@ pub struct GraphicsWork {
 
 /// Cumulative graphics work owned by one renderer.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "headless", derive(serde::Serialize))]
 pub struct GraphicsWorkDiagnostics {
+    #[cfg_attr(feature = "headless", serde(skip))]
     owner: u128,
     groups: FxHashMap<&'static str, GraphicsWork>,
 }
@@ -197,12 +200,59 @@ impl GraphicsDevice {
         layout: wgpu::TexelCopyBufferLayout,
         size: wgpu::Extent3d,
     ) {
-        self.queue.write_texture(destination, data, layout, size);
+        match upload_band_rows(&destination, layout, size) {
+            Some((band_rows, block_height, bytes_per_row)) => {
+                let mut row = 0;
+                while row < size.height {
+                    let height = band_rows.min(size.height - row);
+                    let start = layout.offset + u64::from(row / block_height) * bytes_per_row;
+                    self.queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            origin: wgpu::Origin3d {
+                                y: destination.origin.y + row,
+                                ..destination.origin
+                            },
+                            ..destination
+                        },
+                        &data[usize::try_from(start).expect("upload offset")..],
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: layout.bytes_per_row,
+                            rows_per_image: None,
+                        },
+                        wgpu::Extent3d { height, ..size },
+                    );
+                    row += height;
+                }
+            }
+            None => self.queue.write_texture(destination, data, layout, size),
+        }
         let mut work = self.work.lock();
         let group = work.groups.entry(group).or_default();
         group.texture_uploads += 1;
         group.texture_uploaded_bytes += data.len() as u64;
     }
+}
+
+// Each queue upload stages its bytes in host-visible memory. Large single
+// uploads get dedicated upload heaps that drivers may keep resident after the
+// copy, so they are split into bands that fit the allocator's shared blocks.
+const UPLOAD_BAND_BYTES: u64 = 1 << 20;
+
+fn upload_band_rows(
+    destination: &wgpu::TexelCopyTextureInfo<'_>,
+    layout: wgpu::TexelCopyBufferLayout,
+    size: wgpu::Extent3d,
+) -> Option<(u32, u32, u64)> {
+    let bytes_per_row = u64::from(layout.bytes_per_row?);
+    let (_, block_height) = destination.texture.format().block_dimensions();
+    let block_rows = size.height.div_ceil(block_height);
+    if size.depth_or_array_layers != 1 || bytes_per_row * u64::from(block_rows) <= UPLOAD_BAND_BYTES
+    {
+        return None;
+    }
+    let band_blocks = u32::try_from((UPLOAD_BAND_BYTES / bytes_per_row).max(1)).ok()?;
+    Some((band_blocks * block_height, block_height, bytes_per_row))
 }
 
 impl Deref for GraphicsDevice {

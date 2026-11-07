@@ -13,6 +13,8 @@ use crate::{
     render_graph::{ExternalTextureDesc, RenderTextureDesc},
 };
 
+use super::core::{create_msaa_view, create_texture_view};
+
 /// Registry of persistent textures that are owned by render pipelines.
 #[derive(Clone)]
 pub struct ExternalTextureRegistry {
@@ -172,17 +174,32 @@ impl ExternalTextureSlotGuard<'_> {
         self.entry().front.clone()
     }
 
-    pub fn back_view(&self) -> wgpu::TextureView {
-        self.entry().back.clone()
+    pub fn back_view(&mut self, device: &wgpu::Device) -> wgpu::TextureView {
+        let entry = self.entry_mut();
+        entry
+            .back
+            .get_or_insert_with(|| create_texture_view(device, &entry.desc, "External Back"))
+            .clone()
     }
 
-    pub fn msaa_view(&self) -> Option<wgpu::TextureView> {
-        self.entry().msaa_view.clone()
+    pub fn msaa_view(&mut self, device: &wgpu::Device) -> Option<wgpu::TextureView> {
+        let entry = self.entry_mut();
+        (entry.sample_count > 1).then(|| {
+            entry
+                .msaa_view
+                .get_or_insert_with(|| {
+                    create_msaa_view(device, &entry.desc, entry.sample_count, "External MSAA")
+                })
+                .clone()
+        })
     }
 
     pub fn swap_front_back(&mut self) {
         let entry = self.entry_mut();
-        std::mem::swap(&mut entry.front, &mut entry.back);
+        std::mem::swap(
+            &mut entry.front,
+            entry.back.as_mut().expect("compute back texture"),
+        );
     }
 
     fn entry(&self) -> &ExternalTextureEntry {
@@ -224,7 +241,7 @@ struct ExternalTextureEntry {
     desc: RenderTextureDesc,
     sample_count: u32,
     front: wgpu::TextureView,
-    back: wgpu::TextureView,
+    back: Option<wgpu::TextureView>,
     msaa_view: Option<wgpu::TextureView>,
     last_used_frame: u64,
     ref_count: u32,
@@ -232,95 +249,22 @@ struct ExternalTextureEntry {
 
 impl ExternalTextureEntry {
     fn new(device: &wgpu::Device, desc: RenderTextureDesc, sample_count: u32) -> Self {
-        let (front, back, msaa_view) = create_views(device, &desc, sample_count);
         Self {
+            front: create_texture_view(device, &desc, "External Front"),
+            back: None,
+            msaa_view: None,
             desc,
             sample_count,
-            front,
-            back,
-            msaa_view,
             last_used_frame: 0,
             ref_count: 1,
         }
     }
 
     fn rebuild(&mut self, device: &wgpu::Device, desc: RenderTextureDesc, sample_count: u32) {
-        let (front, back, msaa_view) = create_views(device, &desc, sample_count);
+        self.front = create_texture_view(device, &desc, "External Front");
+        self.back = None;
+        self.msaa_view = None;
         self.desc = desc;
         self.sample_count = sample_count;
-        self.front = front;
-        self.back = back;
-        self.msaa_view = msaa_view;
     }
-}
-
-fn create_views(
-    device: &wgpu::Device,
-    desc: &RenderTextureDesc,
-    sample_count: u32,
-) -> (
-    wgpu::TextureView,
-    wgpu::TextureView,
-    Option<wgpu::TextureView>,
-) {
-    let front = create_texture_view(device, desc, "External Front");
-    let back = create_texture_view(device, desc, "External Back");
-    let msaa_view = if sample_count > 1 {
-        Some(create_msaa_view(device, desc, sample_count))
-    } else {
-        None
-    };
-    (front, back, msaa_view)
-}
-
-fn create_texture_view(
-    device: &wgpu::Device,
-    desc: &RenderTextureDesc,
-    label: &str,
-) -> wgpu::TextureView {
-    let width = desc.size.width.positive().max(1);
-    let height = desc.size.height.positive().max(1);
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(label),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: desc.format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::STORAGE_BINDING
-            | wgpu::TextureUsages::COPY_SRC
-            | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    texture.create_view(&wgpu::TextureViewDescriptor::default())
-}
-
-fn create_msaa_view(
-    device: &wgpu::Device,
-    desc: &RenderTextureDesc,
-    sample_count: u32,
-) -> wgpu::TextureView {
-    let width = desc.size.width.positive().max(1);
-    let height = desc.size.height.positive().max(1);
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("External MSAA"),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count,
-        dimension: wgpu::TextureDimension::D2,
-        format: desc.format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    });
-    texture.create_view(&wgpu::TextureViewDescriptor::default())
 }

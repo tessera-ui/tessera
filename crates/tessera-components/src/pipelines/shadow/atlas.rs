@@ -1,9 +1,3 @@
-//! Shadow atlas composite pipeline for batched mask and blur passes.
-//!
-//! ## Usage
-//!
-//! Expand shadow composite commands into atlas-backed mask, blur, and draw ops.
-
 use std::collections::{HashMap, HashSet};
 
 use smallvec::SmallVec;
@@ -210,10 +204,8 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
                 ) {
                     Some(allocation) => allocation,
                     None => {
-                        self.stamp_cache.clear();
-                        self.stamp_heat.clear();
-                        self.atlas.reset();
-                        return build_fallback_output(&shadows);
+                        emit_fallback_item(&mut output, item);
+                        continue;
                     }
                 };
                 let inner_rect = allocation.rect.inset(guard);
@@ -721,10 +713,6 @@ impl ShadowAtlas {
         false
     }
 
-    fn reset(&mut self) {
-        self.pages.clear();
-    }
-
     fn allocate(
         &mut self,
         registry: &ExternalTextureRegistry,
@@ -763,6 +751,24 @@ impl ShadowAtlas {
             .map(|page| page.size)
             .max_by_key(|size| size.width.positive() as u64 * size.height.positive() as u64);
         let page_size = atlas_page_size(width, height, previous_size, self.max_dimension);
+        let area =
+            |size: PxSize| u64::from(size.width.positive()) * u64::from(size.height.positive());
+        let pixels = self
+            .pages
+            .iter()
+            .flatten()
+            .map(|page| area(page.size))
+            .sum::<u64>()
+            + area(page_size);
+        let samples = if sample_count > 1 {
+            sample_count as u64
+        } else {
+            0
+        };
+        let bytes_per_pixel = 4 * (2 + SHADOW_ATLAS_LAYER_CAPACITY as u64 * 4 + samples);
+        if pixels.saturating_mul(bytes_per_pixel) > 32 * 1024 * 1024 {
+            return None;
+        }
         let page_index = self.add_page(registry, device, page_size, sample_count, frame_index);
         let rect = self
             .pages
@@ -1066,14 +1072,6 @@ fn emit_fallback_item(output: &mut CompositeOutput, item: &ShadowItem) {
             ops: replacement_ops,
         });
     }
-}
-
-fn build_fallback_output(items: &[ShadowItem]) -> CompositeOutput {
-    let mut output = CompositeOutput::empty();
-    for item in items {
-        emit_fallback_item(&mut output, item);
-    }
-    output
 }
 
 #[cfg(test)]

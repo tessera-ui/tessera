@@ -1,6 +1,10 @@
-use std::{collections::HashMap, num::NonZeroU64};
+use std::{
+    collections::{BTreeMap, HashMap},
+    num::NonZeroU64,
+};
 
 use encase::{ShaderType, UniformBuffer};
+use etagere::{AllocId, AtlasAllocator, size2};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     DrawGeometry, PxSize,
@@ -10,7 +14,6 @@ use tessera_ui::{
 
 use super::command::{ImageVectorCommand, ImageVectorData, ImageVectorVertex, VectorTintMode};
 
-const DEFAULT_ATLAS_SIZE: u32 = 2048;
 const MIN_ATLAS_SIZE: u32 = 256;
 const ATLAS_PADDING: u32 = 1;
 const ATLAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -43,6 +46,8 @@ struct AtlasCacheEntry {
     uv_origin: [f32; 2],
     uv_scale: [f32; 2],
     page_index: usize,
+    allocation: AllocId,
+    last_used: u64,
 }
 
 struct SampleResources {
@@ -70,8 +75,6 @@ struct AtlasSampleUniforms {
     rotation: f32,
 }
 
-/// Render pipeline that rasterizes SVG vector meshes into an atlas for
-/// sampling.
 pub struct ImageVectorPipeline {
     raster_pipeline: wgpu::RenderPipeline,
     raster_bind_group: wgpu::BindGroup,
@@ -79,8 +82,8 @@ pub struct ImageVectorPipeline {
     sample_bind_group_layout: wgpu::BindGroupLayout,
     atlas_sampler: wgpu::Sampler,
     atlas: VectorAtlas,
-    resources: HashMap<ImageVectorData, GeometryResources>,
     cache: HashMap<AtlasKey, AtlasCacheEntry>,
+    frame: u64,
     raster_sample_count: u32,
     sample_resources: Vec<SampleResources>,
     next_sample: usize,
@@ -88,7 +91,6 @@ pub struct ImageVectorPipeline {
 }
 
 impl ImageVectorPipeline {
-    /// Creates the vector atlas pipeline with raster and sampling passes.
     pub fn new(
         device: &tessera_ui::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
@@ -284,9 +286,9 @@ impl ImageVectorPipeline {
             sample_pipeline,
             sample_bind_group_layout,
             atlas_sampler,
-            atlas: VectorAtlas::new(device),
-            resources: HashMap::new(),
+            atlas: VectorAtlas::default(),
             cache: HashMap::new(),
+            frame: 0,
             raster_sample_count,
             sample_resources: Vec::new(),
             next_sample: 0,
@@ -333,29 +335,24 @@ impl ImageVectorPipeline {
         height: u32,
     ) {
         let key = AtlasKey::new(data, width, height);
-        if self.cache.contains_key(&key) {
+        if let Some(entry) = self.cache.get_mut(&key) {
+            entry.last_used = self.frame;
             return;
         }
 
-        let geometry_key = data.clone();
-        self.resources
-            .entry(geometry_key.clone())
-            .or_insert_with(|| Self::create_resources(device, data));
-
-        let allocation = self.atlas.allocate(device, queue, width, height);
-        let geometry = self
-            .resources
-            .get(&geometry_key)
-            .expect("geometry must exist");
-        self.rasterize_into_allocation(device, queue, geometry, &allocation, width, height);
-
+        let geometry = Self::create_resources(device, data);
+        let allocation = self.atlas.allocate(device, width, height);
+        self.rasterize_into_allocation(device, queue, &geometry, &allocation, width, height);
+        let page_size = self.atlas.page_texture(allocation.page_index).size();
         let uv_origin = [
-            allocation.inner_rect.x as f32 / allocation.page_size.0 as f32,
-            allocation.inner_rect.y as f32 / allocation.page_size.1 as f32,
+            (allocation.region.rectangle.min.x as u32 + ATLAS_PADDING) as f32
+                / page_size.width as f32,
+            (allocation.region.rectangle.min.y as u32 + ATLAS_PADDING) as f32
+                / page_size.height as f32,
         ];
         let uv_scale = [
-            allocation.inner_rect.width as f32 / allocation.page_size.0 as f32,
-            allocation.inner_rect.height as f32 / allocation.page_size.1 as f32,
+            width as f32 / page_size.width as f32,
+            height as f32 / page_size.height as f32,
         ];
 
         self.cache.insert(
@@ -364,6 +361,8 @@ impl ImageVectorPipeline {
                 uv_origin,
                 uv_scale,
                 page_index: allocation.page_index,
+                allocation: allocation.region.id,
+                last_used: self.frame,
             },
         );
     }
@@ -377,6 +376,8 @@ impl ImageVectorPipeline {
         width: u32,
         height: u32,
     ) {
+        let padded_width = width + ATLAS_PADDING * 2;
+        let padded_height = height + ATLAS_PADDING * 2;
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("image_vector_atlas_encoder"),
         });
@@ -386,8 +387,8 @@ impl ImageVectorPipeline {
             &wgpu::TextureDescriptor {
                 label: Some("image_vector_resolved_texture"),
                 size: wgpu::Extent3d {
-                    width,
-                    height,
+                    width: padded_width,
+                    height: padded_height,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
@@ -406,8 +407,8 @@ impl ImageVectorPipeline {
                 &wgpu::TextureDescriptor {
                     label: Some("image_vector_msaa_texture"),
                     size: wgpu::Extent3d {
-                        width,
-                        height,
+                        width: padded_width,
+                        height: padded_height,
                         depth_or_array_layers: 1,
                     },
                     mip_level_count: 1,
@@ -442,6 +443,14 @@ impl ImageVectorPipeline {
                 timestamp_writes: None,
             });
             pass.set_pipeline(&self.raster_pipeline);
+            pass.set_viewport(
+                ATLAS_PADDING as f32,
+                ATLAS_PADDING as f32,
+                width as f32,
+                height as f32,
+                0.0,
+                1.0,
+            );
             pass.set_bind_group(0, &self.raster_bind_group, &[]);
             pass.set_vertex_buffer(0, geometry.vertex_buffer.slice(..));
             pass.set_index_buffer(geometry.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
@@ -459,15 +468,15 @@ impl ImageVectorPipeline {
                 texture: self.atlas.page_texture(allocation.page_index),
                 mip_level: 0,
                 origin: wgpu::Origin3d {
-                    x: allocation.inner_rect.x,
-                    y: allocation.inner_rect.y,
+                    x: allocation.region.rectangle.min.x as u32,
+                    y: allocation.region.rectangle.min.y as u32,
                     z: 0,
                 },
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::Extent3d {
-                width: allocation.inner_rect.width,
-                height: allocation.inner_rect.height,
+                width: padded_width,
+                height: padded_height,
                 depth_or_array_layers: 1,
             },
         );
@@ -479,10 +488,10 @@ impl ImageVectorPipeline {
 impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
     fn begin_frame(&mut self, _context: &FrameContext<'_>) {
         self.next_sample = 0;
+        self.frame += 1;
     }
 
     fn end_frame(&mut self, context: &FrameContext<'_>) {
-        // Queue writes precede submission of the frame's encoded draws.
         for resources in self
             .sample_resources
             .iter()
@@ -492,6 +501,27 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 .graphics
                 .write_buffer(&resources.buffer, 0, &resources.bytes[..resources.used]);
         }
+        self.cache.retain(|_, entry| {
+            if entry.last_used == self.frame {
+                return true;
+            }
+            self.atlas
+                .pages
+                .get_mut(&entry.page_index)
+                .unwrap()
+                .allocator
+                .deallocate(entry.allocation);
+            false
+        });
+        self.atlas.pages.retain(|index, page| {
+            if !page.allocator.is_empty() {
+                return true;
+            }
+            for resources in &mut self.sample_resources {
+                resources.bind_groups.remove(index);
+            }
+            false
+        });
     }
 
     fn draw(&mut self, context: &mut DrawContext<ImageVectorCommand>) {
@@ -662,139 +692,89 @@ fn physical_dimensions(geometry: DrawGeometry) -> Option<(u32, u32)> {
 
 struct AtlasAllocation {
     page_index: usize,
-    inner_rect: AtlasRect,
-    page_size: (u32, u32),
+    region: etagere::Allocation,
 }
 
-#[derive(Clone, PartialEq, Copy)]
-struct AtlasRect {
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-}
-
+#[derive(Default)]
 struct VectorAtlas {
-    pages: Vec<AtlasPage>,
-    default_size: u32,
-    max_dimension: u32,
+    pages: BTreeMap<usize, AtlasPage>,
 }
 
 impl VectorAtlas {
-    fn new(device: &tessera_ui::GraphicsDevice) -> Self {
-        let max_dimension = device.limits().max_texture_dimension_2d;
-        let default_size = DEFAULT_ATLAS_SIZE.min(max_dimension);
-        Self {
-            pages: Vec::new(),
-            default_size: default_size.max(MIN_ATLAS_SIZE),
-            max_dimension,
-        }
-    }
-
     fn allocate(
         &mut self,
         device: &tessera_ui::GraphicsDevice,
-        queue: &wgpu::Queue,
         width: u32,
         height: u32,
     ) -> AtlasAllocation {
         let padded_width = width.saturating_add(ATLAS_PADDING * 2).max(1);
         let padded_height = height.saturating_add(ATLAS_PADDING * 2).max(1);
+        let max_dimension = device.limits().max_texture_dimension_2d;
 
-        if padded_width > self.max_dimension || padded_height > self.max_dimension {
+        if padded_width > max_dimension || padded_height > max_dimension {
             panic!(
                 "Image vector target {}x{} exceeds GPU atlas limit {}",
-                width, height, self.max_dimension
+                width, height, max_dimension
             );
         }
 
-        for (index, page) in self.pages.iter_mut().enumerate() {
-            if let Some(rect) = page.allocate(padded_width, padded_height) {
+        let page_size = padded_width
+            .max(padded_height)
+            .next_power_of_two()
+            .max(MIN_ATLAS_SIZE)
+            .min(max_dimension);
+        for (&index, page) in &mut self.pages {
+            if page.texture.width() != page_size {
+                continue;
+            }
+            if let Some(allocation) = page
+                .allocator
+                .allocate(size2(padded_width as i32, padded_height as i32))
+            {
                 return AtlasAllocation {
                     page_index: index,
-                    inner_rect: AtlasRect {
-                        x: rect.x + ATLAS_PADDING,
-                        y: rect.y + ATLAS_PADDING,
-                        width,
-                        height,
-                    },
-                    page_size: (page.width, page.height),
+                    region: allocation,
                 };
             }
         }
 
-        let needed = padded_width.max(padded_height);
-        let mut page_size = self.default_size.max(needed).max(MIN_ATLAS_SIZE);
-        page_size = page_size.min(self.max_dimension);
-        let page_index = self.add_page(device, queue, page_size);
-        let page = self
-            .pages
-            .get_mut(page_index)
-            .expect("new page should exist");
-        let rect = page
-            .allocate(padded_width, padded_height)
+        let mut page = AtlasPage::new(device, page_size);
+        let allocation = page
+            .allocator
+            .allocate(size2(padded_width as i32, padded_height as i32))
             .expect("allocation should fit in a new page");
+        let page_index = self.pages.keys().next_back().map_or(0, |index| index + 1);
+        self.pages.insert(page_index, page);
         AtlasAllocation {
             page_index,
-            inner_rect: AtlasRect {
-                x: rect.x + ATLAS_PADDING,
-                y: rect.y + ATLAS_PADDING,
-                width,
-                height,
-            },
-            page_size: (page.width, page.height),
+            region: allocation,
         }
     }
 
-    fn add_page(
-        &mut self,
-        device: &tessera_ui::GraphicsDevice,
-        queue: &wgpu::Queue,
-        size: u32,
-    ) -> usize {
-        let page = AtlasPage::new(device, queue, size, size);
-        self.pages.push(page);
-        self.pages.len() - 1
-    }
-
     fn page_view(&self, index: usize) -> &wgpu::TextureView {
-        &self.pages[index].view
+        &self.pages[&index].view
     }
 
     fn page_texture(&self, index: usize) -> &wgpu::Texture {
-        &self.pages[index].texture
+        &self.pages[&index].texture
     }
-}
-
-struct ShelfRow {
-    y: u32,
-    height: u32,
-    cursor_x: u32,
 }
 
 struct AtlasPage {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
-    width: u32,
-    height: u32,
-    rows: Vec<ShelfRow>,
-    next_y: u32,
+    allocator: AtlasAllocator,
 }
 
 impl AtlasPage {
-    fn new(
-        device: &tessera_ui::GraphicsDevice,
-        _queue: &wgpu::Queue,
-        width: u32,
-        height: u32,
-    ) -> Self {
+    fn new(device: &tessera_ui::GraphicsDevice, size: u32) -> Self {
         let texture = device.create_texture(
             "vector_atlas",
             &wgpu::TextureDescriptor {
                 label: Some("image_vector_atlas_page"),
                 size: wgpu::Extent3d {
-                    width,
-                    height,
+                    width: size,
+                    height: size,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
@@ -807,91 +787,11 @@ impl AtlasPage {
                 view_formats: &[],
             },
         );
-        #[cfg(target_arch = "wasm32")]
-        {
-            // WebGPU does not support `clear_texture` on the web backend.
-            let zeroed = vec![0; (width as usize) * (height as usize) * 4];
-            device.write_texture(
-                "vector_atlas",
-                wgpu::TexelCopyTextureInfo {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                &zeroed,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(width * 4),
-                    rows_per_image: Some(height),
-                },
-                wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-            );
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("image_vector_atlas_clear_encoder"),
-            });
-            encoder.clear_texture(
-                &texture,
-                &wgpu::ImageSubresourceRange {
-                    aspect: wgpu::TextureAspect::All,
-                    base_mip_level: 0,
-                    mip_level_count: Some(1),
-                    base_array_layer: 0,
-                    array_layer_count: Some(1),
-                },
-            );
-            _queue.submit(std::iter::once(encoder.finish()));
-        }
-
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Self {
             texture,
             view,
-            width,
-            height,
-            rows: Vec::new(),
-            next_y: 0,
+            allocator: AtlasAllocator::new(size2(size as i32, size as i32)),
         }
-    }
-
-    fn allocate(&mut self, width: u32, height: u32) -> Option<AtlasRect> {
-        for row in &mut self.rows {
-            if height <= row.height && row.cursor_x + width <= self.width {
-                let rect = AtlasRect {
-                    x: row.cursor_x,
-                    y: row.y,
-                    width,
-                    height,
-                };
-                row.cursor_x += width;
-                return Some(rect);
-            }
-        }
-
-        if self.next_y + height > self.height {
-            return None;
-        }
-
-        let rect = AtlasRect {
-            x: 0,
-            y: self.next_y,
-            width,
-            height,
-        };
-        self.rows.push(ShelfRow {
-            y: self.next_y,
-            height,
-            cursor_x: width,
-        });
-        self.next_y += height;
-        Some(rect)
     }
 }

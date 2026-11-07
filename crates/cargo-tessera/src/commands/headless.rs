@@ -1,16 +1,7 @@
-//! `cargo tessera headless`: a long-running supervisor for headless sessions.
+//! `cargo tessera headless`: offscreen sessions over JSONL stdio.
 //!
-//! The supervisor manages one or more headless render workers and speaks a
-//! JSONL protocol on stdin/stdout, so automation and agents can drive Tessera
-//! applications without a window.
-//!
-//! ## Protocol
-//!
-//! One JSON object per line on stdin, one response object per line on stdout.
-//! Requests: `spawn`, `list`, `input`, `text`, `render`, `snapshot`, `resize`,
-//! `kill`, `rebuild` and `shutdown`. Worker lifecycle commands are handled
-//! here; `input`/`text`/`render`/`snapshot`/`resize` are forwarded to the
-//! selected worker session.
+//! Send one request per line: `spawn`, `list`, `input`, `text`, `render`,
+//! `snapshot`, `resources`, `resize`, `kill`, `rebuild`, or `shutdown`.
 
 use std::{
     collections::HashMap,
@@ -163,6 +154,9 @@ pub fn execute(
                 }
                 result
             }
+            Request::Resources { session, .. } => with_session(&mut sessions, &session, |worker| {
+                worker.send(json!({"cmd": "resources"}))
+            }),
             Request::Kill { session, .. } => match sessions.remove(&session) {
                 Some(mut worker) => {
                     worker.terminate();
@@ -585,6 +579,11 @@ enum Request {
         id: Option<u64>,
         session: String,
     },
+    Resources {
+        #[serde(default)]
+        id: Option<u64>,
+        session: String,
+    },
     Resize {
         #[serde(default)]
         id: Option<u64>,
@@ -617,6 +616,7 @@ impl Request {
             | Request::Text { id, .. }
             | Request::Render { id, .. }
             | Request::Snapshot { id, .. }
+            | Request::Resources { id, .. }
             | Request::Resize { id, .. }
             | Request::Kill { id, .. }
             | Request::Rebuild { id, .. }
