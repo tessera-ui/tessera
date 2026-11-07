@@ -2,7 +2,6 @@ use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxSize,
-    px::PxRect,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu,
 };
@@ -15,7 +14,11 @@ struct GlassUniforms {
     rect_uv_bounds: Vec4,
     corner_radii: Vec4,
     corner_g2: Vec4,
-    clip_rect_uv: Vec4,
+    material_tone: Vec4,
+    blur_sigma_px: f32,
+    pixels_per_dp: f32,
+    opacity: f32,
+    material_mode: u32,
     rect_size_px: Vec2,
     ripple_center: Vec2,
     shape_type: f32,
@@ -26,6 +29,8 @@ struct GlassUniforms {
     ripple_alpha: f32,
     ripple_strength: f32,
     border_width: f32,
+    contrast: f32,
+    feedback: f32,
 }
 
 #[derive(PartialEq, ShaderType)]
@@ -190,9 +195,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             instances: context
                 .commands
                 .iter()
-                .map(|(command, geometry)| {
-                    glass_uniforms(command, *geometry, context.target_size, context.clip_rect)
-                })
+                .map(|(command, geometry)| glass_uniforms(command, *geometry, context.target_size))
                 .collect(),
         };
         let mut content = StorageBuffer::new(Vec::<u8>::new());
@@ -238,7 +241,6 @@ fn glass_uniforms(
     command: &FluidGlassCommand,
     geometry: tessera_ui::DrawGeometry,
     target_size: PxSize,
-    clip_rect: Option<PxRect>,
 ) -> GlassUniforms {
     let render = &command.render;
     let size = geometry.local_size;
@@ -246,15 +248,6 @@ fn glass_uniforms(
     let [world_width, world_height] = geometry.window_size();
     let screen_w = target_size.width.to_f32();
     let screen_h = target_size.height.to_f32();
-
-    let clip_rect_uv = clip_rect.map_or(Vec4::new(0.0, 0.0, 1.0, 1.0), |rect| {
-        Vec4::new(
-            rect.x.0 as f32 / screen_w,
-            rect.y.0 as f32 / screen_h,
-            (rect.x.0 + rect.width.0) as f32 / screen_w,
-            (rect.y.0 + rect.height.0) as f32 / screen_h,
-        )
-    });
 
     let (corner_radii, corner_g2, shape_type) = match render.shape.resolve_for_size(size) {
         crate::shape_def::ResolvedShape::Rounded {
@@ -276,7 +269,15 @@ fn glass_uniforms(
             (start_pos.x + world_width) / screen_w,
             (start_pos.y + world_height) / screen_h,
         ),
-        clip_rect_uv,
+        material_tone: render.material_tone.unwrap_or_default().into(),
+        blur_sigma_px: render.blur_sigma_px,
+        pixels_per_dp: render.pixels_per_dp,
+        opacity: render.opacity,
+        material_mode: match (render.material_tone.is_some(), render.dark) {
+            (false, _) => 0,
+            (true, false) => 1,
+            (true, true) => 2,
+        },
         rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
         ripple_center: render.ripple_center.unwrap_or([0.0, 0.0]).into(),
         corner_radii,
@@ -288,6 +289,8 @@ fn glass_uniforms(
         ripple_radius: render.ripple_radius.unwrap_or(0.0),
         ripple_alpha: render.ripple_alpha.unwrap_or(0.0),
         ripple_strength: render.ripple_strength.unwrap_or(0.0),
+        contrast: render.contrast.unwrap_or(1.0),
+        feedback: render.feedback,
         border_width: render
             .border
             .as_ref()

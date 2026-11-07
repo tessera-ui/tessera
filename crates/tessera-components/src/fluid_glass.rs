@@ -4,13 +4,14 @@
 //!
 //! Use as a background for buttons, panels, or other UI elements.
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, Dp, FocusRequester, LayoutResult, MeasurementError,
-    Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, State,
+    Callback, Color, ComputedData, Constraint, CursorEventContent, Dp, FocusRequester,
+    LayoutResult, MeasurementError, Modifier, PointerEventPass, PointerId, PointerInput,
+    PointerInputModifierNode, PressKeyEventType, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, layout},
     modifier::ModifierCapabilityExt as _,
-    receive_frame_nanos, remember, tessera,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -24,7 +25,42 @@ use crate::{
     pos_misc::is_position_inside_bounds,
     ripple_state::RippleState,
     shape_def::{RoundedCorner, Shape},
+    theme::MaterialTheme,
 };
+
+/// Selects how the glass filters its backdrop.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GlassMaterial {
+    /// Frosted glass for controls and surfaces that need stronger separation.
+    #[default]
+    Regular,
+    /// More transparent glass that retains more of the backdrop's color and contrast.
+    Clear,
+    /// A refractive lens with no default blur or tone adjustment.
+    Custom,
+}
+
+/// Selects the glass material's light or dark treatment.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GlassAppearance {
+    /// A brighter glass surface for use with dark content.
+    Light,
+    /// A darker glass surface for use with light content.
+    Dark,
+}
+
+impl GlassMaterial {
+    fn optics(self, appearance: GlassAppearance) -> Option<(Dp, [f32; 4])> {
+        let (radius, tone) = match (self, appearance) {
+            (Self::Regular, GlassAppearance::Light) => (4.43, [0.6736, 0.2956, 0.6534, 0.995]),
+            (Self::Regular, GlassAppearance::Dark) => (4.43, [0.1316, 0.2600, 0.6488, 1.0183]),
+            (Self::Clear, GlassAppearance::Light) => (13.22, [0.3126, 0.6380, 0.8613, 1.0538]),
+            (Self::Clear, GlassAppearance::Dark) => (13.22, [0.1325, 0.6730, 0.9097, 1.0543]),
+            (Self::Custom, _) => return None,
+        };
+        Some((Dp(radius), tone))
+    }
+}
 
 /// Border properties applied to the glass surface.
 ///
@@ -62,6 +98,13 @@ impl Default for FluidGlassRenderArgs {
             ripple_alpha: None,
             ripple_strength: None,
             border: default_glass_border(),
+            material_tone: None,
+            blur_sigma_px: 0.0,
+            pixels_per_dp: 1.0,
+            opacity: 1.0,
+            contrast: None,
+            dark: false,
+            feedback: 0.0,
         }
     }
 }
@@ -107,6 +150,60 @@ fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> 
     }
 }
 
+struct GlassFeedbackPointer {
+    active: State<Option<PointerId>>,
+    ripple: State<RippleState>,
+}
+
+impl PointerInputModifierNode for GlassFeedbackPointer {
+    fn on_pointer_input(&self, input: PointerInput<'_>) {
+        if input.pass != PointerEventPass::Main {
+            return;
+        }
+        for change in input.pointer_changes.iter() {
+            let active = self.active.get();
+            match change.content {
+                CursorEventContent::Pressed(PressKeyEventType::Left)
+                    if active.is_none() && !change.is_consumed() =>
+                {
+                    let position = change
+                        .position()
+                        .map(|point| input.local_to_window.inverse_point(point))
+                        .or(input.cursor_position_rel);
+                    if let Some(position) = position.filter(|position| {
+                        is_position_inside_bounds(input.computed_data, *position)
+                    }) {
+                        let size = input.computed_data;
+                        self.active.set(Some(change.pointer_id));
+                        start_glass_feedback(
+                            self.ripple,
+                            [
+                                position.x / size.width.to_f32().max(1.0),
+                                position.y / size.height.to_f32().max(1.0),
+                            ],
+                        );
+                    }
+                }
+                CursorEventContent::Released(PressKeyEventType::Left)
+                | CursorEventContent::Cancelled(PressKeyEventType::Left)
+                    if active == Some(change.pointer_id) =>
+                {
+                    self.active.set(None);
+                    self.ripple.with_mut(RippleState::release);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn start_glass_feedback(state: State<RippleState>, center: [f32; 2]) {
+    state.with_mut(|ripple| {
+        ripple.set_pressed(true);
+        ripple.start_animation(center);
+    });
+}
+
 /// # fluid_glass
 ///
 /// Renders a highly customizable surface with blur, tint, and a liquid lens
@@ -119,8 +216,10 @@ fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> 
 /// ## Parameters
 ///
 /// - `tint_color` — optional glass tint color.
-/// - `shape` — optional glass shape.
-/// - `blur_radius` — optional background blur radius.
+/// - `shape` — optional glass shape. Regular and Clear default to a capsule.
+/// - `material` — backdrop treatment, defaults to [`GlassMaterial::Regular`].
+/// - `appearance` — override the inherited theme appearance; defaults to light without a theme.
+/// - `blur_radius` — override the material's blur radius. Zero disables backdrop blur.
 /// - `noise_amount` — optional noise amount.
 /// - `noise_scale` — optional noise scale.
 /// - `time` — optional animated time input.
@@ -132,6 +231,7 @@ fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> 
 /// - `ripple_alpha` — optional ripple alpha.
 /// - `ripple_strength` — optional ripple strength.
 /// - `on_click` — optional click callback.
+/// - `interactive` — enables optical press feedback. Defaults to true when `on_click` is set.
 /// - `border` — optional glass outline.
 /// - `block_input` — optional input blocking flag.
 /// - `accessibility_role` — optional accessibility role.
@@ -143,12 +243,12 @@ fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> 
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{fluid_glass::fluid_glass, text::text};
+/// use tessera_components::{fluid_glass::{GlassMaterial, fluid_glass}, text::text};
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// fluid_glass().child(|| {
+/// fluid_glass().material(GlassMaterial::Clear).child(|| {
 ///     text("Content on glass");
 /// });
 /// # }
@@ -158,6 +258,8 @@ fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> 
 pub fn fluid_glass(
     tint_color: Option<Color>,
     shape: Option<Shape>,
+    material: Option<GlassMaterial>,
+    appearance: Option<GlassAppearance>,
     blur_radius: Option<Dp>,
     noise_amount: Option<f32>,
     noise_scale: Option<f32>,
@@ -170,6 +272,7 @@ pub fn fluid_glass(
     ripple_alpha: Option<f32>,
     ripple_strength: Option<f32>,
     on_click: Option<Callback>,
+    interactive: Option<bool>,
     border: Option<GlassBorder>,
     block_input: Option<bool>,
     accessibility_role: Option<Role>,
@@ -179,8 +282,20 @@ pub fn fluid_glass(
     child: Option<RenderSlot>,
 ) {
     let tint_color = tint_color.unwrap_or(Color::TRANSPARENT);
-    let shape = shape.unwrap_or_else(default_glass_shape);
-    let blur_radius = blur_radius.unwrap_or(Dp(0.0));
+    let material = material.unwrap_or_default();
+    let shape = shape.unwrap_or_else(|| match material {
+        GlassMaterial::Regular | GlassMaterial::Clear => Shape::CAPSULE,
+        GlassMaterial::Custom => default_glass_shape(),
+    });
+    let appearance = if let Some(appearance) = appearance {
+        appearance
+    } else if use_context::<MaterialTheme>().is_some_and(|theme| theme.get().color_scheme.is_dark) {
+        GlassAppearance::Dark
+    } else {
+        GlassAppearance::Light
+    };
+    let optics = material.optics(appearance);
+    let blur_radius = blur_radius.unwrap_or(optics.map_or(Dp(0.0), |(radius, _)| radius));
     let noise_amount = noise_amount.unwrap_or(0.0);
     let noise_scale = noise_scale.unwrap_or(1.0);
     let time = time.unwrap_or(0.0);
@@ -189,14 +304,15 @@ pub fn fluid_glass(
     let block_input = block_input.unwrap_or(false);
     let accessibility_focusable = accessibility_focusable.unwrap_or(false);
     let mut modifier = modifier.unwrap_or_default();
-    let interactive = on_click.is_some();
+    let clickable = on_click.is_some();
+    let feedback_enabled = interactive.unwrap_or(clickable);
     let focus_requester = remember(FocusRequester::new).get();
-    let interaction_state = if interactive {
+    let interaction_state = if clickable {
         Some(remember(InteractionState::new))
     } else {
         None
     };
-    let ripple_state = if interactive {
+    let ripple_state = if feedback_enabled {
         Some(remember(RippleState::new))
     } else {
         None
@@ -206,12 +322,10 @@ pub fn fluid_glass(
         || accessibility_description.is_some()
         || accessibility_focusable;
 
-    if interactive {
+    if let Some(on_click) = on_click {
         let press_handler = ripple_state.map(|state| {
             move |ctx: PointerEventContext| {
-                state.with_mut(|s| {
-                    s.start_animation(ctx.normalized_pos);
-                });
+                start_glass_feedback(state, ctx.normalized_pos);
             }
         });
         let release_handler = ripple_state.map(|state| {
@@ -220,7 +334,7 @@ pub fn fluid_glass(
             }
         });
         let clickable_args = ClickableArgs {
-            on_click: on_click.expect("interactive implies on_click is set"),
+            on_click,
             block_input,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
@@ -233,10 +347,16 @@ pub fn fluid_glass(
         };
 
         modifier = modifier.clickable_with(clickable_args);
-    } else if block_input {
-        modifier = modifier.block_touch_propagation();
+    } else {
+        if block_input {
+            modifier = modifier.block_touch_propagation();
+        }
+        if let Some(ripple) = ripple_state {
+            let active = remember(|| None::<PointerId>);
+            modifier = modifier.push_pointer_input(GlassFeedbackPointer { active, ripple });
+        }
     }
-    if !interactive && has_semantics {
+    if !clickable && has_semantics {
         let semantics = SemanticsArgs {
             role: accessibility_role.or_else(|| accessibility_focusable.then_some(Role::Button)),
             label: accessibility_label.clone(),
@@ -258,38 +378,54 @@ pub fn fluid_glass(
         ripple_alpha,
         ripple_strength,
         border,
+        material_tone: optics.map(|(_, tone)| tone),
+        blur_sigma_px: blur_radius.to_pixels_f32().max(0.0),
+        pixels_per_dp: Dp(1.0).to_pixels_f32(),
+        opacity: 1.0,
+        contrast,
+        dark: appearance == GlassAppearance::Dark,
+        feedback: 0.0,
     };
 
     layout().modifier(modifier).child(move || {
-        fluid_glass_inner()
-            .render(render.clone())
-            .blur_radius(blur_radius)
+        fluid_glass_inner(render.clone())
             .padding(padding)
-            .interactive(interactive)
+            .clickable(clickable)
             .block_input(block_input)
-            .contrast_optional(contrast)
             .ripple_state_optional(ripple_state)
+            .interaction_state_optional(interaction_state)
             .child_optional(child);
     });
 }
 
 #[tessera]
 fn fluid_glass_inner(
-    render: Option<FluidGlassRenderArgs>,
-    blur_radius: Option<Dp>,
-    contrast: Option<f32>,
+    render: FluidGlassRenderArgs,
     padding: Option<Dp>,
-    interactive: Option<bool>,
+    clickable: Option<bool>,
     block_input: Option<bool>,
     ripple_state: Option<State<RippleState>>,
+    interaction_state: Option<State<InteractionState>>,
     child: Option<RenderSlot>,
 ) {
-    let render = render.unwrap_or_default();
-    let blur_radius = blur_radius.unwrap_or(Dp(0.0));
     let padding = padding.unwrap_or(Dp(0.0));
-    let interactive = interactive.unwrap_or(false);
+    let clickable = clickable.unwrap_or(false);
     let block_input = block_input.unwrap_or(false);
-    let mut render = render.clone();
+    let mut render = render;
+    if let Some(ripple) = ripple_state {
+        let (pressed, hovered) = if let Some(interaction) = interaction_state {
+            interaction.with(|state| (state.is_pressed(), state.is_hovered()))
+        } else {
+            (ripple.with(RippleState::is_pressed), false)
+        };
+        render.feedback = if pressed {
+            0.16
+        } else if hovered {
+            0.025
+        } else {
+            0.0
+        };
+    }
     let frame_nanos = current_frame_nanos();
     if let Some((progress, center)) = ripple_state.as_ref().and_then(|state| {
         state.with_mut(|ripple| {
@@ -313,14 +449,12 @@ fn fluid_glass_inner(
         render.ripple_center = Some(center);
         render.ripple_radius = Some(progress);
         render.ripple_alpha = Some((1.0 - progress) * 0.3);
-        render.ripple_strength = Some(progress);
+        render.ripple_strength = Some(4.0 * progress * (1.0 - progress));
     }
     let modifier =
-        apply_fluid_glass_block_input_modifier(Modifier::new(), !interactive && block_input);
+        apply_fluid_glass_block_input_modifier(Modifier::new(), !clickable && block_input);
     let policy = FluidGlassLayout {
         render: render.clone(),
-        blur_radius,
-        contrast,
         padding,
     };
     layout()
@@ -337,8 +471,6 @@ fn fluid_glass_inner(
 #[derive(Clone, PartialEq)]
 struct FluidGlassLayout {
     render: FluidGlassRenderArgs,
-    blur_radius: Dp,
-    contrast: Option<f32>,
     padding: Dp,
 }
 
@@ -392,25 +524,22 @@ impl tessera_ui::DrawModifierNode for FluidGlassLayout {
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
         let input = &mut *ctx.render_input;
-        if self.blur_radius > Dp(0.0) {
-            let blur_command =
-                DualBlurCommand::horizontal_then_vertical(self.blur_radius.to_pixels_f32());
-            let mut metadata = input.metadata_mut();
-            metadata.fragment_mut().push_compute_command(blur_command);
+        let mut render = self.render.clone();
+        if render.material_tone.is_none() {
+            if render.blur_sigma_px > 0.0 {
+                input.metadata_mut().fragment_mut().push_compute_command(
+                    DualBlurCommand::horizontal_then_vertical(render.blur_sigma_px),
+                );
+                render.blur_sigma_px = 0.0;
+            }
+            if let Some(contrast) = render.contrast.take().filter(|value| *value != 1.0) {
+                input
+                    .metadata_mut()
+                    .fragment_mut()
+                    .push_compute_command(ContrastCommand::new(contrast));
+            }
         }
-
-        if let Some(contrast_value) = self.contrast
-            && contrast_value != 1.0
-        {
-            input
-                .metadata_mut()
-                .fragment_mut()
-                .push_compute_command(ContrastCommand::new(contrast_value));
-        }
-
-        let drawable = FluidGlassCommand {
-            render: self.render.clone(),
-        };
+        let drawable = FluidGlassCommand { render };
 
         input
             .metadata_mut()

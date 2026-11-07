@@ -7,9 +7,9 @@ use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, layout::layout, tess
 
 use crate::{
     button::ButtonDefaults,
-    fluid_glass::{GlassBorder, fluid_glass},
+    fluid_glass::{GlassAppearance, GlassBorder, GlassMaterial, fluid_glass},
     modifier::ModifierExt as _,
-    shape_def::{RoundedCorner, Shape},
+    shape_def::Shape,
 };
 
 impl GlassButtonBuilder {
@@ -54,6 +54,9 @@ impl GlassButtonBuilder {
 /// - `padding` — optional inner padding.
 /// - `tint_color` — optional glass tint color.
 /// - `shape` — optional shape override.
+/// - `material` — backdrop treatment, defaults to [`GlassMaterial::Regular`].
+/// - `appearance` — optional override for the inherited light or dark appearance.
+/// - `interactive` — optional override for optical press feedback.
 /// - `blur_radius` — optional blur radius.
 /// - `noise_amount` — optional noise amount.
 /// - `noise_scale` — optional noise scale.
@@ -90,6 +93,9 @@ pub fn glass_button(
     padding: Option<Dp>,
     tint_color: Option<Color>,
     shape: Option<Shape>,
+    material: Option<GlassMaterial>,
+    appearance: Option<GlassAppearance>,
+    interactive: Option<bool>,
     blur_radius: Option<Dp>,
     noise_amount: Option<f32>,
     noise_scale: Option<f32>,
@@ -103,14 +109,6 @@ pub fn glass_button(
 ) {
     let modifier = modifier.unwrap_or_default();
     let padding = padding.unwrap_or(Dp(12.0));
-    let tint_color = tint_color.unwrap_or(Color::new(0.5, 0.5, 0.5, 0.1));
-    let shape = shape.unwrap_or(Shape::RoundedRectangle {
-        top_left: RoundedCorner::manual(Dp(25.0), 3.0),
-        top_right: RoundedCorner::manual(Dp(25.0), 3.0),
-        bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
-        bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
-    });
-    let blur_radius = blur_radius.unwrap_or(Dp(0.0));
     let noise_amount = noise_amount.unwrap_or(0.0);
     let noise_scale = noise_scale.unwrap_or(1.0);
     let time = time.unwrap_or(0.0);
@@ -122,9 +120,12 @@ pub fn glass_button(
     layout().modifier(outer_modifier).child(move || {
         fluid_glass()
             .modifier(Modifier::new())
-            .tint_color(tint_color)
-            .shape(shape)
-            .blur_radius(blur_radius)
+            .tint_color_optional(tint_color)
+            .shape_optional(shape)
+            .material_optional(material)
+            .appearance_optional(appearance)
+            .interactive_optional(interactive)
+            .blur_radius_optional(blur_radius)
             .noise_amount(noise_amount)
             .noise_scale(noise_scale)
             .time(time)
