@@ -214,7 +214,7 @@ pub struct LayoutFrameDiagnostics {
     pub dirty_nodes_param: u64,
     /// Nodes whose direct layout children changed.
     pub dirty_nodes_structural: u64,
-    /// Invalidated nodes including ancestors that depend on their sizes.
+    /// Invalidated layout nodes and the ancestors that measure them.
     pub dirty_nodes_with_ancestors: u64,
     /// Time spent identifying affected ancestors, in nanoseconds.
     pub dirty_expand_ns: u64,
@@ -2358,12 +2358,13 @@ impl ComponentTree {
                 }
             }
         }
-        let mut dirty_nodes_self = measure_self_nodes.clone();
-        dirty_nodes_self.extend(layout_dirty_nodes.placement_self_nodes.iter().copied());
-        let dirty_nodes_param = dirty_nodes_self.len() as u64;
+        let dirty_nodes_param = (measure_self_nodes.len()
+            + layout_dirty_nodes
+                .placement_self_nodes
+                .difference(&measure_self_nodes)
+                .count()) as u64;
         let dirty_nodes_structural = structural_dirty_nodes.len() as u64;
         let dirty_prepare_start = Instant::now();
-        dirty_nodes_self.extend(structural_dirty_nodes.iter().copied());
         // A node whose direct layout children changed must recompute
         // placements: its cached placements are keyed by the previous
         // children's instance keys, so reusing them against a different
@@ -2371,30 +2372,13 @@ impl ComponentTree {
         // without a position.
         let mut placement_dirty_nodes = layout_dirty_nodes.placement_self_nodes.clone();
         placement_dirty_nodes.extend(structural_dirty_nodes.iter().copied());
-        let dirty_nodes_effective = expand_dirty_nodes_with_ancestors(
+        measure_self_nodes.extend(structural_dirty_nodes);
+        let (dirty_nodes_effective, dirty_children) = collect_dirty_layout_paths(
             &self.tree,
             &self.node_ids_by_instance_key,
-            &dirty_nodes_self,
+            &measure_self_nodes,
+            &placement_dirty_nodes,
         );
-        let mut dirty_children: HashMap<u64, Vec<NodeId>> = HashMap::default();
-        for key in &dirty_nodes_effective {
-            let Some(&id) = self.node_ids_by_instance_key.get(key) else {
-                continue;
-            };
-            if self.tree[id].get().role != NodeRole::Layout {
-                continue;
-            }
-            for ancestor in id.ancestors(&self.tree).skip(1) {
-                let node = self.tree[ancestor].get();
-                dirty_children
-                    .entry(node.instance_key)
-                    .or_default()
-                    .push(id);
-                if node.role == NodeRole::Layout {
-                    break;
-                }
-            }
-        }
         let dirty_expand_ns = dirty_prepare_start.elapsed().as_nanos() as u64;
         record_frame_stage(&mut stage_timer, "layout_dirty_paths");
         let mut diagnostics = LayoutDiagnosticsCollector::default();
@@ -2423,7 +2407,6 @@ impl ComponentTree {
         self.focus_owner.commit_pending();
 
         record_frame_stage(&mut stage_timer, "consumer_attachments");
-        measure_self_nodes.extend(structural_dirty_nodes);
         {
             let consumed_insets = Cell::new(crate::Insets::default());
             let layout_ctx = LayoutContext::new(
@@ -3656,23 +3639,40 @@ fn component_node_viewport_rect(
     )
 }
 
-fn expand_dirty_nodes_with_ancestors(
+fn collect_dirty_layout_paths(
     tree: &ComponentNodeTree,
     node_ids: &HashMap<u64, indextree::NodeId>,
-    dirty_nodes_self: &HashSet<u64>,
-) -> HashSet<u64> {
+    measure_self: &HashSet<u64>,
+    placement_self: &HashSet<u64>,
+) -> (HashSet<u64>, HashMap<u64, Vec<NodeId>>) {
     let mut expanded = HashSet::default();
-    for dirty_key in dirty_nodes_self {
+    let mut children: HashMap<_, Vec<_>> = HashMap::default();
+    for dirty_key in measure_self
+        .iter()
+        .chain(placement_self.difference(measure_self))
+    {
         let mut current = node_ids.get(dirty_key).copied();
+        let mut layout_child = None;
         while let Some(node_id) = current {
             let Some(node) = tree.get(node_id) else { break };
-            if !expanded.insert(node.get().instance_key) {
+            let data = node.get();
+            current = node.parent();
+            if data.role != NodeRole::Layout && current.is_some() {
+                continue;
+            }
+            if let Some(child) = layout_child
+                && !measure_self.contains(&data.instance_key)
+            {
+                children.entry(data.instance_key).or_default().push(child);
+            }
+            // A previously visited parent already carries its own path to the root.
+            if !expanded.insert(data.instance_key) {
                 break;
             }
-            current = node.parent();
+            layout_child = Some(node_id);
         }
     }
-    expanded
+    (expanded, children)
 }
 
 fn record_layout_commands(

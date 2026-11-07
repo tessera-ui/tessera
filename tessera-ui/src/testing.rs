@@ -812,6 +812,62 @@ mod tests {
         }
     }
 
+    #[derive(Clone, PartialEq)]
+    struct MeasureRevisionPolicy(State<u8>);
+
+    impl LayoutModifierNode for MeasureRevisionPolicy {
+        fn measure(
+            &self,
+            _: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            let _revision = self.0.get();
+            Ok(LayoutResult::new(ComputedData {
+                width: Px(20),
+                height: Px(10),
+            }))
+        }
+    }
+
+    #[tessera(crate)]
+    fn transparent_dirty_siblings(revision: State<u8>) {
+        let stable = remember(|| 0_u8);
+        for (tag, revision) in [("left", revision), ("right", revision), ("stable", stable)] {
+            crate::layout::layout()
+                .policy(MeasureRevisionPolicy(revision))
+                .modifier(
+                    Modifier::new().push_semantics(TestTagSemanticsModifier { tag: tag.into() }),
+                );
+        }
+    }
+
+    #[tessera(crate)]
+    fn dirty_siblings_fixture(probe: super::TestProbe<Option<State<u8>>>) {
+        let revision = remember(|| 0_u8);
+        probe.set(Some(revision));
+        crate::layout::layout()
+            .policy(VerticalStackPolicy)
+            .child(move || transparent_dirty_siblings(revision));
+    }
+
+    #[test]
+    fn dirty_siblings_share_transparent_ancestors_without_losing_measurement() {
+        let probe = super::TestProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test(|| dirty_siblings_fixture(probe.clone())).viewport_px(100, 100),
+        );
+        pump_layout_test_session(&mut session, 0);
+        let snapshot = session.inspect_components();
+        let instances = ["left", "right", "stable"].map(|tag| snapshot.tagged(tag).instance_id());
+        probe.get().unwrap().set(1);
+        pump_layout_test_session(&mut session, 16_000_000);
+        assert_eq!(
+            instances.map(|instance| session
+                .work()
+                .for_instance(instance, crate::WorkPhase::Measure)),
+            [1, 1, 0],
+        );
+    }
+
     #[tessera(crate)]
     fn measure_only_width_fixture(probe: MeasureProbe) {
         let width = remember(|| 40);

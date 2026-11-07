@@ -67,6 +67,8 @@ root. Component nodes and input dispatch plans borrow static function names.
 Layout input snapshots share the authored policy with component props, and each
 layout node measures with its own policy clone. Cached child measurements share
 their storage across placement updates, and leaf layouts need no child storage.
+The same ancestor walk marks dirty layout paths and records the affected children
+for parents that can reuse their cached measurement.
 
 Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements share that refresh. Consumers compare
