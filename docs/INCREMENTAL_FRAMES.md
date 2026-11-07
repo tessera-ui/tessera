@@ -41,12 +41,14 @@ work still requests another frame.
 
 ## Retained runtime storage
 
-Context snapshots share their bindings until replay needs to remap or remove a
-binding. Context and keyed scopes restore their prior bindings when they exit.
-Finalized component props are shared with the replay snapshot.
+Replay snapshots share finalized props and inherited context maps. Empty
+contexts need no binding storage. Context and keyed scopes restore their prior
+bindings when they exit.
 Modifier snapshots share immutable chain links. The scene stores empty and
 single-child branches inline and uses persistent ordered maps for wider branches
 so updating one child can preserve the previous frame's snapshot.
+Scene branches use indexed pages with generation checks, and culling uses the
+inherited clip bounds computed by layout.
 
 Nodes allocate interaction data and accessibility descriptions only when used.
 Pointer modifier positions are shared between the node and dispatch plans, and

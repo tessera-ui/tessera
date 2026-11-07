@@ -9,6 +9,8 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+use smallvec::SmallVec;
+
 use crate::{
     Command, ComputeCommand, DrawCommand, DrawRegion, FloatRect, LocalToWindow, SampleRegion,
     px::{Px, PxPosition, PxRect, PxSize},
@@ -90,14 +92,14 @@ pub struct RenderFragmentOp {
 /// A per-component render fragment.
 #[derive(Default, Clone)]
 pub struct RenderFragment {
-    ops: Option<Arc<Vec<RenderFragmentOp>>>,
+    ops: Option<Arc<SmallVec<[RenderFragmentOp; 1]>>>,
 }
 
 impl RenderFragment {
     /// Returns fragment ops in insertion order.
     #[must_use]
     pub fn ops(&self) -> &[RenderFragmentOp] {
-        self.ops.as_deref().map_or(&[], Vec::as_slice)
+        self.ops.as_deref().map_or(&[], SmallVec::as_slice)
     }
 
     /// Returns fragment ops in insertion order for local position overrides.

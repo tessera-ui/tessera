@@ -25,13 +25,50 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ContextSnapshotEntry {
+struct ContextSnapshotEntry {
     slot: u32,
     generation: u64,
     key: SlotKey,
 }
 
-pub(crate) type ContextMap = ImHashMap<TypeId, ContextSnapshotEntry>;
+type ContextBindings = ImHashMap<TypeId, ContextSnapshotEntry>;
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ContextMap(Option<Arc<ContextBindings>>);
+
+impl ContextMap {
+    fn new() -> Self {
+        Self(None)
+    }
+
+    fn from_bindings(bindings: ContextBindings) -> Self {
+        Self((!bindings.is_empty()).then(|| Arc::new(bindings)))
+    }
+
+    fn get(&self, type_id: &TypeId) -> Option<&ContextSnapshotEntry> {
+        self.0.as_deref()?.get(type_id)
+    }
+
+    fn update(&self, type_id: TypeId, entry: ContextSnapshotEntry) -> Self {
+        let mut bindings = self.0.as_deref().cloned().unwrap_or_default();
+        bindings.insert(type_id, entry);
+        Self::from_bindings(bindings)
+    }
+
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
+        self.0.is_none()
+    }
+
+    #[cfg(test)]
+    fn ptr_eq(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (None, None) => true,
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 struct SlotKey {
@@ -169,25 +206,26 @@ fn resolve_snapshot_entry(
 }
 
 fn normalize_context_snapshot(snapshot: &ContextMap) -> ContextMap {
-    let mut normalized = snapshot.clone();
-    if snapshot.is_empty() {
-        return normalized;
-    }
-
-    with_slot_table(|table| {
-        for (&type_id, &entry) in snapshot {
-            match resolve_snapshot_entry(table, entry) {
-                Some(resolved) if resolved != entry => {
-                    normalized.insert(type_id, resolved);
-                }
-                Some(_) => {}
-                None => {
-                    normalized.remove(&type_id);
-                }
+    let Some(bindings) = snapshot.0.as_deref() else {
+        return ContextMap::new();
+    };
+    let normalized = with_slot_table(|table| {
+        let mut updated = None;
+        for (&type_id, &entry) in bindings {
+            let resolved = resolve_snapshot_entry(table, entry);
+            if resolved == Some(entry) {
+                continue;
+            }
+            let next = updated.get_or_insert_with(|| bindings.clone());
+            if let Some(resolved) = resolved {
+                next.insert(type_id, resolved);
+            } else {
+                next.remove(&type_id);
             }
         }
+        updated
     });
-    normalized
+    normalized.map_or_else(|| snapshot.clone(), ContextMap::from_bindings)
 }
 
 pub(crate) fn context_from_previous_snapshot_for_instance<T>(

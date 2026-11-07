@@ -4080,7 +4080,7 @@ mod tests {
                     instance_logic_id: 0,
                     group_path: Vec::new(),
                     instance_key_override: None,
-                    context: ContextMap::new(),
+                    context: ContextMap::default(),
                     replay,
                 },
             );

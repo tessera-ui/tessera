@@ -15,7 +15,9 @@ use crate::{
     time::Instant,
 };
 
-use super::{ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, record_frame_stage};
+use super::{
+    ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, record_frame_stage,
+};
 
 #[derive(Clone, Copy, PartialEq)]
 enum SceneClip {
@@ -190,9 +192,93 @@ impl SceneBranch {
     }
 }
 
+const BRANCH_PAGE_SIZE: usize = 64;
+
+struct BranchPage {
+    entries: [Option<(NodeId, SceneBranch)>; BRANCH_PAGE_SIZE],
+    occupied: usize,
+}
+
+impl Default for BranchPage {
+    fn default() -> Self {
+        Self {
+            entries: std::array::from_fn(|_| None),
+            occupied: 0,
+        }
+    }
+}
+
+#[derive(Default)]
+struct SceneBranches {
+    pages: Vec<Option<Box<BranchPage>>>,
+}
+
+impl SceneBranches {
+    fn address(id: NodeId) -> (usize, usize) {
+        let index = usize::from(id) - 1;
+        (index / BRANCH_PAGE_SIZE, index % BRANCH_PAGE_SIZE)
+    }
+
+    fn get(&self, id: NodeId) -> Option<&SceneBranch> {
+        let (page, index) = Self::address(id);
+        let (stored, branch) = self.pages.get(page)?.as_ref()?.entries[index].as_ref()?;
+        (*stored == id).then_some(branch)
+    }
+
+    fn get_mut(&mut self, id: NodeId) -> Option<&mut SceneBranch> {
+        let (page, index) = Self::address(id);
+        let (stored, branch) = self.pages.get_mut(page)?.as_mut()?.entries[index].as_mut()?;
+        (*stored == id).then_some(branch)
+    }
+
+    fn take(&mut self, id: NodeId) -> Option<SceneBranch> {
+        let (page, index) = Self::address(id);
+        let page = self.pages.get_mut(page)?.as_mut()?;
+        let entry = &mut page.entries[index];
+        if entry.as_ref().is_some_and(|(stored, _)| *stored == id) {
+            page.occupied -= 1;
+            entry.take().map(|(_, branch)| branch)
+        } else {
+            None
+        }
+    }
+
+    fn remove(&mut self, id: NodeId) {
+        self.take(id);
+        let (page, _) = Self::address(id);
+        if let Some(entry) = self.pages.get_mut(page)
+            && entry.as_ref().is_some_and(|page| page.occupied == 0)
+        {
+            *entry = None;
+            while self.pages.last().is_some_and(Option::is_none) {
+                self.pages.pop();
+            }
+        }
+    }
+
+    fn insert(&mut self, id: NodeId, branch: SceneBranch) {
+        let (page, index) = Self::address(id);
+        if page >= self.pages.len() {
+            self.pages.resize_with(page + 1, || None);
+        }
+        let page = self.pages[page].get_or_insert_with(Box::default);
+        if page.entries[index].replace((id, branch)).is_none() {
+            page.occupied += 1;
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (NodeId, &SceneBranch)> {
+        self.pages
+            .iter()
+            .flatten()
+            .flat_map(|page| page.entries.iter().flatten())
+            .map(|(id, branch)| (*id, branch))
+    }
+}
+
 #[derive(Default)]
 pub(super) struct FrameScene {
-    branches: HashMap<NodeId, SceneBranch>,
+    branches: SceneBranches,
     geometry_consumers: HashSet<NodeId>,
     root: Option<Arc<SceneRope>>,
     graph: Option<RenderGraph>,
@@ -202,13 +288,14 @@ pub(super) struct FrameScene {
 impl FrameScene {
     fn output(&self, mut node_id: NodeId) -> Option<Arc<SceneRope>> {
         loop {
-            let branch = self.branches.get(&node_id)?;
+            let branch = self.branches.get(node_id)?;
+            if branch.culled {
+                return None;
+            }
             // Transparent composition wrappers have no geometry journal of
             // their own.
             if let Some(child) = branch.transparent_child() {
                 node_id = child;
-            } else if branch.culled {
-                return None;
             } else {
                 return branch.output.clone();
             }
@@ -233,7 +320,7 @@ impl FrameScene {
         for node_id in removed {
             if let Some(bounds) = self
                 .branches
-                .get(node_id)
+                .get(*node_id)
                 .and_then(|branch| branch.output.as_ref())
                 .and_then(|rope| rope.bounds)
             {
@@ -241,7 +328,7 @@ impl FrameScene {
             }
         }
         for node_id in removed {
-            let mut parent = self.branches.get(node_id).and_then(|branch| branch.parent);
+            let mut parent = self.branches.get(*node_id).and_then(|branch| branch.parent);
             if let Some(parent) = parent {
                 structural.insert(parent);
             }
@@ -249,11 +336,11 @@ impl FrameScene {
                 if !dirty.insert(id) {
                     break;
                 }
-                parent = self.branches.get(&id).and_then(|branch| branch.parent);
+                parent = self.branches.get(id).and_then(|branch| branch.parent);
             }
         }
         for node_id in removed {
-            self.branches.remove(node_id);
+            self.branches.remove(*node_id);
             self.geometry_consumers.remove(node_id);
         }
         record_frame_stage(&mut stage_timer, "scene_removals");
@@ -264,14 +351,16 @@ impl FrameScene {
             .geometry_consumers
             .intersection(&metadata.geometry_changed)
         {
-            let Some(branch) = self.branches.get(&node_id) else {
+            let Some(branch) = self.branches.get(node_id) else {
                 own_changes.insert(node_id);
                 continue;
             };
-            if branch.culled && fully_clipped(tree, metadata, node_id, viewport_rect) {
+            let node_metadata = metadata.get(&node_id);
+            if branch.culled
+                && fully_clipped(tree[node_id].get().role, node_metadata, viewport_rect)
+            {
                 continue;
             }
-            let node_metadata = metadata.get(&node_id);
             let prepared = node_metadata.and_then(|node| node.prepared_layout);
             let has_draw = node_metadata.is_some_and(|node| !node.fragment.ops().is_empty());
             if !branch.culled
@@ -297,9 +386,11 @@ impl FrameScene {
             own_changes.insert(node_id);
         }
         if self.viewport != Some(viewport) {
-            own_changes.extend(self.branches.iter().filter_map(|(&id, branch)| {
-                (branch.culled || branch.draw.is_some()).then_some(id)
-            }));
+            own_changes.extend(
+                self.branches.iter().filter_map(|(id, branch)| {
+                    (branch.culled || branch.draw.is_some()).then_some(id)
+                }),
+            );
         }
         for &node_id in changed {
             if let Some(parent) = tree.get(node_id).and_then(|node| node.parent()) {
@@ -318,7 +409,7 @@ impl FrameScene {
                 }
                 let transparent = self
                     .branches
-                    .get(&ancestor)
+                    .get(ancestor)
                     .and_then(SceneBranch::transparent_child)
                     .is_some();
                 if !transparent || own_changes.contains(&ancestor) || structural.contains(&ancestor)
@@ -335,7 +426,7 @@ impl FrameScene {
             .map(|id| {
                 let depth = self
                     .branches
-                    .get(&id)
+                    .get(id)
                     .filter(|_| !changed.contains(&id))
                     .map_or_else(|| id.ancestors(tree).count(), |branch| branch.depth);
                 (id, depth)
@@ -354,7 +445,7 @@ impl FrameScene {
         let updated = ordered.len() as u64;
         for (node_id, depth) in ordered {
             let node = &tree[node_id];
-            let mut branch = self.branches.remove(&node_id).unwrap_or_default();
+            let mut branch = self.branches.take(node_id).unwrap_or_default();
             let affects_pixels = own_changes.contains(&node_id) || structural.contains(&node_id);
             if affects_pixels
                 && let Some(bounds) = branch.output.as_ref().and_then(|rope| rope.bounds)
@@ -435,11 +526,7 @@ impl FrameScene {
                     .children
                     .update_output(child, self.output(child).as_ref());
             }
-            let hidden = node.get().role == NodeRole::Layout
-                && metadata
-                    .get(&node_id)
-                    .is_none_or(|metadata| metadata.abs_position.is_none());
-            branch.culled = hidden || fully_clipped(tree, metadata, node_id, viewport_rect);
+            branch.culled = fully_clipped(node.get().role, metadata.get(&node_id), viewport_rect);
             if branch.draw.is_some() || branch.clip.is_some() || branch.culled {
                 self.geometry_consumers.insert(node_id);
             } else {
@@ -497,7 +584,7 @@ impl FrameScene {
                     parent = tree.get(id).and_then(|node| node.parent());
                     continue;
                 }
-                if let Some(parent) = self.branches.get_mut(&id) {
+                if let Some(parent) = self.branches.get_mut(id) {
                     parent.children.update_output(child, branch.output.as_ref());
                 }
                 break;
@@ -569,24 +656,19 @@ fn fragment_bounds(
 }
 
 fn fully_clipped(
-    tree: &ComponentNodeTree,
-    metadata: &ComponentNodeMetaDatas,
-    node_id: NodeId,
+    role: NodeRole,
+    metadata: Option<&ComponentNodeMetaData>,
     viewport: PxRect,
 ) -> bool {
-    for id in node_id.ancestors(tree) {
-        if let Some(prepared) = metadata.get(&id).and_then(|node| node.prepared_layout) {
-            return prepared.child_clip_bounds.is_some_and(|bounds| {
+    (role == NodeRole::Layout && metadata.is_none_or(|node| node.abs_position.is_none()))
+        || metadata
+            .and_then(|node| node.prepared_layout)
+            .and_then(|prepared| prepared.child_clip_bounds)
+            .is_some_and(|bounds| {
                 bounds.width <= 0.0
                     || bounds.height <= 0.0
                     || bounds.outward().is_orthogonal(&viewport)
-            });
-        }
-        if tree[id].get().role == NodeRole::Layout {
-            return true;
-        }
-    }
-    false
+            })
 }
 
 impl SceneRope {
@@ -705,6 +787,28 @@ mod tests {
                 drawing(&repainted),
                 [(0, zero), (2, translated), (1, offset)]
             );
+
+            tree.metadatas.remove(&first);
+            first.remove_subtree(&mut tree.tree);
+            let replacement = tree
+                .tree
+                .new_node(crate::component_tree::ComponentNode::new(
+                    "replacement",
+                    NodeRole::Layout,
+                ));
+            assert_eq!(usize::from(first), usize::from(replacement));
+            assert_ne!(first, replacement);
+            root.append(replacement, &mut tree.tree);
+            tree.tree[root].get_mut().layout_children = None;
+            let metadata = tree.metadatas.entry_or_default(replacement);
+            metadata.computed_data = Some(ComputedData {
+                width: Px(16),
+                height: Px(16),
+            });
+            metadata.rel_position = Some(zero);
+            metadata.fragment.push_draw_command(Marker(3));
+            let recycled = frame(&mut scene, tree, &[replacement], &[first]);
+            assert_eq!(drawing(&recycled), [(0, zero), (2, translated), (3, zero)]);
 
             let mut builder = RenderGraphBuilder::new();
             previous_root.emit(&mut builder);
