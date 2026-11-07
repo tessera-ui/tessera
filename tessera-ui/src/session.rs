@@ -95,24 +95,23 @@ impl RuntimeSession {
         self.run(|| self.local_resource_in_session())
     }
 
-    #[inline]
     fn local_resource_in_session<T: Default + 'static>(&self) -> Rc<T> {
         let key = TypeId::of::<T>();
-        let cached = self.0.resources.borrow().local.get(&key).cloned();
-        let resource = cached.unwrap_or_else(|| self.initialize_local_resource::<T>(key));
-        Rc::downcast(resource).unwrap_or_else(|_| unreachable!())
-    }
-
-    #[cold]
-    fn initialize_local_resource<T: Default + 'static>(&self, key: TypeId) -> Rc<dyn Any> {
-        let resource = Rc::new(T::default());
-        let mut resources = self.0.resources.borrow_mut();
-        if let Some(stored) = resources.local.get(&key) {
-            return stored.clone();
+        if let Some(resource) = self.0.resources.borrow().local.get(&key).cloned() {
+            return Rc::downcast(resource).unwrap_or_else(|_| unreachable!());
         }
-        resources.local.insert(key, resource.clone());
-        resources.order.push((key, false));
-        resource
+        let resource = Rc::new(T::default());
+        let stored = {
+            let mut resources = self.0.resources.borrow_mut();
+            if let Some(stored) = resources.local.get(&key) {
+                stored.clone()
+            } else {
+                resources.local.insert(key, resource.clone());
+                resources.order.push((key, false));
+                resource.clone()
+            }
+        };
+        Rc::downcast(stored).unwrap_or_else(|_| unreachable!())
     }
 
     /// Returns this session's identity for correlating observations.
