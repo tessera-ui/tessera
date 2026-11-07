@@ -37,8 +37,10 @@ require full redraw, including the first frame after their removal.
 
 Target recreation and a missing rendered predecessor force full redraw. Damage
 is relative to the preceding scene update, so it cannot be reused after a dropped
-changed frame. This target-pixel reuse is not an independently compositable
-subtree cache and does not change per-command opacity into group opacity.
+changed frame. The damage history keeps the predecessor's identity without
+holding its draw commands alive. This target-pixel reuse is not an independently
+compositable subtree cache and does not change per-command opacity into group
+opacity.
 
 Queued runtime wakes are ignored if their invalidations have already been
 consumed. Pending layout, paint, animation, dispatcher, clipboard, and focus

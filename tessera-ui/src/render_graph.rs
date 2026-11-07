@@ -6,7 +6,7 @@
 
 use std::{
     any::TypeId,
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, Weak},
 };
 
 use smallvec::SmallVec;
@@ -170,7 +170,7 @@ pub struct RenderGraphOp {
 pub struct RenderGraph {
     data: Arc<RenderGraphData>,
     damage: Option<PxRect>,
-    previous: Option<Arc<RenderGraphData>>,
+    previous: Option<Weak<RenderGraphData>>,
 }
 
 #[derive(Default)]
@@ -205,7 +205,7 @@ impl RenderOrderPlan {
 impl RenderGraph {
     pub(crate) fn with_damage(mut self, damage: Option<PxRect>, previous: Option<&Self>) -> Self {
         self.damage = damage;
-        self.previous = previous.map(|graph| Arc::clone(&graph.data));
+        self.previous = previous.map(|graph| Arc::downgrade(&graph.data));
         self
     }
 
@@ -220,7 +220,7 @@ impl RenderGraph {
         if self
             .previous
             .as_ref()
-            .is_some_and(|data| Arc::ptr_eq(data, &previous.data))
+            .is_some_and(|data| std::ptr::eq(data.as_ptr(), Arc::as_ptr(&previous.data)))
         {
             self.damage
         } else {
@@ -508,6 +508,19 @@ mod tests {
     #[test]
     fn damage_requires_the_rendered_predecessor_and_safe_contents_in_both_frames() {
         #[derive(Clone)]
+        struct ResourceDraw {
+            _resource: Arc<()>,
+        }
+
+        impl DrawCommand for ResourceDraw {
+            fn supports_partial_redraw(&self) -> bool {
+                true
+            }
+
+            fn apply_opacity(&mut self, _: f32) {}
+        }
+
+        #[derive(Clone)]
         struct UntrackedResource;
 
         impl DrawCommand for UntrackedResource {
@@ -523,7 +536,19 @@ mod tests {
             }
         }
 
-        let first = RenderGraphBuilder::new().finish();
+        let geometry =
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(8), Px(8)));
+        let resource = Arc::new(());
+        let resource_lifetime = Arc::downgrade(&resource);
+        let first = {
+            let mut fragment = RenderFragment::default();
+            fragment.push_draw_command(ResourceDraw {
+                _resource: resource,
+            });
+            let mut builder = RenderGraphBuilder::new();
+            builder.append_fragment(&fragment, geometry, 1.0);
+            builder.finish()
+        };
         let damage = PxRect::new(Px(2), Px(3), Px(4), Px(5));
         let second = RenderGraphBuilder::new()
             .finish()
@@ -565,8 +590,6 @@ mod tests {
         let mut fragment = RenderFragment::default();
         fragment.push_draw_command(UntrackedResource);
         let mut builder = RenderGraphBuilder::new();
-        let geometry =
-            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(8), Px(8)));
         builder.append_fragment(&fragment, geometry, 1.0);
         let unknown = builder.finish().with_damage(Some(damage), Some(&first));
         assert_eq!(
@@ -583,6 +606,11 @@ mod tests {
             computed.damage_since(Some(&first)),
             None,
             "compute work must fully reconstruct its input scene"
+        );
+        drop(first);
+        assert!(
+            resource_lifetime.upgrade().is_none(),
+            "damage history must not keep prior draw resources alive"
         );
     }
 
