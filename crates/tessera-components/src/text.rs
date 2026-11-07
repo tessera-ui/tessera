@@ -177,21 +177,29 @@ impl TextLayout {
         let fonts = crate::fonts::prepare(&self.text, self.style);
         let mut cache = self.shaped.lock();
         let font_size_px = self.style.font_size.to_pixels_f32();
-        if cache.as_ref().is_none_or(|cached| {
-            cached.fonts != fonts
-                || cached.text != self.text
-                || cached.style != self.style
-                || cached.font_size_px != font_size_px
-                || cached.constraint != constraint
-        }) {
-            *cache = Some(CachedText {
-                fonts,
-                text: self.text.clone(),
-                style: self.style,
-                font_size_px,
-                constraint: constraint.clone(),
-                data: TextData::shape(self.text.clone(), self.color, self.style, constraint),
-            });
+        match cache.as_mut() {
+            Some(cached)
+                if cached.fonts == fonts
+                    && cached.text == self.text
+                    && cached.style == self.style
+                    && cached.font_size_px == font_size_px
+                    && cached.constraint.single_line == constraint.single_line =>
+            {
+                if cached.constraint != constraint {
+                    cached.data.relayout(&constraint);
+                    cached.constraint = constraint;
+                }
+            }
+            _ => {
+                *cache = Some(CachedText {
+                    fonts,
+                    text: self.text.clone(),
+                    style: self.style,
+                    font_size_px,
+                    constraint: constraint.clone(),
+                    data: TextData::shape(self.text.clone(), self.color, self.style, constraint),
+                });
+            }
         }
         let mut data = cache.as_ref().expect("text must be shaped").data.clone();
         data.set_color(self.color);

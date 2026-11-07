@@ -272,14 +272,13 @@ impl TextData {
             },
             family: style.font_family,
         };
-        let (text_buffer, bounds, first_baseline, last_baseline, line_count) =
-            Self::build_buffer(&text, font_size, line_height, font, &constraint);
-        let data = Self {
+        let text_buffer = Self::build_buffer(&text, font_size, line_height, font, &constraint);
+        let mut data = Self {
             text_buffer: Arc::new(text_buffer),
-            size: bounds,
-            first_baseline,
-            last_baseline,
-            line_count,
+            size: [0; 2],
+            first_baseline: 0.0,
+            last_baseline: 0.0,
+            line_count: 0,
             base_color: color,
             current_color: color,
             text,
@@ -290,7 +289,48 @@ impl TextData {
             base_span_colors: None,
             span_opacity: 1.0,
         };
+        data.measure_layout();
         data
+    }
+
+    /// Lays out the shaped text again for a new constraint without reshaping.
+    pub(crate) fn relayout(&mut self, constraint: &TextConstraint) {
+        let buffer = Arc::make_mut(&mut self.text_buffer);
+        buffer.set_size(constraint.max_width, constraint.max_height);
+        buffer.shape_until_scroll(&mut write_font_system(), false);
+        self.measure_layout();
+    }
+
+    fn measure_layout(&mut self) {
+        let buffer = &self.text_buffer;
+        let mut width = 0.0_f32;
+        self.first_baseline = 0.0;
+        self.last_baseline = 0.0;
+        self.line_count = 0;
+        for run in buffer.layout_runs() {
+            width = width.max(run.line_w);
+            if self.line_count == 0 {
+                self.first_baseline = run.line_y;
+            }
+            self.last_baseline = run.line_y;
+            self.line_count += 1;
+        }
+        if buffer.lines.iter().any(|line| {
+            matches!(
+                line.align(),
+                Some(
+                    glyphon::cosmic_text::Align::Center
+                        | glyphon::cosmic_text::Align::Right
+                        | glyphon::cosmic_text::Align::End
+                )
+            )
+        }) {
+            width = buffer.size().0.unwrap_or(width);
+        }
+        self.size = [
+            width.ceil() as u32,
+            (self.line_count as f32 * buffer.metrics().line_height).ceil() as u32,
+        ];
     }
 
     /// Builds [`TextData`] directly from a pre-shaped glyphon buffer.
@@ -312,40 +352,12 @@ impl TextData {
             .flat_map(|line| line.glyphs.iter().map(|glyph| glyph.color_opt))
             .collect();
         let metrics = text_buffer.metrics();
-        // Calculate text bounds
-        let mut run_width: f32 = 0.0;
-        let mut first_baseline = 0.0;
-        let mut last_baseline = 0.0;
-        let mut line_count: u32 = 0;
-        for run in text_buffer.layout_runs() {
-            // Take the max. width of all lines.
-            run_width = run_width.max(run.line_w);
-            if line_count == 0 {
-                first_baseline = run.line_y;
-            }
-            last_baseline = run.line_y;
-            line_count += 1;
-        }
-        if text_buffer.lines.iter().any(|line| {
-            matches!(
-                line.align(),
-                Some(
-                    glyphon::cosmic_text::Align::Center
-                        | glyphon::cosmic_text::Align::Right
-                        | glyphon::cosmic_text::Align::End
-                )
-            )
-        }) {
-            run_width = text_buffer.size().0.unwrap_or(run_width);
-        }
-        let total_height = line_count as f32 * metrics.line_height;
-        // build text data
-        Self {
+        let mut data = Self {
             text_buffer: Arc::new(text_buffer),
-            size: [run_width as u32, total_height.ceil() as u32],
-            first_baseline,
-            last_baseline,
-            line_count,
+            size: [0; 2],
+            first_baseline: 0.0,
+            last_baseline: 0.0,
+            line_count: 0,
             base_color: Color::WHITE,
             current_color: Color::WHITE,
             text: String::new(),
@@ -362,7 +374,9 @@ impl TextData {
                 .any(Option::is_some)
                 .then(|| Arc::new(base_span_colors)),
             span_opacity: 1.0,
-        }
+        };
+        data.measure_layout();
+        data
     }
 
     /// Get the glyphon text area from the text data
@@ -391,34 +405,7 @@ impl TextData {
         let buffer = Arc::make_mut(&mut self.text_buffer);
         buffer.set_scroll(scroll);
         buffer.shape_until_scroll(&mut write_font_system(), false);
-        let mut width = 0.0_f32;
-        self.first_baseline = 0.0;
-        self.last_baseline = 0.0;
-        self.line_count = 0;
-        for run in self.text_buffer.layout_runs() {
-            width = width.max(run.line_w);
-            if self.line_count == 0 {
-                self.first_baseline = run.line_y;
-            }
-            self.last_baseline = run.line_y;
-            self.line_count += 1;
-        }
-        if self.text_buffer.lines.iter().any(|line| {
-            matches!(
-                line.align(),
-                Some(
-                    glyphon::cosmic_text::Align::Center
-                        | glyphon::cosmic_text::Align::Right
-                        | glyphon::cosmic_text::Align::End
-                )
-            )
-        }) {
-            width = self.text_buffer.size().0.unwrap_or(width);
-        }
-        self.size = [
-            width as u32,
-            (self.line_count as f32 * self.text_buffer.metrics().line_height).ceil() as u32,
-        ];
+        self.measure_layout();
     }
 
     fn build_buffer(
@@ -427,7 +414,7 @@ impl TextData {
         line_height: f32,
         font: TextFont,
         constraint: &TextConstraint,
-    ) -> (glyphon::Buffer, [u32; 2], f32, f32, u32) {
+    ) -> glyphon::Buffer {
         let mut text_buffer = glyphon::Buffer::new(
             &mut write_font_system(),
             glyphon::Metrics::new(size, line_height),
@@ -458,28 +445,7 @@ impl TextData {
             None,
         );
         text_buffer.shape_until_scroll(&mut write_font_system(), false);
-        // Calculate text bounds and baselines.
-        let mut run_width: f32 = 0.0;
-        let metrics = text_buffer.metrics();
-        let mut first_baseline = 0.0;
-        let mut last_baseline = 0.0;
-        let mut line_count: u32 = 0;
-        for run in text_buffer.layout_runs() {
-            run_width = run_width.max(run.line_w);
-            if line_count == 0 {
-                first_baseline = run.line_y;
-            }
-            last_baseline = run.line_y;
-            line_count += 1;
-        }
-        let total_height = line_count as f32 * metrics.line_height;
-        (
-            text_buffer,
-            [run_width.ceil() as u32, total_height.ceil() as u32],
-            first_baseline,
-            last_baseline,
-            line_count,
-        )
+        text_buffer
     }
 
     pub(crate) fn set_color(&mut self, color: Color) {
@@ -620,7 +586,7 @@ mod tests {
     }
 
     #[test]
-    fn wrapping_keeps_words_intact_and_falls_back_for_words_wider_than_the_line() {
+    fn wrapping_keeps_words_intact_relays_out_like_fresh_shaping_and_breaks_long_words() {
         let session = tessera_ui::RuntimeSession::new();
         let _session = session.enter();
         let style = MaterialTypography::default().body_medium;
@@ -651,6 +617,25 @@ mod tests {
         assert_eq!(runs.len(), 2);
         assert!(runs[0].glyphs.iter().all(|glyph| glyph.end <= 6));
         assert_eq!(runs[1].glyphs[0].start, 6);
+        let unconstrained = TextData::shape(
+            "alpha beta".to_string(),
+            Color::BLACK,
+            style,
+            TextConstraint::default(),
+        );
+        let mut relaid = unconstrained.clone();
+        relaid.relayout(&TextConstraint {
+            max_width: Some(width),
+            max_height: None,
+            ..Default::default()
+        });
+        assert_eq!(
+            relaid.measure_info(),
+            phrase.measure_info(),
+            "relayout must wrap like a fresh shape"
+        );
+        relaid.relayout(&TextConstraint::default());
+        assert_eq!(relaid.measure_info(), unconstrained.measure_info());
         let long = TextData::shape(
             "supercalifragilisticexpialidocious".to_string(),
             Color::BLACK,
