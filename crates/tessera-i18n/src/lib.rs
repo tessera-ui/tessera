@@ -3,8 +3,14 @@
 //! Configure catalogs through `tessera-build`, register `res::i18n()` with
 //! `EntryPoint::package`, and resolve messages through `res::I18N`.
 
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use std::{
+    borrow::Cow,
+    cmp::Reverse,
+    collections::HashMap,
+    sync::{Arc, OnceLock},
+};
 
+use fluent_bundle::{FluentArgs, FluentResource, concurrent::FluentBundle};
 use tessera_ui::{EntryRegistry, Plugin, State, StateOwner, TesseraPackage, try_with_plugin};
 
 pub use fluent_bundle::FluentValue;
@@ -12,6 +18,136 @@ pub use fluent_templates::{self, LanguageIdentifier, Loader, langid};
 
 /// Named values supplied to a Fluent message.
 pub type Arguments<'a> = HashMap<Cow<'static, str>, FluentValue<'a>>;
+
+/// Fluent catalogs embedded in the binary and parsed per locale on first lookup.
+///
+/// Lookups try the best matching locales before the fallback locale.
+pub struct EmbeddedLoader {
+    locales: Vec<EmbeddedLocale>,
+    fallback: LanguageIdentifier,
+}
+
+struct EmbeddedLocale {
+    id: LanguageIdentifier,
+    sources: &'static [&'static str],
+    bundle: OnceLock<FluentBundle<FluentResource>>,
+}
+
+impl EmbeddedLoader {
+    /// Creates a loader from Fluent sources grouped by locale identifier.
+    ///
+    /// Panics when an identifier is invalid, or later when a locale's sources
+    /// fail to parse or define a message twice.
+    pub fn new(
+        locales: &'static [(&'static str, &'static [&'static str])],
+        fallback: LanguageIdentifier,
+    ) -> Self {
+        Self {
+            locales: locales
+                .iter()
+                .map(|&(id, sources)| EmbeddedLocale {
+                    id: id.parse().expect("invalid locale identifier"),
+                    sources,
+                    bundle: OnceLock::new(),
+                })
+                .collect(),
+            fallback,
+        }
+    }
+
+    fn negotiate(&self, requested: &LanguageIdentifier) -> Vec<&EmbeddedLocale> {
+        let mut available = self.locales.iter().collect::<Vec<_>>();
+        let mut matches = Vec::new();
+        for available_as_range in [false, true] {
+            available.retain(|locale| {
+                let matched = locale.id.matches(requested, available_as_range, false);
+                if matched {
+                    matches.push(*locale);
+                }
+                !matched
+            });
+        }
+        matches.sort_by_key(|locale| {
+            Reverse(
+                usize::from(locale.id.script.is_some())
+                    + usize::from(locale.id.region.is_some())
+                    + locale.id.variants().len(),
+            )
+        });
+        matches
+    }
+
+    fn format(locale: &EmbeddedLocale, id: &str, args: Option<&Arguments<'_>>) -> Option<String> {
+        let bundle = locale.bundle.get_or_init(|| {
+            let mut bundle = FluentBundle::new_concurrent(vec![locale.id.clone()]);
+            for source in locale.sources {
+                let resource = FluentResource::try_new((*source).to_owned())
+                    .unwrap_or_else(|_| panic!("invalid Fluent source for {}", locale.id));
+                bundle
+                    .add_resource(resource)
+                    .unwrap_or_else(|_| panic!("duplicate Fluent message for {}", locale.id));
+            }
+            bundle
+        });
+        let (message, attribute) = match id.split_once('.') {
+            Some((message, attribute)) => (message, Some(attribute)),
+            None => (id, None),
+        };
+        let message = bundle.get_message(message)?;
+        let pattern = match attribute {
+            Some(attribute) => message
+                .attributes()
+                .find(|candidate| candidate.id() == attribute)?
+                .value(),
+            None => message.value()?,
+        };
+        let args = args.map(|args| {
+            args.iter()
+                .map(|(key, value)| (key.as_ref(), value.clone()))
+                .collect::<FluentArgs<'_>>()
+        });
+        let mut errors = Vec::new();
+        let value = bundle.format_pattern(pattern, args.as_ref(), &mut errors);
+        errors.is_empty().then(|| value.into_owned())
+    }
+}
+
+impl Loader for EmbeddedLoader {
+    fn lookup_complete(
+        &self,
+        lang: &LanguageIdentifier,
+        text_id: &str,
+        args: Option<&Arguments<'_>>,
+    ) -> String {
+        self.try_lookup_complete(lang, text_id, args)
+            .unwrap_or_else(|| format!("Unknown localization key: {text_id:?}"))
+    }
+
+    fn try_lookup_complete(
+        &self,
+        lang: &LanguageIdentifier,
+        text_id: &str,
+        args: Option<&Arguments<'_>>,
+    ) -> Option<String> {
+        self.negotiate(lang)
+            .into_iter()
+            .find_map(|locale| Self::format(locale, text_id, args))
+            .or_else(|| {
+                let fallback = self
+                    .locales
+                    .iter()
+                    .find(|locale| locale.id == self.fallback);
+                (*lang != self.fallback)
+                    .then_some(fallback)
+                    .flatten()
+                    .and_then(|locale| Self::format(locale, text_id, args))
+            })
+    }
+
+    fn locales(&self) -> Box<dyn Iterator<Item = &LanguageIdentifier> + '_> {
+        Box::new(self.locales.iter().map(|locale| &locale.id))
+    }
+}
 
 /// A shareable message catalog that can be registered as an entry package.
 #[derive(Clone)]
@@ -145,5 +281,46 @@ impl I18n {
                 localization.locale.clone(),
             )
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static LOCALES: &[(&str, &[&str])] = &[
+        (
+            "en",
+            &[
+                "greeting = Hello\n    .title = Welcome\n",
+                "only-en = Fallback\n",
+            ],
+        ),
+        ("zh-CN", &["greeting = 你好\n"]),
+    ];
+
+    #[test]
+    fn embedded_locales_parse_on_first_lookup_and_fall_back_per_message() {
+        let loader = EmbeddedLoader::new(LOCALES, langid!("en"));
+        assert_eq!(
+            loader
+                .try_lookup(&langid!("en"), "greeting.title")
+                .as_deref(),
+            Some("Welcome")
+        );
+        assert!(loader.locales[1].bundle.get().is_none());
+        assert_eq!(
+            loader.try_lookup(&langid!("zh-CN"), "greeting").as_deref(),
+            Some("你好")
+        );
+        assert_eq!(
+            loader.try_lookup(&langid!("zh-CN"), "only-en").as_deref(),
+            Some("Fallback")
+        );
+        assert_eq!(
+            loader.try_lookup(&langid!("fr"), "greeting").as_deref(),
+            Some("Hello")
+        );
+        assert_eq!(loader.try_lookup(&langid!("en"), "missing"), None);
     }
 }
