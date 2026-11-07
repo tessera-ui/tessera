@@ -5425,7 +5425,6 @@ mod tests {
         let _ = controller.text_data(constraint, controller.prepare_display());
         let buffer = controller.editor().with_buffer(Clone::clone);
         let glyph = &buffer.layout_runs().next().unwrap().glyphs[0];
-        let system = crate::pipelines::text::pipeline::read_font_system();
-        assert_eq!(system.db().face(glyph.font_id).unwrap().weight.0, 700);
+        assert_eq!(glyph.font_weight, glyphon::Weight::BOLD);
     }
 }
