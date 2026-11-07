@@ -650,7 +650,7 @@ impl RenderCore {
         let finish_time =
             tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
                 .then(|| submit_start.elapsed());
-        queue.submit(Some(command_buffer));
+        queue.submit(self.graphics.finish_prelude().into_iter().chain([command_buffer]));
         let submit = submit_start.elapsed();
         if let Some(finish_time) = finish_time {
             debug!(

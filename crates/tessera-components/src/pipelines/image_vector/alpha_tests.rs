@@ -81,9 +81,9 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
 
 #[test]
 #[ignore = "requires a native GPU adapter for real raster/vector alpha comparison"]
-fn translucent_atlas_reuse_preserves_alpha_and_releases_unused_sizes() {
+fn translucent_atlas_reuse_preserves_alpha_and_releases_sizes_after_retention() {
     crate::test_utils::run_isolated_test(
-        "pipelines::image_vector::alpha_tests::translucent_atlas_reuse_preserves_alpha_and_releases_unused_sizes",
+        "pipelines::image_vector::alpha_tests::translucent_atlas_reuse_preserves_alpha_and_releases_sizes_after_retention",
         || {
             for samples in [1, 4] {
                 let probe = TestProbe::default();
@@ -187,6 +187,12 @@ fn translucent_atlas_reuse_preserves_alpha_and_releases_unused_sizes() {
                 observed.get().size.unwrap().set(8.0);
                 renderer.render_frames(4);
                 assert_eq!(renderer.read_pixels().unwrap(), initial);
+                let retained = renderer.resource_snapshot().unwrap();
+                assert!(
+                    retained["textures"].as_i64().unwrap() > baseline["textures"].as_i64().unwrap(),
+                    "recently used vector sizes stay cached: {baseline} -> {retained}"
+                );
+                renderer.render_frames(super::pipeline::RETAINED_FRAMES as u32);
                 let settled = renderer.resource_snapshot().unwrap();
                 if let (Some(initial), Some(current)) = (
                     baseline["texture_bytes"].as_u64(),

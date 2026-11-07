@@ -1,8 +1,5 @@
-use std::{collections::HashMap, num::NonZeroUsize};
-
-use encase::{ShaderType, StorageBuffer, UniformBuffer};
+use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
-use lru::LruCache;
 use tessera_ui::{
     PxSize,
     px::PxRect,
@@ -11,233 +8,6 @@ use tessera_ui::{
 };
 
 use crate::pipelines::fluid_glass::FluidGlassCommand;
-
-// Define MAX_CONCURRENT_SHAPES, can be adjusted later
-pub const MAX_CONCURRENT_GLASSES: usize = 256;
-const FLUID_GLASS_SDF_CACHE_CAPACITY: usize = 64;
-/// Minimum number of frames an SDF must be requested before being cached.
-const SDF_CACHE_HEAT_THRESHOLD: u32 = 3;
-/// Number of frames to keep SDF heat tracking data before cleanup.
-const SDF_HEAT_TRACKING_WINDOW: u32 = 10;
-
-#[derive(PartialEq, ShaderType)]
-struct SdfUniforms {
-    size: Vec2,
-    corner_radii: Vec4,
-    corner_g2: Vec4,
-    shape_type: f32,
-}
-
-#[derive(Clone, Hash, PartialEq, Eq)]
-struct FluidGlassSdfCacheKey {
-    shape_type: u32,
-    corner_radii: [u32; 4],
-    corner_g2: [u32; 4],
-    width: u32,
-    height: u32,
-}
-
-struct FluidGlassSdfCacheEntry {
-    _texture: wgpu::Texture,
-    view: wgpu::TextureView,
-}
-
-struct PreparedGlassInstance {
-    uniforms: GlassUniforms,
-    sdf_key: Option<FluidGlassSdfCacheKey>,
-}
-
-struct InstanceBuildInput<'a> {
-    command: &'a FluidGlassCommand,
-    geometry: tessera_ui::DrawGeometry,
-    target_size: PxSize,
-    clip_rect: Option<PxRect>,
-    device: &'a wgpu::Device,
-    queue: &'a wgpu::Queue,
-}
-
-struct SdfGenerationInput<'a> {
-    device: &'a wgpu::Device,
-    queue: &'a wgpu::Queue,
-    size: (u32, u32),
-    corner_radii: Vec4,
-    corner_g2: Vec4,
-    shape_type: f32,
-}
-
-struct FluidGlassSdfGenerator {
-    pipeline: wgpu::ComputePipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
-}
-
-impl FluidGlassSdfCacheKey {
-    fn new(shape_type: f32, corner_radii: Vec4, corner_g2: Vec4, width: u32, height: u32) -> Self {
-        Self {
-            shape_type: shape_type.to_bits(),
-            corner_radii: [
-                corner_radii.x.to_bits(),
-                corner_radii.y.to_bits(),
-                corner_radii.z.to_bits(),
-                corner_radii.w.to_bits(),
-            ],
-            corner_g2: [
-                corner_g2.x.to_bits(),
-                corner_g2.y.to_bits(),
-                corner_g2.z.to_bits(),
-                corner_g2.w.to_bits(),
-            ],
-            width,
-            height,
-        }
-    }
-}
-
-impl FluidGlassSdfGenerator {
-    fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Fluid Glass SDF Cache Shader"),
-            source: wgpu::ShaderSource::Wgsl(
-                concat!(
-                    include_str!("sdf_common.wgsl"),
-                    "\n",
-                    include_str!("sdf_cache.wgsl")
-                )
-                .into(),
-            ),
-        });
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                        format: wgpu::TextureFormat::Rgba16Float,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                    },
-                    count: None,
-                },
-            ],
-            label: Some("fluid_glass_sdf_cache_bind_group_layout"),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Fluid Glass SDF Cache Pipeline Layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Fluid Glass SDF Cache Pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: pipeline_cache,
-        });
-
-        Self {
-            pipeline,
-            bind_group_layout,
-        }
-    }
-
-    fn generate(&self, input: SdfGenerationInput<'_>) -> FluidGlassSdfCacheEntry {
-        let SdfGenerationInput {
-            device,
-            queue,
-            size,
-            corner_radii,
-            corner_g2,
-            shape_type,
-        } = input;
-        let (width, height) = size;
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Fluid Glass Cached SDF Texture"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
-            view_formats: &[],
-        });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let sdf_uniforms = SdfUniforms {
-            size: Vec2::new(width as f32, height as f32),
-            corner_radii,
-            corner_g2,
-            shape_type,
-        };
-
-        let mut uniform_buffer = UniformBuffer::new(Vec::new());
-        uniform_buffer
-            .write(&sdf_uniforms)
-            .expect("buffer write failed");
-        let uniform_data = uniform_buffer.into_inner();
-        let uniform_buffer_gpu = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Fluid Glass SDF Uniform Buffer"),
-            size: uniform_data.len() as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        queue.write_buffer(&uniform_buffer_gpu, 0, &uniform_data);
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer_gpu.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-            ],
-            label: Some("fluid_glass_sdf_cache_bind_group"),
-        });
-
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Fluid Glass SDF Cache Encoder"),
-        });
-
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Fluid Glass SDF Cache Pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            let workgroups_x = width.div_ceil(8);
-            let workgroups_y = height.div_ceil(8);
-            pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
-        }
-
-        queue.submit(Some(encoder.finish()));
-
-        FluidGlassSdfCacheEntry {
-            _texture: texture,
-            view,
-        }
-    }
-}
 
 #[derive(ShaderType, Clone, PartialEq, Copy, Debug, Default)]
 struct GlassUniforms {
@@ -256,7 +26,6 @@ struct GlassUniforms {
     ripple_alpha: f32,
     ripple_strength: f32,
     border_width: f32,
-    sdf_cache_enabled: f32,
 }
 
 #[derive(PartialEq, ShaderType)]
@@ -265,28 +34,12 @@ struct GlassInstances {
     instances: Vec<GlassUniforms>,
 }
 
-/// Tracks how frequently an SDF is requested to decide if it should be cached.
-#[derive(Debug, Clone, PartialEq)]
-struct SdfHeatTracker {
-    /// Number of frames this SDF has been requested
-    hit_count: u32,
-    /// Frame number when last seen
-    last_seen_frame: u32,
-}
-
 // --- Pipeline Definition ---
 
 pub(crate) struct FluidGlassPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
-    sdf_generator: FluidGlassSdfGenerator,
-    sdf_cache: LruCache<FluidGlassSdfCacheKey, FluidGlassSdfCacheEntry>,
-    /// Tracks SDF usage frequency to avoid caching transient SDFs
-    sdf_heat_tracker: HashMap<FluidGlassSdfCacheKey, SdfHeatTracker>,
-    /// Current frame number for heat tracking
-    current_frame: u32,
-    dummy_sdf_view: wgpu::TextureView,
 }
 
 impl FluidGlassPipeline {
@@ -319,36 +72,10 @@ impl FluidGlassPipeline {
             &shader,
             &bind_group_layout,
         );
-        let sdf_generator = FluidGlassSdfGenerator::new(gpu, pipeline_cache);
-        let dummy_sdf_texture = gpu.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Fluid Glass Dummy SDF Texture"),
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
-            view_formats: &[],
-        });
-        let dummy_sdf_view = dummy_sdf_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sdf_cache = LruCache::new(
-            NonZeroUsize::new(FLUID_GLASS_SDF_CACHE_CAPACITY)
-                .expect("SDF cache capacity must be greater than zero"),
-        );
-
         Self {
             pipeline,
             bind_group_layout,
             sampler,
-            sdf_generator,
-            sdf_cache,
-            sdf_heat_tracker: HashMap::new(),
-            current_frame: 0,
-            dummy_sdf_view,
         }
     }
 
@@ -392,22 +119,6 @@ impl FluidGlassPipeline {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
@@ -472,309 +183,114 @@ impl FluidGlassPipeline {
 
 impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
     fn draw(&mut self, context: &mut DrawContext<FluidGlassCommand>) {
-        // Advance frame counter and cleanup old SDF heat tracking data
-        self.current_frame = self.current_frame.wrapping_add(1);
-        self.sdf_heat_tracker.retain(|_, tracker| {
-            // Remove entries not seen in the last SDF_HEAT_TRACKING_WINDOW
-            // frames
-            self.current_frame.saturating_sub(tracker.last_seen_frame) < SDF_HEAT_TRACKING_WINDOW
-        });
-
-        let instances = self.build_instances(
-            context.commands,
-            context.target_size,
-            context.clip_rect,
-            context.device,
-            context.queue,
-        );
-        if instances.is_empty() {
+        if context.commands.is_empty() {
             return;
         }
-
-        let groups = self.group_instances_by_sdf(instances);
-
+        let instances = GlassInstances {
+            instances: context
+                .commands
+                .iter()
+                .map(|(command, geometry)| {
+                    glass_uniforms(command, *geometry, context.target_size, context.clip_rect)
+                })
+                .collect(),
+        };
+        let mut content = StorageBuffer::new(Vec::<u8>::new());
+        content
+            .write(&instances)
+            .expect("fluid glass instance serialization failed");
+        let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Fluid Glass Storage Buffer"),
+            size: content.as_ref().len() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        context.queue.write_buffer(&buffer, 0, content.as_ref());
+        let bind_group = context
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(context.scene_texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                ],
+                label: Some("fluid_glass_bind_group"),
+            });
         context.render_pass.set_pipeline(&self.pipeline);
-        let mut alive_buffers: Vec<wgpu::Buffer> = Vec::new();
-
-        for (key, uniforms) in groups {
-            if uniforms.is_empty() {
-                continue;
-            }
-            let uniform_buffer =
-                match Self::create_and_upload_buffer(context.device, context.queue, &uniforms) {
-                    Ok(buf) => buf,
-                    Err(_) => continue,
-                };
-            let sdf_view = key
-                .as_ref()
-                .and_then(|key| self.sdf_cache.peek(key).map(|entry| &entry.view))
-                .unwrap_or(&self.dummy_sdf_view);
-            let bind_group = self.create_bind_group(
-                context.device,
-                &uniform_buffer,
-                context.scene_texture_view,
-                sdf_view,
-            );
-            context.render_pass.set_bind_group(0, &bind_group, &[]);
-            context.render_pass.draw(0..6, 0..uniforms.len() as u32);
-            alive_buffers.push(uniform_buffer);
-        }
+        context.render_pass.set_bind_group(0, &bind_group, &[]);
+        context
+            .render_pass
+            .draw(0..6, 0..instances.instances.len() as u32);
     }
 }
 
-impl FluidGlassPipeline {
-    fn build_instance(&mut self, input: InstanceBuildInput<'_>) -> PreparedGlassInstance {
-        let InstanceBuildInput {
-            command,
-            geometry,
-            target_size,
-            clip_rect,
-            device: gpu,
-            queue,
-        } = input;
-        let render = &command.render;
-        let size = &geometry.local_size;
-        let start_pos = geometry.window_origin();
-        let [world_width, world_height] = geometry.window_size();
-        let screen_w = target_size.width.to_f32();
-        let screen_h = target_size.height.to_f32();
+fn glass_uniforms(
+    command: &FluidGlassCommand,
+    geometry: tessera_ui::DrawGeometry,
+    target_size: PxSize,
+    clip_rect: Option<PxRect>,
+) -> GlassUniforms {
+    let render = &command.render;
+    let size = geometry.local_size;
+    let start_pos = geometry.window_origin();
+    let [world_width, world_height] = geometry.window_size();
+    let screen_w = target_size.width.to_f32();
+    let screen_h = target_size.height.to_f32();
 
-        let clip_rect_uv = if let Some(rect) = clip_rect {
-            [
-                rect.x.0 as f32 / screen_w,
-                rect.y.0 as f32 / screen_h,
-                (rect.x.0 + rect.width.0) as f32 / screen_w,
-                (rect.y.0 + rect.height.0) as f32 / screen_h,
-            ]
-            .into()
-        } else {
-            [0.0, 0.0, 1.0, 1.0].into() // Default to full screen if no clip rect is provided
-        };
+    let clip_rect_uv = clip_rect.map_or(Vec4::new(0.0, 0.0, 1.0, 1.0), |rect| {
+        Vec4::new(
+            rect.x.0 as f32 / screen_w,
+            rect.y.0 as f32 / screen_h,
+            (rect.x.0 + rect.width.0) as f32 / screen_w,
+            (rect.y.0 + rect.height.0) as f32 / screen_h,
+        )
+    });
 
-        let rect_uv_bounds = [
+    let (corner_radii, corner_g2, shape_type) = match render.shape.resolve_for_size(size) {
+        crate::shape_def::ResolvedShape::Rounded {
+            corner_radii,
+            corner_g2,
+        } => (
+            corner_radii.into(),
+            corner_g2.into(),
+            if corner_radii == [0.0; 4] { 2.0 } else { 0.0 },
+        ),
+        crate::shape_def::ResolvedShape::Ellipse => (Vec4::ZERO, Vec4::ZERO, 1.0),
+    };
+
+    GlassUniforms {
+        tint_color: render.tint_color.to_array().into(),
+        rect_uv_bounds: Vec4::new(
             start_pos.x / screen_w,
             start_pos.y / screen_h,
             (start_pos.x + world_width) / screen_w,
             (start_pos.y + world_height) / screen_h,
-        ];
-
-        let resolved_shape = render.shape.resolve_for_size(*size);
-        let (corner_radii, corner_g2, mut shape_type) = match resolved_shape {
-            crate::shape_def::ResolvedShape::Rounded {
-                corner_radii,
-                corner_g2,
-            } => (corner_radii.into(), corner_g2.into(), 0.0),
-            crate::shape_def::ResolvedShape::Ellipse => (Vec4::ZERO, Vec4::ZERO, 1.0),
-        };
-
-        let is_axis_aligned_rect = matches!(resolved_shape, crate::shape_def::ResolvedShape::Rounded { corner_radii, .. } if corner_radii == [0.0, 0.0, 0.0, 0.0]);
-
-        if is_axis_aligned_rect {
-            shape_type = 2.0;
-        }
-
-        let border_width = render
+        ),
+        clip_rect_uv,
+        rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
+        ripple_center: render.ripple_center.unwrap_or([0.0, 0.0]).into(),
+        corner_radii,
+        corner_g2,
+        shape_type,
+        noise_amount: render.noise_amount,
+        noise_scale: render.noise_scale,
+        time: render.time,
+        ripple_radius: render.ripple_radius.unwrap_or(0.0),
+        ripple_alpha: render.ripple_alpha.unwrap_or(0.0),
+        ripple_strength: render.ripple_strength.unwrap_or(0.0),
+        border_width: render
             .border
             .as_ref()
-            .map(|b| b.width.0 as f32)
-            .unwrap_or(0.0);
-
-        let sdf_key = if geometry.local_to_window.scale() == 1.0 {
-            self.maybe_get_sdf_entry(gpu, queue, size, corner_radii, shape_type, corner_g2)
-        } else {
-            None
-        };
-
-        let uniforms = GlassUniforms {
-            tint_color: render.tint_color.to_array().into(),
-            rect_uv_bounds: rect_uv_bounds.into(),
-            clip_rect_uv,
-            rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
-            ripple_center: render.ripple_center.unwrap_or([0.0, 0.0]).into(),
-            corner_radii,
-            corner_g2,
-            shape_type,
-            noise_amount: render.noise_amount,
-            noise_scale: render.noise_scale,
-            time: render.time,
-            ripple_radius: render.ripple_radius.unwrap_or(0.0),
-            ripple_alpha: render.ripple_alpha.unwrap_or(0.0),
-            ripple_strength: render.ripple_strength.unwrap_or(0.0),
-            border_width,
-            sdf_cache_enabled: if sdf_key.is_some() { 1.0 } else { 0.0 },
-        };
-
-        PreparedGlassInstance { uniforms, sdf_key }
-    }
-
-    fn build_instances(
-        &mut self,
-        commands: &[(&FluidGlassCommand, tessera_ui::DrawGeometry)],
-        target_size: PxSize,
-        clip_rect: Option<PxRect>,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) -> Vec<PreparedGlassInstance> {
-        let mut instances = commands
-            .iter()
-            .map(|(cmd, geometry)| {
-                self.build_instance(InstanceBuildInput {
-                    command: cmd,
-                    geometry: *geometry,
-                    target_size,
-                    clip_rect,
-                    device: gpu,
-                    queue,
-                })
-            })
-            .collect::<Vec<_>>();
-        Self::enforce_instance_limit(&mut instances);
-        instances
-    }
-
-    fn enforce_instance_limit(instances: &mut Vec<PreparedGlassInstance>) -> u32 {
-        if instances.len() > MAX_CONCURRENT_GLASSES {
-            instances.truncate(MAX_CONCURRENT_GLASSES);
-        }
-        instances.len() as u32
-    }
-
-    fn maybe_get_sdf_entry(
-        &mut self,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        size: &PxSize,
-        corner_radii: Vec4,
-        shape_type: f32,
-        corner_g2: Vec4,
-    ) -> Option<FluidGlassSdfCacheKey> {
-        if !(shape_type == 0.0 || shape_type == 1.0) {
-            return None;
-        }
-
-        let width = size.width.0.max(0) as u32;
-        let height = size.height.0.max(0) as u32;
-        if width == 0 || height == 0 {
-            return None;
-        }
-
-        let key = FluidGlassSdfCacheKey::new(shape_type, corner_radii, corner_g2, width, height);
-
-        if self.sdf_cache.contains(&key) {
-            self.sdf_cache.promote(&key);
-            return Some(key);
-        }
-
-        let tracker = self
-            .sdf_heat_tracker
-            .entry(key.clone())
-            .or_insert(SdfHeatTracker {
-                hit_count: 0,
-                last_seen_frame: self.current_frame,
-            });
-
-        if tracker.last_seen_frame != self.current_frame {
-            tracker.hit_count += 1;
-            tracker.last_seen_frame = self.current_frame;
-        }
-
-        if tracker.hit_count >= SDF_CACHE_HEAT_THRESHOLD {
-            let entry = self.sdf_generator.generate(SdfGenerationInput {
-                device: gpu,
-                queue,
-                size: (width, height),
-                corner_radii,
-                shape_type,
-                corner_g2,
-            });
-
-            self.sdf_cache.put(key.clone(), entry);
-            Some(key)
-        } else {
-            None
-        }
-    }
-
-    /// Create GPU buffer and upload the instance data. Returns the created
-    /// buffer or an error.
-    fn create_and_upload_buffer(
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        instances: &[GlassUniforms],
-    ) -> Result<wgpu::Buffer, ()> {
-        // Serialize uniforms first so we can determine exact buffer size
-        // (avoids magic numbers).
-        let uniforms = GlassInstances {
-            instances: instances.to_vec(),
-        };
-
-        let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
-        if buffer_content.write(&uniforms).is_err() {
-            return Err(());
-        }
-
-        let size = buffer_content.as_ref().len() as wgpu::BufferAddress;
-        let uniform_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Fluid Glass Storage Buffer"),
-            size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        queue.write_buffer(&uniform_buffer, 0, buffer_content.as_ref());
-        Ok(uniform_buffer)
-    }
-
-    fn create_bind_group(
-        &self,
-        gpu: &wgpu::Device,
-        uniform_buffer: &wgpu::Buffer,
-        scene_texture_view: &wgpu::TextureView,
-        sdf_view: &wgpu::TextureView,
-    ) -> wgpu::BindGroup {
-        gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(scene_texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(sdf_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-            ],
-            label: Some("fluid_glass_bind_group"),
-        })
-    }
-
-    fn group_instances_by_sdf(
-        &self,
-        instances: Vec<PreparedGlassInstance>,
-    ) -> Vec<(Option<FluidGlassSdfCacheKey>, Vec<GlassUniforms>)> {
-        let mut groups: Vec<(Option<FluidGlassSdfCacheKey>, Vec<GlassUniforms>)> = Vec::new();
-
-        for instance in instances {
-            if let Some((_, uniforms)) = groups.iter_mut().find(|(key, _)| *key == instance.sdf_key)
-            {
-                uniforms.push(instance.uniforms);
-            } else {
-                groups.push((instance.sdf_key, vec![instance.uniforms]));
-            }
-        }
-
-        groups
+            .map_or(0.0, |border| border.width.0 as f32),
     }
 }

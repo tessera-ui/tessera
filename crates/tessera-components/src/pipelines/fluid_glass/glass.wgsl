@@ -14,7 +14,6 @@ struct GlassUniforms {
     ripple_alpha: f32,
     ripple_strength: f32,
     border_width: f32,
-    sdf_cache_enabled: f32,
 };
 
 const LENS_SOURCE_OVERSCAN_SCALE: f32 = 1.06;
@@ -34,8 +33,6 @@ struct GlassInstances {
 @group(0) @binding(0) var<storage, read> uniforms: GlassInstances;
 @group(0) @binding(1) var t_diffuse: texture_2d<f32>;
 @group(0) @binding(2) var s_diffuse: sampler;
-@group(0) @binding(3) var sdf_texture: texture_2d<f32>;
-@group(0) @binding(4) var sdf_sampler: sampler;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -72,22 +69,6 @@ fn vs_main(
     out.uv = local_uv;
     out.instance_index = instance_index;
     return out;
-}
-
-fn evaluate_shape(
-    instance: GlassUniforms,
-    coord: vec2<f32>,
-    half_size: vec2<f32>,
-    k: vec4<f32>
-) -> vec3<f32> {
-    if instance.sdf_cache_enabled > 0.5 {
-        let uv = clamp((coord + half_size) / (half_size * 2.0), vec2<f32>(0.0), vec2<f32>(1.0));
-        let sample = textureSampleLevel(sdf_texture, sdf_sampler, uv, 0.0);
-        let normal = normalize(sample.yz);
-        return vec3<f32>(sample.x, normal);
-    }
-
-    return shape_sd_normal(instance.shape_type, coord, half_size, instance.corner_radii, k);
 }
 
 fn rand(co: vec2<f32>) -> f32 {
@@ -149,7 +130,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let half_size = instance.rect_size_px * 0.5;
     let centered_coord = local_coord - half_size;
 
-    let shape_eval = evaluate_shape(instance, centered_coord, half_size, instance.corner_g2);
+    let shape_eval = shape_sd_normal(
+        instance.shape_type,
+        centered_coord,
+        half_size,
+        instance.corner_radii,
+        instance.corner_g2,
+    );
     let sd = shape_eval.x;
     let sample_uv = lens_sample_uv(instance, centered_coord, half_size, shape_eval);
 

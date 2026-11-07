@@ -18,6 +18,8 @@ const MIN_ATLAS_SIZE: u32 = 256;
 const ATLAS_PADDING: u32 = 1;
 const ATLAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const SAMPLES_PER_BUFFER: usize = 64;
+// Entries survive brief absences, such as icons scrolled out and back in.
+pub(super) const RETAINED_FRAMES: u64 = 120;
 
 struct GeometryResources {
     vertex_buffer: tessera_ui::TrackedBuffer,
@@ -82,6 +84,7 @@ pub struct ImageVectorPipeline {
     sample_bind_group_layout: wgpu::BindGroupLayout,
     atlas_sampler: wgpu::Sampler,
     atlas: VectorAtlas,
+    scratch: RasterScratch,
     cache: HashMap<AtlasKey, AtlasCacheEntry>,
     frame: u64,
     raster_sample_count: u32,
@@ -287,6 +290,7 @@ impl ImageVectorPipeline {
             sample_bind_group_layout,
             atlas_sampler,
             atlas: VectorAtlas::default(),
+            scratch: RasterScratch::default(),
             cache: HashMap::new(),
             frame: 0,
             raster_sample_count,
@@ -329,7 +333,6 @@ impl ImageVectorPipeline {
     fn ensure_cached_entry(
         &mut self,
         device: &tessera_ui::GraphicsDevice,
-        queue: &wgpu::Queue,
         data: &ImageVectorData,
         width: u32,
         height: u32,
@@ -342,7 +345,7 @@ impl ImageVectorPipeline {
 
         let geometry = Self::create_resources(device, data);
         let allocation = self.atlas.allocate(device, width, height);
-        self.rasterize_into_allocation(device, queue, &geometry, &allocation, width, height);
+        self.rasterize_into_allocation(device, &geometry, &allocation, width, height);
         let page_size = self.atlas.page_texture(allocation.page_index).size();
         let uv_origin = [
             (allocation.region.rectangle.min.x as u32 + ATLAS_PADDING) as f32
@@ -368,9 +371,8 @@ impl ImageVectorPipeline {
     }
 
     fn rasterize_into_allocation(
-        &self,
+        &mut self,
         device: &tessera_ui::GraphicsDevice,
-        queue: &wgpu::Queue,
         geometry: &GeometryResources,
         allocation: &AtlasAllocation,
         width: u32,
@@ -378,110 +380,138 @@ impl ImageVectorPipeline {
     ) {
         let padded_width = width + ATLAS_PADDING * 2;
         let padded_height = height + ATLAS_PADDING * 2;
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("image_vector_atlas_encoder"),
-        });
-
-        let resolved_texture = device.create_texture(
-            "vector_atlas",
-            &wgpu::TextureDescriptor {
-                label: Some("image_vector_resolved_texture"),
-                size: wgpu::Extent3d {
+        let scratch = self.scratch.ensure(
+            device,
+            padded_width.max(padded_height),
+            self.raster_sample_count,
+        );
+        let page = self.atlas.page_texture(allocation.page_index);
+        device.encode_before_frame(|encoder| {
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("image_vector_raster_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: scratch.msaa.as_ref().unwrap_or(&scratch.resolved),
+                        depth_slice: None,
+                        resolve_target: scratch.msaa.as_ref().map(|_| &scratch.resolved),
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    multiview_mask: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                pass.set_pipeline(&self.raster_pipeline);
+                pass.set_viewport(
+                    ATLAS_PADDING as f32,
+                    ATLAS_PADDING as f32,
+                    width as f32,
+                    height as f32,
+                    0.0,
+                    1.0,
+                );
+                pass.set_bind_group(0, &self.raster_bind_group, &[]);
+                pass.set_vertex_buffer(0, geometry.vertex_buffer.slice(..));
+                pass.set_index_buffer(geometry.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..geometry.index_count, 0, 0..1);
+            }
+            encoder.copy_texture_to_texture(
+                scratch.resolved.texture().as_image_copy(),
+                wgpu::TexelCopyTextureInfo {
+                    texture: page,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: allocation.region.rectangle.min.x as u32,
+                        y: allocation.region.rectangle.min.y as u32,
+                        z: 0,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
                     width: padded_width,
                     height: padded_height,
                     depth_or_array_layers: 1,
                 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: ATLAS_FORMAT,
-                usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            },
-        );
-        let resolved_view = resolved_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let (color_view, resolve_target, _msaa_texture) = if self.raster_sample_count > 1 {
-            let msaa_texture = device.create_texture(
-                "vector_atlas",
-                &wgpu::TextureDescriptor {
-                    label: Some("image_vector_msaa_texture"),
-                    size: wgpu::Extent3d {
-                        width: padded_width,
-                        height: padded_height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: self.raster_sample_count,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: ATLAS_FORMAT,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                    view_formats: &[],
-                },
             );
-            let msaa_view = msaa_texture.create_view(&wgpu::TextureViewDescriptor::default());
-            (msaa_view, Some(resolved_view.clone()), Some(msaa_texture))
-        } else {
-            (resolved_view.clone(), None, None)
-        };
+        });
+    }
+}
 
+/// Render targets shared by rasterizations, kept while frames keep
+/// rasterizing.
+#[derive(Default)]
+struct RasterScratch {
+    targets: Option<RasterTargets>,
+    used: bool,
+}
+
+struct RasterTargets {
+    size: u32,
+    resolved: wgpu::TextureView,
+    msaa: Option<wgpu::TextureView>,
+}
+
+impl RasterScratch {
+    fn ensure(
+        &mut self,
+        device: &tessera_ui::GraphicsDevice,
+        size: u32,
+        sample_count: u32,
+    ) -> &RasterTargets {
+        self.used = true;
+        if self
+            .targets
+            .as_ref()
+            .is_none_or(|targets| targets.size < size)
         {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("image_vector_raster_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &color_view,
-                    depth_slice: None,
-                    resolve_target: resolve_target.as_ref(),
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                multiview_mask: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
+            let size = size.next_power_of_two().max(MIN_ATLAS_SIZE);
+            let create = |label, sample_count, usage| {
+                device
+                    .create_texture(
+                        "vector_atlas",
+                        &wgpu::TextureDescriptor {
+                            label: Some(label),
+                            size: wgpu::Extent3d {
+                                width: size,
+                                height: size,
+                                depth_or_array_layers: 1,
+                            },
+                            mip_level_count: 1,
+                            sample_count,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: ATLAS_FORMAT,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | usage,
+                            view_formats: &[],
+                        },
+                    )
+                    .create_view(&wgpu::TextureViewDescriptor::default())
+            };
+            self.targets = Some(RasterTargets {
+                size,
+                resolved: create(
+                    "image_vector_raster_resolved",
+                    1,
+                    wgpu::TextureUsages::COPY_SRC,
+                ),
+                msaa: (sample_count > 1).then(|| {
+                    create(
+                        "image_vector_raster_msaa",
+                        sample_count,
+                        wgpu::TextureUsages::empty(),
+                    )
+                }),
             });
-            pass.set_pipeline(&self.raster_pipeline);
-            pass.set_viewport(
-                ATLAS_PADDING as f32,
-                ATLAS_PADDING as f32,
-                width as f32,
-                height as f32,
-                0.0,
-                1.0,
-            );
-            pass.set_bind_group(0, &self.raster_bind_group, &[]);
-            pass.set_vertex_buffer(0, geometry.vertex_buffer.slice(..));
-            pass.set_index_buffer(geometry.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            pass.draw_indexed(0..geometry.index_count, 0, 0..1);
         }
+        self.targets.as_ref().expect("raster targets")
+    }
 
-        encoder.copy_texture_to_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &resolved_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyTextureInfo {
-                texture: self.atlas.page_texture(allocation.page_index),
-                mip_level: 0,
-                origin: wgpu::Origin3d {
-                    x: allocation.region.rectangle.min.x as u32,
-                    y: allocation.region.rectangle.min.y as u32,
-                    z: 0,
-                },
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::Extent3d {
-                width: padded_width,
-                height: padded_height,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        queue.submit(std::iter::once(encoder.finish()));
+    fn end_frame(&mut self) {
+        if !std::mem::take(&mut self.used) {
+            self.targets = None;
+        }
     }
 }
 
@@ -501,8 +531,9 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 .graphics
                 .write_buffer(&resources.buffer, 0, &resources.bytes[..resources.used]);
         }
+        self.scratch.end_frame();
         self.cache.retain(|_, entry| {
-            if entry.last_used == self.frame {
+            if self.frame - entry.last_used <= RETAINED_FRAMES {
                 return true;
             }
             self.atlas
@@ -531,13 +562,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
 
         for (command, geometry) in context.commands.iter() {
             if let Some((width, height)) = physical_dimensions(*geometry) {
-                self.ensure_cached_entry(
-                    context.graphics,
-                    context.queue,
-                    &command.data,
-                    width,
-                    height,
-                );
+                self.ensure_cached_entry(context.graphics, &command.data, width, height);
             }
         }
 

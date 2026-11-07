@@ -100,6 +100,7 @@ pub struct GraphicsDevice {
     queue: wgpu::Queue,
     work: Arc<Mutex<GraphicsWorkDiagnostics>>,
     frame_uploads: Arc<FrameUploads>,
+    prelude: Arc<Mutex<Option<wgpu::CommandEncoder>>>,
 }
 
 #[derive(Debug, Default)]
@@ -118,7 +119,27 @@ impl GraphicsDevice {
                 groups: FxHashMap::default(),
             })),
             frame_uploads: Arc::default(),
+            prelude: Arc::default(),
         }
+    }
+
+    /// Records GPU work that runs before the current frame's passes, in the
+    /// same submission.
+    ///
+    /// Use it to prepare textures, such as atlas entries, that the frame
+    /// samples. Queue writes made during the frame complete before this work.
+    pub fn encode_before_frame(&self, record: impl FnOnce(&mut wgpu::CommandEncoder)) {
+        let mut prelude = self.prelude.lock();
+        record(prelude.get_or_insert_with(|| {
+            self.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Frame Prelude"),
+                })
+        }));
+    }
+
+    pub(crate) fn finish_prelude(&self) -> Option<wgpu::CommandBuffer> {
+        self.prelude.lock().take().map(wgpu::CommandEncoder::finish)
     }
 
     /// Returns the device used by this renderer.
