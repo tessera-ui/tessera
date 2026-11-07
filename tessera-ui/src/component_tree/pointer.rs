@@ -184,7 +184,7 @@ impl PointerIndex {
                 self.remove(id);
                 continue;
             };
-            if !raw_input && metadata.input_transforms.is_empty() {
+            if !raw_input && metadata.input_transforms.is_none() {
                 if self.entries.contains_key(&id) {
                     self.remove(id);
                 }
@@ -230,12 +230,16 @@ impl PointerIndex {
             });
             let mut position = context.base_abs_pos;
             for (index, action) in plan.actions.iter().enumerate() {
-                if let Some(transform) = context.input_transforms.get(index) {
+                if let Some(transform) = context
+                    .input_transforms
+                    .as_ref()
+                    .and_then(|transforms| transforms.get(index))
+                {
                     position = transform.translation();
                 }
                 match action {
                     OrderedModifierAction::Placement(placement) => {
-                        if context.input_transforms.is_empty() {
+                        if context.input_transforms.is_none() {
                             crate::work::record(
                                 context.instance_logic_id,
                                 crate::WorkPhase::Transform,

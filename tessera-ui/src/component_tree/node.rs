@@ -185,41 +185,17 @@ impl NodeInteraction {
     }
 }
 
-#[derive(Clone, Default)]
-pub(crate) struct InputTransforms(Option<(crate::LocalToWindow, Arc<[PxPosition]>)>);
+#[derive(Clone)]
+pub(super) struct InputTransforms {
+    pub(super) parent: crate::LocalToWindow,
+    positions: Arc<[PxPosition]>,
+}
 
 impl InputTransforms {
-    pub(super) fn set_parent(&mut self, parent: crate::LocalToWindow) {
-        if let Some((current, _)) = &mut self.0 {
-            *current = parent;
-        }
-    }
-
-    pub(super) fn set_positions(
-        &mut self,
-        parent: crate::LocalToWindow,
-        positions: Vec<PxPosition>,
-    ) {
-        if positions.is_empty() {
-            self.0 = None;
-        } else if let Some((current_parent, current_positions)) = &mut self.0
-            && current_positions.as_ref() == positions.as_slice()
-        {
-            *current_parent = parent;
-        } else {
-            self.0 = Some((parent, positions.into()));
-        }
-    }
-
-    pub(super) fn is_empty(&self) -> bool {
-        self.0.is_none()
-    }
-
     pub(super) fn get(&self, index: usize) -> Option<crate::LocalToWindow> {
-        let (parent, positions) = self.0.as_ref()?;
-        positions
+        self.positions
             .get(index)
-            .map(|position| parent.with_local_origin(*position))
+            .map(|position| self.parent.with_local_origin(*position))
     }
 }
 
@@ -248,7 +224,7 @@ pub(crate) struct ComponentNodeMetaData {
     /// None if the node is not drawn yet.
     pub base_abs_position: Option<PxPosition>,
     pub local_to_window: Option<crate::LocalToWindow>,
-    pub input_transforms: InputTransforms,
+    pub(super) input_transforms: Option<Box<InputTransforms>>,
     pub event_clip_bounds: Option<crate::FloatRect>,
     /// The node's start position, relative to the root window.
     /// After placement modifiers are applied.
@@ -294,7 +270,7 @@ impl ComponentNodeMetaData {
             rel_position: None,
             base_abs_position: None,
             local_to_window: None,
-            input_transforms: InputTransforms::default(),
+            input_transforms: None,
             event_clip_bounds: None,
             abs_position: None,
             fragment: RenderFragment::default(),
@@ -313,6 +289,26 @@ impl ComponentNodeMetaData {
 
     pub(crate) fn event_clip_rect(&self) -> Option<PxRect> {
         self.event_clip_bounds.map(crate::FloatRect::outward)
+    }
+
+    pub(super) fn set_input_transforms(
+        &mut self,
+        parent: crate::LocalToWindow,
+        positions: Vec<PxPosition>,
+    ) {
+        if positions.is_empty() {
+            self.input_transforms = None;
+        } else if let Some(transforms) = &mut self.input_transforms {
+            transforms.parent = parent;
+            if transforms.positions.as_ref() != positions.as_slice() {
+                transforms.positions = positions.into();
+            }
+        } else {
+            self.input_transforms = Some(Box::new(InputTransforms {
+                parent,
+                positions: positions.into(),
+            }));
+        }
     }
 
     pub(crate) fn clip_region(&self) -> Option<&ClipRegion> {

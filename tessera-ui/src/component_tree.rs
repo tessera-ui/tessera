@@ -1726,7 +1726,7 @@ impl ComponentTree {
                     metadata
                         .local_to_window
                         .map_or(1.0, |transform| transform.scale()),
-                    &metadata.input_transforms,
+                    metadata.input_transforms.as_deref(),
                 )
             })
             .unwrap_or_default();
@@ -2603,7 +2603,7 @@ fn drain_pending_focused_input<E>(
 #[derive(Clone)]
 struct NodeInputContext {
     local_to_window: crate::LocalToWindow,
-    input_transforms: node::InputTransforms,
+    input_transforms: Option<node::InputTransforms>,
     event_clip_bounds: Option<crate::FloatRect>,
     base_abs_pos: PxPosition,
     abs_pos: PxPosition,
@@ -2657,7 +2657,7 @@ fn resolve_node_input_context(
         local_to_window: metadata
             .local_to_window
             .unwrap_or_else(|| crate::LocalToWindow::new(1.0, abs_pos).unwrap()),
-        input_transforms: metadata.input_transforms.clone(),
+        input_transforms: metadata.input_transforms.as_deref().cloned(),
         event_clip_bounds: metadata.event_clip_bounds,
         base_abs_pos,
         abs_pos,
@@ -2784,7 +2784,7 @@ fn bounds_hit_path(
             size,
             position,
             transform.scale(),
-            &metadata.input_transforms,
+            metadata.input_transforms.as_deref(),
         )
         || bounds.contains(position) && has_pointer_handler;
     node_handles_hover.then_some(node_id)
@@ -2796,17 +2796,17 @@ fn node_handles_pointer_at_position(
     size: ComputedData,
     position: PxPosition,
     scale: f32,
-    transforms: &node::InputTransforms,
+    transforms: Option<&node::InputTransforms>,
 ) -> bool {
     let mut current_abs_pos = base_abs_pos;
     let size = PxSize::new(size.width, size.height);
     for (index, action) in node.modifier.ordered_actions().into_iter().enumerate() {
-        if let Some(transform) = transforms.get(index) {
+        if let Some(transform) = transforms.and_then(|transforms| transforms.get(index)) {
             current_abs_pos = transform.translation();
         }
         match action {
             OrderedModifierAction::Placement(placement) => {
-                if transforms.is_empty() {
+                if transforms.is_none() {
                     crate::work::record(
                         node.instance_logic_id,
                         crate::WorkPhase::Transform,
@@ -2838,18 +2838,18 @@ fn resolve_node_hover_cursor_icon(
     size: ComputedData,
     position: PxPosition,
     scale: f32,
-    transforms: &node::InputTransforms,
+    transforms: Option<&node::InputTransforms>,
 ) -> Option<winit::window::CursorIcon> {
     let mut current_abs_pos = base_abs_pos;
     let size = PxSize::new(size.width, size.height);
     let mut resolved = None;
     for (index, action) in node.modifier.ordered_actions().into_iter().enumerate() {
-        if let Some(transform) = transforms.get(index) {
+        if let Some(transform) = transforms.and_then(|transforms| transforms.get(index)) {
             current_abs_pos = transform.translation();
         }
         match action {
             OrderedModifierAction::Placement(placement) => {
-                if transforms.is_empty() {
+                if transforms.is_none() {
                     crate::work::record(
                         node.instance_logic_id,
                         crate::WorkPhase::Transform,
@@ -3002,12 +3002,17 @@ fn dispatch_pointer_modifiers_for_node_pass(
     };
     let mut current_abs_pos = plan.context.base_abs_pos;
     for (index, action) in plan.actions.iter().enumerate() {
-        if let Some(transform) = plan.context.input_transforms.get(index) {
+        if let Some(transform) = plan
+            .context
+            .input_transforms
+            .as_ref()
+            .and_then(|transforms| transforms.get(index))
+        {
             current_abs_pos = transform.translation();
         }
         match action {
             OrderedModifierAction::Placement(placement) => {
-                if plan.context.input_transforms.is_empty() {
+                if plan.context.input_transforms.is_none() {
                     crate::work::record(
                         plan.context.instance_logic_id,
                         crate::WorkPhase::Transform,
@@ -3921,7 +3926,9 @@ fn prepare_layout_metadata_for_node(
         })
         .flatten();
     let local_position = if let Some(position) = cached_position {
-        metadata.input_transforms.set_parent(parent_transform);
+        if let Some(transforms) = &mut metadata.input_transforms {
+            transforms.parent = parent_transform;
+        }
         position
     } else {
         let _phase = push_phase(RuntimePhase::Place);
@@ -3933,9 +3940,7 @@ fn prepare_layout_metadata_for_node(
         let (position, inputs) = node
             .modifier
             .resolve_placement(rel_pos, node.instance_logic_id);
-        metadata
-            .input_transforms
-            .set_positions(parent_transform, inputs);
+        metadata.set_input_transforms(parent_transform, inputs);
         position
     };
     let local_to_window = parent_transform.with_local_origin(local_position);
