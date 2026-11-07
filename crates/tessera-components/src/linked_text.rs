@@ -29,7 +29,7 @@ use crate::{
         shape::command::ShapeCommand,
         text::{
             command::{TextCommand, TextConstraint},
-            pipeline::{TextData, color_to_glyphon, write_font_system},
+            pipeline::{TextData, color_to_glyphon, shaping_fonts},
         },
     },
     theme::{ContentColor, MaterialTheme, TextStyle},
@@ -205,7 +205,7 @@ fn shape_paragraph(key: &ShapeKey) -> Paragraph {
         } else {
             0.0
         });
-    let mut font_system = write_font_system();
+    let mut font_system = shaping_fonts();
     let mut buffer = glyphon::Buffer::new(&mut font_system, glyphon::Metrics::new(size, height));
     buffer.set_wrap(glyphon::Wrap::WordOrGlyph);
     buffer.set_size(key.constraint.max_width, key.constraint.max_height);

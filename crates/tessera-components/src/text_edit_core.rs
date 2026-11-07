@@ -26,7 +26,7 @@ use crate::{
         shape::command::ShapeCommand,
         text::{
             command::{TextCommand, TextConstraint},
-            pipeline::{TextData, color_to_glyphon, write_font_system},
+            pipeline::{TextData, color_to_glyphon, shaping_fonts},
         },
     },
     theme::TextStyle,
@@ -623,7 +623,7 @@ impl TextEditState {
         }
 
         let mut editor = self.clone_owned_editor();
-        editor.action(&mut write_font_system(), action);
+        editor.action(&mut shaping_fonts(), action);
         let preview = PreviewEditResult {
             text: editor_content(&editor),
             selection: editor_selection(&editor),
@@ -661,7 +661,7 @@ impl TextEditState {
 
     fn apply_action(&mut self, action: glyphon::Action) {
         self.pending_preview = None;
-        self.editor.action(&mut write_font_system(), action);
+        self.editor.action(&mut shaping_fonts(), action);
     }
 
     fn set_cursor_and_selection(&mut self, cursor: Cursor, selection: Option<Selection>) {
@@ -747,7 +747,7 @@ impl TextEditState {
     fn sync_size_and_shape_until_scroll(&mut self, constraint: &TextConstraint) {
         self.editor.with_buffer_mut(|buffer| {
             buffer.set_size(constraint.max_width, constraint.max_height);
-            buffer.shape_until_scroll(&mut write_font_system(), false);
+            buffer.shape_until_scroll(&mut shaping_fonts(), false);
         });
     }
 
@@ -797,7 +797,7 @@ impl TextEditState {
 
     fn scroll_vertical_by(&mut self, delta: f32) {
         self.editor.action(
-            &mut write_font_system(),
+            &mut shaping_fonts(),
             glyphon::Action::Scroll { pixels: delta },
         );
     }
@@ -805,7 +805,7 @@ impl TextEditState {
     fn shape_until_cursor(&mut self) -> glyphon::cosmic_text::Scroll {
         let cursor = self.cursor();
         self.editor.with_buffer_mut(|buffer| {
-            buffer.shape_until_cursor(&mut write_font_system(), cursor, false);
+            buffer.shape_until_cursor(&mut shaping_fonts(), cursor, false);
         });
         self.scroll()
     }
@@ -814,7 +814,7 @@ impl TextEditState {
         let cursor = self.cursor();
         let next_cursor = self.editor.with_buffer_mut(|buffer| {
             buffer
-                .cursor_motion(&mut write_font_system(), cursor, None, motion)
+                .cursor_motion(&mut shaping_fonts(), cursor, None, motion)
                 .map(|(next_cursor, _)| next_cursor)
         })?;
         Some(self.cursor_to_text_offset(next_cursor))
@@ -1337,7 +1337,7 @@ impl TextLayoutState {
             && buffer.scroll() != scroll
         {
             buffer.set_scroll(scroll);
-            buffer.shape_until_scroll(&mut write_font_system(), false);
+            buffer.shape_until_scroll(&mut shaping_fonts(), false);
         }
     }
 
@@ -1700,7 +1700,7 @@ impl TextLayoutState {
         action: glyphon::Action,
     ) -> Option<(usize, Option<TextSelection>)> {
         let (mut editor, transformed_text) = self.display_editor(cursor_offset, selection)?;
-        editor.action(&mut write_font_system(), action);
+        editor.action(&mut shaping_fonts(), action);
         let cursor_offset = transformed_text.map_to_raw(editor_cursor_offset(&editor));
         let selection = Self::display_selection_to_raw(&editor, &transformed_text);
         Some((cursor_offset, selection))
@@ -2011,7 +2011,7 @@ impl TextEditorController {
         let line_height_px: Px = final_line_height.into();
         let frame_nanos = current_frame_nanos();
         let mut buffer = glyphon::Buffer::new(
-            &mut write_font_system(),
+            &mut shaping_fonts(),
             glyphon::Metrics::new(size.to_pixels_f32(), line_height_px.to_f32()),
         );
         buffer.set_wrap(glyphon::Wrap::Glyph);
@@ -3164,7 +3164,7 @@ fn editor_motion_offset(
     let cursor = editor.cursor();
     let next_cursor = editor.with_buffer_mut(|buffer| {
         buffer
-            .cursor_motion(&mut write_font_system(), cursor, None, motion)
+            .cursor_motion(&mut shaping_fonts(), cursor, None, motion)
             .map(|(next_cursor, _)| next_cursor)
     })?;
     Some(editor.with_buffer(|buffer| cursor_to_text_offset_in_buffer(buffer, next_cursor)))
@@ -3383,7 +3383,7 @@ fn build_display_buffer(
     style: Option<TextStyle>,
 ) -> glyphon::Buffer {
     let mut buffer = glyphon::Buffer::new(
-        &mut write_font_system(),
+        &mut shaping_fonts(),
         glyphon::Metrics::new(font_size, line_height),
     );
     buffer.set_wrap(wrap);
@@ -3395,7 +3395,7 @@ fn build_display_buffer(
         None,
     );
     buffer.set_scroll(scroll);
-    buffer.shape_until_scroll(&mut write_font_system(), false);
+    buffer.shape_until_scroll(&mut shaping_fonts(), false);
     buffer
 }
 
