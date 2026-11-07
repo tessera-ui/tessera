@@ -140,7 +140,7 @@ pub(crate) fn nearest_replay_boundary_instance_key(
         if fallback == 0 {
             fallback = node.instance_key;
         }
-        if node.replay.is_some() {
+        if node.replay_boundary {
             return node.instance_key;
         }
         let Some(parent_id) = node_ref.parent() else {

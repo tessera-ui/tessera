@@ -1878,10 +1878,10 @@ mod tests {
                 match node.role {
                     NodeRole::Composition => {
                         layout_composition =
-                            Some((node_id, node.instance_key, node.replay.is_some()));
+                            Some((node_id, node.instance_key, node.replay_boundary));
                     }
                     NodeRole::Layout => {
-                        layout_node = Some((node_id, node.instance_key, node.replay.is_none()));
+                        layout_node = Some((node_id, node.instance_key, !node.replay_boundary));
                     }
                 }
             }

@@ -74,8 +74,7 @@ pub(crate) struct ComponentNode {
     pub(crate) layout_node: Box<dyn LayoutModifierDyn>,
     /// Draw modifier node used to record draw and compute commands.
     pub(crate) draw_node: Box<dyn DrawModifierNode>,
-    /// Optional replay metadata for subtree-level rerun.
-    pub(crate) replay: Option<crate::prop::ComponentReplayData>,
+    pub(crate) replay_boundary: bool,
     /// Whether props are equal to the previous frame snapshot.
     pub(crate) props_unchanged_from_previous: bool,
 }
@@ -97,7 +96,7 @@ impl ComponentNode {
             modifier: Modifier::default(),
             layout_node: Box::new(DefaultLayoutNode),
             draw_node: Box::new(NoopDrawModifier),
-            replay: None,
+            replay_boundary: false,
             props_unchanged_from_previous: false,
         }
     }

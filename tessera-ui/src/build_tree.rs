@@ -254,7 +254,7 @@ fn missing_replay_snapshot_panic_message(instance_key: u64) -> String {
             node.fn_name,
             node.role,
             node.instance_logic_id,
-            node.replay.is_some(),
+            node.replay_boundary,
             node.props_unchanged_from_previous,
         );
 
@@ -266,7 +266,7 @@ fn missing_replay_snapshot_panic_message(instance_key: u64) -> String {
                 break;
             };
             let current = current_ref.get();
-            if nearest_replayable_ancestor.is_none() && current.replay.is_some() {
+            if nearest_replayable_ancestor.is_none() && current.replay_boundary {
                 nearest_replayable_ancestor = Some((current.instance_key, current.fn_name.clone()));
             }
 
@@ -276,7 +276,7 @@ fn missing_replay_snapshot_panic_message(instance_key: u64) -> String {
                 current.instance_key,
                 current.instance_logic_id,
                 current.role,
-                current.replay.is_some(),
+                current.replay_boundary,
             ));
 
             cursor = current_ref.parent();

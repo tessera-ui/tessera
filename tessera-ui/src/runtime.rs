@@ -1861,27 +1861,6 @@ pub(crate) fn reset_layout_dirty_tracking() {
     with_layout_dirty_tracker_mut(|tracker| *tracker = LayoutDirtyTracker::default());
 }
 
-fn record_component_replay_snapshot(runtime: &TesseraRuntime) {
-    let Some(node) = runtime.component_tree.current_node() else {
-        return;
-    };
-    let Some(replay) = node.replay.clone() else {
-        return;
-    };
-
-    let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
-        instance_logic_id: node.instance_logic_id,
-        group_path: context.group_path,
-        instance_key_override: context.instance_key_override,
-        context: context.context_map.clone(),
-        replay,
-    });
-    let retired = with_component_replay_tracker_mut(|tracker| {
-        tracker.current_nodes.insert(node.instance_key, snapshot)
-    });
-    drop(retired);
-}
-
 pub(crate) fn record_layout_structure(
     instance_key: u64,
     children: impl ExactSizeIterator<Item = u64> + Clone,
@@ -2236,67 +2215,56 @@ impl TesseraRuntime {
     where
         P: Prop,
     {
-        let current_node_info = self
-            .component_tree
-            .current_node()
-            .map(|node| (node.instance_key, node.instance_logic_id));
-        let previous_replay = current_node_info.and_then(|(instance_key, instance_logic_id)| {
-            with_component_replay_tracker(|tracker| {
-                let previous = tracker.previous_nodes.get(&instance_key)?;
-                if previous.instance_logic_id != instance_logic_id {
-                    return None;
-                }
-                if previous.replay.props.equals(props) {
-                    Some(previous.replay.clone())
-                } else {
-                    None
-                }
-            })
-        });
-
-        let pending_dirty = current_node_info
-            .map(|(instance_key, _)| consume_pending_build_invalidation(instance_key))
-            .unwrap_or(false);
-
-        if let Some((instance_key, instance_logic_id)) = current_node_info
-            && let Some(replay) = previous_replay.clone()
-            && !is_instance_key_build_dirty(instance_key)
-            && !pending_dirty
-            && self
-                .component_tree
-                .try_reuse_current_subtree(instance_key, instance_logic_id)
-        {
-            if let Some(node) = self.component_tree.current_node_mut() {
-                node.replay = Some(replay);
-                node.props_unchanged_from_previous = true;
-            }
-            record_component_replay_snapshot(self);
-            return true;
-        }
-
-        if let Some(node) = self.component_tree.current_node_mut() {
-            if let Some(replay) = previous_replay {
-                node.replay = Some(replay);
-                node.props_unchanged_from_previous = true;
-            } else {
-                node.replay = Some(
-                    if let Some(props) = crate::component_call::active_component_props(props) {
-                        ComponentReplayData { runner, props }
-                    } else {
-                        ComponentReplayData::new(runner, props)
-                    },
-                );
-                node.props_unchanged_from_previous = false;
-            }
-        } else {
+        let Some(node) = self.component_tree.current_node() else {
             debug_assert!(
                 false,
                 "set_current_component_replay must be called inside a component build"
             );
             return false;
-        }
-        record_component_replay_snapshot(self);
-        false
+        };
+        let instance_key = node.instance_key;
+        let instance_logic_id = node.instance_logic_id;
+        let previous_replay = with_component_replay_tracker(|tracker| {
+            let previous = tracker.previous_nodes.get(&instance_key)?;
+            (previous.instance_logic_id == instance_logic_id && previous.replay.props.equals(props))
+                .then(|| previous.replay.clone())
+        });
+
+        let pending_dirty = consume_pending_build_invalidation(instance_key);
+        let props_unchanged = previous_replay.is_some();
+        let retained = props_unchanged
+            && !is_instance_key_build_dirty(instance_key)
+            && !pending_dirty
+            && self
+                .component_tree
+                .try_reuse_current_subtree(instance_key, instance_logic_id);
+
+        let node = self
+            .component_tree
+            .current_node_mut()
+            .expect("component replay requires a current node");
+        node.replay_boundary = true;
+        node.props_unchanged_from_previous = props_unchanged;
+
+        let replay = previous_replay.unwrap_or_else(|| {
+            if let Some(props) = crate::component_call::active_component_props(props) {
+                ComponentReplayData { runner, props }
+            } else {
+                ComponentReplayData::new(runner, props)
+            }
+        });
+        let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
+            instance_logic_id,
+            group_path: context.group_path,
+            instance_key_override: context.instance_key_override,
+            context: context.context_map.clone(),
+            replay,
+        });
+        let retired = with_component_replay_tracker_mut(|tracker| {
+            tracker.current_nodes.insert(instance_key, snapshot)
+        });
+        drop(retired);
+        retained
     }
 
     pub(crate) fn set_current_children_scale(&mut self, scale: f32) {
