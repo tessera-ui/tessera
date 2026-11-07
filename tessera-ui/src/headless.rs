@@ -344,6 +344,7 @@ impl HeadlessRenderer {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         });
     }
 
@@ -364,6 +365,7 @@ impl HeadlessRenderer {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         });
     }
 
@@ -384,6 +386,7 @@ impl HeadlessRenderer {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         });
     }
 
@@ -410,6 +413,7 @@ impl HeadlessRenderer {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         });
     }
 

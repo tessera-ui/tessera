@@ -234,6 +234,7 @@ impl CursorState {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         };
         self.push_event(press_event);
     }
@@ -292,6 +293,7 @@ impl CursorState {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         });
         (self.touch_scroll_config.enabled && dragging).then_some(PointerChange {
             timestamp: now,
@@ -306,6 +308,7 @@ impl CursorState {
             sampled_position: PointerPosition::At(current_position),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         })
     }
 
@@ -343,6 +346,7 @@ impl CursorState {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         });
         self.pointer_positions.remove(&touch_state.pointer_id);
         if self.touch_points.is_empty() {
@@ -381,6 +385,7 @@ pub struct PointerChange {
     /// Whether this change has been consumed by a handler.
     pub(crate) consumed: bool,
     pub(crate) tap_claimed: bool,
+    pub(crate) scroll_discrete: Option<bool>,
     pub(crate) sampled_position: PointerPosition,
 }
 
@@ -400,6 +405,7 @@ impl PointerChange {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         }
     }
 
@@ -433,6 +439,17 @@ impl PointerChange {
 
     pub(crate) fn resolved_position(&self, fallback: Option<PxPosition>) -> Option<PxPosition> {
         self.position_snapshot().unwrap_or(fallback)
+    }
+
+    /// Returns whether this scroll sample represents a discrete wheel step.
+    ///
+    /// The classification follows the original input when an ancestor
+    /// receives a smaller remainder or a different coordinate space.
+    pub fn is_discrete_scroll(&self) -> bool {
+        self.scroll_discrete.unwrap_or_else(|| {
+            matches!(&self.content, CursorEventContent::Scroll(event)
+                if crate::scroll::is_discrete_wheel(event))
+        })
     }
 
     /// Marks this change as consumed.
@@ -473,6 +490,34 @@ pub struct ScrollEventContent {
     pub unit: ScrollDeltaUnit,
     /// The input source that produced the scroll event.
     pub source: ScrollEventSource,
+}
+
+impl ScrollEventContent {
+    /// Returns the horizontal and vertical delta in physical pixels.
+    pub fn pixel_delta(&self) -> (f32, f32) {
+        crate::normalize_platform_scroll_delta(self.delta_x, self.delta_y, self.unit, self.source)
+    }
+
+    /// Converts the sample to pixels so handlers can forward the remaining distance.
+    pub fn normalize_to_pixels(&mut self) {
+        (self.delta_x, self.delta_y) = self.pixel_delta();
+        self.unit = ScrollDeltaUnit::Pixel;
+    }
+
+    pub(crate) fn from_wheel(delta: winit::event::MouseScrollDelta) -> Self {
+        let (delta_x, delta_y, unit) = match delta {
+            winit::event::MouseScrollDelta::LineDelta(x, y) => (x, y, ScrollDeltaUnit::Line),
+            winit::event::MouseScrollDelta::PixelDelta(delta) => {
+                (delta.x as f32, delta.y as f32, ScrollDeltaUnit::Pixel)
+            }
+        };
+        Self {
+            delta_x,
+            delta_y,
+            unit,
+            source: ScrollEventSource::Wheel,
+        }
+    }
 }
 
 /// Enumeration of all possible cursor event types.
@@ -553,19 +598,7 @@ impl CursorEventContent {
     /// A `CursorEventContent::Scroll` event with raw line or pixel delta
     /// values.
     pub fn from_scroll_event(delta: winit::event::MouseScrollDelta) -> Self {
-        let (delta_x, delta_y, unit) = match delta {
-            winit::event::MouseScrollDelta::LineDelta(x, y) => (x, y, ScrollDeltaUnit::Line),
-            winit::event::MouseScrollDelta::PixelDelta(delta) => {
-                (delta.x as f32, delta.y as f32, ScrollDeltaUnit::Pixel)
-            }
-        };
-
-        Self::Scroll(ScrollEventContent {
-            delta_x,
-            delta_y,
-            unit,
-            source: ScrollEventSource::Wheel,
-        })
+        Self::Scroll(ScrollEventContent::from_wheel(delta))
     }
 }
 

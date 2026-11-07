@@ -1721,6 +1721,11 @@ impl ComponentTree {
             if matches!(&change.content, CursorEventContent::Pressed(_)) {
                 self.focus_owner.observe_pointer_press(change.timestamp);
             }
+            if matches!(change.content, CursorEventContent::Scroll(_))
+                && change.scroll_discrete.is_none()
+            {
+                change.scroll_discrete = Some(change.is_discrete_scroll());
+            }
             if matches!(
                 &change.content,
                 CursorEventContent::Scroll(scroll)
@@ -3183,15 +3188,9 @@ fn run_pointer_input_for_node<F>(
             if transform.scale() != 1.0
                 && let CursorEventContent::Scroll(scroll) = &mut local_change.content
             {
-                let (x, y) = crate::scroll::normalize_platform_scroll_delta(
-                    scroll.delta_x,
-                    scroll.delta_y,
-                    scroll.unit,
-                    scroll.source,
-                );
-                scroll.delta_x = x / transform.scale();
-                scroll.delta_y = y / transform.scale();
-                scroll.unit = crate::ScrollDeltaUnit::Pixel;
+                scroll.normalize_to_pixels();
+                scroll.delta_x /= transform.scale();
+                scroll.delta_y /= transform.scale();
             }
             local_pointer_changes.push(local_change);
         }
@@ -4614,6 +4613,7 @@ mod tests {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         }];
         tree.dispatch_pointer_input(
             root,
@@ -4675,6 +4675,7 @@ mod tests {
                     sampled_position: Default::default(),
                     consumed: false,
                     tap_claimed: false,
+                    scroll_discrete: None,
                 }];
                 tree.dispatch_pointer_input(
                     root,

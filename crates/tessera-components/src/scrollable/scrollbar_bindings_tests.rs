@@ -11,7 +11,7 @@ use tessera_ui::{
     MOUSE_POINTER_ID, Modifier, PointerChange, PressKeyEventType, Px, PxPosition, ScrollDeltaUnit,
     ScrollEventContent, ScrollEventSource, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    current_frame_time, remember, scaled_box, tessera,
+    current_frame_time, platform_scroll_config, remember, scaled_box, tessera,
 };
 
 use crate::{
@@ -268,13 +268,14 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                 assert_eq!(offset(), -48.0);
                 let (_, bar) = control(&renderer, Role::ScrollBar, label);
                 assert!((bar.numeric_value().unwrap() - 0.08).abs() < 0.000001);
+                let wheel_ticks = (40.0 / platform_scroll_config().wheel_line_step.0) as f32;
                 renderer.inject_pointer(
                     PointerChange::new(
                         current_frame_time().unwrap(),
                         MOUSE_POINTER_ID,
                         CursorEventContent::Scroll(ScrollEventContent {
-                            delta_x: if horizontal { -1.0 } else { 0.0 },
-                            delta_y: if horizontal { 0.0 } else { -1.0 },
+                            delta_x: if horizontal { -wheel_ticks } else { 0.0 },
+                            delta_y: if horizontal { 0.0 } else { -wheel_ticks },
                             unit: ScrollDeltaUnit::Line,
                             source: ScrollEventSource::Wheel,
                         }),
@@ -286,7 +287,7 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                 assert_eq!(
                     offset(),
                     -112.0,
-                    "One native wheel line maps to 64 viewport pixels exactly once"
+                    "40 window pixels in wheel ticks become 64 viewport pixels"
                 );
                 renderer.pointer_scroll(
                     MOUSE_POINTER_ID,

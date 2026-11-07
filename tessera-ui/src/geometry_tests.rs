@@ -13,11 +13,13 @@ use crate::{
 
 use super::{FloatRect, scaled_box};
 
+type ObservedInput = (bool, Option<PxPosition>, Option<PxPosition>, f32, bool);
+
 #[derive(Clone, Default, PartialEq)]
 struct GeometryProbe {
     visible_bounds: crate::testing::TestProbe<Vec<Option<FloatRect>>>,
     coordinates: crate::testing::TestProbe<Vec<LayoutCoordinates>>,
-    input: crate::testing::TestProbe<Vec<(bool, Option<PxPosition>, Option<PxPosition>, f32)>>,
+    input: crate::testing::TestProbe<Vec<ObservedInput>>,
     parent_offset: crate::testing::TestProbe<Option<State<PxPosition>>>,
     child_offset: crate::testing::TestProbe<Option<State<PxPosition>>>,
     observer_visible: crate::testing::TestProbe<Option<State<bool>>>,
@@ -771,10 +773,7 @@ impl LayoutModifierNode for Content {
     }
 }
 
-struct ObserveInput(
-    bool,
-    crate::testing::TestProbe<Vec<(bool, Option<PxPosition>, Option<PxPosition>, f32)>>,
-);
+struct ObserveInput(bool, crate::testing::TestProbe<Vec<ObservedInput>>);
 
 impl PointerInputModifierNode for ObserveInput {
     fn on_pointer_input(&self, input: PointerInput<'_>) {
@@ -784,9 +783,11 @@ impl PointerInputModifierNode for ObserveInput {
         let position = input.cursor_position_rel;
         let absolute = input.cursor_position_abs();
         for change in input.pointer_changes.iter_mut() {
+            let discrete = change.is_discrete_scroll();
             if let CursorEventContent::Scroll(scroll) = &mut change.content {
-                self.1
-                    .with_mut(|input| input.push((self.0, position, absolute, scroll.delta_y)));
+                self.1.with_mut(|input| {
+                    input.push((self.0, position, absolute, scroll.delta_y, discrete));
+                });
                 if self.0 {
                     scroll.delta_y -= 8.0;
                 }
@@ -860,10 +861,10 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
     );
     pump_layout_test_session(&mut session, 0);
     for (index, (width, scale, x, y, local_delta)) in [
-        (200, 1.0, 50.25, 44.5, 12.0),
-        (300, 1.5, 70.25, 56.5, 8.0),
-        (100, 0.5, 30.25, 32.5, 24.0),
-        (200, 1.0, 50.25, 44.5, 12.0),
+        (200, 1.0, 50.25, 44.5, 24.0),
+        (300, 1.5, 70.25, 56.5, 16.0),
+        (100, 0.5, 30.25, 32.5, 48.0),
+        (200, 1.0, 50.25, 44.5, 24.0),
     ]
     .into_iter()
     .enumerate()
@@ -883,7 +884,7 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
             crate::MOUSE_POINTER_ID,
             CursorEventContent::Scroll(ScrollEventContent {
                 delta_x: 0.0,
-                delta_y: 12.0,
+                delta_y: 24.0,
                 unit: ScrollDeltaUnit::Pixel,
                 source: ScrollEventSource::Wheel,
             }),
@@ -898,6 +899,7 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
         );
         let samples = probe.input.with(Clone::clone);
         assert_eq!(samples.len(), 1, "Input delivery at scale {scale}");
+        assert!(!samples[0].4, "Scaling cannot make precise input discrete");
         assert_eq!(
             samples[0].1,
             Some(PxPosition::from_f32_xy(40.0, 24.0)),
@@ -972,7 +974,7 @@ fn scaled_layout_keeps_local_dimensions_maps_actual_input_and_returns_window_scr
         crate::MOUSE_POINTER_ID,
         CursorEventContent::Scroll(ScrollEventContent {
             delta_x: 0.0,
-            delta_y: 20.0,
+            delta_y: 40.0,
             unit: ScrollDeltaUnit::Pixel,
             source: ScrollEventSource::Wheel,
         }),
@@ -991,13 +993,15 @@ fn scaled_layout_keeps_local_dimensions_maps_actual_input_and_returns_window_scr
         Some(position),
         "Canonical window pointer must remain unchanged"
     );
-    assert_eq!(child.3, 32.0);
+    assert_eq!(child.3, 64.0);
+    assert!(child.4);
     let parent = samples
         .iter()
         .find(|sample| !sample.0)
         .expect("Ancestor must receive remaining wheel input");
     assert_eq!(
-        parent.3, 15.0,
+        parent.3, 35.0,
         "Eight local units consume exactly five window units"
     );
+    assert!(parent.4, "A partial wheel step must keep its animation");
 }

@@ -16,12 +16,11 @@ use tessera_ui::{
     AxisConstraint, BuildModifierNode, CallbackWith, Color, ComputedData, Constraint, Dp,
     LayoutCoordinates, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, LayoutResult,
     MeasurementError, Modifier, ModifierBuildContext, PointerInput, PointerInputModifierNode, Px,
-    PxPosition, RenderSlot, ScrollDeltaUnit, ScrollEventSource, State, current_frame_nanos,
-    current_frame_time,
+    PxPosition, RenderSlot, ScrollEventSource, State, current_frame_nanos, current_frame_time,
     focus::FocusRevealRequest,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    normalize_platform_scroll_delta, receive_frame_nanos, remember, tessera,
+    receive_frame_nanos, remember, tessera,
     time::Instant,
 };
 
@@ -38,9 +37,9 @@ pub use crate::scrollable::scrollbar::{
 };
 
 const SCROLL_INERTIA_DECAY_CONSTANT: f32 = 5.0;
-const SCROLL_INERTIA_MIN_VELOCITY: f32 = 10.0;
-const SCROLL_INERTIA_START_THRESHOLD: f32 = 50.0;
-const SCROLL_INERTIA_MAX_VELOCITY: f32 = 6000.0;
+const SCROLL_INERTIA_MIN_VELOCITY_DP: f32 = 10.0;
+const SCROLL_INERTIA_START_THRESHOLD_DP: f32 = 50.0;
+const SCROLL_INERTIA_MAX_VELOCITY_DP: f32 = 6000.0;
 const SCROLL_VELOCITY_SAMPLE_WINDOW: Duration = Duration::from_millis(90);
 const SCROLL_VELOCITY_IDLE_CUTOFF: Duration = Duration::from_millis(65);
 
@@ -53,34 +52,6 @@ const SCROLL_VELOCITY_IDLE_CUTOFF: Duration = Duration::from_millis(65);
 /// responsive to rapid wheel input.
 pub(crate) const DEFAULT_SCROLL_SMOOTHING: f32 = 0.75;
 
-/// Pixel magnitude at which wheel input counts as a discrete notch.
-///
-/// Mouse wheels deliver stepwise input while trackpads deliver a continuous
-/// stream, and browsers report both as pixel deltas (Chrome normalises a mouse
-/// wheel notch to roughly 100px). Deltas at or above this value are animated
-/// like a notch; smaller ones are applied directly so touchpads keep tracking
-/// the finger 1:1.
-const DISCRETE_WHEEL_STEP_PX: f32 = 40.0;
-
-fn clamp_inertia_velocity(vx: f32, vy: f32) -> (f32, f32) {
-    let magnitude = (vx * vx + vy * vy).sqrt();
-    if !magnitude.is_finite() {
-        return (0.0, 0.0);
-    }
-    if magnitude > SCROLL_INERTIA_MAX_VELOCITY {
-        let scale = SCROLL_INERTIA_MAX_VELOCITY / magnitude;
-        (vx * scale, vy * scale)
-    } else {
-        (vx, vy)
-    }
-}
-fn is_discrete_wheel_step(unit: ScrollDeltaUnit, delta_x: f32, delta_y: f32) -> bool {
-    match unit {
-        ScrollDeltaUnit::Line => true,
-        ScrollDeltaUnit::Pixel => delta_x.abs().max(delta_y.abs()) >= DISCRETE_WHEEL_STEP_PX,
-    }
-}
-
 fn clamp_scroll_coordinate(value: f32, boundary: f32, enabled: bool) -> f32 {
     if !enabled {
         0.0
@@ -91,16 +62,6 @@ fn clamp_scroll_coordinate(value: f32, boundary: f32, enabled: bool) -> f32 {
     } else {
         value
     }
-}
-
-fn normalize_scroll_delta(
-    delta_x: f32,
-    delta_y: f32,
-    unit: ScrollDeltaUnit,
-    source: ScrollEventSource,
-) -> ScrollDelta {
-    let (delta_x, delta_y) = normalize_platform_scroll_delta(delta_x, delta_y, unit, source);
-    ScrollDelta::new(delta_x, delta_y)
 }
 
 /// Defines the behavior of the scrollbar visibility.
@@ -454,7 +415,7 @@ impl ScrollableController {
         &mut self,
         delta: ScrollDelta,
         source: ScrollEventSource,
-        unit: ScrollDeltaUnit,
+        discrete: bool,
         container_size: &ComputedData,
         vertical: bool,
         horizontal: bool,
@@ -463,8 +424,7 @@ impl ScrollableController {
         if source != ScrollEventSource::Touch {
             self.velocity_tracker = None;
         }
-        let immediate =
-            source == ScrollEventSource::Touch || !is_discrete_wheel_step(unit, delta.x, delta.y);
+        let immediate = !discrete;
         if immediate {
             self.target_position_f32 = self.child_position_f32;
             self.target_position = self.child_position;
@@ -524,10 +484,11 @@ impl ScrollableController {
             return ScrollVelocity::ZERO;
         };
         if let Some(velocity) = tracker.resolve(now) {
-            let velocity_magnitude = (velocity.x * velocity.x + velocity.y * velocity.y).sqrt();
-            if velocity_magnitude > SCROLL_INERTIA_START_THRESHOLD {
-                let (vx, vy) = clamp_inertia_velocity(velocity.x, velocity.y);
-                return ScrollVelocity::new(vx, vy);
+            let density = self.density as f32;
+            let speed = velocity.x.hypot(velocity.y);
+            if speed.is_finite() && speed > SCROLL_INERTIA_START_THRESHOLD_DP * density {
+                let scale = (SCROLL_INERTIA_MAX_VELOCITY_DP * density / speed).min(1.0);
+                return ScrollVelocity::new(velocity.x * scale, velocity.y * scale);
             }
         }
         ScrollVelocity::ZERO
@@ -1088,12 +1049,15 @@ struct ScrollInputTarget<'a> {
 }
 
 impl ScrollInputTarget<'_> {
-    fn apply(&self, event: &mut tessera_ui::ScrollEventContent) -> ScrollSampleConsumption {
+    fn apply(
+        &self,
+        event: &mut tessera_ui::ScrollEventContent,
+        discrete: bool,
+    ) -> ScrollSampleConsumption {
         let connection = self
             .connection
             .map(|connection| connection.in_space(self.transform));
-        let available =
-            normalize_scroll_delta(event.delta_x, event.delta_y, event.unit, event.source);
+        let available = ScrollDelta::new(event.delta_x, event.delta_y);
         let pre = connection
             .as_ref()
             .map(|connection| connection.pre_scroll(available, event.source))
@@ -1102,7 +1066,7 @@ impl ScrollInputTarget<'_> {
             controller.apply_input_delta(
                 available - pre,
                 event.source,
-                event.unit,
+                discrete,
                 &self.viewport,
                 self.vertical,
                 self.horizontal,
@@ -1116,7 +1080,6 @@ impl ScrollInputTarget<'_> {
         let remaining = available_after_child - post;
         event.delta_x = remaining.x;
         event.delta_y = remaining.y;
-        event.unit = ScrollDeltaUnit::Pixel;
         ScrollSampleConsumption {
             child,
             gesture: pre + child + post,
@@ -1162,19 +1125,14 @@ impl PointerInputModifierNode for ScrollbarWheelModifierNode {
             {
                 continue;
             }
+            let discrete = change.is_discrete_scroll();
             self.recognizer.with_mut(|recognizer| {
                 recognizer.for_each(input.pass, std::slice::from_mut(change), |_, event| {
-                    let normalized = normalize_scroll_delta(
-                        event.delta_x,
-                        event.delta_y,
-                        event.unit,
-                        event.source,
-                    );
+                    event.normalize_to_pixels();
                     let to_viewport = input.local_to_window.scale() / viewport_scale;
-                    event.delta_x = normalized.x * to_viewport;
-                    event.delta_y = normalized.y * to_viewport;
-                    event.unit = ScrollDeltaUnit::Pixel;
-                    let consumption = target.apply(event);
+                    event.delta_x *= to_viewport;
+                    event.delta_y *= to_viewport;
+                    let consumption = target.apply(event, discrete);
                     event.delta_x /= to_viewport;
                     event.delta_y /= to_viewport;
                     if !consumption.child.is_zero() && self.behavior == ScrollBarBehavior::AutoHide
@@ -1283,7 +1241,7 @@ impl ScrollableViewportPointerModifierNode {
             controller.apply_input_delta(
                 displacement - pre,
                 ScrollEventSource::Touch,
-                ScrollDeltaUnit::Pixel,
+                false,
                 viewport,
                 self.vertical,
                 self.horizontal,
@@ -1311,8 +1269,10 @@ impl ScrollableViewportPointerModifierNode {
             velocity.y = inertia.velocity_y;
             inertia.velocity_y = 0.0;
         }
-        let active = inertia.velocity_x.abs() >= SCROLL_INERTIA_MIN_VELOCITY
-            || inertia.velocity_y.abs() >= SCROLL_INERTIA_MIN_VELOCITY;
+        let stop_speed = self.controller.with(|c| c.density as f32) / transform.scale()
+            * SCROLL_INERTIA_MIN_VELOCITY_DP;
+        let active =
+            inertia.velocity_x.abs() >= stop_speed || inertia.velocity_y.abs() >= stop_speed;
         self.controller.with_mut(|controller| {
             if active {
                 controller.active_inertia = Some(inertia);
@@ -1371,8 +1331,10 @@ impl ScrollableViewportPointerModifierNode {
             // Release is intentionally handled after all scroll samples in this
             // frame.
             if should_handle_scroll {
+                let discrete = changes[0].is_discrete_scroll();
                 self.scroll_recognizer.with_mut(|recognizer| {
                     recognizer.for_each(pass, changes, |context, scroll_event| {
+                        scroll_event.normalize_to_pixels();
                         let consumption = ScrollInputTarget {
                             controller: self.controller,
                             vertical: self.vertical,
@@ -1381,7 +1343,7 @@ impl ScrollableViewportPointerModifierNode {
                             connection: self.nested_scroll_connection.as_ref(),
                             transform,
                         }
-                        .apply(scroll_event);
+                        .apply(scroll_event, discrete);
                         let child_consumed = consumption.child;
                         let gesture_consumed = consumption.gesture;
                         if scroll_event.source == ScrollEventSource::Touch
@@ -1747,7 +1709,7 @@ mod scroll_tests {
             controller.apply_input_delta(
                 ScrollDelta::new(0.0, -0.1),
                 ScrollEventSource::Wheel,
-                ScrollDeltaUnit::Pixel,
+                false,
                 &viewport,
                 true,
                 false,
@@ -1861,7 +1823,7 @@ mod scroll_tests {
         controller.apply_input_delta(
             ScrollDelta::new(0.0, -300.0),
             ScrollEventSource::Wheel,
-            ScrollDeltaUnit::Pixel,
+            true,
             &viewport,
             true,
             false,
@@ -1877,7 +1839,7 @@ mod scroll_tests {
         controller.apply_input_delta(
             ScrollDelta::new(0.0, -2.0),
             ScrollEventSource::Touch,
-            ScrollDeltaUnit::Pixel,
+            false,
             &viewport,
             true,
             false,
@@ -1902,6 +1864,27 @@ mod scroll_tests {
     }
 
     #[test]
+    fn fling_launch_threshold_and_cap_use_the_same_logical_speed_at_each_density() {
+        let start = Instant::now();
+        let sample = start + Duration::from_millis(10);
+        for density in [1.0, 3.0] {
+            let mut controller = controller();
+            controller.update_density(density);
+            controller.push_touch_delta(start, 0.0, 0.0);
+            controller.push_touch_delta(sample, 0.0, -0.4 * density as f32);
+            assert!(controller.resolve_touch_velocity(sample).is_zero());
+
+            controller.push_touch_delta(start, 0.0, 0.0);
+            controller.push_touch_delta(sample, 0.0, -100.0 * density as f32);
+            let logical = controller.resolve_touch_velocity(sample).y / density as f32;
+            assert!(
+                (logical + 6000.0).abs() < 0.01,
+                "Logical fling speed: {logical}"
+            );
+        }
+    }
+
+    #[test]
     fn line_wheel_steps_reach_the_top_from_the_bottom() {
         let mut controller = controller();
         let viewport = controller.visible_size;
@@ -1912,7 +1895,7 @@ mod scroll_tests {
             controller.apply_input_delta(
                 ScrollDelta::new(0.0, 40.0),
                 ScrollEventSource::Wheel,
-                ScrollDeltaUnit::Line,
+                true,
                 &viewport,
                 true,
                 false,
@@ -1942,7 +1925,7 @@ mod scroll_tests {
         controller.apply_input_delta(
             ScrollDelta::new(0.0, 1900.5),
             ScrollEventSource::Wheel,
-            ScrollDeltaUnit::Pixel,
+            true,
             &viewport,
             true,
             false,
@@ -1965,7 +1948,7 @@ mod scroll_tests {
         controller.apply_input_delta(
             ScrollDelta::new(0.0, -120.0),
             ScrollEventSource::Wheel,
-            ScrollDeltaUnit::Pixel,
+            true,
             &viewport,
             true,
             false,
@@ -2002,14 +1985,14 @@ mod scroll_tests {
         let mut controller = controller();
         let viewport = controller.visible_size;
         controller.apply_input_delta(
-            ScrollDelta::new(0.0, -8.0),
+            ScrollDelta::new(0.0, -80.0),
             ScrollEventSource::Wheel,
-            ScrollDeltaUnit::Pixel,
+            false,
             &viewport,
             true,
             false,
         );
-        assert_eq!(controller.child_position.y, -8.0);
+        assert_eq!(controller.child_position.y, -80.0);
         assert!(!controller.has_pending_animation_frame());
     }
 
@@ -2026,7 +2009,7 @@ mod scroll_tests {
         controller.apply_input_delta(
             ScrollDelta::new(0.0, -500.0),
             ScrollEventSource::Wheel,
-            ScrollDeltaUnit::Pixel,
+            true,
             &viewport,
             true,
             false,
@@ -2041,7 +2024,7 @@ mod scroll_tests {
         controller.apply_input_delta(
             ScrollDelta::new(0.0, 500.0),
             ScrollEventSource::Wheel,
-            ScrollDeltaUnit::Pixel,
+            true,
             &viewport,
             true,
             false,

@@ -33,7 +33,7 @@ use winit::{
 };
 
 use crate::{
-    ImeRequest, ImeState, PxPosition,
+    ImeRequest, ImeState, PxPosition, ScrollEventContent,
     build_tree::build_component_tree,
     component_tree::{
         LayoutFrameDiagnostics, WindowDragRequest, WindowRequests, clear_layout_snapshots,
@@ -1619,6 +1619,7 @@ where
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         });
         debug!("Cursor moved to: {}, {}", position.x, position.y);
     }
@@ -1706,6 +1707,7 @@ where
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         };
         #[cfg(target_os = "macos")]
         if matches!(
@@ -1731,16 +1733,21 @@ where
         if self.resize_in_progress {
             return;
         }
-        let event_content = CursorEventContent::from_scroll_event(delta);
-        let event = PointerChange {
-            timestamp: Instant::now(),
-            pointer_id: MOUSE_POINTER_ID,
-            content: event_content,
-            gesture_state: GestureState::Dragged,
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-        };
+        let scroll = ScrollEventContent::from_wheel(delta);
+        let discrete = crate::scroll::is_discrete_platform_wheel(&scroll);
+        if !scroll.delta_x.is_finite()
+            || !scroll.delta_y.is_finite()
+            || (scroll.delta_x == 0.0 && scroll.delta_y == 0.0)
+        {
+            return;
+        }
+        let mut event = PointerChange::new(
+            Instant::now(),
+            MOUSE_POINTER_ID,
+            CursorEventContent::Scroll(scroll),
+            GestureState::Dragged,
+        );
+        event.scroll_discrete = Some(discrete);
         self.cursor_state.push_event(event);
         debug!("Mouse scroll: {delta:?}");
     }
@@ -2582,6 +2589,7 @@ mod tests {
             sampled_position: Default::default(),
             consumed: false,
             tap_claimed: false,
+            scroll_discrete: None,
         };
         pump_layout_test_session_with_input(
             &mut session,

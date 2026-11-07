@@ -9,12 +9,12 @@ use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, ComputedData,
     CursorEventContent, Dp, ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput,
     KeyboardInputModifierNode, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition,
-    PxSize, ScrollDeltaUnit, SemanticsModifierNode, State,
+    PxSize, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     clipboard::{ClipboardAction, ClipboardInput, ClipboardInputModifierNode},
     layout::layout,
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
-    normalize_platform_scroll_delta, remember, tessera, use_context, winit,
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -821,12 +821,8 @@ fn handle_text_input(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
                 |_context, event| {
-                    let (dx, dy) = normalize_platform_scroll_delta(
-                        event.delta_x,
-                        event.delta_y,
-                        event.unit,
-                        event.source,
-                    );
+                    event.normalize_to_pixels();
+                    let (dx, dy) = (event.delta_x, event.delta_y);
                     if controller.with(|s| s.single_line()) {
                         let requested = if dx.abs() > f32::EPSILON { dx } else { dy };
                         if requested.abs() <= f32::EPSILON
@@ -858,9 +854,6 @@ fn handle_text_input(
                         let consumed = controller.with_mut(|s| s.scroll_vertical_consumed(-dy));
                         event.delta_y = dy + consumed;
                     }
-                    // Rewrite the event as already-normalized pixels so an
-                    // ancestor scroll container receives exactly the remainder.
-                    event.unit = ScrollDeltaUnit::Pixel;
                 },
             );
         });
