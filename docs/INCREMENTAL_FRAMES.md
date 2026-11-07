@@ -85,6 +85,7 @@ parent outward. Sibling replacements share that refresh. Consumers compare
 retained ancestry after the round's order is available.
 Component replay uses the same props allocation prepared by the registered call.
 Subtree replacements reuse bounded temporary identity sets within each build.
+Detached subtrees transfer reusable geometry through the live instance index.
 Retained subtrees attach directly without allocating a temporary tree node.
 Focus, pointer dispatch, and accessibility read sibling order from the same
 indices stored on the component nodes.

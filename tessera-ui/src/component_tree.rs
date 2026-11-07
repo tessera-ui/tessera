@@ -553,8 +553,6 @@ pub struct ComponentTree {
     scale_factor_bits: u64,
     /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
-    /// Detached old-subtree nodes keyed by instance key during replay replace.
-    replay_reuse_candidates: HashMap<u64, indextree::NodeId>,
     replay_detached_root: Option<NodeId>,
     replay_retained_roots: HashSet<NodeId>,
     replay_ancestry: replay::ReplayAncestry,
@@ -663,7 +661,6 @@ impl ComponentTree {
             #[cfg(feature = "profiling")]
             profiler_dirty_nodes: HashSet::default(),
             scale_factor_bits: crate::dp::scale_factor().to_bits(),
-            replay_reuse_candidates: HashMap::default(),
             replay_detached_root: None,
             replay_retained_roots: HashSet::default(),
             replay_ancestry: replay::ReplayAncestry::default(),
@@ -710,7 +707,6 @@ impl ComponentTree {
         self.pointer_index = pointer::PointerIndex::default();
         self.stop_accessibility_updates();
         self.node_queue.clear();
-        self.replay_reuse_candidates.clear();
         self.replay_detached_root = None;
         self.replay_retained_roots.clear();
         self.replay_ancestry = replay::ReplayAncestry::default();
@@ -815,7 +811,6 @@ impl ComponentTree {
         &mut self,
         instance_key: u64,
     ) -> Result<ReplayReplaceContext, ReplayReplaceError> {
-        self.replay_reuse_candidates.clear();
         let Some(target_node_id) = self.find_node_id_by_instance_key(instance_key) else {
             return Err(ReplayReplaceError::NodeNotFound);
         };
@@ -890,7 +885,6 @@ impl ComponentTree {
             inserted_instance_logic_ids,
             reused_instance_logic_ids,
         } = result;
-        let mut replaced_nodes = SmallVec::<[_; 4]>::new();
         let mut pending: SmallVec<[_; 8]> = inserted_root_ids.into_iter().collect();
         while let Some(id) = pending.pop() {
             let retained = self.replay_retained_roots.contains(&id);
@@ -903,46 +897,38 @@ impl ComponentTree {
                 if retained {
                     reused_instance_keys.insert(node.get().instance_key);
                     reused_instance_logic_ids.insert(node.get().instance_logic_id);
-                } else if let Some(old_id) =
-                    self.replay_reuse_candidates.get(&node.get().instance_key)
-                {
-                    replaced_nodes.push((*old_id, id));
                 }
             }
         }
 
+        let mut detached_node_ids = SmallVec::<[_; 8]>::new();
         if !detached_root_reused {
-            for id in detached_root_id.descendants(&self.tree) {
-                let node = self.tree[id].get();
-                if !inserted_instance_keys.contains(&node.instance_key) {
-                    removed_instance_keys.insert(node.instance_key);
-                }
-                if !inserted_instance_logic_ids.contains(&node.instance_logic_id) {
-                    removed_instance_logic_ids.insert(node.instance_logic_id);
-                }
-            }
+            detached_node_ids.extend(detached_root_id.descendants(&self.tree));
         }
-        for (old_id, new_id) in replaced_nodes {
-            let input_geometry_changed = self
-                .tree
-                .get(old_id)
-                .zip(self.tree.get(new_id))
-                .is_none_or(|(old, new)| {
-                    !old.get().modifier.input_geometry_eq(&new.get().modifier)
-                });
-            let old_parent = if old_id == detached_root_id {
-                Some(parent_id)
-            } else {
-                self.tree.get(old_id).and_then(|node| node.parent())
-            };
-            let new_parent = self.tree.get(new_id).and_then(|node| node.parent());
-            let same_parent = old_parent
-                .and_then(|id| self.tree.get(id))
-                .map(|node| node.get().instance_key)
-                == new_parent
-                    .and_then(|id| self.tree.get(id))
-                    .map(|node| node.get().instance_key);
-            if let Some(previous) = self.metadatas.remove(&old_id) {
+        for &old_id in &detached_node_ids {
+            let old = &self.tree[old_id];
+            let instance_key = old.get().instance_key;
+            let instance_logic_id = old.get().instance_logic_id;
+            let previous = self.metadatas.remove(&old_id);
+            if !inserted_instance_logic_ids.contains(&instance_logic_id) {
+                removed_instance_logic_ids.insert(instance_logic_id);
+            }
+            if !inserted_instance_keys.contains(&instance_key) {
+                removed_instance_keys.insert(instance_key);
+            } else if instance_key != 0
+                && let Some(previous) = previous
+            {
+                let new_id = self.node_ids_by_instance_key[&instance_key];
+                let new = &self.tree[new_id];
+                let input_geometry_changed =
+                    !old.get().modifier.input_geometry_eq(&new.get().modifier);
+                let old_parent = if old_id == detached_root_id {
+                    Some(parent_id)
+                } else {
+                    old.parent()
+                };
+                let parent_key = |id: NodeId| self.tree[id].get().instance_key;
+                let same_parent = old_parent.map(parent_key) == new.parent().map(parent_key);
                 let metadata = self.metadatas.entry_or_default(new_id);
                 metadata.computed_data = previous.computed_data;
                 metadata.draw_layout = previous.draw_layout;
@@ -964,6 +950,9 @@ impl ComponentTree {
                     self.metadatas.geometry_dirty.remove(&new_id);
                 }
             }
+            self.remove_position_observer(old_id);
+            self.removed_frame_nodes.insert(old_id);
+            self.changed_frame_nodes.remove(&old_id);
         }
         for key in removed_instance_keys.iter() {
             self.last_global_rects.remove(key);
@@ -973,22 +962,8 @@ impl ComponentTree {
             .extend(removed_instance_keys.iter().copied());
         crate::runtime::remove_layout_structure(removed_instance_keys);
         if !detached_root_reused {
-            let detached_node_ids = detached_root_id
-                .traverse(&self.tree)
-                .filter_map(|edge| match edge {
-                    indextree::NodeEdge::Start(id) => Some(id),
-                    indextree::NodeEdge::End(_) => None,
-                })
-                .collect::<SmallVec<[_; 8]>>();
-            for node_id in &detached_node_ids {
-                self.remove_position_observer(*node_id);
-                self.removed_frame_nodes.insert(*node_id);
-                self.changed_frame_nodes.remove(node_id);
-                self.metadatas.remove(node_id);
-            }
             detached_root_id.remove_subtree(&mut self.tree);
         }
-        self.replay_reuse_candidates.clear();
         self.replay_detached_root = None;
         self.replay_retained_roots.clear();
 
@@ -1058,20 +1033,8 @@ impl ComponentTree {
 
     fn replay_candidate(&self, instance_key: u64) -> Option<NodeId> {
         let root = self.replay_detached_root?;
-        let id = self
-            .replay_reuse_candidates
-            .get(&instance_key)
-            .or_else(|| self.node_ids_by_instance_key.get(&instance_key))
-            .copied()?;
+        let id = self.find_node_id_by_instance_key(instance_key)?;
         id.ancestors(&self.tree).any(|id| id == root).then_some(id)
-    }
-
-    fn preserve_replay_candidate(&mut self, instance_key: u64) {
-        if let Some(id) = self.replay_candidate(instance_key) {
-            self.replay_reuse_candidates
-                .entry(instance_key)
-                .or_insert(id);
-        }
     }
 
     pub(crate) fn attach_retained_subtree(
@@ -1088,7 +1051,6 @@ impl ComponentTree {
         self.replay_retained_roots.insert(id);
         id.detach(&mut self.tree);
         self.attach_build_node(id);
-        self.replay_reuse_candidates.remove(&instance_key);
         Some(id)
     }
 
@@ -1097,10 +1059,6 @@ impl ComponentTree {
     /// The `node_component` itself primarily holds the layout policy, render
     /// policy, and handlers.
     pub(crate) fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
-        let instance_key = node_component.instance_key;
-        if instance_key != 0 {
-            self.preserve_replay_candidate(instance_key);
-        }
         let new_node_id = self.tree.new_node(node_component);
         self.attach_build_node(new_node_id);
         new_node_id
@@ -1127,7 +1085,6 @@ impl ComponentTree {
         let same_parent = previous_parent.map(parent_key) == new_parent.map(parent_key);
         id.detach(&mut self.tree);
         self.remove_position_observer(id);
-        self.replay_reuse_candidates.remove(&node.instance_key);
         let old = self.tree[id].get_mut();
         node.layout_children = old.layout_children.take();
         node.sibling_index = old.sibling_index;
@@ -6383,6 +6340,11 @@ mod tests {
 
         let root = tree.add_node(node_with_role("root", NodeRole::Composition, 1, 1));
         let layout_a = tree.add_node(node("layout_a", 2, 2));
+        let size = ComputedData {
+            width: Px(31),
+            height: Px(17),
+        };
+        tree.metadatas.entry_or_default(layout_a).computed_data = Some(size);
         tree.pop_node();
 
         let composition = tree.add_node(node_with_role("wrapper", NodeRole::Composition, 3, 3));
@@ -6419,6 +6381,10 @@ mod tests {
         assert!(
             tree.finish_replace_subtree(context, &mut ReplayReplaceResult::default())
                 .is_ok()
+        );
+        assert_eq!(
+            tree.metadatas.get(&layout_a).unwrap().computed_data,
+            Some(size)
         );
         tree.finish_replay_round();
         assert_eq!(
