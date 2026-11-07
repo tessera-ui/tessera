@@ -633,13 +633,54 @@ impl RenderCore {
     /// When a swapchain surface is present it is reconfigured; offscreen cores
     /// only rebuild their render targets.
     pub(crate) fn resize_surface(&mut self) {
+        self.apply_resize(true);
+    }
+
+    fn apply_resize(&mut self, force: bool) {
         if self.size.width > 0 && self.size.height > 0 {
-            self.config.width = self.size.width;
-            self.config.height = self.size.height;
+            let timer = tracing::enabled!(target: "tessera_ui::resize_cost", tracing::Level::DEBUG)
+                .then(crate::time::Instant::now);
+            let limit = self.device.limits().max_texture_dimension_2d;
+            // DirectComposition clips the unscaled visual to the HWND client area.
+            // Other presentation systems can stretch it and need exact extents.
+            let retain_surface = cfg!(target_os = "windows")
+                && self.surface.is_some()
+                && self.adapter_info.backend == wgpu::Backend::Dx12;
+            let width = if retain_surface {
+                retained_dimension(self.config.width, self.size.width, limit)
+            } else {
+                self.size.width
+            };
+            let height = if retain_surface {
+                retained_dimension(self.config.height, self.size.height, limit)
+            } else {
+                self.size.height
+            };
+            let configure = force || self.config.width != width || self.config.height != height;
+            self.config.width = width;
+            self.config.height = height;
             if let Some(surface) = &self.surface {
-                surface.configure(&self.device, &self.config);
+                if configure {
+                    surface.configure(&self.device, &self.config);
+                }
             }
-            self.rebuild_pass_targets();
+            let configured = timer.map(|timer| timer.elapsed());
+            self.rebuild_pass_targets(force);
+            if let Some(timer) = timer {
+                let configured = configured.unwrap();
+                tracing::debug!(
+                    target: "tessera_ui::resize_cost",
+                    width = self.draw_config.width,
+                    height = self.draw_config.height,
+                    surface_width = self.config.width,
+                    surface_height = self.config.height,
+                    surface_reconfigured = configure && self.surface.is_some(),
+                    present_mode = ?self.config.present_mode,
+                    surface_configure_ns = configured.as_nanos(),
+                    target_rebuild_ns = timer.elapsed().saturating_sub(configured).as_nanos(),
+                    "resize_prepare_cpu"
+                );
+            }
         }
     }
 
@@ -656,47 +697,50 @@ impl RenderCore {
             }
         };
         self.surface = Some(surface);
-        if self.size.width > 0 && self.size.height > 0 {
-            self.config.width = self.size.width;
-            self.config.height = self.size.height;
-            if let Some(surface) = &self.surface {
-                surface.configure(&self.device, &self.config);
-            }
-            self.rebuild_pass_targets();
-        }
+        self.resize_surface();
     }
 
-    pub(crate) fn rebuild_pass_targets(&mut self) {
+    fn rebuild_pass_targets(&mut self, force: bool) {
         self.previous_graph = None;
-        self.draw_config.width = self.config.width;
-        self.draw_config.height = self.config.height;
-        self.targets.offscreen.texture().destroy();
-        self.targets.stencil.texture().destroy();
-        if let Some(view) = self.targets.offscreen_copy.take() {
-            view.texture().destroy();
-        }
-
-        self.targets.offscreen =
-            Self::create_pass_target(&self.device, &self.draw_config, "Offscreen");
-        self.targets.stencil =
-            Self::create_stencil(&self.device, &self.draw_config, self.targets.sample_count);
-        if self.surface.is_none() {
+        self.draw_config.width = self.size.width;
+        self.draw_config.height = self.size.height;
+        let limit = self.device.limits().max_texture_dimension_2d;
+        let current = self.targets.offscreen.texture().size();
+        let mut allocation = self.draw_config.clone();
+        allocation.width = retained_dimension(current.width, self.size.width, limit);
+        allocation.height = retained_dimension(current.height, self.size.height, limit);
+        if self.surface.is_none()
+            && (force
+                || self.targets.offscreen_copy.as_ref().is_none_or(|view| {
+                    view.texture().width() != self.size.width
+                        || view.texture().height() != self.size.height
+                }))
+        {
+            if let Some(view) = self.targets.offscreen_copy.take() {
+                view.texture().destroy();
+            }
             self.targets.offscreen_copy = Some(Self::create_pass_target(
                 &self.device,
                 &self.config,
                 "Offscreen Copy",
             ));
         }
+        if !force && current.width == allocation.width && current.height == allocation.height {
+            return;
+        }
+        self.targets.offscreen.texture().destroy();
+        self.targets.stencil.texture().destroy();
+
+        self.targets.offscreen = Self::create_pass_target(&self.device, &allocation, "Offscreen");
+        self.targets.stencil =
+            Self::create_stencil(&self.device, &allocation, self.targets.sample_count);
 
         if self.targets.sample_count > 1 {
             if let Some(t) = self.targets.msaa_texture.take() {
                 t.destroy();
             }
-            let (msaa_texture, msaa_view) = Self::make_msaa_resources(
-                &self.device,
-                self.targets.sample_count,
-                &self.draw_config,
-            );
+            let (msaa_texture, msaa_view) =
+                Self::make_msaa_resources(&self.device, self.targets.sample_count, &allocation);
             self.targets.msaa_texture = msaa_texture;
             self.targets.msaa_view = msaa_view;
         }
@@ -705,8 +749,43 @@ impl RenderCore {
     /// Resize the surface if needed.
     pub(crate) fn resize_if_needed(&mut self) {
         if self.size_changed {
-            self.resize_surface();
+            self.apply_resize(false);
             self.size_changed = false;
+        }
+    }
+}
+
+fn retained_dimension(current: u32, requested: u32, limit: u32) -> u32 {
+    const STEP: u32 = 128;
+    let rounded = requested.div_ceil(STEP).saturating_mul(STEP).min(limit);
+    if current >= requested
+        && current <= rounded.saturating_add(STEP)
+        && current <= requested.saturating_mul(2).max(STEP)
+    {
+        current
+    } else {
+        rounded
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::retained_dimension;
+
+    #[test]
+    fn resize_capacity_bounds_slack_and_avoids_bucket_boundary_oscillation() {
+        assert_eq!(retained_dimension(256, 257, 16384), 384);
+        assert_eq!(retained_dimension(384, 255, 16384), 384);
+        assert_eq!(retained_dimension(384, 127, 16384), 128);
+        assert_eq!(retained_dimension(384, 257, 16384), 384);
+        assert_eq!(retained_dimension(384, 999, 1000), 1000);
+        for requested in [1, 127, 128, 129, 1000, 4096, 16383, 16384] {
+            for current in [1, 128, 256, 4096, 16384] {
+                let capacity = retained_dimension(current, requested, 16384);
+                assert!(capacity >= requested);
+                assert!(capacity <= 16384);
+                assert!(capacity - requested < 256);
+            }
         }
     }
 }

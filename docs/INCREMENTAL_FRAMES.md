@@ -64,6 +64,15 @@ for normal, medium, and bold text on a worker, overlapping renderer startup.
 The first text layout waits only if that preparation has not completed; custom
 font registration still invalidates the affected matching caches normally.
 
+Scene, MSAA, and stencil attachments reuse nearby allocation sizes while layout,
+clipping, and drawing retain the exact viewport dimensions. Capacity grows in
+128-pixel steps with shrink hysteresis: each axis keeps less than 256 pixels of
+slack and at most twice the requested extent (with a 128-pixel floor). A resize
+still forces a full scene redraw. Offscreen output and readback remain exact-sized.
+Windows D3D12 DirectComposition surfaces also reuse capacity and present unscaled
+pixels clipped by the client window; other presentation systems remain exact-sized.
+Forced surface recovery reconfigures even when capacity already fits.
+
 ## Diagnostics
 
 `LayoutFrameDiagnostics` reports measurement calls and dirty-child checks,
@@ -77,6 +86,8 @@ included in `render_build_passes_ns`; `render_prepare_ns` is not emitted for a
 separate pre-render ordering step.
 
 Windowed `frame_total_ns` includes pending surface and render-target resize work.
+Enable `tessera_ui::resize_cost=debug` tracing to separate surface configuration
+from target rebuilding; the trace also reports whether configuration was needed.
 
 Component build durations include child builds; do not sum nested samples as
 exclusive CPU time. Compare frame latency with tracing disabled separately from

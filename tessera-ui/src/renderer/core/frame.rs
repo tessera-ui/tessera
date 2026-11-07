@@ -58,7 +58,6 @@ struct BlitParams<'a> {
     pipeline: &'a wgpu::RenderPipeline,
     /// Source position of the target's first texel.
     source_origin: PxPosition,
-    source_size: PxSize,
 }
 
 struct RenderCoreFrameState<'a> {
@@ -190,8 +189,8 @@ impl RenderCore {
         self.last_render_breakdown = None;
 
         let texture_size = wgpu::Extent3d {
-            width: self.config.width,
-            height: self.config.height,
+            width: self.draw_config.width,
+            height: self.draw_config.height,
             depth_or_array_layers: 1,
         };
         let build_start = Instant::now();
@@ -216,7 +215,10 @@ impl RenderCore {
             &self.device,
             &self.queue,
             &mut passes,
-            [self.config.width as f32, self.config.height as f32],
+            [
+                self.draw_config.width as f32,
+                self.draw_config.height as f32,
+            ],
         );
         let build_passes = build_start.elapsed();
 
@@ -315,7 +317,6 @@ impl RenderCore {
         }
         drop(scene);
 
-        let target_size = state.target_size();
         RenderCore::blit_to_view(BlitParams {
             encoder: &mut encoder,
             device: state.device,
@@ -325,14 +326,13 @@ impl RenderCore {
             sampler: &state.blit.sampler,
             pipeline: &state.blit.present_pipeline,
             source_origin: PxPosition::ZERO,
-            source_size: target_size,
         });
         #[cfg(feature = "debug-dirty-overlay")]
         Self::render_dirty_overlay(
             &mut encoder,
             output_view,
             &state.blit.dirty_overlay_pipeline,
-            target_size,
+            state.target_size(),
             dirty_overlay_rects,
         );
 
@@ -617,7 +617,6 @@ impl RenderCore {
             sampler: &state.blit.sampler,
             pipeline: &state.blit.pipeline_rgba,
             source_origin: origin,
-            source_size: target_size,
         });
 
         let translate = |rect: PxRect| PxRect {
@@ -717,7 +716,6 @@ impl RenderCore {
             sampler,
             pipeline,
             source_origin,
-            source_size,
         } = params;
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
@@ -758,8 +756,8 @@ impl RenderCore {
         rpass.set_viewport(
             -source_origin.x,
             -source_origin.y,
-            source_size.width.to_f32(),
-            source_size.height.to_f32(),
+            source.texture().width() as f32,
+            source.texture().height() as f32,
             0.0,
             1.0,
         );
@@ -873,6 +871,14 @@ fn render_current_pass(params: RenderPassParams<'_>) {
         ..Default::default()
     });
 
+    rpass.set_viewport(
+        0.0,
+        0.0,
+        target_size.width.to_f32(),
+        target_size.height.to_f32(),
+        0.0,
+        1.0,
+    );
     clipper.restore(&mut rpass, target_size);
 
     // Draws that do not sample the scene never read this placeholder.
@@ -1111,6 +1117,97 @@ mod tests {
     #[cfg(all(feature = "headless", not(target_family = "wasm")))]
     #[test]
     #[ignore = "requires a GPU adapter"]
+    fn nearby_resizes_reuse_attachments_without_scaling_output_or_skipping_recovery() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        for sample_count in [1, 4] {
+            let mut core = pollster::block_on(RenderCore::new_offscreen(
+                winit::dpi::PhysicalSize::new(256, 256),
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+                sample_count,
+                crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
+            ));
+            core.resize_surface();
+            let scene = core.targets.offscreen.texture().clone();
+            let stencil = core.targets.stencil.texture().clone();
+            let msaa = core.targets.msaa_texture.clone();
+            for (width, height) in [(133, 139), (251, 253), (129, 135)] {
+                core.resize(winit::dpi::PhysicalSize::new(width, height));
+                core.resize_if_needed();
+                assert_eq!(core.targets.offscreen.texture(), &scene);
+                assert_eq!(core.targets.stencil.texture(), &stencil);
+                assert_eq!(core.targets.msaa_texture, msaa);
+                assert_eq!(
+                    (core.draw_config.width, core.draw_config.height),
+                    (width, height)
+                );
+                assert_eq!(
+                    core.offscreen_copy().texture().size(),
+                    wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    }
+                );
+
+                let extent = scene.size();
+                let mut pixels = vec![0; (extent.width * extent.height * 4) as usize];
+                for y in 0..extent.height {
+                    for x in 0..extent.width {
+                        let start = ((y * extent.width + x) * 4) as usize;
+                        pixels[start..start + 4].copy_from_slice(&[x as u8, y as u8, 0, 255]);
+                    }
+                }
+                core.queue.write_texture(
+                    scene.as_image_copy(),
+                    &pixels,
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(extent.width * 4),
+                        rows_per_image: Some(extent.height),
+                    },
+                    extent,
+                );
+                let mut encoder = core.device.create_command_encoder(&Default::default());
+                RenderCore::blit_to_view(BlitParams {
+                    encoder: &mut encoder,
+                    device: &core.device,
+                    source: &core.targets.offscreen,
+                    target: core.offscreen_copy(),
+                    bind_group_layout: &core.blit.bind_group_layout,
+                    sampler: &core.blit.sampler,
+                    pipeline: &core.blit.present_pipeline,
+                    source_origin: PxPosition::ZERO,
+                });
+                core.queue.submit(Some(encoder.finish()));
+                let output = core.read_offscreen_rgba().unwrap();
+                assert_eq!(output.len(), (width * height * 4) as usize);
+                for (index, pixel) in output.chunks_exact(4).enumerate() {
+                    let x = index as u32 % width;
+                    let y = index as u32 / width;
+                    assert_eq!(pixel, &[x as u8, y as u8, 0, 255]);
+                }
+            }
+            core.render(
+                RenderGraph::default(),
+                #[cfg(feature = "debug-dirty-overlay")]
+                &[],
+            );
+            assert!(core.previous_graph.is_some());
+            core.resize_surface();
+            assert_ne!(core.targets.offscreen.texture(), &scene);
+            assert_ne!(core.targets.stencil.texture(), &stencil);
+            assert!(core.previous_graph.is_none());
+            core.resize(winit::dpi::PhysicalSize::new(17, 19));
+            core.resize_if_needed();
+            assert_eq!(core.targets.offscreen.texture().width(), 128);
+            assert_eq!(core.targets.offscreen.texture().height(), 128);
+        }
+    }
+
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    #[test]
+    #[ignore = "requires a GPU adapter"]
     fn unorm_output_encodes_srgb_and_internal_linear_copies_remain_linear() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
@@ -1161,7 +1258,6 @@ mod tests {
                 sampler: &core.blit.sampler,
                 pipeline,
                 source_origin: PxPosition::ZERO,
-                source_size: PxSize::new(Px(1), Px(1)),
             });
             core.queue.submit(Some(encoder.finish()));
             let pixels = core

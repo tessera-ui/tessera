@@ -188,6 +188,52 @@ fn damage_redraw_matches_a_fresh_target_and_skips_unaffected_shapes() {
     );
 }
 
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn resized_scene_uses_logical_viewport_for_fractional_clips() {
+    crate::test_utils::run_isolated_test(
+        "pipelines::shape::coverage_tests::resized_scene_uses_logical_viewport_for_fractional_clips",
+        || {
+            let create = |width, height, sample_count| {
+                HeadlessRenderer::new(
+                    Box::new(|| {
+                        damage_fixture(TestProbe::default());
+                    }),
+                    vec![Box::new(crate::TesseraComponents)],
+                    HeadlessConfig {
+                        width,
+                        height,
+                        sample_count,
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+            };
+            for sample_count in [1, 4] {
+                let mut resized = create(200, 128, sample_count);
+                resized.render_frames(2);
+                for (width, height) in [(201, 133), (251, 253), (129, 135), (385, 259), (83, 61)] {
+                    resized.resize(width, height);
+                    resized.render_frames(2);
+                    let mut exact = create(width, height, sample_count);
+                    exact.render_frames(2);
+                    let expected = exact.read_pixels().unwrap();
+                    assert!(
+                        expected
+                            .chunks_exact(4)
+                            .any(|pixel| pixel == [0, 0, 0, 255])
+                    );
+                    assert_eq!(
+                        resized.read_pixels().unwrap(),
+                        expected,
+                        "resizing to {width}x{height} must preserve exact pixels at MSAA{sample_count}"
+                    );
+                }
+            }
+        },
+    );
+}
+
 #[tessera]
 fn batch_fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
     let distinct = remember(|| false);
