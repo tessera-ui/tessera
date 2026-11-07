@@ -161,6 +161,20 @@ fn update_one_leaf(count: usize) -> (super::LayoutFrameDiagnostics, super::Layou
     );
     pump_layout_test_session(&mut session, 0);
     let initial = session.diagnostics().expect("Initial frame diagnostics");
+    let edited_node = |session: &crate::testing::LayoutTestSession<_>| {
+        session
+            .inspect_components()
+            .nodes()
+            .iter()
+            .find(|node| {
+                node.semantics()
+                    .and_then(|semantics| semantics.key.as_deref())
+                    == Some("edited")
+            })
+            .expect("edited layout")
+            .node_id()
+    };
+    let edited = edited_node(&session);
     let retained = retained_node_ids(&session);
     assert_eq!(retained.len(), count);
     assert_eq!(
@@ -172,6 +186,11 @@ fn update_one_leaf(count: usize) -> (super::LayoutFrameDiagnostics, super::Layou
     probe.version.get().expect("Version state").set(1);
     pump_layout_test_session(&mut session, 16_000_000);
     let updated = session.diagnostics().expect("Updated frame diagnostics");
+    assert_eq!(
+        edited_node(&session),
+        edited,
+        "replay must update the existing layout leaf"
+    );
     assert_eq!(
         session
             .work_totals()

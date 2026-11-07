@@ -18,7 +18,8 @@ use crate::{
         FocusTraversalPolicy,
     },
     layout::{
-        ChildMeasure, LayoutInput, LayoutModifierDyn, LayoutResult, PlacementResult, PlacementScope,
+        ChildMeasure, DefaultLayoutNode, LayoutInput, LayoutModifierDyn, LayoutResult,
+        NoopDrawModifier, PlacementResult, PlacementScope,
     },
     modifier::{
         DrawModifierNode, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier,
@@ -80,6 +81,26 @@ pub(crate) struct ComponentNode {
 }
 
 impl ComponentNode {
+    pub(crate) fn new(fn_name: &str, role: NodeRole) -> Self {
+        Self {
+            fn_name: fn_name.to_owned(),
+            role,
+            layout_children: None,
+            #[cfg(feature = "profiling")]
+            subtree_len: 1,
+            children_scale: 1.0,
+            instance_logic_id: 0,
+            instance_key: 0,
+            interaction: None,
+            layout_coordinate_space: false,
+            modifier: Modifier::default(),
+            layout_node: Box::new(DefaultLayoutNode),
+            draw_node: Box::new(NoopDrawModifier),
+            replay: None,
+            props_unchanged_from_previous: false,
+        }
+    }
+
     pub(crate) fn interaction(&self) -> &NodeInteraction {
         static EMPTY: NodeInteraction = NodeInteraction::EMPTY;
         self.interaction.as_deref().unwrap_or(&EMPTY)

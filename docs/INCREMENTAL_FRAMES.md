@@ -59,6 +59,8 @@ need no child storage.
 Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements share that refresh. Consumers compare
 retained ancestry after the round's order is available.
+Rebuilt layout leaves with a matching instance keep their node IDs and cached
+geometry. Changes to input geometry or the parent invalidate placement.
 
 ## Shared GPU resources
 

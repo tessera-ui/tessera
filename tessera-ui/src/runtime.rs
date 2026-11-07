@@ -17,7 +17,7 @@ use smallvec::SmallVec;
 use crate::{
     NodeId,
     accessibility::{AccessibilityActionHandler, AccessibilityNode},
-    component_tree::ComponentTree,
+    component_tree::{ComponentNode, ComponentTree, NodeRole, PreviousLayoutNode},
     execution_context::{
         ExecutionContext, OrderFrame, with_execution_context, with_execution_context_mut,
     },
@@ -2837,6 +2837,43 @@ fn enter_node_context(
     }
 }
 
+pub(crate) struct LayoutNodeScope {
+    id: NodeId,
+    previous: Option<PreviousLayoutNode>,
+    _context: NodeContextGuard,
+}
+
+impl Drop for LayoutNodeScope {
+    fn drop(&mut self) {
+        TesseraRuntime::with_mut(|runtime| {
+            if let Some(previous) = &self.previous {
+                runtime
+                    .component_tree
+                    .reconcile_layout_node(self.id, previous);
+            }
+            runtime.finalize_current_layout_policy_dirty();
+            runtime.component_tree.pop_node();
+        });
+    }
+}
+
+pub(crate) fn begin_layout_node(name: &str, component_type_id: u64) -> LayoutNodeScope {
+    let (instance_logic_id, instance_key) = with_execution_context_mut(|context| {
+        let logic_id = reserve_component_identity_in(context, component_type_id);
+        (logic_id, instance_key_in(context, logic_id))
+    });
+    let mut node = ComponentNode::new(name, NodeRole::Layout);
+    node.instance_logic_id = instance_logic_id;
+    node.instance_key = instance_key;
+    let (id, previous) =
+        TesseraRuntime::with_mut(|runtime| runtime.component_tree.add_layout_node(node));
+    LayoutNodeScope {
+        id,
+        previous,
+        _context: enter_node_context(id, name, |_| instance_logic_id),
+    }
+}
+
 /// Push the current component instance key for the active execution scope.
 pub fn push_current_component_instance_key(instance_key: u64) -> CurrentComponentInstanceGuard {
     with_execution_context_mut(|context| {
@@ -2890,9 +2927,13 @@ pub(crate) fn current_instance_key() -> u64 {
             .instance_logic_id_stack
             .last()
             .expect("current_instance_key must be called inside a component");
-        let group_path_hash = hash_components(&[&context.group_path_stack[..]]);
-        hash_components(&[instance_logic_id, &group_path_hash])
+        instance_key_in(context, *instance_logic_id)
     })
+}
+
+fn instance_key_in(context: &ExecutionContext, logic_id: u64) -> u64 {
+    let group_path_hash = hash_components(&[&context.group_path_stack[..]]);
+    hash_components(&[&logic_id, &group_path_hash])
 }
 
 /// Push an execution phase for the current thread.

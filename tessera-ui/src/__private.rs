@@ -6,8 +6,6 @@ use indextree::NodeId;
 
 use crate::{
     component_tree::{ComponentNode, NodeRole},
-    layout::{DefaultLayoutNode, NoopDrawModifier},
-    modifier::Modifier,
     prop::ErasedComponentRunner,
     runtime::TesseraRuntime,
 };
@@ -64,45 +62,17 @@ where
 
 pub fn register_component_node(fn_name: &str, _component_type_id: u64) -> NodeId {
     TesseraRuntime::with_mut(|runtime| {
-        runtime.component_tree.add_node(ComponentNode {
-            fn_name: fn_name.to_string(),
-            role: NodeRole::Composition,
-            layout_children: None,
-            #[cfg(feature = "profiling")]
-            subtree_len: 1,
-            children_scale: 1.0,
-            instance_logic_id: 0,
-            instance_key: 0,
-            interaction: None,
-            layout_coordinate_space: false,
-            modifier: Modifier::default(),
-            layout_node: Box::new(DefaultLayoutNode),
-            draw_node: Box::new(NoopDrawModifier),
-            replay: None,
-            props_unchanged_from_previous: false,
-        })
+        runtime
+            .component_tree
+            .add_node(ComponentNode::new(fn_name, NodeRole::Composition))
     })
 }
 
 pub fn register_layout_node(fn_name: &str, _component_type_id: u64) -> NodeId {
     TesseraRuntime::with_mut(|runtime| {
-        runtime.component_tree.add_node(ComponentNode {
-            fn_name: fn_name.to_string(),
-            role: NodeRole::Layout,
-            layout_children: None,
-            #[cfg(feature = "profiling")]
-            subtree_len: 1,
-            children_scale: 1.0,
-            instance_logic_id: 0,
-            instance_key: 0,
-            interaction: None,
-            layout_coordinate_space: false,
-            modifier: Modifier::default(),
-            layout_node: Box::new(DefaultLayoutNode),
-            draw_node: Box::new(NoopDrawModifier),
-            replay: None,
-            props_unchanged_from_previous: false,
-        })
+        runtime
+            .component_tree
+            .add_node(ComponentNode::new(fn_name, NodeRole::Layout))
     })
 }
 

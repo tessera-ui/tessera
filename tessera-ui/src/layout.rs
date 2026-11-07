@@ -8,6 +8,7 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
+    sync::OnceLock,
 };
 
 use crate::{
@@ -23,7 +24,7 @@ use crate::{
     prop::Prop,
     px::PxPosition,
     render_graph::RenderFragment,
-    runtime::TesseraRuntime,
+    runtime::{TesseraRuntime, begin_layout_node},
     tessera,
 };
 
@@ -1110,29 +1111,7 @@ pub fn layout(
     let policy = policy.unwrap_or(LayoutModifierHandle::from(DefaultLayoutNode));
     let draw = draw.unwrap_or(DrawModifierHandle::from(NoopDrawModifier));
     let modifier = modifier.unwrap_or_default();
-    let layout_node_component_type_id = layout_node_component_type_id();
-    let layout_node_id =
-        crate::__private::register_layout_node("layout", layout_node_component_type_id);
-    let _layout_node_ctx_guard = crate::__private::push_current_node(
-        layout_node_id,
-        layout_node_component_type_id,
-        "layout",
-    );
-    let layout_instance_key = crate::__private::current_instance_key();
-    let layout_instance_logic_id = crate::__private::current_instance_logic_id();
-    let _layout_scope_guard = {
-        struct LayoutNodeScopeGuard;
-
-        impl Drop for LayoutNodeScopeGuard {
-            fn drop(&mut self) {
-                crate::__private::finish_component_node();
-            }
-        }
-
-        LayoutNodeScopeGuard
-    };
-
-    crate::__private::set_current_node_identity(layout_instance_key, layout_instance_logic_id);
+    let _layout_scope = begin_layout_node("layout", layout_node_component_type_id());
     modifier.attach();
     TesseraRuntime::with_mut(|runtime| {
         runtime.set_current_layout_node_boxed(policy.into_box());
@@ -1144,9 +1123,12 @@ pub fn layout(
 }
 
 fn layout_node_component_type_id() -> u64 {
-    let mut hasher = DefaultHasher::new();
-    "layout_node".hash(&mut hasher);
-    hasher.finish()
+    static ID: OnceLock<u64> = OnceLock::new();
+    *ID.get_or_init(|| {
+        let mut hasher = DefaultHasher::new();
+        "layout_node".hash(&mut hasher);
+        hasher.finish()
+    })
 }
 
 /// Default layout node that stacks children at (0,0) and uses the bounding

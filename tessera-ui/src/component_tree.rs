@@ -609,6 +609,11 @@ pub(crate) struct ReplayReplaceContext {
     detached_root_id: indextree::NodeId,
 }
 
+pub(crate) struct PreviousLayoutNode {
+    node: ComponentNode,
+    same_parent: bool,
+}
+
 impl Default for ComponentTree {
     fn default() -> Self {
         Self::new()
@@ -952,10 +957,7 @@ impl ComponentTree {
                 })
                 .collect::<Vec<_>>();
             for node_id in &detached_node_ids {
-                self.position_observer_nodes.remove(node_id);
-                self.window_observer_nodes.remove(node_id);
-                self.forget_observer_space(*node_id);
-                self.pending_position_observers.remove(node_id);
+                self.remove_position_observer(*node_id);
                 self.removed_frame_nodes.insert(*node_id);
                 self.changed_frame_nodes.remove(node_id);
                 self.metadatas.remove(node_id);
@@ -1106,10 +1108,7 @@ impl ComponentTree {
         candidate_node_id.detach(&mut self.tree);
         current_node_id.insert_before(candidate_node_id, &mut self.tree);
         self.metadatas.remove(&current_node_id);
-        self.position_observer_nodes.remove(&current_node_id);
-        self.window_observer_nodes.remove(&current_node_id);
-        self.forget_observer_space(current_node_id);
-        self.pending_position_observers.remove(&current_node_id);
+        self.remove_position_observer(current_node_id);
         self.composition_order.remove(&current_node_id);
         self.changed_frame_nodes.remove(&current_node_id);
         self.removed_frame_nodes.insert(current_node_id);
@@ -1130,22 +1129,76 @@ impl ComponentTree {
     /// policy, and handlers.
     pub(crate) fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
         let instance_key = node_component.instance_key;
-        let needs_geometry = node_component.role == NodeRole::Layout || self.node_queue.is_empty();
-        self.preserve_replay_candidate(instance_key);
+        if instance_key != 0 {
+            self.preserve_replay_candidate(instance_key);
+        }
         let new_node_id = self.tree.new_node(node_component);
-        self.changed_frame_nodes.insert(new_node_id);
+        self.attach_build_node(new_node_id);
+        new_node_id
+    }
+
+    pub(crate) fn add_layout_node(
+        &mut self,
+        mut node: ComponentNode,
+    ) -> (NodeId, Option<PreviousLayoutNode>) {
+        let reusable = self.replay_candidate(node.instance_key).filter(|&id| {
+            let old = &self.tree[id];
+            old.parent().is_some()
+                && old.first_child().is_none()
+                && old.get().role == NodeRole::Layout
+                && old.get().instance_logic_id == node.instance_logic_id
+        });
+        let Some(id) = reusable else {
+            return (self.add_node(node), None);
+        };
+
+        let previous_parent = self.tree[id].parent();
+        let new_parent = self.node_queue.last().copied();
+        let parent_key = |id: NodeId| self.tree[id].get().instance_key;
+        let same_parent = previous_parent.map(parent_key) == new_parent.map(parent_key);
+        id.detach(&mut self.tree);
+        self.remove_position_observer(id);
+        self.replay_reuse_candidates.remove(&node.instance_key);
+        node.layout_children = self.tree[id].get_mut().layout_children.take();
+        let previous = std::mem::replace(self.tree[id].get_mut(), node);
+        self.attach_build_node(id);
+        self.metadatas.mark_paint_dirty(id);
+        (
+            id,
+            Some(PreviousLayoutNode {
+                node: previous,
+                same_parent,
+            }),
+        )
+    }
+
+    pub(crate) fn reconcile_layout_node(&mut self, id: NodeId, previous: &PreviousLayoutNode) {
+        let input_changed = !previous
+            .node
+            .modifier
+            .input_geometry_eq(&self.tree[id].get().modifier);
+        let metadata = self.metadatas.entry_or_default(id);
+        metadata.geometry_initialized &= !input_changed;
+        if input_changed || !previous.same_parent {
+            self.metadatas.mark_geometry_dirty(id);
+        }
+    }
+
+    fn attach_build_node(&mut self, id: NodeId) {
+        let node = self.tree[id].get();
+        let instance_key = node.instance_key;
+        let needs_geometry = node.role == NodeRole::Layout || self.node_queue.is_empty();
+        self.changed_frame_nodes.insert(id);
         if instance_key != 0 || self.node_queue.is_empty() {
-            self.node_ids_by_instance_key
-                .insert(instance_key, new_node_id);
+            self.node_ids_by_instance_key.insert(instance_key, id);
         }
         if let Some(current_node_id) = self.node_queue.last_mut() {
-            current_node_id.append(new_node_id, &mut self.tree);
+            current_node_id.append(id, &mut self.tree);
         }
         if needs_geometry {
-            self.metadatas.entry_or_default(new_node_id);
+            self.metadatas.entry_or_default(id);
         }
-        self.node_queue.push(new_node_id);
-        new_node_id
+        self.node_queue.push(id);
     }
 
     /// Pop the last node from the queue
@@ -1324,6 +1377,13 @@ impl ComponentTree {
         &mut self,
     ) -> (&ComponentNodeTree, &ComponentNodeMetaDatas, &mut FocusOwner) {
         (&self.tree, &self.metadatas, &mut self.focus_owner)
+    }
+
+    fn remove_position_observer(&mut self, node_id: NodeId) {
+        self.position_observer_nodes.remove(&node_id);
+        self.window_observer_nodes.remove(&node_id);
+        self.pending_position_observers.remove(&node_id);
+        self.forget_observer_space(node_id);
     }
 
     fn forget_observer_space(&mut self, node_id: NodeId) {
