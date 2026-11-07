@@ -6,7 +6,6 @@ use std::{
 };
 
 use indextree::NodeId;
-use rustc_hash::FxHashMap;
 use tracing::debug;
 use winit::window::CursorIcon;
 
@@ -381,7 +380,8 @@ pub(crate) type ComponentNodeTree = indextree::Arena<ComponentNode>;
 /// Stores component metadata for a single UI tree.
 #[derive(Default)]
 pub(crate) struct ComponentNodeMetaDatas {
-    entries: FxHashMap<NodeId, ComponentNodeMetaData>,
+    entries: Vec<(NodeId, ComponentNodeMetaData)>,
+    indices: Vec<Option<NonZeroUsize>>,
     #[cfg(feature = "profiling")]
     pub(super) profiling_dirty: rustc_hash::FxHashSet<NodeId>,
     pub(super) geometry_visits: u64,
@@ -401,6 +401,7 @@ impl ComponentNodeMetaDatas {
 
     pub(crate) fn clear(&mut self) {
         self.entries.clear();
+        self.indices.clear();
         #[cfg(feature = "profiling")]
         self.profiling_dirty.clear();
         self.geometry_dirty.clear();
@@ -422,23 +423,54 @@ impl ComponentNodeMetaDatas {
         self.paint_changed.remove(node_id);
         self.placement_order_dirty.remove(node_id);
         self.placement_order_changed.remove(node_id);
-        self.entries.remove(node_id)
+        let slot = Self::slot(*node_id);
+        let index = self.index(*node_id)?;
+        self.indices[slot] = None;
+        let (_, metadata) = self.entries.swap_remove(index);
+        if let Some((moved, _)) = self.entries.get(index) {
+            self.indices[Self::slot(*moved)] = NonZeroUsize::new(index + 1);
+        }
+        Some(metadata)
+    }
+
+    fn slot(node_id: NodeId) -> usize {
+        usize::from(node_id) - 1
+    }
+
+    fn index(&self, node_id: NodeId) -> Option<usize> {
+        let index = self.indices.get(Self::slot(node_id))?.as_ref()?.get() - 1;
+        (self.entries[index].0 == node_id).then_some(index)
     }
 
     pub(crate) fn get(&self, node_id: &NodeId) -> Option<&ComponentNodeMetaData> {
-        self.entries.get(node_id)
+        Some(&self.entries[self.index(*node_id)?].1)
     }
 
     pub(crate) fn get_mut(&mut self, node_id: &NodeId) -> Option<&mut ComponentNodeMetaData> {
-        self.entries.get_mut(node_id)
+        let index = self.index(*node_id)?;
+        Some(&mut self.entries[index].1)
     }
 
     pub(crate) fn entry_or_default(&mut self, node_id: NodeId) -> &mut ComponentNodeMetaData {
-        self.entries.entry(node_id).or_insert_with(|| {
-            self.geometry_dirty.insert(node_id);
-            self.paint_dirty_nodes.insert(node_id);
-            ComponentNodeMetaData::default()
-        })
+        let slot = Self::slot(node_id);
+        if let Some(index) = self.indices.get(slot).copied().flatten() {
+            let index = index.get() - 1;
+            let previous = self.entries[index].0;
+            if previous == node_id {
+                return &mut self.entries[index].1;
+            }
+            self.remove(&previous);
+        }
+        if self.indices.len() <= slot {
+            self.indices.resize(slot + 1, None);
+        }
+        self.geometry_dirty.insert(node_id);
+        self.paint_dirty_nodes.insert(node_id);
+        let index = self.entries.len();
+        self.entries
+            .push((node_id, ComponentNodeMetaData::default()));
+        self.indices[slot] = NonZeroUsize::new(index + 1);
+        &mut self.entries[index].1
     }
 
     pub(crate) fn mark_geometry_dirty(&mut self, node_id: NodeId) {
@@ -447,7 +479,7 @@ impl ComponentNodeMetaDatas {
 
     pub(crate) fn mark_paint_dirty(&mut self, node_id: NodeId) {
         self.paint_dirty_nodes.insert(node_id);
-        if let Some(metadata) = self.entries.get_mut(&node_id) {
+        if let Some(metadata) = self.get_mut(&node_id) {
             metadata.paint_dirty = true;
         }
     }

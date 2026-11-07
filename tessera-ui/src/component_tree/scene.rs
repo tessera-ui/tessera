@@ -827,6 +827,7 @@ mod tests {
             });
             metadata.rel_position = Some(zero);
             metadata.fragment.push_draw_command(Marker(3));
+            assert!(tree.metadatas.remove(&first).is_none());
             let recycled = frame(&mut scene, tree, &[replacement], &[first]);
             assert_eq!(drawing(&recycled), [(0, zero), (2, translated), (3, zero)]);
 
