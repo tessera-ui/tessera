@@ -25,6 +25,16 @@ use crate::{
 
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 
+/// Shared string content accepted by [`text`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TextContent(Arc<str>);
+
+impl<T: Into<String>> From<T> for TextContent {
+    fn from(value: T) -> Self {
+        Self(value.into().into())
+    }
+}
+
 /// # text
 ///
 /// Renders a block of text with a single, uniform style.
@@ -71,7 +81,7 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 /// ```
 #[tessera]
 pub fn text(
-    #[prop(into)] content: String,
+    #[prop(into)] content: TextContent,
     modifier: Option<Modifier>,
     color: Option<Color>,
     style: Option<TextStyle>,
@@ -82,18 +92,31 @@ pub fn text(
     #[prop(into)] accessibility_description: Option<String>,
 ) {
     let modifier = modifier.unwrap_or_default();
-    let theme = use_context::<MaterialTheme>();
-    let inherited_style = use_context::<TextStyle>().map(|s| s.get());
-    let resolved_style = style
-        .or(inherited_style)
-        .or_else(|| theme.map(|t| t.get().typography.body_large))
-        .unwrap_or_default();
-    let color = color
-        .or(use_context::<ContentColor>().map(|c| c.get().current))
-        .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
-        .unwrap_or_else(|| ContentColor::default().current);
+    let theme = if style.is_none() || color.is_none() {
+        use_context::<MaterialTheme>()
+    } else {
+        None
+    };
+    let resolved_style = if let Some(style) = style {
+        style
+    } else if let Some(inherited) = use_context::<TextStyle>() {
+        inherited.get()
+    } else {
+        theme
+            .map(|theme| theme.with(|theme| theme.typography.body_large))
+            .unwrap_or_default()
+    };
+    let color = if let Some(color) = color {
+        color
+    } else if let Some(inherited) = use_context::<ContentColor>() {
+        inherited.get().current
+    } else {
+        theme
+            .map(|theme| theme.with(|theme| theme.color_scheme.on_surface))
+            .unwrap_or_else(|| ContentColor::default().current)
+    };
     let size = size.unwrap_or(resolved_style.font_size);
-    let content = Arc::<str>::from(content);
+    let TextContent(content) = content;
     let semantics = TextSemantics {
         content: content.clone(),
         label: accessibility_label,
@@ -279,7 +302,7 @@ impl tessera_ui::DrawModifierNode for TextLayout {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        State,
+        Context, State, WorkPhase, provide_context,
         testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
     };
 
@@ -426,6 +449,45 @@ mod tests {
             0
         );
         assert_eq!(diagnostics.geometry_nodes_updated, 0);
+    }
+
+    #[tessera]
+    fn inherited_defaults_fixture(
+        observed: TestProbe<Option<(Context<TextStyle>, Context<ContentColor>)>>,
+    ) {
+        provide_context(TextStyle::default, move || {
+            provide_context(ContentColor::default, move || {
+                observed.set(Some((
+                    use_context::<TextStyle>().unwrap(),
+                    use_context::<ContentColor>().unwrap(),
+                )));
+                text("Inherited");
+                text("Explicit")
+                    .style(TextStyle::default())
+                    .color(Color::BLACK);
+            });
+        });
+    }
+
+    #[test]
+    fn explicit_text_defaults_ignore_inherited_updates() {
+        let observed = TestProbe::default();
+        let mut session = start_layout_test_session(layout_test(|| {
+            inherited_defaults_fixture(observed.clone());
+        }));
+        pump_layout_test_session(&mut session, 0);
+        assert_eq!(session.work().count("text", WorkPhase::Build), 2);
+        let (style, color) = observed.get().unwrap();
+
+        style.with_mut(|style| style.font_size = Dp(30.0));
+        pump_layout_test_session(&mut session, 16_666_667);
+        assert_eq!(session.work().count("text", WorkPhase::Build), 1);
+
+        color.set(ContentColor {
+            current: Color::WHITE,
+        });
+        pump_layout_test_session(&mut session, 33_333_334);
+        assert_eq!(session.work().count("text", WorkPhase::Build), 1);
     }
 
     #[test]

@@ -121,6 +121,7 @@ Native component-package registration starts system-font scanning and matching
 for normal, medium, and bold text on a worker, overlapping renderer startup.
 The first text layout waits only if that preparation has not completed; custom
 font registration still invalidates the affected matching caches normally.
+Plain text shares immutable content across component props, layout, and semantics.
 The text pipeline shares live glyph buffers for identical short layouts within
 a runtime session. The bounded lookup uses weak references and is cleared when
 the font system is mutably borrowed for configuration.

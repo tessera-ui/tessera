@@ -17,6 +17,14 @@ use crate::{
     text::text,
 };
 
+struct PlainLabel(&'static str);
+
+impl From<PlainLabel> for String {
+    fn from(label: PlainLabel) -> Self {
+        label.0.into()
+    }
+}
+
 #[tessera]
 fn fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
     let changed = remember(|| false);
@@ -55,11 +63,11 @@ fn fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
             disabled: true,
             ..Default::default()
         }));
-        text(if changed.get() {
+        text(PlainLabel(if changed.get() {
             "Changed text"
         } else {
             "Plain text"
-        })
+        }))
         .modifier(Modifier::new().semantics(SemanticsArgs {
             test_tag: Some("plain".into()),
             ..Default::default()
