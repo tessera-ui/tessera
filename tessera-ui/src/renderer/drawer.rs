@@ -3,7 +3,7 @@
 pub mod command;
 pub mod pipeline;
 
-use crate::{px::PxSize, render_graph::DrawGeometry};
+use crate::render_graph::DrawGeometry;
 
 pub use command::DrawCommand;
 pub use pipeline::{DrawablePipeline, ErasedDrawContext, PipelineRegistry};
@@ -19,46 +19,6 @@ impl Drawer {
     /// Create a new drawer
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Initialize all pipelines at the beginning of each render pass.
-    pub fn begin_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        target_size: PxSize,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    ) {
-        self.pipeline_registry.begin_all_passes(
-            gpu,
-            queue,
-            config,
-            target_size,
-            render_pass,
-            scene_texture_view,
-        );
-    }
-
-    /// Finalize all pipelines at the end of each render pass.
-    pub fn end_pass(
-        &mut self,
-        gpu: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        target_size: PxSize,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    ) {
-        self.pipeline_registry.end_all_passes(
-            gpu,
-            queue,
-            config,
-            target_size,
-            render_pass,
-            scene_texture_view,
-        );
     }
 
     /// Submit a draw command to the appropriate pipeline for rendering.

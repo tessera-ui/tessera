@@ -14,9 +14,9 @@ use super::command::ComputeCommand;
 pub struct ErasedComputeBatchItem<'a> {
     /// The compute command to execute.
     pub command: &'a dyn ComputeCommand,
-    /// Local dimensions and their precise target mapping.
+    /// Local dimensions and their mapping into the pass textures.
     pub geometry: DrawGeometry,
-    /// The rectangle of the content that will be written.
+    /// The rectangle written, in pass texture coordinates.
     pub target_area: PxRect,
 }
 
@@ -24,21 +24,26 @@ pub struct ErasedComputeBatchItem<'a> {
 pub struct ComputeBatchItem<'a, C: ComputeCommand> {
     /// The compute command to execute.
     pub command: &'a C,
-    /// Local dimensions and their precise target mapping.
+    /// Local dimensions and their mapping into the pass textures.
     pub geometry: DrawGeometry,
-    /// The rectangle of the content that will be written.
+    /// The rectangle written, in pass texture coordinates.
     pub target_area: PxRect,
 }
 
 /// A batch of compute commands within an active compute pass.
+///
+/// The pass textures cover the scene region the batch reads and writes, so
+/// they can be larger than `target_size` and offset from the window.
 pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
+    /// Renderer-owned resource creation and uploads.
+    pub graphics: &'a crate::GraphicsDevice,
     /// WGPU device used to create and manage GPU resources.
     pub device: &'a wgpu::Device,
     /// Queue for submitting GPU workloads.
     pub queue: &'a wgpu::Queue,
     /// Surface configuration describing output formats and dimensions.
     pub config: &'a wgpu::SurfaceConfiguration,
-    /// Target texture size for the current compute pass.
+    /// Size of the scene region covered by the pass textures.
     pub target_size: PxSize,
     /// Active compute pass encoder.
     pub compute_pass: &'a mut wgpu::ComputePass<'b>,
@@ -52,6 +57,7 @@ pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
 
 /// Type-erased context used when dispatching compute pipelines.
 pub(crate) struct ErasedDispatchContext<'a, 'b> {
+    pub graphics: &'a crate::GraphicsDevice,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub config: &'a wgpu::SurfaceConfiguration,
@@ -63,9 +69,9 @@ pub(crate) struct ErasedDispatchContext<'a, 'b> {
 
 /// Processes compute commands of type `C`.
 pub trait ComputablePipeline<C: ComputeCommand>: SendSync {
-    /// Dispatches the command batch over each item's target area. Pixels outside
-    /// dispatched regions retain the prior scene. The output uses a compatible
-    /// non-sRGB storage texture format.
+    /// Dispatches the command batch over each item's target area. The output
+    /// starts as a copy of the input and uses a non-sRGB storage format; draws
+    /// that sample the scene next read the result.
     fn dispatch(&mut self, context: &mut ComputeContext<C>);
 }
 
@@ -111,6 +117,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
         }
 
         self.pipeline.dispatch(&mut ComputeContext {
+            graphics: context.graphics,
             device: context.device,
             queue: context.queue,
             config: context.config,

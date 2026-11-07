@@ -121,7 +121,7 @@ programming contract; the guidelines below also govern framework implementation.
 - Keep Compose, Measure, Place, and Paint dependencies separate. State reads during measurement invalidate measurement; placement-only calculations may use `MeasureScope::placement` or `LayoutModifierInput::placement` and must not determine sizes or constraints. Implement `place_children` when a policy supports cached placement.
 - Draw-only properties must be excluded from both measurement and placement equality. Placement transforms invalidate window geometry without measuring. Parent-data modifiers should implement `equivalent` when their values can be compared so unchanged weights or alignment do not invalidate the parent.
 - Keep measured control dimensions in local units and share one inherited `LocalToWindow` transformation across rendering, clipping, pointer input, focus reveal, IME, and accessibility. Use `LayoutCoordinates` for local-size consumers; do not feed window rectangle dimensions back into local layout or drawing. See [local layout coordinates](docs/LOCAL_COORDINATES.md).
-- Canonical pointer samples and gesture histories remain in window coordinates. Convert displacements and nested-scroll remainder through each handler's coordinate space, and apply a scene transformation exactly once, including when compositing local textures.
+- Canonical pointer samples and gesture histories remain in window coordinates. Convert displacements and nested-scroll remainder through each handler's coordinate space, and apply a scene transformation exactly once.
 
 ---
 
@@ -157,7 +157,7 @@ programming contract; the guidelines below also govern framework implementation.
 - `Global`: Samples the entire screen. This is expensive as it requires a full-screen texture copy.
 - `PaddedLocal(PaddingRect)`: Defines a sampling region relative to the component's bounding box plus padding on each side. The draw region, clip stack, and render target bounds determine the scissor rectangle independently.
 - `Absolute(PxRect)`: Samples a specific, absolute region of the screen.
-- **Performance Optimization**: Sampled draw passes capture the bounding union of their declared sampling regions. `Global` and explicit scene reads without a declared sampling region retain full-screen capture. Sampling bounds must expand outward at fractional positions and remain independent of draw clipping. Scene compute passes still preserve the full target outside their dispatched regions. **Batching** groups subsequent barrier commands with non-overlapping draw regions into the same render pass, avoiding additional captures. A separate scissor rectangle limits actual drawing for each command.
+- **Performance Optimization**: Sampled draw passes copy the bounding union of their declared sampling regions into a pooled texture and receive its window rectangle as `scene_rect`. `Global` and explicit scene reads without a declared sampling region copy the full screen. Sampling bounds must expand outward at fractional positions and remain independent of draw clipping. Compute passes filter only the union of their items' sampling and target regions; every batch starts from a copy of its input, so pixels outside dispatched regions keep their prior values, and the result feeds the next sampling draws. **Batching** groups subsequent barrier commands with non-overlapping draw regions into the same render pass, avoiding additional captures. A separate scissor rectangle limits actual drawing for each command.
 
 ### WebGPU Resource Usage Guidelines
 

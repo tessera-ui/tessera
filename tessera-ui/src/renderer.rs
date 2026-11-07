@@ -5,7 +5,6 @@
 pub mod compute;
 pub mod core;
 pub mod drawer;
-pub mod external;
 
 #[cfg(target_os = "macos")]
 mod macos_titlebar;
@@ -49,7 +48,7 @@ use crate::{
     pipeline_context::PipelineContext,
     plugin::{DesktopPlatformContext, DesktopWindowAction, PluginContext, PluginHost},
     px::PxSize,
-    render_graph::{RenderGraph, RenderGraphExecution},
+    render_graph::{RenderGraph, RenderGraphOp},
     render_module::RenderModule,
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
@@ -72,7 +71,6 @@ pub use compute::{
     ComputablePipeline, ComputeBatchItem, ComputePipelineRegistry, ErasedComputeBatchItem,
 };
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
-pub use external::{ExternalTextureHandle, ExternalTextureRegistry};
 
 #[cfg(feature = "debug-dirty-overlay")]
 use crate::PxRect;
@@ -1061,10 +1059,10 @@ Fps: {:.2}
     /// Perform the actual GPU rendering for the provided commands and return
     /// the render duration.
     #[cfg(not(feature = "debug-dirty-overlay"))]
-    #[instrument(level = "debug", skip(args, execution))]
+    #[instrument(level = "debug", skip(args, ops))]
     fn perform_render<'a>(
         args: &mut RenderFrameArgs<'a>,
-        execution: RenderGraphExecution,
+        ops: Vec<RenderGraphOp>,
     ) -> std::time::Duration {
         #[cfg(feature = "profiling")]
         let _profiler_guard =
@@ -1077,17 +1075,17 @@ Fps: {:.2}
         }
 
         debug!("Rendering draw commands...");
-        args.app.render(execution);
+        args.app.render(ops);
         let render_cost = render_timer.elapsed();
         debug!("Rendered to surface in {render_cost:?}");
         render_cost
     }
 
     #[cfg(feature = "debug-dirty-overlay")]
-    #[instrument(level = "debug", skip(args, execution, dirty_overlay_rects))]
+    #[instrument(level = "debug", skip(args, ops, dirty_overlay_rects))]
     fn perform_render<'a>(
         args: &mut RenderFrameArgs<'a>,
-        execution: RenderGraphExecution,
+        ops: Vec<RenderGraphOp>,
         dirty_overlay_rects: &[PxRect],
     ) -> std::time::Duration {
         #[cfg(feature = "profiling")]
@@ -1101,7 +1099,7 @@ Fps: {:.2}
         }
 
         debug!("Rendering draw commands...");
-        args.app.render(execution, dirty_overlay_rects);
+        args.app.render(ops, dirty_overlay_rects);
         let render_cost = render_timer.elapsed();
         debug!("Rendered to surface in {render_cost:?}");
         render_cost
@@ -1216,21 +1214,12 @@ Fps: {:.2}
         let overlay_clear_pending = !dirty_overlay_rects.is_empty();
         #[cfg(feature = "profiling")]
         let prepare_timer = Instant::now();
-        let RenderGraphExecution {
-            ops,
-            resources,
-            external_resources,
-        } = new_graph.into_execution();
+        let ops = new_graph.ordered_ops();
         #[cfg(feature = "profiling")]
         let render_prepare_ns = Some(prepare_timer.elapsed().as_nanos());
-        // Perform GPU render every frame.
         let render_cost = Self::perform_render(
             args,
-            RenderGraphExecution {
-                ops,
-                resources,
-                external_resources,
-            },
+            ops,
             #[cfg(feature = "debug-dirty-overlay")]
             &dirty_overlay_rects,
         );

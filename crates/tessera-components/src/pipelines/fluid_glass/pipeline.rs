@@ -1,7 +1,6 @@
 use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    PxSize,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu,
 };
@@ -19,6 +18,8 @@ struct GlassUniforms {
     pixels_per_dp: f32,
     opacity: f32,
     material_mode: u32,
+    scene_uv: Vec4,
+    scene_size_px: Vec2,
     rect_size_px: Vec2,
     ripple_center: Vec2,
     shape_type: f32,
@@ -195,7 +196,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
             instances: context
                 .commands
                 .iter()
-                .map(|(command, geometry)| glass_uniforms(command, *geometry, context.target_size))
+                .map(|(command, geometry)| glass_uniforms(command, *geometry, &*context))
                 .collect(),
         };
         let mut content = StorageBuffer::new(Vec::<u8>::new());
@@ -240,14 +241,24 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
 fn glass_uniforms(
     command: &FluidGlassCommand,
     geometry: tessera_ui::DrawGeometry,
-    target_size: PxSize,
+    context: &DrawContext<FluidGlassCommand>,
 ) -> GlassUniforms {
     let render = &command.render;
     let size = geometry.local_size;
     let start_pos = geometry.window_origin();
     let [world_width, world_height] = geometry.window_size();
-    let screen_w = target_size.width.to_f32();
-    let screen_h = target_size.height.to_f32();
+    let screen_w = context.target_size.width.to_f32();
+    let screen_h = context.target_size.height.to_f32();
+
+    let scene = context.scene_rect;
+    let texture = context.scene_texture_view.texture();
+    let (texture_w, texture_h) = (texture.width() as f32, texture.height() as f32);
+    let scene_uv = Vec4::new(
+        screen_w / texture_w,
+        screen_h / texture_h,
+        -scene.x.to_f32() / texture_w,
+        -scene.y.to_f32() / texture_h,
+    );
 
     let (corner_radii, corner_g2, shape_type) = match render.shape.resolve_for_size(size) {
         crate::shape_def::ResolvedShape::Rounded {
@@ -278,6 +289,8 @@ fn glass_uniforms(
             (true, false) => 1,
             (true, true) => 2,
         },
+        scene_uv,
+        scene_size_px: Vec2::new(scene.width.to_f32(), scene.height.to_f32()),
         rect_size_px: [size.width.0 as f32, size.height.0 as f32].into(),
         ripple_center: render.ripple_center.unwrap_or([0.0, 0.0]).into(),
         corner_radii,

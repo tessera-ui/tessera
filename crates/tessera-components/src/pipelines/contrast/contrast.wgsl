@@ -26,31 +26,33 @@ fn reset() {
     atomicStore(&mean_result.total_pixels, 0u);
 }
 
-// Dispatched over the area only.
+// Both passes are dispatched over the area only.
+fn area_coord(global_id: vec3<u32>) -> vec2<u32> {
+    return global_id.xy + vec2<u32>(uniforms.area_x, uniforms.area_y);
+}
+
+fn outside_area(global_id: vec3<u32>) -> bool {
+    return global_id.x >= uniforms.area_width || global_id.y >= uniforms.area_height
+        || any(area_coord(global_id) >= textureDimensions(source_texture));
+}
+
 @compute @workgroup_size(8, 8, 1)
 fn accumulate(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let coord = global_id.xy + vec2<u32>(uniforms.area_x, uniforms.area_y);
-    if global_id.x >= uniforms.area_width || global_id.y >= uniforms.area_height
-        || any(coord >= textureDimensions(source_texture)) {
+    if outside_area(global_id) {
         return;
     }
-    atomicAdd(&mean_result.total_luminance, u32(luminance(textureLoad(source_texture, coord, 0)) * 255.0));
+    let color = textureLoad(source_texture, area_coord(global_id), 0);
+    atomicAdd(&mean_result.total_luminance, u32(luminance(color) * 255.0));
     atomicAdd(&mean_result.total_pixels, 1u);
 }
 
 @compute @workgroup_size(8, 8, 1)
 fn apply(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let coord = global_id.xy;
-    if any(coord >= textureDimensions(dest_texture)) {
+    if outside_area(global_id) {
         return;
     }
+    let coord = area_coord(global_id);
     let color = textureLoad(source_texture, coord, 0);
-    let in_area = global_id.x >= uniforms.area_x && global_id.x < uniforms.area_x + uniforms.area_width
-        && global_id.y >= uniforms.area_y && global_id.y < uniforms.area_y + uniforms.area_height;
-    if !in_area {
-        textureStore(dest_texture, coord, color);
-        return;
-    }
     var mean = 0.5;
     let pixels = atomicLoad(&mean_result.total_pixels);
     if pixels > 0u {

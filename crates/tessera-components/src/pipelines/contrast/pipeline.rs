@@ -161,18 +161,14 @@ impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
             pass.set_bind_group(0, &bind_group, &[]);
             pass.set_pipeline(&self.reset);
             pass.dispatch_workgroups(1, 1, 1);
-            pass.set_pipeline(&self.accumulate);
-            pass.dispatch_workgroups(
-                uniforms.area_width.div_ceil(8),
-                uniforms.area_height.div_ceil(8),
-                1,
-            );
-            pass.set_pipeline(&self.apply);
-            pass.dispatch_workgroups(
-                context.target_size.width.positive().div_ceil(8),
-                context.target_size.height.positive().div_ceil(8),
-                1,
-            );
+            for pipeline in [&self.accumulate, &self.apply] {
+                pass.set_pipeline(pipeline);
+                pass.dispatch_workgroups(
+                    uniforms.area_width.div_ceil(8),
+                    uniforms.area_height.div_ceil(8),
+                    1,
+                );
+            }
         }
     }
 }

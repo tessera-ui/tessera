@@ -47,9 +47,9 @@ calculations must use the inverse transformation where appropriate; changing
 only the vertex positions does not scale line widths or fragment-space shapes.
 Text rendering scales glyph placement and glyph rasterization together.
 
-Local texture and atlas generation use their own identity coordinate space.
-Their final scene composite receives the scene transformation once. Physical
-caches must account for scale or bypass an incompatible cached entry.
+Atlas generation uses its own identity coordinate space. Drawing an atlas
+entry applies the scene transformation once. Physical caches must account for
+scale or bypass an incompatible cached entry.
 
 Local drawing and sampling padding scale with the command. Explicit absolute
 sampling regions and global sampling already describe window coordinates.

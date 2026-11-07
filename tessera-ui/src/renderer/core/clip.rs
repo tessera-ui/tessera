@@ -4,8 +4,6 @@
 //!
 //! Apply rounded or elliptical clipping across scene draw passes.
 
-use std::collections::HashMap;
-
 use bytemuck::{Pod, Zeroable};
 
 use crate::{
@@ -25,11 +23,6 @@ struct MaskInstance {
     padding: u32,
 }
 
-struct StencilTarget {
-    view: wgpu::TextureView,
-    used: bool,
-}
-
 pub(super) struct ShapeClipper {
     push_pipeline: wgpu::RenderPipeline,
     pop_pipeline: wgpu::RenderPipeline,
@@ -37,7 +30,6 @@ pub(super) struct ShapeClipper {
     capacity: usize,
     layout: wgpu::BindGroupLayout,
     group: wgpu::BindGroup,
-    stencils: HashMap<(u32, u32, u32), StencilTarget>,
     instances: Vec<MaskInstance>,
     stack: Vec<Option<u32>>,
 }
@@ -106,7 +98,6 @@ impl ShapeClipper {
             capacity: 1,
             layout,
             group,
-            stencils: HashMap::new(),
             instances: Vec::new(),
             stack: Vec::new(),
         }
@@ -143,12 +134,13 @@ impl ShapeClipper {
         passes: &mut [RenderPassPlan],
         viewport: [f32; 2],
     ) {
-        self.stencils
-            .retain(|_, target| std::mem::replace(&mut target.used, false));
         self.stack.clear();
         self.instances.clear();
         for pass in passes {
-            for op in &mut pass.draws {
+            let RenderPassPlan::Draw { draws, .. } = pass else {
+                continue;
+            };
+            for op in draws {
                 if let DrawOrClip::Clip(ClipOps::ShapePush { region, index }) = op {
                     *index = self.instances.len() as u32;
                     self.instances.push(Self::instance(*region, viewport));
@@ -188,53 +180,14 @@ impl ShapeClipper {
         }
     }
 
-    pub(super) fn stencil(
-        &mut self,
-        device: &wgpu::Device,
-        size: PxSize,
-        samples: u32,
-    ) -> wgpu::TextureView {
-        let target = self
-            .stencils
-            .entry((
-                size.width.positive().max(1),
-                size.height.positive().max(1),
-                samples,
-            ))
-            .or_insert_with_key(|&(width, height, sample_count)| StencilTarget {
-                used: true,
-                view: device
-                    .create_texture(&wgpu::TextureDescriptor {
-                        label: Some("UI stencil"),
-                        size: wgpu::Extent3d {
-                            width,
-                            height,
-                            depth_or_array_layers: 1,
-                        },
-                        mip_level_count: 1,
-                        sample_count,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: wgpu::TextureFormat::Stencil8,
-                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                        view_formats: &[],
-                    })
-                    .create_view(&Default::default()),
-            });
-        target.used = true;
-        target.view.clone()
-    }
-
-    pub(super) fn restore(&self, pass: &mut wgpu::RenderPass<'_>, size: PxSize, apply_clip: bool) {
-        if apply_clip {
-            let mut depth = 0;
-            for index in self.stack.iter().flatten() {
-                self.draw_mask(pass, size, *index, depth, true);
-                depth += 1;
-            }
-            pass.set_stencil_reference(depth);
-        } else {
-            pass.set_stencil_reference(0);
+    /// Redraws the active masks into a pass whose stencil starts cleared.
+    pub(super) fn restore(&self, pass: &mut wgpu::RenderPass<'_>, size: PxSize) {
+        let mut depth = 0;
+        for index in self.stack.iter().flatten() {
+            self.draw_mask(pass, size, *index, depth, true);
+            depth += 1;
         }
+        pass.set_stencil_reference(depth);
     }
 
     pub(super) fn push(

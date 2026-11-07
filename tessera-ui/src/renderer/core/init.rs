@@ -6,13 +6,10 @@ use winit::window::Window;
 
 use crate::{
     pipeline_cache::initialize_cache,
-    renderer::{
-        compute::ComputePipelineRegistry, drawer::Drawer, external::ExternalTextureRegistry,
-        window_drawable_size,
-    },
+    renderer::{compute::ComputePipelineRegistry, drawer::Drawer, window_drawable_size},
 };
 
-use super::{BlitState, ComputeState, FrameTargets, LocalTexturePool, RenderCore, RenderPipelines};
+use super::{BlitState, FrameTargets, RenderCore, RenderPipelines};
 
 impl RenderCore {
     fn pick_alpha_mode(
@@ -428,7 +425,6 @@ impl RenderCore {
                 cache: pipeline_cache.as_ref(),
             })
         };
-        let blit_pipeline = create_blit_pipeline("Blit Pipeline", draw_config.format, "fs_main");
         let blit_pipeline_rgba = create_blit_pipeline(
             "Blit Pipeline Rgba8",
             wgpu::TextureFormat::Rgba8Unorm,
@@ -501,19 +497,13 @@ impl RenderCore {
         let targets = FrameTargets {
             offscreen: offscreen_texture,
             offscreen_copy: offscreen_copy_texture,
-            scene_sample: None,
             msaa_texture,
             msaa_view,
+            stencil: Self::create_stencil(&device, &draw_config, sample_count),
             sample_count,
         };
 
-        let compute = ComputeState {
-            target_a: None,
-            target_b: None,
-        };
-
         let blit = BlitState {
-            pipeline: blit_pipeline,
             present_pipeline,
             pipeline_rgba: blit_pipeline_rgba,
             bind_group_layout: blit_bind_group_layout,
@@ -549,10 +539,7 @@ impl RenderCore {
             pipeline_cache,
             adapter_info,
             targets,
-            compute,
             blit,
-            local_textures: LocalTexturePool::new(),
-            external_textures: ExternalTextureRegistry::new(),
             frame_index: 0,
             last_render_breakdown: None,
             #[cfg(all(
@@ -592,32 +579,27 @@ impl RenderCore {
         texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    pub(super) fn create_compute_pass_target(
+    fn create_stencil(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
-        label_suffix: &str,
+        sample_count: u32,
     ) -> wgpu::TextureView {
-        let label = format!("Compute {label_suffix} Texture");
-        let texture_descriptor = wgpu::TextureDescriptor {
-            label: Some(&label),
-            size: wgpu::Extent3d {
-                width: config.width,
-                height: config.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::STORAGE_BINDING
-                | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        };
-        let texture = device.create_texture(&texture_descriptor);
-        texture.create_view(&wgpu::TextureViewDescriptor::default())
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("UI stencil"),
+                size: wgpu::Extent3d {
+                    width: config.width,
+                    height: config.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count,
+                dimension: wgpu::TextureDimension::D2,
+                format: TextureFormat::Stencil8,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default())
     }
 
     /// Resize the surface
@@ -677,20 +659,15 @@ impl RenderCore {
         self.draw_config.width = self.config.width;
         self.draw_config.height = self.config.height;
         self.targets.offscreen.texture().destroy();
-        for view in [
-            self.targets.offscreen_copy.take(),
-            self.targets.scene_sample.take(),
-            self.compute.target_a.take(),
-            self.compute.target_b.take(),
-        ]
-        .into_iter()
-        .flatten()
-        {
+        self.targets.stencil.texture().destroy();
+        if let Some(view) = self.targets.offscreen_copy.take() {
             view.texture().destroy();
         }
 
         self.targets.offscreen =
             Self::create_pass_target(&self.device, &self.draw_config, "Offscreen");
+        self.targets.stencil =
+            Self::create_stencil(&self.device, &self.draw_config, self.targets.sample_count);
         if self.surface.is_none() {
             self.targets.offscreen_copy = Some(Self::create_pass_target(
                 &self.device,

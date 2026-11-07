@@ -77,67 +77,16 @@ impl DrawGeometry {
     }
 }
 
-/// Resource identifier used by render graph nodes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RenderResourceId {
-    /// The main scene color buffer.
-    SceneColor,
-    /// The main scene depth buffer.
-    SceneDepth,
-    /// A local texture allocated by a fragment.
-    Local(u32),
-    /// A persistent texture owned by a pipeline.
-    External(u32),
-}
-
-/// Descriptor for a local render texture.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderTextureDesc {
-    /// Pixel size of the texture.
-    pub size: PxSize,
-    /// Texture format.
-    pub format: wgpu::TextureFormat,
-}
-
-/// Render graph resource description.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RenderResource {
-    /// A texture resource allocated for a fragment.
-    Texture(RenderTextureDesc),
-}
-
-/// Descriptor for a persistent external texture.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExternalTextureDesc {
-    /// Registry handle identifier for the texture.
-    pub handle_id: u32,
-    /// Pixel size of the texture.
-    pub size: PxSize,
-    /// Texture format.
-    pub format: wgpu::TextureFormat,
-    /// MSAA sample count for render targets.
-    pub sample_count: u32,
-    /// Whether to clear the texture on the first render pass write.
-    pub clear_on_first_use: bool,
-}
-
-/// A single render op inside a fragment graph.
+/// A single render op inside a fragment.
 #[derive(Clone)]
 pub struct RenderFragmentOp {
     /// The command to execute.
     pub command: Command,
     /// Type identifier used for batching.
     pub type_id: TypeId,
-    /// Resource read by this op.
-    pub read: Option<RenderResourceId>,
-    /// Resource written by this op.
-    pub write: Option<RenderResourceId>,
-    /// Local dependencies inside the fragment.
-    pub deps: SmallVec<[u32; 2]>,
     /// Optional size override for this op.
     pub size_override: Option<PxSize>,
-    /// Optional position override for this op (SceneColor ops treat it as
-    /// offset).
+    /// Optional offset of this op from its node's origin.
     pub position_override: Option<PxPosition>,
 }
 
@@ -145,7 +94,6 @@ pub struct RenderFragmentOp {
 #[derive(Default, Clone)]
 pub struct RenderFragment {
     ops: Vec<RenderFragmentOp>,
-    resources: Vec<RenderResource>,
 }
 
 impl RenderFragment {
@@ -161,69 +109,30 @@ impl RenderFragment {
         &mut self.ops
     }
 
-    /// Returns local resources declared by this fragment.
-    #[must_use]
-    pub fn resources(&self) -> &[RenderResource] {
-        &self.resources
-    }
-
-    /// Adds a local texture resource to the fragment.
-    pub fn add_local_texture(&mut self, desc: RenderTextureDesc) -> RenderResourceId {
-        let index = self.resources.len() as u32;
-        self.resources.push(RenderResource::Texture(desc));
-        RenderResourceId::Local(index)
-    }
-
-    /// Adds a draw command with default scene resource bindings.
+    /// Adds a draw command.
     pub fn push_draw_command<C: DrawCommand + 'static>(&mut self, command: C) -> u32 {
-        let type_id = TypeId::of::<C>();
-        let read = command
-            .sample_region()
-            .is_some()
-            .then_some(RenderResourceId::SceneColor);
-        let write = Some(RenderResourceId::SceneColor);
-
-        let op = RenderFragmentOp {
-            command: Command::Draw(Box::new(command)),
-            type_id,
-            read,
-            write,
-            deps: SmallVec::new(),
-            size_override: None,
-            position_override: None,
-        };
-        self.push_op(op)
+        self.push_op(Command::Draw(Box::new(command)), TypeId::of::<C>())
     }
 
-    /// Adds a compute command with default scene resource bindings.
+    /// Adds a compute command.
     pub fn push_compute_command<C: ComputeCommand + 'static>(&mut self, command: C) -> u32 {
-        let type_id = TypeId::of::<C>();
-        let read = Some(RenderResourceId::SceneColor);
-        let write = Some(RenderResourceId::SceneColor);
-
-        let op = RenderFragmentOp {
-            command: Command::Compute(Box::new(command)),
-            type_id,
-            read,
-            write,
-            deps: SmallVec::new(),
-            size_override: None,
-            position_override: None,
-        };
-        self.push_op(op)
+        self.push_op(Command::Compute(Box::new(command)), TypeId::of::<C>())
     }
 
-    /// Adds a render op to the fragment.
-    pub fn push_op(&mut self, op: RenderFragmentOp) -> u32 {
+    fn push_op(&mut self, command: Command, type_id: TypeId) -> u32 {
         let index = self.ops.len() as u32;
-        self.ops.push(op);
+        self.ops.push(RenderFragmentOp {
+            command,
+            type_id,
+            size_override: None,
+            position_override: None,
+        });
         index
     }
 
-    /// Clears all ops and resources in the fragment.
+    /// Clears all ops in the fragment.
     pub fn clear(&mut self) {
         self.ops.clear();
-        self.resources.clear();
     }
 }
 
@@ -234,12 +143,6 @@ pub struct RenderGraphOp {
     pub command: Command,
     /// Type identifier used for batching and ordering.
     pub type_id: TypeId,
-    /// Resource read for the op.
-    pub read: Option<RenderResourceId>,
-    /// Resource write for the op.
-    pub write: Option<RenderResourceId>,
-    /// Dependencies on other ops by index.
-    pub deps: SmallVec<[usize; 2]>,
     /// Local drawing dimensions and their precise target mapping.
     pub geometry: DrawGeometry,
     /// Opacity multiplier applied during record.
@@ -258,18 +161,6 @@ pub struct RenderGraph {
 struct RenderGraphData {
     ordered_ops: OnceLock<Vec<RenderGraphOp>>,
     ops: Vec<RenderGraphOp>,
-    resources: Vec<RenderResource>,
-    external_resources: Vec<ExternalTextureDesc>,
-}
-
-/// Owned render graph payload for graph transforms.
-pub struct RenderGraphParts {
-    /// Render ops for the frame.
-    pub ops: Vec<RenderGraphOp>,
-    /// Resource declarations referenced by the ops.
-    pub resources: Vec<RenderResource>,
-    /// External resources referenced by the ops.
-    pub external_resources: Vec<ExternalTextureDesc>,
 }
 
 impl RenderGraph {
@@ -279,131 +170,49 @@ impl RenderGraph {
         &self.data.ops
     }
 
-    /// Returns local resources in the graph.
-    #[must_use]
-    pub fn resources(&self) -> &[RenderResource] {
-        &self.data.resources
+    /// Returns the ops in execution order.
+    pub(crate) fn ordered_ops(&self) -> Vec<RenderGraphOp> {
+        self.data
+            .ordered_ops
+            .get_or_init(|| order_ops(self.data.ops.clone()))
+            .clone()
     }
-
-    /// Returns external resources in the graph.
-    #[must_use]
-    pub fn external_resources(&self) -> &[ExternalTextureDesc] {
-        &self.data.external_resources
-    }
-
-    /// Decomposes the graph into owned parts for graph processing.
-    #[must_use]
-    pub fn into_parts(self) -> RenderGraphParts {
-        match Arc::try_unwrap(self.data) {
-            Ok(data) => RenderGraphParts {
-                ops: data.ops,
-                resources: data.resources,
-                external_resources: data.external_resources,
-            },
-            Err(data) => RenderGraphParts {
-                ops: data.ops.clone(),
-                resources: data.resources.clone(),
-                external_resources: data.external_resources.clone(),
-            },
-        }
-    }
-
-    /// Builds a render graph from owned parts.
-    #[must_use]
-    pub fn from_parts(parts: RenderGraphParts) -> Self {
-        Self {
-            data: Arc::new(RenderGraphData {
-                ops: parts.ops,
-                resources: parts.resources,
-                external_resources: parts.external_resources,
-                ordered_ops: OnceLock::new(),
-            }),
-        }
-    }
-
-    /// Consumes the graph and returns an execution-ready payload.
-    pub(crate) fn into_execution(self) -> RenderGraphExecution {
-        RenderGraphExecution {
-            ops: self
-                .data
-                .ordered_ops
-                .get_or_init(|| order_ops(self.data.ops.clone()))
-                .clone(),
-            resources: self.data.resources.clone(),
-            external_resources: self.data.external_resources.clone(),
-        }
-    }
-}
-
-/// Ordered render ops with resource declarations for the current frame.
-pub(crate) struct RenderGraphExecution {
-    pub(crate) ops: Vec<RenderGraphOp>,
-    pub(crate) resources: Vec<RenderResource>,
-    pub(crate) external_resources: Vec<ExternalTextureDesc>,
 }
 
 /// Builder for a frame-level render graph.
 pub(crate) struct RenderGraphBuilder {
     ops: Vec<RenderGraphOp>,
-    resources: Vec<RenderResource>,
-    external_resources: Vec<ExternalTextureDesc>,
-    sequence_index: usize,
 }
 
 impl RenderGraphBuilder {
     /// Creates a new render graph builder.
     pub(crate) fn new() -> Self {
-        Self {
-            ops: Vec::new(),
-            resources: Vec::new(),
-            external_resources: Vec::new(),
-            sequence_index: 0,
-        }
+        Self { ops: Vec::new() }
+    }
+
+    fn push_state(&mut self, command: Command) {
+        self.ops.push(RenderGraphOp {
+            command,
+            type_id: TypeId::of::<Command>(),
+            geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
+            opacity: 1.0,
+            sequence_index: self.ops.len(),
+        });
     }
 
     /// Pushes a clip push op into the graph.
     pub(crate) fn push_clip_push(&mut self, rect: PxRect) {
-        self.ops.push(RenderGraphOp {
-            command: Command::ClipPush(rect),
-            type_id: TypeId::of::<Command>(),
-            read: None,
-            write: None,
-            deps: SmallVec::new(),
-            geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
-            opacity: 1.0,
-            sequence_index: self.sequence_index,
-        });
-        self.sequence_index += 1;
+        self.push_state(Command::ClipPush(rect));
     }
 
     /// Pushes a shape clip op into the graph.
     pub(crate) fn push_shape_clip_push(&mut self, region: crate::ClipRegion) {
-        self.ops.push(RenderGraphOp {
-            command: Command::ShapeClipPush(region),
-            type_id: TypeId::of::<Command>(),
-            read: None,
-            write: None,
-            deps: SmallVec::new(),
-            geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
-            opacity: 1.0,
-            sequence_index: self.sequence_index,
-        });
-        self.sequence_index += 1;
+        self.push_state(Command::ShapeClipPush(region));
     }
 
     /// Pushes a clip pop op into the graph.
     pub(crate) fn push_clip_pop(&mut self) {
-        self.ops.push(RenderGraphOp {
-            command: Command::ClipPop,
-            type_id: TypeId::of::<Command>(),
-            read: None,
-            write: None,
-            deps: SmallVec::new(),
-            geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
-            opacity: 1.0,
-            sequence_index: self.sequence_index,
-        });
-        self.sequence_index += 1;
+        self.push_state(Command::ClipPop);
     }
 
     /// Appends a fragment into the frame graph.
@@ -413,72 +222,35 @@ impl RenderGraphBuilder {
         geometry: DrawGeometry,
         opacity: f32,
     ) {
-        if fragment.ops.is_empty() {
-            return;
-        }
-
-        let resource_base = self.resources.len() as u32;
-        self.resources.extend(fragment.resources.iter().cloned());
-
-        let base_index = self.ops.len();
-
         for op in &fragment.ops {
-            let writes_scene = op.write == Some(RenderResourceId::SceneColor);
-            let position_override = op.position_override.unwrap_or(PxPosition::ZERO);
-            let size_override = op.size_override.unwrap_or(geometry.local_size);
-
-            let map = |resource| map_resource(resource, resource_base, fragment.resources.len());
-            let read = op.read.map(map);
-            let write = op.write.map(map);
-            let deps = op
-                .deps
-                .iter()
-                .map(|dep| base_index + *dep as usize)
-                .collect::<SmallVec<[usize; 2]>>();
-
             let mut command = op.command.clone();
             if let Command::Draw(ref mut command) = command {
                 command.apply_opacity(opacity);
             }
-
-            let mapping = if writes_scene {
-                geometry
-                    .local_to_window
-                    .with_local_origin(position_override)
-            } else {
-                LocalToWindow::IDENTITY.with_local_origin(position_override)
-            };
-
+            let mapping = geometry
+                .local_to_window
+                .with_local_origin(op.position_override.unwrap_or(PxPosition::ZERO));
             self.ops.push(RenderGraphOp {
                 command,
                 type_id: op.type_id,
-                read,
-                write,
-                deps,
-                geometry: DrawGeometry::new(size_override, mapping),
+                geometry: DrawGeometry::new(
+                    op.size_override.unwrap_or(geometry.local_size),
+                    mapping,
+                ),
                 opacity,
-                sequence_index: self.sequence_index,
+                sequence_index: self.ops.len(),
             });
-            self.sequence_index += 1;
         }
     }
 
     /// Finishes graph construction.
     pub(crate) fn finish(self) -> RenderGraph {
-        RenderGraph::from_parts(RenderGraphParts {
-            ops: self.ops,
-            resources: self.resources,
-            external_resources: self.external_resources,
-        })
-    }
-}
-
-fn map_resource(resource: RenderResourceId, base: u32, count: usize) -> RenderResourceId {
-    match resource {
-        RenderResourceId::Local(index) if (index as usize) < count => {
-            RenderResourceId::Local(base + index)
+        RenderGraph {
+            data: Arc::new(RenderGraphData {
+                ordered_ops: OnceLock::new(),
+                ops: self.ops,
+            }),
         }
-        other => other,
     }
 }
 
@@ -495,12 +267,6 @@ fn order_ops(ops: Vec<RenderGraphOp>) -> Vec<RenderGraphOp> {
 
     let mut outgoing: Vec<SmallVec<[usize; 4]>> = vec![SmallVec::new(); ops.len()];
     let mut in_degree = vec![0usize; ops.len()];
-
-    for (idx, op) in ops.iter().enumerate() {
-        for dep in &op.deps {
-            add_edge(&mut outgoing, &mut in_degree, *dep, idx);
-        }
-    }
 
     let by_sequence = sequence_order(&ops);
 
@@ -720,37 +486,7 @@ fn needs_ordering(
     left_op: &RenderGraphOp,
     right_op: &RenderGraphOp,
 ) -> bool {
-    if is_state_change(left_op) || is_state_change(right_op) {
-        return true;
-    }
-
-    if non_scene_conflict(left_op, right_op) {
-        return true;
-    }
-
-    scene_conflict(left, right)
-}
-
-fn non_scene_conflict(left: &RenderGraphOp, right: &RenderGraphOp) -> bool {
-    if let Some(resource) = left.write {
-        if resource == RenderResourceId::SceneColor {
-            return false;
-        }
-        if Some(resource) == right.read || Some(resource) == right.write {
-            return true;
-        }
-    }
-
-    if let Some(resource) = left.read {
-        if resource == RenderResourceId::SceneColor {
-            return false;
-        }
-        if Some(resource) == right.write {
-            return true;
-        }
-    }
-
-    false
+    is_state_change(left_op) || is_state_change(right_op) || scene_conflict(left, right)
 }
 
 fn scene_conflict(left: &OpInfo, right: &OpInfo) -> bool {
@@ -773,9 +509,6 @@ fn scene_conflict(left: &OpInfo, right: &OpInfo) -> bool {
 }
 
 fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
-    if op.read != Some(RenderResourceId::SceneColor) {
-        return None;
-    }
     match &op.command {
         Command::Draw(command) => command
             .sample_region()
@@ -786,9 +519,6 @@ fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
 }
 
 fn scene_write_rect(op: &RenderGraphOp) -> Option<PxRect> {
-    if op.write != Some(RenderResourceId::SceneColor) {
-        return None;
-    }
     match &op.command {
         Command::Draw(command) => Some(
             command
@@ -915,25 +645,14 @@ mod tests {
     };
 
     #[test]
-    fn fragment_maps_scene_overrides_once_and_keeps_texture_generation_unscaled() {
+    fn fragment_overrides_map_through_the_node_transform_once() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let mut fragment = RenderFragment::default();
-        let local = fragment.add_local_texture(RenderTextureDesc {
-            size: PxSize::new(Px(64), Px(32)),
-            format: wgpu::TextureFormat::Rgba8Unorm,
-        });
         fragment.push_draw_command(ProbeDraw {
             id: 1,
             sample: None,
         });
-        fragment.push_draw_command(ProbeDraw {
-            id: 2,
-            sample: None,
-        });
-        fragment.ops_mut()[0].write = Some(local);
-        fragment.ops_mut()[1].read = Some(local);
-        fragment.ops_mut()[1].deps.push(0);
         for op in fragment.ops_mut() {
             op.size_override = Some(PxSize::new(Px(64), Px(32)));
             op.position_override = Some(PxPosition::from_f32_xy(4.0, 8.0));
@@ -947,36 +666,8 @@ mod tests {
             ),
             1.0,
         );
-        builder.append_fragment(
-            &fragment,
-            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(64), Px(32))),
-            0.5,
-        );
         let graph = builder.finish();
-        assert_eq!(graph.resources().len(), 2);
-        assert_eq!(graph.ops()[1].read, Some(RenderResourceId::Local(0)));
-        assert_eq!(graph.ops()[1].deps.as_slice(), &[0]);
-        assert_eq!(graph.ops()[2].write, Some(RenderResourceId::Local(1)));
-        assert_eq!(graph.ops()[3].read, Some(RenderResourceId::Local(1)));
-        assert_eq!(graph.ops()[3].deps.as_slice(), &[2]);
-        assert_eq!(fragment.ops()[0].write, Some(RenderResourceId::Local(0)));
-        assert_eq!(fragment.ops()[1].deps.as_slice(), &[0]);
-        let local = graph
-            .ops()
-            .iter()
-            .find(|op| op.write == Some(RenderResourceId::Local(0)))
-            .unwrap();
-        let scene = graph
-            .ops()
-            .iter()
-            .find(|op| op.write == Some(RenderResourceId::SceneColor))
-            .unwrap();
-        assert_eq!(local.geometry.local_to_window.scale(), 1.0);
-        assert_eq!(
-            local.geometry.window_origin(),
-            PxPosition::from_f32_xy(4.0, 8.0)
-        );
-        assert_eq!(local.geometry.window_size(), [64.0, 32.0]);
+        let scene = &graph.ops()[0];
         assert_eq!(scene.geometry.local_size, PxSize::new(Px(64), Px(32)));
         assert_eq!(
             scene.geometry.window_origin(),
@@ -1003,9 +694,6 @@ mod tests {
         RenderGraphOp {
             command: Command::Draw(Box::new(ProbeDraw { id, sample: None })),
             type_id: TypeId::of::<ProbeDraw>(),
-            read: None,
-            write: Some(RenderResourceId::SceneColor),
-            deps: SmallVec::new(),
             geometry: DrawGeometry::from_position_size(
                 PxPosition::new(Px::new(x), Px::new(y)),
                 PxSize::new(Px::new(w), Px::new(h)),
@@ -1031,7 +719,6 @@ mod tests {
                 pad,
             ))));
         }
-        op.read = Some(RenderResourceId::SceneColor);
         op
     }
 
@@ -1039,9 +726,6 @@ mod tests {
         RenderGraphOp {
             command: Command::ClipPush(PxRect::new(Px::ZERO, Px::ZERO, Px::new(10), Px::new(10))),
             type_id: TypeId::of::<Command>(),
-            read: None,
-            write: None,
-            deps: SmallVec::new(),
             geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
             opacity: 1.0,
             sequence_index: sequence,
@@ -1052,9 +736,6 @@ mod tests {
         RenderGraphOp {
             command: Command::ClipPop,
             type_id: TypeId::of::<Command>(),
-            read: None,
-            write: None,
-            deps: SmallVec::new(),
             geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
             opacity: 1.0,
             sequence_index: sequence,

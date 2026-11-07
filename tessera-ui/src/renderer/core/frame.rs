@@ -5,70 +5,45 @@ use smallvec::SmallVec;
 use tracing::{debug, error, warn};
 
 use crate::{
-    DrawCommand, Px, PxPosition, PxRect, PxSize, SampleRegion,
-    render_graph::{
-        DrawGeometry, ExternalTextureDesc, RenderGraphExecution, RenderResource, RenderResourceId,
-        RenderTextureDesc,
-    },
-    render_pass::{
-        ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassKind, RenderPassPlan,
-    },
+    DrawCommand, LocalToWindow, Px, PxPosition, PxRect, PxSize, SampleRegion, ScratchFit,
+    ScratchTexture, ScratchTextureDescriptor,
+    render_graph::{DrawGeometry, RenderGraphOp},
+    render_pass::{ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassPlan},
     renderer::{
         compute::{ErasedComputeBatchItem, pipeline::ErasedDispatchContext},
         drawer::ErasedDrawContext,
-        external::{ExternalTextureRegistry, ExternalTextureSlotGuard},
     },
     time::Instant,
 };
 
 use super::*;
 
-fn compute_last_use_passes(passes: &[RenderPassPlan], local_count: usize) -> Vec<usize> {
-    let mut last_use = vec![0usize; local_count];
-    for (pass_index, pass) in passes.iter().enumerate() {
-        if let Some(RenderResourceId::Local(index)) = pass.read_resource {
-            last_use[index as usize] = pass_index;
-        }
-        if let RenderResourceId::Local(index) = pass.write_resource {
-            last_use[index as usize] = pass_index;
-        }
-        for draw in pass.draws.iter() {
-            if let DrawOrClip::Draw(cmd) = draw
-                && let Some(RenderResourceId::Local(index)) = cmd.read_resource
-            {
-                last_use[index as usize] = pass_index;
-            }
-        }
-    }
-    last_use
+/// Scene pixels available to draws that sample the scene.
+enum SceneState {
+    /// Draws sample a copy of the offscreen target.
+    Offscreen,
+    /// A compute pass filtered the scene inside `rect`.
+    Filtered {
+        texture: ScratchTexture,
+        rect: PxRect,
+    },
 }
 
-struct RenderPassParams<'a, 'b> {
-    msaa_view: Option<wgpu::TextureView>,
-    stencil_view: wgpu::TextureView,
+struct RenderPassParams<'a> {
+    msaa_view: Option<&'a wgpu::TextureView>,
+    stencil_view: &'a wgpu::TextureView,
     clipper: &'a mut super::clip::ShapeClipper,
     clear_target: bool,
     encoder: &'a mut wgpu::CommandEncoder,
-    write_target: wgpu::TextureView,
+    write_target: &'a wgpu::TextureView,
     commands_in_pass: &'a mut SmallVec<[DrawOrClip; 32]>,
-    scene_texture_view: wgpu::TextureView,
+    scene: Option<(&'a wgpu::TextureView, PxRect)>,
     drawer: &'a mut Drawer,
+    graphics: &'a crate::GraphicsDevice,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
     target_size: PxSize,
-    clip_stack: &'a mut SmallVec<[PxRect; 16]>,
-    apply_clip: bool,
-    resources: &'a mut FrameResources<'b>,
-}
-
-struct RenderPassExecParams<'a, 'b> {
-    encoder: &'a mut wgpu::CommandEncoder,
-    scene_texture_view: &'a mut wgpu::TextureView,
-    scene_source: &'a mut SceneSource,
-    resources: &'a mut FrameResources<'b>,
-    clear_state: &'a mut RenderPassClearState,
-    pass: &'a mut RenderPassPlan,
     clip_stack: &'a mut SmallVec<[PxRect; 16]>,
 }
 
@@ -80,254 +55,25 @@ struct BlitParams<'a> {
     bind_group_layout: &'a wgpu::BindGroupLayout,
     sampler: &'a wgpu::Sampler,
     pipeline: &'a wgpu::RenderPipeline,
-    target_size: PxSize,
-    scissor_rect: Option<PxRect>,
-}
-
-struct FrameResources<'a> {
-    graphics: &'a crate::GraphicsDevice,
-    locals: Vec<LocalResourceState>,
-    pool: &'a mut LocalTexturePool,
-    device: &'a wgpu::Device,
-    sample_count: u32,
-    current_frame: u64,
-    external: ExternalTextureRegistry,
-    external_descs: &'a [ExternalTextureDesc],
-}
-
-struct FrameResourcesParams<'a> {
-    graphics: &'a crate::GraphicsDevice,
-    pool: &'a mut LocalTexturePool,
-    device: &'a wgpu::Device,
-    resources: &'a [RenderResource],
-    external_descs: &'a [ExternalTextureDesc],
-    sample_count: u32,
-    current_frame: u64,
-    last_use_passes: &'a [usize],
-    external: ExternalTextureRegistry,
-}
-
-struct LocalResourceState {
-    desc: RenderTextureDesc,
-    slot: Option<usize>,
-    last_use_pass: usize,
-}
-
-impl<'a> FrameResources<'a> {
-    fn new(params: FrameResourcesParams<'a>) -> Self {
-        let FrameResourcesParams {
-            graphics,
-            pool,
-            device,
-            resources,
-            external_descs,
-            sample_count,
-            current_frame,
-            last_use_passes,
-            external,
-        } = params;
-        let locals = resources
-            .iter()
-            .enumerate()
-            .map(|(index, resource)| match resource {
-                RenderResource::Texture(desc) => LocalResourceState {
-                    desc: desc.clone(),
-                    slot: None,
-                    last_use_pass: *last_use_passes.get(index).unwrap_or(&0),
-                },
-            })
-            .collect();
-        Self {
-            graphics,
-            locals,
-            pool,
-            device,
-            sample_count,
-            current_frame,
-            external,
-            external_descs,
-        }
-    }
-
-    fn local_slot(&mut self, id: RenderResourceId) -> Option<&LocalTextureSlot> {
-        let RenderResourceId::Local(index) = id else {
-            return None;
-        };
-        let local = self.locals.get_mut(index as usize)?;
-        let slot_index = match local.slot {
-            Some(slot) => slot,
-            None => {
-                let slot = self.pool.allocate(
-                    self.device,
-                    &local.desc,
-                    self.sample_count,
-                    self.current_frame,
-                );
-                local.slot = Some(slot);
-                slot
-            }
-        };
-        self.pool.slot(slot_index)
-    }
-
-    fn local_slot_mut(&mut self, id: RenderResourceId) -> Option<&mut LocalTextureSlot> {
-        let RenderResourceId::Local(index) = id else {
-            return None;
-        };
-        let local = self.locals.get_mut(index as usize)?;
-        let slot_index = match local.slot {
-            Some(slot) => slot,
-            None => {
-                let slot = self.pool.allocate(
-                    self.device,
-                    &local.desc,
-                    self.sample_count,
-                    self.current_frame,
-                );
-                local.slot = Some(slot);
-                slot
-            }
-        };
-        self.pool.slot_mut(slot_index)
-    }
-
-    fn external_slot(&self, id: RenderResourceId) -> Option<ExternalTextureSlotGuard<'_>> {
-        let RenderResourceId::External(index) = id else {
-            return None;
-        };
-        let handle_id = self.external_descs.get(index as usize)?.handle_id;
-        self.external.slot(handle_id)
-    }
-
-    fn external_slot_mut(&self, id: RenderResourceId) -> Option<ExternalTextureSlotGuard<'_>> {
-        self.external_slot(id)
-    }
-
-    fn release_for_pass(&mut self, pass_index: usize) {
-        for local in &mut self.locals {
-            if local.last_use_pass == pass_index
-                && let Some(slot) = local.slot.take()
-                && let Some(slot_ref) = self.pool.slot_mut(slot)
-            {
-                slot_ref.in_use = false;
-            }
-        }
-    }
+    /// Source position of the target's first texel.
+    source_origin: PxPosition,
+    source_size: PxSize,
 }
 
 struct RenderCoreFrameState<'a> {
+    graphics: &'a crate::GraphicsDevice,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
-    targets: &'a mut FrameTargets,
+    targets: &'a FrameTargets,
     pipelines: &'a mut RenderPipelines,
-    compute: &'a mut ComputeState,
     blit: &'a BlitState,
 }
 
-struct RenderPassClearState {
-    scene_written: bool,
-    locals_written: Vec<bool>,
-    externals_written: Vec<bool>,
-    externals_should_clear: Vec<bool>,
-}
-
-impl RenderPassClearState {
-    fn new(local_count: usize, external_resources: &[ExternalTextureDesc]) -> Self {
-        Self {
-            scene_written: false,
-            locals_written: vec![false; local_count],
-            externals_written: vec![false; external_resources.len()],
-            externals_should_clear: external_resources
-                .iter()
-                .map(|desc| desc.clear_on_first_use)
-                .collect(),
-        }
+impl RenderCoreFrameState<'_> {
+    fn target_size(&self) -> PxSize {
+        PxSize::new(Px(self.config.width as i32), Px(self.config.height as i32))
     }
-
-    fn should_clear(&mut self, resource: RenderResourceId) -> bool {
-        match resource {
-            RenderResourceId::SceneColor => {
-                let clear = !self.scene_written;
-                self.scene_written = true;
-                clear
-            }
-            RenderResourceId::Local(index) => {
-                let slot = self
-                    .locals_written
-                    .get_mut(index as usize)
-                    .unwrap_or_else(|| panic!("missing clear state for local resource {index}"));
-                let clear = !*slot;
-                *slot = true;
-                clear
-            }
-            RenderResourceId::External(index) => {
-                let should_clear = self
-                    .externals_should_clear
-                    .get(index as usize)
-                    .copied()
-                    .unwrap_or(true);
-                if !should_clear {
-                    return false;
-                }
-                let slot = self
-                    .externals_written
-                    .get_mut(index as usize)
-                    .unwrap_or_else(|| panic!("missing clear state for external resource {index}"));
-                let clear = !*slot;
-                *slot = true;
-                clear
-            }
-            RenderResourceId::SceneDepth => false,
-        }
-    }
-}
-
-enum ComputeTargets<'a> {
-    Scene {
-        front: &'a mut wgpu::TextureView,
-        back: &'a mut wgpu::TextureView,
-    },
-    Local {
-        slot: &'a mut LocalTextureSlot,
-        device: &'a wgpu::Device,
-    },
-    External {
-        slot: ExternalTextureSlotGuard<'a>,
-        device: &'a wgpu::Device,
-    },
-}
-
-impl ComputeTargets<'_> {
-    fn front(&self) -> wgpu::TextureView {
-        match self {
-            Self::Scene { front, .. } => (**front).clone(),
-            Self::Local { slot, .. } => slot.front_view().clone(),
-            Self::External { slot, .. } => slot.front_view(),
-        }
-    }
-
-    fn back(&mut self) -> wgpu::TextureView {
-        match self {
-            Self::Scene { back, .. } => (**back).clone(),
-            Self::Local { slot, device } => slot.back_view(device),
-            Self::External { slot, device } => slot.back_view(device),
-        }
-    }
-
-    fn swap(&mut self) {
-        match self {
-            Self::Scene { front, back } => std::mem::swap(*front, *back),
-            Self::Local { slot, .. } => slot.swap_front_back(),
-            Self::External { slot, .. } => slot.swap_front_back(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SceneSource {
-    Offscreen,
-    Compute,
 }
 
 struct SubmitContext<'a> {
@@ -340,41 +86,30 @@ struct SubmitContext<'a> {
 struct SubmitBatchParams<'a, 'b> {
     drawer: &'a mut Drawer,
     resources: SubmitContext<'a>,
-    scene_texture_view: &'a wgpu::TextureView,
+    scene: (&'a wgpu::TextureView, PxRect),
     target_size: PxSize,
     clip_stack: &'b [PxRect],
     current_batch_draw_rect: &'a mut Option<PxRect>,
 }
 
-struct ComputePassParams<'a> {
-    encoder: &'a mut wgpu::CommandEncoder,
-    commands: Vec<ComputePlanItem>,
-    compute_pipeline_registry: &'a mut ComputePipelineRegistry,
-    device: &'a wgpu::Device,
-    queue: &'a wgpu::Queue,
-    config: &'a wgpu::SurfaceConfiguration,
-}
-
 impl RenderCore {
-    /// Render the surface using the unified command system.
-    ///
-    /// # Arguments
-    ///
-    /// * `ops` - Ordered render ops for the current frame.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` if rendering succeeds
+    /// Renders the frame and presents it to the window surface, or keeps it in
+    /// the offscreen copy when the core has no surface.
     pub(crate) fn render(
         &mut self,
-        execution: RenderGraphExecution,
+        ops: Vec<RenderGraphOp>,
         #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
     ) {
         if self.surface.is_none() {
-            self.render_offscreen(
-                execution,
+            let render_start = Instant::now();
+            let output_view = self.offscreen_copy().clone();
+            self.render_into_view(
+                ops,
+                &output_view,
                 #[cfg(feature = "debug-dirty-overlay")]
                 dirty_overlay_rects,
+                render_start,
+                std::time::Duration::ZERO,
             );
             return;
         }
@@ -423,7 +158,7 @@ impl RenderCore {
             .create_view(&wgpu::TextureViewDescriptor::default());
 
         self.render_into_view(
-            execution,
+            ops,
             &output_view,
             #[cfg(feature = "debug-dirty-overlay")]
             dirty_overlay_rects,
@@ -441,35 +176,9 @@ impl RenderCore {
         }
     }
 
-    /// Renders the frame into the internal offscreen target.
-    ///
-    /// Used by offscreen cores that have no swapchain surface. After this call
-    /// the rendered pixels can be read back with
-    /// [`RenderCore::read_offscreen_rgba`].
-    fn render_offscreen(
-        &mut self,
-        execution: RenderGraphExecution,
-        #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
-    ) {
-        let render_start = Instant::now();
-        let output_view = self.offscreen_copy().clone();
-        self.render_into_view(
-            execution,
-            &output_view,
-            #[cfg(feature = "debug-dirty-overlay")]
-            dirty_overlay_rects,
-            render_start,
-            std::time::Duration::ZERO,
-        );
-    }
-
-    /// Executes the render graph into `output_view`.
-    ///
-    /// Shared render body for both the window-surface path and the offscreen
-    /// path; only texture acquisition and presentation differ between them.
     fn render_into_view(
         &mut self,
-        execution: RenderGraphExecution,
+        ops: Vec<RenderGraphOp>,
         output_view: &wgpu::TextureView,
         #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
         render_start: Instant,
@@ -483,26 +192,14 @@ impl RenderCore {
             height: self.config.height,
             depth_or_array_layers: 1,
         };
-
-        let RenderGraphExecution {
-            ops,
-            resources,
-            external_resources,
-        } = execution;
-        for resource in &external_resources {
-            self.external_textures
-                .mark_used(resource.handle_id, current_frame);
-        }
         let build_start = Instant::now();
-        let graph = RenderPassGraph::build(ops, &resources, &external_resources, texture_size);
-        let mut passes = graph.into_passes();
+        let mut passes = RenderPassGraph::build(ops, texture_size).into_passes();
         self.pipelines.clipper.prepare(
             &self.device,
             &self.queue,
             &mut passes,
             [self.config.width as f32, self.config.height as f32],
         );
-        let last_use_passes = compute_last_use_passes(&passes, resources.len());
         let build_passes = build_start.elapsed();
 
         let mut encoder = self
@@ -511,15 +208,6 @@ impl RenderCore {
                 label: Some("Render Encoder"),
             });
 
-        let device = &self.device;
-        let queue = &self.queue;
-        let config = &self.draw_config;
-        let blit = &self.blit;
-        let pipelines = &mut self.pipelines;
-        let targets = &mut self.targets;
-        let compute = &mut self.compute;
-        let local_textures = &mut self.local_textures;
-
         let encode_start = Instant::now();
         #[cfg(all(
             feature = "profiling",
@@ -527,112 +215,88 @@ impl RenderCore {
             not(target_arch = "wasm32")
         ))]
         if let Some(timing) = &mut self.gpu_timing {
-            timing.begin(device, &mut encoder, passes.len(), current_frame);
+            timing.begin(&self.device, &mut encoder, passes.len(), current_frame);
         }
-        local_textures.begin_frame(current_frame);
 
-        // Frame-level begin for all pipelines
-        pipelines
-            .drawer
-            .pipeline_registry
-            .begin_all_frames(device, queue, config, &self.graphics);
-
-        let mut scene_texture_view = targets.offscreen.clone();
-        let mut scene_source = SceneSource::Offscreen;
-        let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
-        let mut frame_resources = FrameResources::new(FrameResourcesParams {
+        let mut state = RenderCoreFrameState {
             graphics: &self.graphics,
-            pool: local_textures,
-            device,
-            resources: &resources,
-            external_descs: &external_resources,
-            sample_count: targets.sample_count,
-            current_frame,
-            last_use_passes: &last_use_passes,
-            external: self.external_textures.clone(),
-        });
-
-        let mut clear_state = RenderPassClearState::new(resources.len(), &external_resources);
-
-        let mut frame_state = RenderCoreFrameState {
-            device,
-            queue,
-            config,
-            targets,
-            pipelines,
-            compute,
-            blit,
+            device: &self.device,
+            queue: &self.queue,
+            config: &self.draw_config,
+            targets: &self.targets,
+            pipelines: &mut self.pipelines,
+            blit: &self.blit,
         };
+        state.pipelines.drawer.pipeline_registry.begin_all_frames(
+            state.device,
+            state.queue,
+            state.config,
+            state.graphics,
+        );
 
-        for (pass_index, pass) in passes.iter_mut().enumerate() {
+        let mut scene = SceneState::Offscreen;
+        let mut scene_written = false;
+        let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
+        for pass in &mut passes {
             let timing = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
             Self::execute_render_pass(
-                &mut frame_state,
-                RenderPassExecParams {
-                    encoder: &mut encoder,
-                    scene_texture_view: &mut scene_texture_view,
-                    scene_source: &mut scene_source,
-                    resources: &mut frame_resources,
-                    clear_state: &mut clear_state,
-                    pass,
-                    clip_stack: &mut clip_stack,
-                },
+                &mut state,
+                &mut encoder,
+                &mut scene,
+                &mut scene_written,
+                pass,
+                &mut clip_stack,
             );
-            frame_resources.release_for_pass(pass_index);
             #[cfg(all(
                 feature = "profiling",
                 feature = "headless",
                 not(target_arch = "wasm32")
             ))]
             if let Some(timing) = &mut self.gpu_timing {
-                timing.mark(&mut encoder, || {
-                    let kind = match pass.kind {
-                        RenderPassKind::Draw => "Draw",
-                        RenderPassKind::Compute => "Compute",
-                    };
-                    format!(
-                        "{kind} read={:?} write={:?}",
-                        pass.read_resource, pass.write_resource
-                    )
+                timing.mark(&mut encoder, || match pass {
+                    RenderPassPlan::Draw { reads_scene, .. } => {
+                        format!("Draw reads_scene={reads_scene}")
+                    }
+                    RenderPassPlan::Compute(_) => "Compute".to_owned(),
                 });
             }
             if let Some(timing) = timing {
                 debug!(
-                    pass_index,
                     elapsed_us = timing.elapsed().as_micros(),
                     frame_nanos = crate::current_frame_nanos(),
                     "render_pass_cpu"
                 );
             }
         }
+        drop(scene);
 
-        let target_size = PxSize::new(Px(self.config.width as i32), Px(self.config.height as i32));
+        let target_size = state.target_size();
         RenderCore::blit_to_view(BlitParams {
             encoder: &mut encoder,
-            device,
-            source: &scene_texture_view,
+            device: state.device,
+            source: &state.targets.offscreen,
             target: output_view,
-            bind_group_layout: &blit.bind_group_layout,
-            sampler: &blit.sampler,
-            pipeline: &blit.present_pipeline,
-            target_size,
-            scissor_rect: None,
+            bind_group_layout: &state.blit.bind_group_layout,
+            sampler: &state.blit.sampler,
+            pipeline: &state.blit.present_pipeline,
+            source_origin: PxPosition::ZERO,
+            source_size: target_size,
         });
         #[cfg(feature = "debug-dirty-overlay")]
         Self::render_dirty_overlay(
             &mut encoder,
             output_view,
-            &blit.dirty_overlay_pipeline,
+            &state.blit.dirty_overlay_pipeline,
             target_size,
             dirty_overlay_rects,
         );
 
-        // Frame-level end for all pipelines
-        frame_state
-            .pipelines
-            .drawer
-            .pipeline_registry
-            .end_all_frames(device, queue, config, &self.graphics);
+        state.pipelines.drawer.pipeline_registry.end_all_frames(
+            state.device,
+            state.queue,
+            state.config,
+            state.graphics,
+        );
         let encode = encode_start.elapsed();
 
         #[cfg(all(
@@ -649,7 +313,7 @@ impl RenderCore {
         let finish_time =
             tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
                 .then(|| submit_start.elapsed());
-        queue.submit(
+        self.queue.submit(
             self.graphics
                 .finish_prelude()
                 .into_iter()
@@ -666,15 +330,13 @@ impl RenderCore {
             );
         }
 
-        let present = std::time::Duration::ZERO;
-        self.external_textures.collect_garbage(current_frame, 2);
         self.frame_index = self.frame_index.wrapping_add(1);
         self.last_render_breakdown = Some(RenderTimingBreakdown {
             acquire,
             build_passes,
             encode,
             submit,
-            present,
+            present: std::time::Duration::ZERO,
             total: render_start.elapsed(),
         });
     }
@@ -777,288 +439,227 @@ impl RenderCore {
 
     fn execute_render_pass(
         state: &mut RenderCoreFrameState<'_>,
-        params: RenderPassExecParams<'_, '_>,
+        encoder: &mut wgpu::CommandEncoder,
+        scene: &mut SceneState,
+        scene_written: &mut bool,
+        pass: &mut RenderPassPlan,
+        clip_stack: &mut SmallVec<[PxRect; 16]>,
     ) {
-        let RenderPassExecParams {
-            encoder,
-            scene_texture_view,
-            scene_source,
-            resources,
-            clear_state,
-            pass,
-            clip_stack,
-        } = params;
-
-        if pass.draws.is_empty() && pass.compute.is_empty() {
-            return;
-        }
-
-        match pass.kind {
-            RenderPassKind::Compute => {
-                if pass.compute.is_empty() {
-                    return;
-                }
-
-                let read_resource = pass.read_resource.unwrap_or(RenderResourceId::SceneColor);
-                let write_resource = pass.write_resource;
-
-                let input_view = match read_resource {
-                    RenderResourceId::SceneColor => Some(scene_texture_view.clone()),
-                    RenderResourceId::Local(_) => resources
-                        .local_slot(read_resource)
-                        .map(|slot| slot.front_view().clone()),
-                    RenderResourceId::External(_) => resources
-                        .external_slot(read_resource)
-                        .map(|slot| slot.front_view()),
-                    RenderResourceId::SceneDepth => Some(scene_texture_view.clone()),
-                };
-
-                let input_follows_front = read_resource == write_resource;
-                let compute_to_run = std::mem::take(&mut pass.compute);
-
-                let final_view = match write_resource {
-                    RenderResourceId::SceneColor => {
-                        let create = |label| {
-                            RenderCore::create_compute_pass_target(
-                                state.device,
-                                state.config,
-                                label,
-                            )
-                        };
-                        let mut targets = ComputeTargets::Scene {
-                            front: state
-                                .compute
-                                .target_a
-                                .get_or_insert_with(|| create("Compute A")),
-                            back: state
-                                .compute
-                                .target_b
-                                .get_or_insert_with(|| create("Compute B")),
-                        };
-                        let needs_scene_prefill = read_resource == RenderResourceId::SceneColor
-                            && !matches!(*scene_source, SceneSource::Compute);
-                        if needs_scene_prefill {
-                            let front_view = targets.front();
-                            Self::blit_to_view(BlitParams {
-                                encoder,
-                                device: state.device,
-                                source: scene_texture_view,
-                                target: &front_view,
-                                bind_group_layout: &state.blit.bind_group_layout,
-                                sampler: &state.blit.sampler,
-                                pipeline: &state.blit.pipeline_rgba,
-                                target_size: PxSize::new(
-                                    Px(state.config.width as i32),
-                                    Px(state.config.height as i32),
-                                ),
-                                scissor_rect: None,
-                            });
-                        }
-                        let params = ComputePassParams {
-                            encoder,
-                            commands: compute_to_run,
-                            compute_pipeline_registry: &mut state.pipelines.compute_registry,
-                            device: state.device,
-                            queue: state.queue,
-                            config: state.config,
-                        };
-                        let texture_size = wgpu::Extent3d {
-                            width: state.config.width,
-                            height: state.config.height,
-                            depth_or_array_layers: 1,
-                        };
-                        do_compute_with_targets(
-                            params,
-                            if read_resource == RenderResourceId::SceneColor {
-                                None
-                            } else {
-                                input_view
-                            },
-                            &mut targets,
-                            texture_size,
-                            input_follows_front,
-                        )
-                    }
-                    RenderResourceId::Local(_) => {
-                        let params = ComputePassParams {
-                            encoder,
-                            commands: compute_to_run,
-                            compute_pipeline_registry: &mut state.pipelines.compute_registry,
-                            device: state.device,
-                            queue: state.queue,
-                            config: state.config,
-                        };
-                        let Some(slot) = resources.local_slot_mut(write_resource) else {
-                            return;
-                        };
-                        let texture_size = wgpu::Extent3d {
-                            width: slot.desc.size.width.positive().max(1),
-                            height: slot.desc.size.height.positive().max(1),
-                            depth_or_array_layers: 1,
-                        };
-                        let mut targets = ComputeTargets::Local {
-                            slot,
-                            device: state.device,
-                        };
-                        do_compute_with_targets(
-                            params,
-                            input_view,
-                            &mut targets,
-                            texture_size,
-                            input_follows_front,
-                        )
-                    }
-                    RenderResourceId::External(_) => {
-                        let params = ComputePassParams {
-                            encoder,
-                            commands: compute_to_run,
-                            compute_pipeline_registry: &mut state.pipelines.compute_registry,
-                            device: state.device,
-                            queue: state.queue,
-                            config: state.config,
-                        };
-                        let Some(slot) = resources.external_slot_mut(write_resource) else {
-                            return;
-                        };
-                        let size = slot.size();
-                        let texture_size = wgpu::Extent3d {
-                            width: size.width.positive().max(1),
-                            height: size.height.positive().max(1),
-                            depth_or_array_layers: 1,
-                        };
-                        let mut targets = ComputeTargets::External {
-                            slot,
-                            device: state.device,
-                        };
-                        do_compute_with_targets(
-                            params,
-                            input_view,
-                            &mut targets,
-                            texture_size,
-                            input_follows_front,
-                        )
-                    }
-                    RenderResourceId::SceneDepth => {
-                        drop(compute_to_run);
-                        return;
-                    }
-                };
-
-                if write_resource == RenderResourceId::SceneColor {
-                    *scene_texture_view = final_view;
-                    *scene_source = SceneSource::Compute;
+        match pass {
+            RenderPassPlan::Compute(items) => {
+                if let Some(filtered) = Self::filter_scene(state, encoder, std::mem::take(items)) {
+                    *scene = filtered;
                 }
             }
-            RenderPassKind::Draw => {
-                if pass.draws.is_empty() {
+            RenderPassPlan::Draw { draws, reads_scene } => {
+                if draws.is_empty() {
                     return;
                 }
-
-                let write_resource = pass.write_resource;
-                let reads_scene = pass.read_resource == Some(RenderResourceId::SceneColor);
-                let (write_target, msaa_view, target_size) = match write_resource {
-                    RenderResourceId::SceneColor => (
-                        state.targets.offscreen.clone(),
-                        state.targets.msaa_view.clone(),
-                        PxSize::new(
-                            Px(state.config.width as i32),
-                            Px(state.config.height as i32),
-                        ),
-                    ),
-                    RenderResourceId::Local(_) => {
-                        let Some(slot) = resources.local_slot_mut(write_resource) else {
-                            return;
-                        };
-                        (
-                            slot.front_view().clone(),
-                            slot.msaa_view(state.device),
-                            slot.desc.size,
-                        )
-                    }
-                    RenderResourceId::External(_) => {
-                        let Some(mut slot) = resources.external_slot(write_resource) else {
-                            return;
-                        };
-                        (slot.front_view(), slot.msaa_view(state.device), slot.size())
-                    }
-                    RenderResourceId::SceneDepth => {
-                        return;
-                    }
-                };
-
-                let mut scene_view = if reads_scene {
-                    scene_texture_view.clone()
+                let target_size = state.target_size();
+                let sample_copy;
+                let sampled = if *reads_scene {
+                    Some(match &*scene {
+                        SceneState::Filtered { texture, rect } => (&**texture, *rect),
+                        SceneState::Offscreen => {
+                            let rect =
+                                scene_sampling_rect(draws, target_size).unwrap_or_else(|| {
+                                    PxRect::from_position_size(PxPosition::ZERO, target_size)
+                                });
+                            sample_copy = Self::copy_scene_region(state, encoder, rect);
+                            (&*sample_copy, rect)
+                        }
+                    })
                 } else {
-                    write_target.clone()
+                    None
                 };
-                if reads_scene
-                    && write_resource == RenderResourceId::SceneColor
-                    && matches!(*scene_source, SceneSource::Offscreen)
-                {
-                    let sample_view = state
-                        .targets
-                        .scene_sample
-                        .get_or_insert_with(|| {
-                            RenderCore::create_pass_target(
-                                state.device,
-                                state.config,
-                                "Scene Sample",
-                            )
-                        })
-                        .clone();
-                    let sample_rect = scene_sampling_rect(&pass.draws, target_size);
-                    Self::blit_to_view(BlitParams {
-                        encoder,
-                        device: state.device,
-                        source: scene_texture_view,
-                        target: &sample_view,
-                        bind_group_layout: &state.blit.bind_group_layout,
-                        sampler: &state.blit.sampler,
-                        pipeline: &state.blit.pipeline,
-                        target_size: PxSize::new(
-                            Px(state.config.width as i32),
-                            Px(state.config.height as i32),
-                        ),
-                        scissor_rect: sample_rect,
-                    });
-                    scene_view = sample_view;
-                }
-                let clear_target = clear_state.should_clear(write_resource);
-
-                let samples = msaa_view
-                    .as_ref()
-                    .map(|view| view.texture().sample_count())
-                    .unwrap_or(1);
-                let stencil_view =
-                    state
-                        .pipelines
-                        .clipper
-                        .stencil(state.device, target_size, samples);
                 render_current_pass(RenderPassParams {
-                    msaa_view,
-                    stencil_view,
+                    msaa_view: state.targets.msaa_view.as_ref(),
+                    stencil_view: &state.targets.stencil,
                     clipper: &mut state.pipelines.clipper,
-                    clear_target,
+                    clear_target: !*scene_written,
                     encoder,
-                    write_target: write_target.clone(),
-                    commands_in_pass: &mut pass.draws,
-                    scene_texture_view: scene_view,
+                    write_target: &state.targets.offscreen,
+                    commands_in_pass: draws,
+                    scene: sampled,
                     drawer: &mut state.pipelines.drawer,
+                    graphics: state.graphics,
                     device: state.device,
                     queue: state.queue,
                     config: state.config,
                     target_size,
                     clip_stack,
-                    apply_clip: write_resource == RenderResourceId::SceneColor,
-                    resources,
                 });
-
-                if write_resource == RenderResourceId::SceneColor {
-                    *scene_texture_view = write_target.clone();
-                    *scene_source = SceneSource::Offscreen;
-                }
+                *scene_written = true;
+                *scene = SceneState::Offscreen;
             }
         }
+    }
+
+    /// Copies the scene pixels that a sampling pass reads.
+    fn copy_scene_region(
+        state: &RenderCoreFrameState<'_>,
+        encoder: &mut wgpu::CommandEncoder,
+        rect: PxRect,
+    ) -> ScratchTexture {
+        let size = wgpu::Extent3d {
+            width: rect.width.positive(),
+            height: rect.height.positive(),
+            depth_or_array_layers: 1,
+        };
+        let texture = state.graphics.scratch_texture(ScratchTextureDescriptor {
+            width: size.width,
+            height: size.height,
+            format: state.config.format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            sample_count: 1,
+            fit: ScratchFit::Approx,
+        });
+        encoder.copy_texture_to_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: state.targets.offscreen.texture(),
+                mip_level: 0,
+                origin: wgpu::Origin3d {
+                    x: rect.x.positive(),
+                    y: rect.y.positive(),
+                    z: 0,
+                },
+                aspect: wgpu::TextureAspect::All,
+            },
+            texture.texture().as_image_copy(),
+            size,
+        );
+        texture
+    }
+
+    /// Runs compute items over the scene region they read and write. Each batch
+    /// starts from a copy of the previous result, so pixels a batch does not
+    /// write keep their prior values.
+    fn filter_scene(
+        state: &mut RenderCoreFrameState<'_>,
+        encoder: &mut wgpu::CommandEncoder,
+        items: Vec<ComputePlanItem>,
+    ) -> Option<SceneState> {
+        let target_size = state.target_size();
+        let region = items
+            .iter()
+            .map(|item| item.sampling_rect.union(&item.target_rect))
+            .reduce(|a, b| a.union(&b))?
+            .intersection(&PxRect::from_position_size(PxPosition::ZERO, target_size))?;
+        if region.width <= Px::ZERO || region.height <= Px::ZERO {
+            return None;
+        }
+        let origin = PxPosition::new(region.x, region.y);
+        let descriptor = ScratchTextureDescriptor {
+            width: region.width.positive(),
+            height: region.height.positive(),
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST,
+            sample_count: 1,
+            fit: ScratchFit::Approx,
+        };
+        let mut front = state.graphics.scratch_texture(descriptor);
+        let mut back = state.graphics.scratch_texture(descriptor);
+        Self::blit_to_view(BlitParams {
+            encoder,
+            device: state.device,
+            source: &state.targets.offscreen,
+            target: &front,
+            bind_group_layout: &state.blit.bind_group_layout,
+            sampler: &state.blit.sampler,
+            pipeline: &state.blit.pipeline_rgba,
+            source_origin: origin,
+            source_size: target_size,
+        });
+
+        let translate = |rect: PxRect| PxRect {
+            x: rect.x - region.x,
+            y: rect.y - region.y,
+            ..rect
+        };
+        let items: Vec<ComputePlanItem> = items
+            .into_iter()
+            .map(|item| ComputePlanItem {
+                geometry: DrawGeometry::new(
+                    item.geometry.local_size,
+                    LocalToWindow::new(
+                        item.geometry.local_to_window.scale(),
+                        item.geometry.local_to_window.translation() - origin,
+                    )
+                    .expect("finite compute geometry"),
+                ),
+                target_rect: translate(item.target_rect),
+                sampling_rect: translate(item.sampling_rect),
+                ..item
+            })
+            .collect();
+        let extent = wgpu::Extent3d {
+            width: descriptor.width,
+            height: descriptor.height,
+            depth_or_array_layers: 1,
+        };
+
+        let mut index = 0;
+        while index < items.len() {
+            let type_id = items[index].command.as_any().type_id();
+            let mut batch: SmallVec<[ErasedComputeBatchItem<'_>; 8]> = SmallVec::new();
+            let mut sampling: SmallVec<[PxRect; 8]> = SmallVec::new();
+            let mut cursor = index;
+            // Items in one batch read the same input, so their reads must not
+            // depend on each other's writes.
+            while let Some(item) = items.get(cursor) {
+                if item.command.as_any().type_id() != type_id
+                    || (!batch.is_empty()
+                        && sampling
+                            .iter()
+                            .any(|rect| rects_overlap(*rect, item.sampling_rect)))
+                {
+                    break;
+                }
+                sampling.push(item.sampling_rect);
+                batch.push(ErasedComputeBatchItem {
+                    command: &*item.command,
+                    geometry: item.geometry,
+                    target_area: item.target_rect,
+                });
+                cursor += 1;
+            }
+
+            encoder.copy_texture_to_texture(
+                front.texture().as_image_copy(),
+                back.texture().as_image_copy(),
+                extent,
+            );
+            {
+                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("Compute Pass"),
+                    timestamp_writes: None,
+                });
+                state.pipelines.compute_registry.dispatch_erased(
+                    ErasedDispatchContext {
+                        graphics: state.graphics,
+                        device: state.device,
+                        queue: state.queue,
+                        config: state.config,
+                        target_size: PxSize::new(region.width, region.height),
+                        compute_pass: &mut compute_pass,
+                        input_view: &front,
+                        output_view: &back,
+                    },
+                    &batch,
+                );
+            }
+            std::mem::swap(&mut front, &mut back);
+            index = cursor;
+        }
+
+        Some(SceneState::Filtered {
+            texture: front,
+            rect: region,
+        })
     }
 
     fn blit_to_view(params: BlitParams<'_>) {
@@ -1070,8 +671,8 @@ impl RenderCore {
             bind_group_layout,
             sampler,
             pipeline,
-            target_size,
-            scissor_rect,
+            source_origin,
+            source_size,
         } = params;
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
@@ -1085,11 +686,11 @@ impl RenderCore {
                     resource: wgpu::BindingResource::Sampler(sampler),
                 },
             ],
-            label: Some("Compute Copy Bind Group"),
+            label: Some("Blit Bind Group"),
         });
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Compute Copy Pass"),
+            label: Some("Blit Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: target,
                 resolve_target: None,
@@ -1107,17 +708,16 @@ impl RenderCore {
 
         rpass.set_pipeline(pipeline);
         rpass.set_bind_group(0, &bind_group, &[]);
-        if let Some(rect) = scissor_rect {
-            let Some(clamped) = clamp_rect_to_target(rect, target_size) else {
-                return;
-            };
-            rpass.set_scissor_rect(
-                clamped.x.0.max(0) as u32,
-                clamped.y.0.max(0) as u32,
-                clamped.width.0.max(0) as u32,
-                clamped.height.0.max(0) as u32,
-            );
-        }
+        // Mapping the whole source onto a shifted viewport copies texels one to
+        // one starting at `source_origin`.
+        rpass.set_viewport(
+            -source_origin.x,
+            -source_origin.y,
+            source_size.width.to_f32(),
+            source_size.height.to_f32(),
+            0.0,
+            1.0,
+        );
         rpass.draw(0..3, 0..1);
     }
 
@@ -1161,132 +761,6 @@ impl RenderCore {
     }
 }
 
-fn do_compute_with_targets(
-    params: ComputePassParams<'_>,
-    fixed_input_view: Option<wgpu::TextureView>,
-    targets: &mut ComputeTargets<'_>,
-    texture_size: wgpu::Extent3d,
-    input_follows_front: bool,
-) -> wgpu::TextureView {
-    if params.commands.is_empty() {
-        return targets.front();
-    }
-
-    let commands = &params.commands;
-    let mut index = 0;
-    while index < commands.len() {
-        let command = &commands[index];
-        let type_id = command.command.as_any().type_id();
-
-        let mut batch_items: SmallVec<[ErasedComputeBatchItem<'_>; 8]> = SmallVec::new();
-        let mut batch_sampling_rects: SmallVec<[PxRect; 8]> = SmallVec::new();
-        let mut cursor = index;
-
-        while cursor < commands.len() {
-            let candidate = &commands[cursor];
-            if candidate.command.as_any().type_id() != type_id {
-                break;
-            }
-
-            let sampling_area = candidate.sampling_rect;
-
-            if batch_sampling_rects
-                .iter()
-                .any(|existing| rects_overlap(*existing, sampling_area))
-            {
-                break;
-            }
-
-            batch_sampling_rects.push(sampling_area);
-            batch_items.push(ErasedComputeBatchItem {
-                command: &*candidate.command,
-                geometry: candidate.geometry,
-                target_area: candidate.target_rect,
-            });
-            cursor += 1;
-        }
-
-        if batch_items.is_empty() {
-            batch_sampling_rects.push(command.sampling_rect);
-            batch_items.push(ErasedComputeBatchItem {
-                command: &*command.command,
-                geometry: command.geometry,
-                target_area: command.target_rect,
-            });
-            cursor = index + 1;
-        }
-
-        let front_view = targets.front();
-        let use_fixed_input = input_follows_front && fixed_input_view.is_some() && index == 0;
-        let input_view = if use_fixed_input {
-            fixed_input_view
-                .as_ref()
-                .expect("compute pass missing input view")
-                .clone()
-        } else if input_follows_front {
-            front_view.clone()
-        } else {
-            fixed_input_view
-                .as_ref()
-                .expect("compute pass missing input view")
-                .clone()
-        };
-
-        // Distinct graph IDs can still import the same external texture.
-        let in_place = !input_follows_front && input_view.texture() != front_view.texture();
-        let output_view = if in_place {
-            front_view.clone()
-        } else {
-            let back_view = targets.back();
-            let copy_source = if use_fixed_input {
-                fixed_input_view
-                    .as_ref()
-                    .expect("compute pass missing input view")
-            } else {
-                &front_view
-            };
-            params.encoder.copy_texture_to_texture(
-                copy_source.texture().as_image_copy(),
-                back_view.texture().as_image_copy(),
-                texture_size,
-            );
-            back_view
-        };
-
-        {
-            let mut cpass = params
-                .encoder
-                .begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("Compute Pass"),
-                    timestamp_writes: None,
-                });
-
-            params.compute_pipeline_registry.dispatch_erased(
-                ErasedDispatchContext {
-                    device: params.device,
-                    queue: params.queue,
-                    config: params.config,
-                    target_size: PxSize::new(
-                        Px(texture_size.width as i32),
-                        Px(texture_size.height as i32),
-                    ),
-                    compute_pass: &mut cpass,
-                    input_view: &input_view,
-                    output_view: &output_view,
-                },
-                &batch_items,
-            );
-        }
-
-        if !in_place {
-            targets.swap();
-        }
-        index = cursor;
-    }
-
-    targets.front()
-}
-
 fn rects_overlap(a: PxRect, b: PxRect) -> bool {
     let a_left = a.x.0;
     let a_top = a.y.0;
@@ -1301,7 +775,7 @@ fn rects_overlap(a: PxRect, b: PxRect) -> bool {
     !(a_right <= b_left || b_right <= a_left || a_bottom <= b_top || b_bottom <= a_top)
 }
 
-fn render_current_pass(params: RenderPassParams<'_, '_>) {
+fn render_current_pass(params: RenderPassParams<'_>) {
     let RenderPassParams {
         msaa_view,
         stencil_view,
@@ -1310,23 +784,20 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
         encoder,
         write_target,
         commands_in_pass,
-        scene_texture_view,
+        scene,
         drawer,
+        graphics,
         device,
         queue,
         config,
         target_size,
         clip_stack,
-        apply_clip,
-        resources,
     } = params;
 
-    let (view, resolve_target) = if let Some(msaa_view) = msaa_view.as_ref() {
-        (msaa_view, Some(&write_target))
-    } else {
-        (&write_target, None)
+    let (view, resolve_target) = match msaa_view {
+        Some(msaa_view) => (msaa_view, Some(write_target)),
+        None => (write_target, None),
     };
-
     let load_ops = if clear_target {
         wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
     } else {
@@ -1337,7 +808,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("Render Pass"),
         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-            view: &stencil_view,
+            view: stencil_view,
             depth_ops: None,
             stencil_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Clear(0),
@@ -1356,59 +827,44 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
         ..Default::default()
     });
 
-    drawer.begin_pass(
-        device,
-        queue,
-        config,
-        target_size,
-        &mut rpass,
-        &scene_texture_view,
-    );
+    clipper.restore(&mut rpass, target_size);
 
-    clipper.restore(&mut rpass, target_size, apply_clip);
-
-    // Prepare buffered submission state
+    // Draws that do not sample the scene never read this placeholder.
+    let scene = scene.unwrap_or((
+        write_target,
+        PxRect::from_position_size(PxPosition::ZERO, target_size),
+    ));
     let mut buffer: SmallVec<[(&dyn DrawCommand, DrawGeometry); 16]> = SmallVec::new();
     let mut last_command_type_id = None;
     let mut current_batch_draw_rect: Option<PxRect> = None;
-    let mut current_batch_read: Option<RenderResourceId> = None;
+    macro_rules! flush {
+        () => {
+            submit_buffered_commands(
+                &mut rpass,
+                SubmitBatchParams {
+                    drawer: &mut *drawer,
+                    resources: SubmitContext {
+                        graphics,
+                        device,
+                        queue,
+                        config,
+                    },
+                    scene,
+                    target_size,
+                    clip_stack: clip_stack.as_slice(),
+                    current_batch_draw_rect: &mut current_batch_draw_rect,
+                },
+                &mut buffer,
+            )
+        };
+    }
     for cmd in commands_in_pass.iter() {
         let cmd = match cmd {
             DrawOrClip::Clip(clip_ops) => {
-                // Must flush any existing buffered commands before changing
-                // clip state
                 if !buffer.is_empty() {
-                    let scene_view = resolve_scene_view(
-                        current_batch_read,
-                        &scene_texture_view,
-                        &write_target,
-                        resources,
-                    );
-                    submit_buffered_commands(
-                        &mut rpass,
-                        SubmitBatchParams {
-                            drawer,
-                            resources: SubmitContext {
-                                graphics: resources.graphics,
-                                device,
-                                queue,
-                                config,
-                            },
-                            scene_texture_view: &scene_view,
-                            target_size,
-                            clip_stack: if apply_clip {
-                                clip_stack.as_slice()
-                            } else {
-                                &[]
-                            },
-                            current_batch_draw_rect: &mut current_batch_draw_rect,
-                        },
-                        &mut buffer,
-                    );
-                    last_command_type_id = None; // Reset batch type after flush
-                    current_batch_read = None;
+                    flush!();
+                    last_command_type_id = None;
                 }
-                // Update clip stack
                 match *clip_ops {
                     ClipOps::Push(rect) => {
                         clip_stack.push(rect);
@@ -1423,95 +879,22 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
                         clipper.pop(&mut rpass, target_size);
                     }
                 }
-                // continue to next command
                 continue;
             }
-            DrawOrClip::Draw(cmd) => cmd, // Proceed with draw commands
+            DrawOrClip::Draw(cmd) => cmd,
         };
 
-        // If the incoming command cannot be merged into the current batch,
-        // flush first.
-        let read_resource = cmd.read_resource;
-        if (!can_merge_into_batch(&last_command_type_id, cmd.type_id)
-            || current_batch_read != read_resource)
-            && !buffer.is_empty()
-        {
-            let scene_view = resolve_scene_view(
-                current_batch_read,
-                &scene_texture_view,
-                &write_target,
-                resources,
-            );
-            submit_buffered_commands(
-                &mut rpass,
-                SubmitBatchParams {
-                    drawer,
-                    resources: SubmitContext {
-                        graphics: resources.graphics,
-                        device,
-                        queue,
-                        config,
-                    },
-                    scene_texture_view: &scene_view,
-                    target_size,
-                    clip_stack: if apply_clip {
-                        clip_stack.as_slice()
-                    } else {
-                        &[]
-                    },
-                    current_batch_draw_rect: &mut current_batch_draw_rect,
-                },
-                &mut buffer,
-            );
+        if !can_merge_into_batch(&last_command_type_id, cmd.type_id) && !buffer.is_empty() {
+            flush!();
         }
-
-        // Add the command to the buffer and update the current batch rect
-        // (extracted merge helper).
         buffer.push((cmd.command.as_ref(), cmd.geometry));
         last_command_type_id = Some(cmd.type_id);
-        current_batch_read = read_resource;
         current_batch_draw_rect = Some(merge_batch_rect(current_batch_draw_rect, cmd.draw_rect));
     }
-
-    // If there are any remaining commands in the buffer, submit them
     if !buffer.is_empty() {
-        let scene_view = resolve_scene_view(
-            current_batch_read,
-            &scene_texture_view,
-            &write_target,
-            resources,
-        );
-        submit_buffered_commands(
-            &mut rpass,
-            SubmitBatchParams {
-                drawer,
-                resources: SubmitContext {
-                    graphics: resources.graphics,
-                    device,
-                    queue,
-                    config,
-                },
-                scene_texture_view: &scene_view,
-                target_size,
-                clip_stack: if apply_clip {
-                    clip_stack.as_slice()
-                } else {
-                    &[]
-                },
-                current_batch_draw_rect: &mut current_batch_draw_rect,
-            },
-            &mut buffer,
-        );
+        flush!();
     }
 
-    drawer.end_pass(
-        device,
-        queue,
-        config,
-        target_size,
-        &mut rpass,
-        &scene_texture_view,
-    );
     drop(buffer);
     commands_in_pass.clear();
     let record_us = timing.map(|start| start.elapsed().as_micros());
@@ -1527,27 +910,6 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     }
 }
 
-fn resolve_scene_view(
-    read_resource: Option<RenderResourceId>,
-    scene_texture_view: &wgpu::TextureView,
-    write_target: &wgpu::TextureView,
-    resources: &mut FrameResources<'_>,
-) -> wgpu::TextureView {
-    match read_resource {
-        Some(RenderResourceId::SceneColor) => scene_texture_view.clone(),
-        Some(resource_id @ RenderResourceId::Local(_)) => resources
-            .local_slot(resource_id)
-            .map(|slot| slot.front_view().clone())
-            .unwrap_or_else(|| scene_texture_view.clone()),
-        Some(resource_id @ RenderResourceId::External(_)) => resources
-            .external_slot(resource_id)
-            .map(|slot| slot.front_view())
-            .unwrap_or_else(|| scene_texture_view.clone()),
-        Some(RenderResourceId::SceneDepth) => scene_texture_view.clone(),
-        None => write_target.clone(),
-    }
-}
-
 fn submit_buffered_commands(
     rpass: &mut wgpu::RenderPass<'_>,
     params: SubmitBatchParams<'_, '_>,
@@ -1556,7 +918,7 @@ fn submit_buffered_commands(
     let SubmitBatchParams {
         drawer,
         resources,
-        scene_texture_view,
+        scene,
         target_size,
         clip_stack,
         current_batch_draw_rect,
@@ -1573,7 +935,8 @@ fn submit_buffered_commands(
                 config: resources.config,
                 target_size,
                 render_pass: rpass,
-                scene_texture_view,
+                scene_texture_view: scene.0,
+                scene_rect: scene.1,
                 clip_rect: current_clip_rect,
             },
             buffer.as_slice(),
@@ -1699,12 +1062,16 @@ mod tests {
             1,
             crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
         ));
-        let scene_sample =
-            RenderCore::create_pass_target(&core.device, &core.draw_config, "Sample");
-        let compute = RenderCore::create_compute_pass_target(&core.device, &core.config, "A");
+        let filtered = core.graphics.scratch_texture(ScratchTextureDescriptor {
+            width: 1,
+            height: 1,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            sample_count: 1,
+            fit: ScratchFit::Exact,
+        });
         for (target, pipeline, expected) in [
-            (&scene_sample, &core.blit.pipeline, 128_u8),
-            (&compute, &core.blit.pipeline_rgba, 55),
+            (&*filtered, &core.blit.pipeline_rgba, 55_u8),
             (core.offscreen_copy(), &core.blit.present_pipeline, 128),
         ] {
             let mut encoder = core.device.create_command_encoder(&Default::default());
@@ -1735,8 +1102,8 @@ mod tests {
                 bind_group_layout: &core.blit.bind_group_layout,
                 sampler: &core.blit.sampler,
                 pipeline,
-                target_size: PxSize::new(Px(1), Px(1)),
-                scissor_rect: None,
+                source_origin: PxPosition::ZERO,
+                source_size: PxSize::new(Px(1), Px(1)),
             });
             core.queue.submit(Some(encoder.finish()));
             let pixels = core
@@ -1770,7 +1137,6 @@ mod tests {
             type_id: std::any::TypeId::of::<SampleCommand>(),
             geometry: DrawGeometry::from_position_size(position, size),
             draw_rect: PxRect::from_position_size(position, size),
-            read_resource: Some(RenderResourceId::SceneColor),
         })
     }
 

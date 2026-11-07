@@ -26,22 +26,6 @@ pub struct FrameContext<'a> {
     pub config: &'a wgpu::SurfaceConfiguration,
 }
 
-/// Resources available within one render pass.
-pub struct PassContext<'a, 'b> {
-    /// The WGPU device.
-    pub device: &'a wgpu::Device,
-    /// The WGPU queue.
-    pub queue: &'a wgpu::Queue,
-    /// The current surface configuration.
-    pub config: &'a wgpu::SurfaceConfiguration,
-    /// Target texture size for the current pass.
-    pub target_size: PxSize,
-    /// The active render pass encoder.
-    pub render_pass: &'a mut wgpu::RenderPass<'b>,
-    /// A view of the current scene texture.
-    pub scene_texture_view: &'a wgpu::TextureView,
-}
-
 /// A batch of drawing commands within an active render pass.
 pub struct DrawContext<'a, 'b, 'c, T> {
     /// Renderer-owned resource creation and uploads.
@@ -58,8 +42,11 @@ pub struct DrawContext<'a, 'b, 'c, T> {
     pub render_pass: &'a mut wgpu::RenderPass<'b>,
     /// The draw commands to be processed.
     pub commands: &'c [(&'c T, DrawGeometry)],
-    /// A view of the current scene texture.
+    /// Scene pixels sampled by commands that declare a sample region.
     pub scene_texture_view: &'a wgpu::TextureView,
+    /// Window rectangle of the valid pixels in `scene_texture_view`, whose
+    /// first texel is at the rectangle's origin. The texture can be larger.
+    pub scene_rect: PxRect,
     /// An optional clipping rectangle for the draw call.
     pub clip_rect: Option<PxRect>,
 }
@@ -78,30 +65,27 @@ pub struct ErasedDrawContext<'a, 'b> {
     pub target_size: PxSize,
     /// Active render pass that receives draw calls.
     pub render_pass: &'a mut wgpu::RenderPass<'b>,
-    /// Scene texture view available for sampling.
+    /// Scene pixels sampled by commands that declare a sample region.
     pub scene_texture_view: &'a wgpu::TextureView,
+    /// Window rectangle of the valid pixels in `scene_texture_view`, whose
+    /// first texel is at the rectangle's origin. The texture can be larger.
+    pub scene_rect: PxRect,
     /// Optional clipping rectangle applied to the submission.
     pub clip_rect: Option<PxRect>,
 }
 
 /// Draws commands of type `T`.
 ///
-/// Each frame calls `begin_frame`, then participating passes call `begin_pass`,
-/// `draw`, and `end_pass`; `end_frame` runs after all passes and before submission.
+/// Each frame calls `begin_frame`, then `draw` for each batch; `end_frame` runs
+/// after all passes and before submission.
 #[allow(unused_variables)]
 pub trait DrawablePipeline<T: DrawCommand> {
     /// Prepares resources once per frame, before render passes.
     fn begin_frame(&mut self, context: &FrameContext<'_>) {}
 
-    /// Prepares this pipeline for a participating render pass.
-    fn begin_pass(&mut self, context: &mut PassContext<'_, '_>) {}
-
     /// Renders the command batch. Honor `clip_rect` when setting scissor bounds.
     /// The scene texture is available for commands that declare background sampling.
     fn draw(&mut self, context: &mut DrawContext<'_, '_, '_, T>);
-
-    /// Finalizes this pipeline within the participating render pass.
-    fn end_pass(&mut self, context: &mut PassContext<'_, '_>) {}
 
     /// Finalizes the frame after all passes and before GPU submission.
     fn end_frame(&mut self, context: &FrameContext<'_>) {}
@@ -112,10 +96,6 @@ pub(crate) trait ErasedDrawablePipeline {
     fn begin_frame(&mut self, context: &FrameContext<'_>);
     /// Called at the end of a frame for cleanup or readback.
     fn end_frame(&mut self, context: &FrameContext<'_>);
-    /// Invoked before a render pass starts to bind shared pass state.
-    fn begin_pass(&mut self, context: &mut PassContext<'_, '_>);
-    /// Invoked after a render pass ends to finalize pass-level resources.
-    fn end_pass(&mut self, context: &mut PassContext<'_, '_>);
     /// Draws a batch of commands with type-erased dispatch.
     fn draw_erased(
         &mut self,
@@ -140,14 +120,6 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         self.pipeline.end_frame(context);
     }
 
-    fn begin_pass(&mut self, context: &mut PassContext<'_, '_>) {
-        self.pipeline.begin_pass(context);
-    }
-
-    fn end_pass(&mut self, context: &mut PassContext<'_, '_>) {
-        self.pipeline.end_pass(context);
-    }
-
     fn draw_erased(
         &mut self,
         context: ErasedDrawContext<'_, '_>,
@@ -166,6 +138,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
             target_size,
             render_pass,
             scene_texture_view,
+            scene_rect,
             clip_rect,
         } = context;
 
@@ -191,6 +164,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
                 render_pass,
                 commands: &typed_commands,
                 scene_texture_view,
+                scene_rect,
                 clip_rect,
             });
             if let Some(timing) = timing {
@@ -232,48 +206,6 @@ impl PipelineRegistry {
             _marker: std::marker::PhantomData,
         });
         self.pipelines.insert(TypeId::of::<T>(), erased);
-    }
-
-    pub(crate) fn begin_all_passes(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        target_size: PxSize,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    ) {
-        for pipeline in self.pipelines.values_mut() {
-            pipeline.begin_pass(&mut PassContext {
-                device,
-                queue,
-                config,
-                target_size,
-                render_pass,
-                scene_texture_view,
-            });
-        }
-    }
-
-    pub(crate) fn end_all_passes(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        target_size: PxSize,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        scene_texture_view: &wgpu::TextureView,
-    ) {
-        for pipeline in self.pipelines.values_mut() {
-            pipeline.end_pass(&mut PassContext {
-                device,
-                queue,
-                config,
-                target_size,
-                render_pass,
-                scene_texture_view,
-            });
-        }
     }
 
     pub(crate) fn begin_all_frames(

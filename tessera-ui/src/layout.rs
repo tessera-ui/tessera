@@ -784,10 +784,8 @@ impl<'a> RenderInput<'a> {
             .get_mut(&self.current_node_id)
             .expect("record metadata");
         for op in metadata.fragment.ops_mut().iter_mut().skip(start) {
-            if op.write == Some(crate::render_graph::RenderResourceId::SceneColor) {
-                op.position_override =
-                    Some(bounds.position + op.position_override.unwrap_or(PxPosition::ZERO));
-            }
+            op.position_override =
+                Some(bounds.position + op.position_override.unwrap_or(PxPosition::ZERO));
             op.size_override.get_or_insert(bounds.size.into());
         }
     }

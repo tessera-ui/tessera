@@ -595,7 +595,7 @@ impl HeadlessRenderer {
         #[cfg(feature = "profiling")]
         let prepare_timer = Instant::now();
         let order_timer = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
-        let execution = graph.into_execution();
+        let ops = graph.ordered_ops();
         if let Some(order_timer) = order_timer {
             tracing::debug!(
                 frame_index,
@@ -608,9 +608,9 @@ impl HeadlessRenderer {
         #[cfg(feature = "profiling")]
         let render_timer = Instant::now();
         #[cfg(feature = "debug-dirty-overlay")]
-        self.core.render(execution, &[]);
+        self.core.render(ops, &[]);
         #[cfg(not(feature = "debug-dirty-overlay"))]
-        self.core.render(execution);
+        self.core.render(ops);
         #[cfg(feature = "profiling")]
         let render_duration = render_timer.elapsed();
         self.cursor.frame_cleanup();

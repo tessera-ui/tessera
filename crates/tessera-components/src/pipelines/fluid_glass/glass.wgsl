@@ -8,6 +8,9 @@ struct GlassUniforms {
     pixels_per_dp: f32,
     opacity: f32,
     material_mode: u32,
+    // Maps window UVs into the scene texture: scale in xy, offset in zw.
+    scene_uv: vec4<f32>,
+    scene_size_px: vec2<f32>,
     rect_size_px: vec2<f32>,
     ripple_center: vec2<f32>,
     shape_type: f32,
@@ -132,6 +135,15 @@ fn custom_lens_coord(
     return distorted_coord + half_size;
 }
 
+fn scene_sample_uv(instance: GlassUniforms, window_uv: vec2<f32>) -> vec2<f32> {
+    let size = vec2<f32>(textureDimensions(t_diffuse));
+    return clamp(
+        window_uv * instance.scene_uv.xy + instance.scene_uv.zw,
+        vec2(0.5) / size,
+        (instance.scene_size_px - vec2(0.5)) / size,
+    );
+}
+
 fn to_srgb(linear: vec3<f32>) -> vec3<f32> {
     return select(1.055 * pow(max(linear, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, linear * 12.92, linear <= vec3(0.0031308));
 }
@@ -140,9 +152,9 @@ fn from_srgb(encoded: vec3<f32>) -> vec3<f32> {
     return select(pow(max((encoded + 0.055) / 1.055, vec3(0.0)), vec3(2.4)), encoded / 12.92, encoded <= vec3(0.04045));
 }
 
-fn blurred_material_backdrop(uv: vec2<f32>, sigma_uv: vec2<f32>) -> vec3<f32> {
+fn blurred_material_backdrop(instance: GlassUniforms, uv: vec2<f32>, sigma_uv: vec2<f32>) -> vec3<f32> {
     if all(sigma_uv == vec2(0.0)) {
-        return to_srgb(textureSampleLevel(t_diffuse, s_diffuse, uv, 0.0).rgb);
+        return to_srgb(textureSampleLevel(t_diffuse, s_diffuse, scene_sample_uv(instance, uv), 0.0).rgb);
     }
     let size = vec2<i32>(textureDimensions(t_diffuse));
     let size_f = vec2<f32>(size);
@@ -153,7 +165,7 @@ fn blurred_material_backdrop(uv: vec2<f32>, sigma_uv: vec2<f32>) -> vec3<f32> {
             let ox = GAUSSIAN_QUANTILES[7u * x + STRATA_ORDER[y]];
             let oy = GAUSSIAN_QUANTILES[7u * y + 6u - x];
             let offset = vec2(ox, oy) * sigma_uv;
-            let point = clamp(vec2<i32>(floor((uv + offset) * size_f)), vec2(0), size - 1);
+            let point = vec2<i32>(floor(scene_sample_uv(instance, uv + offset) * size_f));
             color += to_srgb(textureLoad(t_diffuse, point, 0).rgb);
         }
     }
@@ -209,7 +221,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color: vec3<f32>;
     let tint_weight = instance.tint_color.a;
     if material {
-        color = blurred_material_backdrop(sample_uv, instance.blur_sigma_px * px_to_uv);
+        color = blurred_material_backdrop(instance, sample_uv, instance.blur_sigma_px * px_to_uv);
         if instance.contrast != 1.0 {
             color = clamp((color - 0.5) * instance.contrast + 0.5, vec3(0.0), vec3(1.0));
         }
@@ -227,7 +239,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
         color = from_srgb(clamp(color, vec3(0.0), vec3(1.0)));
     } else {
-        color = textureSampleLevel(t_diffuse, s_diffuse, sample_uv, 0.0).rgb;
+        color = textureSampleLevel(t_diffuse, s_diffuse, scene_sample_uv(instance, sample_uv), 0.0).rgb;
         if tint_weight > 0.0 {
             color = mix(color, instance.tint_color.rgb, tint_weight);
         }

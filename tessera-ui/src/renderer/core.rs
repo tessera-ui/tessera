@@ -9,9 +9,7 @@ use std::{io, sync::Arc, time::Duration};
 use winit::window::Window;
 
 use crate::{
-    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, PxSize,
-    pipeline_cache::save_cache, render_graph::RenderTextureDesc,
-    renderer::external::ExternalTextureRegistry,
+    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, pipeline_cache::save_cache,
 };
 
 use super::{compute::ComputePipelineRegistry, drawer::Drawer};
@@ -32,14 +30,13 @@ struct RenderPipelines {
     compute_registry: ComputePipelineRegistry,
 }
 
-// Effect-only targets are created on first use so window resizes do not
-// allocate full-window textures that the current scene never samples.
 struct FrameTargets {
     offscreen: wgpu::TextureView,
+    // Only surface-less cores render into a copy for readback.
     offscreen_copy: Option<wgpu::TextureView>,
-    scene_sample: Option<wgpu::TextureView>,
     msaa_texture: Option<wgpu::Texture>,
     msaa_view: Option<wgpu::TextureView>,
+    stencil: wgpu::TextureView,
     sample_count: u32,
 }
 
@@ -83,225 +80,13 @@ impl std::fmt::Display for OffscreenReadbackError {
 
 impl std::error::Error for OffscreenReadbackError {}
 
-struct ComputeState {
-    target_a: Option<wgpu::TextureView>,
-    target_b: Option<wgpu::TextureView>,
-}
-
 struct BlitState {
-    pipeline: wgpu::RenderPipeline,
     present_pipeline: wgpu::RenderPipeline,
     pipeline_rgba: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     #[cfg(feature = "debug-dirty-overlay")]
     dirty_overlay_pipeline: wgpu::RenderPipeline,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct RenderTextureDescKey {
-    size: PxSize,
-    format: wgpu::TextureFormat,
-    sample_count: u32,
-}
-
-impl RenderTextureDescKey {
-    fn from_desc(desc: &RenderTextureDesc, sample_count: u32) -> Self {
-        Self {
-            size: desc.size,
-            format: desc.format,
-            sample_count,
-        }
-    }
-}
-
-struct LocalTextureSlot {
-    desc: RenderTextureDescKey,
-    front: wgpu::TextureView,
-    back: Option<wgpu::TextureView>,
-    msaa_view: Option<wgpu::TextureView>,
-    in_use: bool,
-    last_used_frame: u64,
-}
-
-impl LocalTextureSlot {
-    fn front_view(&self) -> &wgpu::TextureView {
-        &self.front
-    }
-
-    fn back_view(&mut self, device: &wgpu::Device) -> wgpu::TextureView {
-        self.back
-            .get_or_insert_with(|| {
-                create_texture_view(
-                    device,
-                    &RenderTextureDesc {
-                        size: self.desc.size,
-                        format: self.desc.format,
-                    },
-                    "Local Back",
-                )
-            })
-            .clone()
-    }
-
-    fn swap_front_back(&mut self) {
-        std::mem::swap(
-            &mut self.front,
-            self.back.as_mut().expect("compute back texture"),
-        );
-    }
-
-    fn msaa_view(&mut self, device: &wgpu::Device) -> Option<wgpu::TextureView> {
-        (self.desc.sample_count > 1).then(|| {
-            self.msaa_view
-                .get_or_insert_with(|| {
-                    create_msaa_view(
-                        device,
-                        &RenderTextureDesc {
-                            size: self.desc.size,
-                            format: self.desc.format,
-                        },
-                        self.desc.sample_count,
-                        "Local MSAA",
-                    )
-                })
-                .clone()
-        })
-    }
-}
-
-struct LocalTexturePool {
-    slots: Vec<LocalTextureSlot>,
-}
-
-impl LocalTexturePool {
-    const MAX_SLOTS: usize = 16;
-
-    fn new() -> Self {
-        Self { slots: Vec::new() }
-    }
-
-    fn begin_frame(&mut self, current_frame: u64) {
-        // Sizes from earlier layouts, such as before a window resize, are
-        // released once they stop being used.
-        self.slots
-            .retain(|slot| current_frame.wrapping_sub(slot.last_used_frame) <= 2);
-        for slot in &mut self.slots {
-            slot.in_use = false;
-        }
-    }
-
-    fn allocate(
-        &mut self,
-        device: &wgpu::Device,
-        desc: &RenderTextureDesc,
-        sample_count: u32,
-        current_frame: u64,
-    ) -> usize {
-        let key = RenderTextureDescKey::from_desc(desc, sample_count);
-        if let Some((index, slot)) = self
-            .slots
-            .iter_mut()
-            .enumerate()
-            .find(|(_, slot)| slot.desc == key && !slot.in_use)
-        {
-            slot.in_use = true;
-            slot.last_used_frame = current_frame;
-            return index;
-        }
-
-        let replacement = (self.slots.len() >= Self::MAX_SLOTS)
-            .then(|| self.lru_unused_index())
-            .flatten();
-
-        let slot = LocalTextureSlot {
-            desc: key,
-            front: create_texture_view(device, desc, "Local Front"),
-            back: None,
-            msaa_view: None,
-            in_use: true,
-            last_used_frame: current_frame,
-        };
-        if let Some(index) = replacement {
-            // Frame resources retain indices into this pool until their last
-            // pass, so eviction must not move another live slot.
-            self.slots[index] = slot;
-            index
-        } else {
-            self.slots.push(slot);
-            self.slots.len() - 1
-        }
-    }
-
-    fn lru_unused_index(&self) -> Option<usize> {
-        self.slots
-            .iter()
-            .enumerate()
-            .filter(|(_, slot)| !slot.in_use)
-            .min_by_key(|(_, slot)| slot.last_used_frame)
-            .map(|(index, _)| index)
-    }
-
-    fn slot(&self, index: usize) -> Option<&LocalTextureSlot> {
-        self.slots.get(index)
-    }
-
-    fn slot_mut(&mut self, index: usize) -> Option<&mut LocalTextureSlot> {
-        self.slots.get_mut(index)
-    }
-}
-
-pub(crate) fn create_texture_view(
-    device: &wgpu::Device,
-    desc: &RenderTextureDesc,
-    label: &str,
-) -> wgpu::TextureView {
-    let width = desc.size.width.positive().max(1);
-    let height = desc.size.height.positive().max(1);
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(label),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: desc.format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::STORAGE_BINDING
-            | wgpu::TextureUsages::COPY_SRC
-            | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    texture.create_view(&wgpu::TextureViewDescriptor::default())
-}
-
-pub(crate) fn create_msaa_view(
-    device: &wgpu::Device,
-    desc: &RenderTextureDesc,
-    sample_count: u32,
-    label: &str,
-) -> wgpu::TextureView {
-    let width = desc.size.width.positive().max(1);
-    let height = desc.size.height.positive().max(1);
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(label),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count,
-        dimension: wgpu::TextureDimension::D2,
-        format: desc.format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    });
-    texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
 /// Render core holding device, surface, pipelines, and frame resources.
@@ -323,10 +108,7 @@ pub struct RenderCore {
     adapter_info: wgpu::AdapterInfo,
 
     targets: FrameTargets,
-    compute: ComputeState,
     blit: BlitState,
-    local_textures: LocalTexturePool,
-    external_textures: ExternalTextureRegistry,
     frame_index: u64,
     last_render_breakdown: Option<RenderTimingBreakdown>,
     #[cfg(all(
@@ -445,50 +227,5 @@ impl RenderCore {
             save_cache(cache, &self.adapter_info)?;
         }
         Ok(())
-    }
-}
-
-#[cfg(all(test, feature = "headless", not(target_family = "wasm")))]
-mod tests {
-    use crate::{Px, PxSize, render_graph::RenderTextureDesc};
-
-    use super::{LocalTexturePool, RenderCore};
-
-    #[test]
-    #[ignore = "requires a GPU adapter"]
-    fn evicting_an_unused_texture_preserves_live_slot_indices() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        let core = pollster::block_on(RenderCore::new_offscreen(
-            winit::dpi::PhysicalSize::new(1, 1),
-            wgpu::TextureFormat::Rgba8Unorm,
-            1,
-            crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
-        ));
-        let mut pool = LocalTexturePool::new();
-        let texture = |width| RenderTextureDesc {
-            size: PxSize::new(Px(width), Px(8)),
-            format: wgpu::TextureFormat::Rgba8Unorm,
-        };
-        let mut last = None;
-        for index in 0..LocalTexturePool::MAX_SLOTS {
-            let desc = texture(16 + index as i32);
-            pool.allocate(&core.device, &desc, 1, 1);
-            last = Some(desc);
-        }
-        pool.begin_frame(2);
-        let desc = last.unwrap();
-        let live = pool.allocate(&core.device, &desc, 1, 2);
-        let front = pool.slot(live).unwrap().front_view().clone();
-        let replacement = pool.allocate(&core.device, &texture(128), 1, 2);
-        assert_ne!(replacement, live);
-        let slot = pool
-            .slot(live)
-            .expect("the reserved slot must remain attached");
-        assert!(slot.in_use);
-        assert_eq!(slot.desc.size, desc.size);
-        assert_eq!(slot.front_view(), &front);
-        assert_eq!(pool.slot(replacement).unwrap().desc.size, texture(128).size);
-        assert_eq!(pool.slots.len(), LocalTexturePool::MAX_SLOTS);
     }
 }

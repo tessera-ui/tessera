@@ -4,6 +4,7 @@ use encase::{ShaderType, UniformBuffer, internal::WriteInto};
 use lru::LruCache;
 use smallvec::SmallVec;
 use tessera_ui::{
+    ScratchFit, ScratchTextureDescriptor,
     compute::pipeline::{ComputablePipeline, ComputeContext},
     wgpu,
 };
@@ -137,7 +138,6 @@ pub struct BlurPipeline {
     resample_bind_group_layout: wgpu::BindGroupLayout,
     blur_bind_group_layout: wgpu::BindGroupLayout,
     downsample_sampler: wgpu::Sampler,
-    texture_pool: LruCache<(u32, u32), Vec<wgpu::Texture>>,
     weight_cache: LruCache<u32, WeightCacheEntry>,
 }
 
@@ -307,64 +307,11 @@ impl BlurPipeline {
             resample_bind_group_layout,
             blur_bind_group_layout,
             downsample_sampler,
-            texture_pool: LruCache::new(NonZeroUsize::new(8).unwrap()),
             weight_cache: LruCache::new(
                 NonZeroUsize::new(WEIGHT_CACHE_CAPACITY)
                     .expect("WEIGHT_CACHE_CAPACITY must be non-zero"),
             ),
         }
-    }
-
-    fn texture_key(width: u32, height: u32) -> (u32, u32) {
-        (width.max(1), height.max(1))
-    }
-
-    fn acquire_texture(&mut self, device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
-        let key = Self::texture_key(width, height);
-        if let Some(bucket) = self.texture_pool.get_mut(&key)
-            && let Some(texture) = bucket.pop()
-        {
-            return texture;
-        }
-
-        device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Blur Intermediate Texture"),
-            size: wgpu::Extent3d {
-                width: key.0,
-                height: key.1,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
-            view_formats: &[],
-        })
-    }
-
-    fn release_texture(&mut self, texture: wgpu::Texture, width: u32, height: u32) {
-        let key = Self::texture_key(width, height);
-        const MAX_BYTES: u64 = 64 * 1024 * 1024;
-        let bytes = u64::from(key.0) * u64::from(key.1) * 4;
-        if bytes > MAX_BYTES {
-            return;
-        }
-        while self
-            .texture_pool
-            .iter()
-            .map(|(&(width, height), textures)| {
-                u64::from(width) * u64::from(height) * 4 * textures.len() as u64
-            })
-            .sum::<u64>()
-            + bytes
-            > MAX_BYTES
-        {
-            self.texture_pool.pop_lru();
-        }
-        self.texture_pool
-            .get_or_insert_mut(key, Vec::new)
-            .push(texture);
     }
 
     fn quantize_radius(radius: f32) -> u32 {
@@ -426,12 +373,21 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
             let down_width = area_width.div_ceil(scale);
             let down_height = area_height.div_ceil(scale);
 
-            let downsample_texture = self.acquire_texture(context.device, down_width, down_height);
-            let downsample_view =
-                downsample_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            let blur_texture = self.acquire_texture(context.device, down_width, down_height);
-            let blur_view = blur_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let intermediate = || {
+                context.graphics.scratch_texture(ScratchTextureDescriptor {
+                    width: down_width,
+                    height: down_height,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING
+                        | wgpu::TextureUsages::STORAGE_BINDING,
+                    sample_count: 1,
+                    fit: ScratchFit::Approx,
+                })
+            };
+            let downsample_texture = intermediate();
+            let blur_texture = intermediate();
+            let downsample_view: &wgpu::TextureView = &downsample_texture;
+            let blur_view: &wgpu::TextureView = &blur_texture;
 
             let resample_uniforms = ResampleUniforms {
                 area_x,
@@ -462,7 +418,7 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                             },
                             wgpu::BindGroupEntry {
                                 binding: 2,
-                                resource: wgpu::BindingResource::TextureView(&downsample_view),
+                                resource: wgpu::BindingResource::TextureView(downsample_view),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 3,
@@ -483,8 +439,8 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 1,
             );
 
-            let mut read_view = downsample_view.clone();
-            let mut write_view = blur_view.clone();
+            let mut read_view = downsample_view;
+            let mut write_view = blur_view;
             for pass in &item.command.passes {
                 let effective_radius = (pass.radius * coordinate_scale / scale as f32).max(0.0);
 
@@ -536,11 +492,11 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
-                                    resource: wgpu::BindingResource::TextureView(&read_view),
+                                    resource: wgpu::BindingResource::TextureView(read_view),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 2,
-                                    resource: wgpu::BindingResource::TextureView(&write_view),
+                                    resource: wgpu::BindingResource::TextureView(write_view),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 3,
@@ -580,7 +536,7 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,
-                                resource: wgpu::BindingResource::TextureView(&read_view),
+                                resource: wgpu::BindingResource::TextureView(read_view),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 2,
@@ -604,9 +560,6 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 upsample_workgroups_y,
                 1,
             );
-
-            self.release_texture(downsample_texture, down_width, down_height);
-            self.release_texture(blur_texture, down_width, down_height);
         }
     }
 }

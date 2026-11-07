@@ -84,7 +84,6 @@ pub struct ImageVectorPipeline {
     sample_bind_group_layout: wgpu::BindGroupLayout,
     atlas_sampler: wgpu::Sampler,
     atlas: VectorAtlas,
-    scratch: RasterScratch,
     cache: HashMap<AtlasKey, AtlasCacheEntry>,
     frame: u64,
     raster_sample_count: u32,
@@ -290,7 +289,6 @@ impl ImageVectorPipeline {
             sample_bind_group_layout,
             atlas_sampler,
             atlas: VectorAtlas::default(),
-            scratch: RasterScratch::default(),
             cache: HashMap::new(),
             frame: 0,
             raster_sample_count,
@@ -380,20 +378,28 @@ impl ImageVectorPipeline {
     ) {
         let padded_width = width + ATLAS_PADDING * 2;
         let padded_height = height + ATLAS_PADDING * 2;
-        let scratch = self.scratch.ensure(
-            device,
-            padded_width.max(padded_height),
-            self.raster_sample_count,
-        );
+        let target = |sample_count, usage| {
+            device.scratch_texture(tessera_ui::ScratchTextureDescriptor {
+                width: padded_width,
+                height: padded_height,
+                format: ATLAS_FORMAT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | usage,
+                sample_count,
+                fit: tessera_ui::ScratchFit::Approx,
+            })
+        };
+        let resolved = target(1, wgpu::TextureUsages::COPY_SRC);
+        let msaa = (self.raster_sample_count > 1)
+            .then(|| target(self.raster_sample_count, wgpu::TextureUsages::empty()));
         let page = self.atlas.page_texture(allocation.page_index);
         device.encode_before_frame(|encoder| {
             {
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("image_vector_raster_pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: scratch.msaa.as_ref().unwrap_or(&scratch.resolved),
+                        view: msaa.as_deref().unwrap_or(&resolved),
                         depth_slice: None,
-                        resolve_target: scratch.msaa.as_ref().map(|_| &scratch.resolved),
+                        resolve_target: msaa.as_ref().map(|_| &*resolved),
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                             store: wgpu::StoreOp::Store,
@@ -419,7 +425,7 @@ impl ImageVectorPipeline {
                 pass.draw_indexed(0..geometry.index_count, 0, 0..1);
             }
             encoder.copy_texture_to_texture(
-                scratch.resolved.texture().as_image_copy(),
+                resolved.texture().as_image_copy(),
                 wgpu::TexelCopyTextureInfo {
                     texture: page,
                     mip_level: 0,
@@ -440,81 +446,6 @@ impl ImageVectorPipeline {
     }
 }
 
-/// Render targets shared by rasterizations, kept while frames keep
-/// rasterizing.
-#[derive(Default)]
-struct RasterScratch {
-    targets: Option<RasterTargets>,
-    used: bool,
-}
-
-struct RasterTargets {
-    size: u32,
-    resolved: wgpu::TextureView,
-    msaa: Option<wgpu::TextureView>,
-}
-
-impl RasterScratch {
-    fn ensure(
-        &mut self,
-        device: &tessera_ui::GraphicsDevice,
-        size: u32,
-        sample_count: u32,
-    ) -> &RasterTargets {
-        self.used = true;
-        if self
-            .targets
-            .as_ref()
-            .is_none_or(|targets| targets.size < size)
-        {
-            let size = size.next_power_of_two().max(MIN_ATLAS_SIZE);
-            let create = |label, sample_count, usage| {
-                device
-                    .create_texture(
-                        "vector_atlas",
-                        &wgpu::TextureDescriptor {
-                            label: Some(label),
-                            size: wgpu::Extent3d {
-                                width: size,
-                                height: size,
-                                depth_or_array_layers: 1,
-                            },
-                            mip_level_count: 1,
-                            sample_count,
-                            dimension: wgpu::TextureDimension::D2,
-                            format: ATLAS_FORMAT,
-                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | usage,
-                            view_formats: &[],
-                        },
-                    )
-                    .create_view(&wgpu::TextureViewDescriptor::default())
-            };
-            self.targets = Some(RasterTargets {
-                size,
-                resolved: create(
-                    "image_vector_raster_resolved",
-                    1,
-                    wgpu::TextureUsages::COPY_SRC,
-                ),
-                msaa: (sample_count > 1).then(|| {
-                    create(
-                        "image_vector_raster_msaa",
-                        sample_count,
-                        wgpu::TextureUsages::empty(),
-                    )
-                }),
-            });
-        }
-        self.targets.as_ref().expect("raster targets")
-    }
-
-    fn end_frame(&mut self) {
-        if !std::mem::take(&mut self.used) {
-            self.targets = None;
-        }
-    }
-}
-
 impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
     fn begin_frame(&mut self, _context: &FrameContext<'_>) {
         self.next_sample = 0;
@@ -531,7 +462,6 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 .graphics
                 .write_buffer(&resources.buffer, 0, &resources.bytes[..resources.used]);
         }
-        self.scratch.end_frame();
         self.cache.retain(|_, entry| {
             if self.frame - entry.last_used <= RETAINED_FRAMES {
                 return true;

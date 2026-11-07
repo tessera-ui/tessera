@@ -29,7 +29,10 @@ mod graphics;
 mod work;
 
 pub use dispatcher::UiDispatcher;
-pub use graphics::{GraphicsDevice, GraphicsWork, GraphicsWorkDiagnostics, TrackedBuffer};
+pub use graphics::{
+    GraphicsDevice, GraphicsWork, GraphicsWorkDiagnostics, ScratchFit, ScratchTexture,
+    ScratchTextureDescriptor, TrackedBuffer,
+};
 pub use work::{FrameWork, WorkExecution, WorkPhase, WorkTotals};
 
 mod session;
@@ -128,10 +131,7 @@ pub use crate::{
     },
     prop::{Callback, CallbackWith, RenderSlot, RenderSlotWith, Slot},
     px::{Px, PxPosition, PxRect, PxSize},
-    render_graph::{
-        DrawGeometry, ExternalTextureDesc, RenderFragment, RenderFragmentOp, RenderGraph,
-        RenderGraphOp, RenderGraphParts, RenderResource, RenderResourceId, RenderTextureDesc,
-    },
+    render_graph::{DrawGeometry, RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp},
     render_module::RenderModule,
     render_scene::{Command, DrawRegion, PaddingRect, SampleRegion},
     renderer::{
@@ -139,7 +139,6 @@ pub use crate::{
         compute::{self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry},
         core::OffscreenReadbackError,
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
-        external::{ExternalTextureHandle, ExternalTextureRegistry},
     },
     runtime::{
         FrameClockDiagnostics, FrameNanosControl, State, StateOwner, current_frame_nanos,
