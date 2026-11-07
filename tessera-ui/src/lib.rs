@@ -136,10 +136,7 @@ pub use crate::{
     render_scene::{Command, DrawRegion, PaddingRect, SampleRegion},
     renderer::{
         Renderer,
-        compute::{
-            self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry, ComputeResource,
-            ComputeResourceManager, ComputeResourceRef,
-        },
+        compute::{self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry},
         core::OffscreenReadbackError,
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
         external::{ExternalTextureHandle, ExternalTextureRegistry},

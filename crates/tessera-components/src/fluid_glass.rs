@@ -20,7 +20,6 @@ use crate::{
         blur::command::DualBlurCommand,
         contrast::ContrastCommand,
         fluid_glass::{FluidGlassCommand, FluidGlassRenderArgs},
-        mean::command::MeanCommand,
     },
     pos_misc::is_position_inside_bounds,
     ripple_state::RippleState,
@@ -403,14 +402,10 @@ impl tessera_ui::DrawModifierNode for FluidGlassLayout {
         if let Some(contrast_value) = self.contrast
             && contrast_value != 1.0
         {
-            let mean_command = MeanCommand::new(input.gpu, input.compute_resource_manager);
-            let contrast_command =
-                ContrastCommand::new(contrast_value, mean_command.result_buffer_ref());
-            let mut metadata = input.metadata_mut();
-            metadata.fragment_mut().push_compute_command(mean_command);
-            metadata
+            input
+                .metadata_mut()
                 .fragment_mut()
-                .push_compute_command(contrast_command);
+                .push_compute_command(ContrastCommand::new(contrast_value));
         }
 
         let drawable = FluidGlassCommand {

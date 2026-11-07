@@ -1,16 +1,10 @@
 use tessera_ui::PipelineContext;
 
-use crate::pipelines::{
-    blur::pipeline::BlurPipeline, contrast::ContrastPipeline, mean::pipeline::MeanPipeline,
-};
+use crate::pipelines::{blur::pipeline::BlurPipeline, contrast::ContrastPipeline};
 
 pub(super) fn register(context: &mut PipelineContext<'_>) {
     let resources = context.resources();
     let pipeline = BlurPipeline::new(resources.device, resources.pipeline_cache);
-    context.register_compute_pipeline(pipeline);
-
-    let resources = context.resources();
-    let pipeline = MeanPipeline::new(resources.device, resources.pipeline_cache);
     context.register_compute_pipeline(pipeline);
 
     let resources = context.resources();

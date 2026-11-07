@@ -353,7 +353,6 @@ struct ComputePassParams<'a> {
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
-    resource_manager: &'a mut ComputeResourceManager,
 }
 
 impl RenderCore {
@@ -650,7 +649,12 @@ impl RenderCore {
         let finish_time =
             tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
                 .then(|| submit_start.elapsed());
-        queue.submit(self.graphics.finish_prelude().into_iter().chain([command_buffer]));
+        queue.submit(
+            self.graphics
+                .finish_prelude()
+                .into_iter()
+                .chain([command_buffer]),
+        );
         let submit = submit_start.elapsed();
         if let Some(finish_time) = finish_time {
             debug!(
@@ -857,7 +861,6 @@ impl RenderCore {
                             device: state.device,
                             queue: state.queue,
                             config: state.config,
-                            resource_manager: &mut state.compute.resource_manager,
                         };
                         let texture_size = wgpu::Extent3d {
                             width: state.config.width,
@@ -884,7 +887,6 @@ impl RenderCore {
                             device: state.device,
                             queue: state.queue,
                             config: state.config,
-                            resource_manager: &mut state.compute.resource_manager,
                         };
                         let Some(slot) = resources.local_slot_mut(write_resource) else {
                             return;
@@ -914,7 +916,6 @@ impl RenderCore {
                             device: state.device,
                             queue: state.queue,
                             config: state.config,
-                            resource_manager: &mut state.compute.resource_manager,
                         };
                         let Some(slot) = resources.external_slot_mut(write_resource) else {
                             return;
@@ -1270,7 +1271,6 @@ fn do_compute_with_targets(
                         Px(texture_size.height as i32),
                     ),
                     compute_pass: &mut cpass,
-                    resource_manager: params.resource_manager,
                     input_view: &input_view,
                     output_view: &output_view,
                 },

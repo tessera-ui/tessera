@@ -1,40 +1,21 @@
-use tessera_ui::{
-    SampleRegion, compute::ComputeResourceRef, renderer::compute::command::ComputeCommand,
-};
+use tessera_ui::{SampleRegion, renderer::compute::command::ComputeCommand};
 
-/// Command to apply a contrast adjustment using a pre-calculated mean
-/// luminance.
-///
-/// # Parameters
-///
-/// - `contrast`: The contrast adjustment factor.
-/// - `mean_result_handle`: Handle to the buffer containing mean luminance data.
+/// Command that scales colors away from the mean luminance of its area.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ContrastCommand {
     /// The contrast adjustment factor.
     pub contrast: f32,
-    /// A handle to the `wgpu::Buffer` containing the mean luminance data.
-    pub mean_result_handle: ComputeResourceRef,
 }
 
 impl ContrastCommand {
-    /// Creates a new `ContrastCommand`.
-    ///
-    /// # Parameters
-    ///
-    /// - `contrast`: The contrast adjustment factor.
-    /// - `mean_result_handle`: Handle to the buffer containing mean luminance
-    ///   data.
-    pub fn new(contrast: f32, mean_result_handle: ComputeResourceRef) -> Self {
-        Self {
-            contrast,
-            mean_result_handle,
-        }
+    /// Creates a contrast adjustment with the given factor.
+    pub fn new(contrast: f32) -> Self {
+        Self { contrast }
     }
 }
 
 impl ComputeCommand for ContrastCommand {
-    fn barrier(&self) -> tessera_ui::SampleRegion {
+    fn barrier(&self) -> SampleRegion {
         SampleRegion::ZERO_PADDING_LOCAL
     }
 }

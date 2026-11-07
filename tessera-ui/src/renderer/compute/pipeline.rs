@@ -6,9 +6,7 @@
 
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{
-    PxRect, PxSize, SendSync, compute::resource::ComputeResourceManager, render_graph::DrawGeometry,
-};
+use crate::{PxRect, PxSize, SendSync, render_graph::DrawGeometry};
 
 use super::command::ComputeCommand;
 
@@ -46,8 +44,6 @@ pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
     pub compute_pass: &'a mut wgpu::ComputePass<'b>,
     /// Batch of typed compute items to process.
     pub items: &'c [ComputeBatchItem<'c, C>],
-    /// Shared resource manager used to reuse GPU buffers.
-    pub resource_manager: &'a mut ComputeResourceManager,
     /// Input texture view sampled by the compute pass.
     pub input_view: &'a wgpu::TextureView,
     /// Output texture view written by the compute pass.
@@ -61,7 +57,6 @@ pub(crate) struct ErasedDispatchContext<'a, 'b> {
     pub config: &'a wgpu::SurfaceConfiguration,
     pub target_size: PxSize,
     pub compute_pass: &'a mut wgpu::ComputePass<'b>,
-    pub resource_manager: &'a mut ComputeResourceManager,
     pub input_view: &'a wgpu::TextureView,
     pub output_view: &'a wgpu::TextureView,
 }
@@ -122,7 +117,6 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
             target_size: context.target_size,
             compute_pass: context.compute_pass,
             items: &typed_items,
-            resource_manager: context.resource_manager,
             input_view: context.input_view,
             output_view: context.output_view,
         });

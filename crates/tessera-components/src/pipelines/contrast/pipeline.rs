@@ -15,15 +15,18 @@ struct Uniforms {
     area_height: u32,
 }
 
-/// Pipeline for applying contrast adjustment to an image using a compute
-/// shader.
+/// Measures the mean luminance of each command's area and scales its colors
+/// away from it.
 pub struct ContrastPipeline {
-    pipeline: wgpu::ComputePipeline,
+    reset: wgpu::ComputePipeline,
+    accumulate: wgpu::ComputePipeline,
+    apply: wgpu::ComputePipeline,
     bind_group_layout: wgpu::BindGroupLayout,
+    mean: wgpu::Buffer,
 }
 
 impl ContrastPipeline {
-    /// Builds the contrast compute pipeline, optionally reusing a cache.
+    /// Builds the contrast compute pipelines, optionally reusing a cache.
     pub fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Contrast Shader"),
@@ -32,20 +35,16 @@ impl ContrastPipeline {
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
-                // 0: Uniforms
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(
-                            std::num::NonZeroU64::new(20).expect("binding size must be non-zero"),
-                        ),
+                        min_binding_size: None,
                     },
                     count: None,
                 },
-                // 1: Source Texture
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -56,7 +55,6 @@ impl ContrastPipeline {
                     },
                     count: None,
                 },
-                // 2: Destination Texture (Storage)
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -67,16 +65,13 @@ impl ContrastPipeline {
                     },
                     count: None,
                 },
-                // 3: Mean Result Buffer (Storage)
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
-                        min_binding_size: Some(
-                            std::num::NonZeroU64::new(8).expect("binding size must be non-zero"),
-                        ),
+                        min_binding_size: None,
                     },
                     count: None,
                 },
@@ -89,54 +84,53 @@ impl ContrastPipeline {
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
-
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Contrast Pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: pipeline_cache,
-        });
+        let create = |entry_point| {
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Contrast Pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: Some(entry_point),
+                compilation_options: Default::default(),
+                cache: pipeline_cache,
+            })
+        };
 
         Self {
-            pipeline,
+            reset: create("reset"),
+            accumulate: create("accumulate"),
+            apply: create("apply"),
             bind_group_layout,
+            // Dispatches in a pass run in order, so one accumulator serves every item.
+            mean: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Contrast Mean Buffer"),
+                size: 8,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }),
         }
     }
 }
 
 impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
-    /// Dispatches one or more contrast adjustment compute commands.
     fn dispatch(&mut self, context: &mut ComputeContext<ContrastCommand>) {
         for item in context.items {
-            let Some(mean_buffer) = context
-                .resource_manager
-                .get(&item.command.mean_result_handle)
-            else {
-                continue;
-            };
-
-            let target_area = item.target_area;
+            let area = item.target_area;
             let uniforms = Uniforms {
                 contrast: item.command.contrast,
-                area_x: target_area.x.0 as u32,
-                area_y: target_area.y.0 as u32,
-                area_width: target_area.width.0 as u32,
-                area_height: target_area.height.0 as u32,
+                area_x: area.x.0 as u32,
+                area_y: area.y.0 as u32,
+                area_width: area.width.0 as u32,
+                area_height: area.height.0 as u32,
             };
-
-            let uniform_array = [uniforms];
-            let uniform_bytes = bytemuck::cast_slice(&uniform_array);
             let uniform_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Contrast Uniform Buffer"),
-                size: uniform_bytes.len() as u64,
+                size: std::mem::size_of::<Uniforms>() as u64,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
             context
                 .queue
-                .write_buffer(&uniform_buffer, 0, uniform_bytes);
+                .write_buffer(&uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
 
             let bind_group = context
                 .device
@@ -157,15 +151,24 @@ impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
                         },
                         wgpu::BindGroupEntry {
                             binding: 3,
-                            resource: mean_buffer.as_entire_binding(),
+                            resource: self.mean.as_entire_binding(),
                         },
                     ],
                     label: Some("contrast_bind_group"),
                 });
 
-            context.compute_pass.set_pipeline(&self.pipeline);
-            context.compute_pass.set_bind_group(0, &bind_group, &[]);
-            context.compute_pass.dispatch_workgroups(
+            let pass = &mut *context.compute_pass;
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_pipeline(&self.reset);
+            pass.dispatch_workgroups(1, 1, 1);
+            pass.set_pipeline(&self.accumulate);
+            pass.dispatch_workgroups(
+                uniforms.area_width.div_ceil(8),
+                uniforms.area_height.div_ceil(8),
+                1,
+            );
+            pass.set_pipeline(&self.apply);
+            pass.dispatch_workgroups(
                 context.target_size.width.positive().div_ceil(8),
                 context.target_size.height.positive().div_ceil(8),
                 1,

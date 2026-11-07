@@ -530,12 +530,9 @@ impl HeadlessRenderer {
         let mut _record_cost = Duration::ZERO;
         let mut _diagnostics = crate::component_tree::LayoutFrameDiagnostics::default();
         let graph = loop {
-            self.core.compute_resource_manager_mut().clear();
             let layout_dirty_nodes = take_layout_dirty_nodes();
-            let core = &mut self.core;
             let (graph, _requests, diagnostics, record_cost, next_move, next_reveal, next_keyboard) =
                 TesseraRuntime::with_mut(|runtime| {
-                    let (gpu, compute_resource_manager) = core.record_resources();
                     runtime.component_tree.compute(
                         ComputeParams {
                             screen_size,
@@ -548,10 +545,7 @@ impl HeadlessRenderer {
                             modifiers,
                             layout_dirty_nodes: &layout_dirty_nodes,
                         },
-                        ComputeMode::Full {
-                            compute_resource_manager,
-                            gpu,
-                        },
+                        ComputeMode::Full,
                     )
                 });
             _record_cost += record_cost;

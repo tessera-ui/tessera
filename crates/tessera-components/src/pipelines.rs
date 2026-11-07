@@ -14,7 +14,6 @@ pub(crate) mod image;
 pub(crate) mod image_vector;
 pub(crate) mod linear_wave;
 pub(crate) mod loading_shape;
-pub(crate) mod mean;
 pub(crate) mod path_stroke;
 pub(crate) mod progress_arc;
 pub(crate) mod shape;

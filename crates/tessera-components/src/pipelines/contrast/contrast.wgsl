@@ -7,39 +7,55 @@ struct Uniforms {
 };
 
 struct MeanResult {
-    total_luminance: u32,
-    total_pixels: u32,
+    total_luminance: atomic<u32>,
+    total_pixels: atomic<u32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var source_texture: texture_2d<f32>;
 @group(0) @binding(2) var dest_texture: texture_storage_2d<rgba8unorm, write>;
-@group(0) @binding(3) var<storage, read> mean_result: MeanResult;
+@group(0) @binding(3) var<storage, read_write> mean_result: MeanResult;
+
+fn luminance(color: vec4<f32>) -> f32 {
+    return dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+
+@compute @workgroup_size(1, 1, 1)
+fn reset() {
+    atomicStore(&mean_result.total_luminance, 0u);
+    atomicStore(&mean_result.total_pixels, 0u);
+}
+
+// Dispatched over the area only.
+@compute @workgroup_size(8, 8, 1)
+fn accumulate(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let coord = global_id.xy + vec2<u32>(uniforms.area_x, uniforms.area_y);
+    if global_id.x >= uniforms.area_width || global_id.y >= uniforms.area_height
+        || any(coord >= textureDimensions(source_texture)) {
+        return;
+    }
+    atomicAdd(&mean_result.total_luminance, u32(luminance(textureLoad(source_texture, coord, 0)) * 255.0));
+    atomicAdd(&mean_result.total_pixels, 1u);
+}
 
 @compute @workgroup_size(8, 8, 1)
-fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let output_size = textureDimensions(dest_texture);
+fn apply(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let coord = global_id.xy;
-
-    if global_id.x >= uniforms.area_x && global_id.x < uniforms.area_x + uniforms.area_width && global_id.y >= uniforms.area_y && global_id.y < uniforms.area_y + uniforms.area_height && global_id.x < output_size.x && global_id.y < output_size.y {
-
-        // Calculate mean luminance on the fly
-        var mean_luminance: f32 = 0.5;
-        if mean_result.total_pixels > 0u {
-            mean_luminance = (f32(mean_result.total_luminance) / f32(mean_result.total_pixels)) / 255.0;
-        }
-
-        let original_color = textureLoad(source_texture, coord, 0);
-        let mean_vec = vec3<f32>(mean_luminance);
-
-        // Apply contrast adjustment using the mean luminance
-        let adjusted_color_rgb = (original_color.rgb - mean_vec) * uniforms.contrast + mean_vec;
-        let clamped_color_rgb = clamp(adjusted_color_rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-        let final_color = vec4<f32>(clamped_color_rgb, original_color.a);
-
-        textureStore(dest_texture, coord, final_color);
-    } else if global_id.x < output_size.x && global_id.y < output_size.y {
-        let color = textureLoad(source_texture, coord, 0);
-        textureStore(dest_texture, coord, color);
+    if any(coord >= textureDimensions(dest_texture)) {
+        return;
     }
+    let color = textureLoad(source_texture, coord, 0);
+    let in_area = global_id.x >= uniforms.area_x && global_id.x < uniforms.area_x + uniforms.area_width
+        && global_id.y >= uniforms.area_y && global_id.y < uniforms.area_y + uniforms.area_height;
+    if !in_area {
+        textureStore(dest_texture, coord, color);
+        return;
+    }
+    var mean = 0.5;
+    let pixels = atomicLoad(&mean_result.total_pixels);
+    if pixels > 0u {
+        mean = f32(atomicLoad(&mean_result.total_luminance)) / f32(pixels) / 255.0;
+    }
+    let adjusted = clamp((color.rgb - vec3<f32>(mean)) * uniforms.contrast + vec3<f32>(mean), vec3<f32>(0.0), vec3<f32>(1.0));
+    textureStore(dest_texture, coord, vec4<f32>(adjusted, color.a));
 }

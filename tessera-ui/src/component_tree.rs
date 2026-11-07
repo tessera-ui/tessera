@@ -11,7 +11,7 @@ use smallvec::SmallVec;
 use tracing::{debug, warn};
 
 use crate::{
-    ComputeResourceManager, NodeId, PxRect,
+    NodeId, PxRect,
     clipboard::{self, ClipboardInput, ClipboardResponse, QueuedClipboardAction},
     cursor::{CursorEventContent, MOUSE_POINTER_ID, PointerChange},
     focus::{
@@ -504,11 +504,8 @@ pub(crate) struct ComputeParams<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) enum ComputeMode<'a> {
-    Full {
-        compute_resource_manager: &'a mut ComputeResourceManager,
-        gpu: &'a wgpu::Device,
-    },
+pub(crate) enum ComputeMode {
+    Full,
     #[cfg(any(test, feature = "testing"))]
     LayoutOnly,
 }
@@ -2226,7 +2223,7 @@ impl ComponentTree {
     pub(crate) fn compute(
         &mut self,
         params: ComputeParams<'_>,
-        mode: ComputeMode<'_>,
+        mode: ComputeMode,
     ) -> (
         RenderGraph,
         WindowRequests,
@@ -2435,11 +2432,8 @@ impl ComponentTree {
         }
         record_frame_stage(&mut stage_timer, "geometry");
 
-        let (compute_resource_manager, gpu) = match mode {
-            ComputeMode::Full {
-                compute_resource_manager,
-                gpu,
-            } => (compute_resource_manager, gpu),
+        match mode {
+            ComputeMode::Full => {}
             #[cfg(any(test, feature = "testing"))]
             ComputeMode::LayoutOnly => {
                 self.collect_globally_positioned_invocations(screen_size);
@@ -2478,13 +2472,7 @@ impl ComponentTree {
 
         let record_timer = Instant::now();
         let _focus_owner_guard = bind_focus_owner(&mut self.focus_owner);
-        record_layout_commands(
-            root_node,
-            &self.tree,
-            &mut self.metadatas,
-            compute_resource_manager,
-            gpu,
-        );
+        record_layout_commands(root_node, &self.tree, &mut self.metadatas);
         let record_cost = record_timer.elapsed();
         record_frame_stage(&mut stage_timer, "paint");
         diagnostics_snapshot.geometry_nodes_updated +=
@@ -3661,8 +3649,6 @@ fn record_layout_commands(
     root_node: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &mut ComponentNodeMetaDatas,
-    compute_resource_manager: &mut ComputeResourceManager,
-    gpu: &wgpu::Device,
 ) {
     struct DrawModifierChainContent<'a> {
         instance: u64,
@@ -3768,7 +3754,7 @@ fn record_layout_commands(
             metadata.clip_region = None;
             metadata.opacity = 1.0;
         }
-        let mut input = RenderInput::new(node_id, metadatas, compute_resource_manager, gpu);
+        let mut input = RenderInput::new(node_id, metadatas);
         let node_ref = node.get();
         let mut bounds = Some(input.draw_bounds);
         let mut layer_index = 0;

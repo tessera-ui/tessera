@@ -10,8 +10,8 @@ use winit::window::Window;
 
 use crate::{
     ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, PxSize,
-    compute::resource::ComputeResourceManager, pipeline_cache::save_cache,
-    render_graph::RenderTextureDesc, renderer::external::ExternalTextureRegistry,
+    pipeline_cache::save_cache, render_graph::RenderTextureDesc,
+    renderer::external::ExternalTextureRegistry,
 };
 
 use super::{compute::ComputePipelineRegistry, drawer::Drawer};
@@ -86,7 +86,6 @@ impl std::error::Error for OffscreenReadbackError {}
 struct ComputeState {
     target_a: Option<wgpu::TextureView>,
     target_b: Option<wgpu::TextureView>,
-    resource_manager: ComputeResourceManager,
 }
 
 struct BlitState {
@@ -416,16 +415,6 @@ impl RenderCore {
     /// Returns the configured MSAA sample count.
     pub fn sample_count(&self) -> u32 {
         self.targets.sample_count
-    }
-
-    /// Returns the frame-local compute resource manager.
-    pub fn compute_resource_manager_mut(&mut self) -> &mut ComputeResourceManager {
-        &mut self.compute.resource_manager
-    }
-
-    /// Returns the device and compute manager used during record.
-    pub fn record_resources(&mut self) -> (&wgpu::Device, &mut ComputeResourceManager) {
-        (&self.device, &mut self.compute.resource_manager)
     }
 
     /// Returns the timing breakdown for the most recent render call.

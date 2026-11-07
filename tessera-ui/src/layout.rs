@@ -11,8 +11,7 @@ use std::{
 };
 
 use crate::{
-    ComputeResourceManager, ComputedData, Constraint, MeasurementError, ParentConstraint, Px,
-    RenderSlot,
+    ComputedData, Constraint, MeasurementError, ParentConstraint, Px, RenderSlot,
     component_tree::{
         ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, DrawLayoutBounds,
         LayoutContext, LayoutDiagnosticsCollector, LayoutSnapshotMap, measure_node,
@@ -727,18 +726,12 @@ pub struct RenderInput<'a> {
     current_node_id: crate::NodeId,
     metadatas: &'a mut ComponentNodeMetaDatas,
     pub(crate) draw_bounds: DrawLayoutBounds,
-    /// Mutable GPU compute resources for the current frame.
-    pub compute_resource_manager: &'a mut ComputeResourceManager,
-    /// GPU device for issuing render-side allocations.
-    pub gpu: &'a wgpu::Device,
 }
 
 impl<'a> RenderInput<'a> {
     pub(crate) fn new(
         current_node_id: crate::NodeId,
         metadatas: &'a mut ComponentNodeMetaDatas,
-        compute_resource_manager: &'a mut ComputeResourceManager,
-        gpu: &'a wgpu::Device,
     ) -> Self {
         let size = metadatas
             .get(&current_node_id)
@@ -751,8 +744,6 @@ impl<'a> RenderInput<'a> {
                 position: PxPosition::ZERO,
                 size,
             },
-            compute_resource_manager,
-            gpu,
         }
     }
 

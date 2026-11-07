@@ -5,7 +5,6 @@ use wgpu::TextureFormat;
 use winit::window::Window;
 
 use crate::{
-    compute::resource::ComputeResourceManager,
     pipeline_cache::initialize_cache,
     renderer::{
         compute::ComputePipelineRegistry, drawer::Drawer, external::ExternalTextureRegistry,
@@ -511,7 +510,6 @@ impl RenderCore {
         let compute = ComputeState {
             target_a: None,
             target_b: None,
-            resource_manager: ComputeResourceManager::new(),
         };
 
         let blit = BlitState {
