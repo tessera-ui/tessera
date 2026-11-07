@@ -1,6 +1,9 @@
 use std::{
     num::NonZeroUsize,
-    sync::{Arc, Weak},
+    sync::{
+        Arc, Weak,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 
 use glyphon::fontdb;
@@ -18,6 +21,8 @@ use super::command::{TextCommand, TextConstraint};
 
 struct TextResources {
     font_system: Arc<RwLock<glyphon::FontSystem>>,
+    // Read and advanced under the font-system write lock.
+    font_revision: AtomicU32,
     // A cache entry must not extend the lifetime of the glyphs it indexes.
     short_layouts: Mutex<LruCache<TextLayoutKey, Weak<ShapedText>>>,
 }
@@ -33,6 +38,46 @@ struct TextLayoutKey {
     family: Option<&'static str>,
     bounds: [Option<u32>; 2],
     single_line: bool,
+}
+
+impl TextLayoutKey {
+    fn new(
+        text: &Arc<str>,
+        font_size: f32,
+        line_height: f32,
+        font: TextFont,
+        constraint: &TextConstraint,
+    ) -> Self {
+        Self {
+            text: Arc::clone(text),
+            metrics: [font_size, line_height, font.tracking].map(f32::to_bits),
+            weight: font.weight,
+            family: font.family,
+            bounds: [constraint.max_width, constraint.max_height]
+                .map(|bound| bound.map(f32::to_bits)),
+            single_line: constraint.single_line,
+        }
+    }
+}
+
+impl TextResources {
+    fn cached_layout(&self, key: Option<&TextLayoutKey>) -> Option<Arc<ShapedText>> {
+        key.and_then(|key| self.short_layouts.lock().get(key).and_then(Weak::upgrade))
+    }
+
+    fn create_layout(
+        &self,
+        key: Option<TextLayoutKey>,
+        create: impl FnOnce(&mut glyphon::FontSystem, u32) -> Arc<ShapedText>,
+    ) -> Arc<ShapedText> {
+        let mut fonts = self.font_system.write();
+        let revision = self.font_revision.load(Ordering::Relaxed);
+        let layout = create(&mut fonts, revision);
+        if let Some(key) = key {
+            self.short_layouts.lock().put(key, Arc::downgrade(&layout));
+        }
+        layout
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]
@@ -107,6 +152,7 @@ impl Default for TextResources {
         let preloaded = None;
         Self {
             font_system: Arc::new(RwLock::new(preloaded.unwrap_or_else(system_fonts))),
+            font_revision: AtomicU32::new(1),
             short_layouts: Mutex::new(LruCache::sparse(SHORT_LAYOUT_CAPACITY)),
         }
     }
@@ -147,6 +193,11 @@ pub fn read_font_system() -> ArcRwLockReadGuard<RawRwLock, glyphon::FontSystem> 
 pub fn write_font_system() -> ArcRwLockWriteGuard<RawRwLock, glyphon::FontSystem> {
     let resources = tessera_ui::__private::runtime_resource::<TextResources>();
     let fonts = resources.font_system.write_arc();
+    let revision = resources.font_revision.load(Ordering::Relaxed);
+    resources.font_revision.store(
+        revision.checked_add(1).expect("font revision exhausted"),
+        Ordering::Relaxed,
+    );
     resources.short_layouts.lock().clear();
     fonts
 }
@@ -285,17 +336,28 @@ pub struct TextData {
 struct ShapedText {
     buffer: glyphon::Buffer,
     measure: TextMeasureInfo,
+    font_revision: u32,
 }
 
 impl ShapedText {
-    fn new(buffer: glyphon::Buffer) -> Self {
+    fn new(buffer: glyphon::Buffer, font_revision: u32) -> Self {
         let measure = TextMeasureInfo::from_buffer(&buffer);
-        Self { buffer, measure }
+        Self {
+            buffer,
+            measure,
+            font_revision,
+        }
     }
 
-    fn reshape(&mut self) {
-        self.buffer.shape_until_scroll(&mut shaping_fonts(), false);
+    fn reshape(&mut self, fonts: &mut glyphon::FontSystem) {
+        self.buffer.shape_until_scroll(fonts, false);
         self.measure = TextMeasureInfo::from_buffer(&self.buffer);
+    }
+
+    fn resize(&mut self, constraint: &TextConstraint, fonts: &mut glyphon::FontSystem) {
+        self.buffer
+            .set_size(constraint.max_width, constraint.max_height);
+        self.reshape(fonts);
     }
 }
 
@@ -406,34 +468,20 @@ impl TextData {
             family: style.font_family,
         };
         let resources = tessera_ui::__private::runtime_resource::<TextResources>();
-        let key = (text.len() <= SHORT_TEXT_BYTES).then(|| TextLayoutKey {
-            text: text.clone(),
-            metrics: [font_size, line_height, font.tracking].map(f32::to_bits),
-            weight: font.weight,
-            family: font.family,
-            bounds: [constraint.max_width, constraint.max_height]
-                .map(|bound| bound.map(f32::to_bits)),
-            single_line: constraint.single_line,
-        });
-        let cached = key.as_ref().and_then(|key| {
-            resources
-                .short_layouts
-                .lock()
-                .get(key)
-                .and_then(Weak::upgrade)
-        });
-        let layout = cached.unwrap_or_else(|| {
-            let mut fonts = resources.font_system.write();
-            let buffer =
-                Self::build_buffer(&mut fonts, &text, font_size, line_height, font, &constraint);
-            let layout = Arc::new(ShapedText::new(buffer));
-            if let Some(key) = key {
-                resources
-                    .short_layouts
-                    .lock()
-                    .put(key, Arc::downgrade(&layout));
-            }
-            layout
+        let key = (text.len() <= SHORT_TEXT_BYTES)
+            .then(|| TextLayoutKey::new(&text, font_size, line_height, font, &constraint));
+        let layout = resources.cached_layout(key.as_ref()).unwrap_or_else(|| {
+            resources.create_layout(key, |fonts, revision| {
+                Self::build_layout(
+                    fonts,
+                    revision,
+                    &text,
+                    font_size,
+                    line_height,
+                    font,
+                    &constraint,
+                )
+            })
         });
         Self {
             layout,
@@ -449,13 +497,35 @@ impl TextData {
         }
     }
 
-    /// Lays out the shaped text again for a new constraint without reshaping.
     pub(crate) fn relayout(&mut self, constraint: &TextConstraint) {
-        let layout = Arc::make_mut(&mut self.layout);
-        layout
-            .buffer
-            .set_size(constraint.max_width, constraint.max_height);
-        layout.reshape();
+        let resources = tessera_ui::__private::runtime_resource::<TextResources>();
+        let key = (self.text.len() <= SHORT_TEXT_BYTES).then(|| {
+            TextLayoutKey::new(
+                &self.text,
+                self.font_size,
+                self.line_height,
+                self.font,
+                constraint,
+            )
+        });
+        self.layout = resources.cached_layout(key.as_ref()).unwrap_or_else(|| {
+            resources.create_layout(key, |fonts, revision| {
+                if self.layout.font_revision == revision {
+                    Arc::make_mut(&mut self.layout).resize(constraint, fonts);
+                    Arc::clone(&self.layout)
+                } else {
+                    Self::build_layout(
+                        fonts,
+                        revision,
+                        &self.text,
+                        self.font_size,
+                        self.line_height,
+                        self.font,
+                        constraint,
+                    )
+                }
+            })
+        });
     }
 
     /// Builds [`TextData`] directly from a pre-shaped glyphon buffer.
@@ -478,7 +548,7 @@ impl TextData {
             .collect();
         let metrics = text_buffer.metrics();
         Self {
-            layout: Arc::new(ShapedText::new(text_buffer)),
+            layout: Arc::new(ShapedText::new(text_buffer, 0)),
             base_color: Color::WHITE,
             current_color: Color::WHITE,
             text: Arc::from(""),
@@ -524,17 +594,18 @@ impl TextData {
         }
         let layout = Arc::make_mut(&mut self.layout);
         layout.buffer.set_scroll(scroll);
-        layout.reshape();
+        layout.reshape(&mut shaping_fonts());
     }
 
-    fn build_buffer(
+    fn build_layout(
         font_system: &mut glyphon::FontSystem,
+        font_revision: u32,
         text: &str,
         size: f32,
         line_height: f32,
         font: TextFont,
         constraint: &TextConstraint,
-    ) -> glyphon::Buffer {
+    ) -> Arc<ShapedText> {
         let mut text_buffer = glyphon::Buffer::new_empty(glyphon::Metrics::new(size, line_height));
         if constraint.single_line {
             text_buffer.set_wrap(glyphon::Wrap::None);
@@ -561,7 +632,7 @@ impl TextData {
             None,
         );
         text_buffer.shape_until_scroll(font_system, false);
-        text_buffer
+        Arc::new(ShapedText::new(text_buffer, font_revision))
     }
 
     pub(crate) fn set_color(&mut self, color: Color) {
@@ -642,19 +713,45 @@ mod tests {
             other_color.text_area(origin, 1.0).default_color
         );
 
+        let mut resized = original.clone();
+        let narrow = TextConstraint {
+            max_width: Some(10.0),
+            ..Default::default()
+        };
+        resized.relayout(&narrow);
         let narrower = shape(Color::BLACK, Some(10.0));
+        assert!(Arc::ptr_eq(&resized.layout, &narrower.layout));
         assert_eq!(narrower.layout.buffer.size().0, Some(10.0));
+        assert_eq!(original.layout.buffer.size().0, None);
         let previous_layout = Arc::downgrade(&original.layout);
         drop(original);
         drop(other_color);
         assert!(previous_layout.upgrade().is_none());
 
-        let original = shape(Color::BLACK, None);
+        let mut original = shape(Color::BLACK, None);
+        let revision_before = original.layout.font_revision;
         write_font_system()
             .db_mut()
             .set_sans_serif_family("Tessera test family");
         let updated = shape(Color::BLACK, None);
         assert!(!Arc::ptr_eq(&original.layout, &updated.layout));
+        original.relayout(&narrow);
+        assert_ne!(original.layout.font_revision, revision_before);
+        assert!(Arc::ptr_eq(
+            &original.layout,
+            &shape(Color::BLACK, Some(10.0)).layout
+        ));
+
+        tessera_ui::__private::runtime_resource::<super::TextResources>()
+            .short_layouts
+            .lock()
+            .clear();
+        let allocation = Arc::as_ptr(&original.layout);
+        original.relayout(&TextConstraint {
+            max_width: Some(20.0),
+            ..Default::default()
+        });
+        assert_eq!(Arc::as_ptr(&original.layout), allocation);
     }
 
     #[test]
@@ -757,16 +854,11 @@ mod tests {
             TextConstraint::default(),
         );
         let width = alpha.measure_info().size[0] as f32 + beta.measure_info().size[0] as f32 / 2.0;
-        let phrase = TextData::shape(
-            "alpha beta".to_string(),
-            Color::BLACK,
-            style,
-            TextConstraint {
-                max_width: Some(width),
-                max_height: None,
-                ..Default::default()
-            },
-        );
+        let narrow = TextConstraint {
+            max_width: Some(width),
+            ..Default::default()
+        };
+        let phrase = TextData::shape("alpha beta".into(), Color::BLACK, style, narrow.clone());
         let runs: Vec<_> = phrase.layout.buffer.layout_runs().collect();
         assert_eq!(runs.len(), 2);
         assert!(runs[0].glyphs.iter().all(|glyph| glyph.end <= 6));
@@ -778,11 +870,8 @@ mod tests {
             TextConstraint::default(),
         );
         let mut relaid = unconstrained.clone();
-        relaid.relayout(&TextConstraint {
-            max_width: Some(width),
-            max_height: None,
-            ..Default::default()
-        });
+        relaid.relayout(&narrow);
+        assert!(Arc::ptr_eq(&relaid.layout, &phrase.layout));
         assert_eq!(
             relaid.measure_info(),
             phrase.measure_info(),

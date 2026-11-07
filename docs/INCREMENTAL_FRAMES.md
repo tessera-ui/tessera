@@ -122,9 +122,9 @@ for normal, medium, and bold text on a worker, overlapping renderer startup.
 The first text layout waits only if that preparation has not completed; custom
 font registration still invalidates the affected matching caches normally.
 Plain text shares immutable content across component props, layout, and semantics.
-The text pipeline shares glyph buffers and measurements for identical live short
-layouts within a runtime session. The bounded lookup uses weak references and
-is cleared when the font system is mutably borrowed for configuration.
+Initial layout and reflow share live glyph buffers and measurements for identical
+short text and constraints within a runtime session. A mutable font-system borrow
+clears the bounded weak lookup and invalidates older buffers as reflow sources.
 
 Scene, MSAA, and stencil attachments reuse nearby allocation sizes while layout,
 clipping, and drawing retain the exact viewport dimensions. Capacity grows in
