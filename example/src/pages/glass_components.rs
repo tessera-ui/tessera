@@ -9,6 +9,7 @@ use tessera_components::{
     lazy_list::lazy_column,
     modifier::{DragDelta, ModifierExt},
     row::row,
+    scrollable::{ScrollBarBehavior, ScrollableController, ScrollbarDefaults, scrollbar_v},
     shape_def::Shape,
     slider::slider,
     spacer::spacer,
@@ -28,6 +29,7 @@ use tessera_ui::{
 use crate::res::I18N;
 
 const STAGE_HEIGHT: Dp = Dp(152.0);
+const PAGE_INSET: Dp = Dp(16.0);
 const LENS_ORIGIN: [Dp; 2] = [Dp(32.0), Dp(32.0)];
 const TILE_SIZE: Dp = Dp(64.0);
 const TILE_SPACING: Dp = Dp(12.0);
@@ -270,6 +272,7 @@ fn bounded_position(position: [Dp; 2], size: [Dp; 2], stage_width: Dp) -> [Dp; 2
 #[shard]
 pub fn glass_components_page() {
     let settings = remember(LensSettings::default);
+    let scroll = remember(ScrollableController::new);
     let position = remember(|| LENS_ORIGIN);
     let clicks = remember(|| 0_u32);
     let editors = LensEditors {
@@ -280,187 +283,228 @@ pub fn glass_components_page() {
     let theme = use_context::<MaterialTheme>().unwrap();
 
     column()
-        .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .padding_symmetric(Dp::ZERO, PAGE_INSET),
+        )
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
             glass_preview(settings, position, clicks, editors);
             spacer().modifier(Modifier::new().height(Dp(12.0)));
-            lazy_column()
-                .modifier(
-                    Modifier::new()
-                        .size_in(None, Some(DEMO_WIDTH), None, None)
-                        .fill_max_width()
-                        .weight(1.0),
-                )
-                .item_spacing(Dp(12.0))
-                .item(move || {
-                    text(I18N.text("ui-glass-components"))
-                        .style(theme.with(|t| t.typography.headline_large));
-                })
-                .item(move || {
-                    text(I18N.text("ui-drag-the-glass-lens"))
-                        .style(theme.with(|t| t.typography.body_large));
-                })
-                .item(move || {
-                    flow_row()
-                        .item_spacing(Dp(8.0))
-                        .line_spacing(Dp(8.0))
-                        .children(move || {
-                            button()
-                                .tonal()
-                                .on_click(move || position.set(LENS_ORIGIN))
-                                .child(|| {
-                                    text(I18N.text("ui-reset-lens-position"));
+            boxed()
+                .alignment(Alignment::TopCenter)
+                .modifier(Modifier::new().fill_max_width().weight(1.0))
+                .children(move || {
+                    lazy_column()
+                        .modifier(
+                            Modifier::new()
+                                .padding_symmetric(PAGE_INSET, Dp::ZERO)
+                                .size_in(None, Some(DEMO_WIDTH), None, None)
+                                .fill_max_size(),
+                        )
+                        .viewport_controller(scroll)
+                        .scrollbar_behavior(ScrollBarBehavior::Hidden)
+                        .item_spacing(Dp(12.0))
+                        .item(move || {
+                            text(I18N.text("ui-glass-components"))
+                                .style(theme.with(|t| t.typography.headline_large));
+                        })
+                        .item(move || {
+                            text(I18N.text("ui-drag-the-glass-lens"))
+                                .style(theme.with(|t| t.typography.body_large));
+                        })
+                        .item(move || {
+                            flow_row()
+                                .item_spacing(Dp(8.0))
+                                .line_spacing(Dp(8.0))
+                                .children(move || {
+                                    button()
+                                        .tonal()
+                                        .on_click(move || position.set(LENS_ORIGIN))
+                                        .child(|| {
+                                            text(I18N.text("ui-reset-lens-position"));
+                                        });
+                                    button()
+                                        .outlined()
+                                        .on_click(move || {
+                                            settings.set(LensSettings::default());
+                                            position.set(LENS_ORIGIN);
+                                            clicks.set(0);
+                                            let name = I18N.text("ui-glass-lens");
+                                            editors
+                                                .content
+                                                .with_mut(|editor| editor.set_text(&name));
+                                            editors.label.with_mut(|editor| editor.set_text(&name));
+                                            editors
+                                                .description
+                                                .with_mut(|editor| editor.set_text(""));
+                                        })
+                                        .child(|| {
+                                            text(I18N.text("ui-glass-reset-settings"));
+                                        });
                                 });
-                            button()
-                                .outlined()
-                                .on_click(move || {
-                                    settings.set(LensSettings::default());
-                                    position.set(LENS_ORIGIN);
-                                    clicks.set(0);
-                                    let name = I18N.text("ui-glass-lens");
-                                    editors.content.with_mut(|editor| editor.set_text(&name));
-                                    editors.label.with_mut(|editor| editor.set_text(&name));
-                                    editors.description.with_mut(|editor| editor.set_text(""));
-                                })
-                                .child(|| {
-                                    text(I18N.text("ui-glass-reset-settings"));
+                        })
+                        .item(|| {
+                            section_title("ui-glass-material-section");
+                        })
+                        .item(move || {
+                            choices(
+                                "ui-glass-material",
+                                labels(&MATERIALS),
+                                settings.with(|s| s.material),
+                            )
+                            .on_select(move |index| settings.with_mut(|s| s.material = index));
+                        })
+                        .item(move || {
+                            choices(
+                                "ui-glass-appearance",
+                                labels(&APPEARANCES),
+                                settings.with(|s| s.appearance),
+                            )
+                            .on_select(move |index| settings.with_mut(|s| s.appearance = index));
+                        })
+                        .item(move || {
+                            toggle("ui-glass-custom-blur", settings.with(|s| s.custom_blur))
+                                .on_toggle(move |checked| {
+                                    settings.with_mut(|s| s.custom_blur = checked)
                                 });
+                        })
+                        .item(move || {
+                            number_control(settings, Number::Blur)
+                                .enabled(settings.with(|s| s.custom_blur));
+                        })
+                        .item(move || {
+                            number_control(settings, Number::Contrast);
+                        })
+                        .item(|| {
+                            section_title("ui-glass-shape-section");
+                        })
+                        .item(move || {
+                            choices(
+                                "ui-glass-shape",
+                                labels(&SHAPES),
+                                settings.with(|s| s.shape),
+                            )
+                            .on_select(move |index| settings.with_mut(|s| s.shape = index));
+                        })
+                        .item(move || {
+                            number_control(settings, Number::Corner).enabled(
+                                settings.with(|s| SHAPES[s.shape].1 == LensShape::RoundedRectangle),
+                            );
+                        })
+                        .items_with_key_shared(
+                            LAYOUT_NUMBERS.len(),
+                            |index| ("glass-number", LAYOUT_NUMBERS[index] as usize),
+                            RenderSlotWith::new(move |index| {
+                                number_control(settings, LAYOUT_NUMBERS[index]);
+                            }),
+                        )
+                        .item(move || {
+                            toggle("ui-glass-custom-border", settings.with(|s| s.custom_border))
+                                .on_toggle(move |checked| {
+                                    settings.with_mut(|s| s.custom_border = checked)
+                                });
+                        })
+                        .item(move || {
+                            number_control(settings, Number::Border)
+                                .enabled(settings.with(|s| s.custom_border));
+                        })
+                        .item(|| {
+                            section_title("ui-glass-tint-section");
+                        })
+                        .items_with_key_shared(
+                            TINT_NUMBERS.len(),
+                            |index| ("glass-number", TINT_NUMBERS[index] as usize),
+                            RenderSlotWith::new(move |index| {
+                                number_control(settings, TINT_NUMBERS[index]);
+                            }),
+                        )
+                        .item(|| {
+                            section_title("ui-glass-interaction-section");
+                        })
+                        .item(move || {
+                            choices(
+                                "ui-glass-interactive",
+                                labels(&INTERACTIONS),
+                                settings.with(|s| s.interaction),
+                            )
+                            .on_select(move |index| settings.with_mut(|s| s.interaction = index));
+                        })
+                        .item(move || {
+                            toggle("ui-glass-click-action", settings.with(|s| s.click))
+                                .on_toggle(move |checked| settings.with_mut(|s| s.click = checked));
+                        })
+                        .item(move || {
+                            text(
+                                I18N.format(
+                                    "ui-glass-click-count",
+                                    [("count", clicks.get().into())],
+                                ),
+                            );
+                        })
+                        .item(move || {
+                            toggle("ui-glass-block-input", settings.with(|s| s.block_input))
+                                .on_toggle(move |checked| {
+                                    settings.with_mut(|s| s.block_input = checked)
+                                });
+                        })
+                        .item(move || {
+                            toggle("ui-glass-manual-ripple", settings.with(|s| s.manual_ripple))
+                                .on_toggle(move |checked| {
+                                    settings.with_mut(|s| s.manual_ripple = checked)
+                                });
+                        })
+                        .items_with_key_shared(
+                            RIPPLE_NUMBERS.len(),
+                            |index| ("glass-number", RIPPLE_NUMBERS[index] as usize),
+                            RenderSlotWith::new(move |index| {
+                                number_control(settings, RIPPLE_NUMBERS[index])
+                                    .enabled(settings.with(|s| s.manual_ripple));
+                            }),
+                        )
+                        .item(|| {
+                            section_title("ui-glass-content-section");
+                        })
+                        .item(move || {
+                            toggle("ui-glass-show-content", settings.with(|s| s.show_content))
+                                .on_toggle(move |checked| {
+                                    settings.with_mut(|s| s.show_content = checked)
+                                });
+                        })
+                        .item(move || {
+                            editor_field("ui-glass-content-text", editors.content)
+                                .enabled(settings.with(|s| s.show_content));
+                        })
+                        .item(move || {
+                            choices(
+                                "ui-glass-accessibility-role",
+                                labels(&ROLES),
+                                settings.with(|s| s.role),
+                            )
+                            .on_select(move |index| settings.with_mut(|s| s.role = index));
+                        })
+                        .item(move || {
+                            editor_field("ui-glass-accessibility-label", editors.label);
+                        })
+                        .item(move || {
+                            editor_field("ui-glass-accessibility-description", editors.description);
+                        })
+                        .item(move || {
+                            toggle("ui-glass-focusable", settings.with(|s| s.focusable)).on_toggle(
+                                move |checked| settings.with_mut(|s| s.focusable = checked),
+                            );
                         });
-                })
-                .item(|| {
-                    section_title("ui-glass-material-section");
-                })
-                .item(move || {
-                    choices(
-                        "ui-glass-material",
-                        labels(&MATERIALS),
-                        settings.with(|s| s.material),
-                    )
-                    .on_select(move |index| settings.with_mut(|s| s.material = index));
-                })
-                .item(move || {
-                    choices(
-                        "ui-glass-appearance",
-                        labels(&APPEARANCES),
-                        settings.with(|s| s.appearance),
-                    )
-                    .on_select(move |index| settings.with_mut(|s| s.appearance = index));
-                })
-                .item(move || {
-                    toggle("ui-glass-custom-blur", settings.with(|s| s.custom_blur))
-                        .on_toggle(move |checked| settings.with_mut(|s| s.custom_blur = checked));
-                })
-                .item(move || {
-                    number_control(settings, Number::Blur)
-                        .enabled(settings.with(|s| s.custom_blur));
-                })
-                .item(move || {
-                    number_control(settings, Number::Contrast);
-                })
-                .item(|| {
-                    section_title("ui-glass-shape-section");
-                })
-                .item(move || {
-                    choices(
-                        "ui-glass-shape",
-                        labels(&SHAPES),
-                        settings.with(|s| s.shape),
-                    )
-                    .on_select(move |index| settings.with_mut(|s| s.shape = index));
-                })
-                .item(move || {
-                    number_control(settings, Number::Corner).enabled(
-                        settings.with(|s| SHAPES[s.shape].1 == LensShape::RoundedRectangle),
-                    );
-                })
-                .items_with_key_shared(
-                    LAYOUT_NUMBERS.len(),
-                    |index| ("glass-number", LAYOUT_NUMBERS[index] as usize),
-                    RenderSlotWith::new(move |index| {
-                        number_control(settings, LAYOUT_NUMBERS[index]);
-                    }),
-                )
-                .item(move || {
-                    toggle("ui-glass-custom-border", settings.with(|s| s.custom_border))
-                        .on_toggle(move |checked| settings.with_mut(|s| s.custom_border = checked));
-                })
-                .item(move || {
-                    number_control(settings, Number::Border)
-                        .enabled(settings.with(|s| s.custom_border));
-                })
-                .item(|| {
-                    section_title("ui-glass-tint-section");
-                })
-                .items_with_key_shared(
-                    TINT_NUMBERS.len(),
-                    |index| ("glass-number", TINT_NUMBERS[index] as usize),
-                    RenderSlotWith::new(move |index| {
-                        number_control(settings, TINT_NUMBERS[index]);
-                    }),
-                )
-                .item(|| {
-                    section_title("ui-glass-interaction-section");
-                })
-                .item(move || {
-                    choices(
-                        "ui-glass-interactive",
-                        labels(&INTERACTIONS),
-                        settings.with(|s| s.interaction),
-                    )
-                    .on_select(move |index| settings.with_mut(|s| s.interaction = index));
-                })
-                .item(move || {
-                    toggle("ui-glass-click-action", settings.with(|s| s.click))
-                        .on_toggle(move |checked| settings.with_mut(|s| s.click = checked));
-                })
-                .item(move || {
-                    text(I18N.format("ui-glass-click-count", [("count", clicks.get().into())]));
-                })
-                .item(move || {
-                    toggle("ui-glass-block-input", settings.with(|s| s.block_input))
-                        .on_toggle(move |checked| settings.with_mut(|s| s.block_input = checked));
-                })
-                .item(move || {
-                    toggle("ui-glass-manual-ripple", settings.with(|s| s.manual_ripple))
-                        .on_toggle(move |checked| settings.with_mut(|s| s.manual_ripple = checked));
-                })
-                .items_with_key_shared(
-                    RIPPLE_NUMBERS.len(),
-                    |index| ("glass-number", RIPPLE_NUMBERS[index] as usize),
-                    RenderSlotWith::new(move |index| {
-                        number_control(settings, RIPPLE_NUMBERS[index])
-                            .enabled(settings.with(|s| s.manual_ripple));
-                    }),
-                )
-                .item(|| {
-                    section_title("ui-glass-content-section");
-                })
-                .item(move || {
-                    toggle("ui-glass-show-content", settings.with(|s| s.show_content))
-                        .on_toggle(move |checked| settings.with_mut(|s| s.show_content = checked));
-                })
-                .item(move || {
-                    editor_field("ui-glass-content-text", editors.content)
-                        .enabled(settings.with(|s| s.show_content));
-                })
-                .item(move || {
-                    choices(
-                        "ui-glass-accessibility-role",
-                        labels(&ROLES),
-                        settings.with(|s| s.role),
-                    )
-                    .on_select(move |index| settings.with_mut(|s| s.role = index));
-                })
-                .item(move || {
-                    editor_field("ui-glass-accessibility-label", editors.label);
-                })
-                .item(move || {
-                    editor_field("ui-glass-accessibility-description", editors.description);
-                })
-                .item(move || {
-                    toggle("ui-glass-focusable", settings.with(|s| s.focusable))
-                        .on_toggle(move |checked| settings.with_mut(|s| s.focusable = checked));
+                    boxed()
+                        .modifier(
+                            Modifier::new()
+                                .align(Alignment::TopEnd)
+                                .width(ScrollbarDefaults::THICKNESS)
+                                .fill_max_height(),
+                        )
+                        .children(move || {
+                            scrollbar_v().state(scroll);
+                        });
                 });
         });
 }
@@ -480,6 +524,7 @@ fn glass_preview(
         .shape(shape)
         .modifier(
             Modifier::new()
+                .padding_symmetric(PAGE_INSET, Dp::ZERO)
                 .size_in(None, Some(DEMO_WIDTH), None, None)
                 .fill_max_width()
                 .height(STAGE_HEIGHT),
