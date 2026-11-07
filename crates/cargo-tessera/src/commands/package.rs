@@ -1,4 +1,4 @@
-use std::{fs, process::Command};
+use std::{env, fs, process::Command};
 
 use anyhow::{Context, Result, bail, ensure};
 use heck::ToLowerCamelCase;
@@ -50,9 +50,28 @@ pub fn execute(
                 .then(|| target.as_os_str().to_str())
                 .flatten()
         });
-    let target = target.or(inferred_target);
+    let host;
+    let target = match target.or(inferred_target) {
+        Some(target) => target,
+        None => {
+            let rustc = env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+            let version = Command::new(rustc)
+                .arg("-vV")
+                .output()
+                .context("Failed to run rustc -vV")?;
+            ensure!(
+                version.status.success(),
+                "rustc -vV failed: {}",
+                String::from_utf8_lossy(&version.stderr).trim()
+            );
+            host = String::from_utf8(version.stdout)?;
+            host.lines()
+                .find_map(|line| line.strip_prefix("host: "))
+                .context("Missing host target in rustc -vV output")?
+        }
+    };
     let out = app.output_dir();
-    let linux = target.map_or(cfg!(target_os = "linux"), |target| target.contains("linux"));
+    let linux = target.contains("linux");
     let (binary, binary_dir) = if linux {
         let binary = app.identity.linux_launcher_name();
         let directory = out.join("bin");
@@ -68,13 +87,9 @@ pub fn execute(
                 .to_path_buf(),
         )
     };
-    let macos = target.map_or(cfg!(target_os = "macos"), |target| {
-        target.ends_with("-apple-darwin")
-    });
+    let macos = target.ends_with("-apple-darwin");
     if let Some(icons) = app_assets::desktop(&app.identity, &out.join("icons"), macos)? {
-        if target.map_or(cfg!(target_os = "windows"), |target| {
-            target.contains("windows")
-        }) {
+        if target.contains("windows") {
             let ico = icons
                 .iter()
                 .find(|path| path.extension().is_some_and(|ext| ext == "ico"))
