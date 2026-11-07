@@ -4,12 +4,14 @@ runs:
   using: composite
   steps:
     - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
-        version=130
-        archive="binaryen-version_${version}-x86_64-linux.tar.gz"
+        repo=WebAssembly/binaryen
+        tag=$(gh release view --repo "$repo" --json tagName --jq .tagName)
+        archive="binaryen-$tag-x86_64-linux.tar.gz"
         cd "$RUNNER_TEMP"
-        curl --fail --silent --show-error --location --retry 3 --output "$archive" \
-          "https://github.com/WebAssembly/binaryen/releases/download/version_${version}/$archive"
-        echo "0a18362361ad05465118cd8eeb72edaeec89de6894bc283576ef4e07aa3babcc  $archive" | sha256sum --check
+        gh release download "$tag" --repo "$repo" --pattern "$archive" --pattern "$archive.sha256"
+        sha256sum -c "$archive.sha256"
         tar -xzf "$archive"
-        echo "$RUNNER_TEMP/binaryen-version_${version}/bin" >> "$GITHUB_PATH"
+        echo "$RUNNER_TEMP/binaryen-$tag/bin" >> "$GITHUB_PATH"
