@@ -25,7 +25,8 @@ do not upload or draw scene batches; presentation still copies the scene target.
 
 The retained scene follows the layout tree. Changes to direct layout children
 update the parent branch, including when composition wrappers reorder retained
-children.
+children. The walk over changed branches and their ancestors builds the
+child-before-parent update order as it goes.
 
 Custom `DrawCommand` implementations are conservative by default. Override
 `supports_partial_redraw` only if every visual change invalidates the command's

@@ -439,42 +439,36 @@ impl FrameScene {
         record_frame_stage(&mut stage_timer, "scene_candidates");
         let candidates: Vec<_> = changes
             .iter()
-            .filter_map(|(&id, change)| change.affects_pixels().then_some(id))
+            .filter_map(|(&id, change)| (change.dirty || change.affects_pixels()).then_some(id))
             .collect();
+        let mut ordered = Vec::with_capacity(candidates.len());
         for node_id in candidates {
             if tree.get(node_id).is_none_or(|node| node.is_removed()) {
                 continue;
             }
-            for ancestor in std::iter::successors(Some(node_id), |&id| geometry_parent(tree, id)) {
-                let change = changes.entry(ancestor).or_default();
+            let start = ordered.len();
+            let mut ancestor = Some(node_id);
+            while let Some(id) = ancestor {
+                let change = changes.entry(id).or_default();
                 if std::mem::replace(&mut change.visited, true) {
                     break;
                 }
-                let transparent = self
-                    .branches
-                    .get(ancestor)
-                    .and_then(SceneBranch::transparent_child)
-                    .is_some();
-                change.dirty |= !transparent || change.affects_pixels();
+                change.dirty = change.dirty
+                    || change.affects_pixels()
+                    || self
+                        .branches
+                        .get(id)
+                        .and_then(SceneBranch::transparent_child)
+                        .is_none();
+                ancestor = geometry_parent(tree, id);
+                if change.dirty {
+                    ordered.push((id, ancestor));
+                }
             }
+            // The visited prefix already contains any shared ancestors.
+            ordered[start..].reverse();
         }
         record_frame_stage(&mut stage_timer, "scene_ancestry");
-        let mut ordered = changes
-            .iter()
-            .filter_map(|(&id, change)| {
-                (change.dirty && tree.get(id).is_some_and(|node| !node.is_removed()))
-                    .then_some((id, change))
-            })
-            .map(|(id, change)| {
-                let depth = id
-                    .ancestors(tree)
-                    .filter(|&id| id == root || tree[id].get().role == NodeRole::Layout)
-                    .count();
-                (id, depth, change)
-            })
-            .collect::<Vec<_>>();
-        ordered.sort_unstable_by_key(|&(_, depth, _)| std::cmp::Reverse(depth));
-        record_frame_stage(&mut stage_timer, "scene_order");
         tracing::debug!(
             target: "tessera_ui::frame_cost",
             structural_nodes = changes.values().filter(|change| change.structure).count(),
@@ -484,7 +478,8 @@ impl FrameScene {
             "scene_update_work"
         );
         let updated = ordered.len() as u64;
-        for (node_id, _, change) in ordered {
+        for (node_id, parent) in ordered.into_iter().rev() {
+            let change = &changes[&node_id];
             let node = &tree[node_id];
             let mut branch = self.branches.take(node_id).unwrap_or_default();
             let affects_pixels = change.affects_pixels();
@@ -493,7 +488,7 @@ impl FrameScene {
             {
                 damage = Some(damage.map_or(bounds, |rect: PxRect| rect.union(&bounds)));
             }
-            branch.parent = geometry_parent(tree, node_id);
+            branch.parent = parent;
             if change.structure {
                 branch.children.rebuild(
                     direct_layout_children(node_id, tree).iter().copied(),
