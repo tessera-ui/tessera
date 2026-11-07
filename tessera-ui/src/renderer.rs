@@ -48,7 +48,7 @@ use crate::{
     pipeline_context::PipelineContext,
     plugin::{DesktopPlatformContext, DesktopWindowAction, PluginContext, PluginHost},
     px::PxSize,
-    render_graph::{RenderGraph, RenderGraphOp},
+    render_graph::RenderGraph,
     render_module::RenderModule,
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
@@ -1059,10 +1059,10 @@ Fps: {:.2}
     /// Perform the actual GPU rendering for the provided commands and return
     /// the render duration.
     #[cfg(not(feature = "debug-dirty-overlay"))]
-    #[instrument(level = "debug", skip(args, ops))]
+    #[instrument(level = "debug", skip(args, graph))]
     fn perform_render<'a>(
         args: &mut RenderFrameArgs<'a>,
-        ops: Vec<RenderGraphOp>,
+        graph: RenderGraph,
     ) -> std::time::Duration {
         #[cfg(feature = "profiling")]
         let _profiler_guard =
@@ -1075,17 +1075,17 @@ Fps: {:.2}
         }
 
         debug!("Rendering draw commands...");
-        args.app.render(ops);
+        args.app.render(graph);
         let render_cost = render_timer.elapsed();
         debug!("Rendered to surface in {render_cost:?}");
         render_cost
     }
 
     #[cfg(feature = "debug-dirty-overlay")]
-    #[instrument(level = "debug", skip(args, ops, dirty_overlay_rects))]
+    #[instrument(level = "debug", skip(args, graph, dirty_overlay_rects))]
     fn perform_render<'a>(
         args: &mut RenderFrameArgs<'a>,
-        ops: Vec<RenderGraphOp>,
+        graph: RenderGraph,
         dirty_overlay_rects: &[PxRect],
     ) -> std::time::Duration {
         #[cfg(feature = "profiling")]
@@ -1099,7 +1099,7 @@ Fps: {:.2}
         }
 
         debug!("Rendering draw commands...");
-        args.app.render(ops, dirty_overlay_rects);
+        args.app.render(graph, dirty_overlay_rects);
         let render_cost = render_timer.elapsed();
         debug!("Rendered to surface in {render_cost:?}");
         render_cost
@@ -1212,14 +1212,9 @@ Fps: {:.2}
             Self::collect_dirty_overlay_rects(screen_size, &build_tree_result);
         #[cfg(feature = "debug-dirty-overlay")]
         let overlay_clear_pending = !dirty_overlay_rects.is_empty();
-        #[cfg(feature = "profiling")]
-        let prepare_timer = Instant::now();
-        let ops = new_graph.ordered_ops();
-        #[cfg(feature = "profiling")]
-        let render_prepare_ns = Some(prepare_timer.elapsed().as_nanos());
         let render_cost = Self::perform_render(
             args,
-            ops,
+            new_graph,
             #[cfg(feature = "debug-dirty-overlay")]
             &dirty_overlay_rects,
         );
@@ -1251,7 +1246,7 @@ Fps: {:.2}
                 partial_replay_nodes: build_tree_result.partial_replay_nodes(),
                 total_nodes_before_build: build_tree_result.total_nodes_before_build(),
                 render_time_ns: render_duration_ns,
-                render_prepare_ns,
+                render_prepare_ns: None,
                 render_acquire_ns,
                 render_build_passes_ns,
                 render_encode_ns,

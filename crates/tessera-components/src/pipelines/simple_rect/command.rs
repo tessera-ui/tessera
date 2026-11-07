@@ -8,6 +8,10 @@ pub struct SimpleRectCommand {
 }
 
 impl DrawCommand for SimpleRectCommand {
+    fn supports_partial_redraw(&self) -> bool {
+        true
+    }
+
     fn apply_opacity(&mut self, opacity: f32) {
         self.color = self
             .color

@@ -122,24 +122,18 @@ impl ComputablePipeline<ContrastCommand> for ContrastPipeline {
                 area_width: area.width.0 as u32,
                 area_height: area.height.0 as u32,
             };
-            let uniform_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Contrast Uniform Buffer"),
-                size: std::mem::size_of::<Uniforms>() as u64,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            context
-                .queue
-                .write_buffer(&uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
+            let uniform_buffer = context
+                .graphics
+                .frame_buffer(wgpu::BufferUsages::UNIFORM, bytemuck::bytes_of(&uniforms));
 
             let bind_group = context
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
+                .graphics
+                .cached_bind_group(&wgpu::BindGroupDescriptor {
                     layout: &self.bind_group_layout,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: uniform_buffer.as_entire_binding(),
+                            resource: uniform_buffer.binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,

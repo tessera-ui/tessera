@@ -13,6 +13,10 @@ pub(crate) struct PathStrokeCommand {
 }
 
 impl DrawCommand for PathStrokeCommand {
+    fn supports_partial_redraw(&self) -> bool {
+        true
+    }
+
     fn apply_opacity(&mut self, opacity: f32) {
         self.color = self
             .color

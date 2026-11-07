@@ -9,6 +9,10 @@ pub(crate) struct LoadingShapeCommand {
 }
 
 impl DrawCommand for LoadingShapeCommand {
+    fn supports_partial_redraw(&self) -> bool {
+        true
+    }
+
     fn apply_opacity(&mut self, opacity: f32) {
         self.color = self
             .color

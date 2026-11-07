@@ -30,6 +30,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return textureSample(t_source, s_source, in.uv);
 }
 
+@fragment
+fn fs_clear() -> @location(0) vec4<f32> {
+    return vec4<f32>(0.0);
+}
+
 fn linear_to_srgb(color: vec3<f32>) -> vec3<f32> {
     return select(
         1.055 * pow(max(color, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.4)) - 0.055,

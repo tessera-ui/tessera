@@ -430,6 +430,30 @@ impl RenderCore {
             wgpu::TextureFormat::Rgba8Unorm,
             "fs_main",
         );
+        let clear_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Damage Clear Pipeline"),
+            layout: None,
+            vertex: wgpu::VertexState {
+                module: &blit_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &blit_shader,
+                entry_point: Some("fs_clear"),
+                targets: &[Some(wgpu::ColorTargetState::from(draw_config.format))],
+                compilation_options: Default::default(),
+            }),
+            primitive: Default::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                ..Default::default()
+            },
+            multiview_mask: None,
+            cache: pipeline_cache.as_ref(),
+        });
         let present_pipeline = create_blit_pipeline(
             "Present Pipeline",
             config.format,
@@ -504,6 +528,7 @@ impl RenderCore {
         };
 
         let blit = BlitState {
+            clear_pipeline,
             present_pipeline,
             pipeline_rgba: blit_pipeline_rgba,
             bind_group_layout: blit_bind_group_layout,
@@ -541,6 +566,7 @@ impl RenderCore {
             targets,
             blit,
             frame_index: 0,
+            previous_graph: None,
             last_render_breakdown: None,
             #[cfg(all(
                 feature = "profiling",
@@ -656,6 +682,7 @@ impl RenderCore {
     }
 
     pub(crate) fn rebuild_pass_targets(&mut self) {
+        self.previous_graph = None;
         self.draw_config.width = self.config.width;
         self.draw_config.height = self.config.height;
         self.targets.offscreen.texture().destroy();

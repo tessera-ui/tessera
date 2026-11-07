@@ -81,6 +81,7 @@ impl std::fmt::Display for OffscreenReadbackError {
 impl std::error::Error for OffscreenReadbackError {}
 
 struct BlitState {
+    clear_pipeline: wgpu::RenderPipeline,
     present_pipeline: wgpu::RenderPipeline,
     pipeline_rgba: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
@@ -110,6 +111,7 @@ pub struct RenderCore {
     targets: FrameTargets,
     blit: BlitState,
     frame_index: u64,
+    previous_graph: Option<crate::RenderGraph>,
     last_render_breakdown: Option<RenderTimingBreakdown>,
     #[cfg(all(
         feature = "profiling",

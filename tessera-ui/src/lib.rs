@@ -30,7 +30,7 @@ mod work;
 
 pub use dispatcher::UiDispatcher;
 pub use graphics::{
-    GraphicsDevice, GraphicsWork, GraphicsWorkDiagnostics, ScratchFit, ScratchTexture,
+    FrameBuffer, GraphicsDevice, GraphicsWork, GraphicsWorkDiagnostics, ScratchFit, ScratchTexture,
     ScratchTextureDescriptor, TrackedBuffer,
 };
 pub use work::{FrameWork, WorkExecution, WorkPhase, WorkTotals};

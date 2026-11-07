@@ -14,6 +14,10 @@ pub(crate) struct LinearWaveCommand {
 }
 
 impl DrawCommand for LinearWaveCommand {
+    fn supports_partial_redraw(&self) -> bool {
+        true
+    }
+
     fn apply_opacity(&mut self, opacity: f32) {
         self.color = self
             .color

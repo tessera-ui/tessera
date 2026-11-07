@@ -36,6 +36,15 @@ use crate::{
 /// }
 /// ```
 pub trait DrawCommand: DynClone + Downcast + Send + Sync {
+    /// Whether unchanged commands can keep their pixels between frames.
+    ///
+    /// Opt in only when every visual change invalidates the command's paint
+    /// fragment or geometry. Leave this disabled for commands whose textures or
+    /// other resources can change independently, including deferred uploads.
+    fn supports_partial_redraw(&self) -> bool {
+        false
+    }
+
     /// Specifies sample requirements for this draw operation.
     ///
     /// As a default implementation, this returns `None`, indicating that

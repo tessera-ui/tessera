@@ -40,6 +40,16 @@ struct Key {
     sample_count: u32,
 }
 
+impl Key {
+    fn bytes(self) -> u64 {
+        let (width, height) = self.format.block_dimensions();
+        u64::from(self.width.div_ceil(width))
+            * u64::from(self.height.div_ceil(height))
+            * u64::from(self.format.block_copy_size(None).unwrap_or(8))
+            * u64::from(self.sample_count)
+    }
+}
+
 #[derive(Debug)]
 struct Entry {
     key: Key,
@@ -56,13 +66,28 @@ pub(crate) struct ScratchPool {
 
 // Pooled textures unused for this many frames are released.
 const RETAINED_FRAMES: u64 = 2;
+const CACHE_BYTES: u64 = 64 << 20;
 
 impl ScratchPool {
     pub(crate) fn begin_frame(&mut self) {
-        self.frame += 1;
+        self.frame = self.frame.wrapping_add(1);
         let frame = self.frame;
         self.free
-            .retain(|entry| frame - entry.last_used <= RETAINED_FRAMES);
+            .retain(|entry| frame.wrapping_sub(entry.last_used) <= RETAINED_FRAMES);
+    }
+
+    fn trim(&mut self, budget: u64) {
+        let mut bytes: u64 = self.free.iter().map(|entry| entry.key.bytes()).sum();
+        while bytes > budget {
+            let oldest = self
+                .free
+                .iter()
+                .enumerate()
+                .max_by_key(|(_, entry)| self.frame.wrapping_sub(entry.last_used))
+                .map(|(index, _)| index)
+                .expect("nonempty scratch cache exceeds budget");
+            bytes -= self.free.swap_remove(oldest).key.bytes();
+        }
     }
 }
 
@@ -75,7 +100,7 @@ fn approx_dimension(value: u32) -> u32 {
     if value <= MIN {
         return MIN;
     }
-    let ceil = value.next_power_of_two();
+    let ceil = value.checked_next_power_of_two().unwrap_or(value);
     if value <= POW2_LIMIT || value == ceil {
         return ceil;
     }
@@ -85,6 +110,9 @@ fn approx_dimension(value: u32) -> u32 {
 
 /// A pooled texture. Work recorded after it is dropped may reuse it, so keep
 /// it until all work that uses its contents is recorded.
+///
+/// Returned textures share a 64 MiB idle-cache budget. Active leases are never
+/// evicted; oversized textures are released rather than cached when dropped.
 pub struct ScratchTexture {
     entry: Option<Entry>,
     pool: Arc<Mutex<ScratchPool>>,
@@ -121,6 +149,7 @@ impl Drop for ScratchTexture {
             let mut pool = self.pool.lock();
             entry.last_used = pool.frame;
             pool.free.push(entry);
+            pool.trim(CACHE_BYTES);
         }
     }
 }
@@ -128,11 +157,16 @@ impl Drop for ScratchTexture {
 impl crate::GraphicsDevice {
     /// Leases a pooled texture for work recorded in the current frame.
     pub fn scratch_texture(&self, descriptor: ScratchTextureDescriptor) -> ScratchTexture {
+        let limit = self.device.limits().max_texture_dimension_2d;
+        assert!(
+            descriptor.width <= limit && descriptor.height <= limit,
+            "scratch texture exceeds the device dimension limit"
+        );
         let (width, height) = match descriptor.fit {
             ScratchFit::Exact => (descriptor.width.max(1), descriptor.height.max(1)),
             ScratchFit::Approx => (
-                approx_dimension(descriptor.width),
-                approx_dimension(descriptor.height),
+                approx_dimension(descriptor.width).min(limit),
+                approx_dimension(descriptor.height).min(limit),
             ),
         };
         let key = Key {
@@ -195,5 +229,69 @@ mod tests {
         assert_eq!(approx_dimension(1536), 1536);
         assert_eq!(approx_dimension(1537), 2048);
         assert_eq!(approx_dimension(2048), 2048);
+    }
+
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn leases_reuse_buckets_without_aliasing_and_budget_evicts_only_idle_textures() {
+        use super::*;
+
+        let session = crate::RuntimeSession::new();
+        let _scope = session.enter();
+        let core = pollster::block_on(crate::renderer::core::RenderCore::new_offscreen(
+            winit::dpi::PhysicalSize::new(1, 1),
+            wgpu::TextureFormat::Rgba8Unorm,
+            1,
+            crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
+        ));
+        let graphics = core.resources().graphics;
+        let descriptor = ScratchTextureDescriptor {
+            width: 17,
+            height: 17,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            sample_count: 1,
+            fit: ScratchFit::Approx,
+        };
+        let first = graphics.scratch_texture(descriptor);
+        let identity = first.texture().clone();
+        let active = graphics.scratch_texture(descriptor);
+        assert_ne!(identity, *active.texture(), "active leases cannot alias");
+        assert_eq!(first.size(), (32, 32));
+        drop(first);
+        let reused = graphics.scratch_texture(ScratchTextureDescriptor {
+            width: 18,
+            ..descriptor
+        });
+        assert_eq!(identity, *reused.texture(), "nearby sizes share a bucket");
+        drop(reused);
+        graphics.scratch.lock().trim(0);
+        let replacement = graphics.scratch_texture(descriptor);
+        assert_ne!(
+            identity,
+            *replacement.texture(),
+            "trim evicts idle textures"
+        );
+        assert_ne!(
+            active.texture(),
+            replacement.texture(),
+            "trim cannot evict an active lease"
+        );
+        let allocation = graphics.diagnostics();
+        drop(replacement);
+        for _ in 0..=RETAINED_FRAMES {
+            graphics.begin_frame();
+        }
+        let _expired = graphics.scratch_texture(descriptor);
+        assert_eq!(
+            graphics
+                .diagnostics()
+                .since(&allocation)
+                .group("scratch_textures")
+                .texture_allocations,
+            1,
+            "unused buckets expire without requiring another allocation first"
+        );
     }
 }

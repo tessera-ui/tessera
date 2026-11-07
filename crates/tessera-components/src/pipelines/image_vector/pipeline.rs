@@ -18,6 +18,7 @@ const MIN_ATLAS_SIZE: u32 = 256;
 const ATLAS_PADDING: u32 = 1;
 const ATLAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const SAMPLES_PER_BUFFER: usize = 64;
+pub(super) const ATLAS_CACHE_BYTES: u64 = 32 << 20;
 // Entries survive brief absences, such as icons scrolled out and back in.
 pub(super) const RETAINED_FRAMES: u64 = 120;
 
@@ -338,11 +339,21 @@ impl ImageVectorPipeline {
         let key = AtlasKey::new(data, width, height);
         if let Some(entry) = self.cache.get_mut(&key) {
             entry.last_used = self.frame;
+            self.atlas
+                .pages
+                .get_mut(&entry.page_index)
+                .unwrap()
+                .last_used = self.frame;
             return;
         }
 
         let geometry = Self::create_resources(device, data);
         let allocation = self.atlas.allocate(device, width, height);
+        self.atlas
+            .pages
+            .get_mut(&allocation.page_index)
+            .unwrap()
+            .last_used = self.frame;
         self.rasterize_into_allocation(device, &geometry, &allocation, width, height);
         let page_size = self.atlas.page_texture(allocation.page_index).size();
         let uv_origin = [
@@ -449,7 +460,7 @@ impl ImageVectorPipeline {
 impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
     fn begin_frame(&mut self, _context: &FrameContext<'_>) {
         self.next_sample = 0;
-        self.frame += 1;
+        self.frame = self.frame.wrapping_add(1);
     }
 
     fn end_frame(&mut self, context: &FrameContext<'_>) {
@@ -463,7 +474,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 .write_buffer(&resources.buffer, 0, &resources.bytes[..resources.used]);
         }
         self.cache.retain(|_, entry| {
-            if self.frame - entry.last_used <= RETAINED_FRAMES {
+            if self.frame.wrapping_sub(entry.last_used) <= RETAINED_FRAMES {
                 return true;
             }
             self.atlas
@@ -474,15 +485,31 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 .deallocate(entry.allocation);
             false
         });
-        self.atlas.pages.retain(|index, page| {
-            if !page.allocator.is_empty() {
-                return true;
-            }
-            for resources in &mut self.sample_resources {
-                resources.bind_groups.remove(index);
-            }
-            false
-        });
+        self.atlas
+            .pages
+            .retain(|_, page| !page.allocator.is_empty());
+        let mut bytes: u64 = self.atlas.pages.values().map(AtlasPage::bytes).sum();
+        while bytes > ATLAS_CACHE_BYTES {
+            let oldest = self
+                .atlas
+                .pages
+                .iter()
+                .filter(|(_, page)| page.last_used != self.frame)
+                .max_by_key(|(_, page)| self.frame.wrapping_sub(page.last_used))
+                .map(|(&index, _)| index);
+            let Some(index) = oldest else {
+                // Pages sampled by this frame remain valid until submission.
+                break;
+            };
+            bytes -= self.atlas.pages.remove(&index).unwrap().bytes();
+        }
+        self.cache
+            .retain(|_, entry| self.atlas.pages.contains_key(&entry.page_index));
+        for resources in &mut self.sample_resources {
+            resources
+                .bind_groups
+                .retain(|index, _| self.atlas.pages.contains_key(index));
+        }
     }
 
     fn draw(&mut self, context: &mut DrawContext<ImageVectorCommand>) {
@@ -719,9 +746,14 @@ struct AtlasPage {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     allocator: AtlasAllocator,
+    last_used: u64,
 }
 
 impl AtlasPage {
+    fn bytes(&self) -> u64 {
+        u64::from(self.texture.width()) * u64::from(self.texture.height()) * 4
+    }
+
     fn new(device: &tessera_ui::GraphicsDevice, size: u32) -> Self {
         let texture = device.create_texture(
             "vector_atlas",
@@ -747,6 +779,7 @@ impl AtlasPage {
             texture,
             view,
             allocator: AtlasAllocator::new(size2(size as i32, size as i32)),
+            last_used: 0,
         }
     }
 }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use encase::{ShaderSize, ShaderType, StorageBuffer};
+use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxSize,
@@ -116,29 +116,23 @@ impl DrawablePipeline<ProgressArcCommand> for ProgressArcPipeline {
         }
 
         let instances = build_instances(context.commands, context.target_size);
-        let uniform_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Progress Arc Storage Buffer"),
-            size: 16 + ArcUniform::SHADER_SIZE.get() * instances.len() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
 
         let uniforms = ArcInstances { instances };
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
         buffer_content
             .write(&uniforms)
             .expect("buffer write failed");
-        context
-            .queue
-            .write_buffer(&uniform_buffer, 0, buffer_content.as_ref());
+        let uniform_buffer = context
+            .graphics
+            .frame_buffer(wgpu::BufferUsages::STORAGE, buffer_content.as_ref());
 
         let bind_group = context
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
+            .graphics
+            .cached_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.bind_group_layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
+                    resource: uniform_buffer.binding(),
                 }],
                 label: Some("progress_arc_bind_group"),
             });

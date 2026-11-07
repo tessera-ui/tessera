@@ -203,21 +203,17 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         content
             .write(&instances)
             .expect("fluid glass instance serialization failed");
-        let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Fluid Glass Storage Buffer"),
-            size: content.as_ref().len() as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        context.queue.write_buffer(&buffer, 0, content.as_ref());
+        let buffer = context
+            .graphics
+            .frame_buffer(wgpu::BufferUsages::STORAGE, content.as_ref());
         let bind_group = context
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
+            .graphics
+            .cached_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: buffer.as_entire_binding(),
+                        resource: buffer.binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,

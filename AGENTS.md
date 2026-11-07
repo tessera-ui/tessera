@@ -148,6 +148,15 @@ programming contract; the guidelines below also govern framework implementation.
 - Shape masks are uploaded once per frame into a reusable buffer. Stencil targets
   are pooled by dimensions and sample count, and active masks are restored after
   scene-pass boundaries without constraining declared background sampling regions.
+- Retained scene pixels require conservative draw-command opt-in. Damage includes
+  old and new drawing bounds; recreate targets or redraw fully after a skipped
+  changed predecessor, background sampling, or compute work. Preserve MSAA samples
+  outside damage. Target-pixel reuse must not change per-command alpha into group
+  opacity or be presented as an independently compositable layer cache.
+- Use shared frame-buffer ranges for transient uniforms/storage and pooled scratch
+  leases for filter intermediates. Keep leases until their consumers are recorded;
+  prelude work runs before main-frame commands. Bound idle caches by bytes and age,
+  and account separately for resources retained by cached bind groups.
 - Shape clipping supports up to 255 nested shape masks. `clip_to_bounds` clips do
   not consume stencil levels.
 

@@ -74,6 +74,10 @@ impl Default for CheckmarkCommand {
 }
 
 impl DrawCommand for CheckmarkCommand {
+    fn supports_partial_redraw(&self) -> bool {
+        true
+    }
+
     fn apply_opacity(&mut self, opacity: f32) {
         self.color = self
             .color

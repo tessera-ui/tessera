@@ -192,6 +192,12 @@ fn translucent_atlas_reuse_preserves_alpha_and_releases_sizes_after_retention() 
                     retained["textures"].as_i64().unwrap() > baseline["textures"].as_i64().unwrap(),
                     "recently used vector sizes stay cached: {baseline} -> {retained}"
                 );
+                assert!(
+                    retained["texture_bytes"].as_u64().unwrap()
+                        <= baseline["texture_bytes"].as_u64().unwrap()
+                            + super::pipeline::ATLAS_CACHE_BYTES,
+                    "dynamic sizes must obey the atlas byte budget: {baseline} -> {retained}"
+                );
                 renderer.render_frames(super::pipeline::RETAINED_FRAMES as u32);
                 let settled = renderer.resource_snapshot().unwrap();
                 if let (Some(initial), Some(current)) = (

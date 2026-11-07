@@ -10,7 +10,7 @@ use im::OrdMap;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{
-    ClipRegion, NodeId, PxPosition, PxRect, PxSize,
+    ClipRegion, Command, DrawRegion, NodeId, PxPosition, PxRect, PxSize,
     render_graph::{DrawGeometry, RenderFragment, RenderGraph, RenderGraphBuilder},
     time::Instant,
 };
@@ -28,12 +28,14 @@ struct SceneDraw {
     geometry: DrawGeometry,
     opacity: f32,
     visible: bool,
+    bounds: Option<PxRect>,
 }
 
 struct SceneRope {
     draw: Option<Arc<SceneDraw>>,
     clip: Option<SceneClip>,
     children: OrdMap<usize, Arc<SceneRope>>,
+    bounds: Option<PxRect>,
 }
 
 #[derive(Default)]
@@ -87,6 +89,17 @@ impl FrameScene {
                 .then(Instant::now);
         let mut dirty = HashSet::default();
         let mut structural = changed.clone();
+        let mut damage = None;
+        for node_id in removed {
+            if let Some(bounds) = self
+                .branches
+                .get(node_id)
+                .and_then(|branch| branch.output.as_ref())
+                .and_then(|rope| rope.bounds)
+            {
+                damage = Some(damage.map_or(bounds, |rect: PxRect| rect.union(&bounds)));
+            }
+        }
         for node_id in removed {
             let mut parent = self.branches.get(node_id).and_then(|branch| branch.parent);
             if let Some(parent) = parent {
@@ -202,6 +215,12 @@ impl FrameScene {
         for (node_id, depth) in ordered {
             let node = &tree[node_id];
             let mut branch = self.branches.remove(&node_id).unwrap_or_default();
+            let affects_pixels = own_changes.contains(&node_id) || structural.contains(&node_id);
+            if affects_pixels
+                && let Some(bounds) = branch.output.as_ref().and_then(|rope| rope.bounds)
+            {
+                damage = Some(damage.map_or(bounds, |rect: PxRect| rect.union(&bounds)));
+            }
             branch.parent = node.parent();
             branch.depth = depth;
             if structural.contains(&node_id) {
@@ -237,15 +256,18 @@ impl FrameScene {
                                 .window_bounds()
                                 .outward()
                                 .is_orthogonal(&viewport_rect);
+                        let bounds = fragment_bounds(&fragment, geometry, viewport_rect);
                         if let Some(draw) = &branch.draw
                             && Arc::ptr_eq(&draw.fragment, &fragment)
                             && draw.geometry == geometry
                             && draw.opacity == prepared.cumulative_opacity
                             && draw.visible == visible
+                            && draw.bounds == bounds
                         {
                             return Arc::clone(draw);
                         }
                         Arc::new(SceneDraw {
+                            bounds,
                             fragment,
                             geometry,
                             opacity: prepared.cumulative_opacity,
@@ -310,11 +332,28 @@ impl FrameScene {
                 Some(Arc::clone(previous))
             } else {
                 Some(Arc::new(SceneRope {
+                    bounds: branch
+                        .children
+                        .values()
+                        .filter_map(|rope| rope.bounds)
+                        .chain(
+                            branch
+                                .draw
+                                .iter()
+                                .filter(|draw| draw.visible)
+                                .filter_map(|draw| draw.bounds),
+                        )
+                        .reduce(|a, b| a.union(&b)),
                     draw: branch.draw.clone(),
                     clip: branch.clip,
                     children: branch.children.clone(),
                 }))
             };
+            if affects_pixels
+                && let Some(bounds) = branch.output.as_ref().and_then(|rope| rope.bounds)
+            {
+                damage = Some(damage.map_or(bounds, |rect: PxRect| rect.union(&bounds)));
+            }
             let mut child = node_id;
             let mut parent = branch.parent;
             while let Some(id) = parent {
@@ -349,7 +388,9 @@ impl FrameScene {
             (None, None) => true,
             _ => false,
         };
-        if !same || self.viewport != Some(viewport) || self.graph.is_none() {
+        let previous_graph = self.graph.clone();
+        let full = self.viewport != Some(viewport) || self.graph.is_none();
+        if !same || full {
             let mut builder = RenderGraphBuilder::new();
             if let Some(root) = &next_root {
                 root.emit(&mut builder);
@@ -363,10 +404,45 @@ impl FrameScene {
             self.graph
                 .as_ref()
                 .expect("frame scene is initialized")
-                .clone(),
+                .clone()
+                .with_damage(
+                    (!full).then_some(damage.unwrap_or(PxRect::ZERO)),
+                    previous_graph.as_ref(),
+                ),
             updated,
         )
     }
+}
+
+fn fragment_bounds(
+    fragment: &RenderFragment,
+    geometry: DrawGeometry,
+    viewport: PxRect,
+) -> Option<PxRect> {
+    fragment
+        .ops()
+        .iter()
+        .filter_map(|op| {
+            let geometry = DrawGeometry::new(
+                op.size_override.unwrap_or(geometry.local_size),
+                geometry
+                    .local_to_window
+                    .with_local_origin(op.position_override.unwrap_or(PxPosition::ZERO)),
+            );
+            let bounds = match &op.command {
+                Command::Draw(command) => match command.draw_region() {
+                    DrawRegion::Global => viewport,
+                    DrawRegion::Absolute(rect) => rect,
+                    DrawRegion::PaddedLocal(padding) => {
+                        geometry.padded_window_bounds(padding).outward()
+                    }
+                },
+                Command::Compute(_) => geometry.window_bounds().outward(),
+                _ => return None,
+            };
+            bounds.intersection(&viewport)
+        })
+        .reduce(|a, b| a.union(&b))
 }
 
 fn fully_clipped(

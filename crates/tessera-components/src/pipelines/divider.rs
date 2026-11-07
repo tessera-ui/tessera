@@ -21,6 +21,10 @@ pub(crate) struct DividerCommand {
 }
 
 impl DrawCommand for DividerCommand {
+    fn supports_partial_redraw(&self) -> bool {
+        true
+    }
+
     fn draw_region(&self) -> DrawRegion {
         DrawRegion::PaddedLocal(PaddingRect::uniform(Px(1)))
     }

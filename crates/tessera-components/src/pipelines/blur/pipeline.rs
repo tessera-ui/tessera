@@ -330,22 +330,13 @@ impl BlurPipeline {
     }
 
     fn create_uniform_buffer<T: ShaderType + WriteInto>(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        label: &str,
+        graphics: &tessera_ui::GraphicsDevice,
         data: &T,
-    ) -> wgpu::Buffer {
+    ) -> tessera_ui::FrameBuffer {
         let mut buffer = UniformBuffer::new(Vec::new());
         buffer.write(data).expect("buffer write failed");
         let bytes = buffer.into_inner();
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(label),
-            size: bytes.len() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        queue.write_buffer(&uniform_buffer, 0, &bytes);
-        uniform_buffer
+        graphics.frame_buffer(wgpu::BufferUsages::UNIFORM, &bytes)
     }
 }
 
@@ -396,21 +387,17 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 area_height,
                 scale,
             };
-            let resample_uniform_buffer = Self::create_uniform_buffer(
-                context.device,
-                context.queue,
-                "Blur Resample Uniform Buffer",
-                &resample_uniforms,
-            );
+            let resample_uniform_buffer =
+                Self::create_uniform_buffer(context.graphics, &resample_uniforms);
             let downsample_bind_group =
                 context
-                    .device
-                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                    .graphics
+                    .cached_bind_group(&wgpu::BindGroupDescriptor {
                         layout: &self.resample_bind_group_layout,
                         entries: &[
                             wgpu::BindGroupEntry {
                                 binding: 0,
-                                resource: resample_uniform_buffer.as_entire_binding(),
+                                resource: resample_uniform_buffer.binding(),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,
@@ -456,12 +443,8 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                     area_height: down_height,
                     sample_count: weight_entry.sample_count,
                 };
-                let blur_uniform_buffer = Self::create_uniform_buffer(
-                    context.device,
-                    context.queue,
-                    "Blur Pass Uniform Buffer",
-                    &blur_uniforms,
-                );
+                let blur_uniform_buffer =
+                    Self::create_uniform_buffer(context.graphics, &blur_uniforms);
 
                 // Create weights and offsets buffer (padded to vec4 for
                 // alignment)
@@ -473,22 +456,18 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                         glam::Vec4::new(weight_entry.offsets[i], 0.0, 0.0, 0.0)
                     }),
                 };
-                let weights_buffer = Self::create_uniform_buffer(
-                    context.device,
-                    context.queue,
-                    "Blur Weights and Offsets Buffer",
-                    &weights_and_offsets,
-                );
+                let weights_buffer =
+                    Self::create_uniform_buffer(context.graphics, &weights_and_offsets);
 
                 let blur_bind_group =
                     context
-                        .device
-                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                        .graphics
+                        .cached_bind_group(&wgpu::BindGroupDescriptor {
                             layout: &self.blur_bind_group_layout,
                             entries: &[
                                 wgpu::BindGroupEntry {
                                     binding: 0,
-                                    resource: blur_uniform_buffer.as_entire_binding(),
+                                    resource: blur_uniform_buffer.binding(),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
@@ -506,7 +485,7 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 4,
-                                    resource: weights_buffer.as_entire_binding(),
+                                    resource: weights_buffer.binding(),
                                 },
                             ],
                             label: Some("blur_directional_bind_group"),
@@ -526,13 +505,13 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
 
             let upsample_bind_group =
                 context
-                    .device
-                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                    .graphics
+                    .cached_bind_group(&wgpu::BindGroupDescriptor {
                         layout: &self.resample_bind_group_layout,
                         entries: &[
                             wgpu::BindGroupEntry {
                                 binding: 0,
-                                resource: resample_uniform_buffer.as_entire_binding(),
+                                resource: resample_uniform_buffer.binding(),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,

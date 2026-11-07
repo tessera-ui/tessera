@@ -133,6 +133,10 @@ pub enum ShapeCommand {
 }
 
 impl DrawCommand for ShapeCommand {
+    fn supports_partial_redraw(&self) -> bool {
+        true
+    }
+
     fn draw_region(&self) -> DrawRegion {
         match self {
             Self::Shadow { smoothness, .. } => {

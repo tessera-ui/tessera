@@ -20,8 +20,6 @@ struct TextResources {
 static PRELOADED_FONTS: std::sync::Mutex<Option<std::thread::JoinHandle<glyphon::FontSystem>>> =
     std::sync::Mutex::new(None);
 
-/// Starts scanning system fonts in the background so the first text layout
-/// does not wait for it.
 pub(crate) fn preload_system_fonts() {
     #[cfg(not(target_family = "wasm"))]
     {
@@ -29,7 +27,19 @@ pub(crate) fn preload_system_fonts() {
         if preloaded.is_none() {
             *preloaded = std::thread::Builder::new()
                 .name("tessera-fonts".into())
-                .spawn(system_fonts)
+                .spawn(|| {
+                    let mut fonts = system_fonts();
+                    // Matching examines installed variable-font axes. Prepare common UI
+                    // weights while the renderer initializes instead of on first layout.
+                    for weight in [
+                        fontdb::Weight::NORMAL,
+                        fontdb::Weight::MEDIUM,
+                        fontdb::Weight::BOLD,
+                    ] {
+                        fonts.get_font_matches(&glyphon::Attrs::new().weight(weight));
+                    }
+                    fonts
+                })
                 .ok();
         }
     }

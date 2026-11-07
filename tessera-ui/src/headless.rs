@@ -591,26 +591,12 @@ impl HeadlessRenderer {
         #[cfg(feature = "profiling")]
         let draw_duration = draw_timer.elapsed();
 
-        let frame_index = self.frame_index;
-        #[cfg(feature = "profiling")]
-        let prepare_timer = Instant::now();
-        let order_timer = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
-        let ops = graph.ordered_ops();
-        if let Some(order_timer) = order_timer {
-            tracing::debug!(
-                frame_index,
-                order_us = order_timer.elapsed().as_micros(),
-                "headless_graph_cpu"
-            );
-        }
-        #[cfg(feature = "profiling")]
-        let prepare_duration = prepare_timer.elapsed();
         #[cfg(feature = "profiling")]
         let render_timer = Instant::now();
         #[cfg(feature = "debug-dirty-overlay")]
-        self.core.render(ops, &[]);
+        self.core.render(graph, &[]);
         #[cfg(not(feature = "debug-dirty-overlay"))]
-        self.core.render(ops);
+        self.core.render(graph);
         #[cfg(feature = "profiling")]
         let render_duration = render_timer.elapsed();
         self.cursor.frame_cleanup();
@@ -625,7 +611,7 @@ impl HeadlessRenderer {
             };
             if let Some(metadata_timer) = metadata_timer {
                 tracing::debug!(
-                    frame_index,
+                    frame_index = self.frame_index,
                     elapsed_us = metadata_timer.elapsed().as_micros(),
                     "headless_profiler_metadata_cpu"
                 );
@@ -643,7 +629,7 @@ impl HeadlessRenderer {
                 partial_replay_nodes: _build_tree_result.partial_replay_nodes(),
                 total_nodes_before_build: _build_tree_result.total_nodes_before_build(),
                 render_time_ns: Some(render_duration.as_nanos()),
-                render_prepare_ns: Some(prepare_duration.as_nanos()),
+                render_prepare_ns: None,
                 render_acquire_ns: breakdown.map(|timing| timing.acquire.as_nanos()),
                 render_build_passes_ns: breakdown.map(|timing| timing.build_passes.as_nanos()),
                 render_encode_ns: breakdown.map(|timing| timing.encode.as_nanos()),

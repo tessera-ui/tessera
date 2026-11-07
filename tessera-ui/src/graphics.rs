@@ -16,8 +16,12 @@ use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use wgpu::util::DeviceExt as _;
 
-pub use self::scratch::{ScratchFit, ScratchTexture, ScratchTextureDescriptor};
+pub use self::{
+    frame::FrameBuffer,
+    scratch::{ScratchFit, ScratchTexture, ScratchTextureDescriptor},
+};
 
+mod frame;
 mod scratch;
 
 /// Actual resource operations for a pipeline's declared resource group.
@@ -106,6 +110,7 @@ pub struct GraphicsDevice {
     frame_uploads: Arc<FrameUploads>,
     prelude: Arc<Mutex<Option<wgpu::CommandEncoder>>>,
     scratch: Arc<Mutex<scratch::ScratchPool>>,
+    frame_resources: Arc<Mutex<frame::FrameResources>>,
 }
 
 #[derive(Debug, Default)]
@@ -126,6 +131,7 @@ impl GraphicsDevice {
             frame_uploads: Arc::default(),
             prelude: Arc::default(),
             scratch: Arc::default(),
+            frame_resources: Arc::default(),
         }
     }
 
@@ -174,6 +180,7 @@ impl GraphicsDevice {
     pub(crate) fn begin_frame(&self) {
         self.frame_uploads.bytes.store(0, Ordering::Relaxed);
         self.scratch.lock().begin_frame();
+        self.frame_resources.lock().begin_frame();
     }
 
     pub(crate) fn take_deferred_upload(&self) -> bool {

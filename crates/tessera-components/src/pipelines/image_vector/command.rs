@@ -92,6 +92,10 @@ pub struct ImageVectorCommand {
 }
 
 impl DrawCommand for ImageVectorCommand {
+    fn supports_partial_redraw(&self) -> bool {
+        true
+    }
+
     fn apply_opacity(&mut self, opacity: f32) {
         self.tint = self.tint.with_alpha(self.tint.a * opacity.clamp(0.0, 1.0));
     }

@@ -7,7 +7,7 @@ use tracing::{debug, error, warn};
 use crate::{
     DrawCommand, LocalToWindow, Px, PxPosition, PxRect, PxSize, SampleRegion, ScratchFit,
     ScratchTexture, ScratchTextureDescriptor,
-    render_graph::{DrawGeometry, RenderGraphOp},
+    render_graph::{DrawGeometry, RenderGraph},
     render_pass::{ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassPlan},
     renderer::{
         compute::{ErasedComputeBatchItem, pipeline::ErasedDispatchContext},
@@ -34,6 +34,7 @@ struct RenderPassParams<'a> {
     stencil_view: &'a wgpu::TextureView,
     clipper: &'a mut super::clip::ShapeClipper,
     clear_target: bool,
+    damage: PxRect,
     encoder: &'a mut wgpu::CommandEncoder,
     write_target: &'a wgpu::TextureView,
     commands_in_pass: &'a mut SmallVec<[DrawOrClip; 32]>,
@@ -90,6 +91,7 @@ struct SubmitBatchParams<'a, 'b> {
     target_size: PxSize,
     clip_stack: &'b [PxRect],
     current_batch_draw_rect: &'a mut Option<PxRect>,
+    damage: PxRect,
 }
 
 impl RenderCore {
@@ -97,14 +99,14 @@ impl RenderCore {
     /// the offscreen copy when the core has no surface.
     pub(crate) fn render(
         &mut self,
-        ops: Vec<RenderGraphOp>,
+        graph: RenderGraph,
         #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
     ) {
         if self.surface.is_none() {
             let render_start = Instant::now();
             let output_view = self.offscreen_copy().clone();
             self.render_into_view(
-                ops,
+                graph,
                 &output_view,
                 #[cfg(feature = "debug-dirty-overlay")]
                 dirty_overlay_rects,
@@ -158,7 +160,7 @@ impl RenderCore {
             .create_view(&wgpu::TextureViewDescriptor::default());
 
         self.render_into_view(
-            ops,
+            graph,
             &output_view,
             #[cfg(feature = "debug-dirty-overlay")]
             dirty_overlay_rects,
@@ -178,7 +180,7 @@ impl RenderCore {
 
     fn render_into_view(
         &mut self,
-        ops: Vec<RenderGraphOp>,
+        graph: RenderGraph,
         output_view: &wgpu::TextureView,
         #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
         render_start: Instant,
@@ -193,7 +195,23 @@ impl RenderCore {
             depth_or_array_layers: 1,
         };
         let build_start = Instant::now();
-        let mut passes = RenderPassGraph::build(ops, texture_size).into_passes();
+        let target_rect = PxRect::new(
+            Px::ZERO,
+            Px::ZERO,
+            Px(texture_size.width as i32),
+            Px(texture_size.height as i32),
+        );
+        let damage = graph.damage_since(self.previous_graph.as_ref());
+        let full_redraw = damage.is_none();
+        let damage = damage
+            .unwrap_or(target_rect)
+            .intersection(&target_rect)
+            .unwrap_or(PxRect::ZERO);
+        let mut passes = if damage.width > Px::ZERO && damage.height > Px::ZERO {
+            RenderPassGraph::build(graph.ordered_ops(), texture_size).into_passes()
+        } else {
+            Vec::new()
+        };
         self.pipelines.clipper.prepare(
             &self.device,
             &self.queue,
@@ -227,6 +245,40 @@ impl RenderCore {
             pipelines: &mut self.pipelines,
             blit: &self.blit,
         };
+        if (!full_redraw && damage.width > Px::ZERO && damage.height > Px::ZERO)
+            || (full_redraw && passes.is_empty())
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Damage Clear Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: state
+                        .targets
+                        .msaa_view
+                        .as_ref()
+                        .unwrap_or(&state.targets.offscreen),
+                    resolve_target: state
+                        .targets
+                        .msaa_view
+                        .as_ref()
+                        .map(|_| &state.targets.offscreen),
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: if full_redraw {
+                            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                        } else {
+                            wgpu::LoadOp::Load
+                        },
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+            if !full_redraw {
+                pass.set_pipeline(&state.blit.clear_pipeline);
+                set_scissor_rect_from_pxrect(&mut pass, damage);
+                pass.draw(0..3, 0..1);
+            }
+        }
         state.pipelines.drawer.pipeline_registry.begin_all_frames(
             state.device,
             state.queue,
@@ -235,7 +287,7 @@ impl RenderCore {
         );
 
         let mut scene = SceneState::Offscreen;
-        let mut scene_written = false;
+        let mut scene_written = !full_redraw;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
         for pass in &mut passes {
             let timing = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
@@ -246,6 +298,7 @@ impl RenderCore {
                 &mut scene_written,
                 pass,
                 &mut clip_stack,
+                damage,
             );
             #[cfg(all(
                 feature = "profiling",
@@ -309,6 +362,7 @@ impl RenderCore {
         }
 
         let submit_start = Instant::now();
+        self.graphics.upload_frame_buffers();
         let command_buffer = encoder.finish();
         let finish_time =
             tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
@@ -331,6 +385,7 @@ impl RenderCore {
         }
 
         self.frame_index = self.frame_index.wrapping_add(1);
+        self.previous_graph = Some(graph);
         self.last_render_breakdown = Some(RenderTimingBreakdown {
             acquire,
             build_passes,
@@ -444,6 +499,7 @@ impl RenderCore {
         scene_written: &mut bool,
         pass: &mut RenderPassPlan,
         clip_stack: &mut SmallVec<[PxRect; 16]>,
+        damage: PxRect,
     ) {
         match pass {
             RenderPassPlan::Compute(items) => {
@@ -477,6 +533,7 @@ impl RenderCore {
                     stencil_view: &state.targets.stencil,
                     clipper: &mut state.pipelines.clipper,
                     clear_target: !*scene_written,
+                    damage,
                     encoder,
                     write_target: &state.targets.offscreen,
                     commands_in_pass: draws,
@@ -781,6 +838,7 @@ fn render_current_pass(params: RenderPassParams<'_>) {
         stencil_view,
         clipper,
         clear_target,
+        damage,
         encoder,
         write_target,
         commands_in_pass,
@@ -853,6 +911,7 @@ fn render_current_pass(params: RenderPassParams<'_>) {
                     target_size,
                     clip_stack: clip_stack.as_slice(),
                     current_batch_draw_rect: &mut current_batch_draw_rect,
+                    damage,
                 },
                 &mut buffer,
             )
@@ -883,6 +942,10 @@ fn render_current_pass(params: RenderPassParams<'_>) {
             }
             DrawOrClip::Draw(cmd) => cmd,
         };
+
+        if cmd.draw_rect.intersection(&damage).is_none() {
+            continue;
+        }
 
         if !can_merge_into_batch(&last_command_type_id, cmd.type_id) && !buffer.is_empty() {
             flush!();
@@ -922,10 +985,13 @@ fn submit_buffered_commands(
         target_size,
         clip_stack,
         current_batch_draw_rect,
+        damage,
     } = params;
     let (current_clip_rect, anything_to_submit) =
         apply_clip_to_batch_rect(clip_stack, current_batch_draw_rect, target_size);
-    if anything_to_submit && let Some(rect) = *current_batch_draw_rect {
+    if anything_to_submit
+        && let Some(rect) = current_batch_draw_rect.and_then(|rect| rect.intersection(&damage))
+    {
         set_scissor_rect_from_pxrect(rpass, rect);
         drawer.submit(
             ErasedDrawContext {
@@ -937,7 +1003,11 @@ fn submit_buffered_commands(
                 render_pass: rpass,
                 scene_texture_view: scene.0,
                 scene_rect: scene.1,
-                clip_rect: current_clip_rect,
+                clip_rect: Some(
+                    current_clip_rect
+                        .and_then(|clip| clip.intersection(&damage))
+                        .unwrap_or(damage),
+                ),
             },
             buffer.as_slice(),
         );

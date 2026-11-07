@@ -12,6 +12,10 @@ pub struct TextCommand {
 }
 
 impl DrawCommand for TextCommand {
+    fn supports_partial_redraw(&self) -> bool {
+        true
+    }
+
     fn apply_opacity(&mut self, opacity: f32) {
         self.data.apply_opacity(opacity);
     }

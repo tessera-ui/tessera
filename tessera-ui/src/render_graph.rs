@@ -155,15 +155,44 @@ pub struct RenderGraphOp {
 #[derive(Clone, Default)]
 pub struct RenderGraph {
     data: Arc<RenderGraphData>,
+    damage: Option<PxRect>,
+    previous: Option<Arc<RenderGraphData>>,
 }
 
 #[derive(Default)]
 struct RenderGraphData {
     ordered_ops: OnceLock<Vec<RenderGraphOp>>,
     ops: Vec<RenderGraphOp>,
+    partial_redraw: bool,
 }
 
 impl RenderGraph {
+    pub(crate) fn with_damage(mut self, damage: Option<PxRect>, previous: Option<&Self>) -> Self {
+        self.damage = damage;
+        self.previous = previous.map(|graph| Arc::clone(&graph.data));
+        self
+    }
+
+    pub(crate) fn damage_since(&self, previous: Option<&Self>) -> Option<PxRect> {
+        let previous = previous?;
+        if !self.data.partial_redraw || !previous.data.partial_redraw {
+            return None;
+        }
+        if Arc::ptr_eq(&self.data, &previous.data) {
+            return Some(PxRect::ZERO);
+        }
+        if self
+            .previous
+            .as_ref()
+            .is_some_and(|data| Arc::ptr_eq(data, &previous.data))
+        {
+            self.damage
+        } else {
+            // A frame was skipped after the scene journals advanced.
+            None
+        }
+    }
+
     /// Returns ops in the graph.
     #[must_use]
     pub fn ops(&self) -> &[RenderGraphOp] {
@@ -245,11 +274,21 @@ impl RenderGraphBuilder {
 
     /// Finishes graph construction.
     pub(crate) fn finish(self) -> RenderGraph {
+        let partial_redraw = self.ops.iter().all(|op| match &op.command {
+            Command::Draw(command) => {
+                command.sample_region().is_none() && command.supports_partial_redraw()
+            }
+            Command::Compute(_) => false,
+            _ => true,
+        });
         RenderGraph {
             data: Arc::new(RenderGraphData {
                 ordered_ops: OnceLock::new(),
                 ops: self.ops,
+                partial_redraw,
             }),
+            damage: None,
+            previous: None,
         }
     }
 }
@@ -683,11 +722,96 @@ mod tests {
     }
 
     impl DrawCommand for ProbeDraw {
+        fn supports_partial_redraw(&self) -> bool {
+            true
+        }
+
         fn sample_region(&self) -> Option<SampleRegion> {
             self.sample
         }
 
         fn apply_opacity(&mut self, _opacity: f32) {}
+    }
+
+    #[test]
+    fn damage_requires_the_rendered_predecessor_and_safe_contents_in_both_frames() {
+        #[derive(Clone)]
+        struct UntrackedResource;
+
+        impl DrawCommand for UntrackedResource {
+            fn apply_opacity(&mut self, _: f32) {}
+        }
+
+        #[derive(Clone)]
+        struct Filter;
+
+        impl ComputeCommand for Filter {
+            fn barrier(&self) -> SampleRegion {
+                SampleRegion::Global
+            }
+        }
+
+        let first = RenderGraphBuilder::new().finish();
+        let damage = PxRect::new(Px(2), Px(3), Px(4), Px(5));
+        let second = RenderGraphBuilder::new()
+            .finish()
+            .with_damage(Some(damage), Some(&first));
+        assert_eq!(
+            second.damage_since(None),
+            None,
+            "new targets need all pixels"
+        );
+        assert_eq!(second.damage_since(Some(&first)), Some(damage));
+        assert_eq!(second.damage_since(Some(&second)), Some(PxRect::ZERO));
+        let third = RenderGraphBuilder::new()
+            .finish()
+            .with_damage(Some(damage), Some(&second));
+        assert_eq!(
+            third.damage_since(Some(&first)),
+            None,
+            "skipping a scene update loses its damage"
+        );
+
+        let sampled = RenderGraphBuilder {
+            ops: vec![padded_sample_op(1, 0, 0, 0, 10, 10, 8)],
+        }
+        .finish()
+        .with_damage(Some(damage), Some(&first));
+        assert_eq!(
+            sampled.damage_since(Some(&first)),
+            None,
+            "background effects need full replay"
+        );
+        let removed = RenderGraphBuilder::new()
+            .finish()
+            .with_damage(Some(damage), Some(&sampled));
+        assert_eq!(
+            removed.damage_since(Some(&sampled)),
+            None,
+            "removing an effect must discard its output too"
+        );
+        let mut fragment = RenderFragment::default();
+        fragment.push_draw_command(UntrackedResource);
+        let mut builder = RenderGraphBuilder::new();
+        let geometry =
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(8), Px(8)));
+        builder.append_fragment(&fragment, geometry, 1.0);
+        let unknown = builder.finish().with_damage(Some(damage), Some(&first));
+        assert_eq!(
+            unknown.damage_since(Some(&first)),
+            None,
+            "custom commands must explicitly opt in"
+        );
+        fragment.clear();
+        fragment.push_compute_command(Filter);
+        let mut builder = RenderGraphBuilder::new();
+        builder.append_fragment(&fragment, geometry, 1.0);
+        let computed = builder.finish().with_damage(Some(damage), Some(&first));
+        assert_eq!(
+            computed.damage_since(Some(&first)),
+            None,
+            "compute work must fully reconstruct its input scene"
+        );
     }
 
     fn draw_op(id: u32, sequence: usize, x: i32, y: i32, w: i32, h: i32) -> RenderGraphOp {
