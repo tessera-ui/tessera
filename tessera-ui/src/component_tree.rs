@@ -2405,12 +2405,11 @@ impl ComponentTree {
                 self.collect_globally_positioned_invocations(screen_size);
                 diagnostics_snapshot.accessibility_nodes_updated =
                     self.sync_accessibility(root_node, true) as u64;
-                let mut geometry_changes = self.metadatas.geometry_changed.clone();
-                geometry_changes.extend(changed_frame_nodes.iter().copied());
                 self.focus_owner.sync_geometry_changes(
                     &self.tree,
                     &self.metadatas,
-                    &geometry_changes,
+                    &self.metadatas.geometry_changed,
+                    &changed_frame_nodes,
                 );
                 let _ = self.dispatch_pointer_input(
                     root_node,
@@ -2467,12 +2466,11 @@ impl ComponentTree {
         );
         diagnostics_snapshot.scene_nodes_updated = scene_updates;
         record_frame_stage(&mut stage_timer, "scene");
-        let mut focus_geometry_changes = self.metadatas.geometry_changed.clone();
-        focus_geometry_changes.extend(changed_frame_nodes.iter().copied());
         self.focus_owner.sync_geometry_changes(
             &self.tree,
             &self.metadatas,
-            &focus_geometry_changes,
+            &self.metadatas.geometry_changed,
+            &changed_frame_nodes,
         );
         record_frame_stage(&mut stage_timer, "focus_geometry");
         debug!(

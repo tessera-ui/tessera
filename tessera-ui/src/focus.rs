@@ -1412,12 +1412,15 @@ impl FocusOwner {
         &mut self,
         tree: &ComponentNodeTree,
         metadatas: &ComponentNodeMetaDatas,
-        changed: &HashSet<NodeId>,
+        geometry_changed: &HashSet<NodeId>,
+        structure_changed: &HashSet<NodeId>,
     ) {
-        if changed.is_empty() {
+        if (geometry_changed.is_empty() && structure_changed.is_empty())
+            || (self.handles_by_component.is_empty() && self.active.is_none())
+        {
             return;
         }
-        for node_id in changed {
+        for node_id in geometry_changed.union(structure_changed) {
             let Some(&handle) = self.handles_by_component.get(node_id) else {
                 continue;
             };
@@ -1528,7 +1531,7 @@ impl FocusOwner {
         metadatas: &ComponentNodeMetaDatas,
     ) {
         let changed = self.handles_by_component.keys().copied().collect();
-        self.sync_geometry_changes(tree, metadatas, &changed);
+        self.sync_geometry_changes(tree, metadatas, &changed, &HashSet::default());
     }
 
     pub(crate) fn commit_pending(&mut self) {
