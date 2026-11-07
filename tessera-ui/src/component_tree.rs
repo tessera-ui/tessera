@@ -600,6 +600,28 @@ pub(crate) struct ReplayReplaceResult {
     pub reused_instance_logic_ids: HashSet<u64>,
 }
 
+impl ReplayReplaceResult {
+    fn clear(&mut self) {
+        // A large replacement should not make later small replacements clear large tables.
+        const MAX_REUSED_CAPACITY: usize = 256;
+
+        for set in [
+            &mut self.removed_instance_keys,
+            &mut self.removed_instance_logic_ids,
+            &mut self.inserted_instance_keys,
+            &mut self.reused_instance_keys,
+            &mut self.inserted_instance_logic_ids,
+            &mut self.reused_instance_logic_ids,
+        ] {
+            if set.capacity() > MAX_REUSED_CAPACITY {
+                *set = HashSet::default();
+            } else {
+                set.clear();
+            }
+        }
+    }
+}
+
 pub(crate) struct ReplayReplaceContext {
     parent_id: indextree::NodeId,
     next_sibling: Option<indextree::NodeId>,
@@ -821,7 +843,9 @@ impl ComponentTree {
     pub(crate) fn finish_replace_subtree(
         &mut self,
         context: ReplayReplaceContext,
-    ) -> Result<ReplayReplaceResult, ReplayReplaceError> {
+        result: &mut ReplayReplaceResult,
+    ) -> Result<(), ReplayReplaceError> {
+        result.clear();
         let ReplayReplaceContext {
             parent_id,
             next_sibling,
@@ -855,11 +879,15 @@ impl ComponentTree {
 
         let detached_root_reused = inserted_root_ids.contains(&detached_root_id);
 
-        let mut inserted_instance_keys = HashSet::default();
-        let mut reused_instance_keys = HashSet::default();
-        let mut inserted_instance_logic_ids = HashSet::default();
-        let mut reused_instance_logic_ids = HashSet::default();
-        let mut replaced_nodes = Vec::new();
+        let ReplayReplaceResult {
+            removed_instance_keys,
+            removed_instance_logic_ids,
+            inserted_instance_keys,
+            reused_instance_keys,
+            inserted_instance_logic_ids,
+            reused_instance_logic_ids,
+        } = result;
+        let mut replaced_nodes = SmallVec::<[_; 4]>::new();
         let mut pending: SmallVec<[_; 8]> = inserted_root_ids.into_iter().collect();
         while let Some(id) = pending.pop() {
             let retained = self.replay_retained_roots.contains(&id);
@@ -880,8 +908,6 @@ impl ComponentTree {
             }
         }
 
-        let mut removed_instance_keys = HashSet::default();
-        let mut removed_instance_logic_ids = HashSet::default();
         if !detached_root_reused {
             for id in detached_root_id.descendants(&self.tree) {
                 let node = self.tree[id].get();
@@ -938,13 +964,13 @@ impl ComponentTree {
                 }
             }
         }
-        for key in &removed_instance_keys {
+        for key in removed_instance_keys.iter() {
             self.last_global_rects.remove(key);
             self.node_ids_by_instance_key.remove(key);
         }
         self.removed_focus_owners
             .extend(removed_instance_keys.iter().copied());
-        crate::runtime::remove_layout_structure(&removed_instance_keys);
+        crate::runtime::remove_layout_structure(removed_instance_keys);
         if !detached_root_reused {
             let detached_node_ids = detached_root_id
                 .traverse(&self.tree)
@@ -952,7 +978,7 @@ impl ComponentTree {
                     indextree::NodeEdge::Start(id) => Some(id),
                     indextree::NodeEdge::End(_) => None,
                 })
-                .collect::<Vec<_>>();
+                .collect::<SmallVec<[_; 8]>>();
             for node_id in &detached_node_ids {
                 self.remove_position_observer(*node_id);
                 self.removed_frame_nodes.insert(*node_id);
@@ -967,14 +993,7 @@ impl ComponentTree {
 
         self.replay_changed_parents.insert(parent_id);
         self.node_queue = previous_queue;
-        Ok(ReplayReplaceResult {
-            removed_instance_keys,
-            removed_instance_logic_ids,
-            inserted_instance_keys,
-            reused_instance_keys,
-            inserted_instance_logic_ids,
-            reused_instance_logic_ids,
-        })
+        Ok(())
     }
 
     pub(crate) fn finish_replay_round(&mut self) {
@@ -6230,10 +6249,11 @@ mod tests {
         let before_finish = root.children(tree.tree()).collect::<Vec<_>>();
         assert_eq!(before_finish, vec![second, new_a, new_b]);
 
-        let replace_result = match tree.finish_replace_subtree(context) {
-            Ok(result) => result,
-            Err(_) => panic!("finish replace should succeed"),
-        };
+        let mut replace_result = ReplayReplaceResult::default();
+        assert!(
+            tree.finish_replace_subtree(context, &mut replace_result)
+                .is_ok()
+        );
         tree.finish_replay_round();
 
         let root_children = root
@@ -6284,10 +6304,11 @@ mod tests {
         assert!(tree.try_reuse_current_subtree(2, 2));
         tree.pop_node();
 
-        let replace_result = match tree.finish_replace_subtree(context) {
-            Ok(result) => result,
-            Err(_) => panic!("finish replace should succeed"),
-        };
+        let mut replace_result = ReplayReplaceResult::default();
+        assert!(
+            tree.finish_replace_subtree(context, &mut replace_result)
+                .is_ok()
+        );
         tree.finish_replay_round();
 
         let root_children = root
@@ -6309,6 +6330,26 @@ mod tests {
         assert!(!replace_result.removed_instance_keys.contains(&3));
         assert!(!replace_result.removed_instance_logic_ids.contains(&2));
         assert!(!replace_result.removed_instance_logic_ids.contains(&3));
+
+        let Ok(context) = tree.begin_replace_subtree_by_instance_key(4) else {
+            panic!("second replace context should be created");
+        };
+        tree.add_node(node("new_second", 5, 5));
+        tree.pop_node();
+        assert!(
+            tree.finish_replace_subtree(context, &mut replace_result)
+                .is_ok()
+        );
+        assert_eq!(
+            replace_result.inserted_instance_keys,
+            [5].into_iter().collect()
+        );
+        assert_eq!(
+            replace_result.removed_instance_keys,
+            [4].into_iter().collect()
+        );
+        assert!(replace_result.reused_instance_keys.is_empty());
+        assert!(replace_result.reused_instance_logic_ids.is_empty());
     }
 
     #[test]
@@ -6338,7 +6379,10 @@ mod tests {
                 extra
             });
             tree.pop_node();
-            assert!(tree.finish_replace_subtree(context).is_ok());
+            assert!(
+                tree.finish_replace_subtree(context, &mut ReplayReplaceResult::default())
+                    .is_ok()
+            );
             tree.finish_replay_round();
             assert_eq!(direct_layout_children(root, &tree.tree).as_ref(), &[outer]);
             assert_eq!(direct_layout_children(outer, &tree.tree).as_ref(), &[inner]);
@@ -6391,14 +6435,20 @@ mod tests {
         let layout_c = tree.add_node(node("layout_c", 10, 10));
         tree.pop_node();
         tree.pop_node();
-        assert!(tree.finish_replace_subtree(context).is_ok());
+        assert!(
+            tree.finish_replace_subtree(context, &mut ReplayReplaceResult::default())
+                .is_ok()
+        );
 
         let context = tree
             .begin_replace_subtree_by_instance_key(2)
             .unwrap_or_else(|_| panic!("first layout exists"));
         let layout_a = tree.add_node(node("replaced_layout_a", 2, 2));
         tree.pop_node();
-        assert!(tree.finish_replace_subtree(context).is_ok());
+        assert!(
+            tree.finish_replace_subtree(context, &mut ReplayReplaceResult::default())
+                .is_ok()
+        );
         tree.finish_replay_round();
         assert_eq!(
             direct_layout_children(root, tree.tree()).as_ref(),
@@ -6415,7 +6465,10 @@ mod tests {
             tree.pop_node();
         }
         tree.pop_node();
-        assert!(tree.finish_replace_subtree(context).is_ok());
+        assert!(
+            tree.finish_replace_subtree(context, &mut ReplayReplaceResult::default())
+                .is_ok()
+        );
         tree.finish_replay_round();
         assert_eq!(
             direct_layout_children(root, tree.tree()).as_ref(),

@@ -10,7 +10,7 @@ use rustc_hash::FxHashSet as HashSet;
 use tracing::{debug, instrument};
 
 use crate::{
-    component_tree::{ComponentNode, NodeRole, ReplayReplaceError},
+    component_tree::{ComponentNode, NodeRole, ReplayReplaceError, ReplayReplaceResult},
     context::{
         begin_recompose_context_slot_epoch, drop_context_slots_for_instance_logic_ids,
         remove_context_read_dependencies, reset_context_read_dependencies, with_context_snapshot,
@@ -430,6 +430,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         let mut replay_roots_for_debug = Vec::new();
         let mut deferred_backwards_instance_keys = HashSet::default();
         let mut executed_instance_keys = HashSet::default();
+        let mut replace_result = ReplayReplaceResult::default();
         let mut fallback_to_root_recompose = false;
         #[cfg(feature = "profiling")]
         let mut replayed_nodes = 0_u64;
@@ -528,12 +529,12 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                     let compose_ns = compose_timer.map(|timer| timer.elapsed().as_nanos());
 
                     let attach_timer = replay_trace.then(Instant::now);
-                    let replace_result = TesseraRuntime::with_mut(|runtime| {
+                    TesseraRuntime::with_mut(|runtime| {
                         runtime
                             .component_tree
-                            .finish_replace_subtree(replace_context)
-                    });
-                    let replace_result = replace_result.unwrap_or_else(|_| {
+                            .finish_replace_subtree(replace_context, &mut replace_result)
+                    })
+                    .unwrap_or_else(|_| {
                         panic!("finish_replace_subtree failed for instance key {instance_key}")
                     });
                     if replay_trace {
@@ -562,16 +563,10 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                             .copied(),
                     );
 
-                    for removed in &replace_result.removed_instance_keys {
-                        if !replace_result.inserted_instance_keys.contains(removed) {
-                            stale_instance_keys.insert(*removed);
-                        }
-                    }
-                    for removed in &replace_result.removed_instance_logic_ids {
-                        if !replace_result.inserted_instance_logic_ids.contains(removed) {
-                            stale_instance_logic_ids.insert(*removed);
-                        }
-                    }
+                    stale_instance_keys
+                        .extend(replace_result.removed_instance_keys.iter().copied());
+                    stale_instance_logic_ids
+                        .extend(replace_result.removed_instance_logic_ids.iter().copied());
                 }
             });
 
