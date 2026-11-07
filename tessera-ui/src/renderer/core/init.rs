@@ -5,7 +5,6 @@ use wgpu::TextureFormat;
 use winit::window::Window;
 
 use crate::{
-    CompositePipelineRegistry,
     compute::resource::ComputeResourceManager,
     pipeline_cache::initialize_cache,
     renderer::{
@@ -498,7 +497,6 @@ impl RenderCore {
             clipper: super::clip::ShapeClipper::new(&device, draw_config.format, sample_count),
             drawer,
             compute_registry: ComputePipelineRegistry::new(),
-            composite_registry: CompositePipelineRegistry::new(),
         };
 
         let targets = FrameTargets {

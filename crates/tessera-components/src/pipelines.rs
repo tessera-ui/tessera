@@ -17,12 +17,10 @@ pub(crate) mod loading_shape;
 pub(crate) mod mean;
 pub(crate) mod path_stroke;
 pub(crate) mod progress_arc;
-pub(crate) mod shadow;
 pub(crate) mod shape;
 pub(crate) mod simple_rect;
 pub(crate) mod text;
 
-mod composite;
 mod compute;
 mod draw;
 mod instanced;
@@ -33,7 +31,6 @@ pub fn register_pipelines(context: &mut tessera_ui::PipelineContext<'_>) {
     SharedQuad::clear();
     draw::register(context);
     compute::register(context);
-    composite::register(context);
     SharedQuad::clear();
 }
 

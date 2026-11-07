@@ -1066,10 +1066,7 @@ fn check_value_indicators(samples: u32) {
         );
     }
     let bounds = labels[0].1;
-    assert!(
-        bounds.width.0 >= 72,
-        "48dp minimum label width: {bounds:?}"
-    );
+    assert!(bounds.width.0 >= 72, "48dp minimum label width: {bounds:?}");
     assert_eq!(bounds.height.0, 66, "44dp label height");
     assert_eq!(
         (bounds.y + bounds.height).0,

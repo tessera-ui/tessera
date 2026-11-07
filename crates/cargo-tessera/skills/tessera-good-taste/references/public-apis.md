@@ -17,7 +17,7 @@ gates, and platform support. Use `cargo doc --open` in the application workspace
 | Overlays and navigation | `tessera_components::{dialog, menus, tooltip, bottom_sheet, side_sheet, snackbar, navigation_bar, navigation_rail, navigation_drawer}`; `tessera_shard::{shard, router, ShardState, ShardStateLifeCycle}` |
 | Tasks and animation | `tessera_shard::task_handles`; `tessera_ui::{receive_frame_nanos, FrameNanosControl, current_frame_nanos, current_frame_time, frame_delta}` |
 | Platform integration | `tessera_platform::{PlatformPackage, clipboard, window}`; `tessera_ui::{plugin, with_plugin, with_plugin_mut}` |
-| Public extensions | `tessera_ui::{modifier, Plugin, RenderModule, PipelineContext, DrawCommand, DrawablePipeline, ComputeCommand, ComputablePipeline, CompositePipeline, ExternalTextureHandle}`; documented sampling, clipping, and resource contracts |
+| Public extensions | `tessera_ui::{modifier, Plugin, RenderModule, PipelineContext, DrawCommand, DrawablePipeline, ComputeCommand, ComputablePipeline}`; documented sampling, clipping, and resource contracts |
 | Build and verification | `cargo tessera` commands; `tessera_ui::{testing, headless, profiler}` with their feature gates |
 
 Choose documented application and extension APIs for each task. Keep runtime

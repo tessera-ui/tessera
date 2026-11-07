@@ -2,7 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Verify clipped, scaled and cached surfaces across repeated draw batches.
+//! Verify clipped and scaled surfaces across repeated draw batches.
 
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, scaled_box, tessera,
@@ -15,7 +15,7 @@ const BATCH_COUNT: usize = 300;
 const VIEWPORT_WIDTH: u32 = 8 + BATCH_COUNT as u32 * 16;
 
 #[tessera]
-fn cache_clock_fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
+fn batch_fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
     let distinct = remember(|| false);
     if let Some(probe) = probe {
         probe.set(Some(distinct));
@@ -48,17 +48,17 @@ fn cache_clock_fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
 }
 
 #[test]
-#[ignore = "requires a native GPU adapter for cache generation across isolated draw batches"]
-fn shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers() {
+#[ignore = "requires a native GPU adapter"]
+fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
     crate::test_utils::run_isolated_test(
-        "pipelines::shape::coverage_tests::shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers",
+        "pipelines::shape::coverage_tests::shape_batches_share_uploads_and_preserve_pixels_across_buffers",
         || {
             for sample_count in [1, 4] {
                 let probe = TestProbe::<Option<State<bool>>>::default();
                 let observed = probe.clone();
                 let mut renderer = HeadlessRenderer::new(
                     Box::new(move || {
-                        cache_clock_fixture().probe(probe.clone());
+                        batch_fixture().probe(probe.clone());
                     }),
                     vec![Box::new(crate::TesseraComponents)],
                     HeadlessConfig {
@@ -70,97 +70,46 @@ fn shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers
                 )
                 .unwrap();
                 renderer.render_frames(1);
-                assert_eq!(
-                    renderer
-                        .graphics_work()
-                        .group("shape_cache")
-                        .texture_allocations,
-                    0,
-                    "repeated batches in one frame must not warm a transient shape"
-                );
+                let uploads = renderer
+                    .frame_graphics_work()
+                    .group("shape_batches")
+                    .buffer_uploads;
                 assert!(
-                    renderer
-                        .frame_graphics_work()
-                        .group("shape_batches")
-                        .buffer_uploads
-                        <= 2,
-                    "uncached batches must share frame uploads, got {}",
-                    renderer
-                        .frame_graphics_work()
-                        .group("shape_batches")
-                        .buffer_uploads
+                    uploads <= 2,
+                    "batches must share frame uploads, got {uploads}"
                 );
-                let uncached = renderer.read_pixels().unwrap();
-                let first = pixel(&uncached, VIEWPORT_WIDTH, 10, 10);
+                let uniform = renderer.read_pixels().unwrap();
+                let first = pixel(&uniform, VIEWPORT_WIDTH, 10, 10);
                 assert_eq!(first[3], 255);
                 for index in 0..BATCH_COUNT {
                     assert_eq!(
-                        pixel(&uncached, VIEWPORT_WIDTH, 10 + index * 16, 10),
+                        pixel(&uniform, VIEWPORT_WIDTH, 10 + index * 16, 10),
                         first,
-                        "uncached batch {index} must retain its own position across buffer boundaries"
+                        "batch {index} must retain its own position across buffer boundaries"
                     );
                 }
-                renderer.render_frames(7);
-                assert_eq!(
-                    renderer
-                        .graphics_work()
-                        .group("shape_cache")
-                        .texture_allocations,
-                    1,
-                    "one stable shape must become cached across real frames"
-                );
-                assert!(
-                    renderer
-                        .frame_graphics_work()
-                        .group("shape_batches")
-                        .buffer_uploads
-                        <= 2,
-                    "cached batches must share frame uploads"
-                );
                 observed.get().unwrap().set(true);
-                let before = renderer
-                    .graphics_work()
-                    .group("shape_cache")
-                    .texture_allocations;
-                renderer.render_frames(8);
-                assert_eq!(
-                    renderer
-                        .graphics_work()
-                        .group("shape_cache")
-                        .texture_allocations
-                        - before,
-                    15,
-                    "more than ten batches per frame must not expire stable shape heat"
-                );
-                let cached = renderer.read_pixels().unwrap();
+                renderer.render_frames(2);
+                let distinct = renderer.read_pixels().unwrap();
                 let mut previous_red = None;
                 for index in 0..BATCH_COUNT {
-                    let x = 10 + index * 16;
-                    let actual = pixel(&cached, VIEWPORT_WIDTH, x, 10);
+                    let actual = pixel(&distinct, VIEWPORT_WIDTH, 10 + index * 16, 10);
                     assert_eq!(actual[3], 255);
                     if index % 15 != 0
                         && let Some(previous) = previous_red
                     {
                         assert!(
                             actual[0] > previous,
-                            "cached batch colors must remain distinct and ordered"
+                            "batch colors must remain distinct and ordered"
                         );
                     }
                     assert_eq!(
                         actual,
-                        pixel(&cached, VIEWPORT_WIDTH, 10 + index % 15 * 16, 10),
-                        "cached batch {index} must preserve texture and transform selection across buffers"
+                        pixel(&distinct, VIEWPORT_WIDTH, 10 + index % 15 * 16, 10),
+                        "batch {index} must keep its own instance data across buffers"
                     );
                     previous_red = Some(actual[0]);
                 }
-                assert!(
-                    renderer
-                        .frame_graphics_work()
-                        .group("shape_batches")
-                        .buffer_uploads
-                        <= 2,
-                    "distinct cached textures must share transform uploads"
-                );
                 let allocations = renderer
                     .graphics_work()
                     .group("shape_batches")
@@ -174,7 +123,7 @@ fn shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers
                     allocations,
                     "stable frame batches must reuse GPU buffers and bindings"
                 );
-                assert_eq!(renderer.read_pixels().unwrap(), cached);
+                assert_eq!(renderer.read_pixels().unwrap(), distinct);
             }
         },
     );
@@ -282,7 +231,7 @@ fn native_borders_keep_fully_covered_pixels_opaque_at_integer_and_fractional_cli
         assert_eq!(
             renderer.read_pixels().unwrap(),
             pixels,
-            "reused batch slots must preserve cached and fractional shape pixels"
+            "reused batch slots must preserve fractional shape pixels"
         );
         for x in [24, 32, 40] {
             assert_black(&pixels, 112, x, 16, sample_count);

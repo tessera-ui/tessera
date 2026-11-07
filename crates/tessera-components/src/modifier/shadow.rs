@@ -4,8 +4,8 @@ use tessera_ui::{
 };
 
 use crate::{
-    pipelines::shadow::atlas::ShadowAtlasCommand,
-    shadow::{ShadowLayers, material_shadow},
+    pipelines::shape::command::ShapeCommand,
+    shadow::{ShadowLayer, ShadowLayers, material_shadow},
     shape_def::{ResolvedShape, Shape},
     theme::MaterialColorScheme,
 };
@@ -135,26 +135,37 @@ fn record_md3_shadow(
             },
             ResolvedShape::Ellipse => ResolvedShape::Ellipse,
         };
-        let index = fragment.push_composite_command(ShadowAtlasCommand::new(
+        push_shadow(
+            fragment,
+            ambient,
             expanded,
-            ShadowLayers {
-                ambient: Some(ambient),
-                spot: None,
-            },
-        ));
-        let op = &mut fragment.ops_mut()[index as usize];
-        op.size_override = Some(PxSize::new(size.width + growth, size.height + growth));
-        op.position_override = Some(PxPosition::from_f32_xy(-spread, -spread));
+            -spread,
+            Some(PxSize::new(size.width + growth, size.height + growth)),
+        );
     }
     if let Some(spot) = spot {
-        fragment.push_composite_command(ShadowAtlasCommand::new(
-            shape,
-            ShadowLayers {
-                ambient: None,
-                spot: Some(spot),
-            },
-        ));
+        push_shadow(fragment, spot, shape, 0.0, None);
     }
+}
+
+fn push_shadow(
+    fragment: &mut tessera_ui::RenderFragment,
+    layer: ShadowLayer,
+    shape: ResolvedShape,
+    inset: f32,
+    size: Option<PxSize>,
+) {
+    let index = fragment.push_draw_command(ShapeCommand::Shadow {
+        color: layer.color,
+        shape,
+        smoothness: layer.smoothness,
+    });
+    let op = &mut fragment.ops_mut()[index as usize];
+    op.size_override = size;
+    op.position_override = Some(PxPosition::from_f32_xy(
+        inset + layer.offset[0],
+        inset + layer.offset[1],
+    ));
 }
 
 #[cfg(test)]
@@ -162,15 +173,25 @@ mod tests {
     use tessera_ui::{Color, Command, Px, PxPosition, PxSize, RenderFragment};
 
     use crate::{
-        pipelines::shadow::atlas::ShadowAtlasCommand,
+        pipelines::shape::command::ShapeCommand,
         shadow::{ShadowLayer, ShadowLayers},
         shape_def::ResolvedShape,
     };
 
     use super::record_md3_shadow;
 
+    fn shadow_shape(command: &Command) -> ResolvedShape {
+        let Command::Draw(command) = command else {
+            panic!("shadow draw")
+        };
+        match command.downcast_ref::<ShapeCommand>() {
+            Some(ShapeCommand::Shadow { shape, .. }) => *shape,
+            _ => panic!("shadow shape"),
+        }
+    }
+
     #[test]
-    fn ambient_spread_expands_its_mask_without_moving_the_key_shadow() {
+    fn ambient_spread_expands_its_shape_and_both_layers_keep_their_offsets() {
         let mut fragment = RenderFragment::default();
         let shape = ResolvedShape::Rounded {
             corner_radii: [0.0, 1.0, 4.0, 20.0],
@@ -196,32 +217,21 @@ mod tests {
         assert_eq!(ops[0].size_override, Some(PxSize::new(Px(108), Px(48))));
         assert_eq!(
             ops[0].position_override,
-            Some(PxPosition::from_f32_xy(-4.0, -4.0))
+            Some(PxPosition::from_f32_xy(-4.0, -2.0))
         );
         assert_eq!(ops[1].size_override, None);
-        assert_eq!(ops[1].position_override, None);
-        let Command::Composite(ambient) = &ops[0].command else {
-            panic!("ambient mask")
-        };
         assert_eq!(
-            ambient
-                .downcast_ref::<ShadowAtlasCommand>()
-                .expect("shadow")
-                .shape,
+            ops[1].position_override,
+            Some(PxPosition::from_f32_xy(0.0, 2.0))
+        );
+        assert_eq!(
+            shadow_shape(&ops[0].command),
             ResolvedShape::Rounded {
                 corner_radii: [0.0, 3.3125, 8.0, 24.0],
                 corner_g2: [2.0; 4]
             }
         );
-        let Command::Composite(key) = &ops[1].command else {
-            panic!("key mask")
-        };
-        assert_eq!(
-            key.downcast_ref::<ShadowAtlasCommand>()
-                .expect("shadow")
-                .shape,
-            shape
-        );
+        assert_eq!(shadow_shape(&ops[1].command), shape);
 
         fragment.clear();
         record_md3_shadow(
@@ -240,7 +250,7 @@ mod tests {
         );
         assert_eq!(
             fragment.ops()[0].position_override,
-            Some(PxPosition::from_f32_xy(-1.5, -1.5))
+            Some(PxPosition::from_f32_xy(-1.5, 0.5))
         );
     }
 }

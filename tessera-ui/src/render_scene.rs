@@ -1,8 +1,5 @@
 //! Render command definitions for frame graphs
 
-use downcast_rs::{Downcast, impl_downcast};
-use dyn_clone::DynClone;
-
 use crate::{
     ComputeCommand, DrawCommand,
     px::{Px, PxRect},
@@ -81,13 +78,6 @@ impl SampleRegion {
     }
 }
 
-/// Trait for composite rendering commands that expand into draw/compute ops.
-pub trait CompositeCommand: DynClone + Downcast + Send + Sync {}
-
-impl_downcast!(CompositeCommand);
-
-dyn_clone::clone_trait_object!(CompositeCommand);
-
 /// Unified command enum that can represent either a draw or compute operation.
 ///
 /// This enum enables the rendering system to process both graphics and compute
@@ -98,8 +88,6 @@ pub enum Command {
     Draw(Box<dyn DrawCommand>),
     /// A GPU computation command processed by compute pipelines.
     Compute(Box<dyn ComputeCommand>),
-    /// A composite command that expands into draw/compute operations.
-    Composite(Box<dyn CompositeCommand>),
     /// A command to push a clipping rectangle onto the stack.
     ClipPush(PxRect),
     /// Pushes a shape clip for this subtree.
@@ -127,7 +115,6 @@ impl Command {
             Self::Draw(command) => command.sample_region(),
             // Currently, compute can only be used for after effects,
             Self::Compute(command) => Some(command.barrier()),
-            Self::Composite(_) => None,
             Self::ClipPush(_) | Self::ShapeClipPush(_) | Self::ClipPop => None, /* Clipping commands do not require barriers */
         }
     }
@@ -138,7 +125,6 @@ impl Clone for Command {
         match self {
             Self::Draw(cmd) => Self::Draw(cmd.clone()),
             Self::Compute(cmd) => Self::Compute(cmd.clone()),
-            Self::Composite(cmd) => Self::Composite(cmd.clone()),
             Self::ClipPush(rect) => Self::ClipPush(*rect),
             Self::ShapeClipPush(region) => Self::ShapeClipPush(*region),
             Self::ClipPop => Self::ClipPop,
@@ -157,12 +143,5 @@ impl From<Box<dyn DrawCommand>> for Command {
 impl From<Box<dyn ComputeCommand>> for Command {
     fn from(val: Box<dyn ComputeCommand>) -> Self {
         Self::Compute(val)
-    }
-}
-
-/// Automatic conversion from boxed composite commands to unified commands.
-impl From<Box<dyn CompositeCommand>> for Command {
-    fn from(val: Box<dyn CompositeCommand>) -> Self {
-        Self::Composite(val)
     }
 }

@@ -133,13 +133,9 @@ pub use crate::{
         RenderGraphOp, RenderGraphParts, RenderResource, RenderResourceId, RenderTextureDesc,
     },
     render_module::RenderModule,
-    render_scene::{Command, CompositeCommand, DrawRegion, PaddingRect, SampleRegion},
+    render_scene::{Command, DrawRegion, PaddingRect, SampleRegion},
     renderer::{
         Renderer,
-        composite::{
-            self, CompositeBatchItem, CompositeContext, CompositeOutput, CompositePipeline,
-            CompositePipelineRegistry, CompositeReplacement,
-        },
         compute::{
             self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry, ComputeResource,
             ComputeResourceManager, ComputeResourceRef,

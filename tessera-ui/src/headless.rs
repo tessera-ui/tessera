@@ -27,8 +27,8 @@ use crate::{
     pipeline_context::PipelineContext,
     render_module::RenderModule,
     renderer::{
-        MAX_FRAME_SETTLING_RETRIES, RenderCore, TesseraConfig, composite::expand_composites,
-        core::OffscreenReadbackError, focus_settling_can_progress,
+        MAX_FRAME_SETTLING_RETRIES, RenderCore, TesseraConfig, core::OffscreenReadbackError,
+        focus_settling_can_progress,
     },
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
@@ -596,17 +596,11 @@ impl HeadlessRenderer {
         let frame_index = self.frame_index;
         #[cfg(feature = "profiling")]
         let prepare_timer = Instant::now();
-        let composite_timer = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
-        let (composite_context, composite_registry) =
-            self.core.composite_context_parts(screen_size, frame_index);
-        let graph = expand_composites(graph, composite_context, composite_registry);
-        let composite_us = composite_timer.map(|start| start.elapsed().as_micros());
-        let order_timer = composite_timer.map(|_| Instant::now());
+        let order_timer = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
         let execution = graph.into_execution();
         if let Some(order_timer) = order_timer {
             tracing::debug!(
                 frame_index,
-                composite_us,
                 order_us = order_timer.elapsed().as_micros(),
                 "headless_graph_cpu"
             );

@@ -1,29 +1,15 @@
 use std::ops::Range;
 
-use encase::{ShaderType, StorageBuffer};
-use glam::{Vec2, Vec4};
-use tessera_ui::{PxPosition, PxSize, wgpu};
+use encase::StorageBuffer;
+use glam::Vec4;
+use tessera_ui::{PxSize, wgpu};
 
 use super::{
     super::command::{ShapeCommand, rect_to_uniforms},
-    CachedInstanceBatch, ShapeInstances, ShapePipeline, ShapeUniforms,
+    ShapeInstances, ShapePipeline,
 };
 
 const INSTANCES_PER_BUFFER: usize = 256;
-
-#[repr(C)]
-#[derive(ShaderType, Clone, Copy, Debug, PartialEq)]
-struct CachedRectUniform {
-    position: Vec4,
-    screen_size: Vec2,
-    padding: Vec2,
-}
-
-#[derive(PartialEq, ShaderType)]
-struct CachedRectInstances {
-    #[shader(size(runtime))]
-    rects: Vec<CachedRectUniform>,
-}
 
 #[derive(Default)]
 pub(super) struct BatchResources {
@@ -131,51 +117,37 @@ impl BatchResources {
     }
 }
 
-fn build_instances(
-    commands: &[(&ShapeCommand, tessera_ui::DrawGeometry)],
-    indices: &[usize],
-    target_size: PxSize,
-) -> Vec<ShapeUniforms> {
-    indices
-        .iter()
-        .map(|&index| {
-            let (command, geometry) = commands[index];
-            let mut uniforms =
-                rect_to_uniforms(command, geometry.local_size, geometry.window_origin());
-            let [width, height] = geometry.window_size();
-            let origin = geometry.window_origin();
-            let scale = geometry.local_to_window.scale();
-            uniforms.position = Vec4::new(origin.x, origin.y, width, height);
-            uniforms.corner_radii *= scale;
-            uniforms.border_width *= scale;
-            uniforms.screen_size = [target_size.width.to_f32(), target_size.height.to_f32()].into();
-            uniforms
-        })
-        .collect()
-}
-
 impl ShapePipeline {
-    pub(super) fn draw_uncached_batch(
+    pub(super) fn draw_batch(
         &mut self,
         gpu: &tessera_ui::GraphicsDevice,
         target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&ShapeCommand, tessera_ui::DrawGeometry)],
-        indices: &[usize],
     ) {
-        if indices.is_empty() {
-            return;
-        }
-
-        let instances = build_instances(commands, indices, target_size);
-
+        let instances = commands
+            .iter()
+            .map(|(command, geometry)| {
+                let mut uniforms =
+                    rect_to_uniforms(command, geometry.local_size, geometry.window_origin());
+                let [width, height] = geometry.window_size();
+                let origin = geometry.window_origin();
+                let scale = geometry.local_to_window.scale();
+                uniforms.position = Vec4::new(origin.x, origin.y, width, height);
+                uniforms.corner_radii *= scale;
+                uniforms.border_width *= scale;
+                uniforms.screen_size =
+                    [target_size.width.to_f32(), target_size.height.to_f32()].into();
+                uniforms
+            })
+            .collect();
         let uniforms = ShapeInstances { instances };
 
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
         buffer_content
             .write(&uniforms)
             .expect("buffer write failed");
-        let (bind_group, instances) = self.uncached_batches.append(
+        let (bind_group, instances) = self.batches.append(
             gpu,
             &self.bind_group_layout,
             buffer_content.as_ref(),
@@ -187,73 +159,5 @@ impl ShapePipeline {
         render_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..6, 0, instances);
-    }
-
-    pub(super) fn draw_cached_run(
-        &mut self,
-        gpu: &tessera_ui::GraphicsDevice,
-        target_size: PxSize,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        texture_bind_group: &wgpu::BindGroup,
-        instances: &[(PxPosition, PxSize)],
-    ) {
-        if instances.is_empty() {
-            return;
-        }
-
-        let rects: Vec<CachedRectUniform> = instances
-            .iter()
-            .map(|(position, size)| CachedRectUniform {
-                position: Vec4::new(
-                    position.x,
-                    position.y,
-                    size.width.raw() as f32,
-                    size.height.raw() as f32,
-                ),
-                screen_size: Vec2::new(target_size.width.to_f32(), target_size.height.to_f32()),
-                padding: Vec2::ZERO,
-            })
-            .collect();
-
-        let rect_instances = CachedRectInstances { rects };
-
-        let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
-        buffer_content
-            .write(&rect_instances)
-            .expect("buffer write failed");
-
-        let (transform_bind_group, instance_range) = self.cached_batches.append(
-            gpu,
-            &self.cache_transform_bind_group_layout,
-            buffer_content.as_ref(),
-            instances.len(),
-        );
-
-        render_pass.set_pipeline(&self.cached_pipeline);
-        render_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.set_bind_group(0, texture_bind_group, &[]);
-        render_pass.set_bind_group(1, transform_bind_group, &[]);
-        render_pass.draw_indexed(0..6, 0, instance_range);
-    }
-
-    pub(super) fn flush_cached_run(
-        &mut self,
-        gpu: &tessera_ui::GraphicsDevice,
-        target_size: PxSize,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        pending: &mut CachedInstanceBatch,
-    ) {
-        let Some((entry, instances)) = pending.take() else {
-            return;
-        };
-        let texture_bind_group = entry.texture_bind_group.clone();
-        self.draw_cached_run(
-            gpu,
-            target_size,
-            render_pass,
-            &texture_bind_group,
-            &instances,
-        );
     }
 }

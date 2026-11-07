@@ -9,14 +9,9 @@ use std::{io, sync::Arc, time::Duration};
 use winit::window::Window;
 
 use crate::{
-    CompositeCommand, ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, PxSize,
-    compute::resource::ComputeResourceManager,
-    pipeline_cache::save_cache,
-    render_graph::RenderTextureDesc,
-    renderer::{
-        composite::{CompositeContext, CompositePipelineRegistry},
-        external::ExternalTextureRegistry,
-    },
+    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, PxSize,
+    compute::resource::ComputeResourceManager, pipeline_cache::save_cache,
+    render_graph::RenderTextureDesc, renderer::external::ExternalTextureRegistry,
 };
 
 use super::{compute::ComputePipelineRegistry, drawer::Drawer};
@@ -35,7 +30,6 @@ struct RenderPipelines {
     clipper: clip::ShapeClipper,
     drawer: Drawer,
     compute_registry: ComputePipelineRegistry,
-    composite_registry: CompositePipelineRegistry,
 }
 
 // Effect-only targets are created on first use so window resizes do not
@@ -455,48 +449,6 @@ impl RenderCore {
         P: ComputablePipeline<T> + 'static,
     {
         self.pipelines.compute_registry.register(pipeline);
-    }
-
-    /// Registers a new composite pipeline for a specific command type.
-    pub fn register_composite_pipeline<T, P>(&mut self, pipeline: P)
-    where
-        T: CompositeCommand + 'static,
-        P: super::composite::CompositePipeline<T> + 'static,
-    {
-        self.pipelines.composite_registry.register(pipeline);
-    }
-
-    pub(crate) fn composite_context_parts(
-        &mut self,
-        frame_size: PxSize,
-        frame_index: u64,
-    ) -> (CompositeContext<'_>, &mut CompositePipelineRegistry) {
-        let RenderCore {
-            device,
-            queue,
-            draw_config,
-            pipeline_cache,
-            targets,
-            pipelines,
-            ..
-        } = self;
-        let resources = RenderResources {
-            graphics: &self.graphics,
-            device,
-            queue,
-            surface_config: draw_config,
-            pipeline_cache: pipeline_cache.as_ref(),
-            sample_count: targets.sample_count,
-        };
-        let context = CompositeContext {
-            resources,
-            external_textures: self.external_textures.clone(),
-            frame_size,
-            surface_format: draw_config.format,
-            sample_count: targets.sample_count,
-            frame_index,
-        };
-        (context, &mut pipelines.composite_registry)
     }
 
     pub(crate) fn save_pipeline_cache(&self) -> io::Result<()> {

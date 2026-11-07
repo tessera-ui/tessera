@@ -6,7 +6,7 @@ struct ShapeUniforms {
     render_mode: f32,
     ripple_params: vec4f,
     ripple_color: vec4f,
-    border_width: f32,
+    border_width: f32,         // outline width, or the Gaussian sigma of a shadow
     position: vec4f,           // x, y, width, height
     screen_size: vec2f,
 };
@@ -17,6 +17,8 @@ const MODE_SCALED_FILL: f32 = 2.0;
 const MODE_RIPPLE_FILL: f32 = 3.0;
 const MODE_RIPPLE_OUTLINE: f32 = 4.0;
 const MODE_RIPPLE_FILLED_OUTLINE: f32 = 5.0;
+const MODE_SHADOW: f32 = 6.0;
+const SHADOW_ROWS: i32 = 6;
 
 const EPS_DISCARD: f32 = 0.001;
 
@@ -47,9 +49,11 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // `instance.position` is the rect (x, y, width, height) in pixels.
     let instance_pos = instance.position.xy;
     let instance_size = instance.position.zw;
+    // Shadows extend three sigma beyond the shape they blur.
+    let pad = select(0.0, 3.0 * instance.border_width, instance.render_mode == MODE_SHADOW);
 
     // Calculate the vertex's final pixel position.
-    let pixel_pos = instance_pos + in.position * instance_size;
+    let pixel_pos = instance_pos - pad + in.position * (instance_size + 2.0 * pad);
 
     // Convert final pixel position to NDC for the rasterizer.
     let clip_pos = vec2<f32>(
@@ -61,7 +65,8 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.clip_position = vec4<f32>(clip_pos, 0.0, 1.0);
 
     // local_pos is normalized object space (so `local_pos * size` yields pixels).
-    out.local_pos = in.position - 0.5; // Center around 0 for SDF
+    out.local_pos = in.position - 0.5
+        + (2.0 * in.position - 1.0) * pad / max(instance_size, vec2f(EPS_DISCARD));
     out.instance_index = in.instance_index;
     return out;
 }
@@ -146,6 +151,64 @@ fn sample_ellipse(p: vec2f, r: vec2f) -> vec3f {
     return vec3f((scaled_length - 1.0) * scale, gradient);
 }
 
+fn erf(x: f32) -> f32 {
+    let a = abs(x);
+    var r = 1.0 + (0.278393 + (0.230389 + 0.078108 * a * a) * a) * a;
+    r = r * r;
+    return sign(x) * (1.0 - 1.0 / (r * r));
+}
+
+// Horizontal inset of a corner at `dy` into its band, for a p-norm corner of
+// radius `r` and exponent `k`.
+fn corner_inset(dy: f32, r: f32, k: f32) -> f32 {
+    if dy <= 0.0 {
+        return 0.0;
+    }
+    let y = min(dy, r);
+    return r - pow(max(pow(r, k) - pow(y, k), 0.0), 1.0 / k);
+}
+
+// Horizontal span of the shape on row `y`.
+fn shape_row(y: f32, half_size: vec2f, corner_radii: vec4f, corner_g2: vec4f) -> vec2f {
+    if is_ellipse(corner_radii) {
+        let t = y / max(half_size.y, EPS_DISCARD);
+        let w = half_size.x * sqrt(max(1.0 - t * t, 0.0));
+        return vec2f(-w, w);
+    }
+    let top = y < 0.0;
+    let max_radius = min(half_size.x, half_size.y);
+    let left_radius = min(select(corner_radii.w, corner_radii.x, top), max_radius);
+    let right_radius = min(select(corner_radii.z, corner_radii.y, top), max_radius);
+    let left_k = select(corner_g2.w, corner_g2.x, top);
+    let right_k = select(corner_g2.z, corner_g2.y, top);
+    let ay = abs(y);
+    return vec2f(
+        -half_size.x + corner_inset(ay - half_size.y + left_radius, left_radius, left_k),
+        half_size.x - corner_inset(ay - half_size.y + right_radius, right_radius, right_k),
+    );
+}
+
+// Coverage of the shape convolved with a Gaussian: exact along x, integrated
+// numerically over the rows within three sigma.
+fn shadow_coverage(p: vec2f, half_size: vec2f, corner_radii: vec4f, corner_g2: vec4f, sigma: f32) -> f32 {
+    let low = max(-half_size.y, p.y - 3.0 * sigma);
+    let high = min(half_size.y, p.y + 3.0 * sigma);
+    if high <= low {
+        return 0.0;
+    }
+    let step = (high - low) / f32(SHADOW_ROWS);
+    let scale = 0.70710678 / sigma;
+    var sum = 0.0;
+    for (var i = 0; i < SHADOW_ROWS; i++) {
+        let y = low + (f32(i) + 0.5) * step;
+        let span = shape_row(y, half_size, corner_radii, corner_g2);
+        let row = 0.5 * (erf((p.x - span.x) * scale) - erf((p.x - span.y) * scale));
+        let dy = (p.y - y) / sigma;
+        sum += row * exp(-0.5 * dy * dy);
+    }
+    return clamp(sum * step * 0.39894228 / sigma, 0.0, 1.0);
+}
+
 fn aa_mask(dist: f32, aa: f32) -> f32 {
     return 1.0 - smoothstep(-aa, aa, dist);
 }
@@ -176,6 +239,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     let p_normalized = in.local_pos;
     let p_object = p_normalized * size;
+
+    if mode == MODE_SHADOW {
+        let alpha = instance.primary_color.a
+            * shadow_coverage(p_object, half_size, instance.corner_radii, instance.corner_g2, instance.border_width);
+        if alpha <= EPS_DISCARD {
+            discard;
+        }
+        return vec4f(instance.primary_color.rgb * alpha, alpha);
+    }
 
     var final_color: vec4f;
 

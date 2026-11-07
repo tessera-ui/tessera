@@ -13,8 +13,7 @@ use std::{
 use smallvec::SmallVec;
 
 use crate::{
-    Command, CompositeCommand, ComputeCommand, DrawCommand, DrawRegion, FloatRect, LocalToWindow,
-    SampleRegion,
+    Command, ComputeCommand, DrawCommand, DrawRegion, FloatRect, LocalToWindow, SampleRegion,
     px::{Px, PxPosition, PxRect, PxSize},
 };
 
@@ -214,21 +213,6 @@ impl RenderFragment {
         self.push_op(op)
     }
 
-    /// Adds a composite command with default scene resource bindings.
-    pub fn push_composite_command<C: CompositeCommand + 'static>(&mut self, command: C) -> u32 {
-        let type_id = TypeId::of::<C>();
-        let op = RenderFragmentOp {
-            command: Command::Composite(Box::new(command)),
-            type_id,
-            read: None,
-            write: Some(RenderResourceId::SceneColor),
-            deps: SmallVec::new(),
-            size_override: None,
-            position_override: None,
-        };
-        self.push_op(op)
-    }
-
     /// Adds a render op to the fragment.
     pub fn push_op(&mut self, op: RenderFragmentOp) -> u32 {
         let index = self.ops.len() as u32;
@@ -273,7 +257,6 @@ pub struct RenderGraph {
 #[derive(Default)]
 struct RenderGraphData {
     ordered_ops: OnceLock<Vec<RenderGraphOp>>,
-    has_composites: bool,
     ops: Vec<RenderGraphOp>,
     resources: Vec<RenderResource>,
     external_resources: Vec<ExternalTextureDesc>,
@@ -328,23 +311,14 @@ impl RenderGraph {
     /// Builds a render graph from owned parts.
     #[must_use]
     pub fn from_parts(parts: RenderGraphParts) -> Self {
-        let has_composites = parts
-            .ops
-            .iter()
-            .any(|op| matches!(op.command, Command::Composite(_)));
         Self {
             data: Arc::new(RenderGraphData {
-                has_composites,
                 ops: parts.ops,
                 resources: parts.resources,
                 external_resources: parts.external_resources,
                 ordered_ops: OnceLock::new(),
             }),
         }
-    }
-
-    pub(crate) fn has_composites(&self) -> bool {
-        self.data.has_composites
     }
 
     /// Consumes the graph and returns an execution-ready payload.
@@ -530,7 +504,7 @@ fn order_ops(ops: Vec<RenderGraphOp>) -> Vec<RenderGraphOp> {
 
     let by_sequence = sequence_order(&ops);
 
-    // State changes (clip push/pop, composite) act as sequence-ordered
+    // State changes (clip push/pop) act as sequence-ordered
     // barriers. Without this, ops in different clip scopes have no ordering
     // edge and can be hoisted ahead of the background they must paint on top
     // of, which reorders overlapping content incorrectly.
@@ -667,7 +641,6 @@ impl OpInfo {
                 }
             }
             Command::Compute(_) => OpCategory::Compute,
-            Command::Composite(_) => OpCategory::StateChange,
             Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => {
                 OpCategory::StateChange
             }
@@ -808,7 +781,6 @@ fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
             .sample_region()
             .map(|region| sample_region_rect(region, op.geometry)),
         Command::Compute(command) => Some(sample_region_rect(command.barrier(), op.geometry)),
-        Command::Composite(_) => None,
         Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => None,
     }
 }
@@ -824,7 +796,6 @@ fn scene_write_rect(op: &RenderGraphOp) -> Option<PxRect> {
                 .unwrap_or_else(|| draw_region_rect(command.draw_region(), op.geometry)),
         ),
         Command::Compute(_) => Some(op.geometry.window_bounds().outward()),
-        Command::Composite(_) => None,
         Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => None,
     }
 }
@@ -848,7 +819,7 @@ fn draw_region_rect(region: DrawRegion, geometry: DrawGeometry) -> PxRect {
 fn is_state_change(op: &RenderGraphOp) -> bool {
     matches!(
         op.command,
-        Command::Composite(_) | Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop
+        Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop
     )
 }
 
@@ -905,17 +876,6 @@ fn clip_intervals(ops: &[RenderGraphOp], by_sequence: &[usize]) -> Option<Vec<Cl
                     predecessor: pop_pred,
                 });
                 let parent = stack_start.len() - 1;
-                stack_start[parent] = cursor + 1;
-                stack_pred[parent] = Some(idx);
-            }
-            Command::Composite(_) => {
-                close_open_span(&mut intervals, &stack_start, &stack_pred, cursor);
-                let parent = stack_start.len() - 1;
-                intervals.push(ClipInterval {
-                    start: cursor,
-                    end: cursor + 1,
-                    predecessor: stack_pred[parent],
-                });
                 stack_start[parent] = cursor + 1;
                 stack_pred[parent] = Some(idx);
             }

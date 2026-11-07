@@ -1,5 +1,7 @@
 use glam::{Vec2, Vec4};
-use tessera_ui::{Color, DrawCommand, PxPosition, PxSize};
+use tessera_ui::{Color, DrawCommand, DrawRegion, PaddingRect, Px, PxPosition, PxSize};
+
+use crate::shape_def::ResolvedShape;
 
 use super::pipeline::ShapeUniforms;
 
@@ -118,9 +120,34 @@ pub enum ShapeCommand {
         /// Width of the border
         border_width: f32,
     },
+    /// A Gaussian-blurred shape that extends beyond its bounds by
+    /// `smoothness`.
+    Shadow {
+        /// Shadow color (RGBA)
+        color: Color,
+        /// Shape that casts the shadow.
+        shape: ResolvedShape,
+        /// Blur radius in pixels, three standard deviations of the Gaussian.
+        smoothness: f32,
+    },
 }
 
 impl DrawCommand for ShapeCommand {
+    fn draw_region(&self) -> DrawRegion {
+        match self {
+            Self::Shadow { smoothness, .. } => {
+                let pad = Px(smoothness.max(0.0).ceil() as i32);
+                DrawRegion::PaddedLocal(PaddingRect {
+                    top: pad,
+                    right: pad,
+                    bottom: pad,
+                    left: pad,
+                })
+            }
+            _ => DrawRegion::PaddedLocal(PaddingRect::ZERO),
+        }
+    }
+
     fn apply_opacity(&mut self, opacity: f32) {
         fn scale_color(color: &mut Color, factor: f32) {
             *color = color.with_alpha(color.a * factor);
@@ -132,7 +159,8 @@ impl DrawCommand for ShapeCommand {
             | Self::ScaledRect { color, .. }
             | Self::OutlinedRect { color, .. }
             | Self::Ellipse { color }
-            | Self::OutlinedEllipse { color, .. } => scale_color(color, factor),
+            | Self::OutlinedEllipse { color, .. }
+            | Self::Shadow { color, .. } => scale_color(color, factor),
             Self::RippleRect { color, ripple, .. }
             | Self::RippleOutlinedRect { color, ripple, .. } => {
                 scale_color(color, factor);
@@ -353,6 +381,28 @@ pub(crate) fn rect_to_uniforms(
             5.0,
             None,
         ),
+        ShapeCommand::Shadow {
+            color,
+            shape,
+            smoothness,
+        } => {
+            let (corner_radii, corner_g2) = match *shape {
+                ResolvedShape::Rounded {
+                    corner_radii,
+                    corner_g2,
+                } => (corner_radii, corner_g2),
+                ResolvedShape::Ellipse => ([-1.0; 4], [0.0; 4]),
+            };
+            (
+                *color,
+                Color::TRANSPARENT,
+                corner_radii,
+                corner_g2,
+                smoothness / 3.0,
+                6.0,
+                None,
+            )
+        }
     };
 
     let width = size.width;

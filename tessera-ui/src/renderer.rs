@@ -2,7 +2,6 @@
 //! the main [`Renderer`] struct that manages the application lifecycle, event
 //! handling, and rendering pipeline for cross-platform UI applications.
 
-pub mod composite;
 pub mod compute;
 pub mod core;
 pub mod drawer;
@@ -1167,10 +1166,6 @@ Fps: {:.2}
         let overlay_clear_pending = !dirty_overlay_rects.is_empty();
         #[cfg(feature = "profiling")]
         let prepare_timer = Instant::now();
-        let (composite_context, composite_registry) =
-            args.app.composite_context_parts(screen_size, frame_idx);
-        let new_graph =
-            composite::expand_composites(new_graph, composite_context, composite_registry);
         let RenderGraphExecution {
             ops,
             resources,

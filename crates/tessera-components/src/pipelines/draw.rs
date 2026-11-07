@@ -1,19 +1,12 @@
 use tessera_ui::PipelineContext;
 
 use crate::pipelines::{
-    checkmark::pipeline::CheckmarkPipeline,
-    divider::DividerPipeline,
-    fluid_glass::pipeline::FluidGlassPipeline,
-    image::pipeline::ImagePipeline,
-    image_vector::pipeline::ImageVectorPipeline,
-    linear_wave::pipeline::LinearWavePipeline,
-    loading_shape::pipeline::LoadingShapePipeline,
-    path_stroke::pipeline::PathStrokePipeline,
-    progress_arc::pipeline::ProgressArcPipeline,
-    shadow::pipeline::{ShadowCompositePipeline, ShadowMaskPipeline},
-    shape::pipeline::ShapePipeline,
-    simple_rect::pipeline::SimpleRectPipeline,
-    text::pipeline::GlyphonTextRender,
+    checkmark::pipeline::CheckmarkPipeline, divider::DividerPipeline,
+    fluid_glass::pipeline::FluidGlassPipeline, image::pipeline::ImagePipeline,
+    image_vector::pipeline::ImageVectorPipeline, linear_wave::pipeline::LinearWavePipeline,
+    loading_shape::pipeline::LoadingShapePipeline, path_stroke::pipeline::PathStrokePipeline,
+    progress_arc::pipeline::ProgressArcPipeline, shape::pipeline::ShapePipeline,
+    simple_rect::pipeline::SimpleRectPipeline, text::pipeline::GlyphonTextRender,
 };
 
 pub(super) fn register(context: &mut PipelineContext<'_>) {
@@ -43,21 +36,6 @@ pub(super) fn register(context: &mut PipelineContext<'_>) {
         resources.sample_count,
     );
     context.register_draw_pipeline(pipeline);
-
-    let resources = context.resources();
-    let mask_pipeline = ShadowMaskPipeline::new(
-        resources.device,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    let composite_pipeline = ShadowCompositePipeline::new(
-        resources.device,
-        resources.surface_config,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(mask_pipeline);
-    context.register_draw_pipeline(composite_pipeline);
 
     let resources = context.resources();
     let pipeline = ProgressArcPipeline::new(
