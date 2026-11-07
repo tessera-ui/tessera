@@ -36,6 +36,13 @@ thread_local! {
     static ACTIVE_SESSION: RefCell<Weak<SessionState>> = const { RefCell::new(Weak::new()) };
 }
 
+fn active_session_state() -> Option<Rc<SessionState>> {
+    ACTIVE_SESSION
+        .try_with(|active| active.borrow().upgrade())
+        .ok()
+        .flatten()
+}
+
 /// An owner for the resources of one UI session.
 #[derive(Clone)]
 pub struct RuntimeSession(Rc<SessionState>);
@@ -149,10 +156,7 @@ impl RuntimeSession {
     }
 
     pub(crate) fn current() -> Option<Self> {
-        ACTIVE_SESSION
-            .try_with(|active| active.borrow().upgrade().map(Self))
-            .ok()
-            .flatten()
+        active_session_state().map(Self)
     }
 
     pub(crate) fn accepts_work(&self) -> bool {
@@ -169,7 +173,7 @@ impl RuntimeSession {
 }
 
 pub(crate) fn current_session_identity() -> Option<u128> {
-    RuntimeSession::current().map(|session| session.0.identity)
+    active_session_state().map(|session| session.identity)
 }
 
 pub(crate) fn with_active_execution_context<R>(
@@ -180,10 +184,17 @@ pub(crate) fn with_active_execution_context<R>(
 }
 
 impl Drop for RuntimeSession {
+    #[inline]
     fn drop(&mut self) {
-        if Rc::strong_count(&self.0) != 1 {
-            return;
+        if Rc::strong_count(&self.0) == 1 {
+            self.shutdown();
         }
+    }
+}
+
+impl RuntimeSession {
+    #[cold]
+    fn shutdown(&self) {
         self.0.closing.set(true);
         let previous = self.0.previous.borrow().clone();
         let was_active = ACTIVE_SESSION
