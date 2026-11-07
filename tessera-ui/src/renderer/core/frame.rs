@@ -200,14 +200,27 @@ impl RenderCore {
             Px(texture_size.height as i32),
         );
         let damage = graph.damage_since(self.previous_graph.as_ref());
+        let local_graph = damage
+            .and_then(|damage| damage.intersection(&target_rect))
+            .and_then(|damage| graph.for_damage(damage));
+        let damage = damage.filter(|_| {
+            local_graph
+                .as_ref()
+                .is_none_or(RenderGraph::supports_partial_redraw)
+        });
         let full_redraw = damage.is_none();
         let damage = damage
             .unwrap_or(target_rect)
             .intersection(&target_rect)
             .unwrap_or(PxRect::ZERO);
+        let local_graph = local_graph.as_ref().filter(|_| !full_redraw);
         let mut passes = if damage.width > Px::ZERO && damage.height > Px::ZERO {
             RenderPassGraph::build(
-                graph.ordered_ops(self.previous_graph.as_ref()),
+                local_graph.unwrap_or(&graph).ordered_ops(
+                    self.previous_graph
+                        .as_ref()
+                        .filter(|_| local_graph.is_none()),
+                ),
                 texture_size,
                 (!full_redraw).then_some(damage),
             )

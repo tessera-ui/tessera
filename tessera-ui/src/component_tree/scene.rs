@@ -32,13 +32,15 @@ struct SceneDraw {
     opacity: f32,
     visible: bool,
     bounds: Option<PxRect>,
+    partial_redraw: bool,
 }
 
-struct SceneRope {
+pub(crate) struct SceneRope {
     draw: Option<Arc<SceneDraw>>,
     clip: Option<SceneClip>,
     children: SceneChildren,
     bounds: Option<PxRect>,
+    partial_redraw: bool,
 }
 
 enum SceneChildren {
@@ -533,6 +535,8 @@ impl FrameScene {
                             return Arc::clone(draw);
                         }
                         Arc::new(SceneDraw {
+                            partial_redraw: prepared.cumulative_opacity == 1.0
+                                && fragment.supports_partial_redraw(),
                             bounds,
                             fragment,
                             geometry,
@@ -595,18 +599,27 @@ impl FrameScene {
             {
                 Some(Arc::clone(previous))
             } else {
-                Some(Arc::new(SceneRope {
-                    bounds: children
-                        .values()
-                        .filter_map(|rope| rope.bounds)
-                        .chain(
-                            branch
-                                .draw
-                                .iter()
-                                .filter(|draw| draw.visible)
-                                .filter_map(|draw| draw.bounds),
+                let visible_draw = branch.draw.as_ref().filter(|draw| draw.visible);
+                let (bounds, partial_redraw) = children.values().fold(
+                    (
+                        visible_draw.and_then(|draw| draw.bounds),
+                        visible_draw.is_none_or(|draw| draw.partial_redraw),
+                    ),
+                    |(bounds, partial_redraw), child| {
+                        (
+                            child.bounds.map_or(bounds, |child_bounds| {
+                                Some(
+                                    bounds
+                                        .map_or(child_bounds, |bounds| bounds.union(&child_bounds)),
+                                )
+                            }),
+                            partial_redraw && child.partial_redraw,
                         )
-                        .reduce(|a, b| a.union(&b)),
+                    },
+                );
+                Some(Arc::new(SceneRope {
+                    bounds,
+                    partial_redraw,
                     draw: branch.draw.clone(),
                     clip: branch.clip,
                     children,
@@ -642,11 +655,22 @@ impl FrameScene {
         let previous_graph = self.graph.clone();
         let full = self.viewport != Some(viewport) || self.graph.is_none();
         if !same || full {
-            let mut builder = RenderGraphBuilder::new();
-            if let Some(root) = &next_root {
-                root.emit(&mut builder);
-            }
-            self.graph = Some(builder.finish());
+            let local_damage = damage.is_some_and(|rect| {
+                i64::from(rect.width.0) * i64::from(rect.height.0)
+                    < i64::from(viewport_rect.width.0) * i64::from(viewport_rect.height.0) / 2
+            });
+            self.graph = Some(match &next_root {
+                Some(root) if !full && local_damage && root.partial_redraw => {
+                    RenderGraph::from_partial_scene(Arc::clone(root))
+                }
+                root => {
+                    let mut builder = RenderGraphBuilder::new();
+                    if let Some(root) = root {
+                        root.emit(&mut builder, None);
+                    }
+                    builder.finish()
+                }
+            });
         }
         record_frame_stage(&mut stage_timer, "scene_emit");
         self.root = next_root;
@@ -719,19 +743,27 @@ fn fully_clipped(
 }
 
 impl SceneRope {
-    fn emit(&self, builder: &mut RenderGraphBuilder) {
+    pub(crate) fn emit(&self, builder: &mut RenderGraphBuilder, damage: Option<PxRect>) {
+        let intersects_damage = |bounds: Option<PxRect>| {
+            damage.is_none_or(|damage| {
+                bounds.is_some_and(|bounds| bounds.intersection(&damage).is_some())
+            })
+        };
+        if !intersects_damage(self.bounds) {
+            return;
+        }
         match self.clip {
             Some(SceneClip::Shape(region)) => builder.push_shape_clip_push(region),
             Some(SceneClip::Rect(rect)) => builder.push_clip_push(rect),
             None => {}
         }
         if let Some(draw) = &self.draw {
-            if draw.visible {
+            if draw.visible && intersects_damage(draw.bounds) {
                 builder.append_fragment(&draw.fragment, draw.geometry, draw.opacity);
             }
         }
         for child in self.children.values() {
-            child.emit(builder);
+            child.emit(builder, damage);
         }
         if self.clip.is_some() {
             builder.push_clip_pop();
@@ -754,6 +786,10 @@ mod tests {
     struct Marker(u32);
 
     impl DrawCommand for Marker {
+        fn supports_partial_redraw(&self) -> bool {
+            true
+        }
+
         fn apply_opacity(&mut self, _: f32) {}
     }
 
@@ -766,6 +802,103 @@ mod tests {
                 Some((marker.0, op.geometry.window_origin()))
             })
             .collect()
+    }
+
+    #[test]
+    fn local_damage_keeps_ancestor_shape_clips_and_can_expand_the_full_scene() {
+        let session = RuntimeSession::new();
+        let _runtime_scope = session.enter();
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(ComponentNode::new("root", NodeRole::Layout));
+        let clip = tree.add_node(ComponentNode::new("clip", NodeRole::Layout));
+        let changed = tree.add_node(ComponentNode::new("changed", NodeRole::Layout));
+        tree.pop_node();
+        tree.pop_node();
+        let outside = tree.add_node(ComponentNode::new("outside", NodeRole::Layout));
+        tree.pop_node();
+        tree.pop_node();
+
+        let zero = PxPosition::ZERO;
+        let far = PxPosition::new(Px(64), Px(64));
+        for (id, size, position) in [
+            (root, 100, zero),
+            (clip, 16, zero),
+            (changed, 16, zero),
+            (outside, 16, far),
+        ] {
+            let metadata = tree.metadatas.entry_or_default(id);
+            metadata.computed_data = Some(ComputedData {
+                width: Px(size),
+                height: Px(size),
+            });
+            metadata.rel_position = Some(position);
+        }
+        let clip_metadata = tree.metadatas.entry_or_default(clip);
+        clip_metadata.clips_children = true;
+        clip_metadata.clip_region = Some(ClipRegion {
+            position: zero,
+            size: [16.0, 16.0],
+            shape: crate::ClipShape::RoundedRectangle {
+                radii: [3.0; 4],
+                exponents: [2.0; 4],
+            },
+        });
+        tree.metadatas
+            .entry_or_default(changed)
+            .fragment
+            .push_draw_command(Marker(1));
+        tree.metadatas
+            .entry_or_default(outside)
+            .fragment
+            .push_draw_command(Marker(2));
+
+        let viewport = PxSize::new(Px(100), Px(100));
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        let mut scene = FrameScene::default();
+        let (previous, _) = scene.update(
+            root,
+            &tree.tree,
+            &tree.metadatas,
+            &root.descendants(&tree.tree).collect(),
+            &HashSet::default(),
+            viewport,
+        );
+        tree.metadatas.geometry_changed.clear();
+        let fragment = &mut tree.metadatas.entry_or_default(changed).fragment;
+        fragment.clear();
+        fragment.push_draw_command(Marker(3));
+        tree.metadatas.paint_changed.insert(changed);
+        let (graph, _) = scene.update(
+            root,
+            &tree.tree,
+            &tree.metadatas,
+            &HashSet::default(),
+            &HashSet::default(),
+            viewport,
+        );
+
+        let damage = graph.damage_since(Some(&previous)).expect("local damage");
+        let regional = graph.for_damage(damage).expect("regional graph");
+        assert!(matches!(
+            regional.ops(),
+            [
+                crate::render_graph::RenderGraphOp {
+                    command: Command::ShapeClipPush(_),
+                    ..
+                },
+                crate::render_graph::RenderGraphOp {
+                    command: Command::Draw(_),
+                    ..
+                },
+                crate::render_graph::RenderGraphOp {
+                    command: Command::ClipPop,
+                    ..
+                },
+            ]
+        ));
+        assert_eq!(drawing(&regional), [(3, zero)]);
+        assert_eq!(graph.damage_since(None), None);
+        assert_eq!(drawing(&graph), [(3, zero), (2, far)]);
     }
 
     #[test]
@@ -865,7 +998,7 @@ mod tests {
             assert_eq!(drawing(&recycled), [(0, zero), (2, translated), (3, zero)]);
 
             let mut builder = RenderGraphBuilder::new();
-            previous_root.emit(&mut builder);
+            previous_root.emit(&mut builder, None);
             assert_eq!(
                 drawing(&builder.finish()),
                 [(0, zero), (1, zero), (2, zero)]

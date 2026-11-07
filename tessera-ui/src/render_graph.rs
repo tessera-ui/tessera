@@ -13,6 +13,7 @@ use smallvec::SmallVec;
 
 use crate::{
     Command, ComputeCommand, DrawCommand, DrawRegion, FloatRect, LocalToWindow, SampleRegion,
+    component_tree::SceneRope,
     px::{Px, PxPosition, PxRect, PxSize},
 };
 
@@ -148,6 +149,10 @@ impl RenderFragment {
             _ => false,
         }
     }
+
+    pub(crate) fn supports_partial_redraw(&self) -> bool {
+        self.ops().iter().all(|op| partial_redraw_safe(&op.command))
+    }
 }
 
 /// A render op after merging into the frame graph.
@@ -176,8 +181,33 @@ pub struct RenderGraph {
 #[derive(Default)]
 struct RenderGraphData {
     order_plan: OnceLock<Arc<RenderOrderPlan>>,
+    scene: Option<Arc<SceneRope>>,
+    flat: OnceLock<FlatRenderGraph>,
+}
+
+#[derive(Default)]
+struct FlatRenderGraph {
     ops: Vec<RenderGraphOp>,
     partial_redraw: bool,
+}
+
+impl RenderGraphData {
+    fn flat(&self) -> &FlatRenderGraph {
+        self.flat.get_or_init(|| {
+            let Some(scene) = &self.scene else {
+                return FlatRenderGraph::default();
+            };
+            let mut builder = RenderGraphBuilder::new();
+            scene.emit(&mut builder, None);
+            builder.into_flat()
+        })
+    }
+
+    fn supports_partial_redraw(&self) -> bool {
+        self.flat
+            .get()
+            .map_or(self.scene.is_some(), |flat| flat.partial_redraw)
+    }
 }
 
 struct RenderOrderPlan {
@@ -203,6 +233,17 @@ impl RenderOrderPlan {
 }
 
 impl RenderGraph {
+    pub(crate) fn from_partial_scene(scene: Arc<SceneRope>) -> Self {
+        Self {
+            data: Arc::new(RenderGraphData {
+                scene: Some(scene),
+                ..RenderGraphData::default()
+            }),
+            damage: None,
+            previous: None,
+        }
+    }
+
     pub(crate) fn with_damage(mut self, damage: Option<PxRect>, previous: Option<&Self>) -> Self {
         self.damage = damage;
         self.previous = previous.map(|graph| Arc::downgrade(&graph.data));
@@ -211,7 +252,7 @@ impl RenderGraph {
 
     pub(crate) fn damage_since(&self, previous: Option<&Self>) -> Option<PxRect> {
         let previous = previous?;
-        if !self.data.partial_redraw || !previous.data.partial_redraw {
+        if !self.data.supports_partial_redraw() || !previous.data.supports_partial_redraw() {
             return None;
         }
         if Arc::ptr_eq(&self.data, &previous.data) {
@@ -229,20 +270,31 @@ impl RenderGraph {
         }
     }
 
+    pub(crate) fn for_damage(&self, damage: PxRect) -> Option<Self> {
+        let scene = self.data.scene.as_ref()?;
+        let mut builder = RenderGraphBuilder::new();
+        scene.emit(&mut builder, Some(damage));
+        Some(builder.finish())
+    }
+
+    pub(crate) fn supports_partial_redraw(&self) -> bool {
+        self.data.supports_partial_redraw()
+    }
+
     /// Returns ops in the graph.
     #[must_use]
     pub fn ops(&self) -> &[RenderGraphOp] {
-        &self.data.ops
+        &self.data.flat().ops
     }
 
     fn order_plan(&self, previous: Option<&Self>) -> &Arc<RenderOrderPlan> {
         self.data.order_plan.get_or_init(|| {
             if let Some(plan) = previous.and_then(|graph| graph.data.order_plan.get())
-                && plan.matches(&self.data.ops)
+                && plan.matches(self.ops())
             {
                 Arc::clone(plan)
             } else {
-                Arc::new(RenderOrderPlan::new(&self.data.ops))
+                Arc::new(RenderOrderPlan::new(self.ops()))
             }
         })
     }
@@ -251,10 +303,11 @@ impl RenderGraph {
         &self,
         previous: Option<&Self>,
     ) -> impl Iterator<Item = &RenderGraphOp> {
+        let ops = self.ops();
         self.order_plan(previous)
             .indices
             .iter()
-            .map(|&index| &self.data.ops[index])
+            .map(|&index| &ops[index])
     }
 }
 
@@ -324,25 +377,34 @@ impl RenderGraphBuilder {
 
     /// Finishes graph construction.
     pub(crate) fn finish(self) -> RenderGraph {
-        let partial_redraw = self.ops.iter().all(|op| match &op.command {
-            Command::Draw(command) => {
-                command.sample_region().is_none() && command.supports_partial_redraw()
-            }
-            Command::Compute(_) => false,
-            _ => true,
-        });
         RenderGraph {
             data: Arc::new(RenderGraphData {
-                order_plan: OnceLock::new(),
-                ops: self.ops,
-                partial_redraw,
+                flat: OnceLock::from(self.into_flat()),
+                ..RenderGraphData::default()
             }),
             damage: None,
             previous: None,
         }
     }
+
+    fn into_flat(self) -> FlatRenderGraph {
+        let partial_redraw = self.ops.iter().all(|op| partial_redraw_safe(&op.command));
+        FlatRenderGraph {
+            ops: self.ops,
+            partial_redraw,
+        }
+    }
 }
 
+fn partial_redraw_safe(command: &Command) -> bool {
+    match command {
+        Command::Draw(command) => {
+            command.sample_region().is_none() && command.supports_partial_redraw()
+        }
+        Command::Compute(_) => false,
+        _ => true,
+    }
+}
 mod ordering;
 #[cfg(test)]
 mod retained_order_tests;

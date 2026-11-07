@@ -4,6 +4,8 @@ mod pointer;
 mod replay;
 mod scene;
 
+pub(crate) use scene::SceneRope;
+
 use std::{
     cell::Cell,
     collections::{BinaryHeap, VecDeque},

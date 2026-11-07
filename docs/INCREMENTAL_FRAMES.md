@@ -22,6 +22,8 @@ the old and new drawing bounds of changed or removed branches. Eligible frames
 clear that damage rectangle and replay intersecting commands in scene order,
 with the same shape clips, blending, and MSAA as a full redraw. Unchanged frames
 do not upload or draw scene batches; presentation still copies the scene target.
+Small damage regions can build their draw list directly from intersecting scene
+branches, retaining ancestor clips. The full draw list remains available on demand.
 
 The retained scene follows the layout tree. Changes to direct layout children
 update the parent branch, including when composition wrappers reorder retained
