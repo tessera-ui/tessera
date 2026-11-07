@@ -17,17 +17,15 @@ use rustc_hash::{FxHashMap as HashMap, FxHasher};
 
 use crate::{
     NodeId,
-    context::{ContextMap, current_context_map, with_context_snapshot},
+    context::{ContextMap, with_context_snapshot},
     execution_context::{OrderFrame, with_execution_context, with_execution_context_mut},
     prop::{ErasedComponentRunner, ErasedProp, Prop},
-    runtime::{
-        TesseraRuntime, current_group_path, current_instance_key_override,
-        current_replay_boundary_instance_key_from_scope, ensure_build_phase,
-        reserve_component_identity, with_replay_scope,
-    },
+    runtime::{TesseraRuntime, ensure_build_phase, reserve_component_identity, with_replay_scope},
 };
 
 type PropUpdate = Box<dyn FnOnce(&mut dyn Any) + Send + Sync>;
+
+const MAX_RECYCLED_QUEUE_CAPACITY: usize = 256;
 
 struct PendingCall {
     name: &'static str,
@@ -48,6 +46,7 @@ struct PendingCall {
 struct PendingCalls {
     calls: HashMap<u64, PendingCall>,
     scopes: Vec<VecDeque<u64>>,
+    recycled_queues: Vec<VecDeque<u64>>,
     reset_generation: u64,
     next_call_id: u64,
 }
@@ -159,16 +158,11 @@ impl<P: Prop> ComponentCall<P> {
     pub(crate) fn execute_now(self) {
         self.validate_session();
         loop {
-            let next = PENDING_CALLS.with(|calls| {
-                calls
-                    .borrow_mut()
-                    .scopes
-                    .last_mut()
-                    .expect("active render-slot fragment")
-                    .pop_front()
-            });
-            let id = next.expect("render-slot call must belong to the active fragment");
-            execute_call(id);
+            let (id, call) =
+                take_next_call().expect("render-slot call must belong to the active fragment");
+            if let Some(call) = call {
+                execute_call(call);
+            }
             if id == self.id {
                 break;
             }
@@ -273,14 +267,12 @@ fn register_erased_call(
     runner: Arc<dyn ErasedComponentRunner>,
 ) -> u64 {
     ensure_build_phase();
-    PENDING_CALLS.with(|calls| {
-        assert!(
-            !calls.borrow().scopes.is_empty(),
-            "component declarations require an active build fragment"
-        );
-    });
     let id = PENDING_CALLS.with(|calls| {
         let mut calls = calls.borrow_mut();
+        assert!(
+            !calls.scopes.is_empty(),
+            "component declarations require an active build fragment"
+        );
         calls.next_call_id = calls
             .next_call_id
             .checked_add(1)
@@ -288,24 +280,25 @@ fn register_erased_call(
         calls.next_call_id
     });
     let identity = reserve_component_identity(component_type_id);
-    let call = PendingCall {
+    let parent = TesseraRuntime::with(|runtime| runtime.component_tree.current_build_node_id());
+    let call = with_execution_context(|context| PendingCall {
         name,
-        parent: TesseraRuntime::with(|runtime| runtime.component_tree.current_build_node_id()),
-        execution_parent: with_execution_context(|context| {
-            context.node_context_stack.last().copied()
-        }),
+        parent,
+        execution_parent: context.node_context_stack.last().copied(),
         identity,
-        prop_owner: with_execution_context(|context| {
-            context.instance_logic_id_stack.last().copied().unwrap_or(0)
-        }),
-        creator: current_replay_boundary_instance_key_from_scope().unwrap_or(0),
-        group_path: current_group_path(),
-        key_override: current_instance_key_override(),
-        context: current_context_map(),
+        prop_owner: context.instance_logic_id_stack.last().copied().unwrap_or(0),
+        creator: context
+            .current_component_instance_stack
+            .last()
+            .copied()
+            .unwrap_or(0),
+        group_path: context.group_path_stack.clone(),
+        key_override: context.instance_key_override,
+        context: context.context_map.clone(),
         props,
         runner,
         updates: Vec::new(),
-    };
+    });
     PENDING_CALLS.with(|calls| {
         let mut calls = calls.borrow_mut();
         calls
@@ -326,11 +319,15 @@ impl Drop for ScopeGuard {
     fn drop(&mut self) {
         let abandoned = PENDING_CALLS.with(|calls| {
             let mut calls = calls.borrow_mut();
-            let pending = calls.scopes.pop().expect("balanced build fragments");
-            pending
-                .into_iter()
+            let mut pending = calls.scopes.pop().expect("balanced build fragments");
+            let abandoned = pending
+                .drain(..)
                 .filter_map(|id| calls.calls.remove(&id))
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>();
+            if (1..=MAX_RECYCLED_QUEUE_CAPACITY).contains(&pending.capacity()) {
+                calls.recycled_queues.push(pending);
+            }
+            abandoned
         });
         if self.root_order_frame {
             with_execution_context_mut(|context| {
@@ -358,23 +355,32 @@ fn begin_pending_scope() -> ScopeGuard {
             false
         }
     });
-    PENDING_CALLS.with(|calls| calls.borrow_mut().scopes.push(VecDeque::new()));
+    PENDING_CALLS.with(|calls| {
+        let mut calls = calls.borrow_mut();
+        let queue = calls.recycled_queues.pop().unwrap_or_default();
+        calls.scopes.push(queue);
+    });
     ScopeGuard { root_order_frame }
 }
 
 fn drain_pending_scope() {
-    loop {
-        let next = PENDING_CALLS.with(|calls| {
-            calls
-                .borrow_mut()
-                .scopes
-                .last_mut()
-                .expect("active build fragment")
-                .pop_front()
-        });
-        let Some(id) = next else { break };
-        execute_call(id);
+    while let Some((_, call)) = take_next_call() {
+        if let Some(call) = call {
+            execute_call(call);
+        }
     }
+}
+
+fn take_next_call() -> Option<(u64, Option<PendingCall>)> {
+    PENDING_CALLS.with(|calls| {
+        let mut calls = calls.borrow_mut();
+        let id = calls
+            .scopes
+            .last_mut()
+            .expect("active build fragment")
+            .pop_front()?;
+        Some((id, calls.calls.remove(&id)))
+    })
 }
 
 struct ParentGuard {
@@ -410,9 +416,7 @@ impl Drop for PropScopeGuard {
     }
 }
 
-fn execute_call(id: u64) {
-    let call = PENDING_CALLS.with(|calls| calls.borrow_mut().calls.remove(&id));
-    let Some(mut call) = call else { return };
+fn execute_call(mut call: PendingCall) {
     let _parent_guard = ParentGuard {
         queue: TesseraRuntime::with_mut(|runtime| {
             runtime.component_tree.replace_build_parent(call.parent)
@@ -459,6 +463,7 @@ pub(crate) fn reset_pending_calls() {
         for scope in &mut calls.scopes {
             scope.clear();
         }
+        calls.recycled_queues.clear();
         calls.reset_generation = calls.reset_generation.wrapping_add(1);
         std::mem::take(&mut calls.calls)
     });

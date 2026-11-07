@@ -592,13 +592,20 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                                 )
                             )
                         });
-                    let replay = replay_snapshot.replay.clone();
-                    let replay_instance_logic_id = replay_snapshot.instance_logic_id;
-                    let replay_group_path = replay_snapshot.group_path.clone();
-                    let replay_instance_key_override = replay_snapshot.instance_key_override;
-
+                    let replay = &replay_snapshot.replay;
                     let replay_trace =
                         tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG);
+                    let trace_name = replay_trace
+                        .then(|| {
+                            TesseraRuntime::with(|runtime| {
+                                runtime
+                                    .component_tree
+                                    .find_node_id_by_instance_key(*instance_key)
+                                    .and_then(|id| runtime.component_tree.get(id))
+                                    .map(|node| node.fn_name.clone())
+                            })
+                        })
+                        .flatten();
                     let detach_timer = replay_trace.then(Instant::now);
                     let replace_context = TesseraRuntime::with_mut(|runtime| {
                         runtime
@@ -622,9 +629,9 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                     let compose_timer = replay_trace.then(Instant::now);
                     with_context_snapshot(context_snapshot, || {
                         with_replay_scope(
-                            replay_instance_logic_id,
-                            &replay_group_path,
-                            replay_instance_key_override,
+                            replay_snapshot.instance_logic_id,
+                            &replay_snapshot.group_path,
+                            replay_snapshot.instance_key_override,
                             || {
                                 crate::component_call::with_component_runner(
                                     &replay.runner,
@@ -650,7 +657,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                         tracing::debug!(
                             target: "tessera_ui::replay",
                             instance_key,
-                            fn_name = %replay_snapshot.fn_name,
+                            fn_name = trace_name.as_deref().unwrap_or("<missing>"),
                             detach_ns,
                             compose_ns,
                             attach_ns = attach_timer.map(|timer| timer.elapsed().as_nanos()),

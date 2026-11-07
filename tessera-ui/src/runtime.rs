@@ -597,15 +597,11 @@ pub(crate) struct StructureReconcileResult {
 }
 
 /// Persisted replay snapshot for one component instance.
-#[allow(dead_code)]
 #[derive(Clone)]
 pub(crate) struct ReplayNodeSnapshot {
-    pub instance_key: u64,
-    pub parent_instance_key: Option<u64>,
     pub instance_logic_id: u64,
     pub group_path: Vec<u64>,
     pub instance_key_override: Option<u64>,
-    pub fn_name: String,
     pub replay: ComponentReplayData,
 }
 
@@ -1870,26 +1866,14 @@ fn record_component_replay_snapshot(runtime: &TesseraRuntime, node_id: NodeId) {
         return;
     };
 
-    let tree = runtime.component_tree.tree();
-    let parent_instance_key = tree
-        .get(node_id)
-        .and_then(|n| n.parent())
-        .and_then(|parent_id| tree.get(parent_id))
-        .map(|parent| parent.get().instance_key);
-
-    let snapshot = ReplayNodeSnapshot {
-        instance_key: node.instance_key,
-        parent_instance_key,
+    let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
         instance_logic_id: node.instance_logic_id,
-        group_path: current_group_path(),
-        instance_key_override: current_instance_key_override(),
-        fn_name: node.fn_name.clone(),
+        group_path: context.group_path_stack.clone(),
+        instance_key_override: context.instance_key_override,
         replay,
-    };
+    });
     with_component_replay_tracker_mut(|tracker| {
-        tracker
-            .current_nodes
-            .insert(snapshot.instance_key, snapshot);
+        tracker.current_nodes.insert(node.instance_key, snapshot);
     });
 }
 
@@ -2972,7 +2956,8 @@ pub(crate) fn pop_group_id(expected_group_id: u64) {
 }
 
 /// Get a clone of the current control-flow path.
-pub(crate) fn current_group_path() -> Vec<u64> {
+#[cfg(test)]
+fn current_group_path() -> Vec<u64> {
     with_execution_context(|context| context.group_path_stack.clone())
 }
 
@@ -4048,12 +4033,9 @@ mod tests {
             tracker.previous_nodes.insert(
                 instance_key,
                 ReplayNodeSnapshot {
-                    instance_key,
-                    parent_instance_key: None,
                     instance_logic_id: 0,
                     group_path: Vec::new(),
                     instance_key_override: None,
-                    fn_name: "test_component".to_string(),
                     replay,
                 },
             );
