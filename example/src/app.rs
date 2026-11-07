@@ -425,21 +425,27 @@ mod tests {
         }
 
         for sample_count in [1, 4] {
+            let session = tessera_ui::RuntimeSession::new();
+            let _session = session.enter();
+            let mut registry = tessera_ui::EntryRegistry::new();
+            registry.register_package(tessera_components::ComponentsPackage);
+            registry.register_package(crate::res::i18n());
+            registry.register_package(crate::pages::FONTS);
+            registry.register_package(crate::pages::custom_shader::CustomShaderPackage);
             let navigation = TestProbe::default();
             let observed = navigation.clone();
-            let mut renderer = tessera_ui::EntryPoint::new(move || {
-                app_fixture(observed.clone());
-            })
-            .package(tessera_components::ComponentsPackage)
-            .package(crate::res::i18n())
-            .package(crate::pages::FONTS)
-            .package(crate::pages::custom_shader::CustomShaderPackage)
-            .into_headless(tessera_ui::HeadlessConfig {
-                width: 1200,
-                height: 800,
-                sample_count,
-                ..Default::default()
-            })
+            let mut renderer = tessera_ui::HeadlessRenderer::new(
+                Box::new(move || {
+                    app_fixture(observed.clone());
+                }),
+                registry.finish(),
+                tessera_ui::HeadlessConfig {
+                    width: 1200,
+                    height: 800,
+                    sample_count,
+                    ..Default::default()
+                },
+            )
             .unwrap();
             renderer.render_frames(8);
             let handles = navigation.get().unwrap();
