@@ -142,6 +142,10 @@ impl ComputePipelineRegistry {
         Self::default()
     }
 
+    pub(crate) fn remove(&mut self, type_id: TypeId) {
+        self.pipelines.remove(&type_id);
+    }
+
     /// Registers a pipeline for its command type, replacing any prior registration.
     pub fn register<C: ComputeCommand + 'static>(
         &mut self,

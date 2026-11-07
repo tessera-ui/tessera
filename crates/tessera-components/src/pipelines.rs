@@ -30,7 +30,6 @@ pub fn register_pipelines(context: &mut tessera_ui::PipelineContext<'_>) {
     SharedQuad::clear();
     draw::register(context);
     compute::register(context);
-    SharedQuad::clear();
 }
 
 use std::{cell::RefCell, sync::Arc};

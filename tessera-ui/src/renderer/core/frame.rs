@@ -215,6 +215,7 @@ impl RenderCore {
         } else {
             Vec::new()
         };
+        self.initialize_used_pipelines(&passes);
         self.pipelines.clipper.prepare(
             &self.device,
             &self.queue,
@@ -540,6 +541,37 @@ impl RenderCore {
                 });
                 *scene_written = true;
                 *scene = SceneState::Offscreen;
+            }
+        }
+    }
+
+    fn initialize_used_pipelines(&mut self, passes: &[RenderPassPlan<'_>]) {
+        if self.pipeline_factories.is_empty() {
+            return;
+        }
+        let mut last = None;
+        let mut initialize = |key| {
+            if last != Some(key) {
+                last = Some(key);
+                if let Some(factory) = self.pipeline_factories.remove(&key) {
+                    factory(self);
+                }
+            }
+        };
+        for pass in passes {
+            match pass {
+                RenderPassPlan::Draw { draws, .. } => {
+                    for op in draws {
+                        if let DrawOrClip::Draw(draw) = op {
+                            initialize((PipelineKind::Draw, draw.type_id));
+                        }
+                    }
+                }
+                RenderPassPlan::Compute(items) => {
+                    for item in items {
+                        initialize((PipelineKind::Compute, item.command.as_any().type_id()));
+                    }
+                }
             }
         }
     }
@@ -1286,6 +1318,111 @@ mod tests {
         }
 
         fn apply_opacity(&mut self, _opacity: f32) {}
+    }
+
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn deferred_pipelines_start_on_first_use_and_draw_receives_the_whole_frame() {
+        use std::sync::{Arc, Mutex};
+
+        use crate::renderer::{
+            compute::pipeline::ComputeContext,
+            drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+        };
+
+        struct Probe(Arc<Mutex<Vec<&'static str>>>);
+
+        #[derive(Clone)]
+        struct ComputeProbe;
+
+        impl ComputeCommand for ComputeProbe {
+            fn barrier(&self) -> SampleRegion {
+                SampleRegion::Global
+            }
+        }
+
+        impl ComputablePipeline<ComputeProbe> for Probe {
+            fn dispatch(&mut self, _: &mut ComputeContext<'_, '_, '_, ComputeProbe>) {
+                self.0.lock().unwrap().push("compute");
+            }
+        }
+
+        impl DrawablePipeline<SampleCommand> for Probe {
+            fn begin_frame(&mut self, _: &FrameContext<'_>) {
+                self.0.lock().unwrap().push("begin");
+            }
+
+            fn draw(&mut self, _: &mut DrawContext<'_, '_, '_, SampleCommand>) {
+                self.0.lock().unwrap().push("draw");
+            }
+
+            fn end_frame(&mut self, _: &FrameContext<'_>) {
+                self.0.lock().unwrap().push("end");
+            }
+        }
+
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let mut core = pollster::block_on(RenderCore::new_offscreen(
+            winit::dpi::PhysicalSize::new(16, 16),
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            1,
+            crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
+        ));
+        let events = Arc::new(Mutex::new(Vec::new()));
+        core.register_draw_pipeline_factory({
+            let events = events.clone();
+            move |_| {
+                events.lock().unwrap().push("create");
+                Probe(events)
+            }
+        });
+        core.register_compute_pipeline_factory({
+            let events = events.clone();
+            move |_| {
+                events.lock().unwrap().push("create compute");
+                Probe(events)
+            }
+        });
+        let render = |core: &mut RenderCore, graph| {
+            core.render(
+                graph,
+                #[cfg(feature = "debug-dirty-overlay")]
+                &[],
+            );
+        };
+        render(&mut core, RenderGraph::default());
+        assert!(events.lock().unwrap().is_empty());
+        let mut fragment = crate::render_graph::RenderFragment::default();
+        fragment.push_draw_command(SampleCommand(None));
+        let mut graph = crate::render_graph::RenderGraphBuilder::new();
+        graph.append_fragment(
+            &fragment,
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(16), Px(16))),
+            1.0,
+        );
+        let graph = graph.finish();
+        render(&mut core, graph.clone());
+        render(&mut core, graph);
+        assert_eq!(
+            *events.lock().unwrap(),
+            ["create", "begin", "draw", "end", "begin", "draw", "end"]
+        );
+        events.lock().unwrap().clear();
+        let mut fragment = crate::render_graph::RenderFragment::default();
+        fragment.push_compute_command(ComputeProbe);
+        let mut graph = crate::render_graph::RenderGraphBuilder::new();
+        graph.append_fragment(
+            &fragment,
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(16), Px(16))),
+            1.0,
+        );
+        render(&mut core, graph.finish());
+        assert_eq!(
+            *events.lock().unwrap(),
+            ["create compute", "begin", "compute", "end"]
+        );
     }
 
     fn sampled_draw(command: &SampleCommand, position: PxPosition) -> DrawOrClip<'_> {

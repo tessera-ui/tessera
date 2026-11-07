@@ -65,6 +65,9 @@ geometry. Changes to input geometry or the parent invalidate placement.
 
 ## Shared GPU resources
 
+Component draw and compute pipelines are created on first use. Factories
+receive the renderer's resources before that frame starts its pipeline hooks.
+
 Use `GraphicsDevice::frame_buffer` for transient uniform and storage data. Each
 allocation has a distinct aligned range, and each used page uploads once before
 frame submission. Its contents are valid only for the current frame. Use

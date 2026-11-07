@@ -550,6 +550,7 @@ impl RenderCore {
             size,
             size_changed: false,
             pipelines,
+            pipeline_factories: Default::default(),
             pipeline_cache,
             adapter_info,
             targets,

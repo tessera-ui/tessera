@@ -4,8 +4,9 @@
 //!
 //! Drive frame submission and GPU resource setup for Tessera applications.
 
-use std::{io, sync::Arc, time::Duration};
+use std::{any::TypeId, io, sync::Arc, time::Duration};
 
+use rustc_hash::FxHashMap;
 use winit::window::Window;
 
 use crate::{
@@ -25,6 +26,14 @@ struct RenderPipelines {
     drawer: Drawer,
     compute_registry: ComputePipelineRegistry,
 }
+
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+enum PipelineKind {
+    Draw,
+    Compute,
+}
+
+type PipelineFactory = Box<dyn FnOnce(&mut RenderCore) + Send>;
 
 struct FrameTargets {
     offscreen: wgpu::TextureView,
@@ -100,6 +109,7 @@ pub struct RenderCore {
     size: winit::dpi::PhysicalSize<u32>,
     size_changed: bool,
     pipelines: RenderPipelines,
+    pipeline_factories: FxHashMap<(PipelineKind, TypeId), PipelineFactory>,
 
     pipeline_cache: Option<wgpu::PipelineCache>,
     adapter_info: wgpu::AdapterInfo,
@@ -204,6 +214,8 @@ impl RenderCore {
         T: DrawCommand + 'static,
         P: DrawablePipeline<T> + 'static,
     {
+        self.pipeline_factories
+            .remove(&(PipelineKind::Draw, TypeId::of::<T>()));
         self.pipelines.drawer.pipeline_registry.register(pipeline);
     }
 
@@ -213,7 +225,49 @@ impl RenderCore {
         T: ComputeCommand + 'static,
         P: ComputablePipeline<T> + 'static,
     {
+        self.pipeline_factories
+            .remove(&(PipelineKind::Compute, TypeId::of::<T>()));
         self.pipelines.compute_registry.register(pipeline);
+    }
+
+    pub(crate) fn register_draw_pipeline_factory<T, P>(
+        &mut self,
+        factory: impl FnOnce(RenderResources<'_>) -> P + Send + 'static,
+    ) where
+        T: DrawCommand + 'static,
+        P: DrawablePipeline<T> + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+        self.pipelines
+            .drawer
+            .pipeline_registry
+            .pipelines
+            .remove(&type_id);
+        self.pipeline_factories.insert(
+            (PipelineKind::Draw, type_id),
+            Box::new(move |core| {
+                let pipeline = factory(core.resources());
+                core.register_draw_pipeline(pipeline);
+            }),
+        );
+    }
+
+    pub(crate) fn register_compute_pipeline_factory<T, P>(
+        &mut self,
+        factory: impl FnOnce(RenderResources<'_>) -> P + Send + 'static,
+    ) where
+        T: ComputeCommand + 'static,
+        P: ComputablePipeline<T> + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+        self.pipelines.compute_registry.remove(type_id);
+        self.pipeline_factories.insert(
+            (PipelineKind::Compute, type_id),
+            Box::new(move |core| {
+                let pipeline = factory(core.resources());
+                core.register_compute_pipeline(pipeline);
+            }),
+        );
     }
 
     pub(crate) fn save_pipeline_cache(&self) -> io::Result<()> {

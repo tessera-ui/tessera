@@ -42,4 +42,26 @@ impl<'a> PipelineContext<'a> {
     {
         self.core.register_compute_pipeline(pipeline);
     }
+
+    /// Registers a factory that creates a draw pipeline before the first frame that uses it.
+    pub fn register_draw_pipeline_factory<T, P>(
+        &mut self,
+        factory: impl FnOnce(RenderResources<'_>) -> P + Send + 'static,
+    ) where
+        T: DrawCommand + 'static,
+        P: DrawablePipeline<T> + 'static,
+    {
+        self.core.register_draw_pipeline_factory(factory);
+    }
+
+    /// Registers a factory that creates a compute pipeline before its first dispatch.
+    pub fn register_compute_pipeline_factory<T, P>(
+        &mut self,
+        factory: impl FnOnce(RenderResources<'_>) -> P + Send + 'static,
+    ) where
+        T: ComputeCommand + 'static,
+        P: ComputablePipeline<T> + 'static,
+    {
+        self.core.register_compute_pipeline_factory(factory);
+    }
 }

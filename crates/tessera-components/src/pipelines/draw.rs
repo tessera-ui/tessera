@@ -10,111 +10,111 @@ use crate::pipelines::{
 };
 
 pub(super) fn register(context: &mut PipelineContext<'_>) {
-    let resources = context.resources();
-    let pipeline = SimpleRectPipeline::new(
-        resources.device,
-        resources.surface_config,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        SimpleRectPipeline::new(
+            resources.device,
+            resources.surface_config,
+            resources.pipeline_cache,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = DividerPipeline::new(
-        resources.graphics,
-        resources.pipeline_cache,
-        resources.surface_config,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        DividerPipeline::new(
+            resources.graphics,
+            resources.pipeline_cache,
+            resources.surface_config,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = ShapePipeline::new(
-        resources.graphics,
-        resources.surface_config,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        ShapePipeline::new(
+            resources.graphics,
+            resources.surface_config,
+            resources.pipeline_cache,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = ProgressArcPipeline::new(
-        resources.device,
-        resources.surface_config,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        ProgressArcPipeline::new(
+            resources.device,
+            resources.surface_config,
+            resources.pipeline_cache,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = CheckmarkPipeline::new(
-        resources.graphics,
-        resources.pipeline_cache,
-        resources.surface_config,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        CheckmarkPipeline::new(
+            resources.graphics,
+            resources.pipeline_cache,
+            resources.surface_config,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = GlyphonTextRender::new(
-        resources.device,
-        resources.queue,
-        resources.surface_config,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        GlyphonTextRender::new(
+            resources.device,
+            resources.queue,
+            resources.surface_config,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = FluidGlassPipeline::new(
-        resources.device,
-        resources.pipeline_cache,
-        resources.surface_config,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        FluidGlassPipeline::new(
+            resources.device,
+            resources.pipeline_cache,
+            resources.surface_config,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = ImagePipeline::new(
-        resources.graphics,
-        resources.surface_config,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        ImagePipeline::new(
+            resources.graphics,
+            resources.surface_config,
+            resources.pipeline_cache,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = ImageVectorPipeline::new(
-        resources.graphics,
-        resources.surface_config,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        ImageVectorPipeline::new(
+            resources.graphics,
+            resources.surface_config,
+            resources.pipeline_cache,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = LoadingShapePipeline::new(
-        resources.graphics,
-        resources.surface_config,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        LoadingShapePipeline::new(
+            resources.graphics,
+            resources.surface_config,
+            resources.pipeline_cache,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = LinearWavePipeline::new(
-        resources.graphics,
-        resources.surface_config,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        LinearWavePipeline::new(
+            resources.graphics,
+            resources.surface_config,
+            resources.pipeline_cache,
+            resources.sample_count,
+        )
+    });
 
-    let resources = context.resources();
-    let pipeline = PathStrokePipeline::new(
-        resources.graphics,
-        resources.surface_config,
-        resources.pipeline_cache,
-        resources.sample_count,
-    );
-    context.register_draw_pipeline(pipeline);
+    context.register_draw_pipeline_factory(|resources| {
+        PathStrokePipeline::new(
+            resources.graphics,
+            resources.surface_config,
+            resources.pipeline_cache,
+            resources.sample_count,
+        )
+    });
 }
