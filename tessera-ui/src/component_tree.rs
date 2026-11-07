@@ -1201,10 +1201,12 @@ impl ComponentTree {
     }
 
     fn refresh_layout_children(&mut self, node_id: indextree::NodeId) -> bool {
-        let mut children = Vec::new();
+        let mut children = SmallVec::<[NodeId; 4]>::new();
+        let mut shared_children = None;
         #[cfg(feature = "profiling")]
         let mut subtree_len = 1_usize;
-        let mut next_child = node_id.first_child(&self.tree);
+        let first_child = node_id.first_child(&self.tree);
+        let mut next_child = first_child;
         let mut index = NonZero::<usize>::MIN;
         while let Some(child_id) = next_child {
             next_child = child_id.next_sibling(&self.tree);
@@ -1226,17 +1228,23 @@ impl ComponentTree {
             if child.role == NodeRole::Layout {
                 children.push(child_id);
             } else {
-                children.extend(direct_layout_children(child_id, &self.tree).iter().copied());
+                let descendants = direct_layout_children(child_id, &self.tree);
+                if first_child == Some(child_id) && next_child.is_none() {
+                    shared_children = Some(descendants);
+                } else {
+                    children.extend_from_slice(&descendants);
+                }
             }
         }
+        let child_ids = shared_children.as_deref().unwrap_or(children.as_slice());
         let node_ref = &self.tree[node_id];
         let node = node_ref.get();
-        let changed = node.layout_children.as_deref() != Some(children.as_slice());
+        let changed = node.layout_children.as_deref() != Some(child_ids);
         if changed && (node.role == NodeRole::Layout || node_ref.parent().is_none()) {
             self.frame_scene.invalidate_structure(node_id);
             crate::runtime::record_layout_structure(
                 node.instance_key,
-                children.iter().map(|id| self.tree[*id].get().instance_key),
+                child_ids.iter().map(|id| self.tree[*id].get().instance_key),
             );
         }
         let node = self.tree[node_id].get_mut();
@@ -1245,7 +1253,8 @@ impl ComponentTree {
             node.subtree_len = subtree_len;
         }
         if changed {
-            node.layout_children = Some(node::share_layout_children(children));
+            node.layout_children =
+                Some(shared_children.unwrap_or_else(|| node::share_layout_children(&children)));
         }
         changed
     }
@@ -6352,10 +6361,12 @@ mod tests {
             assert_eq!(direct_layout_children(root, &tree.tree).as_ref(), &[outer]);
             assert_eq!(direct_layout_children(outer, &tree.tree).as_ref(), &[inner]);
             let expected = extra.map_or_else(|| vec![leaf], |extra| vec![leaf, extra]);
-            assert_eq!(
-                direct_layout_children(inner, &tree.tree).as_ref(),
-                expected.as_slice()
-            );
+            let actual = direct_layout_children(inner, &tree.tree);
+            assert_eq!(actual.as_ref(), expected.as_slice());
+            assert!(Arc::ptr_eq(
+                &actual,
+                &direct_layout_children(wrapper, &tree.tree)
+            ));
             #[cfg(feature = "profiling")]
             for (id, base) in [(root, 5), (outer, 4), (inner, 3), (wrapper, 2)] {
                 assert_eq!(
@@ -6363,8 +6374,6 @@ mod tests {
                     base + usize::from(add_extra)
                 );
             }
-            #[cfg(not(feature = "profiling"))]
-            let _ = wrapper;
         }
     }
 

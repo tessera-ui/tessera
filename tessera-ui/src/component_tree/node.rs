@@ -351,10 +351,10 @@ pub(crate) fn direct_layout_children(node_id: NodeId, tree: &ComponentNodeTree) 
     for child_id in node_id.children(tree) {
         collect(child_id, tree, &mut children);
     }
-    share_layout_children(children)
+    share_layout_children(&children)
 }
 
-pub(super) fn share_layout_children(children: Vec<NodeId>) -> Arc<[NodeId]> {
+pub(super) fn share_layout_children(children: &[NodeId]) -> Arc<[NodeId]> {
     static EMPTY: OnceLock<Arc<[NodeId]>> = OnceLock::new();
     if children.is_empty() {
         Arc::clone(EMPTY.get_or_init(|| Arc::from([])))
