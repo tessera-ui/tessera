@@ -532,12 +532,21 @@ enum ModifierAction {
     GloballyPositioned(crate::component_tree::GloballyPositionedHandler),
 }
 
+impl ModifierAction {
+    fn layout_node(&self) -> Option<&dyn ErasedLayoutModifierNode> {
+        match self {
+            Self::Layout(node) => Some(node.as_ref()),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) enum OrderedModifierAction {
-    Layout(Arc<dyn ErasedLayoutModifierNode>),
+    Layout,
     Placement(Arc<dyn ErasedPlacementModifierNode>),
     Draw(Arc<dyn DrawModifierNode>),
-    ParentData(Arc<dyn ParentDataModifierNode>),
+    ParentData,
     Cursor(Arc<dyn CursorModifierNode>),
     PointerPreviewInput(Arc<dyn PointerInputModifierNode>),
     PointerInput(Arc<dyn PointerInputModifierNode>),
@@ -585,9 +594,9 @@ impl ModifierElement {
         }
     }
 
-    fn fold_actions<F>(&self, visit: &mut F)
+    fn fold_actions<'a, F>(&'a self, visit: &mut F)
     where
-        F: FnMut(&ModifierAction),
+        F: FnMut(&'a ModifierAction),
     {
         match self {
             Self::Empty => {}
@@ -1114,50 +1123,48 @@ impl Modifier {
     pub(crate) fn ordered_actions(&self) -> Vec<OrderedModifierAction> {
         let mut actions = Vec::new();
         self.element.fold_actions(&mut |action| {
-            actions.push(action.clone());
-        });
-        actions
-            .into_iter()
-            .filter_map(|action| match action {
-                ModifierAction::Layout(node) => Some(OrderedModifierAction::Layout(node)),
-                ModifierAction::Placement(node) => Some(OrderedModifierAction::Placement(node)),
-                ModifierAction::Draw(node) => Some(OrderedModifierAction::Draw(node)),
-                ModifierAction::ParentData(node) => Some(OrderedModifierAction::ParentData(node)),
-                ModifierAction::Cursor(node) => Some(OrderedModifierAction::Cursor(node)),
+            let action = match action {
+                ModifierAction::Layout(_) => OrderedModifierAction::Layout,
+                ModifierAction::Placement(node) => OrderedModifierAction::Placement(node.clone()),
+                ModifierAction::Draw(node) => OrderedModifierAction::Draw(node.clone()),
+                ModifierAction::ParentData(_) => OrderedModifierAction::ParentData,
+                ModifierAction::Cursor(node) => OrderedModifierAction::Cursor(node.clone()),
                 ModifierAction::PointerPreviewInput(node) => {
-                    Some(OrderedModifierAction::PointerPreviewInput(node))
+                    OrderedModifierAction::PointerPreviewInput(node.clone())
                 }
                 ModifierAction::PointerInput(node) => {
-                    Some(OrderedModifierAction::PointerInput(node))
+                    OrderedModifierAction::PointerInput(node.clone())
                 }
                 ModifierAction::PointerFinalInput(node) => {
-                    Some(OrderedModifierAction::PointerFinalInput(node))
+                    OrderedModifierAction::PointerFinalInput(node.clone())
                 }
                 ModifierAction::KeyboardPreviewInput(node) => {
-                    Some(OrderedModifierAction::KeyboardPreviewInput(node))
+                    OrderedModifierAction::KeyboardPreviewInput(node.clone())
                 }
                 ModifierAction::KeyboardInput(node) => {
-                    Some(OrderedModifierAction::KeyboardInput(node))
+                    OrderedModifierAction::KeyboardInput(node.clone())
                 }
                 ModifierAction::ClipboardInput(node) => {
-                    Some(OrderedModifierAction::ClipboardInput(node))
+                    OrderedModifierAction::ClipboardInput(node.clone())
                 }
                 ModifierAction::ImePreviewInput(node) => {
-                    Some(OrderedModifierAction::ImePreviewInput(node))
+                    OrderedModifierAction::ImePreviewInput(node.clone())
                 }
-                ModifierAction::ImeInput(node) => Some(OrderedModifierAction::ImeInput(node)),
+                ModifierAction::ImeInput(node) => OrderedModifierAction::ImeInput(node.clone()),
                 ModifierAction::Build(_)
                 | ModifierAction::Semantics(_)
                 | ModifierAction::Focus(_)
-                | ModifierAction::GloballyPositioned(_) => None,
-            })
-            .collect()
+                | ModifierAction::GloballyPositioned(_) => return,
+            };
+            actions.push(action);
+        });
+        actions
     }
 
     pub(crate) fn input_geometry_eq(&self, other: &Self) -> bool {
         let shape = |modifier: &Self| {
             let mut pointer = false;
-            let mut actions = Vec::new();
+            let mut actions = SmallVec::<[_; 4]>::new();
             modifier.element.fold_actions(&mut |action| {
                 pointer |= matches!(
                     action,
@@ -1246,84 +1253,76 @@ impl Modifier {
         (position, positions)
     }
 
+    fn select_actions<'a, T>(
+        &'a self,
+        mut select: impl FnMut(&'a ModifierAction) -> Option<T>,
+    ) -> SmallVec<[T; 4]> {
+        let mut selected = SmallVec::new();
+        self.element.fold_actions(&mut |action| {
+            if let Some(value) = select(action) {
+                selected.push(value);
+            }
+        });
+        selected
+    }
+
+    fn selected_actions_eq<'a, T>(
+        &'a self,
+        other: &'a Self,
+        select: impl Fn(&'a ModifierAction) -> Option<T>,
+        mut eq: impl FnMut(T, T) -> bool,
+    ) -> bool {
+        let lhs = self.select_actions(&select);
+        let rhs = other.select_actions(select);
+        lhs.len() == rhs.len() && lhs.into_iter().zip(rhs).all(|(lhs, rhs)| eq(lhs, rhs))
+    }
+
+    pub(crate) fn layout_modifiers(&self) -> SmallVec<[Arc<dyn LayoutModifierNode>; 4]> {
+        self.select_actions(|action| action.layout_node().map(|node| node.node()))
+    }
+
     pub(crate) fn layout_measure_eq(&self, other: &Self) -> bool {
-        let lhs: Vec<_> = self
-            .ordered_actions()
-            .into_iter()
-            .filter_map(|action| match action {
-                OrderedModifierAction::Layout(node) => Some(node),
-                _ => None,
-            })
-            .collect();
-        let rhs: Vec<_> = other
-            .ordered_actions()
-            .into_iter()
-            .filter_map(|action| match action {
-                OrderedModifierAction::Layout(node) => Some(node),
-                _ => None,
-            })
-            .collect();
-        lhs.len() == rhs.len()
-            && lhs
-                .iter()
-                .zip(rhs.iter())
-                .all(|(lhs, rhs)| lhs.measure_eq(rhs.as_ref()))
+        self.selected_actions_eq(other, ModifierAction::layout_node, |lhs, rhs| {
+            lhs.measure_eq(rhs)
+        })
     }
 
     pub(crate) fn layout_placement_eq(&self, other: &Self) -> bool {
-        let nodes = |modifier: &Self| {
-            modifier
-                .ordered_actions()
-                .into_iter()
-                .filter_map(|action| match action {
-                    OrderedModifierAction::Layout(node) => Some(node),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-        };
-        let lhs = nodes(self);
-        let rhs = nodes(other);
-        lhs.len() == rhs.len()
-            && lhs
-                .iter()
-                .zip(&rhs)
-                .all(|(lhs, rhs)| lhs.placement_eq(rhs.as_ref()))
+        self.selected_actions_eq(other, ModifierAction::layout_node, |lhs, rhs| {
+            lhs.placement_eq(rhs)
+        })
     }
 
     pub(crate) fn position_eq(&self, other: &Self) -> bool {
-        let nodes = |modifier: &Self| {
-            modifier
-                .ordered_actions()
-                .into_iter()
-                .filter_map(|action| match action {
-                    OrderedModifierAction::Placement(node) => Some(node),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-        };
-        let lhs = nodes(self);
-        let rhs = nodes(other);
-        lhs.len() == rhs.len() && lhs.iter().zip(&rhs).all(|(lhs, rhs)| lhs.eq(rhs.as_ref()))
+        self.selected_actions_eq(
+            other,
+            |action| match action {
+                ModifierAction::Placement(node) => Some(node.as_ref()),
+                _ => None,
+            },
+            |lhs, rhs| lhs.eq(rhs),
+        )
+    }
+
+    pub(crate) fn parent_data<T: Clone + Send + Sync + 'static>(&self) -> Option<T> {
+        let mut data = ParentDataMap::default();
+        self.element.fold_actions(&mut |action| {
+            if let ModifierAction::ParentData(node) = action {
+                node.apply_parent_data(&mut data);
+            }
+        });
+        data.get(&TypeId::of::<T>())?.downcast_ref::<T>().cloned()
     }
 
     pub(crate) fn parent_data_eq(&self, other: &Self) -> bool {
-        let nodes = |modifier: &Self| {
-            modifier
-                .ordered_actions()
-                .into_iter()
-                .filter_map(|action| match action {
-                    OrderedModifierAction::ParentData(node) => Some(node),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-        };
-        let lhs = nodes(self);
-        let rhs = nodes(other);
-        lhs.len() == rhs.len()
-            && lhs
-                .iter()
-                .zip(&rhs)
-                .all(|(lhs, rhs)| Arc::ptr_eq(lhs, rhs) || lhs.equivalent(rhs.as_ref()))
+        self.selected_actions_eq(
+            other,
+            |action| match action {
+                ModifierAction::ParentData(node) => Some(node),
+                _ => None,
+            },
+            |lhs, rhs| Arc::ptr_eq(lhs, rhs) || lhs.equivalent(rhs.as_ref()),
+        )
     }
 }
 

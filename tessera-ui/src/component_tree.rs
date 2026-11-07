@@ -3781,7 +3781,7 @@ fn record_layout_commands(
         let layers = input.draw_layers();
         for action in node_ref.modifier.ordered_actions() {
             match action {
-                OrderedModifierAction::Layout(_) => {
+                OrderedModifierAction::Layout => {
                     bounds = layers.get(layer_index).copied().flatten();
                     layer_index += 1;
                 }

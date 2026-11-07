@@ -5,7 +5,7 @@
 //! Measure and align content while reserving independent interaction bounds.
 
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
     sync::OnceLock,
@@ -19,7 +19,6 @@ use crate::{
     },
     modifier::{
         DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutModifierNode, Modifier,
-        OrderedModifierAction, ParentDataMap,
     },
     prop::Prop,
     px::PxPosition,
@@ -154,14 +153,7 @@ impl LayoutChild {
         T: Clone + Send + Sync + 'static,
     {
         let node = scope.tree.get(self.node_id)?;
-        let mut data: ParentDataMap = HashMap::default();
-        for action in node.get().modifier.ordered_actions() {
-            if let OrderedModifierAction::ParentData(node) = action {
-                node.apply_parent_data(&mut data);
-            }
-        }
-        let value = data.get(&TypeId::of::<T>())?;
-        value.downcast_ref::<T>().cloned()
+        node.get().modifier.parent_data()
     }
 
     pub(crate) const fn instance_key(&self) -> u64 {
@@ -214,14 +206,7 @@ impl<'a> PlacementChild<'a> {
         T: Clone + Send + Sync + 'static,
     {
         let node = self.tree.get(self.node_id)?;
-        let mut data: ParentDataMap = HashMap::default();
-        for action in node.get().modifier.ordered_actions() {
-            if let OrderedModifierAction::ParentData(node) = action {
-                node.apply_parent_data(&mut data);
-            }
-        }
-        let value = data.get(&TypeId::of::<T>())?;
-        value.downcast_ref::<T>().cloned()
+        node.get().modifier.parent_data()
     }
 
     pub(crate) const fn instance_key(&self) -> u64 {

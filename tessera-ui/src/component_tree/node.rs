@@ -23,7 +23,6 @@ use crate::{
     },
     modifier::{
         DrawModifierNode, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier,
-        OrderedModifierAction,
     },
     prop::CallbackWith,
     px::{PxPosition, PxRect, PxSize},
@@ -1204,15 +1203,7 @@ pub(crate) fn measure_node(
     let _phase_guard = push_phase(RuntimePhase::Measure);
 
     let layout_node = &node_data.layout_node;
-    let layout_modifiers: Vec<_> = node_data
-        .modifier
-        .ordered_actions()
-        .into_iter()
-        .filter_map(|action| match action {
-            OrderedModifierAction::Layout(node) => Some(node.node()),
-            _ => None,
-        })
-        .collect();
+    let layout_modifiers = node_data.modifier.layout_modifiers();
     if let Some(layout_ctx) = layout_ctx {
         layout_ctx.inc_measure_node_calls();
         if let Some(entry) = layout_ctx.snapshot(node_data.instance_key) {
