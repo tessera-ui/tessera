@@ -19,9 +19,7 @@ use crate::{
     px::PxPosition,
 };
 
-#[derive(Clone, Default, PartialEq)]
 struct DescendantContext {
-    semantic: bool,
     tooltip: Option<String>,
     traverses: bool,
 }
@@ -35,7 +33,7 @@ struct SemanticEntry {
 
 #[derive(Default)]
 pub(crate) struct AccessibilityIndex {
-    components: HashMap<ComponentNodeId, (AccessKitNodeId, DescendantContext)>,
+    components: HashMap<ComponentNodeId, (AccessKitNodeId, Option<DescendantContext>)>,
     nodes: HashMap<AccessKitNodeId, SemanticEntry>,
     focused: BTreeMap<Vec<usize>, AccessKitNodeId>,
     pending: HashSet<AccessKitNodeId>,
@@ -51,7 +49,9 @@ pub(crate) struct AccessibilityIndex {
 
 impl AccessibilityIndex {
     pub(crate) fn invalidate_geometry(&mut self, changed: &HashSet<ComponentNodeId>) {
-        self.geometry_changed.extend(changed);
+        if self.root.is_some() {
+            self.geometry_changed.extend(changed);
+        }
     }
 
     pub(crate) fn invalidate_placement_order(&mut self, changed: &HashSet<ComponentNodeId>) {
@@ -59,7 +59,7 @@ impl AccessibilityIndex {
             if self
                 .components
                 .get(id)
-                .is_some_and(|(_, context)| context.semantic)
+                .is_some_and(|(_, context)| context.is_some())
             {
                 self.changed.insert(*id);
             }
@@ -71,6 +71,9 @@ impl AccessibilityIndex {
         changed: &HashSet<ComponentNodeId>,
         removed: &HashSet<ComponentNodeId>,
     ) {
+        if self.root.is_none() {
+            return;
+        }
         for id in removed {
             self.changed.remove(id);
             self.geometry_changed.remove(id);
@@ -92,19 +95,34 @@ impl AccessibilityIndex {
         {
             self.ancestor_visits = 0;
         }
-        let mut changed = std::mem::take(&mut self.changed);
+        let mut changed = if self.root.is_some() {
+            std::mem::take(&mut self.changed)
+        } else {
+            // Until first use, the live tree is the only source of semantic state.
+            root.descendants(tree)
+                .filter(|id| {
+                    *id == root
+                        || metadatas
+                            .get(id)
+                            .is_some_and(|node| node.accessibility.is_some())
+                })
+                .collect()
+        };
         let mut geometry_updated = 0;
         for id in std::mem::take(&mut self.geometry_changed) {
             if changed.contains(&id) || self.removed.contains(&id) {
                 continue;
             }
-            let Some((key, context)) = self.components.get(&id) else {
-                changed.insert(id);
+            let Some((key, _)) = self.components.get(&id) else {
+                if id == root
+                    || metadatas
+                        .get(&id)
+                        .is_some_and(|node| node.accessibility.is_some())
+                {
+                    changed.insert(id);
+                }
                 continue;
             };
-            if id != root && !context.semantic {
-                continue;
-            }
             let bounds = semantic_bounds(tree, metadatas, id);
             if let (Some(entry), Some(bounds)) = (self.nodes.get_mut(key), bounds) {
                 if entry.node.bounds() != Some(bounds) {
@@ -116,59 +134,69 @@ impl AccessibilityIndex {
                 changed.insert(id);
             }
         }
-        let mut removed_keys = HashSet::default();
+        let mut removed = HashMap::default();
         for id in std::mem::take(&mut self.removed) {
-            if let Some((key, _)) = self.components.remove(&id) {
-                removed_keys.insert(key);
+            if let Some((key, context)) = self.components.remove(&id) {
+                removed.insert(key, context);
             }
         }
-        let mut contexts = HashMap::default();
-        let mut descendants = Vec::new();
-        for &id in &changed {
-            if tree.get(id).is_none_or(|node| node.is_removed()) {
-                continue;
+        if self.root.is_some() {
+            let mut descendants = Vec::new();
+            for &id in &changed {
+                let Some(component) = tree.get(id).filter(|node| !node.is_removed()) else {
+                    continue;
+                };
+                let key = AccessKitNodeId(component.get().instance_key);
+                let previous = self
+                    .components
+                    .get(&id)
+                    .map(|(_, context)| context)
+                    .or_else(|| removed.get(&key))
+                    .and_then(Option::as_ref);
+                let semantics = metadatas
+                    .get(&id)
+                    .and_then(|node| node.accessibility.as_deref());
+                let context_changed = match (previous, semantics) {
+                    (None, None) => false,
+                    (Some(previous), Some(semantics)) => {
+                        previous.traverses != semantics.merge_descendants
+                            || previous.tooltip != semantics.tooltip
+                    }
+                    _ => true,
+                };
+                if context_changed {
+                    descendants.extend(id.children(tree));
+                }
             }
-            let semantics = metadatas
-                .get(&id)
-                .and_then(|metadata| metadata.accessibility.as_ref());
-            let context = DescendantContext {
-                semantic: semantics.is_some(),
-                tooltip: semantics.and_then(|semantics| semantics.tooltip.clone()),
-                traverses: semantics.is_none_or(|semantics| semantics.merge_descendants),
-            };
-            if self
-                .components
-                .get(&id)
-                .is_some_and(|(_, previous)| *previous != context)
-            {
-                descendants.extend(id.descendants(tree).skip(1));
+            let mut inherited_changes = HashSet::default();
+            while let Some(id) = descendants.pop() {
+                if inherited_changes.insert(id) {
+                    descendants.extend(id.children(tree));
+                }
             }
-            contexts.insert(id, context);
+            changed.extend(inherited_changes);
         }
-        changed.extend(descendants);
         let mut child_changes = HashSet::default();
         for &id in &changed {
             let Some(component) = tree.get(id).filter(|node| !node.is_removed()) else {
                 continue;
             };
             let key = AccessKitNodeId(component.get().instance_key);
-            removed_keys.remove(&key);
-            let context = contexts.remove(&id).unwrap_or_else(|| {
-                let semantics = metadatas
-                    .get(&id)
-                    .and_then(|metadata| metadata.accessibility.as_ref());
-                DescendantContext {
-                    semantic: semantics.is_some(),
-                    tooltip: semantics.and_then(|node| node.tooltip.clone()),
-                    traverses: semantics.is_none_or(|node| node.merge_descendants),
+            let semantics = metadatas
+                .get(&id)
+                .and_then(|node| node.accessibility.as_deref());
+            if id != root && semantics.is_none() {
+                if self.components.remove(&id).is_some() {
+                    self.remove(key, &mut child_changes);
                 }
-            });
-            let semantic = context.semantic;
-            self.components.insert(id, (key, context));
-            if id != root && !semantic {
-                self.remove(key, &mut child_changes);
                 continue;
             }
+            removed.remove(&key);
+            let context = semantics.map(|semantics| DescendantContext {
+                tooltip: semantics.tooltip.clone(),
+                traverses: semantics.merge_descendants,
+            });
+            self.components.insert(id, (key, context));
             let mut parent = None;
             let mut tooltip = None;
             let mut visible = true;
@@ -275,7 +303,7 @@ impl AccessibilityIndex {
                 self.pending.insert(key);
             }
         }
-        for key in removed_keys {
+        for key in removed.into_keys() {
             self.remove(key, &mut child_changes);
         }
         // Parents can be inserted after their children in the change journal.
@@ -324,7 +352,9 @@ impl AccessibilityIndex {
     pub(crate) fn set_label(&mut self, label: Option<&str>, root: ComponentNodeId) {
         if self.root_label.as_deref() != label {
             self.root_label = label.map(str::to_owned);
-            self.changed.insert(root);
+            if self.root.is_some() {
+                self.changed.insert(root);
+            }
         }
     }
 
@@ -397,8 +427,6 @@ pub(crate) fn build_tree_update(
     focused: Option<ComponentNodeId>,
 ) -> Option<TreeUpdate> {
     let mut index = AccessibilityIndex::default();
-    let changed = root.descendants(tree).collect();
-    index.invalidate(&changed, &HashSet::default());
     index.set_label(label, root);
     index.update(tree, metadatas, root);
     index.tree_update(tree, focused, true)
@@ -860,10 +888,6 @@ mod tests {
             ),
         );
         let mut index = AccessibilityIndex::default();
-        index.invalidate(
-            &[root, unchanged, child].into_iter().collect(),
-            &HashSet::default(),
-        );
         index.update(&tree, &metadatas, root);
         assert!(
             index
@@ -960,7 +984,6 @@ mod tests {
             }),
         );
         let mut index = AccessibilityIndex::default();
-        index.invalidate(&root.descendants(&tree).collect(), &HashSet::default());
         index.update(&tree, &metadatas, root);
         let initial = index.tree_update(&tree, Some(child), true).unwrap();
         assert_eq!(
@@ -1054,6 +1077,23 @@ mod tests {
         );
         assert_eq!(delta.focus, child_key);
         assert!(index.tree_update(&tree, Some(child), false).is_none());
+
+        let wrapper = wrappers[0];
+        metadatas.get_mut(&wrapper).unwrap().accessibility = Some(Box::new(AccessibilityNode {
+            tooltip: Some("New group hint".into()),
+            ..AccessibilityNode::new()
+        }));
+        index.invalidate(&[wrapper].into_iter().collect(), &HashSet::default());
+        index.update(&tree, &metadatas, root);
+        let delta = index.tree_update(&tree, Some(child), false).unwrap();
+        assert_eq!(delta.focus, child_key);
+        assert_eq!(delta.nodes.len(), 3);
+        assert_eq!(node(&delta, child).description(), Some("New group hint"));
+        assert_eq!(node(&delta, wrapper).children(), &[child_key]);
+        assert_eq!(
+            node(&delta, root).children(),
+            &[accesskit_id(wrapper), accesskit_id(sibling)]
+        );
     }
 
     #[test]
@@ -1074,7 +1114,6 @@ mod tests {
         );
         let key = tree[old].get().instance_key;
         let mut index = AccessibilityIndex::default();
-        index.invalidate(&[root, old].into_iter().collect(), &HashSet::default());
         index.update(&tree, &metadatas, root);
         let initial = index.tree_update(&tree, None, true).unwrap();
         let children = initial
@@ -1150,8 +1189,6 @@ mod tests {
             .expect("child metadata")
             .has_shape_clipping = true;
         let mut index = AccessibilityIndex::default();
-        let changed = [root, wrapper, child].into_iter().collect();
-        index.invalidate(&changed, &HashSet::default());
         index.set_label(Some("Fixture"), root);
         index.update(&tree, &metadatas, root);
         let update = index.tree_update(&tree, None, true).expect("tree update");
@@ -1257,7 +1294,6 @@ mod tests {
         metadatas.get_mut(&content).unwrap().placement_order = Some(1);
         metadatas.get_mut(&navigation).unwrap().placement_order = Some(0);
         let mut index = AccessibilityIndex::default();
-        index.invalidate(&root.descendants(&tree).collect(), &HashSet::default());
         index.update(&tree, &metadatas, root);
         let initial = index.tree_update(&tree, Some(navigation), true).unwrap();
         assert_eq!(

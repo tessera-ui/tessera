@@ -58,6 +58,9 @@ inherited clip bounds computed by layout.
 Nodes allocate interaction data and accessibility descriptions only when used.
 Pointer modifier positions are shared between the node and dispatch plans, and
 nodes without pointer modifiers need no position buffer.
+The accessibility index starts from the live tree on first publication and
+tracks only semantic nodes and the window root. A deactivated adapter releases
+its index and stops collecting changes until publication resumes.
 
 Composition wrappers without semantics need no geometry metadata outside the
 root. Layout nodes keep one snapshot of their policy inputs. Cached child

@@ -2413,6 +2413,9 @@ where
                     }
                     AccessKitWindowEvent::AccessibilityDeactivated => {
                         self.accessibility_active = false;
+                        TesseraRuntime::with_mut(|runtime| {
+                            runtime.component_tree.stop_accessibility_updates();
+                        });
                         debug!("AccessKit deactivated");
                     }
                 }

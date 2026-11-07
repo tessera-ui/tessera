@@ -683,7 +683,7 @@ impl ComponentTree {
         self.layout_snapshots.clear();
         self.frame_scene = scene::FrameScene::default();
         self.pointer_index = pointer::PointerIndex::default();
-        self.accessibility_index = crate::accessibility::AccessibilityIndex::default();
+        self.stop_accessibility_updates();
         self.node_queue.clear();
         self.replay_reuse_candidates.clear();
         self.replay_detached_root = None;
@@ -776,6 +776,10 @@ impl ComponentTree {
             self.focus_owner.active_component_node_id(),
             full,
         )
+    }
+
+    pub(crate) fn stop_accessibility_updates(&mut self) {
+        self.accessibility_index = crate::accessibility::AccessibilityIndex::default();
     }
 
     pub(crate) fn take_removed_focus_owners(&mut self) -> HashSet<u64> {
