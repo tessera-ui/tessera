@@ -4,7 +4,7 @@
 //!
 //! Rebuild or partially replay the component tree before layout and rendering.
 
-use std::{fmt::Write as _, time::Duration};
+use std::{fmt::Write as _, sync::Arc, time::Duration};
 
 use rustc_hash::FxHashSet as HashSet;
 use tracing::{debug, instrument};
@@ -380,10 +380,10 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         let density_changed = runtime.component_tree.refresh_scale_factor();
         (runtime.component_tree.tree().is_empty(), density_changed)
     });
-    let invalidations = take_build_invalidations();
+    let dirty_instance_keys = Arc::new(take_build_invalidations().dirty_instance_keys);
     #[cfg(feature = "debug-dirty-overlay")]
-    let had_invalidations = !invalidations.dirty_instance_keys.is_empty();
-    with_build_dirty_instance_keys(&invalidations.dirty_instance_keys, || {
+    let had_invalidations = !dirty_instance_keys.is_empty();
+    with_build_dirty_instance_keys(Arc::clone(&dirty_instance_keys), || {
         // Density affects values resolved during build as well as cached
         // measurements.
         if tree_is_empty || density_changed {
@@ -393,7 +393,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             return result;
         }
 
-        if invalidations.dirty_instance_keys.is_empty() {
+        if dirty_instance_keys.is_empty() {
             debug!("Skipping component tree build: no invalidations");
             let result = BuildTreeResult::skip_no_invalidation();
             #[cfg(feature = "debug-dirty-overlay")]
@@ -401,7 +401,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             return result;
         }
 
-        let mut plan = plan_dirty_replay(&invalidations.dirty_instance_keys);
+        let mut plan = plan_dirty_replay(&dirty_instance_keys);
         if plan.recompose_root {
             let result = run_root_recompose();
             #[cfg(feature = "debug-dirty-overlay")]
@@ -426,7 +426,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         let mut stale_instance_keys = HashSet::default();
         let mut stale_instance_logic_ids = HashSet::default();
         let mut recomposed_instance_logic_ids = HashSet::default();
-        let mut pending_dirty_instance_keys = invalidations.dirty_instance_keys.clone();
+        let mut pending_dirty_instance_keys = (*dirty_instance_keys).clone();
         let mut replay_roots_for_debug = Vec::new();
         let mut deferred_backwards_instance_keys = HashSet::default();
         let mut executed_instance_keys = HashSet::default();
@@ -475,7 +475,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
 
             replay_roots_for_debug.extend(dirty_roots.iter().copied());
 
-            with_build_dirty_instance_keys(&live_dirty_instance_keys, || {
+            with_build_dirty_instance_keys(Arc::new(live_dirty_instance_keys), || {
                 for (instance_key, replay_snapshot) in dirty_roots.iter().zip(replay_snapshots) {
                     #[cfg(feature = "profiling")]
                     {

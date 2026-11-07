@@ -982,7 +982,7 @@ pub(crate) fn with_replay_scope<R>(
 }
 
 pub(crate) fn with_build_dirty_instance_keys<R>(
-    dirty_instance_keys: &HashSet<u64>,
+    dirty_instance_keys: Arc<HashSet<u64>>,
     f: impl FnOnce() -> R,
 ) -> R {
     struct BuildDirtyScopeGuard {
@@ -1008,7 +1008,7 @@ pub(crate) fn with_build_dirty_instance_keys<R>(
     with_execution_context_mut(|context| {
         context
             .build_dirty_instance_keys_stack
-            .push(Arc::new(dirty_instance_keys.clone()));
+            .push(dirty_instance_keys);
     });
     let _guard = BuildDirtyScopeGuard { popped: false };
     f()
@@ -4182,13 +4182,13 @@ mod tests {
         outer.insert(7);
 
         assert!(!is_instance_key_build_dirty(7));
-        with_build_dirty_instance_keys(&outer, || {
+        with_build_dirty_instance_keys(Arc::new(outer), || {
             assert!(is_instance_key_build_dirty(7));
             assert!(!is_instance_key_build_dirty(8));
 
             let mut inner = HashSet::default();
             inner.insert(8);
-            with_build_dirty_instance_keys(&inner, || {
+            with_build_dirty_instance_keys(Arc::new(inner), || {
                 assert!(!is_instance_key_build_dirty(7));
                 assert!(is_instance_key_build_dirty(8));
             });
@@ -4207,7 +4207,7 @@ mod tests {
         dirty.insert(11);
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            with_build_dirty_instance_keys(&dirty, || {
+            with_build_dirty_instance_keys(Arc::new(dirty), || {
                 assert!(is_instance_key_build_dirty(11));
                 panic!("expected panic");
             });
@@ -4607,7 +4607,7 @@ mod tests {
         begin_recompose_slot_epoch();
         let mut dirty = HashSet::default();
         dirty.insert(reader_instance_key);
-        with_build_dirty_instance_keys(&dirty, || {
+        with_build_dirty_instance_keys(Arc::new(dirty), || {
             let mut arena = crate::Arena::<()>::new();
             let node_id = arena.new_node(());
             let _phase_guard = push_phase(RuntimePhase::Build);
