@@ -255,9 +255,6 @@ pub(crate) struct ComponentNodeMetaData {
     /// This will be computed during drawing command's generation.
     /// None if the node is not drawn yet.
     pub abs_position: Option<PxPosition>,
-    /// The effective clipping rectangle for this node, considering all its
-    /// ancestors. This is refreshed when geometry or clipping changes.
-    pub event_clip_rect: Option<crate::PxRect>,
     /// Render fragment associated with this node.
     ///
     /// Commands are collected during the record phase and merged into the frame
@@ -300,7 +297,6 @@ impl ComponentNodeMetaData {
             input_transforms: InputTransforms::default(),
             event_clip_bounds: None,
             abs_position: None,
-            event_clip_rect: None,
             fragment: RenderFragment::default(),
             clips_children: false,
             has_shape_clipping: false,
@@ -313,6 +309,10 @@ impl ComponentNodeMetaData {
     /// Returns a mutable render fragment for this node.
     pub fn fragment_mut(&mut self) -> &mut RenderFragment {
         &mut self.fragment
+    }
+
+    pub(crate) fn event_clip_rect(&self) -> Option<PxRect> {
+        self.event_clip_bounds.map(crate::FloatRect::outward)
     }
 
     pub(crate) fn clip_region(&self) -> Option<&ClipRegion> {

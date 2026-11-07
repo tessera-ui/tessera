@@ -63,6 +63,7 @@ inherited clip bounds computed by layout.
 
 Nodes allocate interaction data, accessibility descriptions, and shape clip
 regions only when used.
+Rectangular clips retain fractional bounds and derive outward pixel bounds as needed.
 Pointer modifier positions are shared between the node and dispatch plans, and
 nodes without pointer modifiers need no position buffer.
 The accessibility index starts from the live tree on first publication and

@@ -1433,7 +1433,7 @@ impl FocusOwner {
                         PxSize::new(size.width, size.height),
                     ))
                     .outward();
-                Some(metadata.event_clip_rect.map_or(rect, |clip| {
+                Some(metadata.event_clip_rect().map_or(rect, |clip| {
                     clip.intersection(&rect).unwrap_or(PxRect::ZERO)
                 }))
             });

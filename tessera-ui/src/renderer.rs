@@ -1008,7 +1008,7 @@ Fps: {:.2}
         );
         Some(
             metadata
-                .event_clip_rect
+                .event_clip_rect()
                 .and_then(|clip_rect| clip_rect.intersection(&node_rect))
                 .unwrap_or(node_rect),
         )

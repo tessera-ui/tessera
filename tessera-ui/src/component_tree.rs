@@ -952,7 +952,6 @@ impl ComponentTree {
                 metadata.input_transforms = previous.input_transforms;
                 metadata.event_clip_bounds = previous.event_clip_bounds;
                 metadata.abs_position = previous.abs_position;
-                metadata.event_clip_rect = previous.event_clip_rect;
                 metadata.prepared_layout = previous.prepared_layout;
                 metadata.clip_regions = previous.clip_regions;
                 metadata.geometry_initialized =
@@ -2642,7 +2641,7 @@ fn resolve_node_input_context(
         warn!("Absolute position missing for node {node_id:?}; skipping input handling");
         return None;
     };
-    let event_clip_rect = metadata.event_clip_rect;
+    let event_clip_rect = metadata.event_clip_rect();
     let Some(node_computed_data) = metadata.computed_data else {
         warn!(
             "Computed data not found for node {:?} during input dispatch.",
@@ -2749,7 +2748,7 @@ fn bounds_hit_path(
     {
         return None;
     }
-    if let Some(clip_rect) = metadata.event_clip_rect
+    if let Some(clip_rect) = metadata.event_clip_rect()
         && !clip_rect.contains(position)
     {
         return None;
@@ -3609,7 +3608,7 @@ fn component_node_viewport_rect(
     let metadata = metadatas.get(&node_id)?;
     Some(
         metadata
-            .event_clip_rect
+            .event_clip_rect()
             .and_then(|clip_rect| clip_rect.intersection(&node_rect))
             .unwrap_or(node_rect),
     )
@@ -3812,10 +3811,8 @@ struct PreparedLayoutMetadata {
     local_to_window: crate::LocalToWindow,
     child_local_to_window: crate::LocalToWindow,
     child_clip_bounds: Option<crate::FloatRect>,
-    self_position: PxPosition,
     size: PxSize,
     clips_children: bool,
-    child_clip_rect: Option<PxRect>,
     cumulative_opacity: f32,
     has_shape_clipping: bool,
 }
@@ -3824,7 +3821,6 @@ impl PreparedLayoutMetadata {
     fn child_geometry_eq(&self, other: &Self) -> bool {
         self.child_local_to_window == other.child_local_to_window
             && self.child_clip_bounds == other.child_clip_bounds
-            && self.child_clip_rect == other.child_clip_rect
             && self.cumulative_opacity == other.cumulative_opacity
             && self.has_shape_clipping == other.has_shape_clipping
     }
@@ -3896,7 +3892,6 @@ fn prepare_layout_metadata_for_node(
     parent_transform: crate::LocalToWindow,
     is_root: bool,
     parent_clip_bounds: Option<crate::FloatRect>,
-    parent_clip_rect: Option<PxRect>,
     current_opacity: f32,
     parent_has_shape_clipping: bool,
     reuse_local_placement: bool,
@@ -3910,7 +3905,6 @@ fn prepare_layout_metadata_for_node(
             metadata.abs_position = None;
             metadata.local_to_window = None;
             metadata.event_clip_bounds = None;
-            metadata.event_clip_rect = None;
             metadata.prepared_layout = None;
             metadata.set_prepared_clip_region(None);
             metadata.geometry_initialized = true;
@@ -3962,7 +3956,6 @@ fn prepare_layout_metadata_for_node(
     metadata.base_abs_position = Some(base_self_position);
     metadata.abs_position = Some(self_position);
     metadata.event_clip_bounds = parent_clip_bounds;
-    metadata.event_clip_rect = parent_clip_rect;
 
     let size = metadata
         .computed_data
@@ -4002,21 +3995,13 @@ fn prepare_layout_metadata_for_node(
     } else {
         parent_clip_bounds
     };
-    let child_clip_rect = if clips_children {
-        child_clip_bounds.map(crate::FloatRect::outward)
-    } else {
-        parent_clip_rect
-    };
-
     let prepared = PreparedLayoutMetadata {
         local_position,
         local_to_window,
         child_local_to_window,
         child_clip_bounds,
-        self_position,
         size,
         clips_children,
-        child_clip_rect,
         cumulative_opacity,
         has_shape_clipping: metadata.has_shape_clipping,
     };
@@ -4076,7 +4061,6 @@ fn populate_layout_metadata(
         is_root: bool,
         node_id: indextree::NodeId,
         clip_bounds: Option<crate::FloatRect>,
-        clip_rect: Option<PxRect>,
         current_opacity: f32,
         parent_has_shape_clipping: bool,
         inherited_order_changed: bool,
@@ -4113,7 +4097,6 @@ fn populate_layout_metadata(
                 parent_transform,
                 is_root,
                 clip_bounds,
-                clip_rect,
                 current_opacity,
                 parent_has_shape_clipping,
                 initialized && !self_dirty,
@@ -4169,7 +4152,6 @@ fn populate_layout_metadata(
                     metadata.abs_position = None;
                     metadata.local_to_window = None;
                     metadata.event_clip_bounds = None;
-                    metadata.event_clip_rect = None;
                     size_hidden
                 } else {
                     false
@@ -4181,13 +4163,12 @@ fn populate_layout_metadata(
             }
             return;
         }
-        let (transform, clip, rect, opacity) = prepared.map_or(
-            (parent_transform, clip_bounds, clip_rect, current_opacity),
+        let (transform, clip, opacity) = prepared.map_or(
+            (parent_transform, clip_bounds, current_opacity),
             |prepared| {
                 (
                     prepared.child_local_to_window,
                     prepared.child_clip_bounds,
-                    prepared.child_clip_rect,
                     prepared.cumulative_opacity,
                 )
             },
@@ -4216,7 +4197,6 @@ fn populate_layout_metadata(
                 false,
                 child,
                 clip,
-                rect,
                 opacity,
                 has_shape_clipping,
                 order_changed,
@@ -4250,7 +4230,6 @@ fn populate_layout_metadata(
         crate::LocalToWindow::IDENTITY,
         true,
         root_node,
-        None,
         None,
         1.0,
         false,
@@ -5131,7 +5110,7 @@ mod tests {
             metadata.fragment.push_draw_command(Marker);
             populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
             assert_eq!(
-                tree.metadatas.get(&outside).unwrap().event_clip_rect,
+                tree.metadatas.get(&outside).unwrap().event_clip_rect(),
                 Some(PxRect::new(Px::ZERO, Px::ZERO, Px(200), Px(200))),
                 "the placed traversal target is outside its ancestor's clip"
             );
@@ -5415,7 +5394,7 @@ mod tests {
             winit::keyboard::ModifiersState::empty(),
         );
         let target = tree.find_node_id_by_instance_key(2).unwrap();
-        tree.metadatas.get_mut(&target).unwrap().event_clip_rect = Some(PxRect::ZERO);
+        tree.metadatas.get_mut(&target).unwrap().event_clip_bounds = Some(crate::FloatRect::ZERO);
         tree.metadatas.geometry_changed.insert(target);
         log.lock().unwrap().clear();
         let mut release = [PointerChange::new(

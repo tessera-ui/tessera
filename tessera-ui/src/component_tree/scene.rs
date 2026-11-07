@@ -554,7 +554,10 @@ impl FrameScene {
                             .map_or_else(
                                 || {
                                     SceneClip::Rect(
-                                        prepared.child_clip_rect.unwrap_or(PxRect::ZERO),
+                                        prepared
+                                            .child_clip_bounds
+                                            .map(crate::FloatRect::outward)
+                                            .unwrap_or(PxRect::ZERO),
                                     )
                                 },
                                 SceneClip::Shape,

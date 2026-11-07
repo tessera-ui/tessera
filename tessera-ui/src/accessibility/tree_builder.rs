@@ -686,10 +686,7 @@ fn clipped_shape_bounds(
             y1: bounds.y1.min(clip.y1).max(y0),
         }
     };
-    if let Some(clip) = metadata
-        .event_clip_bounds
-        .or_else(|| metadata.event_clip_rect.map(Into::into))
-    {
+    if let Some(clip) = metadata.event_clip_bounds {
         bounds = intersect(
             bounds,
             Rect {
