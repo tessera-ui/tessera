@@ -10,7 +10,7 @@ use crate::{
     Px, PxPosition, PxRect, PxSize,
     build_tree::build_component_tree,
     component_tree::{ComputeMode, ComputeParams, clear_layout_snapshots},
-    context::{reset_component_context_tracking, reset_context_read_dependencies},
+    context::reset_context_read_dependencies,
     cursor::PointerChange,
     focus::flush_pending_focus_callbacks,
     runtime::{
@@ -692,7 +692,6 @@ fn reset_runtime_for_layout_test(viewport: (u32, u32)) {
     reset_focus_read_dependencies();
     reset_render_slot_read_dependencies();
     reset_state_read_dependencies();
-    reset_component_context_tracking();
     reset_context_read_dependencies();
     reset_build_invalidations();
     reset_frame_clock();

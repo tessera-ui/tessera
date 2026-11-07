@@ -15,7 +15,7 @@ use crate::{
     NodeId, Px, PxPosition, PxSize,
     build_tree::build_component_tree,
     component_tree::{ComponentNodeMetaDatas, ComponentNodeTree, ComputeMode, ComputeParams},
-    context::{reset_component_context_tracking, reset_context_read_dependencies},
+    context::reset_context_read_dependencies,
     cursor::{
         CursorEventContent, CursorState, GestureState, MOUSE_POINTER_ID, PointerChange, PointerId,
         PressKeyEventType, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
@@ -869,7 +869,6 @@ fn reset_headless_runtime(size: winit::dpi::PhysicalSize<u32>) {
     reset_focus_read_dependencies();
     reset_render_slot_read_dependencies();
     reset_state_read_dependencies();
-    reset_component_context_tracking();
     reset_context_read_dependencies();
     reset_build_invalidations();
     reset_frame_clock();

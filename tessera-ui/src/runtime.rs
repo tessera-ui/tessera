@@ -18,6 +18,7 @@ use crate::{
     NodeId,
     accessibility::{AccessibilityActionHandler, AccessibilityNode},
     component_tree::{ComponentNode, ComponentTree, NodeRole, PreviousLayoutNode},
+    context::ContextMap,
     execution_context::{
         ExecutionContext, OrderFrame, with_execution_context, with_execution_context_mut,
     },
@@ -602,6 +603,7 @@ pub(crate) struct ReplayNodeSnapshot {
     pub instance_logic_id: u64,
     pub group_path: Vec<u64>,
     pub instance_key_override: Option<u64>,
+    pub context: ContextMap,
     pub replay: ComponentReplayData,
 }
 
@@ -620,20 +622,31 @@ fn with_component_replay_tracker_mut<R>(f: impl FnOnce(&mut ComponentReplayTrack
 }
 
 pub(crate) fn begin_frame_component_replay_tracking() {
-    with_component_replay_tracker_mut(|tracker| tracker.current_nodes.clear());
+    let retired = with_component_replay_tracker_mut(|tracker| {
+        (!tracker.current_nodes.is_empty()).then(|| std::mem::take(&mut tracker.current_nodes))
+    });
+    drop(retired);
 }
 
 pub(crate) fn finalize_frame_component_replay_tracking() {
-    with_component_replay_tracker_mut(|tracker| {
-        tracker.previous_nodes = std::mem::take(&mut tracker.current_nodes);
+    let retired = with_component_replay_tracker_mut(|tracker| {
+        std::mem::replace(
+            &mut tracker.previous_nodes,
+            std::mem::take(&mut tracker.current_nodes),
+        )
     });
+    drop(retired);
 }
 
 pub(crate) fn finalize_frame_component_replay_tracking_partial() {
-    with_component_replay_tracker_mut(|tracker| {
-        let current = std::mem::take(&mut tracker.current_nodes);
-        tracker.previous_nodes.extend(current);
+    let retired = with_component_replay_tracker_mut(|tracker| {
+        tracker
+            .current_nodes
+            .drain()
+            .filter_map(|(key, snapshot)| tracker.previous_nodes.insert(key, snapshot))
+            .collect::<Vec<_>>()
     });
+    drop(retired);
 }
 
 pub(crate) fn reset_component_replay_tracking() {
@@ -641,16 +654,22 @@ pub(crate) fn reset_component_replay_tracking() {
     drop(removed);
 }
 
-pub(crate) fn previous_component_replay_nodes(keys: &[u64]) -> HashMap<u64, ReplayNodeSnapshot> {
+pub(crate) fn previous_component_replay_nodes(
+    keys: &[u64],
+) -> Result<Vec<ReplayNodeSnapshot>, u64> {
     with_component_replay_tracker(|tracker| {
         keys.iter()
-            .filter_map(|key| {
-                tracker
-                    .previous_nodes
-                    .get(key)
-                    .map(|value| (*key, value.clone()))
-            })
+            .map(|key| tracker.previous_nodes.get(key).cloned().ok_or(*key))
             .collect()
+    })
+}
+
+pub(crate) fn previous_component_context(key: u64) -> Option<ContextMap> {
+    with_component_replay_tracker(|tracker| {
+        tracker
+            .previous_nodes
+            .get(&key)
+            .map(|node| node.context.clone())
     })
 }
 
@@ -658,12 +677,15 @@ pub(crate) fn remove_previous_component_replay_nodes(instance_keys: &HashSet<u64
     if instance_keys.is_empty() {
         return;
     }
-    with_component_replay_tracker_mut(|tracker| {
+    let retired = with_component_replay_tracker_mut(|tracker| {
+        let mut retired = Vec::new();
         for key in instance_keys {
-            tracker.previous_nodes.remove(key);
-            tracker.current_nodes.remove(key);
+            retired.extend(tracker.previous_nodes.remove(key));
+            retired.extend(tracker.current_nodes.remove(key));
         }
+        retired
     });
+    drop(retired);
 }
 
 #[derive(Default)]
@@ -1839,8 +1861,8 @@ pub(crate) fn reset_layout_dirty_tracking() {
     with_layout_dirty_tracker_mut(|tracker| *tracker = LayoutDirtyTracker::default());
 }
 
-fn record_component_replay_snapshot(runtime: &TesseraRuntime, node_id: NodeId) {
-    let Some(node) = runtime.component_tree.get(node_id) else {
+fn record_component_replay_snapshot(runtime: &TesseraRuntime) {
+    let Some(node) = runtime.component_tree.current_node() else {
         return;
     };
     let Some(replay) = node.replay.clone() else {
@@ -1851,11 +1873,13 @@ fn record_component_replay_snapshot(runtime: &TesseraRuntime, node_id: NodeId) {
         instance_logic_id: node.instance_logic_id,
         group_path: context.group_path_stack.clone(),
         instance_key_override: context.instance_key_override,
+        context: context.context_map.clone(),
         replay,
     });
-    with_component_replay_tracker_mut(|tracker| {
-        tracker.current_nodes.insert(node.instance_key, snapshot);
+    let retired = with_component_replay_tracker_mut(|tracker| {
+        tracker.current_nodes.insert(node.instance_key, snapshot)
     });
+    drop(retired);
 }
 
 pub(crate) fn record_layout_structure(
@@ -2252,6 +2276,7 @@ impl TesseraRuntime {
                 node.replay = Some(replay);
                 node.props_unchanged_from_previous = true;
             }
+            record_component_replay_snapshot(self);
             return true;
         }
 
@@ -2276,9 +2301,7 @@ impl TesseraRuntime {
             );
             return false;
         }
-        if let Some(node_id) = current_node_id() {
-            record_component_replay_snapshot(self, node_id);
-        }
+        record_component_replay_snapshot(self);
         false
     }
 
@@ -4057,6 +4080,7 @@ mod tests {
                     instance_logic_id: 0,
                     group_path: Vec::new(),
                     instance_key_override: None,
+                    context: ContextMap::new(),
                     replay,
                 },
             );

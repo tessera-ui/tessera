@@ -105,12 +105,6 @@ pub(crate) fn reset_context_slots() {
     drop(removed);
 }
 
-#[derive(Default)]
-struct ContextSnapshotTracker {
-    previous_by_instance_key: HashMap<u64, ContextMap>,
-    current_by_instance_key: HashMap<u64, ContextMap>,
-}
-
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct ContextReadDependencyKey {
     slot: u32,
@@ -121,14 +115,6 @@ struct ContextReadDependencyKey {
 struct ContextReadDependencyTracker {
     readers_by_context: HashMap<ContextReadDependencyKey, HashSet<u64>>,
     contexts_by_reader: HashMap<u64, HashSet<ContextReadDependencyKey>>,
-}
-
-fn with_context_snapshot_tracker<R>(f: impl FnOnce(&ContextSnapshotTracker) -> R) -> R {
-    CONTEXT_GLOBALS.with(|globals| f(&globals.snapshot_tracker.borrow()))
-}
-
-fn with_context_snapshot_tracker_mut<R>(f: impl FnOnce(&mut ContextSnapshotTracker) -> R) -> R {
-    CONTEXT_GLOBALS.with(|globals| f(&mut globals.snapshot_tracker.borrow_mut()))
 }
 
 fn with_context_read_dependency_tracker<R>(
@@ -146,7 +132,6 @@ fn with_context_read_dependency_tracker_mut<R>(
 #[derive(Default)]
 struct ContextGlobals {
     slot_table: RefCell<SlotTable>,
-    snapshot_tracker: RefCell<ContextSnapshotTracker>,
     read_dependency_tracker: RefCell<ContextReadDependencyTracker>,
 }
 
@@ -205,67 +190,17 @@ fn normalize_context_snapshot(snapshot: &ContextMap) -> ContextMap {
     normalized
 }
 
-pub(crate) fn begin_frame_component_context_tracking() {
-    with_context_snapshot_tracker_mut(|tracker| tracker.current_by_instance_key.clear());
-}
-
-pub(crate) fn finalize_frame_component_context_tracking() {
-    with_context_snapshot_tracker_mut(|tracker| {
-        tracker.previous_by_instance_key = std::mem::take(&mut tracker.current_by_instance_key);
-    });
-}
-
-pub(crate) fn finalize_frame_component_context_tracking_partial() {
-    with_context_snapshot_tracker_mut(|tracker| {
-        let current = std::mem::take(&mut tracker.current_by_instance_key);
-        tracker.previous_by_instance_key.extend(current);
-    });
-}
-
-pub(crate) fn reset_component_context_tracking() {
-    with_context_snapshot_tracker_mut(|tracker| {
-        *tracker = ContextSnapshotTracker::default();
-    });
-}
-
-pub(crate) fn previous_component_context_snapshots(keys: &[u64]) -> HashMap<u64, ContextMap> {
-    with_context_snapshot_tracker(|tracker| {
-        keys.iter()
-            .filter_map(|key| {
-                tracker
-                    .previous_by_instance_key
-                    .get(key)
-                    .map(|value| (*key, value.clone()))
-            })
-            .collect()
-    })
-}
-
 pub(crate) fn context_from_previous_snapshot_for_instance<T>(
     instance_key: u64,
 ) -> Option<Context<T>>
 where
     T: Send + Sync + 'static,
 {
-    with_context_snapshot_tracker(|tracker| {
-        let map = tracker.previous_by_instance_key.get(&instance_key)?;
-        map.get(&TypeId::of::<T>())
-            .copied()
-            .and_then(|entry| with_slot_table(|table| resolve_snapshot_entry(table, entry)))
-            .map(|entry| Context::new(entry.slot, entry.generation))
-    })
-}
-
-pub(crate) fn remove_previous_component_context_snapshots(instance_keys: &HashSet<u64>) {
-    if instance_keys.is_empty() {
-        return;
-    }
-    with_context_snapshot_tracker_mut(|tracker| {
-        for key in instance_keys {
-            tracker.previous_by_instance_key.remove(key);
-            tracker.current_by_instance_key.remove(key);
-        }
-    });
+    let map = crate::runtime::previous_component_context(instance_key)?;
+    map.get(&TypeId::of::<T>())
+        .copied()
+        .and_then(|entry| with_slot_table(|table| resolve_snapshot_entry(table, entry)))
+        .map(|entry| Context::new(entry.slot, entry.generation))
 }
 
 pub(crate) fn remove_context_read_dependencies(instance_keys: &HashSet<u64>) {
@@ -294,14 +229,6 @@ pub(crate) fn remove_context_read_dependencies(instance_keys: &HashSet<u64>) {
 pub(crate) fn reset_context_read_dependencies() {
     with_context_read_dependency_tracker_mut(|tracker| {
         *tracker = ContextReadDependencyTracker::default();
-    });
-}
-
-pub(crate) fn record_current_context_snapshot_for(instance_key: u64) {
-    with_context_snapshot_tracker_mut(|tracker| {
-        tracker
-            .current_by_instance_key
-            .insert(instance_key, current_context_map());
     });
 }
 

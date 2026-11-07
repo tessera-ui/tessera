@@ -22,10 +22,6 @@ pub use crate::{
     session::{local_runtime_resource, runtime_resource},
 };
 
-pub fn record_current_context_snapshot_for(instance_key: u64) {
-    crate::context::record_current_context_snapshot_for(instance_key);
-}
-
 pub fn current_instance_logic_id() -> u64 {
     crate::runtime::current_instance_logic_id()
 }

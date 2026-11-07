@@ -1191,7 +1191,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     __tessera_instance_logic_id,
                 );
                 #prop_assert_tokens
-                #crate_path::__private::record_current_context_snapshot_for(__tessera_instance_key);
                 #replay_tokens
                 if __tessera_component_reused {
                     return;

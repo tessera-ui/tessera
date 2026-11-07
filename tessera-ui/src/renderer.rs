@@ -37,7 +37,7 @@ use crate::{
     component_tree::{
         LayoutFrameDiagnostics, WindowDragRequest, WindowRequests, clear_layout_snapshots,
     },
-    context::{reset_component_context_tracking, reset_context_read_dependencies},
+    context::reset_context_read_dependencies,
     cursor::{
         CursorEventContent, CursorState, GestureState, MOUSE_POINTER_ID, PointerChange,
         PressKeyEventType,
@@ -2188,7 +2188,6 @@ where
         reset_focus_read_dependencies();
         reset_render_slot_read_dependencies();
         reset_state_read_dependencies();
-        reset_component_context_tracking();
         reset_context_read_dependencies();
         reset_build_invalidations();
         reset_frame_clock();
