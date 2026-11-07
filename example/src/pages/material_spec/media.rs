@@ -424,6 +424,7 @@ pub(super) fn picture(#[prop(into)] title: String, width: Dp, height: Dp, thumbn
             (media.asset, media.width, media.height)
         };
         let scale = (width.0 / natural_width).max(height.0 / natural_height);
+        let image_role = if thumbnail { "thumbnail" } else { "hero" };
         boxed()
             .modifier(
                 Modifier::new()
@@ -435,7 +436,7 @@ pub(super) fn picture(#[prop(into)] title: String, width: Dp, height: Dp, thumbn
                             "ui-value-illustration",
                             [("v0", I18N.text(&media.title).into())],
                         )),
-                        test_tag: Some(format!("spec-hero-{}", media.slug)),
+                        test_tag: Some(format!("spec-{image_role}-{}", media.slug)),
                         ..Default::default()
                     }),
             )

@@ -190,16 +190,11 @@ pub(crate) struct LiveDrawerSession {
     scroll: State<ScrollableController>,
     directory: State<SideSheetController>,
     router: State<RouterController>,
-    material: State<Option<usize>>,
 }
 
 impl LiveDrawerSession {
     fn route_active(self) -> bool {
-        self.router.with(|router| {
-            router
-                .current_is::<crate::pages::material_components::MaterialComponentsPageDestination>(
-                )
-        }) && super::drawer_article_selected(self.material.get())
+        self.router.with(super::catalog::current_demo) == Some(11)
     }
 
     fn can_open(self) -> bool {
@@ -214,7 +209,6 @@ impl LiveDrawerSession {
 pub(crate) fn live_drawer_host(
     directory: State<SideSheetController>,
     router: State<RouterController>,
-    material: State<Option<usize>>,
     main_content: tessera_ui::RenderSlotWith<LiveDrawerSession>,
 ) {
     let open = remember(|| false);
@@ -226,7 +220,6 @@ pub(crate) fn live_drawer_host(
         scroll,
         directory,
         router,
-        material,
     };
     if !session.route_active() && open.get() {
         open.set(false);

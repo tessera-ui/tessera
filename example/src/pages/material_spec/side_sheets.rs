@@ -64,18 +64,11 @@ pub(crate) struct LiveSideSheetSession {
     notice: State<String>,
     directory: State<SideSheetController>,
     router: State<RouterController>,
-    material: State<Option<usize>>,
 }
 
 impl LiveSideSheetSession {
     fn route_active(self) -> bool {
-        let selected = self.material.get();
-        self.router.with(|router| {
-            router
-                .current_is::<crate::pages::material_components::MaterialComponentsPageDestination>(
-                )
-        }) && selected.is_some()
-            && selected == super::catalog::component_index(34)
+        self.router.with(super::catalog::current_demo) == Some(34)
     }
 
     fn can_open(self) -> bool {
@@ -90,7 +83,6 @@ impl LiveSideSheetSession {
 pub(crate) fn live_side_sheet_host(
     directory: State<SideSheetController>,
     router: State<RouterController>,
-    material: State<Option<usize>>,
     main_content: tessera_ui::RenderSlotWith<LiveSideSheetSession>,
 ) {
     let session = LiveSideSheetSession {
@@ -99,7 +91,6 @@ pub(crate) fn live_side_sheet_host(
         notice: remember(|| String::from("ui-no-action-selected")),
         directory,
         router,
-        material,
     };
     if !session.route_active() && session.open.get() {
         session.open.set(false);

@@ -9,11 +9,15 @@ use tessera_components::{
     surface::surface,
     text::text,
 };
+use tessera_shard::RouterController;
 use tessera_ui::{
-    Callback, Dp, Modifier, Px, State, modifier::FocusModifierExt as _, remember, tessera,
+    Callback, CallbackWith, Dp, Modifier, Px, State, modifier::FocusModifierExt as _, tessera,
 };
 
-use crate::res::I18N;
+use crate::{
+    pages::material_components::{MaterialArticlePageDestination, current_article},
+    res::I18N,
+};
 
 use super::{
     BACKGROUND, INK, PANEL,
@@ -249,168 +253,165 @@ const COMPONENTS: &[Component] = &[
 ];
 
 #[tessera]
-pub(super) fn component_pages(
-    selected: Option<State<Option<usize>>>,
+pub(crate) fn component_article(
+    index: usize,
+    router: State<RouterController>,
     sessions: Option<crate::app::AppLiveSessions>,
 ) {
-    let selected = if let Some(selected) = selected {
-        selected
-    } else {
-        remember(|| None::<usize>)
-    };
-    let directory_scroll = remember(ScrollableController::new);
-    let directory_list = remember(LazyListController::new);
+    let open_article = CallbackWith::new(move |index| {
+        router
+            .with_mut(|router| router.replace(MaterialArticlePageDestination { index, sessions }));
+    });
     let previous_article = Callback::new(move || {
-        if let Some(index) = selected.get().and_then(|index| index.checked_sub(1)) {
-            selected.set(Some(index));
+        if let Some(index) = index.checked_sub(1) {
+            open_article.call(index);
         }
     });
     let next_article = Callback::new(move || {
-        if let Some(index) = selected
-            .get()
-            .and_then(|index| index.checked_add(1))
-            .filter(|index| *index < COMPONENTS.len())
-        {
-            selected.set(Some(index));
+        if index + 1 < COMPONENTS.len() {
+            open_article.call(index + 1);
         }
     });
-    let width = remember(|| Dp(900.0));
-    let height = remember(|| Px(1));
-    if let Some(index) = selected.get() {
-        let component = COMPONENTS[index];
-        let route = ArticleRoute {
-            // Component pages open on Overview, matching the landing article of
-            // the official Material Design 3 component pages.
-            initial_page: "ui-overview",
-            previous: index.checked_sub(1).map(|index| ArticleDestination {
-                title: COMPONENTS[index].title,
-                on_open: previous_article,
+    let component = COMPONENTS[index];
+    let route = ArticleRoute {
+        // Component pages open on Overview, matching the landing article of
+        // the official Material Design 3 component pages.
+        initial_page: "ui-overview",
+        previous: index.checked_sub(1).map(|index| ArticleDestination {
+            title: COMPONENTS[index].title,
+            on_open: previous_article,
+        }),
+        next: COMPONENTS
+            .get(index + 1)
+            .map(|component| ArticleDestination {
+                title: component.title,
+                on_open: next_article,
             }),
-            next: COMPONENTS
-                .get(index + 1)
-                .map(|component| ArticleDestination {
-                    title: component.title,
-                    on_open: next_article,
-                }),
-        };
-        let content = tessera_ui::RenderSlot::new(move || {
-            let route = route.clone();
-            column()
-                .modifier(Modifier::new().fill_max_size())
-                .children(move || {
-                    let route = route.clone();
-                    boxed()
-                        .modifier(Modifier::new().fill_max_width().weight(1.0).semantics(
-                            SemanticsArgs {
-                                test_tag: Some(format!("component-article-{}", component.demo)),
-                                role: Some(tessera_ui::accesskit::Role::Group),
-                                label: Some(I18N.format(
-                                    "ui-value-specifications",
-                                    [("v0", I18N.text(&component.title).into())],
-                                )),
-                                merge_descendants: true,
-                                ..Default::default()
-                            },
-                        ))
-                        .children(move || {
-                            if component.demo == 13 {
-                                super::dialogs::dialogs_spec().route(route.clone());
-                            } else if component.demo == 25 {
-                                super::snackbars::snackbars_spec().route(route.clone());
-                            } else if component.demo == 1 {
-                                super::app_bars::app_bars_spec().route(route.clone());
-                            } else if component.demo == 20 {
-                                super::segmented::segmented_spec(Callback::new(move || {
-                                    selected.set(Some(0));
-                                }))
+    };
+    let content = tessera_ui::RenderSlot::new(move || {
+        let route = route.clone();
+        column()
+            .modifier(Modifier::new().fill_max_size())
+            .children(move || {
+                let route = route.clone();
+                boxed()
+                    .modifier(Modifier::new().fill_max_width().weight(1.0).semantics(
+                        SemanticsArgs {
+                            test_tag: Some(format!("component-article-{}", component.demo)),
+                            role: Some(tessera_ui::accesskit::Role::Group),
+                            label: Some(I18N.format(
+                                "ui-value-specifications",
+                                [("v0", I18N.text(&component.title).into())],
+                            )),
+                            merge_descendants: true,
+                            ..Default::default()
+                        },
+                    ))
+                    .children(move || {
+                        if component.demo == 13 {
+                            super::dialogs::dialogs_spec().route(route.clone());
+                        } else if component.demo == 25 {
+                            super::snackbars::snackbars_spec().route(route.clone());
+                        } else if component.demo == 1 {
+                            super::app_bars::app_bars_spec().route(route.clone());
+                        } else if component.demo == 20 {
+                            super::segmented::segmented_spec(Callback::new(move || {
+                                open_article.call(0);
+                            }))
+                            .route(route.clone());
+                        } else if component.demo == 24 {
+                            super::text_fields::text_fields_spec().route(route.clone());
+                        } else if component.demo == 4 {
+                            super::tooltips::tooltips_spec().route(route.clone());
+                        } else if component.demo == 31 {
+                            super::navigation_bar::navigation_bar_spec().route(route.clone());
+                        } else if component.demo == 32 {
+                            super::navigation_rail::navigation_rail_spec()
+                                .session_optional(sessions.map(|sessions| sessions.rail))
                                 .route(route.clone());
-                            } else if component.demo == 24 {
-                                super::text_fields::text_fields_spec().route(route.clone());
-                            } else if component.demo == 4 {
-                                super::tooltips::tooltips_spec().route(route.clone());
-                            } else if component.demo == 31 {
-                                super::navigation_bar::navigation_bar_spec().route(route.clone());
-                            } else if component.demo == 32 {
-                                super::navigation_rail::navigation_rail_spec()
-                                    .session_optional(sessions.map(|sessions| sessions.rail))
-                                    .route(route.clone());
-                            } else if component.demo == 21 {
-                                super::tabs::tabs_spec().route(route.clone());
-                            } else if component.demo == 6 {
-                                super::loading_indicator::loading_indicator_spec()
-                                    .route(route.clone());
-                            } else if component.demo == 7 {
-                                super::progress_indicators::progress_indicators_spec()
-                                    .route(route.clone());
-                            } else if component.demo == 12 {
-                                super::badges::badges_spec().route(route.clone());
-                            } else if component.demo == 18 {
-                                super::button_groups::button_groups_spec().route(route.clone());
-                            } else if component.demo == 22 {
-                                super::split_buttons::split_buttons_spec().route(route.clone());
-                            } else if component.demo == 8 {
-                                super::fab_menus::fab_menu_spec().route(route.clone());
-                            } else if component.demo == 9 {
-                                super::extended_fabs::extended_fabs_spec().route(route.clone());
-                            } else if component.demo == 19 {
-                                super::floating_actions::floating_actions_spec()
-                                    .route(route.clone());
-                            } else if component.demo == 28 {
-                                super::date_pickers::date_pickers_spec().route(route.clone());
-                            } else if component.demo == 30 {
-                                super::time_pickers::time_pickers_spec().route(route.clone());
-                            } else if component.demo == 16 {
-                                super::cards::cards_spec().route(route.clone());
-                            } else if component.demo == 15 {
-                                super::lists::lists_spec().route(route.clone());
-                            } else if component.demo == 14 {
-                                super::dividers::divider_spec().route(route.clone());
-                            } else if component.demo == 3 {
-                                super::icon_buttons::icon_buttons_spec().route(route.clone());
-                            } else if component.demo == 17 {
-                                super::chips::chips_spec().route(route.clone());
-                            } else if component.demo == 23 {
-                                super::radio_buttons::radio_buttons_spec().route(route.clone());
-                            } else if component.demo == 5 {
-                                slider_spec().route(route.clone());
-                            } else if component.demo == 36 {
-                                super::buttons::buttons_spec().route(route.clone());
-                            } else if component.demo == 37 {
-                                super::selection_controls::checkbox_spec().route(route.clone());
-                            } else if component.demo == 38 {
-                                super::selection_controls::switch_spec().route(route.clone());
-                            } else if component.demo == 26 {
-                                super::menus::menus_spec().route(route.clone());
-                            } else if component.demo == 27 {
-                                super::search::search_spec().route(route.clone());
-                            } else if component.demo == 2 {
-                                super::carousel::carousel_spec().route(route.clone());
-                            } else if component.demo == 10 {
-                                super::toolbars::toolbars_spec().route(route.clone());
-                            } else if component.demo == 11 {
-                                super::drawers::drawers_spec()
-                                    .session_optional(sessions.map(|sessions| sessions.drawer))
-                                    .route(route.clone())
-                                    .on_recommended(move || {
-                                        if let Some(index) = component_index(32) {
-                                            selected.set(Some(index));
-                                        }
-                                    });
-                            } else if component.demo == 33 {
-                                super::sheets::sheets_spec(false).route(route.clone());
-                            } else if component.demo == 34 {
-                                super::side_sheets::side_sheets_spec()
-                                    .session_optional(sessions.map(|sessions| sessions.side_sheet))
-                                    .route(route.clone());
-                            } else {
-                                unreachable!("ui-unregistered-component-article");
-                            }
-                        });
-                });
-        });
-        content.render();
-        return;
-    }
+                        } else if component.demo == 21 {
+                            super::tabs::tabs_spec().route(route.clone());
+                        } else if component.demo == 6 {
+                            super::loading_indicator::loading_indicator_spec().route(route.clone());
+                        } else if component.demo == 7 {
+                            super::progress_indicators::progress_indicators_spec()
+                                .route(route.clone());
+                        } else if component.demo == 12 {
+                            super::badges::badges_spec().route(route.clone());
+                        } else if component.demo == 18 {
+                            super::button_groups::button_groups_spec().route(route.clone());
+                        } else if component.demo == 22 {
+                            super::split_buttons::split_buttons_spec().route(route.clone());
+                        } else if component.demo == 8 {
+                            super::fab_menus::fab_menu_spec().route(route.clone());
+                        } else if component.demo == 9 {
+                            super::extended_fabs::extended_fabs_spec().route(route.clone());
+                        } else if component.demo == 19 {
+                            super::floating_actions::floating_actions_spec().route(route.clone());
+                        } else if component.demo == 28 {
+                            super::date_pickers::date_pickers_spec().route(route.clone());
+                        } else if component.demo == 30 {
+                            super::time_pickers::time_pickers_spec().route(route.clone());
+                        } else if component.demo == 16 {
+                            super::cards::cards_spec().route(route.clone());
+                        } else if component.demo == 15 {
+                            super::lists::lists_spec().route(route.clone());
+                        } else if component.demo == 14 {
+                            super::dividers::divider_spec().route(route.clone());
+                        } else if component.demo == 3 {
+                            super::icon_buttons::icon_buttons_spec().route(route.clone());
+                        } else if component.demo == 17 {
+                            super::chips::chips_spec().route(route.clone());
+                        } else if component.demo == 23 {
+                            super::radio_buttons::radio_buttons_spec().route(route.clone());
+                        } else if component.demo == 5 {
+                            slider_spec().route(route.clone());
+                        } else if component.demo == 36 {
+                            super::buttons::buttons_spec().route(route.clone());
+                        } else if component.demo == 37 {
+                            super::selection_controls::checkbox_spec().route(route.clone());
+                        } else if component.demo == 38 {
+                            super::selection_controls::switch_spec().route(route.clone());
+                        } else if component.demo == 26 {
+                            super::menus::menus_spec().route(route.clone());
+                        } else if component.demo == 27 {
+                            super::search::search_spec().route(route.clone());
+                        } else if component.demo == 2 {
+                            super::carousel::carousel_spec().route(route.clone());
+                        } else if component.demo == 10 {
+                            super::toolbars::toolbars_spec().route(route.clone());
+                        } else if component.demo == 11 {
+                            super::drawers::drawers_spec()
+                                .session_optional(sessions.map(|sessions| sessions.drawer))
+                                .route(route.clone())
+                                .on_recommended(move || {
+                                    if let Some(index) = component_index(32) {
+                                        open_article.call(index);
+                                    }
+                                });
+                        } else if component.demo == 33 {
+                            super::sheets::sheets_spec(false).route(route.clone());
+                        } else if component.demo == 34 {
+                            super::side_sheets::side_sheets_spec()
+                                .session_optional(sessions.map(|sessions| sessions.side_sheet))
+                                .route(route.clone());
+                        } else {
+                            unreachable!("ui-unregistered-component-article");
+                        }
+                    });
+            });
+    });
+    content.render();
+}
+
+#[tessera]
+pub(crate) fn component_directory(
+    directory_scroll: State<ScrollableController>,
+    directory_list: State<LazyListController>,
+    width: State<Dp>,
+    height: State<Px>,
+    on_open: CallbackWith<usize>,
+) {
     surface()
         .style(BACKGROUND.into())
         .modifier(Modifier::new().fill_max_size())
@@ -475,7 +476,7 @@ pub(super) fn component_pages(
                             list.item(move || {
                                 let entries = entries.clone();
                                 column().children(move || {
-                                    directory_group(entries.clone(), selected, width.get());
+                                    directory_group(entries.clone(), on_open, width.get());
                                     if row + 1 < rows {
                                         gap(Dp(8.0));
                                     }
@@ -488,6 +489,10 @@ pub(super) fn component_pages(
         });
 }
 
+pub(super) fn current_demo(router: &RouterController) -> Option<usize> {
+    current_article(router).map(|index| COMPONENTS[index].demo)
+}
+
 pub(super) fn component_index(demo: usize) -> Option<usize> {
     COMPONENTS
         .iter()
@@ -495,7 +500,7 @@ pub(super) fn component_index(demo: usize) -> Option<usize> {
 }
 
 #[tessera]
-fn directory_group(entries: Vec<(usize, Component)>, selected: State<Option<usize>>, width: Dp) {
+fn directory_group(entries: Vec<(usize, Component)>, on_open: CallbackWith<usize>, width: Dp) {
     let columns = directory_columns(width) as f64;
     let card_width = Dp(((width.0 - 16.0 - (columns - 1.0) * 8.0) / columns).max(0.0));
     flow_row()
@@ -509,7 +514,7 @@ fn directory_group(entries: Vec<(usize, Component)>, selected: State<Option<usiz
         .line_spacing(Dp(8.0))
         .children(move || {
             for (index, component) in entries.iter().copied() {
-                component_card(component, index, selected, card_width);
+                component_card(component, index, on_open, card_width);
             }
         });
 }
@@ -525,7 +530,7 @@ fn directory_columns(width: Dp) -> usize {
 }
 
 #[tessera]
-fn component_card(component: Component, index: usize, selected: State<Option<usize>>, width: Dp) {
+fn component_card(component: Component, index: usize, on_open: CallbackWith<usize>, width: Dp) {
     surface()
         .style(PANEL.into())
         .shape(Shape::rounded_rectangle(Dp(24.0)))
@@ -533,7 +538,7 @@ fn component_card(component: Component, index: usize, selected: State<Option<usi
             test_tag: Some(format!("component-card-{index}")),
             ..Default::default()
         }))
-        .on_click(move || selected.set(Some(index)))
+        .on_click(move || on_open.call(index))
         .accessibility_label(I18N.format(
             "ui-open-value-specifications",
             [("v0", I18N.text(&component.title).into())],
@@ -567,6 +572,7 @@ mod tests {
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
         accesskit::{Action, ActionRequest, Node, Rect, Role, Toggled, TreeId},
+        remember,
     };
 
     use super::*;
@@ -574,7 +580,20 @@ mod tests {
     #[tessera]
     fn fixture(initial_component: Option<usize>) {
         material_theme().child(move || {
-            let selected = remember(|| initial_component);
+            let router = remember(move || {
+                let mut router = RouterController::with_root(
+                    crate::pages::material_components::MaterialComponentsPageDestination {
+                        sessions: None,
+                    },
+                );
+                if let Some(index) = initial_component {
+                    router.push(MaterialArticlePageDestination {
+                        index,
+                        sessions: None,
+                    });
+                }
+                router
+            });
             let drawer =
                 remember(|| tessera_components::side_sheet::SideSheetController::new(false));
             column()
@@ -583,12 +602,12 @@ mod tests {
                     tessera_components::app_bar::top_app_bar()
                         .title("Material Design 3")
                         .navigation_icon(move || {
-                            crate::app::navigation_button(selected, drawer, true);
+                            crate::app::navigation_button(router, drawer);
                         });
                     boxed()
                         .modifier(Modifier::new().fill_max_width().weight(1.0))
                         .children(move || {
-                            component_pages().selected(selected);
+                            tessera_shard::shard_home().controller(router);
                         });
                 });
         });

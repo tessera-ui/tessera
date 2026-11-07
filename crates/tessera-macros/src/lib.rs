@@ -1417,26 +1417,25 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
             quote! { pub #ident: #ty }
         });
 
-    // Keep all explicit function parameters as destination props.
     let expanded = {
-        let destination_builder_setters: Vec<_> = shard_params
+        let required_args = shard_params
             .iter()
-            .filter(|param| !param.is_router)
+            .filter(|param| !param.is_router && option_inner_type(&param.ty).is_none())
             .map(|param| {
                 let ident = &param.ident;
-                if option_inner_type(&param.ty).is_some() {
-                    quote! {
-                        if let Some(value) = self.#ident.clone() {
-                            __tessera_builder.#ident(value);
-                        }
-                    }
-                } else {
-                    quote! {
-                        __tessera_builder.#ident(self.#ident.clone());
+                quote! { self.#ident.clone() }
+            });
+        let destination_builder_setters = shard_params
+            .iter()
+            .filter(|param| !param.is_router && option_inner_type(&param.ty).is_some())
+            .map(|param| {
+                let ident = &param.ident;
+                quote! {
+                    if let Some(value) = self.#ident.clone() {
+                        __tessera_builder.#ident(value);
                     }
                 }
-            })
-            .collect();
+            });
 
         if let Some(state_type) = state_type {
             quote! {
@@ -1447,7 +1446,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                 impl #shard_crate_path::router::RouterDestination for #struct_name {
                     fn exec_component(&self, controller: #ui_crate_path::State<#shard_crate_path::router::RouterController>) {
-                        let __tessera_builder = #func_name(controller);
+                        let __tessera_builder = #func_name(controller #(, #required_args)*);
                         #(#destination_builder_setters)*
                     }
 
@@ -1488,7 +1487,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                 impl #shard_crate_path::router::RouterDestination for #struct_name {
                     fn exec_component(&self, controller: #ui_crate_path::State<#shard_crate_path::router::RouterController>) {
-                        let __tessera_builder = #func_name(controller);
+                        let __tessera_builder = #func_name(controller #(, #required_args)*);
                         #(#destination_builder_setters)*
                     }
 

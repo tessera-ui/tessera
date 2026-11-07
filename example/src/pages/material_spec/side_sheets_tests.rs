@@ -127,16 +127,18 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
     pump(&mut session, 2);
     let navigation = navigation.get().expect("mounted app navigation");
     navigation.router.with_mut(|router| {
-        router.replace(
+        router.reset(
             crate::pages::material_components::MaterialComponentsPageDestination {
-                selected: Some(navigation.material),
                 sessions: navigation.sessions,
             },
-        )
+        );
+        router.push(
+            crate::pages::material_components::MaterialArticlePageDestination {
+                index: super::super::catalog::component_index(34).unwrap(),
+                sessions: navigation.sessions,
+            },
+        );
     });
-    navigation
-        .material
-        .set(super::super::catalog::component_index(34));
     pump(&mut session, 2);
     let live = navigation.sessions.expect("root app sessions").side_sheet;
     assert!(live.route_active());
@@ -154,7 +156,9 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
     assert_eq!(sheet.height.0, height as i32);
     assert_eq!(sheet.x.0 + sheet.width.0, width as i32);
     assert_eq!(sheet.width.0, 400);
-    navigation.material.set(None);
+    navigation
+        .router
+        .with_mut(tessera_shard::RouterController::pop);
     pump(&mut session, 2);
     assert!(
         !live.open.get(),

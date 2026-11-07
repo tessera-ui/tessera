@@ -27,8 +27,9 @@ use tessera_ui::{
 use crate::{
     pages::{
         custom_shader::CustomShaderPageDestination,
-        glass_components::GlassComponentsPageDestination, home::HomePageDestination,
-        material_components::MaterialComponentsPageDestination,
+        glass_components::GlassComponentsPageDestination,
+        home::HomePageDestination,
+        material_components::{MaterialComponentsPageDestination, current_article},
     },
     res::I18N,
 };
@@ -43,7 +44,6 @@ pub(crate) struct AppLiveSessions {
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct AppNavigationHandles {
     pub router: State<RouterController>,
-    pub material: State<Option<usize>>,
     pub directory: State<SideSheetController>,
     pub sessions: Option<AppLiveSessions>,
 }
@@ -60,13 +60,11 @@ pub(crate) fn app(
             AppNavigationHandles {
                 directory: remember(|| SideSheetController::new(true)),
                 router: remember(|| RouterController::with_root(HomePageDestination {})),
-                material: remember(|| None::<usize>),
                 sessions: None,
             }
         };
         let side_sheet_controller = handles.directory;
         let nav_controller = handles.router;
-        let selected = handles.material;
         let content = RenderSlotWith::new(move |sessions: AppLiveSessions| {
             if let Some(on_ready) = on_navigation_ready {
                 on_ready.call(AppNavigationHandles {
@@ -79,24 +77,18 @@ pub(crate) fn app(
                 .top_bar(move || {
                     let app_bar = top_app_bar()
                         .window_chrome(true)
-                        .title(
-                            I18N.text(
-                                if nav_controller
-                                    .with(|c| c.current_is::<MaterialComponentsPageDestination>())
-                                {
-                                    "Material Design 3"
-                                } else {
-                                    "ui-examples"
-                                },
-                            ),
-                        )
+                        .title(I18N.text(
+                            if nav_controller.with(|router| {
+                                router.current_is::<MaterialComponentsPageDestination>()
+                                    || current_article(router).is_some()
+                            }) {
+                                "Material Design 3"
+                            } else {
+                                "ui-examples"
+                            },
+                        ))
                         .navigation_icon(move || {
-                            navigation_button(
-                                selected,
-                                side_sheet_controller,
-                                nav_controller
-                                    .with(|c| c.current_is::<MaterialComponentsPageDestination>()),
-                            );
+                            navigation_button(nav_controller, side_sheet_controller);
                         });
                     if let Some(locale) = I18n::try_current() {
                         app_bar.action(move || {
@@ -159,7 +151,6 @@ pub(crate) fn app(
                                             nav_item(
                                                 "ui-material-components",
                                                 MaterialComponentsPageDestination {
-                                                    selected: Some(selected),
                                                     sessions: Some(sessions),
                                                 },
                                                 nav_controller,
@@ -191,17 +182,14 @@ pub(crate) fn app(
         crate::pages::live_drawer_host(
             side_sheet_controller,
             nav_controller,
-            selected,
             RenderSlotWith::new(move |drawer| {
                 crate::pages::live_side_sheet_host(
                     side_sheet_controller,
                     nav_controller,
-                    selected,
                     RenderSlotWith::new(move |side_sheet| {
                         crate::pages::live_rail_host(
                             side_sheet_controller,
                             nav_controller,
-                            selected,
                             RenderSlotWith::new(move |rail| {
                                 content.render(AppLiveSessions {
                                     drawer,
@@ -255,7 +243,7 @@ fn nav_item<D: RouterDestination + Clone + PartialEq>(
     let item = navigation_drawer_item()
         .label(I18N.text(headline))
         .on_click(move || {
-            nav_controller.with_mut(|c| c.replace(destination.clone()));
+            nav_controller.with_mut(|router| router.reset(destination.clone()));
             side_sheet_controller.with_mut(|c| {
                 if c.is_open() {
                     c.close();
@@ -285,11 +273,10 @@ struct NavigationFade {
 
 #[tessera]
 pub(crate) fn navigation_button(
-    selected: State<Option<usize>>,
+    router: State<RouterController>,
     drawer: State<SideSheetController>,
-    material_page: bool,
 ) {
-    let back = material_page && selected.get().is_some();
+    let back = router.with(current_article).is_some();
     let target = if back { 1.0 } else { 0.0 };
     let frame = current_frame_nanos();
     let fade = remember(|| NavigationFade {
@@ -341,8 +328,8 @@ pub(crate) fn navigation_button(
                     "ui-open-navigation-drawer"
                 }))
                 .on_click(move || {
-                    if material_page && selected.get().is_some() {
-                        selected.set(None);
+                    if router.with(current_article).is_some() {
+                        router.with_mut(RouterController::pop);
                     } else {
                         drawer.with_mut(|drawer| {
                             if drawer.is_open() {
@@ -370,7 +357,6 @@ pub(crate) fn app_fixture(
     let handles = AppNavigationHandles {
         directory: remember(|| SideSheetController::new(true)),
         router: remember(|| RouterController::with_root(HomePageDestination {})),
-        material: remember(|| None::<usize>),
         sessions: None,
     };
     app()
@@ -386,6 +372,72 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn system_back_returns_from_a_component_article_to_the_directory() {
+        use tessera_ui::system_back::{BackSwipeEdge, SystemBackEvent};
+
+        let navigation = TestProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test(|| app_fixture(navigation.clone())).viewport_px(1200, 1600),
+        );
+        session.run(|| tessera_ui::EntryRegistry::new().register_package(crate::res::i18n()));
+        let click = |snapshot: &tessera_ui::testing::AccessibilitySnapshot, label| {
+            let (id, _) = snapshot
+                .nodes()
+                .iter()
+                .find(|(_, node)| {
+                    crate::has_label(node, label) && node.supports_action(Action::Click)
+                })
+                .unwrap_or_else(|| panic!("missing action {label}"));
+            ActionRequest {
+                action: Action::Click,
+                target_tree: TreeId::ROOT,
+                target_node: *id,
+                data: None,
+            }
+        };
+
+        pump_layout_test_session(&mut session, 0);
+        let router = navigation.get().unwrap().router;
+        let directory = click(
+            &session.inspect_accessibility().unwrap(),
+            "Material components",
+        );
+        assert!(session.dispatch_accessibility_action(directory));
+        pump_layout_test_session(&mut session, 1_000_000_000);
+        pump_layout_test_session(&mut session, 2_000_000_000);
+        let article = click(
+            &session.inspect_accessibility().unwrap(),
+            "Open Button groups specifications",
+        );
+        assert!(session.dispatch_accessibility_action(article));
+        pump_layout_test_session(&mut session, 2_100_000_000);
+        assert!(session.run(|| router.with(current_article).is_some()));
+
+        session.dispatch_system_back(SystemBackEvent::Started(BackSwipeEdge::Left));
+        session.dispatch_system_back(SystemBackEvent::Progress {
+            progress: 0.5,
+            edge: BackSwipeEdge::Left,
+        });
+        let preview = pump_layout_test_session(&mut session, 2_200_000_000);
+        assert!(preview.node("component-article-18").bounds().x.0 > 0);
+        assert!(session.run(|| router.with(current_article).is_some()));
+        session.dispatch_system_back(SystemBackEvent::Cancelled);
+        pump_layout_test_session(&mut session, 2_400_000_000);
+        assert!(session.run(|| router.with(current_article).is_some()));
+
+        session.dispatch_system_back(SystemBackEvent::Committed);
+        pump_layout_test_session(&mut session, 2_500_000_000);
+        assert!(session.run(|| {
+            router.with(RouterController::current_is::<MaterialComponentsPageDestination>)
+        }));
+        let article = click(
+            &session.inspect_accessibility().unwrap(),
+            "Open Button groups specifications",
+        );
+        assert!(session.dispatch_accessibility_action(article));
+    }
 
     #[test]
     fn language_switch_preserves_route_and_edited_control_state_in_both_directions() {

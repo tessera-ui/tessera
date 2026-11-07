@@ -15,6 +15,7 @@ use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera, use_context};
 use crate::res::I18N;
 
 pub(crate) use self::{
+    catalog::{component_article, component_directory},
     drawers::{LiveDrawerSession, live_drawer_host},
     media::FONTS,
     navigation_rail::{LiveRailSession, live_rail_host},
@@ -73,14 +74,6 @@ mod text_fields_accessibility;
 mod time_pickers;
 mod toolbars;
 mod tooltips;
-
-pub(crate) fn drawer_article_selected(selected: Option<usize>) -> bool {
-    selected.is_some() && selected == catalog::component_index(11)
-}
-
-pub(crate) fn rail_article_selected(selected: Option<usize>) -> bool {
-    selected.is_some() && selected == catalog::component_index(32)
-}
 
 const BACKGROUND: Color = Color::from_rgb(0.991102097, 0.964686248, 1.000000000);
 const PANEL: Color = Color::from_rgb(0.938685728, 0.879622397, 0.921581856);
@@ -246,16 +239,6 @@ fn spec_table_cells(headers: Vec<String>, cells: Vec<TextTableCell>) {
         .color(INK)
         .header_color(srgb(77, 66, 86))
         .header_background(PANEL);
-}
-
-#[tessera]
-pub(super) fn material_spec(
-    selected: Option<tessera_ui::State<Option<usize>>>,
-    sessions: Option<crate::app::AppLiveSessions>,
-) {
-    catalog::component_pages()
-        .selected_optional(selected)
-        .sessions_optional(sessions);
 }
 
 #[tessera]

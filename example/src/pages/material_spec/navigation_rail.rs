@@ -38,16 +38,11 @@ pub(crate) struct LiveRailSession {
     selected: State<usize>,
     directory: State<SideSheetController>,
     router: State<RouterController>,
-    material: State<Option<usize>>,
 }
 
 impl LiveRailSession {
     fn route_active(self) -> bool {
-        self.router.with(|router| {
-            router
-                .current_is::<crate::pages::material_components::MaterialComponentsPageDestination>(
-                )
-        }) && super::rail_article_selected(self.material.get())
+        self.router.with(super::catalog::current_demo) == Some(32)
     }
 
     fn can_open(self) -> bool {
@@ -62,7 +57,6 @@ impl LiveRailSession {
 pub(crate) fn live_rail_host(
     directory: State<SideSheetController>,
     router: State<RouterController>,
-    material: State<Option<usize>>,
     main_content: tessera_ui::RenderSlotWith<LiveRailSession>,
 ) {
     let open = remember(|| false);
@@ -72,7 +66,6 @@ pub(crate) fn live_rail_host(
         selected,
         directory,
         router,
-        material,
     };
     if !session.route_active() && open.get() {
         open.set(false);

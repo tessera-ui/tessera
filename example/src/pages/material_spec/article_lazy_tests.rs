@@ -4,6 +4,8 @@ use tessera_ui::{
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
 };
 
+use crate::pages::{home::HomePageDestination, material_components::current_article};
+
 fn find(
     renderer: &HeadlessRenderer,
     label: &str,
@@ -1161,7 +1163,7 @@ fn live_drawer_covers_the_real_app_bar_blocks_background_and_restores_its_launch
         Some(Role::Button),
         -600.0,
     );
-    let selected_article = navigation.material.get();
+    let selected_article = navigation.router.with(current_article);
     let (back_id, back) = find(&renderer, "Back to components", Some(Role::Button))
         .expect("real app bar navigation button");
     let before = renderer.read_pixels().unwrap();
@@ -1198,7 +1200,7 @@ fn live_drawer_covers_the_real_app_bar_blocks_background_and_restores_its_launch
     );
     tap_app_bounds(&mut renderer, back.bounds().unwrap());
     renderer.render_frames(3);
-    assert_eq!(navigation.material.get(), selected_article);
+    assert_eq!(navigation.router.with(current_article), selected_article);
     assert!(!navigation.directory.with(|directory| directory.is_open()));
     assert!(find(&renderer, "Mail navigation", Some(Role::Dialog)).is_some());
     let outbox = app_mail_destination(&renderer, "Outbox");
@@ -1210,7 +1212,7 @@ fn live_drawer_covers_the_real_app_bar_blocks_background_and_restores_its_launch
     tap_app_point(&mut renderer, PxPosition::from_f32_xy(612.0, 20.0));
     renderer.render_frames(60);
     assert_app_mail_closed(&renderer, opener);
-    assert_eq!(navigation.material.get(), selected_article);
+    assert_eq!(navigation.router.with(current_article), selected_article);
     assert!(!navigation.directory.with(|directory| directory.is_open()));
     assert!(node_is_exposed(
         &renderer.accessibility_snapshot().unwrap().nodes,
@@ -1233,9 +1235,9 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
         if leave_material_route {
             navigation
                 .router
-                .with_mut(|router| router.replace(crate::pages::home::HomePageDestination {}));
+                .with_mut(|router| router.reset(HomePageDestination {}));
         } else {
-            navigation.material.set(None);
+            navigation.router.with_mut(|router| router.pop());
         }
         renderer.step_frame();
         assert_eq!(
@@ -1255,7 +1257,6 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
         assert_ne!(tree.focus, inbox_id);
         assert!(tree.nodes.iter().any(|(id, _)| *id == tree.focus));
         assert!(navigation.router.is_alive());
-        assert!(navigation.material.is_alive());
         assert!(navigation.directory.is_alive());
         if leave_material_route {
             let menu = find(&renderer, "Open navigation drawer", Some(Role::Button))
@@ -1264,15 +1265,14 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
             renderer.render_frames(60);
             click(&mut renderer, "Material components", None, -600.0, None);
             renderer.render_frames(60);
-        } else {
-            click(
-                &mut renderer,
-                "Open Navigation drawer specifications",
-                None,
-                -600.0,
-                None,
-            );
         }
+        click(
+            &mut renderer,
+            "Open Navigation drawer specifications",
+            None,
+            -600.0,
+            None,
+        );
         reveal(
             &mut renderer,
             "Open modal navigation drawer",
@@ -1385,7 +1385,7 @@ fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selecti
         Some(Role::Button),
         -600.0,
     );
-    let article = navigation.material.get();
+    let article = navigation.router.with(current_article);
     let (back_id, back) = find(&renderer, "Back to components", Some(Role::Button)).unwrap();
     let before = renderer.read_pixels().unwrap();
     let opener = launch_app_rail(&mut renderer);
@@ -1455,7 +1455,7 @@ fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selecti
     );
     tap_app_bounds(&mut renderer, back.bounds().unwrap());
     renderer.render_frames(3);
-    assert_eq!(navigation.material.get(), article);
+    assert_eq!(navigation.router.with(current_article), article);
     assert!(find(&renderer, "Mail rail navigation", Some(Role::Dialog)).is_some());
     tap_app_point(&mut renderer, PxPosition::from_f32_xy(612.0, 20.0));
     renderer.render_frames(60);
@@ -1485,9 +1485,9 @@ fn live_rail_route_exit_clears_modal_focus_and_preserves_selection_on_return() {
         if leave_material_route {
             navigation
                 .router
-                .with_mut(|router| router.replace(crate::pages::home::HomePageDestination {}));
+                .with_mut(|router| router.reset(HomePageDestination {}));
         } else {
-            navigation.material.set(None);
+            navigation.router.with_mut(|router| router.pop());
         }
         renderer.step_frame();
         assert!(
@@ -1501,22 +1501,21 @@ fn live_rail_route_exit_clears_modal_focus_and_preserves_selection_on_return() {
             assert_ne!(tree.focus, stale);
         }
         assert!(tree.nodes.iter().any(|(id, _)| *id == tree.focus));
-        assert!(navigation.router.is_alive() && navigation.material.is_alive());
+        assert!(navigation.router.is_alive());
         if leave_material_route {
             let menu = find(&renderer, "Open navigation drawer", Some(Role::Button)).unwrap();
             tap_app_bounds(&mut renderer, menu.1.bounds().unwrap());
             renderer.render_frames(60);
             click(&mut renderer, "Material components", None, -600.0, None);
             renderer.render_frames(60);
-        } else {
-            click(
-                &mut renderer,
-                "Open Navigation rail specifications",
-                None,
-                -600.0,
-                None,
-            );
         }
+        click(
+            &mut renderer,
+            "Open Navigation rail specifications",
+            None,
+            -600.0,
+            None,
+        );
         click(&mut renderer, "Guidelines", Some(Role::Tab), 800.0, None);
         click(&mut renderer, "Behavior", Some(Role::Link), -600.0, None);
         let opener = launch_app_rail(&mut renderer);
