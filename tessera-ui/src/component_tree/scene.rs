@@ -20,7 +20,7 @@ use super::{
     direct_layout_children, geometry_parent, record_frame_stage,
 };
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(PartialEq)]
 enum SceneClip {
     Shape(ClipRegion),
     Rect(PxRect),
@@ -37,7 +37,7 @@ struct SceneDraw {
 
 pub(crate) struct SceneRope {
     draw: Option<Arc<SceneDraw>>,
-    clip: Option<SceneClip>,
+    clip: Option<Arc<SceneClip>>,
     children: SceneChildren,
     bounds: Option<PxRect>,
     partial_redraw: bool,
@@ -179,7 +179,7 @@ struct SceneBranch {
     parent: Option<NodeId>,
     children: BranchChildren,
     draw: Option<Arc<SceneDraw>>,
-    clip: Option<SceneClip>,
+    clip: Option<Arc<SceneClip>>,
     output: Option<Arc<SceneRope>>,
     culled: bool,
 }
@@ -545,7 +545,7 @@ impl FrameScene {
                         })
                     })
                 });
-                branch.clip = prepared
+                let clip = prepared
                     .filter(|prepared| prepared.clips_children)
                     .map(|prepared| {
                         node_metadata
@@ -563,6 +563,9 @@ impl FrameScene {
                                 SceneClip::Shape,
                             )
                     });
+                if branch.clip.as_deref() != clip.as_ref() {
+                    branch.clip = clip.map(Arc::new);
+                }
             }
             let is_transparent = branch.transparent_child().is_some();
             if was_transparent != is_transparent
@@ -625,7 +628,7 @@ impl FrameScene {
                     bounds,
                     partial_redraw,
                     draw: branch.draw.clone(),
-                    clip: branch.clip,
+                    clip: branch.clip.clone(),
                     children,
                 }))
             };
@@ -756,9 +759,9 @@ impl SceneRope {
         if !intersects_damage(self.bounds) {
             return;
         }
-        match self.clip {
-            Some(SceneClip::Shape(region)) => builder.push_shape_clip_push(region),
-            Some(SceneClip::Rect(rect)) => builder.push_clip_push(rect),
+        match self.clip.as_deref() {
+            Some(SceneClip::Shape(region)) => builder.push_shape_clip_push(*region),
+            Some(SceneClip::Rect(rect)) => builder.push_clip_push(*rect),
             None => {}
         }
         if let Some(draw) = &self.draw {
@@ -839,14 +842,15 @@ mod tests {
         }
         let clip_metadata = tree.metadatas.entry_or_default(clip);
         clip_metadata.clips_children = true;
-        clip_metadata.set_clip_region(Some(ClipRegion {
+        let original_clip = ClipRegion {
             position: zero,
             size: [16.0, 16.0],
             shape: crate::ClipShape::RoundedRectangle {
                 radii: [3.0; 4],
                 exponents: [2.0; 4],
             },
-        }));
+        };
+        clip_metadata.set_clip_region(Some(original_clip));
         tree.metadatas
             .entry_or_default(changed)
             .fragment
@@ -901,7 +905,33 @@ mod tests {
             ]
         ));
         assert_eq!(drawing(&regional), [(3, zero)]);
+        let new_clip = ClipRegion {
+            shape: crate::ClipShape::Ellipse,
+            ..original_clip
+        };
+        tree.metadatas
+            .entry_or_default(clip)
+            .set_clip_region(Some(new_clip));
+        tree.metadatas.mark_geometry_dirty(clip);
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        let (updated, _) = scene.update(
+            root,
+            &tree.tree,
+            &tree.metadatas,
+            &HashSet::default(),
+            &HashSet::default(),
+            viewport,
+        );
+
         assert_eq!(graph.damage_since(None), None);
+        assert!(matches!(
+            &graph.ops()[0].command,
+            Command::ShapeClipPush(clip) if *clip == original_clip
+        ));
+        assert!(matches!(
+            &updated.ops()[0].command,
+            Command::ShapeClipPush(clip) if *clip == new_clip
+        ));
         assert_eq!(drawing(&graph), [(3, zero), (2, far)]);
     }
 
