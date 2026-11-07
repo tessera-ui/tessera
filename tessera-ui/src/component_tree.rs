@@ -627,7 +627,7 @@ pub(crate) struct ReplayReplaceContext {
     parent_id: indextree::NodeId,
     next_sibling: Option<indextree::NodeId>,
     last_existing_child: Option<indextree::NodeId>,
-    previous_queue: Vec<indextree::NodeId>,
+    previous_queue: Option<Vec<indextree::NodeId>>,
     detached_root_id: indextree::NodeId,
 }
 
@@ -828,7 +828,9 @@ impl ComponentTree {
 
         let last_existing_child = parent_id.last_child(&self.tree);
 
-        let previous_queue = std::mem::replace(&mut self.node_queue, vec![parent_id]);
+        let previous_queue =
+            (!self.node_queue.is_empty()).then(|| std::mem::take(&mut self.node_queue));
+        self.node_queue.push(parent_id);
         Ok(ReplayReplaceContext {
             parent_id,
             next_sibling,
@@ -851,6 +853,11 @@ impl ComponentTree {
             previous_queue,
             detached_root_id,
         } = context;
+        if let Some(previous_queue) = previous_queue {
+            self.restore_build_queue(previous_queue);
+        } else {
+            self.node_queue.clear();
+        }
 
         // A replay appends its replacement roots after the surviving siblings.
         let first_inserted = match last_existing_child {
@@ -865,7 +872,6 @@ impl ComponentTree {
             self.replay_ancestry = replay::ReplayAncestry::default();
             self.replay_detached_root = None;
             self.replay_retained_roots.clear();
-            self.node_queue = previous_queue;
             return Err(ReplayReplaceError::ReplayDidNotCreateRoot);
         }
 
@@ -968,7 +974,6 @@ impl ComponentTree {
         self.replay_retained_roots.clear();
 
         self.replay_changed_parents.insert(parent_id);
-        self.node_queue = previous_queue;
         Ok(())
     }
 
@@ -6159,8 +6164,6 @@ mod tests {
         tree.pop_node();
 
         let second = tree.add_node(node("second", 4, 4));
-        tree.pop_node();
-        tree.pop_node();
 
         let context = match tree.begin_replace_subtree_by_instance_key(2) {
             Ok(context) => context,
@@ -6182,6 +6185,9 @@ mod tests {
             tree.finish_replace_subtree(context, &mut replace_result)
                 .is_ok()
         );
+        assert_eq!(tree.current_build_node_id(), Some(second));
+        tree.pop_node();
+        tree.pop_node();
         tree.finish_replay_round();
 
         let root_children = root

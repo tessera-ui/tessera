@@ -427,6 +427,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         let mut stale_instance_logic_ids = HashSet::default();
         let mut recomposed_instance_logic_ids = HashSet::default();
         let mut pending_dirty_instance_keys = (*dirty_instance_keys).clone();
+        #[cfg(feature = "debug-dirty-overlay")]
         let mut replay_roots_for_debug = Vec::new();
         let mut deferred_backwards_instance_keys = HashSet::default();
         let mut executed_instance_keys = HashSet::default();
@@ -474,6 +475,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             let replay_snapshots = previous_component_replay_nodes(&dirty_roots)
                 .unwrap_or_else(|key| panic!("{}", missing_replay_snapshot_panic_message(key)));
 
+            #[cfg(feature = "debug-dirty-overlay")]
             replay_roots_for_debug.extend(dirty_roots.iter().copied());
 
             with_build_dirty_instance_keys(Arc::new(live_dirty_instance_keys), || {
