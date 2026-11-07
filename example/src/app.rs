@@ -462,16 +462,20 @@ mod tests {
                 [("language", I18N.text("ui-language-chinese").into())],
             )
         });
+        let (blur_override, blur_radius) = session.run(|| {
+            (
+                I18N.text("ui-glass-custom-blur"),
+                I18N.text("ui-blur-radius"),
+            )
+        });
         let accessibility = session.inspect_accessibility().unwrap();
         let language = accessibility
             .find(&language, Role::Button)
             .expect("language action")
             .0;
-        let slider = accessibility
-            .nodes()
-            .iter()
-            .find(|(_, node)| node.role() == Role::Slider)
-            .expect("glass slider after navigation")
+        let blur_override = accessibility
+            .find(&blur_override, Role::Switch)
+            .expect("glass blur override after navigation")
             .0;
         let action = |target_node, action| ActionRequest {
             action,
@@ -479,8 +483,15 @@ mod tests {
             target_node,
             data: None,
         };
-        assert!(session.dispatch_accessibility_action(action(slider, Action::Increment)));
+        assert!(session.dispatch_accessibility_action(action(blur_override, Action::Click)));
         pump_layout_test_session(&mut session, 2_016_666_667);
+        let accessibility = session.inspect_accessibility().unwrap();
+        let (slider, initial_value) = accessibility
+            .find(&blur_radius, Role::Slider)
+            .map(|(id, node)| (id, node.numeric_value().unwrap()))
+            .expect("glass blur slider after enabling the override");
+        assert!(session.dispatch_accessibility_action(action(slider, Action::Increment)));
+        pump_layout_test_session(&mut session, 2_033_333_334);
         let accessibility = session.inspect_accessibility().unwrap();
         let value = accessibility
             .nodes()
@@ -490,7 +501,7 @@ mod tests {
             .1
             .numeric_value()
             .unwrap();
-        assert!(value > 0.0);
+        assert!(value > initial_value);
         let labels = |snapshot: &tessera_ui::testing::AccessibilitySnapshot| {
             snapshot
                 .nodes()
@@ -499,7 +510,7 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let english = labels(&accessibility);
-        for (index, timestamp) in [2_033_333_334, 2_050_000_001].into_iter().enumerate() {
+        for (index, timestamp) in [2_050_000_001, 2_066_666_668].into_iter().enumerate() {
             assert!(session.dispatch_accessibility_action(action(language, Action::Click)));
             pump_layout_test_session(&mut session, timestamp);
             assert!(session.run(|| {
@@ -529,7 +540,7 @@ mod tests {
         for _ in 0..2 {
             assert!(session.dispatch_accessibility_action(action(language, Action::Click)));
         }
-        pump_layout_test_session(&mut session, 2_066_666_668);
+        pump_layout_test_session(&mut session, 2_083_333_335);
         assert_eq!(labels(&session.inspect_accessibility().unwrap()), english);
     }
 }
