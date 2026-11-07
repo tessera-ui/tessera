@@ -471,7 +471,7 @@ pub struct PointerInput<'a> {
     /// The current state of the keyboard modifiers at the time of the event.
     pub key_modifiers: winit::keyboard::ModifiersState,
     pub(crate) ime_request: &'a mut Option<ImeRequest>,
-    pub(crate) request_window_drag: &'a mut bool,
+    pub(crate) request_window_drag: &'a mut Option<WindowDragRequest>,
 }
 
 impl PointerInput<'_> {
@@ -527,7 +527,17 @@ impl PointerInput<'_> {
 
     /// Begins a system drag move for the current window.
     pub fn drag_window(&mut self) {
-        *self.request_window_drag = true;
+        *self.request_window_drag = Some(WindowDragRequest {
+            #[cfg(target_os = "macos")]
+            mouse_press: self.pointer_changes.iter().find_map(|change| {
+                (change.pointer_id == crate::cursor::MOUSE_POINTER_ID
+                    && matches!(
+                        change.content,
+                        CursorEventContent::Pressed(crate::cursor::PressKeyEventType::Left)
+                    ))
+                .then_some(change.timestamp)
+            }),
+        });
     }
 
     /// Returns the IME session bridge for the current frame.
@@ -607,13 +617,18 @@ pub(crate) struct WindowRequests {
     /// (which is processed later in the state handling pass) will overwrite
     /// previous requests.
     pub ime_request: Option<ImeRequest>,
-    /// Whether a node requested a native window drag for the current frame.
-    pub request_window_drag: bool,
+    pub request_window_drag: Option<WindowDragRequest>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct WindowDragRequest {
+    #[cfg(target_os = "macos")]
+    pub mouse_press: Option<Instant>,
 }
 
 impl WindowRequests {
     pub(crate) fn settle(&mut self, mut next: Self) {
-        next.request_window_drag |= self.request_window_drag;
+        next.request_window_drag = next.request_window_drag.or(self.request_window_drag);
         if let (Some(previous), Some(request)) = (&self.ime_request, &mut next.ime_request) {
             request.show_keyboard |=
                 previous.show_keyboard && previous.client_id == request.client_id;

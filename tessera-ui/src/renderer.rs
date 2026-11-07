@@ -7,6 +7,9 @@ pub mod core;
 pub mod drawer;
 pub mod external;
 
+#[cfg(target_os = "macos")]
+mod macos_titlebar;
+
 use std::{
     cell::Cell,
     sync::{
@@ -32,7 +35,9 @@ use winit::{
 use crate::{
     ImeRequest, ImeState, PxPosition,
     build_tree::build_component_tree,
-    component_tree::{LayoutFrameDiagnostics, WindowRequests, clear_layout_snapshots},
+    component_tree::{
+        LayoutFrameDiagnostics, WindowDragRequest, WindowRequests, clear_layout_snapshots,
+    },
     context::{reset_component_context_tracking, reset_context_read_dependencies},
     cursor::{
         CursorEventContent, CursorState, GestureState, MOUSE_POINTER_ID, PointerChange,
@@ -350,6 +355,8 @@ pub struct Renderer<F> {
     #[cfg(target_os = "android")]
     android_back: Option<crate::android::system_back::BackBridge>,
     pending_desktop_window_action: Arc<RwLock<Option<DesktopWindowAction>>>,
+    #[cfg(target_os = "macos")]
+    macos_titlebar: macos_titlebar::TitleBarInput,
     frame_index: u64,
     redraw_request_pending: Arc<AtomicBool>,
     pending_close_requested: bool,
@@ -423,6 +430,8 @@ where
             accessibility_active: false,
             event_loop_proxy: Some(event_loop_proxy),
             pending_desktop_window_action: Arc::new(RwLock::new(None)),
+            #[cfg(target_os = "macos")]
+            macos_titlebar: macos_titlebar::TitleBarInput::default(),
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
@@ -598,7 +607,7 @@ struct RenderFrameContext<'a, F> {
 
 struct RenderFrameOutcome {
     accessibility_update: Option<TreeUpdate>,
-    request_window_drag: bool,
+    request_window_drag: Option<WindowDragRequest>,
     runtime_pending_work: RuntimePendingWork,
     #[cfg(feature = "profiling")]
     frame_meta: FrameMeta,
@@ -1306,8 +1315,9 @@ Fps: {:.2}
             }
         }
 
-        let request_window_drag =
-            desktop_window_controls_available() && window_requests.request_window_drag;
+        let request_window_drag = window_requests
+            .request_window_drag
+            .filter(|_| desktop_window_controls_available());
 
         args.ime_bridge_state
             .sync_window(args.app.window(), window_requests.ime_request);
@@ -1501,9 +1511,15 @@ where
         event_loop.exit();
     }
 
-    fn apply_window_drag(&mut self, window: &Window) {
+    fn apply_window_drag(&mut self, window: &Window, _request: WindowDragRequest) {
         let _session = self.session.enter();
         if !desktop_window_controls_available() {
+            return;
+        }
+        #[cfg(target_os = "macos")]
+        if let Some(press) = _request.mouse_press {
+            self.macos_titlebar.handle_press(press);
+            self.update_native_window_shape(window);
             return;
         }
         if let Err(err) = window.drag_window() {
@@ -1691,6 +1707,13 @@ where
             consumed: false,
             tap_claimed: false,
         };
+        #[cfg(target_os = "macos")]
+        if matches!(
+            event.content,
+            CursorEventContent::Pressed(PressKeyEventType::Left)
+        ) {
+            self.macos_titlebar.record_press(event.timestamp);
+        }
         if state == winit::event::ElementState::Pressed {
             TesseraRuntime::with_mut(|runtime| {
                 runtime
@@ -1789,9 +1812,9 @@ where
             )
         });
         flush_pending_focus_callbacks();
-        if requests.request_window_drag {
+        if let Some(request) = requests.request_window_drag {
             let window = self.app.as_ref().unwrap().window_arc();
-            self.apply_window_drag(&window);
+            self.apply_window_drag(&window, request);
         }
         let request = requests.ime_request.filter(|request| {
             TesseraRuntime::with(|runtime| {
@@ -1850,9 +1873,11 @@ where
             })
         };
 
-        if request_window_drag {
-            self.apply_window_drag(app.window());
+        if let Some(request) = request_window_drag {
+            self.apply_window_drag(app.window(), request);
         }
+        #[cfg(target_os = "macos")]
+        self.macos_titlebar.clear();
         if let Some(action) = self.take_pending_desktop_window_action() {
             self.apply_desktop_window_action(app.window(), action);
         }

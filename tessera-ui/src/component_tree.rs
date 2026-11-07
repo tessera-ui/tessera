@@ -40,7 +40,7 @@ pub use node::{
 
 pub(crate) use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
-    WindowRequests, direct_layout_children, measure_node,
+    WindowDragRequest, WindowRequests, direct_layout_children, measure_node,
 };
 
 #[cfg(feature = "profiling")]

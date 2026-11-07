@@ -215,7 +215,8 @@ pub trait ModifierExt {
     /// Makes the subtree selectable with advanced configuration options.
     fn selectable_with(self, args: SelectableArgs) -> Modifier;
 
-    /// Marks this subtree as a draggable window region.
+    /// Marks this subtree as a draggable window region. On macOS, double-clicking
+    /// the region follows the system title bar preference.
     fn window_drag_region(self) -> Modifier;
 }
 

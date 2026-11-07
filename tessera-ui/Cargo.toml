@@ -50,10 +50,14 @@ windows = { workspace = true, features = ["Win32_System_Threading", "Win32_UI_Sh
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2.workspace = true
 objc2-app-kit = { workspace = true, features = [
+    "NSApplication",
+    "NSEvent",
     "NSResponder",
     "NSView",
+    "NSWindow",
     "objc2-quartz-core",
 ] }
+objc2-foundation = { workspace = true, features = ["NSString", "NSUserDefaults"] }
 objc2-quartz-core = { workspace = true, features = [
     "CALayer",
     "objc2-core-foundation",
