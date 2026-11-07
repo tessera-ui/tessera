@@ -16,33 +16,64 @@ struct TextResources {
     font_system: Arc<RwLock<glyphon::FontSystem>>,
 }
 
+#[cfg(not(target_family = "wasm"))]
+static PRELOADED_FONTS: std::sync::Mutex<Option<std::thread::JoinHandle<glyphon::FontSystem>>> =
+    std::sync::Mutex::new(None);
+
+/// Starts scanning system fonts in the background so the first text layout
+/// does not wait for it.
+pub(crate) fn preload_system_fonts() {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        let mut preloaded = PRELOADED_FONTS.lock().expect("font preload lock");
+        if preloaded.is_none() {
+            *preloaded = std::thread::Builder::new()
+                .name("tessera-fonts".into())
+                .spawn(system_fonts)
+                .ok();
+        }
+    }
+}
+
+fn system_fonts() -> glyphon::FontSystem {
+    use glyphon::cosmic_text::{Fallback, PlatformFallback};
+
+    let mut fonts = glyphon::FontSystem::new();
+    let db = fonts.db_mut();
+    let fallback = PlatformFallback.common_fallback().first().copied();
+    #[cfg(target_os = "android")]
+    db.load_fonts_dir("/system/fonts");
+    #[cfg(target_os = "android")]
+    let fallback = fallback.or(Some("Roboto"));
+    #[cfg(target_os = "ios")]
+    let fallback = [".SF UI", ".SF NS", "Helvetica Neue", "Helvetica", "Arial"]
+        .into_iter()
+        .find(|name| {
+            db.query(&fontdb::Query {
+                families: &[fontdb::Family::Name(name)],
+                ..Default::default()
+            })
+            .is_some()
+        })
+        .or(fallback);
+    if let Some(family) = fallback {
+        db.set_sans_serif_family(family);
+    }
+    fonts
+}
+
 impl Default for TextResources {
     fn default() -> Self {
-        use glyphon::cosmic_text::{Fallback, PlatformFallback};
-
-        let mut fonts = glyphon::FontSystem::new();
-        let db = fonts.db_mut();
-        let fallback = PlatformFallback.common_fallback().first().copied();
-        #[cfg(target_os = "android")]
-        db.load_fonts_dir("/system/fonts");
-        #[cfg(target_os = "android")]
-        let fallback = fallback.or(Some("Roboto"));
-        #[cfg(target_os = "ios")]
-        let fallback = [".SF UI", ".SF NS", "Helvetica Neue", "Helvetica", "Arial"]
-            .into_iter()
-            .find(|name| {
-                db.query(&fontdb::Query {
-                    families: &[fontdb::Family::Name(name)],
-                    ..Default::default()
-                })
-                .is_some()
-            })
-            .or(fallback);
-        if let Some(family) = fallback {
-            db.set_sans_serif_family(family);
-        }
+        #[cfg(not(target_family = "wasm"))]
+        let preloaded = PRELOADED_FONTS
+            .lock()
+            .expect("font preload lock")
+            .take()
+            .and_then(|scan| scan.join().ok());
+        #[cfg(target_family = "wasm")]
+        let preloaded = None;
         Self {
-            font_system: Arc::new(RwLock::new(fonts)),
+            font_system: Arc::new(RwLock::new(preloaded.unwrap_or_else(system_fonts))),
         }
     }
 }
@@ -116,14 +147,29 @@ impl GlyphonTextRender {
             mask: !0,
             alpha_to_coverage_enabled: false,
         };
-        Self {
+        let mut pipeline = Self {
             atlas,
             cache,
             swash_cache,
             msaa,
             renderers: Vec::new(),
             next_renderer: 0,
-        }
+        };
+        // Compiles the text render pipeline now rather than on the first text draw.
+        pipeline.push_renderer(gpu);
+        pipeline
+    }
+
+    fn push_renderer(&mut self, device: &wgpu::Device) {
+        self.renderers.push(TextBatchResources {
+            renderer: glyphon::TextRenderer::new(
+                &mut self.atlas,
+                device,
+                self.msaa,
+                tessera_ui::ui_stencil_state(),
+            ),
+            viewport: glyphon::Viewport::new(device, &self.cache),
+        });
     }
 }
 
@@ -148,15 +194,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
         // Batches in one submission need distinct buffers because queued
         // uploads precede all of its draw commands. Reuse them across frames.
         if self.next_renderer == self.renderers.len() {
-            self.renderers.push(TextBatchResources {
-                renderer: glyphon::TextRenderer::new(
-                    &mut self.atlas,
-                    context.device,
-                    self.msaa,
-                    tessera_ui::ui_stencil_state(),
-                ),
-                viewport: glyphon::Viewport::new(context.device, &self.cache),
-            });
+            self.push_renderer(context.device);
         }
         let resources = &mut self.renderers[self.next_renderer];
         self.next_renderer += 1;

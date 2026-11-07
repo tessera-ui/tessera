@@ -189,6 +189,7 @@ impl ComponentsPackage {
 
 impl TesseraPackage for ComponentsPackage {
     fn register(self, registry: &mut EntryRegistry) {
+        pipelines::text::pipeline::preload_system_fonts();
         registry.register_package(PlatformPackage);
         registry.add_module(TesseraComponents);
     }
