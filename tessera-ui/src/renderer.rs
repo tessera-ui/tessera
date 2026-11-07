@@ -202,6 +202,9 @@ pub struct WindowConfig {
     pub icon: Option<winit::window::Icon>,
     /// Whether to show the system window decorations (title bar and borders).
     pub decorations: bool,
+    /// Draws macOS content behind a transparent title bar with native window controls.
+    /// Requires decorations; ignored on other platforms.
+    pub integrated_titlebar: bool,
     /// Whether the window supports transparency.
     pub transparent: bool,
     /// Whether the window is resizable.
@@ -214,6 +217,7 @@ impl Default for WindowConfig {
             application_id: None,
             icon: None,
             decorations: true,
+            integrated_titlebar: false,
             transparent: true,
             resizable: true,
         }
@@ -1760,7 +1764,7 @@ where
             .sync_window(self.app.as_ref().unwrap().window(), request);
     }
 
-    fn handle_redraw_requested(&mut self) {
+    fn handle_redraw_requested(&mut self, event_loop: &ActiveEventLoop) {
         let _session = self.session.enter();
         self.redraw_request_pending.store(false, Ordering::Release);
         let mut app = match self.app.take() {
@@ -1768,7 +1772,7 @@ where
             None => return,
         };
 
-        crate::window_insets::platform::refresh(app.window());
+        crate::window_insets::platform::refresh(app.window(), event_loop);
         app.resize_if_needed();
         let accessibility_enabled =
             self.accessibility_adapter.is_some() && self.accessibility_active;
@@ -1978,6 +1982,19 @@ where
         } else {
             window_attributes
         };
+        #[cfg(target_os = "macos")]
+        let window_attributes = {
+            use winit::platform::macos::WindowAttributesExtMacOS;
+
+            if self.config.window.integrated_titlebar && self.config.window.decorations {
+                window_attributes
+                    .with_titlebar_transparent(true)
+                    .with_title_hidden(true)
+                    .with_fullsize_content_view(true)
+            } else {
+                window_attributes
+            }
+        };
         #[cfg(target_family = "wasm")]
         let window_attributes = {
             use winit::platform::web::WindowAttributesExtWebSys;
@@ -2101,10 +2118,10 @@ where
         self.pending_redraw_reasons.clear();
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let _session = self.session.enter();
         if let Some(app) = self.app.as_ref() {
-            crate::window_insets::platform::refresh(app.window());
+            crate::window_insets::platform::refresh(app.window(), event_loop);
         }
     }
 
@@ -2236,7 +2253,7 @@ where
                 redraw_reasons.push(RedrawReason::FocusChanged);
             }
             WindowEvent::RedrawRequested => {
-                self.handle_redraw_requested();
+                self.handle_redraw_requested(event_loop);
             }
             _ => (),
         }

@@ -26,7 +26,8 @@ pub fn run() -> EntryPoint {
     let entry = EntryPoint::new(app);
     let mut config = res::application();
     config.sample_count = 4;
-    config.window.decorations = false;
+    config.window.decorations = cfg!(target_os = "macos");
+    config.window.integrated_titlebar = true;
     #[cfg(target_family = "wasm")]
     {
         config.web = WebConfig::default().with_canvas_id(env!("CARGO_CRATE_NAME"));

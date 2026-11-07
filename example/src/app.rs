@@ -68,6 +68,11 @@ pub(crate) fn app(
         let nav_controller = handles.router;
         let selected = handles.material;
         let content = RenderSlotWith::new(move |sessions: AppLiveSessions| {
+            let background = use_context::<MaterialTheme>()
+                .unwrap()
+                .get()
+                .color_scheme
+                .surface;
             if let Some(on_ready) = on_navigation_ready {
                 on_ready.call(AppNavigationHandles {
                     sessions: Some(sessions),
@@ -75,7 +80,12 @@ pub(crate) fn app(
                 });
             }
             scaffold()
-                .modifier(Modifier::new().window_insets_padding(WindowInsets::SafeDrawing))
+                .modifier(
+                    Modifier::new()
+                        .fill_max_size()
+                        .background(background)
+                        .window_insets_padding(WindowInsets::SafeDrawing),
+                )
                 .top_bar(move || {
                     let _app_bar = top_app_bar()
                         .title(
@@ -137,11 +147,15 @@ pub(crate) fn app(
                         target_os = "android",
                         target_os = "ios"
                     )))]
-                    _app_bar
-                        .title_area_modifier(Modifier::new().window_drag_region())
-                        .window_control_minimize()
-                        .window_control_toggle_maximize()
-                        .window_control_close();
+                    {
+                        let _app_bar =
+                            _app_bar.title_area_modifier(Modifier::new().window_drag_region());
+                        #[cfg(not(target_os = "macos"))]
+                        _app_bar
+                            .window_control_minimize()
+                            .window_control_toggle_maximize()
+                            .window_control_close();
+                    }
                 })
                 .content(move || {
                     surface()

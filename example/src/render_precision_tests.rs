@@ -11,7 +11,7 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier,
+    Color, Dp, HeadlessConfig, HeadlessRenderer, Insets, Modifier, WindowInsetsController,
     accesskit::{Node, NodeId, Rect, Role},
     tessera, use_context,
     wgpu::TextureFormat,
@@ -343,3 +343,56 @@ precision_case!(
 );
 precision_case!(linear_scrim_unorm_msaa1, check_linear_scrim, Rgba8Unorm, 1);
 precision_case!(linear_scrim_unorm_msaa4, check_linear_scrim, Rgba8Unorm, 4);
+
+#[test]
+#[ignore = "requires a native GPU adapter; validates window safe-area pixels and content bounds"]
+fn app_paints_safe_areas_and_applies_live_insets_once() {
+    let mut renderer = crate::run()
+        .into_headless(HeadlessConfig::default())
+        .expect("example GPU session");
+    for (width, height, insets) in [
+        (800, 600, Insets::top(Dp(28.0))),
+        (400, 800, Insets::vertical(Dp(24.0))),
+        (
+            800,
+            400,
+            Insets::new(Dp(36.0), Dp(24.0), Dp(20.0), Dp(24.0)),
+        ),
+        (800, 600, Insets::default()),
+    ] {
+        renderer.resize(width, height);
+        renderer.run(|| WindowInsetsController::current().set(insets, Insets::default()));
+        renderer.render_frames(21);
+        let nodes = renderer.accessibility_snapshot().unwrap().nodes;
+        let navigation = bounds(&nodes, "ui-open-navigation-drawer", Role::Button);
+        assert_eq!(
+            (navigation.x0, navigation.y0),
+            (insets.left.0 + 4.0, insets.top.0 + 8.0),
+            "navigation must consume the current safe area exactly once"
+        );
+
+        let pixels = renderer.read_pixels().unwrap();
+        let stride = width as usize;
+        let header = ((insets.top.0 as usize + 1) * stride + stride / 2) * 4;
+        let background: [u8; 4] = pixels[header..header + 4].try_into().unwrap();
+        assert_eq!(background[3], 255, "the app bar must be opaque");
+        for (edge, center) in [
+            (insets.top, (stride / 2, 1)),
+            (insets.bottom, (stride / 2, height as usize - 2)),
+            (insets.left, (1, height as usize / 2)),
+            (insets.right, (stride - 2, height as usize / 2)),
+        ] {
+            if edge > Dp::ZERO {
+                assert_opaque_roi(
+                    &pixels,
+                    stride,
+                    center,
+                    background,
+                    "safe area must continue the app bar background",
+                    TextureFormat::Rgba8UnormSrgb,
+                    4,
+                );
+            }
+        }
+    }
+}

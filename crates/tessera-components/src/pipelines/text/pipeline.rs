@@ -22,7 +22,10 @@ impl Default for TextResources {
 
         let mut fonts = glyphon::FontSystem::new();
         #[cfg(target_os = "android")]
-        fonts.db_mut().load_fonts_dir("/system/fonts");
+        {
+            fonts.db_mut().load_fonts_dir("/system/fonts");
+            fonts.db_mut().set_sans_serif_family("Roboto");
+        }
         if let Some(family) = PlatformFallback.common_fallback().first() {
             fonts.db_mut().set_sans_serif_family(*family);
         }
