@@ -678,6 +678,15 @@ pub(crate) struct ReplayReplaceContext {
 pub(crate) struct PreviousBuildNode {
     node: ComponentNode,
     same_parent: bool,
+    defer_consumer_change: bool,
+}
+
+fn has_frame_consumers(node: &ComponentNode) -> bool {
+    node.role == NodeRole::Layout
+        || node.interaction.is_some()
+        || !node.modifier.is_empty()
+        || node.layout_coordinate_space
+        || node.children_scale != 1.0
 }
 
 impl Default for ComponentTree {
@@ -1141,10 +1150,17 @@ impl ComponentTree {
         node.layout_children = old.layout_children.take();
         node.sibling_index = old.sibling_index;
         let previous = std::mem::replace(old, node);
-        if let Some(metadata) = self.metadatas.get_mut(&id) {
+        let metadata = self.metadatas.get_mut(&id);
+        let defer_consumer_change =
+            candidate.keeps_link && metadata.is_none() && !has_frame_consumers(&previous);
+        if let Some(metadata) = metadata {
             metadata.begin_accessibility_rebuild();
         }
-        self.attach_replayed_node(candidate, false);
+        if defer_consumer_change {
+            self.enter_build_node(id, false, false);
+        } else {
+            self.attach_replayed_node(candidate, false);
+        }
         if previous.role == NodeRole::Layout {
             self.metadatas.mark_paint_dirty(id);
         }
@@ -1153,16 +1169,25 @@ impl ComponentTree {
             Some(PreviousBuildNode {
                 node: previous,
                 same_parent,
+                defer_consumer_change,
             }),
         )
     }
 
     pub(crate) fn reconcile_build_node(&mut self, id: NodeId, previous: &PreviousBuildNode) {
-        let Some(metadata) = self.metadatas.get_mut(&id) else {
+        let metadata = self.metadatas.get_mut(&id);
+        let node = self.tree[id].get();
+        if previous.defer_consumer_change
+            && (metadata.is_some()
+                || has_frame_consumers(node)
+                || previous.node.fn_name != node.fn_name)
+        {
+            self.changed_frame_nodes.insert(id);
+        }
+        let Some(metadata) = metadata else {
             return;
         };
         metadata.finish_accessibility_rebuild();
-        let node = self.tree[id].get();
         let input_changed = !previous.node.modifier.input_geometry_eq(&node.modifier);
         metadata.geometry_initialized &= !input_changed;
         if input_changed
@@ -1176,7 +1201,7 @@ impl ComponentTree {
     fn attach_replayed_node(&mut self, candidate: replay::ReplayCandidate, retained: bool) {
         let replay::ReplayCandidate { id, keeps_link } = candidate;
         if keeps_link {
-            self.enter_build_node(id, retained);
+            self.enter_build_node(id, retained, true);
             return;
         }
         self.replay_ancestry.detached_roots.remove(&id);
@@ -1198,10 +1223,10 @@ impl ComponentTree {
                 parent.append(id, &mut self.tree);
             }
         }
-        self.enter_build_node(id, retained);
+        self.enter_build_node(id, retained, true);
     }
 
-    fn enter_build_node(&mut self, id: NodeId, retained: bool) {
+    fn enter_build_node(&mut self, id: NodeId, retained: bool, consumer_changed: bool) {
         if self.replay_range.is_some() {
             let node = self.tree[id].get();
             if retained {
@@ -1214,7 +1239,9 @@ impl ComponentTree {
                     .push((node.instance_key, node.instance_logic_id));
             }
         }
-        self.changed_frame_nodes.insert(id);
+        if consumer_changed {
+            self.changed_frame_nodes.insert(id);
+        }
         self.node_queue.push(id);
     }
 
@@ -2425,6 +2452,13 @@ impl ComponentTree {
         let dirty_expand_ns = dirty_prepare_start.elapsed().as_nanos() as u64;
         record_frame_stage(&mut stage_timer, "layout_dirty_paths");
         let mut diagnostics = LayoutDiagnosticsCollector::default();
+
+        tracing::debug!(
+            target: "tessera_ui::frame_cost",
+            changed = self.changed_frame_nodes.len(),
+            removed = self.removed_frame_nodes.len(),
+            "frame_consumer_candidates"
+        );
 
         #[cfg(feature = "profiling")]
         {

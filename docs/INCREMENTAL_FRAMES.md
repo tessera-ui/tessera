@@ -113,6 +113,9 @@ identity and role match. Children declared in the same order keep their tree
 links. Reordered children remain eligible for reuse until the replacement
 finishes. Retained descendants compare their old and new consumer ancestry
 before the frame updates focus, semantics, and position observers.
+An in-place composition rebuild with no modifiers, interaction, or geometry
+metadata stays out of the consumer journal unless the rebuilt node adds one
+of those capabilities. Layout child changes still use the structure journal.
 
 Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements attach at their original positions and

@@ -767,18 +767,22 @@ impl SemanticsModifierNode for Hint {
 
 #[tessera(crate)]
 fn conditional_description(probe: ReplayProbe) {
-    let visible = remember(|| true);
+    let visible = remember(|| false);
     probe.reverse.set(Some(visible));
     if visible.get() {
         Modifier::new()
             .push_semantics(Hint("Help text".into()))
+            .push_semantics(Tag {
+                key: "conditional-description".into(),
+                label: "Help host".into(),
+            })
             .attach();
     }
     layout().policy(Overlap);
 }
 
 #[test]
-fn rebuilding_a_node_without_semantics_discards_its_previous_description() {
+fn rebuilding_a_composition_node_publishes_added_and_removed_semantics() {
     let probe = ReplayProbe::default();
     let mut session = start_layout_test_session(layout_test(|| {
         conditional_description(probe.clone());
@@ -795,12 +799,27 @@ fn rebuilding_a_node_without_semantics_discards_its_previous_description() {
             host.semantics().and_then(|node| node.tooltip.clone()),
         )
     };
+    let publishes_host = |session: &crate::testing::LayoutTestSession<_>| {
+        session
+            .inspect_accessibility()
+            .expect("Published accessibility tree")
+            .nodes()
+            .iter()
+            .any(|(_, node)| node.label() == Some("Help host"))
+    };
     pump_layout_test_session(&mut session, 0);
     let (host, initial) = description(&session);
-    assert_eq!(initial.as_deref(), Some("Help text"));
-    probe.reverse.get().expect("Visibility state").set(false);
+    assert_eq!(initial, None);
+    assert!(!publishes_host(&session));
+    let visible = probe.reverse.get().expect("Visibility state");
+    visible.set(true);
     pump_layout_test_session(&mut session, 16_000_000);
+    assert_eq!(description(&session), (host, Some("Help text".into())));
+    assert!(publishes_host(&session));
+    visible.set(false);
+    pump_layout_test_session(&mut session, 32_000_000);
     assert_eq!(description(&session), (host, None));
+    assert!(!publishes_host(&session));
 }
 
 #[tessera(crate)]
