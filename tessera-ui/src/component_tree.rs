@@ -833,15 +833,11 @@ impl ComponentTree {
             .ok_or(ReplayReplaceError::RootNodeNotReplaceable)?;
 
         let previous_sibling = target_node_id.previous_sibling(&self.tree);
-        self.replay_insert_before = target_node_id
-            .next_sibling(&self.tree)
-            .map(|sibling| (parent_id, sibling));
+        let next_sibling = target_node_id.next_sibling(&self.tree);
+        self.replay_insert_before = next_sibling.map(|sibling| (parent_id, sibling));
 
-        self.replay_ancestry
-            .detached_roots
-            .insert(target_node_id, parent_id);
+        self.queue_replay_children(parent_id, target_node_id, next_sibling);
         self.replay_retained_roots.clear();
-        target_node_id.detach(&mut self.tree);
 
         let previous_queue =
             (!self.node_queue.is_empty()).then(|| std::mem::take(&mut self.node_queue));
@@ -870,6 +866,7 @@ impl ComponentTree {
             self.node_queue.clear();
         }
 
+        self.detach_replay_suffix(parent_id);
         let next_sibling = self.replay_insert_before.take().map(|(_, sibling)| sibling);
         let first_inserted = match previous_sibling {
             Some(child) => child.next_sibling(&self.tree),
@@ -1036,18 +1033,6 @@ impl ComponentTree {
         self.get_mut(*node_id)
     }
 
-    fn replay_candidate(&self, instance_key: u64) -> Option<NodeId> {
-        if self.replay_ancestry.detached_roots.is_empty() {
-            return None;
-        }
-        let id = self.find_node_id_by_instance_key(instance_key)?;
-        let root = id.ancestors(&self.tree).last()?;
-        self.replay_ancestry
-            .detached_roots
-            .contains_key(&root)
-            .then_some(id)
-    }
-
     pub(crate) fn attach_retained_subtree(
         &mut self,
         instance_key: u64,
@@ -1060,9 +1045,7 @@ impl ComponentTree {
 
         self.capture_reused_ancestry(id);
         self.replay_retained_roots.insert(id);
-        self.replay_ancestry.detached_roots.remove(&id);
-        id.detach(&mut self.tree);
-        self.attach_build_node(id);
+        self.attach_replayed_node(id);
         Some(id)
     }
 
@@ -1071,7 +1054,16 @@ impl ComponentTree {
     /// The `node_component` itself primarily holds the layout policy, render
     /// policy, and handlers.
     pub(crate) fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
+        let instance_key = node_component.instance_key;
+        let needs_geometry = node_component.role == NodeRole::Layout || self.node_queue.is_empty();
         let new_node_id = self.tree.new_node(node_component);
+        if instance_key != 0 || self.node_queue.is_empty() {
+            self.node_ids_by_instance_key
+                .insert(instance_key, new_node_id);
+        }
+        if needs_geometry {
+            self.metadatas.entry_or_default(new_node_id);
+        }
         self.attach_build_node(new_node_id);
         new_node_id
     }
@@ -1088,14 +1080,13 @@ impl ComponentTree {
             return (self.add_node(node), None);
         };
 
-        self.detach_replay_children(id);
+        self.preserve_replay_children(id);
         let previous_parent = self.tree[id]
             .parent()
-            .or(self.replay_ancestry.detached_roots.remove(&id));
+            .or_else(|| self.replay_ancestry.detached_roots.get(&id).copied());
         let new_parent = self.node_queue.last().copied();
         let parent_key = |id: NodeId| self.tree[id].get().instance_key;
         let same_parent = previous_parent.map(parent_key) == new_parent.map(parent_key);
-        id.detach(&mut self.tree);
         self.remove_position_observer(id);
         let old = self.tree[id].get_mut();
         node.layout_children = old.layout_children.take();
@@ -1105,7 +1096,7 @@ impl ComponentTree {
             metadata.accessibility = None;
             metadata.accessibility_action_handler = None;
         }
-        self.attach_build_node(id);
+        self.attach_replayed_node(id);
         if previous.role == NodeRole::Layout {
             self.metadatas.mark_paint_dirty(id);
         }
@@ -1132,31 +1123,44 @@ impl ComponentTree {
         }
     }
 
-    fn attach_build_node(&mut self, id: NodeId) {
-        let node = self.tree[id].get();
-        let instance_key = node.instance_key;
-        let needs_geometry = node.role == NodeRole::Layout || self.node_queue.is_empty();
-        self.changed_frame_nodes.insert(id);
-        if instance_key != 0 || self.node_queue.is_empty() {
-            self.node_ids_by_instance_key.insert(instance_key, id);
+    fn attach_replayed_node(&mut self, id: NodeId) {
+        let parent = self
+            .current_build_node_id()
+            .expect("replay must have a parent");
+        if self.keep_replay_link(parent, id) {
+            self.enter_build_node(id);
+            return;
         }
+        self.replay_ancestry.detached_roots.remove(&id);
+        id.detach(&mut self.tree);
+        self.attach_build_node(id);
+    }
+
+    fn attach_build_node(&mut self, id: NodeId) {
         if let Some(&parent) = self.node_queue.last() {
-            match self.replay_insert_before {
-                Some((replay_parent, sibling)) if parent == replay_parent => {
-                    sibling.insert_before(id, &mut self.tree);
-                }
-                _ => parent.append(id, &mut self.tree),
+            let next = self.next_replay_child(parent).or_else(|| {
+                self.replay_insert_before
+                    .filter(|&(replay_parent, _)| parent == replay_parent)
+                    .map(|(_, sibling)| sibling)
+            });
+            if let Some(sibling) = next {
+                sibling.insert_before(id, &mut self.tree);
+            } else {
+                parent.append(id, &mut self.tree);
             }
         }
-        if needs_geometry {
-            self.metadatas.entry_or_default(id);
-        }
+        self.enter_build_node(id);
+    }
+
+    fn enter_build_node(&mut self, id: NodeId) {
+        self.changed_frame_nodes.insert(id);
         self.node_queue.push(id);
     }
 
     /// Pop the last node from the queue
     pub(crate) fn pop_node(&mut self) {
         if let Some(node_id) = self.node_queue.pop() {
+            self.detach_replay_suffix(node_id);
             self.refresh_layout_children(node_id);
             let node = self.tree[node_id].get();
             let interaction = node.interaction();
