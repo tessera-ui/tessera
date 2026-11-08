@@ -17,16 +17,16 @@ use crate::{
         remove_context_read_dependencies, reset_context_read_dependencies, with_context_snapshot,
     },
     runtime::{
-        TesseraRuntime, begin_frame_component_replay_tracking, begin_frame_layout_dirty_tracking,
-        begin_recompose_slot_epoch, clear_frame_nanos_receivers, drop_slots_for_instance_logic_ids,
-        finalize_frame_component_replay_tracking, finalize_frame_component_replay_tracking_partial,
-        finalize_frame_layout_dirty_tracking, previous_component_replay_node,
-        remove_focus_read_dependencies, remove_frame_nanos_receivers,
-        remove_layout_state_read_dependencies, remove_previous_component_replay_nodes,
-        remove_render_slot_read_dependencies, remove_state_read_dependencies,
-        reset_focus_read_dependencies, reset_render_slot_read_dependencies,
-        reset_state_read_dependencies, take_build_invalidations, with_build_dirty_instance_keys,
-        with_replay_scope,
+        ReplayTrackingMode, TesseraRuntime, begin_frame_component_replay_tracking,
+        begin_frame_layout_dirty_tracking, begin_recompose_slot_epoch, clear_frame_nanos_receivers,
+        drop_slots_for_instance_logic_ids, finalize_frame_component_replay_tracking,
+        finalize_frame_component_replay_tracking_partial, finalize_frame_layout_dirty_tracking,
+        previous_component_replay_node, remove_focus_read_dependencies,
+        remove_frame_nanos_receivers, remove_layout_state_read_dependencies,
+        remove_previous_component_replay_nodes, remove_render_slot_read_dependencies,
+        remove_state_read_dependencies, reset_focus_read_dependencies,
+        reset_render_slot_read_dependencies, reset_state_read_dependencies,
+        take_build_invalidations, with_build_dirty_instance_keys, with_replay_scope,
     },
     time::Instant,
 };
@@ -358,7 +358,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         reset_state_read_dependencies();
         reset_context_read_dependencies();
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.clear());
-        begin_frame_component_replay_tracking();
+        begin_frame_component_replay_tracking(ReplayTrackingMode::Full);
         begin_frame_layout_dirty_tracking();
         begin_recompose_slot_epoch();
         begin_recompose_context_slot_epoch();
@@ -423,7 +423,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
 
         let tree_timer = Instant::now();
         debug!("Building dirty subtrees with replay...");
-        begin_frame_component_replay_tracking();
+        begin_frame_component_replay_tracking(ReplayTrackingMode::Partial);
         begin_frame_layout_dirty_tracking();
         begin_recompose_slot_epoch();
         begin_recompose_context_slot_epoch();

@@ -59,7 +59,8 @@ identity, which pending calls and replay snapshots store by value.
 Pending calls install the live bindings captured at declaration. Replay
 snapshots resolve bindings that can change across frames.
 Replay snapshot records are contiguous, with a separate index by instance key.
-Partial replay publishes all replacements before releasing retired props.
+Partial replay leaves unchanged snapshots in place and publishes all replacements
+before releasing retired props.
 Modifier snapshots share immutable chain links. The scene stores empty and
 single-child branches inline and uses persistent ordered maps for wider branches
 so updating one child can preserve the previous frame's snapshot.

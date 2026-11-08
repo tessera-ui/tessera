@@ -721,6 +721,14 @@ impl ReplaySnapshots {
 struct ComponentReplayTracker {
     previous_nodes: ReplaySnapshots,
     current_nodes: ReplaySnapshots,
+    mode: ReplayTrackingMode,
+}
+
+#[derive(Default, PartialEq, Eq)]
+pub(crate) enum ReplayTrackingMode {
+    #[default]
+    Full,
+    Partial,
 }
 
 fn with_component_replay_tracker<R>(f: impl FnOnce(&ComponentReplayTracker) -> R) -> R {
@@ -731,8 +739,9 @@ fn with_component_replay_tracker_mut<R>(f: impl FnOnce(&mut ComponentReplayTrack
     with_runtime_globals(|globals| f(&mut globals.component_replay_tracker.borrow_mut()))
 }
 
-pub(crate) fn begin_frame_component_replay_tracking() {
+pub(crate) fn begin_frame_component_replay_tracking(mode: ReplayTrackingMode) {
     let retired = with_component_replay_tracker_mut(|tracker| {
+        tracker.mode = mode;
         (!tracker.current_nodes.entries.is_empty())
             .then(|| std::mem::take(&mut tracker.current_nodes))
     });
@@ -751,6 +760,7 @@ pub(crate) fn finalize_frame_component_replay_tracking() {
 
 pub(crate) fn finalize_frame_component_replay_tracking_partial() {
     let retired = with_component_replay_tracker_mut(|tracker| {
+        tracker.mode = ReplayTrackingMode::Full;
         tracker
             .current_nodes
             .drain()
@@ -2739,6 +2749,11 @@ pub fn begin_component_node<P: Prop>(
     begin_component_node_erased(name, component_type_id, props.as_ref(), &|| props.clone())
 }
 
+enum ReplaySnapshotUpdate {
+    Keep,
+    Replace(Option<Arc<dyn ErasedComponent>>),
+}
+
 fn begin_component_node_erased(
     name: &'static str,
     component_type_id: u64,
@@ -2750,13 +2765,31 @@ fn begin_component_node_erased(
     let instance_logic_id = node.instance_logic_id;
     let instance_key = node.instance_key;
     let instance = push_current_component_instance_key(instance_key);
-    let previous_replay = with_component_replay_tracker(|tracker| {
-        let previous = tracker.previous_nodes.get(&instance_key)?;
-        (previous.instance_logic_id == instance_logic_id && previous.replay.equals(props))
-            .then(|| previous.replay.clone())
+    let snapshot_update = with_component_replay_tracker(|tracker| {
+        let Some(previous) = tracker
+            .previous_nodes
+            .get(&instance_key)
+            .filter(|previous| {
+                previous.instance_logic_id == instance_logic_id && previous.replay.equals(props)
+            })
+        else {
+            return ReplaySnapshotUpdate::Replace(None);
+        };
+        if tracker.mode == ReplayTrackingMode::Partial
+            && with_execution_context(|context| {
+                previous.group_path == context.group_path
+                    && previous.instance_key_override == context.instance_key_override
+                    && previous.context.ptr_eq(&context.context_map)
+            })
+            && tracker.current_nodes.get(&instance_key).is_none()
+        {
+            ReplaySnapshotUpdate::Keep
+        } else {
+            ReplaySnapshotUpdate::Replace(Some(previous.replay.clone()))
+        }
     });
     let pending_dirty = consume_pending_build_invalidation(instance_key);
-    let props_unchanged = previous_replay.is_some();
+    let props_unchanged = !matches!(snapshot_update, ReplaySnapshotUpdate::Replace(None));
     let can_retain =
         props_unchanged && !pending_dirty && !is_instance_key_build_dirty(instance_key);
     let (id, retained) = TesseraRuntime::with_mut(|runtime| {
@@ -2781,18 +2814,20 @@ fn begin_component_node_erased(
         _context: context,
         _phase: phase,
     };
-    let replay = previous_replay.unwrap_or_else(current_replay);
-    let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
-        instance_logic_id,
-        group_path: context.group_path,
-        instance_key_override: context.instance_key_override,
-        context: context.context_map.clone(),
-        replay,
-    });
-    let retired = with_component_replay_tracker_mut(|tracker| {
-        tracker.current_nodes.insert(instance_key, snapshot)
-    });
-    drop(retired);
+    if let ReplaySnapshotUpdate::Replace(previous_replay) = snapshot_update {
+        let replay = previous_replay.unwrap_or_else(current_replay);
+        let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
+            instance_logic_id,
+            group_path: context.group_path,
+            instance_key_override: context.instance_key_override,
+            context: context.context_map.clone(),
+            replay,
+        });
+        let retired = with_component_replay_tracker_mut(|tracker| {
+            tracker.current_nodes.insert(instance_key, snapshot)
+        });
+        drop(retired);
+    }
     scope
 }
 

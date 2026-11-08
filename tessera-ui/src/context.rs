@@ -61,8 +61,7 @@ impl ContextMap {
         self.0.is_none()
     }
 
-    #[cfg(test)]
-    fn ptr_eq(&self, other: &Self) -> bool {
+    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         match (&self.0, &other.0) {
             (None, None) => true,
             (Some(a), Some(b)) => Arc::ptr_eq(a, b),
