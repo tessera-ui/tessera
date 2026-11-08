@@ -34,14 +34,6 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,rust-script,cargo-packager
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install package inspection tools
-        run: python -m pip install Pillow resvg_py==0.5.0
-      - name: Install PE inspection tool
-        if: runner.os == 'Windows'
-        run: python -m pip install pefile==2024.8.26
       - name: Test and package example
         if: runner.os == 'Linux'
         run: |
@@ -52,10 +44,13 @@ jobs:
           cargo test --workspace --doc
           rust-script scripts/release-package.rs --check
           cargo tessera package -p example --formats deb
-          python scripts/check-package.py deb target/packages/example
+          rust-script scripts/check-package.rs deb target/packages/example
       - name: Check scripts and formatting
         if: runner.os == 'Linux'
         run: |
+          rust-script --test scripts/check-mobile.rs
+          rust-script --test scripts/check-package.rs
+          rust-script --test scripts/test-apple-ime.rs
           rust-script --test scripts/analyze-profiler.rs
           rust-script --test scripts/check-imports.rs
           rust-script --test scripts/release-package.rs
@@ -67,21 +62,28 @@ jobs:
           cargo tessera package -p example --formats nsis
       - name: Inspect the Windows installer
         if: runner.os == 'Windows'
-        run: python scripts/check-package.py windows target/packages/example
+        run: rust-script scripts/check-package.rs windows target/packages/example
       - name: Package and inspect the macOS example
         if: runner.os == 'macOS'
         run: |
           cargo tessera package -p example --formats app
-          python scripts/check-package.py macos target/packages/example/*.app
+          rust-script scripts/check-package.rs macos target/packages/example/*.app
       - name: Package and inspect the iOS Simulator example
         if: runner.os == 'macOS'
         run: |
           cargo tessera ios build -p example --profiling-output acceptance.jsonl
-          python scripts/check-package.py ios target/packages/example/ios/*/example.app
+          rust-script scripts/check-package.rs ios target/packages/example/ios/*/example.app
       - name: Verify Apple IME and iOS application lifecycle
         if: runner.os == 'macOS'
         run: |
-          python3 scripts/test-apple-ime.py target/packages/example/ios/*/example.app
+          rust-script scripts/test-apple-ime.rs target/packages/example/ios/*/example.app
+      - name: Retain iOS acceptance diagnostics
+        if: failure() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-acceptance-diagnostics
+          path: target/mobile-acceptance
+          if-no-files-found: ignore
 
   check_minimal_versions:
     name: Check minimal dependency versions
@@ -112,14 +114,13 @@ jobs:
           components: rust-src, rust-analyzer
           target: wasm32-unknown-unknown
       - uses: ./.github/actions/setup-binaryen
-      - uses: actions/setup-python@v5
+      - uses: taiki-e/install-action@v2
         with:
-          python-version: '3.12'
+          tool: rust-script
       - name: Build and inspect the Web example
         run: |
-          python -m pip install Pillow resvg_py==0.5.0
           cargo tessera web build --release -p example
-          python scripts/check-package.py web example/gen/web
+          rust-script scripts/check-package.rs web example/gen/web
           node scripts/check-web-wasm.mjs example/gen/web/pkg-web/example_lib_bg.wasm
 
   check_android:
@@ -139,20 +140,18 @@ jobs:
         id: setup-ndk
         with:
           ndk-version: r28c
-      - uses: actions/setup-python@v5
+      - uses: taiki-e/install-action@v2
         with:
-          python-version: '3.12'
-      - name: Install APK inspection tools
-        run: python -m pip install Pillow resvg_py==0.5.0
+          tool: rust-script
       - name: Build and inspect Android APKs
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           cargo tessera android build --format apk -p example --arch arm64
-          python scripts/check-package.py android example/gen/android/app/build/outputs/apk
+          rust-script scripts/check-package.rs android example/gen/android/app/build/outputs/apk
           cargo tessera android build --format apk -p example --arch x86_64 --profiling-output files/acceptance.jsonl
-          python scripts/check-package.py android example/gen/android/app/build/outputs/apk
+          rust-script scripts/check-package.rs android example/gen/android/app/build/outputs/apk
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -169,4 +168,4 @@ jobs:
           target: google_apis
           emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: python3 scripts/check-mobile.py --android example/gen/android/app/build/outputs/apk
+          script: rust-script scripts/check-mobile.rs --android example/gen/android/app/build/outputs/apk
