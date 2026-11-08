@@ -94,9 +94,7 @@ pub fn boxed(
     layout()
         .modifier(modifier)
         .policy(BoxedLayout { alignment })
-        .child(move || {
-            children.render();
-        });
+        .child_shared(children);
 }
 
 #[derive(Clone, PartialEq)]

@@ -69,9 +69,7 @@ pub fn column(
             main_axis_alignment,
             cross_axis_alignment,
         })
-        .child(move || {
-            children.render();
-        });
+        .child_shared(children);
 }
 
 #[derive(Clone, PartialEq)]

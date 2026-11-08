@@ -165,9 +165,7 @@ pub fn row(
             main_axis_alignment,
             cross_axis_alignment,
         })
-        .child(move || {
-            children.render();
-        });
+        .child_shared(children);
 }
 
 fn measure_weighted_row(

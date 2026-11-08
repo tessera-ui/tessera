@@ -92,9 +92,7 @@ pub fn flow_column(
             max_items_per_line,
             max_lines,
         })
-        .child(move || {
-            children.render();
-        });
+        .child_shared(children);
 }
 
 #[derive(Clone, PartialEq)]
