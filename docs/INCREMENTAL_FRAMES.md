@@ -91,8 +91,9 @@ Component slot ownership shares the same inline set used for dependency readers.
 The slot key index stores handles and compares full keys in their slot records.
 
 Each replay round refreshes affected parent layout lists from the deepest
-parent outward. Sibling replacements share that refresh. Consumers compare
-retained ancestry after the round's order is available.
+parent outward. Sibling replacements attach at their original positions and
+share that refresh. Consumers compare retained ancestry after the round's order
+is available.
 Component replay uses the same props allocation prepared by the registered call.
 Immediate setters take only the pending configuration while the declaration
 scope stays registered.

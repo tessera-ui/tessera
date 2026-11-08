@@ -554,6 +554,7 @@ pub struct ComponentTree {
     /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
     replay_detached_root: Option<NodeId>,
+    replay_insert_before: Option<(NodeId, NodeId)>,
     replay_retained_roots: HashSet<NodeId>,
     replay_ancestry: replay::ReplayAncestry,
     replay_changed_parents: HashSet<NodeId>,
@@ -625,8 +626,7 @@ impl ReplayReplaceResult {
 
 pub(crate) struct ReplayReplaceContext {
     parent_id: indextree::NodeId,
-    next_sibling: Option<indextree::NodeId>,
-    last_existing_child: Option<indextree::NodeId>,
+    previous_sibling: Option<indextree::NodeId>,
     previous_queue: Option<Vec<indextree::NodeId>>,
     detached_root_id: indextree::NodeId,
 }
@@ -662,6 +662,7 @@ impl ComponentTree {
             profiler_dirty_nodes: HashSet::default(),
             scale_factor_bits: crate::dp::scale_factor().to_bits(),
             replay_detached_root: None,
+            replay_insert_before: None,
             replay_retained_roots: HashSet::default(),
             replay_ancestry: replay::ReplayAncestry::default(),
             replay_changed_parents: HashSet::default(),
@@ -708,6 +709,7 @@ impl ComponentTree {
         self.stop_accessibility_updates();
         self.node_queue.clear();
         self.replay_detached_root = None;
+        self.replay_insert_before = None;
         self.replay_retained_roots.clear();
         self.replay_ancestry = replay::ReplayAncestry::default();
         self.replay_changed_parents.clear();
@@ -819,22 +821,22 @@ impl ComponentTree {
             return Err(ReplayReplaceError::RootNodeNotReplaceable);
         };
 
-        let next_sibling = target_node_id.next_sibling(&self.tree);
+        let previous_sibling = target_node_id.previous_sibling(&self.tree);
+        self.replay_insert_before = target_node_id
+            .next_sibling(&self.tree)
+            .map(|sibling| (parent_id, sibling));
 
         self.replay_detached_root = Some(target_node_id);
         self.replay_retained_roots.clear();
         self.begin_replay_ancestry(parent_id);
         target_node_id.detach(&mut self.tree);
 
-        let last_existing_child = parent_id.last_child(&self.tree);
-
         let previous_queue =
             (!self.node_queue.is_empty()).then(|| std::mem::take(&mut self.node_queue));
         self.node_queue.push(parent_id);
         Ok(ReplayReplaceContext {
             parent_id,
-            next_sibling,
-            last_existing_child,
+            previous_sibling,
             previous_queue,
             detached_root_id: target_node_id,
         })
@@ -848,8 +850,7 @@ impl ComponentTree {
         result.clear();
         let ReplayReplaceContext {
             parent_id,
-            next_sibling,
-            last_existing_child,
+            previous_sibling,
             previous_queue,
             detached_root_id,
         } = context;
@@ -859,29 +860,24 @@ impl ComponentTree {
             self.node_queue.clear();
         }
 
-        // A replay appends its replacement roots after the surviving siblings.
-        let first_inserted = match last_existing_child {
+        let next_sibling = self.replay_insert_before.take().map(|(_, sibling)| sibling);
+        let first_inserted = match previous_sibling {
             Some(child) => child.next_sibling(&self.tree),
             None => parent_id.first_child(&self.tree),
         };
-        let inserted_root_ids = first_inserted
+        let mut pending: SmallVec<[_; 8]> = first_inserted
             .into_iter()
             .flat_map(|child| child.following_siblings(&self.tree))
-            .collect::<SmallVec<[_; 1]>>();
-        if inserted_root_ids.is_empty() {
+            .take_while(|&id| Some(id) != next_sibling)
+            .collect();
+        if pending.is_empty() {
             self.replay_ancestry = replay::ReplayAncestry::default();
             self.replay_detached_root = None;
             self.replay_retained_roots.clear();
             return Err(ReplayReplaceError::ReplayDidNotCreateRoot);
         }
 
-        if let Some(next_sibling) = next_sibling {
-            for &inserted_root_id in &inserted_root_ids {
-                next_sibling.insert_before(inserted_root_id, &mut self.tree);
-            }
-        }
-
-        let detached_root_reused = inserted_root_ids.contains(&detached_root_id);
+        let detached_root_reused = pending.contains(&detached_root_id);
 
         let ReplayReplaceResult {
             removed_instance_keys,
@@ -891,7 +887,6 @@ impl ComponentTree {
             inserted_instance_logic_ids,
             reused_instance_logic_ids,
         } = result;
-        let mut pending: SmallVec<[_; 8]> = inserted_root_ids.into_iter().collect();
         while let Some(id) = pending.pop() {
             let retained = self.replay_retained_roots.contains(&id);
             if !retained {
@@ -1125,8 +1120,13 @@ impl ComponentTree {
         if instance_key != 0 || self.node_queue.is_empty() {
             self.node_ids_by_instance_key.insert(instance_key, id);
         }
-        if let Some(current_node_id) = self.node_queue.last_mut() {
-            current_node_id.append(id, &mut self.tree);
+        if let Some(&parent) = self.node_queue.last() {
+            match self.replay_insert_before {
+                Some((replay_parent, sibling)) if parent == replay_parent => {
+                    sibling.insert_before(id, &mut self.tree);
+                }
+                _ => parent.append(id, &mut self.tree),
+            }
         }
         if needs_geometry {
             self.metadatas.entry_or_default(id);
@@ -6177,9 +6177,6 @@ mod tests {
         let new_b = tree.add_node(node("new_b", 7, 7));
         tree.pop_node();
 
-        let before_finish = root.children(tree.tree()).collect::<Vec<_>>();
-        assert_eq!(before_finish, vec![second, new_a, new_b]);
-
         let mut replace_result = ReplayReplaceResult::default();
         assert!(
             tree.finish_replace_subtree(context, &mut replace_result)
@@ -6190,11 +6187,8 @@ mod tests {
         tree.pop_node();
         tree.finish_replay_round();
 
-        let root_children = root
-            .children(tree.tree())
-            .map(|id| tree.get(id).expect("child must exist").fn_name)
-            .collect::<Vec<_>>();
-        assert_eq!(root_children, vec!["new_a", "new_b", "second"]);
+        let root_children = root.children(tree.tree()).collect::<Vec<_>>();
+        assert_eq!(root_children, vec![new_a, new_b, second]);
         #[cfg(feature = "profiling")]
         assert_eq!(tree.get(root).unwrap().subtree_len, 5);
 
