@@ -608,6 +608,24 @@ impl ModifierElement {
         }
     }
 
+    fn actions(&self) -> impl Iterator<Item = &ModifierAction> {
+        let mut pending = SmallVec::<[&Self; 8]>::new();
+        pending.push(self);
+        std::iter::from_fn(move || {
+            while let Some(element) = pending.pop() {
+                match element {
+                    Self::Empty => {}
+                    Self::Action(action) => return Some(action),
+                    Self::Combined(combination) => {
+                        pending.push(&combination.inner);
+                        pending.push(&combination.outer);
+                    }
+                }
+            }
+            None
+        })
+    }
+
     fn for_each_action_outer_first<F>(&self, visit: &mut F)
     where
         F: FnMut(ModifierAction),
@@ -1689,29 +1707,15 @@ fn hash_callback_bits<T, R, H: Hasher>(callback: &CallbackWith<T, R>, state: &mu
 
 impl PartialEq for Modifier {
     fn eq(&self, other: &Self) -> bool {
-        let mut lhs_len = 0usize;
-        self.element.fold_actions(&mut |_| lhs_len += 1);
-        let mut rhs_len = 0usize;
-        other.element.fold_actions(&mut |_| rhs_len += 1);
-        if lhs_len != rhs_len {
-            return false;
-        }
-        let mut index = 0usize;
-        let mut equal = true;
-        self.element.fold_actions(&mut |lhs| {
-            if !equal {
-                return;
+        let mut lhs = self.element.actions();
+        let mut rhs = other.element.actions();
+        loop {
+            match (lhs.next(), rhs.next()) {
+                (Some(lhs), Some(rhs)) if modifier_action_eq(lhs, rhs) => {}
+                (None, None) => return true,
+                _ => return false,
             }
-            let mut seen = 0usize;
-            other.element.fold_actions(&mut |rhs| {
-                if seen == index {
-                    equal &= modifier_action_eq(lhs, rhs);
-                }
-                seen += 1;
-            });
-            index += 1;
-        });
-        equal
+        }
     }
 }
 
@@ -1855,5 +1859,37 @@ fn apply_focus_op(runtime: runtime::FocusModifierRuntime<'_>, op: FocusModifierO
         FocusModifierOp::EventHandler(handler) => runtime.set_event_handler(handler),
         FocusModifierOp::BeyondBoundsHandler(handler) => runtime.set_beyond_bounds_handler(handler),
         FocusModifierOp::RevealHandler(handler) => runtime.set_reveal_handler(handler),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
+
+    use super::{FocusModifierOp, Modifier, ModifierAction};
+
+    fn flag(value: bool) -> Modifier {
+        Modifier::new().push_action(ModifierAction::Focus(FocusModifierOp::PreferredTabStop(
+            value,
+        )))
+    }
+
+    #[test]
+    fn modifier_equality_flattens_different_groupings_and_checks_all_actions() {
+        let left = flag(true).then(flag(false)).then(flag(true));
+        let right = flag(true).then(flag(false).then(flag(true)));
+        assert_eq!(left, right);
+
+        let mut left_hash = DefaultHasher::new();
+        let mut right_hash = DefaultHasher::new();
+        left.hash(&mut left_hash);
+        right.hash(&mut right_hash);
+        assert_eq!(left_hash.finish(), right_hash.finish());
+
+        assert_ne!(left, flag(true).then(flag(true)).then(flag(true)));
+        assert_ne!(left, right.then(flag(false)));
     }
 }

@@ -2,7 +2,7 @@
 
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::hash_map::Entry,
     hash::{BuildHasher, Hash, Hasher},
     marker::PhantomData,
@@ -653,13 +653,41 @@ pub(crate) struct ReplayNodeSnapshot {
 struct ReplaySnapshots {
     entries: Vec<(u64, ReplayNodeSnapshot)>,
     indices: HashTable<usize>,
+    next_ordered: Cell<usize>,
 }
 
 impl ReplaySnapshots {
+    fn index_of(&self, key: &u64) -> Option<usize> {
+        self.indices
+            .find(FxBuildHasher.hash_one(key), |&index| {
+                self.entries[index].0 == *key
+            })
+            .copied()
+    }
+
     fn get(&self, key: &u64) -> Option<&ReplayNodeSnapshot> {
-        let index = *self.indices.find(FxBuildHasher.hash_one(key), |&index| {
-            self.entries[index].0 == *key
-        })?;
+        Some(&self.entries[self.index_of(key)?].1)
+    }
+
+    fn get_for_replay_root(&self, key: &u64) -> Option<&ReplayNodeSnapshot> {
+        let index = self.index_of(key)?;
+        self.next_ordered.set(index);
+        Some(&self.entries[index].1)
+    }
+
+    fn get_ordered(&self, key: &u64) -> Option<&ReplayNodeSnapshot> {
+        let cursor = self.next_ordered.get();
+        // Replay follows prior declaration order until a subtree is retained or reordered.
+        let index = if self
+            .entries
+            .get(cursor)
+            .is_some_and(|entry| entry.0 == *key)
+        {
+            cursor
+        } else {
+            self.index_of(key)?
+        };
+        self.next_ordered.set(index + 1);
         Some(&self.entries[index].1)
     }
 
@@ -736,6 +764,7 @@ fn with_component_replay_tracker_mut<R>(f: impl FnOnce(&mut ComponentReplayTrack
 pub(crate) fn begin_frame_component_replay_tracking(mode: ReplayTrackingMode) {
     let retired = with_component_replay_tracker_mut(|tracker| {
         tracker.mode = mode;
+        tracker.previous_nodes.next_ordered.set(0);
         (!tracker.current_nodes.entries.is_empty())
             .then(|| std::mem::take(&mut tracker.current_nodes))
     });
@@ -772,7 +801,9 @@ pub(crate) fn reset_component_replay_tracking() {
 }
 
 pub(crate) fn previous_component_replay_node(key: u64) -> Option<ReplayNodeSnapshot> {
-    with_component_replay_tracker(|tracker| tracker.previous_nodes.get(&key).cloned())
+    with_component_replay_tracker(|tracker| {
+        tracker.previous_nodes.get_for_replay_root(&key).cloned()
+    })
 }
 
 pub(crate) fn previous_component_context(key: u64) -> Option<ContextMap> {
@@ -2820,7 +2851,7 @@ fn begin_component_node_with(
     let snapshot_update = with_component_replay_tracker(|tracker| {
         let Some(previous) = tracker
             .previous_nodes
-            .get(&instance_key)
+            .get_ordered(&instance_key)
             .filter(|previous| {
                 previous.instance_logic_id == instance_logic_id && previous.replay.equals(props)
             })
@@ -4049,6 +4080,42 @@ mod tests {
                     replay: Arc::new(Noop),
                 },
             );
+        });
+    }
+
+    #[test]
+    fn replay_snapshot_cursor_tracks_order_and_recovers_after_reordering() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        for key in [11, 22, 33, 44] {
+            seed_previous_replay_snapshot(key);
+        }
+
+        with_component_replay_tracker(|tracker| {
+            let snapshots = &tracker.previous_nodes;
+            let root = snapshots.get_for_replay_root(&22).expect("root snapshot");
+            assert_eq!(snapshots.next_ordered.get(), 1);
+            assert!(std::ptr::eq(root, snapshots.get_ordered(&22).unwrap()));
+            assert_eq!(snapshots.next_ordered.get(), 2);
+            assert!(std::ptr::eq(
+                snapshots.get_ordered(&33).unwrap(),
+                snapshots.get(&33).unwrap(),
+            ));
+            assert_eq!(snapshots.next_ordered.get(), 3);
+            assert!(std::ptr::eq(
+                snapshots.get_ordered(&11).unwrap(),
+                snapshots.get(&11).unwrap(),
+            ));
+        });
+
+        remove_previous_component_replay_nodes(&[22].into_iter().collect());
+        with_component_replay_tracker(|tracker| {
+            let snapshots = &tracker.previous_nodes;
+            assert!(std::ptr::eq(
+                snapshots.get_ordered(&44).unwrap(),
+                snapshots.get(&44).unwrap(),
+            ));
+            assert!(snapshots.get_ordered(&22).is_none());
         });
     }
 
