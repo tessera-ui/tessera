@@ -444,13 +444,16 @@ pub(crate) fn direct_layout_children(node_id: NodeId, tree: &ComponentNodeTree) 
     LayoutChildren::new(&children)
 }
 
-fn reset_frame_metadata(node_id: NodeId, component_node_metadatas: &mut ComponentNodeMetaDatas) {
+fn reset_frame_metadata(
+    node_id: NodeId,
+    component_node_metadatas: &mut ComponentNodeMetaDatas,
+) -> Option<ComputedData> {
     component_node_metadatas.mark_paint_dirty(node_id);
     let metadata = component_node_metadatas.entry_or_default(node_id);
-    metadata.computed_data = None;
     metadata.draw_layout = NodeDrawLayout::default();
     metadata.layout_cache_hit = false;
     metadata.paint_dirty = true;
+    metadata.computed_data.take()
 }
 
 /// A tree of component nodes, using `indextree::Arena` for storage.
@@ -1463,8 +1466,7 @@ pub(crate) fn measure_node(
             crate::runtime::ReadPhase::Place,
         );
     }
-    reset_frame_metadata(node_id, component_node_metadatas);
-    component_node_metadatas.mark_geometry_dirty(node_id);
+    let previous_size = reset_frame_metadata(node_id, component_node_metadatas);
     let measure_layout_ctx = MeasureLayoutContext {
         tree,
         children: &children,
@@ -1482,12 +1484,16 @@ pub(crate) fn measure_node(
                 constraint,
             )
         },
-    )?;
+    )
+    .inspect_err(|_| component_node_metadatas.mark_geometry_dirty(node_id))?;
     let size = measured.size;
     let measured_children = measured.measured_children;
     let placements = measured.placements;
     apply_layout_placements(&placements, tree, &children, component_node_metadatas);
 
+    if previous_size != Some(size) {
+        component_node_metadatas.mark_geometry_dirty(node_id);
+    }
     let metadata = component_node_metadatas.entry_or_default(node_id);
     metadata.computed_data = Some(size);
     metadata.draw_layout = measured.draw_layout.clone();

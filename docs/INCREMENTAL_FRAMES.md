@@ -2,6 +2,10 @@
 
 ## Geometry observers
 
+Remeasuring a node preserves its window geometry when its measured size is
+unchanged. Changes to position, transforms, and clips invalidate geometry
+through their own journals.
+
 Use `Modifier::layout_coordinate_space` on a figure or container and
 `Modifier::on_layout_rect_in_space` on its measured descendants when only
 relative geometry is needed. These observers compose local placements up to

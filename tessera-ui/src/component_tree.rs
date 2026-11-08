@@ -1168,12 +1168,13 @@ impl ComponentTree {
             return;
         };
         metadata.finish_accessibility_rebuild();
-        let input_changed = !previous
-            .node
-            .modifier
-            .input_geometry_eq(&self.tree[id].get().modifier);
+        let node = self.tree[id].get();
+        let input_changed = !previous.node.modifier.input_geometry_eq(&node.modifier);
         metadata.geometry_initialized &= !input_changed;
-        if input_changed || !previous.same_parent {
+        if input_changed
+            || !previous.same_parent
+            || previous.node.children_scale != node.children_scale
+        {
             self.metadatas.mark_geometry_dirty(id);
         }
     }

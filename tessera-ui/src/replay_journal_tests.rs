@@ -80,9 +80,21 @@ impl PointerInputModifierNode for Pointer {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct RevisionedOverlap(u32);
+
+impl LayoutModifierNode for RevisionedOverlap {
+    fn measure(
+        &self,
+        scope: &mut MeasureScope<'_>,
+    ) -> Result<LayoutResult, crate::MeasurementError> {
+        Overlap.measure(scope)
+    }
+}
+
 #[tessera(crate)]
 fn edited_leaf(version: u32, probe: ReplayProbe) {
-    layout().policy(Overlap).modifier(
+    layout().policy(RevisionedOverlap(version)).modifier(
         Modifier::new()
             .push_semantics(Tag {
                 key: "edited".to_owned(),
@@ -186,6 +198,8 @@ fn update_one_leaf(count: usize) -> (super::LayoutFrameDiagnostics, super::Layou
     probe.version.get().expect("Version state").set(1);
     pump_layout_test_session(&mut session, 16_000_000);
     let updated = session.diagnostics().expect("Updated frame diagnostics");
+    assert_eq!(updated.cache_miss_dirty_self, 1);
+    assert_eq!(updated.geometry_nodes_updated, 0);
     assert_eq!(
         edited_node(&session),
         edited,
