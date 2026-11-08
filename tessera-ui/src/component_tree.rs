@@ -5,8 +5,6 @@ mod pointer;
 mod replay;
 mod scene;
 
-pub(crate) use scene::SceneRope;
-
 use std::{
     cell::Cell,
     collections::{BinaryHeap, VecDeque},
@@ -50,6 +48,7 @@ pub(crate) use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
     WindowDragRequest, WindowRequests, direct_layout_children, measure_node, sibling_index,
 };
+pub(crate) use scene::SceneRope;
 
 #[cfg(feature = "profiling")]
 use crate::profiler::{NodeMeta, Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
