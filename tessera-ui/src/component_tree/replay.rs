@@ -4,8 +4,6 @@
 //!
 //! Preserve interaction and semantics when retained controls move.
 
-use std::collections::hash_map::Entry;
-
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::{
@@ -22,7 +20,7 @@ pub(super) struct ReplayCandidate {
 
 #[derive(Default)]
 pub(super) struct ReplayAncestry {
-    pending_children: HashMap<NodeId, PendingChildren>,
+    pending_children: Vec<(NodeId, PendingChildren)>,
     pub(super) detached_roots: HashMap<NodeId, NodeId>,
     replaced: HashMap<NodeId, Ancestor>,
     reused: HashMap<NodeId, ConsumerAncestry>,
@@ -60,7 +58,10 @@ impl ReplayAncestry {
         }
         recycle(&mut self.detached_roots);
         recycle(&mut self.replaced);
-        recycle(&mut self.pending_children);
+        self.pending_children.clear();
+        if self.pending_children.capacity() > 256 {
+            self.pending_children.shrink_to(256);
+        }
     }
 }
 
@@ -71,9 +72,12 @@ impl ComponentTree {
         first: NodeId,
         end: Option<NodeId>,
     ) {
-        self.replay_ancestry
-            .pending_children
-            .insert(parent, PendingChildren { first, end });
+        let pending = &mut self.replay_ancestry.pending_children;
+        if let Some((_, children)) = pending.iter_mut().rev().find(|(id, _)| *id == parent) {
+            *children = PendingChildren { first, end };
+        } else {
+            pending.push((parent, PendingChildren { first, end }));
+        }
     }
 
     pub(super) fn preserve_replay_children(&mut self, id: NodeId) {
@@ -87,13 +91,20 @@ impl ComponentTree {
     }
 
     pub(super) fn next_replay_child(&self, parent: NodeId) -> Option<NodeId> {
-        Some(self.replay_ancestry.pending_children.get(&parent)?.first)
+        self.replay_ancestry
+            .pending_children
+            .iter()
+            .rev()
+            .find_map(|(id, children)| (*id == parent).then_some(children.first))
     }
 
     pub(super) fn detach_replay_suffix(&mut self, parent: NodeId) {
-        let Some(pending) = self.replay_ancestry.pending_children.remove(&parent) else {
+        let children = &mut self.replay_ancestry.pending_children;
+        let Some(index) = children.iter().rposition(|(id, _)| *id == parent) else {
             return;
         };
+        let (_, pending) = children.remove(index);
+        self.tree[parent].get_mut().layout_children_dirty = true;
         let mut next = Some(pending.first);
         while let Some(child) = next.filter(|&child| Some(child) != pending.end) {
             next = child.next_sibling(&self.tree);
@@ -113,10 +124,17 @@ impl ComponentTree {
             return None;
         }
         if let Some(parent) = self.current_build_node_id()
-            && let Entry::Occupied(mut entry) = self.replay_ancestry.pending_children.entry(parent)
-            && self.tree[entry.get().first].get().instance_key == instance_key
+            && let Some(index) = self
+                .replay_ancestry
+                .pending_children
+                .iter()
+                .rposition(|(id, _)| *id == parent)
+            && self.tree[self.replay_ancestry.pending_children[index].1.first]
+                .get()
+                .instance_key
+                == instance_key
         {
-            let pending = entry.get_mut();
+            let pending = &mut self.replay_ancestry.pending_children[index].1;
             let id = pending.first;
             if !compatible(self.tree[id].get()) {
                 return None;
@@ -124,7 +142,7 @@ impl ComponentTree {
             match id.next_sibling(&self.tree) {
                 Some(next) if Some(next) != pending.end => pending.first = next,
                 _ => {
-                    entry.remove();
+                    self.replay_ancestry.pending_children.remove(index);
                 }
             }
             return Some(ReplayCandidate {

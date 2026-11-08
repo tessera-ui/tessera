@@ -1042,7 +1042,7 @@ impl ComponentTree {
         while let Some((depth, id)) = pending.pop() {
             #[cfg(feature = "profiling")]
             let previous_len = self.tree[id].get().subtree_len;
-            let changed = self.refresh_layout_children(id);
+            let changed = self.refresh_changed_layout_children(id);
             let node = &self.tree[id];
             let propagate = changed && node.get().role == NodeRole::Composition;
             #[cfg(feature = "profiling")]
@@ -1148,7 +1148,12 @@ impl ComponentTree {
         self.remove_position_observer(id);
         let old = self.tree[id].get_mut();
         node.layout_children = old.layout_children.take();
+        node.layout_children_dirty = old.layout_children_dirty;
         node.sibling_index = old.sibling_index;
+        #[cfg(feature = "profiling")]
+        {
+            node.subtree_len = old.subtree_len;
+        }
         let previous = std::mem::replace(old, node);
         let metadata = self.metadatas.get_mut(&id);
         let defer_consumer_change =
@@ -1205,12 +1210,16 @@ impl ComponentTree {
             return;
         }
         self.replay_ancestry.detached_roots.remove(&id);
+        if let Some(parent) = self.tree[id].parent() {
+            self.tree[parent].get_mut().layout_children_dirty = true;
+        }
         id.detach(&mut self.tree);
         self.attach_build_node(id, retained);
     }
 
     fn attach_build_node(&mut self, id: NodeId, retained: bool) {
         if let Some(&parent) = self.node_queue.last() {
+            self.tree[parent].get_mut().layout_children_dirty = true;
             let next = self.next_replay_child(parent).or_else(|| {
                 self.replay_range
                     .as_ref()
@@ -1249,7 +1258,7 @@ impl ComponentTree {
     pub(crate) fn pop_node(&mut self) {
         if let Some(node_id) = self.node_queue.pop() {
             self.detach_replay_suffix(node_id);
-            self.refresh_layout_children(node_id);
+            self.refresh_changed_layout_children(node_id);
             let node = self.tree[node_id].get();
             let interaction = node.interaction();
             let position_observers = &interaction.globally_positioned_handlers;
@@ -1275,7 +1284,16 @@ impl ComponentTree {
         }
     }
 
+    fn refresh_changed_layout_children(&mut self, node_id: NodeId) -> bool {
+        if !self.tree[node_id].get().layout_children_dirty {
+            return false;
+        }
+        self.refresh_layout_children(node_id)
+    }
+
     fn refresh_layout_children(&mut self, node_id: indextree::NodeId) -> bool {
+        #[cfg(feature = "profiling")]
+        let previous_subtree_len = self.tree[node_id].get().subtree_len;
         let mut children = SmallVec::<[NodeId; 4]>::new();
         let mut shared_children = None;
         #[cfg(feature = "profiling")]
@@ -1323,6 +1341,7 @@ impl ComponentTree {
             );
         }
         let node = self.tree[node_id].get_mut();
+        node.layout_children_dirty = false;
         #[cfg(feature = "profiling")]
         {
             node.subtree_len = subtree_len;
@@ -1330,6 +1349,12 @@ impl ComponentTree {
         if changed {
             node.layout_children =
                 Some(shared_children.unwrap_or_else(|| node::LayoutChildren::new(&children)));
+        }
+        let propagate = changed && node.role == NodeRole::Composition;
+        #[cfg(feature = "profiling")]
+        let propagate = propagate || previous_subtree_len != node.subtree_len;
+        if propagate && let Some(parent) = self.tree[node_id].parent() {
+            self.tree[parent].get_mut().layout_children_dirty = true;
         }
         changed
     }

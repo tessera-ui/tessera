@@ -60,6 +60,7 @@ pub(crate) struct ComponentNode {
     /// layout node.
     pub(crate) role: NodeRole,
     pub(super) layout_children: Option<LayoutChildren>,
+    pub(super) layout_children_dirty: bool,
     pub(crate) sibling_index: Option<NonZeroUsize>,
     #[cfg(feature = "profiling")]
     pub(crate) subtree_len: usize,
@@ -87,6 +88,7 @@ impl ComponentNode {
             fn_name,
             role,
             layout_children: None,
+            layout_children_dirty: true,
             sibling_index: None,
             #[cfg(feature = "profiling")]
             subtree_len: 1,

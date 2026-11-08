@@ -882,12 +882,6 @@ fn with_focus_read_dependency_tracker_mut<R>(
     with_runtime_globals(|globals| f(&mut globals.focus_read_dependency_tracker.borrow_mut()))
 }
 
-fn with_render_slot_read_dependency_tracker<R>(
-    f: impl FnOnce(&RenderSlotReadDependencyTracker) -> R,
-) -> R {
-    with_runtime_globals(|globals| f(&globals.render_slot_read_dependency_tracker.borrow()))
-}
-
 fn with_render_slot_read_dependency_tracker_mut<R>(
     f: impl FnOnce(&mut RenderSlotReadDependencyTracker) -> R,
 ) -> R {
@@ -1145,7 +1139,7 @@ fn consume_pending_build_invalidation(instance_key: u64) -> bool {
 pub(crate) fn record_replay_boundary_invalidation_for_instance_key(instance_key: u64) {
     let inserted =
         with_build_invalidation_tracker_mut(|tracker| tracker.invalidate([instance_key], None));
-    if inserted {
+    if inserted && current_phase() != Some(RuntimePhase::Build) {
         schedule_runtime_redraw();
     }
 }
@@ -1321,13 +1315,24 @@ pub(crate) fn track_render_slot_read_dependency(handle: FunctorHandle) {
     });
 }
 
-fn render_slot_read_subscribers(handle: FunctorHandle) -> Vec<u64> {
-    with_render_slot_read_dependency_tracker(|tracker| {
-        tracker
-            .readers(&handle)
-            .map(Iterator::collect)
-            .unwrap_or_default()
-    })
+fn invalidate_render_slot_readers(handle: FunctorHandle, creator_instance_key: u64) {
+    with_execution_context(|context| {
+        let dirty = context.build_dirty_instance_keys_stack.last();
+        with_runtime_globals(|globals| {
+            let readers = globals.render_slot_read_dependency_tracker.borrow();
+            let Some(readers) = readers.readers(&handle) else {
+                return;
+            };
+            let mut invalidations = globals.build_invalidation_tracker.borrow_mut();
+            for instance_key in readers {
+                if instance_key != creator_instance_key
+                    && !dirty.is_some_and(|dirty| dirty.contains(&instance_key))
+                {
+                    invalidations.invalidate([instance_key], None);
+                }
+            }
+        });
+    });
 }
 
 pub(crate) fn remove_state_read_dependencies(instance_keys: &HashSet<u64>) {
@@ -3644,11 +3649,7 @@ where
     if !cell.update(render, static_type) {
         return handle;
     }
-    for instance_key in render_slot_read_subscribers(handle) {
-        if instance_key != creator_instance_key && !is_instance_key_build_dirty(instance_key) {
-            record_replay_boundary_invalidation_for_instance_key(instance_key);
-        }
-    }
+    invalidate_render_slot_readers(handle, creator_instance_key);
     handle
 }
 
@@ -3675,11 +3676,7 @@ where
     if !cell.update(render, static_type) {
         return handle;
     }
-    for instance_key in render_slot_read_subscribers(handle) {
-        if instance_key != creator_instance_key && !is_instance_key_build_dirty(instance_key) {
-            record_replay_boundary_invalidation_for_instance_key(instance_key);
-        }
-    }
+    invalidate_render_slot_readers(handle, creator_instance_key);
     handle
 }
 
@@ -3868,6 +3865,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
     use crate::component_tree::{ComponentNode, NodeRole};
@@ -4570,6 +4568,12 @@ mod tests {
         reset_render_slot_read_dependencies();
         reset_build_invalidations();
 
+        let wakeups = Arc::new(AtomicUsize::new(0));
+        let count = Arc::clone(&wakeups);
+        install_redraw_waker(Arc::new(move || {
+            count.fetch_add(1, Ordering::Relaxed);
+        }));
+
         let reader_boundary_key = crate::testing::TestProbe::new(0u64);
 
         begin_recompose_slot_epoch();
@@ -4601,6 +4605,10 @@ mod tests {
         let mut expected = HashSet::default();
         expected.insert(reader_instance_key);
         assert_eq!(invalidations.dirty_instance_keys, expected);
+        assert_eq!(wakeups.load(Ordering::Relaxed), 0);
+        defer_build_invalidations(&invalidations.dirty_instance_keys);
+        assert_eq!(wakeups.load(Ordering::Relaxed), 1);
+        clear_redraw_waker();
     }
 
     #[test]
