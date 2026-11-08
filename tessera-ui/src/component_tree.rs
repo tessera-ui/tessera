@@ -1087,13 +1087,12 @@ impl ComponentTree {
         instance_key: u64,
         instance_logic_id: u64,
     ) -> Option<NodeId> {
-        let id = self.replay_candidate(instance_key)?;
-        if self.tree.get(id)?.get().instance_logic_id != instance_logic_id {
-            return None;
-        }
-
+        let candidate = self.claim_replay_candidate(instance_key, |node| {
+            node.instance_logic_id == instance_logic_id
+        })?;
+        let id = candidate.id;
         self.capture_reused_ancestry(id);
-        self.attach_replayed_node(id, true);
+        self.attach_replayed_node(candidate, true);
         Some(id)
     }
 
@@ -1120,21 +1119,23 @@ impl ComponentTree {
         &mut self,
         mut node: ComponentNode,
     ) -> (NodeId, Option<PreviousBuildNode>) {
-        let reusable = self.replay_candidate(node.instance_key).filter(|&id| {
-            let old = self.tree[id].get();
+        let reusable = self.claim_replay_candidate(node.instance_key, |old| {
             old.role == node.role && old.instance_logic_id == node.instance_logic_id
         });
-        let Some(id) = reusable else {
+        let Some(candidate) = reusable else {
             return (self.add_node(node), None);
         };
+        let id = candidate.id;
 
         self.preserve_replay_children(id);
-        let previous_parent = self.tree[id]
-            .parent()
-            .or_else(|| self.replay_ancestry.detached_roots.get(&id).copied());
-        let new_parent = self.node_queue.last().copied();
-        let parent_key = |id: NodeId| self.tree[id].get().instance_key;
-        let same_parent = previous_parent.map(parent_key) == new_parent.map(parent_key);
+        let same_parent = candidate.keeps_link || {
+            let previous_parent = self.tree[id]
+                .parent()
+                .or_else(|| self.replay_ancestry.detached_roots.get(&id).copied());
+            let new_parent = self.current_build_node_id();
+            let parent_key = |id: NodeId| self.tree[id].get().instance_key;
+            previous_parent.map(parent_key) == new_parent.map(parent_key)
+        };
         self.remove_position_observer(id);
         let old = self.tree[id].get_mut();
         node.layout_children = old.layout_children.take();
@@ -1143,7 +1144,7 @@ impl ComponentTree {
         if let Some(metadata) = self.metadatas.get_mut(&id) {
             metadata.begin_accessibility_rebuild();
         }
-        self.attach_replayed_node(id, false);
+        self.attach_replayed_node(candidate, false);
         if previous.role == NodeRole::Layout {
             self.metadatas.mark_paint_dirty(id);
         }
@@ -1172,11 +1173,9 @@ impl ComponentTree {
         }
     }
 
-    fn attach_replayed_node(&mut self, id: NodeId, retained: bool) {
-        let parent = self
-            .current_build_node_id()
-            .expect("replay must have a parent");
-        if self.keep_replay_link(parent, id) {
+    fn attach_replayed_node(&mut self, candidate: replay::ReplayCandidate, retained: bool) {
+        let replay::ReplayCandidate { id, keeps_link } = candidate;
+        if keeps_link {
             self.enter_build_node(id, retained);
             return;
         }

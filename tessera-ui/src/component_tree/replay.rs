@@ -13,7 +13,12 @@ use crate::{
     focus::{FocusHandleId, FocusRegistrationKind},
 };
 
-use super::{ComponentTree, NodeRole, sibling_index};
+use super::{ComponentNode, ComponentTree, NodeRole, sibling_index};
+
+pub(super) struct ReplayCandidate {
+    pub(super) id: NodeId,
+    pub(super) keeps_link: bool,
+}
 
 #[derive(Default)]
 pub(super) struct ReplayAncestry {
@@ -85,23 +90,6 @@ impl ComponentTree {
         Some(self.replay_ancestry.pending_children.get(&parent)?.first)
     }
 
-    pub(super) fn keep_replay_link(&mut self, parent: NodeId, id: NodeId) -> bool {
-        let Entry::Occupied(mut entry) = self.replay_ancestry.pending_children.entry(parent) else {
-            return false;
-        };
-        let pending = entry.get_mut();
-        if pending.first != id {
-            return false;
-        }
-        match id.next_sibling(&self.tree) {
-            Some(next) if Some(next) != pending.end => pending.first = next,
-            _ => {
-                entry.remove();
-            }
-        }
-        true
-    }
-
     pub(super) fn detach_replay_suffix(&mut self, parent: NodeId) {
         let Some(pending) = self.replay_ancestry.pending_children.remove(&parent) else {
             return;
@@ -114,34 +102,52 @@ impl ComponentTree {
         }
     }
 
-    pub(super) fn replay_candidate(&mut self, instance_key: u64) -> Option<NodeId> {
+    pub(super) fn claim_replay_candidate(
+        &mut self,
+        instance_key: u64,
+        compatible: impl FnOnce(&ComponentNode) -> bool,
+    ) -> Option<ReplayCandidate> {
         if self.replay_ancestry.pending_children.is_empty()
             && self.replay_ancestry.detached_roots.is_empty()
         {
             return None;
         }
-        if let Some(next) = self
-            .current_build_node_id()
-            .and_then(|id| self.next_replay_child(id))
-            && self.tree[next].get().instance_key == instance_key
+        if let Some(parent) = self.current_build_node_id()
+            && let Entry::Occupied(mut entry) = self.replay_ancestry.pending_children.entry(parent)
+            && self.tree[entry.get().first].get().instance_key == instance_key
         {
-            return Some(next);
-        }
-        let candidate = self.find_node_id_by_instance_key(instance_key)?;
-        let mut branch = candidate;
-        loop {
-            if self.replay_ancestry.detached_roots.contains_key(&branch) {
-                return Some(candidate);
+            let pending = entry.get_mut();
+            let id = pending.first;
+            if !compatible(self.tree[id].get()) {
+                return None;
             }
+            match id.next_sibling(&self.tree) {
+                Some(next) if Some(next) != pending.end => pending.first = next,
+                _ => {
+                    entry.remove();
+                }
+            }
+            return Some(ReplayCandidate {
+                id,
+                keeps_link: true,
+            });
+        }
+        let id = self.find_node_id_by_instance_key(instance_key)?;
+        let mut branch = id;
+        while !self.replay_ancestry.detached_roots.contains_key(&branch) {
             let parent = self.tree[branch].parent()?;
             // Reordered children become individually claimable. Detaching a
             // pending suffix once avoids searching it for every moved child.
             self.detach_replay_suffix(parent);
             if self.replay_ancestry.detached_roots.contains_key(&branch) {
-                return Some(candidate);
+                break;
             }
             branch = parent;
         }
+        compatible(self.tree[id].get()).then_some(ReplayCandidate {
+            id,
+            keeps_link: false,
+        })
     }
 
     pub(super) fn capture_reused_ancestry(&mut self, root: NodeId) {
