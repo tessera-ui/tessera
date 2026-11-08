@@ -31,7 +31,7 @@ fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Result<syn::Path> {
 
 struct ComponentAttr {
     crate_path: Path,
-    scope: Option<Path>,
+    layout: bool,
 }
 
 impl Parse for ComponentAttr {
@@ -39,25 +39,21 @@ impl Parse for ComponentAttr {
         if input.is_empty() {
             return Ok(Self {
                 crate_path: parse_quote!(::tessera_ui),
-                scope: None,
+                layout: false,
             });
         }
         let crate_path: Path = input.parse()?;
-        let scope = if input.is_empty() {
-            None
+        let layout = if input.is_empty() {
+            false
         } else {
             input.parse::<Token![,]>()?;
-            let scope: Ident = input.parse()?;
-            if scope != "scope" || !crate_path.is_ident("crate") {
-                return Err(syn::Error::new_spanned(
-                    scope,
-                    "expected an internal `scope`",
-                ));
+            let role: Ident = input.parse()?;
+            if role != "layout" {
+                return Err(syn::Error::new_spanned(role, "expected `layout`"));
             }
-            input.parse::<Token![=]>()?;
-            Some(input.parse()?)
+            true
         };
-        Ok(Self { crate_path, scope })
+        Ok(Self { crate_path, layout })
     }
 }
 
@@ -948,9 +944,12 @@ impl VisitMut for ControlFlowInstrumenter {
 ///   shard state.
 #[proc_macro_attribute]
 pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let ComponentAttr { crate_path, scope } = parse_macro_input!(attr as ComponentAttr);
-    let begin_scope =
-        scope.unwrap_or_else(|| parse_quote!(#crate_path::__private::begin_component_node));
+    let ComponentAttr { crate_path, layout } = parse_macro_input!(attr as ComponentAttr);
+    let begin_scope = if layout {
+        quote!(#crate_path::__private::begin_layout_component_node)
+    } else {
+        quote!(#crate_path::__private::begin_component_node)
+    };
 
     let mut input_fn = parse_macro_input!(item as ItemFn);
     if let Some(conflicting_attr) = input_fn

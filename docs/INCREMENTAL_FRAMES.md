@@ -79,7 +79,8 @@ its index and stops collecting changes until publication resumes.
 
 Composition wrappers without semantics need no geometry metadata outside the
 root. Component nodes and input dispatch plans borrow static function names.
-An explicit layout call uses one node for replay and geometry. Layout input
+The layout primitive and built-in layout components can use the same node for
+replay and geometry. Layout input
 snapshots share the authored policy with component props, and each layout node
 measures with its own policy clone. Cached child measurements share
 their storage across placement updates, and leaf layouts need no child storage.

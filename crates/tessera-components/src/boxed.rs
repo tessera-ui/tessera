@@ -4,8 +4,10 @@
 //!
 //! Use to create layered UIs, overlays, or composite controls.
 use tessera_ui::{
-    ComputedData, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    __private::configure_layout_node,
+    ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px, PxPosition,
+    RenderSlot,
+    layout::{MeasureScope, PlacementResult, PlacementScope},
     tessera,
 };
 
@@ -82,7 +84,7 @@ fn compute_child_offset(
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();
 /// ```
-#[tessera]
+#[tessera(tessera_ui, layout)]
 pub fn boxed(
     alignment: Option<Alignment>,
     modifier: Option<Modifier>,
@@ -90,11 +92,8 @@ pub fn boxed(
 ) {
     let alignment = alignment.unwrap_or_default();
     let modifier = modifier.unwrap_or_default();
-    let children = children.unwrap_or_else(RenderSlot::empty);
-    layout()
-        .modifier(modifier)
-        .policy(BoxedLayout { alignment })
-        .child_shared(children);
+    configure_layout_node(BoxedLayout { alignment }, NoopDrawModifier, modifier);
+    children.unwrap_or_else(RenderSlot::empty).render();
 }
 
 #[derive(Clone, PartialEq)]

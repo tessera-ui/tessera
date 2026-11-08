@@ -4,11 +4,10 @@
 //!
 //! Use to stack children vertically.
 use tessera_ui::{
-    AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
-    PxPosition, RenderSlot,
-    layout::{
-        LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout,
-    },
+    __private::configure_layout_node,
+    AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier,
+    NoopDrawModifier, Px, PxPosition, RenderSlot,
+    layout::{LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope},
     tessera,
 };
 
@@ -52,7 +51,7 @@ use crate::{
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();
 /// ```
-#[tessera]
+#[tessera(tessera_ui, layout)]
 pub fn column(
     modifier: Option<Modifier>,
     main_axis_alignment: Option<MainAxisAlignment>,
@@ -62,14 +61,15 @@ pub fn column(
     let modifier = modifier.unwrap_or_default();
     let main_axis_alignment = main_axis_alignment.unwrap_or_default();
     let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
-    let children = children.unwrap_or_else(RenderSlot::empty);
-    layout()
-        .modifier(modifier)
-        .policy(ColumnLayout {
+    configure_layout_node(
+        ColumnLayout {
             main_axis_alignment,
             cross_axis_alignment,
-        })
-        .child_shared(children);
+        },
+        NoopDrawModifier,
+        modifier,
+    );
+    children.unwrap_or_else(RenderSlot::empty).render();
 }
 
 #[derive(Clone, PartialEq)]

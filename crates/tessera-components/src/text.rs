@@ -7,12 +7,10 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Color, ComputedData, Dp, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode,
-    accesskit::Role,
-    layout::{MeasureScope, layout},
-    modifier::ModifierCapabilityExt as _,
-    remember, tessera, use_context,
+    __private::configure_layout_node, AccessibilityActionHandler, AccessibilityNode, Color,
+    ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    SemanticsModifierNode, accesskit::Role, layout::MeasureScope,
+    modifier::ModifierCapabilityExt as _, remember, tessera, use_context,
 };
 
 use crate::{
@@ -79,7 +77,7 @@ impl<T: Into<String>> From<T> for TextContent {
 ///
 /// # tessera_ui::testing::layout_test(demo).run();
 /// ```
-#[tessera]
+#[tessera(tessera_ui, layout)]
 pub fn text(
     #[prop(into)] content: TextContent,
     modifier: Option<Modifier>,
@@ -128,9 +126,8 @@ pub fn text(
 
     // A draw-only rebuild can reuse measurement and its glyph buffer.
     let shaped = remember(|| Arc::new(Mutex::new(None))).get();
-    layout()
-        .modifier(modifier.push_semantics(semantics))
-        .policy(TextLayout {
+    configure_layout_node(
+        TextLayout {
             text: content,
             single_line: single_line.unwrap_or(false),
             style: TextStyle {
@@ -139,8 +136,10 @@ pub fn text(
                 ..resolved_style
             },
             shaped: shaped.clone(),
-        })
-        .draw(TextDraw { color, shaped });
+        },
+        TextDraw { color, shaped },
+        modifier.push_semantics(semantics),
+    );
 }
 
 #[derive(Clone)]

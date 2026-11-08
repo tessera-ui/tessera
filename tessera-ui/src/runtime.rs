@@ -31,8 +31,8 @@ use crate::{
         FocusRevealRequest, FocusScopeNode, FocusState, FocusTraversalPolicy,
     },
     inline_set::InlineSet,
-    layout::LayoutModifierHandle,
-    modifier::{DrawModifierNode, Modifier},
+    layout::{DrawModifierHandle, LayoutModifierHandle},
+    modifier::Modifier,
     prop::{CallbackWith, ErasedComponent, Prop},
     read_dependencies::ReadDependencies,
     session::{try_with_runtime_globals, with_runtime_globals},
@@ -2442,19 +2442,6 @@ impl TesseraRuntime {
             );
         }
     }
-
-    fn finalize_current_layout_policy_dirty(&mut self, policy: &LayoutModifierHandle) {
-        if let Some(node) = self.component_tree.current_node() {
-            if node.role == crate::component_tree::NodeRole::Layout {
-                record_layout_policy_dirty(node.instance_key, policy, &node.modifier);
-            }
-        } else {
-            debug_assert!(
-                false,
-                "finalize_current_layout_policy_dirty must be called inside a component build"
-            );
-        }
-    }
 }
 
 /// Guard that records the current component node id for the calling thread.
@@ -2692,13 +2679,13 @@ fn enter_node_context(
     }
 }
 
-pub(crate) struct LayoutComponentScope<'a> {
+/// A component scope whose node also participates in layout.
+pub struct LayoutComponentScope {
     component: ComponentNodeScope,
     previous: Option<PreviousLayoutNode>,
-    policy: Option<&'a LayoutModifierHandle>,
 }
 
-impl std::ops::Deref for LayoutComponentScope<'_> {
+impl std::ops::Deref for LayoutComponentScope {
     type Target = ComponentNodeScope;
 
     fn deref(&self) -> &Self::Target {
@@ -2706,21 +2693,15 @@ impl std::ops::Deref for LayoutComponentScope<'_> {
     }
 }
 
-impl Drop for LayoutComponentScope<'_> {
+impl Drop for LayoutComponentScope {
     fn drop(&mut self) {
-        if self.component.is_retained() {
-            return;
-        }
-        TesseraRuntime::with_mut(|runtime| {
-            if let Some(previous) = &self.previous {
+        if let Some(previous) = &self.previous {
+            TesseraRuntime::with_mut(|runtime| {
                 let tree = &mut runtime.component_tree;
                 let id = tree.current_build_node_id().expect("active layout node");
                 tree.reconcile_layout_node(id, previous);
-            }
-            runtime.finalize_current_layout_policy_dirty(
-                self.policy.unwrap_or(&LayoutModifierHandle::default()),
-            );
-        });
+            });
+        }
     }
 }
 
@@ -2864,12 +2845,12 @@ fn new_build_node(name: &'static str, role: NodeRole, component_type_id: u64) ->
     node
 }
 
-pub(crate) fn begin_layout_component_node<'a, P: Prop>(
+/// Enters the build scope of a component that defines its own layout.
+pub fn begin_layout_component_node<P: Prop>(
     name: &'static str,
     component_type_id: u64,
     props: &Arc<P>,
-    policy: Option<&'a LayoutModifierHandle>,
-) -> LayoutComponentScope<'a> {
+) -> LayoutComponentScope {
     let (component, previous) = begin_component_node_with(
         name,
         component_type_id,
@@ -2881,23 +2862,39 @@ pub(crate) fn begin_layout_component_node<'a, P: Prop>(
     LayoutComponentScope {
         component,
         previous,
-        policy,
     }
 }
 
-pub(crate) fn configure_layout_node(
-    policy: &LayoutModifierHandle,
-    draw: Box<dyn DrawModifierNode>,
+/// Installs the policy, drawing behavior, and modifiers for the current layout component.
+pub fn configure_layout_node(
+    policy: impl Into<LayoutModifierHandle>,
+    draw: impl Into<DrawModifierHandle>,
+    modifier: Modifier,
 ) {
+    let policy = policy.into();
+    let draw = draw.into().into_node();
     // The policy used for measurement may maintain a cache through its shared reference.
-    let policy = policy.as_policy().clone_box();
+    let measurement_policy = policy.as_policy().clone_box();
     TesseraRuntime::with_mut(|runtime| {
         let node = runtime
             .component_tree
             .current_node_mut()
             .expect("active layout node");
-        node.layout_node = policy;
+        assert_eq!(
+            node.role,
+            NodeRole::Layout,
+            "active node must be a layout component"
+        );
+        node.layout_node = measurement_policy;
         node.draw_node = draw;
+    });
+    modifier.attach();
+    TesseraRuntime::with(|runtime| {
+        let node = runtime
+            .component_tree
+            .current_node()
+            .expect("active layout node");
+        record_layout_policy_dirty(node.instance_key, &policy, &node.modifier);
     });
 }
 

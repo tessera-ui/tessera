@@ -6,8 +6,8 @@ pub use crate::{
     prop::Prop,
     runtime::{
         CurrentComponentInstanceGuard, GroupGuard, NodeContextGuard, PathGroupGuard, PhaseGuard,
-        RuntimePhase, begin_component_node, push_current_component_instance_key, push_current_node,
-        push_phase,
+        RuntimePhase, begin_component_node, begin_layout_component_node, configure_layout_node,
+        push_current_component_instance_key, push_current_node, push_phase,
     },
     session::{local_runtime_resource, runtime_resource},
 };

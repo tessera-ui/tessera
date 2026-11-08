@@ -40,6 +40,7 @@ pub(crate) fn is_internal_runtime_name(name: &str) -> bool {
         "current_instance"
             | "current_node"
             | "current_scope"
+            | "configure_layout_node"
             | "enter_call"
             | "exit_call"
             | "enter_component"
