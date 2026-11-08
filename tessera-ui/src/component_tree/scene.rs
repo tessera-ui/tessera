@@ -346,9 +346,12 @@ impl FrameScene {
             }
             let change = changes.entry(node_id).or_default();
             change.own = true;
-            change.structure = true;
-            if let Some(parent) = geometry_parent(tree, node_id) {
-                changes.entry(parent).or_default().structure = true;
+            // Existing branches receive child changes through the layout journal.
+            if self.branches.get(node_id).is_none() {
+                change.structure = true;
+                if let Some(parent) = geometry_parent(tree, node_id) {
+                    changes.entry(parent).or_default().structure = true;
+                }
             }
         }
         record_frame_stage(&mut stage_timer, "scene_candidates");
@@ -926,6 +929,10 @@ mod tests {
             tree.metadatas.entry_or_default(first).fragment.ops_mut()[0].position_override =
                 Some(offset);
             let repainted = frame(tree, &[first], &[]);
+            assert_eq!(
+                repainted.damage_since(Some(&reordered)),
+                Some(PxRect::new(Px::ZERO, Px::ZERO, Px(20), Px(16)))
+            );
             assert_eq!(
                 drawing(&repainted),
                 [(0, zero), (2, translated), (1, offset)]

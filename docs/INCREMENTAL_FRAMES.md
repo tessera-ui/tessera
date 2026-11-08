@@ -27,8 +27,9 @@ branches, retaining ancestor clips. The full draw list remains available on dema
 
 The retained scene follows the layout tree. Changes to direct layout children
 update the parent branch, including when composition wrappers reorder retained
-children. The walk over changed branches and their ancestors builds the
-child-before-parent update order as it goes.
+children. Repainting a retained branch preserves its child links and limits
+damage to the changed drawing bounds. The walk over changed branches and their
+ancestors builds the child-before-parent update order as it goes.
 
 Custom `DrawCommand` implementations are conservative by default. Override
 `supports_partial_redraw` only if every visual change invalidates the command's
