@@ -18,7 +18,7 @@ use tessera_ui::{
 use crate::{
     pipelines::text::{
         command::{TextCommand, TextConstraint},
-        pipeline::{TextData, TextMeasureInfo},
+        pipeline::{TextData, TextFormat, TextMeasureInfo},
     },
     theme::{ContentColor, MaterialTheme, TextStyle},
 };
@@ -180,9 +180,6 @@ struct TextLayout {
 
 struct CachedText {
     fonts: Option<u64>,
-    text: Arc<str>,
-    style: TextStyle,
-    font_size_px: f32,
     constraint: TextConstraint,
     data: TextData,
 }
@@ -196,14 +193,12 @@ impl PartialEq for TextLayout {
 impl TextLayout {
     fn measure_text(&self, constraint: TextConstraint) -> TextMeasureInfo {
         let fonts = crate::fonts::prepare(&self.text, self.style);
+        let format = TextFormat::from(self.style);
         let mut cache = self.shaped.lock();
-        let font_size_px = self.style.font_size.to_pixels_f32();
         match cache.as_mut() {
             Some(cached)
                 if cached.fonts == fonts
-                    && cached.text == self.text
-                    && cached.style == self.style
-                    && cached.font_size_px == font_size_px
+                    && cached.data.matches_text(&self.text, format)
                     && cached.constraint.single_line == constraint.single_line =>
             {
                 if cached.constraint != constraint {
@@ -214,14 +209,11 @@ impl TextLayout {
             _ => {
                 *cache = Some(CachedText {
                     fonts,
-                    text: self.text.clone(),
-                    style: self.style,
-                    font_size_px,
                     constraint: constraint.clone(),
                     data: TextData::shape_prepared(
                         self.text.clone(),
                         Color::WHITE,
-                        self.style,
+                        format,
                         constraint,
                     ),
                 });

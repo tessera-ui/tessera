@@ -139,6 +139,8 @@ font registration still invalidates the affected matching caches normally.
 Plain text shares immutable content across component props, layout, and semantics.
 Text measurement and drawing share the shaped buffer, and only drawing keeps
 the text color.
+The measurement cache compares the text and pixel format stored in the shaped
+data.
 Initial layout and reflow share live glyph buffers and measurements for identical
 short text and constraints within a runtime session. A mutable font-system borrow
 clears the bounded weak lookup and invalidates older buffers as reflow sources.

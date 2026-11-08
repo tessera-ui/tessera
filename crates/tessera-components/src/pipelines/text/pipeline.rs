@@ -41,13 +41,12 @@ struct TextLayoutKey {
 }
 
 impl TextLayoutKey {
-    fn new(
-        text: &Arc<str>,
-        font_size: f32,
-        line_height: f32,
-        font: TextFont,
-        constraint: &TextConstraint,
-    ) -> Self {
+    fn new(text: &Arc<str>, format: TextFormat, constraint: &TextConstraint) -> Self {
+        let TextFormat {
+            font_size,
+            line_height,
+            font,
+        } = format;
         Self {
             text: Arc::clone(text),
             metrics: [font_size, line_height, font.tracking].map(f32::to_bits),
@@ -180,6 +179,32 @@ struct TextFont {
     weight: u16,
     tracking: f32,
     family: Option<&'static str>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct TextFormat {
+    font_size: f32,
+    line_height: f32,
+    font: TextFont,
+}
+
+impl From<TextStyle> for TextFormat {
+    fn from(style: TextStyle) -> Self {
+        let font_size = style.font_size.to_pixels_f32();
+        Self {
+            font_size,
+            line_height: style.line_height.unwrap_or(style.font_size).to_pixels_f32(),
+            font: TextFont {
+                weight: style.font_weight.clamp(1, 1000),
+                tracking: if font_size > 0.0 {
+                    style.letter_spacing.to_pixels_f32() / font_size
+                } else {
+                    0.0
+                },
+                family: style.font_family,
+            },
+        }
+    }
 }
 
 /// Borrows the font system owned by the active runtime session.
@@ -324,9 +349,7 @@ pub struct TextData {
     base_color: Color,
     current_color: Color,
     text: Arc<str>,
-    font_size: f32,
-    line_height: f32,
-    font: TextFont,
+    format: TextFormat,
     styled_identity: Option<Arc<Vec<StyledLineIdentity>>>,
     base_span_colors: Option<Arc<Vec<Option<glyphon::Color>>>>,
     span_opacity: f32,
@@ -427,9 +450,7 @@ impl PartialEq for TextData {
             && self.base_color == other.base_color
             && self.current_color == other.current_color
             && self.text == other.text
-            && self.font_size == other.font_size
-            && self.line_height == other.line_height
-            && self.font == other.font
+            && self.format == other.format
             && self.styled_identity == other.styled_identity
             && self.span_opacity == other.span_opacity
             && self.layout.buffer.wrap() == other.layout.buffer.wrap()
@@ -447,40 +468,21 @@ impl TextData {
         constraint: TextConstraint,
     ) -> Self {
         crate::fonts::prepare(&text, style);
-        Self::shape_prepared(text.into(), color, style, constraint)
+        Self::shape_prepared(text.into(), color, style.into(), constraint)
     }
 
     pub(crate) fn shape_prepared(
         text: Arc<str>,
         color: Color,
-        style: TextStyle,
+        format: TextFormat,
         constraint: TextConstraint,
     ) -> Self {
-        let font_size = style.font_size.to_pixels_f32();
-        let line_height = style.line_height.unwrap_or(style.font_size).to_pixels_f32();
-        let font = TextFont {
-            weight: style.font_weight.clamp(1, 1000),
-            tracking: if font_size > 0.0 {
-                style.letter_spacing.to_pixels_f32() / font_size
-            } else {
-                0.0
-            },
-            family: style.font_family,
-        };
         let resources = tessera_ui::__private::runtime_resource::<TextResources>();
         let key = (text.len() <= SHORT_TEXT_BYTES)
-            .then(|| TextLayoutKey::new(&text, font_size, line_height, font, &constraint));
+            .then(|| TextLayoutKey::new(&text, format, &constraint));
         let layout = resources.cached_layout(key.as_ref()).unwrap_or_else(|| {
             resources.create_layout(key, |fonts, revision| {
-                Self::build_layout(
-                    fonts,
-                    revision,
-                    &text,
-                    font_size,
-                    line_height,
-                    font,
-                    &constraint,
-                )
+                Self::build_layout(fonts, revision, &text, format, &constraint)
             })
         });
         Self {
@@ -488,41 +490,28 @@ impl TextData {
             base_color: color,
             current_color: color,
             text,
-            font_size,
-            line_height,
-            font,
+            format,
             styled_identity: None,
             base_span_colors: None,
             span_opacity: 1.0,
         }
     }
 
+    pub(crate) fn matches_text(&self, text: &str, format: TextFormat) -> bool {
+        self.text.as_ref() == text && self.format == format
+    }
+
     pub(crate) fn relayout(&mut self, constraint: &TextConstraint) {
         let resources = tessera_ui::__private::runtime_resource::<TextResources>();
-        let key = (self.text.len() <= SHORT_TEXT_BYTES).then(|| {
-            TextLayoutKey::new(
-                &self.text,
-                self.font_size,
-                self.line_height,
-                self.font,
-                constraint,
-            )
-        });
+        let key = (self.text.len() <= SHORT_TEXT_BYTES)
+            .then(|| TextLayoutKey::new(&self.text, self.format, constraint));
         self.layout = resources.cached_layout(key.as_ref()).unwrap_or_else(|| {
             resources.create_layout(key, |fonts, revision| {
                 if self.layout.font_revision == revision {
                     Arc::make_mut(&mut self.layout).resize(constraint, fonts);
                     Arc::clone(&self.layout)
                 } else {
-                    Self::build_layout(
-                        fonts,
-                        revision,
-                        &self.text,
-                        self.font_size,
-                        self.line_height,
-                        self.font,
-                        constraint,
-                    )
+                    Self::build_layout(fonts, revision, &self.text, self.format, constraint)
                 }
             })
         });
@@ -552,12 +541,14 @@ impl TextData {
             base_color: Color::WHITE,
             current_color: Color::WHITE,
             text: Arc::from(""),
-            font_size: metrics.font_size,
-            line_height: metrics.line_height,
-            font: TextFont {
-                weight: 400,
-                tracking: 0.0,
-                family: None,
+            format: TextFormat {
+                font_size: metrics.font_size,
+                line_height: metrics.line_height,
+                font: TextFont {
+                    weight: 400,
+                    tracking: 0.0,
+                    family: None,
+                },
             },
             styled_identity: Some(Arc::new(styled_identity)),
             base_span_colors: base_span_colors
@@ -601,12 +592,16 @@ impl TextData {
         font_system: &mut glyphon::FontSystem,
         font_revision: u32,
         text: &str,
-        size: f32,
-        line_height: f32,
-        font: TextFont,
+        format: TextFormat,
         constraint: &TextConstraint,
     ) -> Arc<ShapedText> {
-        let mut text_buffer = glyphon::Buffer::new_empty(glyphon::Metrics::new(size, line_height));
+        let TextFormat {
+            font_size,
+            line_height,
+            font,
+        } = format;
+        let mut text_buffer =
+            glyphon::Buffer::new_empty(glyphon::Metrics::new(font_size, line_height));
         if constraint.single_line {
             text_buffer.set_wrap(glyphon::Wrap::None);
             text_buffer.set_ellipsize(glyphon::cosmic_text::Ellipsize::End(
