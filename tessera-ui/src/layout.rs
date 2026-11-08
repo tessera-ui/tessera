@@ -7,8 +7,8 @@
 use std::{
     any::Any,
     collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
-    sync::{Arc, OnceLock},
+    hash::{Hash, Hasher},
+    sync::Arc,
 };
 
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
     },
     px::PxPosition,
     render_graph::RenderFragment,
-    runtime::begin_layout_node,
+    runtime::{LayoutComponentScope, begin_layout_component_node, configure_layout_node},
     tessera,
 };
 
@@ -1065,7 +1065,7 @@ impl Clone for Box<dyn ErasedDrawModifierNode> {
 ///         .child(move || child.render());
 /// }
 /// ```
-#[tessera(crate)]
+#[tessera(crate, scope = begin_layout)]
 pub fn layout(
     #[prop(into)] policy: Option<LayoutModifierHandle>,
     #[prop(into)] draw: Option<DrawModifierHandle>,
@@ -1075,25 +1075,19 @@ pub fn layout(
     let policy = policy.unwrap_or_default();
     let draw = draw.unwrap_or(DrawModifierHandle::from(NoopDrawModifier));
     let modifier = modifier.unwrap_or_default();
-    let _layout_scope = begin_layout_node(
-        "layout",
-        layout_node_component_type_id(),
-        &policy,
-        draw.into_node(),
-    );
+    configure_layout_node(&policy, draw.into_node());
     modifier.attach();
     if let Some(child) = child {
         child.render();
     }
 }
 
-fn layout_node_component_type_id() -> u64 {
-    static ID: OnceLock<u64> = OnceLock::new();
-    *ID.get_or_init(|| {
-        let mut hasher = DefaultHasher::new();
-        "layout_node".hash(&mut hasher);
-        hasher.finish()
-    })
+fn begin_layout<'a>(
+    name: &'static str,
+    component_type_id: u64,
+    props: &'a Arc<__TesseraLayoutProps>,
+) -> LayoutComponentScope<'a> {
+    begin_layout_component_node(name, component_type_id, props, props.policy.as_ref())
 }
 
 /// Default layout node that stacks children at (0,0) and uses the bounding

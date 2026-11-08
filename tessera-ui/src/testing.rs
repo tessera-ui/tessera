@@ -776,12 +776,8 @@ mod tests {
         AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
         FrameNanosControl, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode,
         LayoutResult, Modifier, NoopDrawModifier, PlacementModifierNode, Px, PxPosition,
-        RenderSlot, SemanticsModifierNode, State,
-        component_tree::{NodeRole, direct_layout_children},
-        layout::MeasureScope,
-        receive_frame_nanos, remember,
-        runtime::TesseraRuntime,
-        tessera,
+        RenderSlot, SemanticsModifierNode, State, component_tree::NodeRole, layout::MeasureScope,
+        receive_frame_nanos, remember, runtime::TesseraRuntime, tessera,
     };
 
     use super::{
@@ -1641,9 +1637,11 @@ mod tests {
     }
 
     #[tessera(crate)]
-    fn explicit_layout_boundary_sample() {
+    fn explicit_layout_boundary_sample(width: super::TestProbe<Option<State<i32>>>) {
+        let state = remember(|| 24);
+        width.set(Some(state));
         crate::layout::layout().policy(FixedSizePolicy {
-            width: 24,
+            width: state.get(),
             height: 12,
         });
     }
@@ -1907,72 +1905,43 @@ mod tests {
     }
 
     #[test]
-    fn layout_keeps_composition_boundary_and_emits_layout_child() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        reset_runtime_for_layout_test((100, 100));
-        let _ = crate::build_tree::build_component_tree(&explicit_layout_boundary_sample);
-
-        TesseraRuntime::with(|runtime| {
-            let tree = runtime.component_tree.tree();
-            let root = tree
-                .get_node_id_at(NonZero::new(1).expect("root node index must be non-zero"))
-                .expect("root node must exist after build");
-
-            let mut layout_composition = None;
-            let mut layout_node = None;
-
-            for edge in root.traverse(tree) {
-                let indextree::NodeEdge::Start(node_id) = edge else {
-                    continue;
-                };
-                let Some(node_ref) = tree.get(node_id) else {
-                    continue;
-                };
-                let node = node_ref.get();
-                if node.fn_name != "layout" {
-                    continue;
+    fn layout_replay_updates_size_without_allocating_a_second_node() {
+        let width = super::TestProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test({
+                let width = width.clone();
+                move || {
+                    explicit_layout_boundary_sample(width.clone());
                 }
+            })
+            .viewport_px(100, 100),
+        );
+        let layout_id = || {
+            TesseraRuntime::with(|runtime| {
+                let tree = runtime.component_tree.tree();
+                let root = tree
+                    .get_node_id_at(NonZero::<usize>::MIN)
+                    .expect("build root");
+                let mut nodes = root
+                    .descendants(tree)
+                    .filter(|&id| tree[id].get().fn_name == "layout");
+                let id = nodes.next().expect("layout node");
+                assert_eq!(tree[id].get().role, NodeRole::Layout);
+                assert!(tree[id].get().replay_boundary);
+                assert!(nodes.next().is_none());
+                id
+            })
+        };
 
-                match node.role {
-                    NodeRole::Composition => {
-                        layout_composition =
-                            Some((node_id, node.instance_key, node.replay_boundary));
-                    }
-                    NodeRole::Layout => {
-                        layout_node = Some((node_id, node.instance_key, !node.replay_boundary));
-                    }
-                }
-            }
-
-            let (layout_composition_id, composition_instance_key, has_replay) =
-                layout_composition.expect("layout composition boundary must exist");
-            let (layout_node_id, layout_instance_key, has_no_replay) =
-                layout_node.expect("emitted layout node must exist");
-
-            assert!(
-                has_replay,
-                "layout composition boundary must keep replay metadata"
-            );
-            assert!(
-                has_no_replay,
-                "emitted layout node must not become its own replay boundary"
-            );
-            assert_ne!(
-                composition_instance_key, layout_instance_key,
-                "layout node must keep a distinct node identity"
-            );
-            assert_eq!(
-                layout_node_id.parent(tree),
-                Some(layout_composition_id),
-                "layout node must be emitted directly under the layout composition boundary"
-            );
-            assert_eq!(
-                direct_layout_children(layout_composition_id, tree),
-                vec![layout_node_id].into(),
-                "direct layout children must resolve to the emitted layout node"
-            );
-        });
+        pump_layout_test_session(&mut session, 0)
+            .node("layout")
+            .size(24, 12);
+        let initial = session.session.run(layout_id);
+        width.get().expect("width state").set(36);
+        pump_layout_test_session(&mut session, 16_666_667)
+            .node("layout")
+            .size(36, 12);
+        assert_eq!(session.session.run(layout_id), initial);
     }
 
     #[derive(Clone, PartialEq)]

@@ -2692,23 +2692,34 @@ fn enter_node_context(
     }
 }
 
-pub(crate) struct LayoutNodeScope<'a> {
-    id: NodeId,
+pub(crate) struct LayoutComponentScope<'a> {
+    component: ComponentNodeScope,
     previous: Option<PreviousLayoutNode>,
-    policy: &'a LayoutModifierHandle,
-    _context: NodeContextGuard,
+    policy: Option<&'a LayoutModifierHandle>,
 }
 
-impl Drop for LayoutNodeScope<'_> {
+impl std::ops::Deref for LayoutComponentScope<'_> {
+    type Target = ComponentNodeScope;
+
+    fn deref(&self) -> &Self::Target {
+        &self.component
+    }
+}
+
+impl Drop for LayoutComponentScope<'_> {
     fn drop(&mut self) {
+        if self.component.is_retained() {
+            return;
+        }
         TesseraRuntime::with_mut(|runtime| {
             if let Some(previous) = &self.previous {
-                runtime
-                    .component_tree
-                    .reconcile_layout_node(self.id, previous);
+                let tree = &mut runtime.component_tree;
+                let id = tree.current_build_node_id().expect("active layout node");
+                tree.reconcile_layout_node(id, previous);
             }
-            runtime.finalize_current_layout_policy_dirty(self.policy);
-            runtime.component_tree.pop_node();
+            runtime.finalize_current_layout_policy_dirty(
+                self.policy.unwrap_or(&LayoutModifierHandle::default()),
+            );
         });
     }
 }
@@ -2746,7 +2757,15 @@ pub fn begin_component_node<P: Prop>(
     component_type_id: u64,
     props: &Arc<P>,
 ) -> ComponentNodeScope {
-    begin_component_node_erased(name, component_type_id, props.as_ref(), &|| props.clone())
+    begin_component_node_with(
+        name,
+        component_type_id,
+        props.as_ref(),
+        &|| props.clone(),
+        NodeRole::Composition,
+        |tree, node| (tree.add_node(node), ()),
+    )
+    .0
 }
 
 enum ReplaySnapshotUpdate {
@@ -2754,14 +2773,16 @@ enum ReplaySnapshotUpdate {
     Replace(Option<Arc<dyn ErasedComponent>>),
 }
 
-fn begin_component_node_erased(
+fn begin_component_node_with<A: Default>(
     name: &'static str,
     component_type_id: u64,
     props: &dyn ErasedComponent,
     current_replay: &dyn Fn() -> Arc<dyn ErasedComponent>,
-) -> ComponentNodeScope {
+    role: NodeRole,
+    attach: impl FnOnce(&mut ComponentTree, ComponentNode) -> (NodeId, A),
+) -> (ComponentNodeScope, A) {
     let phase = push_phase(RuntimePhase::Build);
-    let mut node = new_build_node(name, NodeRole::Composition, component_type_id);
+    let mut node = new_build_node(name, role, component_type_id);
     let instance_logic_id = node.instance_logic_id;
     let instance_key = node.instance_key;
     let instance = push_current_component_instance_key(instance_key);
@@ -2792,7 +2813,7 @@ fn begin_component_node_erased(
     let props_unchanged = !matches!(snapshot_update, ReplaySnapshotUpdate::Replace(None));
     let can_retain =
         props_unchanged && !pending_dirty && !is_instance_key_build_dirty(instance_key);
-    let (id, retained) = TesseraRuntime::with_mut(|runtime| {
+    let (id, retained, attached) = TesseraRuntime::with_mut(|runtime| {
         let tree = &mut runtime.component_tree;
         if can_retain
             && let Some(id) = tree.attach_retained_subtree(instance_key, instance_logic_id)
@@ -2800,11 +2821,12 @@ fn begin_component_node_erased(
             let retained = tree.get_mut(id).expect("retained component node");
             retained.replay_boundary = true;
             retained.props_unchanged_from_previous = true;
-            return (id, true);
+            return (id, true, A::default());
         }
         node.replay_boundary = true;
         node.props_unchanged_from_previous = props_unchanged;
-        (tree.add_node(node), false)
+        let (id, attached) = attach(tree, node);
+        (id, false, attached)
     });
     let context = enter_node_context(id, name, |_| instance_logic_id);
     let scope = ComponentNodeScope {
@@ -2828,7 +2850,7 @@ fn begin_component_node_erased(
         });
         drop(retired);
     }
-    scope
+    (scope, attached)
 }
 
 fn new_build_node(name: &'static str, role: NodeRole, component_type_id: u64) -> ComponentNode {
@@ -2842,25 +2864,41 @@ fn new_build_node(name: &'static str, role: NodeRole, component_type_id: u64) ->
     node
 }
 
-pub(crate) fn begin_layout_node<'a>(
+pub(crate) fn begin_layout_component_node<'a, P: Prop>(
     name: &'static str,
     component_type_id: u64,
-    policy: &'a LayoutModifierHandle,
-    draw: Box<dyn DrawModifierNode>,
-) -> LayoutNodeScope<'a> {
-    let mut node = new_build_node(name, NodeRole::Layout, component_type_id);
-    // The policy used for measurement may maintain a cache through its shared reference.
-    node.layout_node = policy.as_policy().clone_box();
-    node.draw_node = draw;
-    let instance_logic_id = node.instance_logic_id;
-    let (id, previous) =
-        TesseraRuntime::with_mut(|runtime| runtime.component_tree.add_layout_node(node));
-    LayoutNodeScope {
-        id,
+    props: &Arc<P>,
+    policy: Option<&'a LayoutModifierHandle>,
+) -> LayoutComponentScope<'a> {
+    let (component, previous) = begin_component_node_with(
+        name,
+        component_type_id,
+        props.as_ref(),
+        &|| props.clone(),
+        NodeRole::Layout,
+        ComponentTree::add_layout_node,
+    );
+    LayoutComponentScope {
+        component,
         previous,
         policy,
-        _context: enter_node_context(id, name, |_| instance_logic_id),
     }
+}
+
+pub(crate) fn configure_layout_node(
+    policy: &LayoutModifierHandle,
+    draw: Box<dyn DrawModifierNode>,
+) {
+    // The policy used for measurement may maintain a cache through its shared reference.
+    let policy = policy.as_policy().clone_box();
+    TesseraRuntime::with_mut(|runtime| {
+        let node = runtime
+            .component_tree
+            .current_node_mut()
+            .expect("active layout node");
+        node.layout_node = policy;
+        node.draw_node = draw;
+    });
 }
 
 /// Push the current component instance key for the active execution scope.

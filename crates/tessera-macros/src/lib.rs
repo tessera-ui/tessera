@@ -29,6 +29,38 @@ fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Result<syn::Path> {
     }
 }
 
+struct ComponentAttr {
+    crate_path: Path,
+    scope: Option<Path>,
+}
+
+impl Parse for ComponentAttr {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        if input.is_empty() {
+            return Ok(Self {
+                crate_path: parse_quote!(::tessera_ui),
+                scope: None,
+            });
+        }
+        let crate_path: Path = input.parse()?;
+        let scope = if input.is_empty() {
+            None
+        } else {
+            input.parse::<Token![,]>()?;
+            let scope: Ident = input.parse()?;
+            if scope != "scope" || !crate_path.is_ident("crate") {
+                return Err(syn::Error::new_spanned(
+                    scope,
+                    "expected an internal `scope`",
+                ));
+            }
+            input.parse::<Token![=]>()?;
+            Some(input.parse()?)
+        };
+        Ok(Self { crate_path, scope })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct PropAttrConfig {
     into: bool,
@@ -916,10 +948,9 @@ impl VisitMut for ControlFlowInstrumenter {
 ///   shard state.
 #[proc_macro_attribute]
 pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let crate_path: syn::Path = match parse_crate_path(attr) {
-        Ok(path) => path,
-        Err(err) => return err.to_compile_error().into(),
-    };
+    let ComponentAttr { crate_path, scope } = parse_macro_input!(attr as ComponentAttr);
+    let begin_scope =
+        scope.unwrap_or_else(|| parse_quote!(#crate_path::__private::begin_component_node));
 
     let mut input_fn = parse_macro_input!(item as ItemFn);
     if let Some(conflicting_attr) = input_fn
@@ -1144,7 +1175,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             fn #impl_ident #item_generics(__tessera_props: &::std::sync::Arc<#props_ident #ty_generics>) #where_clause {
                 #prop_assert_tokens
-                let __tessera_scope = #crate_path::__private::begin_component_node(
+                let __tessera_scope = #begin_scope(
                     stringify!(#fn_name),
                     #component_type_id_tokens,
                     __tessera_props,
