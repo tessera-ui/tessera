@@ -755,6 +755,8 @@ pub(crate) fn finalize_frame_component_replay_tracking_partial() {
             .current_nodes
             .drain()
             .filter_map(|(key, snapshot)| tracker.previous_nodes.insert(key, snapshot))
+            // Only props own user data. Release those after the borrow ends.
+            .map(|snapshot| snapshot.replay)
             .collect::<Vec<_>>()
     });
     drop(retired);
@@ -3972,6 +3974,49 @@ mod tests {
         remove_previous_component_replay_nodes(&[33].into_iter().collect());
         assert_eq!(previous_component_replay_nodes(&[33]).err(), Some(33));
         assert!(previous_component_replay_nodes(&[22]).is_ok());
+    }
+
+    #[test]
+    fn partial_replay_publishes_all_snapshots_before_dropping_old_props() {
+        #[derive(Clone)]
+        struct ReleaseOnDrop(crate::testing::TestProbe<bool>);
+
+        impl Prop for ReleaseOnDrop {
+            fn prop_eq(&self, _: &Self) -> bool {
+                true
+            }
+
+            fn run_component(self: Arc<Self>) {}
+        }
+
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                let committed = previous_component_replay_nodes(&[11, 22]).unwrap();
+                assert_eq!(committed[0].instance_logic_id, 11);
+                self.0.set(true);
+            }
+        }
+
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let released = crate::testing::TestProbe::new(false);
+        seed_previous_replay_snapshot(11);
+        with_component_replay_tracker_mut(|tracker| {
+            let mut snapshot = tracker.previous_nodes.get(&11).unwrap().clone();
+            tracker.previous_nodes.insert(
+                11,
+                ReplayNodeSnapshot {
+                    replay: Arc::new(ReleaseOnDrop(released.clone())),
+                    ..snapshot.clone()
+                },
+            );
+            snapshot.instance_logic_id = 11;
+            tracker.current_nodes.insert(11, snapshot.clone());
+            tracker.current_nodes.insert(22, snapshot);
+        });
+
+        finalize_frame_component_replay_tracking_partial();
+        assert!(released.get());
     }
 
     fn with_test_component_scope<R>(component_type_id: u64, f: impl FnOnce() -> R) -> R {
