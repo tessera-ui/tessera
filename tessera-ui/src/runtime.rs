@@ -1053,16 +1053,19 @@ fn take_next_node_instance_logic_id_override() -> Option<u64> {
 /// - the control-flow group path active at the original call site
 /// - the keyed-instance override active at the original call site
 /// - a one-shot instance-logic-id override for the replayed component root
+/// - the inherited context bindings captured at the original call site
 pub(crate) fn with_replay_scope<R>(
     instance_logic_id: u64,
     group_path: GroupPath,
     instance_key_override: Option<u64>,
+    context_map: ContextMap,
     f: impl FnOnce() -> R,
 ) -> R {
     struct ReplayScopeGuard {
         group_path: GroupPath,
         key_override: Option<u64>,
         logic_id_override: Option<u64>,
+        context_map: ContextMap,
     }
 
     impl Drop for ReplayScopeGuard {
@@ -1071,6 +1074,7 @@ pub(crate) fn with_replay_scope<R>(
                 context.group_path = self.group_path;
                 context.instance_key_override = self.key_override;
                 context.next_node_instance_logic_id_override = self.logic_id_override;
+                std::mem::swap(&mut context.context_map, &mut self.context_map);
             });
         }
     }
@@ -1081,6 +1085,7 @@ pub(crate) fn with_replay_scope<R>(
         logic_id_override: context
             .next_node_instance_logic_id_override
             .replace(instance_logic_id),
+        context_map: std::mem::replace(&mut context.context_map, context_map),
     });
 
     f()
@@ -2663,11 +2668,8 @@ fn enter_node_context(
     let _ = fn_name;
     #[allow(unused_variables)]
     let (parent_node_id, phase) = with_execution_context_mut(|context| {
-        let parent = context.node_context_stack.last().copied();
         let identity = resolve_identity(context);
-        context.node_context_stack.push(node_id);
-        context.instance_logic_id_stack.push(identity);
-        context.order_frame_stack.push(OrderFrame::default());
+        let parent = push_node_context(context, node_id, identity);
         (parent, context.phase_stack.last().copied())
     });
 
@@ -2683,13 +2685,78 @@ fn enter_node_context(
     }
 }
 
+fn push_node_context(
+    context: &mut ExecutionContext,
+    node_id: NodeId,
+    identity: u64,
+) -> Option<NodeId> {
+    let parent = context.node_context_stack.last().copied();
+    context.node_context_stack.push(node_id);
+    context.instance_logic_id_stack.push(identity);
+    context.order_frame_stack.push(OrderFrame::default());
+    parent
+}
+
+struct ComponentBuildContext {
+    entered_node: bool,
+    #[cfg(feature = "profiling")]
+    profiling_guard: Option<crate::profiler::ScopeGuard>,
+}
+
+impl ComponentBuildContext {
+    fn begin(component_type_id: u64) -> (Self, u64, u64) {
+        let (logic_id, instance_key) = with_execution_context_mut(|context| {
+            let logic_id = reserve_component_identity_in(context, component_type_id);
+            let instance_key = instance_key_in(context, logic_id);
+            context.phase_stack.push(RuntimePhase::Build);
+            context.current_component_instance_stack.push(instance_key);
+            (logic_id, instance_key)
+        });
+        (
+            Self {
+                entered_node: false,
+                #[cfg(feature = "profiling")]
+                profiling_guard: None,
+            },
+            logic_id,
+            instance_key,
+        )
+    }
+
+    fn enter_node(&mut self, node_id: NodeId, logic_id: u64, name: &str) {
+        let parent =
+            with_execution_context_mut(|context| push_node_context(context, node_id, logic_id));
+        self.entered_node = true;
+        #[cfg(feature = "profiling")]
+        {
+            self.profiling_guard = crate::profiler::make_build_scope_guard(node_id, parent, name);
+        }
+        #[cfg(not(feature = "profiling"))]
+        let _ = (parent, name);
+    }
+}
+
+impl Drop for ComponentBuildContext {
+    fn drop(&mut self) {
+        #[cfg(feature = "profiling")]
+        drop(self.profiling_guard.take());
+        with_execution_context_mut(|context| {
+            let instance = context.current_component_instance_stack.pop();
+            debug_assert!(instance.is_some(), "component instance must be active");
+            if self.entered_node {
+                pop_node_context(context);
+            }
+            let phase = context.phase_stack.pop();
+            debug_assert_eq!(phase, Some(RuntimePhase::Build));
+        });
+    }
+}
+
 /// A component build scope that restores the previous node and build context on exit.
 pub struct ComponentNodeScope {
     instance_logic_id: u64,
     retained: bool,
-    _instance: CurrentComponentInstanceGuard,
-    _context: NodeContextGuard,
-    _phase: PhaseGuard,
+    _context: ComponentBuildContext,
     previous: Option<PreviousBuildNode>,
 }
 
@@ -2745,11 +2812,8 @@ fn begin_component_node_with(
     current_replay: &dyn Fn() -> Arc<dyn ErasedComponent>,
     role: NodeRole,
 ) -> ComponentNodeScope {
-    let phase = push_phase(RuntimePhase::Build);
-    let mut node = new_build_node(name, role, component_type_id);
-    let instance_logic_id = node.instance_logic_id;
-    let instance_key = node.instance_key;
-    let instance = push_current_component_instance_key(instance_key);
+    let (mut context, instance_logic_id, instance_key) =
+        ComponentBuildContext::begin(component_type_id);
     let snapshot_update = with_component_replay_tracker(|tracker| {
         let Some(previous) = tracker
             .previous_nodes
@@ -2787,19 +2851,20 @@ fn begin_component_node_with(
             retained.props_unchanged_from_previous = true;
             return (id, true, None);
         }
+        let mut node = ComponentNode::new(name, role);
+        node.instance_logic_id = instance_logic_id;
+        node.instance_key = instance_key;
         node.replay_boundary = true;
         node.props_unchanged_from_previous = props_unchanged;
         let (id, previous) = tree.rebuild_node(node);
         (id, false, previous)
     });
-    let context = enter_node_context(id, name, |_| instance_logic_id);
+    context.enter_node(id, instance_logic_id, name);
     let scope = ComponentNodeScope {
         instance_logic_id,
         retained,
         previous,
-        _instance: instance,
         _context: context,
-        _phase: phase,
     };
     if let ReplaySnapshotUpdate::Replace(previous_replay) = snapshot_update {
         let replay = previous_replay.unwrap_or_else(current_replay);
@@ -2816,17 +2881,6 @@ fn begin_component_node_with(
         drop(retired);
     }
     scope
-}
-
-fn new_build_node(name: &'static str, role: NodeRole, component_type_id: u64) -> ComponentNode {
-    let (instance_logic_id, instance_key) = with_execution_context_mut(|context| {
-        let logic_id = reserve_component_identity_in(context, component_type_id);
-        (logic_id, instance_key_in(context, logic_id))
-    });
-    let mut node = ComponentNode::new(name, role);
-    node.instance_logic_id = instance_logic_id;
-    node.instance_key = instance_key;
-    node
 }
 
 /// Enters the build scope of a component that defines its own layout.
@@ -2896,16 +2950,18 @@ fn pop_current_component_instance_key() {
 }
 
 fn pop_current_node() {
-    with_execution_context_mut(|context| {
-        let popped = context.node_context_stack.pop();
-        debug_assert!(
-            popped.is_some(),
-            "Attempted to pop current node from an empty stack"
-        );
-        let order_frame = context.order_frame_stack.pop();
-        debug_assert!(order_frame.is_some(), "component order frame must exist");
-        context.instance_logic_id_stack.pop();
-    });
+    with_execution_context_mut(pop_node_context);
+}
+
+fn pop_node_context(context: &mut ExecutionContext) {
+    let popped = context.node_context_stack.pop();
+    debug_assert!(
+        popped.is_some(),
+        "Attempted to pop current node from an empty stack"
+    );
+    let order_frame = context.order_frame_stack.pop();
+    debug_assert!(order_frame.is_some(), "component order frame must exist");
+    context.instance_logic_id_stack.pop();
 }
 
 /// Get the node id at the top of the active session's component stack.
@@ -4379,7 +4435,7 @@ mod tests {
             context.next_node_instance_logic_id_override = Some(9);
         });
 
-        with_replay_scope(42, replay, Some(11), || {
+        with_replay_scope(42, replay, Some(11), ContextMap::default(), || {
             assert_eq!(current_group_path(), replay);
             assert_eq!(current_instance_key_override(), Some(11));
             assert_eq!(take_next_node_instance_logic_id_override(), Some(42));
@@ -4408,7 +4464,7 @@ mod tests {
         });
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            with_replay_scope(77, replay, Some(17), || {
+            with_replay_scope(77, replay, Some(17), ContextMap::default(), || {
                 assert_eq!(current_group_path(), replay);
                 assert_eq!(current_instance_key_override(), Some(17));
                 panic!("expected panic");

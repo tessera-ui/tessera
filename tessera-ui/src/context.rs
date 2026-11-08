@@ -199,7 +199,7 @@ fn resolve_snapshot_entry(
     })
 }
 
-fn normalize_context_snapshot(snapshot: &ContextMap) -> ContextMap {
+pub(crate) fn normalize_context_snapshot(snapshot: &ContextMap) -> ContextMap {
     let Some(bindings) = snapshot.0.as_deref() else {
         return ContextMap::new();
     };
@@ -246,10 +246,6 @@ pub(crate) fn reset_context_read_dependencies() {
     with_context_read_dependency_tracker_mut(|tracker| {
         *tracker = ContextReadDependencyTracker::default();
     });
-}
-
-pub(crate) fn with_context_snapshot<R>(snapshot: &ContextMap, f: impl FnOnce() -> R) -> R {
-    with_context_map(normalize_context_snapshot(snapshot), f)
 }
 
 pub(crate) fn with_context_map<R>(map: ContextMap, f: impl FnOnce() -> R) -> R {
@@ -637,13 +633,23 @@ mod tests {
     use parking_lot::RwLock;
 
     use super::{
-        ContextMap, ContextSnapshotEntry, SlotEntry, SlotKey, SlotTable, with_context_snapshot,
-        with_slot_table_mut,
+        ContextMap, ContextSnapshotEntry, SlotEntry, SlotKey, SlotTable,
+        normalize_context_snapshot, with_slot_table_mut,
     };
     use crate::execution_context::{
         reset_execution_context, with_execution_context, with_execution_context_mut,
     };
-    use crate::runtime::{RuntimePhase, push_phase};
+    use crate::runtime::{GroupPath, RuntimePhase, push_phase, with_replay_scope};
+
+    fn with_context_snapshot<R>(snapshot: &ContextMap, body: impl FnOnce() -> R) -> R {
+        with_replay_scope(
+            0,
+            GroupPath::default(),
+            None,
+            normalize_context_snapshot(snapshot),
+            body,
+        )
+    }
 
     fn reset_test_state() {
         with_slot_table_mut(|table| *table = SlotTable::default());

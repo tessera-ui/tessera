@@ -14,7 +14,8 @@ use crate::{
     component_tree::{ComponentNode, NodeRole, ReplayReplaceError, ReplayReplaceResult},
     context::{
         begin_recompose_context_slot_epoch, drop_context_slots_for_instance_logic_ids,
-        remove_context_read_dependencies, reset_context_read_dependencies, with_context_snapshot,
+        normalize_context_snapshot, remove_context_read_dependencies,
+        reset_context_read_dependencies,
     },
     runtime::{
         ReplayTrackingMode, TesseraRuntime, begin_frame_component_replay_tracking,
@@ -521,14 +522,13 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                     let detach_ns = detach_timer.map(|timer| timer.elapsed().as_nanos());
 
                     let compose_timer = replay_trace.then(Instant::now);
-                    with_context_snapshot(&replay_snapshot.context, || {
-                        with_replay_scope(
-                            replay_snapshot.instance_logic_id,
-                            replay_snapshot.group_path,
-                            replay_snapshot.instance_key_override,
-                            || replay_snapshot.replay.run(),
-                        );
-                    });
+                    with_replay_scope(
+                        replay_snapshot.instance_logic_id,
+                        replay_snapshot.group_path,
+                        replay_snapshot.instance_key_override,
+                        normalize_context_snapshot(&replay_snapshot.context),
+                        || replay_snapshot.replay.run(),
+                    );
                     let compose_ns = compose_timer.map(|timer| timer.elapsed().as_nanos());
 
                     let attach_timer = replay_trace.then(Instant::now);

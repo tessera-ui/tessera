@@ -481,30 +481,32 @@ fn execute_call(call: PendingCall) {
         }),
     };
     // Pending declarations execute before this build can recycle context slots.
-    with_context_map(context, || {
-        for (property, occurrence, update) in updates {
-            let mut hasher = FxHasher::default();
-            (identity, name, property, occurrence).hash(&mut hasher);
-            let (group_path, key_override) = with_execution_context_mut(|context| {
-                context.instance_logic_id_stack.push(prop_owner);
-                context.current_component_instance_stack.push(creator);
-                context.order_frame_stack.push(OrderFrame::default());
-                (
-                    std::mem::replace(
-                        &mut context.group_path,
-                        GroupPath::default().extend(hasher.finish()),
-                    ),
-                    std::mem::replace(&mut context.instance_key_override, key_override),
-                )
-            });
-            let _guard = PropScopeGuard {
-                group_path,
-                key_override,
-            };
-            update(pending_props_mut(&mut props).as_any_mut());
-        }
-        with_replay_scope(identity, group_path, key_override, || props.run());
-    });
+    if !updates.is_empty() {
+        with_context_map(context.clone(), || {
+            for (property, occurrence, update) in updates {
+                let mut hasher = FxHasher::default();
+                (identity, name, property, occurrence).hash(&mut hasher);
+                let (group_path, key_override) = with_execution_context_mut(|context| {
+                    context.instance_logic_id_stack.push(prop_owner);
+                    context.current_component_instance_stack.push(creator);
+                    context.order_frame_stack.push(OrderFrame::default());
+                    (
+                        std::mem::replace(
+                            &mut context.group_path,
+                            GroupPath::default().extend(hasher.finish()),
+                        ),
+                        std::mem::replace(&mut context.instance_key_override, key_override),
+                    )
+                });
+                let _guard = PropScopeGuard {
+                    group_path,
+                    key_override,
+                };
+                update(pending_props_mut(&mut props).as_any_mut());
+            }
+        });
+    }
+    with_replay_scope(identity, group_path, key_override, context, || props.run());
 }
 
 pub(crate) fn reset_pending_calls() {
