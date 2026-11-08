@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use hashbrown::HashTable;
+use hashbrown::{HashTable, hash_table::Entry as TableEntry};
 use parking_lot::RwLock;
 use rustc_hash::{FxBuildHasher, FxHashMap as HashMap, FxHashSet as HashSet};
 use slotmap::{SlotMap, new_key_type};
@@ -656,9 +656,71 @@ pub(crate) struct ReplayNodeSnapshot {
 }
 
 #[derive(Default)]
+struct ReplaySnapshots {
+    entries: Vec<(u64, ReplayNodeSnapshot)>,
+    indices: HashTable<usize>,
+}
+
+impl ReplaySnapshots {
+    fn get(&self, key: &u64) -> Option<&ReplayNodeSnapshot> {
+        let index = *self.indices.find(FxBuildHasher.hash_one(key), |&index| {
+            self.entries[index].0 == *key
+        })?;
+        Some(&self.entries[index].1)
+    }
+
+    fn insert(&mut self, key: u64, snapshot: ReplayNodeSnapshot) -> Option<ReplayNodeSnapshot> {
+        let entry = self.indices.entry(
+            FxBuildHasher.hash_one(key),
+            |&index| self.entries[index].0 == key,
+            |&index| FxBuildHasher.hash_one(self.entries[index].0),
+        );
+        match entry {
+            TableEntry::Occupied(entry) => Some(std::mem::replace(
+                &mut self.entries[*entry.get()].1,
+                snapshot,
+            )),
+            TableEntry::Vacant(entry) => {
+                let index = self.entries.len();
+                self.entries.push((key, snapshot));
+                entry.insert(index);
+                None
+            }
+        }
+    }
+
+    fn remove(&mut self, key: &u64) -> Option<ReplayNodeSnapshot> {
+        let entry = self
+            .indices
+            .find_entry(FxBuildHasher.hash_one(key), |&index| {
+                self.entries[index].0 == *key
+            })
+            .ok()?;
+        let (index, _) = entry.remove();
+        let (_, snapshot) = self.entries.swap_remove(index);
+        if let Some((moved_key, _)) = self.entries.get(index) {
+            let previous_index = self.entries.len();
+            let mut moved = self
+                .indices
+                .find_entry(FxBuildHasher.hash_one(moved_key), |&index| {
+                    index == previous_index
+                })
+                .unwrap_or_else(|_| unreachable!("moved replay snapshot must be indexed"));
+            *moved.get_mut() = index;
+        }
+        Some(snapshot)
+    }
+
+    fn drain(&mut self) -> impl Iterator<Item = (u64, ReplayNodeSnapshot)> + '_ {
+        self.indices.clear();
+        self.entries.drain(..)
+    }
+}
+
+#[derive(Default)]
 struct ComponentReplayTracker {
-    previous_nodes: HashMap<u64, ReplayNodeSnapshot>,
-    current_nodes: HashMap<u64, ReplayNodeSnapshot>,
+    previous_nodes: ReplaySnapshots,
+    current_nodes: ReplaySnapshots,
 }
 
 fn with_component_replay_tracker<R>(f: impl FnOnce(&ComponentReplayTracker) -> R) -> R {
@@ -671,7 +733,8 @@ fn with_component_replay_tracker_mut<R>(f: impl FnOnce(&mut ComponentReplayTrack
 
 pub(crate) fn begin_frame_component_replay_tracking() {
     let retired = with_component_replay_tracker_mut(|tracker| {
-        (!tracker.current_nodes.is_empty()).then(|| std::mem::take(&mut tracker.current_nodes))
+        (!tracker.current_nodes.entries.is_empty())
+            .then(|| std::mem::take(&mut tracker.current_nodes))
     });
     drop(retired);
 }
@@ -3892,6 +3955,23 @@ mod tests {
                 },
             );
         });
+    }
+
+    #[test]
+    fn removing_a_replay_snapshot_preserves_lookup_for_the_moved_snapshot() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        for key in [11, 22, 33] {
+            seed_previous_replay_snapshot(key);
+        }
+
+        remove_previous_component_replay_nodes(&[11].into_iter().collect());
+        assert_eq!(previous_component_replay_nodes(&[11]).err(), Some(11));
+        assert!(previous_component_replay_nodes(&[33, 22]).is_ok());
+
+        remove_previous_component_replay_nodes(&[33].into_iter().collect());
+        assert_eq!(previous_component_replay_nodes(&[33]).err(), Some(33));
+        assert!(previous_component_replay_nodes(&[22]).is_ok());
     }
 
     fn with_test_component_scope<R>(component_type_id: u64, f: impl FnOnce() -> R) -> R {
