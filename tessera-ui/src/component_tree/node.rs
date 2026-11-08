@@ -19,8 +19,8 @@ use crate::{
         FocusTraversalPolicy,
     },
     layout::{
-        ChildMeasure, DefaultLayoutNode, LayoutInput, LayoutModifierDyn, LayoutResult,
-        NoopDrawModifier, PlacementResult, PlacementScope,
+        ChildMeasure, DefaultLayoutNode, LayoutInput, LayoutModifierDyn, LayoutModifierHandle,
+        LayoutResult, NoopDrawModifier, PlacementResult, PlacementScope,
     },
     modifier::{
         DrawModifierNode, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier,
@@ -75,6 +75,7 @@ pub(crate) struct ComponentNode {
     pub(crate) modifier: Modifier,
     /// The unified layout node applied at the innermost layer.
     pub(crate) layout_node: Box<dyn LayoutModifierDyn>,
+    pub(crate) layout_input_policy: LayoutModifierHandle,
     /// Draw modifier node used to record draw and compute commands.
     pub(crate) draw_node: Box<dyn DrawModifierNode>,
     pub(crate) replay_boundary: bool,
@@ -99,6 +100,7 @@ impl ComponentNode {
             layout_coordinate_space: false,
             modifier: Modifier::default(),
             layout_node: Box::new(DefaultLayoutNode),
+            layout_input_policy: LayoutModifierHandle::default(),
             draw_node: Box::new(NoopDrawModifier),
             replay_boundary: false,
             props_unchanged_from_previous: false,
@@ -108,6 +110,10 @@ impl ComponentNode {
     pub(crate) fn interaction(&self) -> &NodeInteraction {
         static EMPTY: NodeInteraction = NodeInteraction::EMPTY;
         self.interaction.as_deref().unwrap_or(&EMPTY)
+    }
+
+    pub(crate) fn layout_policy(&self) -> &dyn LayoutModifierDyn {
+        self.layout_input_policy.as_policy()
     }
 
     pub(crate) fn interaction_mut(&mut self) -> &mut NodeInteraction {

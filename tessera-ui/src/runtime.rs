@@ -596,7 +596,6 @@ impl<T> RenderSlotWithCell<T> {
 
 #[derive(Default)]
 struct LayoutDirtyTracker {
-    layout_inputs_by_node: HashMap<u64, LayoutInputSnapshot>,
     pending_measure_self_dirty_nodes: HashSet<u64>,
     ready_measure_self_dirty_nodes: HashSet<u64>,
     pending_placement_self_dirty_nodes: HashSet<u64>,
@@ -623,11 +622,6 @@ pub(crate) enum ReadPhase {
 struct PhaseReader {
     instance_key: u64,
     phase: ReadPhase,
-}
-
-struct LayoutInputSnapshot {
-    policy: LayoutModifierHandle,
-    modifier: Modifier,
 }
 
 #[derive(Default)]
@@ -1708,50 +1702,26 @@ fn with_layout_dirty_tracker_mut<R>(f: impl FnOnce(&mut LayoutDirtyTracker) -> R
     with_runtime_globals(|globals| f(&mut globals.layout_dirty_tracker.borrow_mut()))
 }
 
-fn record_layout_policy_dirty(
-    instance_key: u64,
-    layout_policy: &LayoutModifierHandle,
-    modifier: &Modifier,
-) {
-    if current_phase() != Some(RuntimePhase::Build) {
-        return;
-    }
-    with_layout_dirty_tracker_mut(|tracker| {
-        let snapshot = || LayoutInputSnapshot {
-            policy: layout_policy.clone(),
-            modifier: modifier.clone(),
+fn record_layout_node_dirty(previous: Option<&ComponentNode>, node: &ComponentNode) {
+    let instance_key = node.instance_key;
+    let (measure_changed, placement_changed, transform_changed, parent_data_changed) =
+        if let Some(previous) = previous {
+            (
+                !previous
+                    .layout_policy()
+                    .dyn_measure_eq(node.layout_policy())
+                    || !previous.modifier.layout_measure_eq(&node.modifier),
+                !previous
+                    .layout_policy()
+                    .dyn_placement_eq(node.layout_policy())
+                    || !previous.modifier.layout_placement_eq(&node.modifier),
+                !previous.modifier.position_eq(&node.modifier),
+                !previous.modifier.parent_data_eq(&node.modifier),
+            )
+        } else {
+            (true, true, true, true)
         };
-        let (measure_changed, placement_changed, transform_changed, parent_data_changed) =
-            match tracker.layout_inputs_by_node.entry(instance_key) {
-                std::collections::hash_map::Entry::Occupied(mut entry) => {
-                    let previous = entry.get();
-                    let previous_policy = previous.policy.as_policy();
-                    let policy = layout_policy.as_policy();
-                    let measure_changed = !previous_policy.dyn_measure_eq(policy)
-                        || !previous.modifier.layout_measure_eq(modifier);
-                    let placement_changed = !previous_policy.dyn_placement_eq(policy)
-                        || !previous.modifier.layout_placement_eq(modifier);
-                    let transform_changed = !previous.modifier.position_eq(modifier);
-                    let parent_data_changed = !previous.modifier.parent_data_eq(modifier);
-                    if measure_changed
-                        || placement_changed
-                        || transform_changed
-                        || parent_data_changed
-                    {
-                        entry.insert(snapshot());
-                    }
-                    (
-                        measure_changed,
-                        placement_changed,
-                        transform_changed,
-                        parent_data_changed,
-                    )
-                }
-                std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(snapshot());
-                    (true, true, true, true)
-                }
-            };
+    with_layout_dirty_tracker_mut(|tracker| {
         if measure_changed {
             tracker
                 .pending_measure_self_dirty_nodes
@@ -1879,7 +1849,6 @@ pub(crate) fn remove_layout_structure(instance_keys: &HashSet<u64>) {
     with_layout_dirty_tracker_mut(|tracker| {
         for key in instance_keys {
             tracker.previous_children_by_node.remove(key);
-            tracker.layout_inputs_by_node.remove(key);
             tracker.structural_changes.removed_nodes.insert(*key);
             tracker.structural_changes.changed_nodes.remove(key);
         }
@@ -2785,6 +2754,14 @@ impl Drop for ComponentNodeScope {
                 let id = tree.current_build_node_id().expect("active component node");
                 tree.reconcile_build_node(id, previous);
             }
+            let id = tree.current_build_node_id().expect("active component node");
+            let node = tree.get(id).expect("active component node");
+            if node.role == NodeRole::Layout && !self.retained {
+                record_layout_node_dirty(
+                    self.previous.as_ref().map(|previous| &previous.node),
+                    node,
+                );
+            }
             tree.pop_node();
         });
     }
@@ -2911,7 +2888,7 @@ pub fn configure_layout_node(
 ) {
     let policy = policy.into();
     let draw = draw.into().into_node();
-    // The policy used for measurement may maintain a cache through its shared reference.
+    // Measurement may mutate local policy state, so keep the build input separate.
     let measurement_policy = policy.as_policy().clone_box();
     TesseraRuntime::with_mut(|runtime| {
         let node = runtime
@@ -2924,16 +2901,10 @@ pub fn configure_layout_node(
             "active node must be a layout component"
         );
         node.layout_node = measurement_policy;
+        node.layout_input_policy = policy;
         node.draw_node = draw;
     });
     modifier.attach();
-    TesseraRuntime::with(|runtime| {
-        let node = runtime
-            .component_tree
-            .current_node()
-            .expect("active layout node");
-        record_layout_policy_dirty(node.instance_key, &policy, &node.modifier);
-    });
 }
 
 /// Push the current component instance key for the active execution scope.
@@ -4287,58 +4258,57 @@ mod tests {
         }
     }
 
+    fn dirty_test_node(policy: DirtySplitPolicy, modifier: Modifier) -> ComponentNode {
+        let mut node = ComponentNode::new("dirty_test", NodeRole::Layout);
+        node.instance_key = 1;
+        node.layout_input_policy = LayoutModifierHandle::from(policy);
+        node.modifier = modifier;
+        node
+    }
+
     #[test]
     fn layout_dirty_tracking_separates_measure_and_placement_changes() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         reset_layout_dirty_tracking();
 
+        let first = dirty_test_node(
+            DirtySplitPolicy {
+                measure_key: 0,
+                placement_key: 0,
+            },
+            Modifier::new(),
+        );
         begin_frame_layout_dirty_tracking();
-        {
-            let _phase_guard = push_phase(RuntimePhase::Build);
-            record_layout_policy_dirty(
-                1,
-                &LayoutModifierHandle::from(DirtySplitPolicy {
-                    measure_key: 0,
-                    placement_key: 0,
-                }),
-                &Modifier::new(),
-            );
-        }
+        record_layout_node_dirty(None, &first);
         finalize_frame_layout_dirty_tracking();
         let dirty = take_layout_dirty_nodes();
         assert!(dirty.measure_self_nodes.contains(&1));
         assert!(dirty.placement_self_nodes.is_empty());
 
+        let second = dirty_test_node(
+            DirtySplitPolicy {
+                measure_key: 0,
+                placement_key: 1,
+            },
+            Modifier::new(),
+        );
         begin_frame_layout_dirty_tracking();
-        {
-            let _phase_guard = push_phase(RuntimePhase::Build);
-            record_layout_policy_dirty(
-                1,
-                &LayoutModifierHandle::from(DirtySplitPolicy {
-                    measure_key: 0,
-                    placement_key: 1,
-                }),
-                &Modifier::new(),
-            );
-        }
+        record_layout_node_dirty(Some(&first), &second);
         finalize_frame_layout_dirty_tracking();
         let dirty = take_layout_dirty_nodes();
         assert!(!dirty.measure_self_nodes.contains(&1));
         assert!(dirty.placement_self_nodes.contains(&1));
 
+        let third = dirty_test_node(
+            DirtySplitPolicy {
+                measure_key: 1,
+                placement_key: 1,
+            },
+            Modifier::new(),
+        );
         begin_frame_layout_dirty_tracking();
-        {
-            let _phase_guard = push_phase(RuntimePhase::Build);
-            record_layout_policy_dirty(
-                1,
-                &LayoutModifierHandle::from(DirtySplitPolicy {
-                    measure_key: 1,
-                    placement_key: 1,
-                }),
-                &Modifier::new(),
-            );
-        }
+        record_layout_node_dirty(Some(&second), &third);
         finalize_frame_layout_dirty_tracking();
         let dirty = take_layout_dirty_nodes();
         assert!(dirty.measure_self_nodes.contains(&1));
@@ -4382,35 +4352,25 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         reset_layout_dirty_tracking();
 
+        let policy = DirtySplitPolicy {
+            measure_key: 0,
+            placement_key: 0,
+        };
+        let first = dirty_test_node(
+            policy.clone(),
+            Modifier::new().push_layout(DirtyMeasureModifierNode { width: 10 }),
+        );
         begin_frame_layout_dirty_tracking();
-        {
-            let _phase_guard = push_phase(RuntimePhase::Build);
-            let modifier = Modifier::new().push_layout(DirtyMeasureModifierNode { width: 10 });
-            record_layout_policy_dirty(
-                1,
-                &LayoutModifierHandle::from(DirtySplitPolicy {
-                    measure_key: 0,
-                    placement_key: 0,
-                }),
-                &modifier,
-            );
-        }
+        record_layout_node_dirty(None, &first);
         finalize_frame_layout_dirty_tracking();
         let _ = take_layout_dirty_nodes();
 
+        let second = dirty_test_node(
+            policy,
+            Modifier::new().push_layout(DirtyMeasureModifierNode { width: 20 }),
+        );
         begin_frame_layout_dirty_tracking();
-        {
-            let _phase_guard = push_phase(RuntimePhase::Build);
-            let modifier = Modifier::new().push_layout(DirtyMeasureModifierNode { width: 20 });
-            record_layout_policy_dirty(
-                1,
-                &LayoutModifierHandle::from(DirtySplitPolicy {
-                    measure_key: 0,
-                    placement_key: 0,
-                }),
-                &modifier,
-            );
-        }
+        record_layout_node_dirty(Some(&first), &second);
         finalize_frame_layout_dirty_tracking();
         let dirty = take_layout_dirty_nodes();
         assert!(dirty.measure_self_nodes.contains(&1));

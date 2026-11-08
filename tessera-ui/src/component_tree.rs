@@ -676,7 +676,7 @@ pub(crate) struct ReplayReplaceContext {
 }
 
 pub(crate) struct PreviousBuildNode {
-    node: ComponentNode,
+    pub(crate) node: ComponentNode,
     same_parent: bool,
     defer_consumer_change: bool,
 }
