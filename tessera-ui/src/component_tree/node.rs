@@ -1206,6 +1206,60 @@ fn relayout_base_layout(
     (measured.size == entry.layout_result.size).then_some(measured)
 }
 
+fn save_measured_snapshot(
+    instance_key: u64,
+    constraint: &Constraint,
+    layout: &MeasureLayoutContext<'_, '_>,
+    previous: Option<&LayoutSnapshotEntry>,
+    measured: MeasuredNodeLayout,
+) {
+    let Some(layout_ctx) = layout.layout_ctx else {
+        return;
+    };
+    let consumed_insets = layout_ctx.consumed_insets.get();
+    let child_measurements = layout.children.iter().map(|id| {
+        let measurement = measured.measured_children.get(id)?;
+        measurement
+            .consistent
+            .then(|| (layout.tree[*id].get().instance_key, *measurement))
+    });
+    let unchanged = previous.is_some_and(|previous| {
+        previous.constraint_key == *constraint
+            && previous.consumed_insets == consumed_insets
+            && previous.layout_result.size == measured.size
+            && previous.layout_result.placements == measured.placements
+            && previous.base_placements == measured.base_placements
+            && previous.intrinsic_dependencies == measured.intrinsic_dependencies
+            && previous.draw_layout == measured.draw_layout
+            && child_measurements
+                .clone()
+                .eq(previous.children.entries().iter().copied().map(Some))
+    });
+    if unchanged {
+        layout_ctx.acknowledge_deferred_invalidation(instance_key);
+    } else if let Some(children) = child_measurements.collect::<Option<Vec<_>>>() {
+        layout_ctx.insert_snapshot(
+            instance_key,
+            LayoutSnapshotEntry {
+                constraint_key: *constraint,
+                consumed_insets,
+                children: CachedLayoutChildren::new(children),
+                layout_result: LayoutResult {
+                    size: measured.size,
+                    placements: measured.placements,
+                },
+                base_placements: measured.base_placements,
+                intrinsic_dependencies: measured.intrinsic_dependencies,
+                draw_layout: measured.draw_layout,
+            },
+        );
+        layout_ctx.inc_cache_store_count();
+    } else {
+        layout_ctx.remove_snapshot(instance_key);
+        layout_ctx.inc_cache_drop_non_cacheable_count();
+    }
+}
+
 /// Measures a single node recursively, returning its size or an error.
 pub(crate) fn measure_node(
     node_id: NodeId,
@@ -1240,27 +1294,32 @@ pub(crate) fn measure_node(
         parent_constraint
     );
 
-    // Restore the owning node context for nested control-flow
-    // instrumentation.
-    let _node_ctx_guard = push_current_node_with_instance_logic_id(
-        node_id,
-        node_data.instance_logic_id,
-        node_data.fn_name,
-    );
-    let replay_boundary_instance_key = nearest_replay_boundary_instance_key(node_id, tree);
-    let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
-    let _measured_node_guard = push_measured_node_instance_key(
-        layout_ctx
-            .and_then(|context| context.state_reader_instance_key)
-            .unwrap_or(node_data.instance_key),
-    );
-    let _phase_guard = push_phase(RuntimePhase::Measure);
-
+    let prepare_measurement = || {
+        let node = push_current_node_with_instance_logic_id(
+            node_id,
+            node_data.instance_logic_id,
+            node_data.fn_name,
+        );
+        let instance = push_current_component_instance_key(nearest_replay_boundary_instance_key(
+            node_id, tree,
+        ));
+        let measured = push_measured_node_instance_key(
+            layout_ctx
+                .and_then(|context| context.state_reader_instance_key)
+                .unwrap_or(node_data.instance_key),
+        );
+        let phase = push_phase(RuntimePhase::Measure);
+        (
+            (phase, measured, instance, node),
+            node_data.modifier.layout_modifiers(),
+        )
+    };
+    let mut measurement = None;
     let layout_node = &node_data.layout_node;
-    let layout_modifiers = node_data.modifier.layout_modifiers();
+    let snapshot = layout_ctx.and_then(|context| context.snapshot(node_data.instance_key));
     if let Some(layout_ctx) = layout_ctx {
         layout_ctx.inc_measure_node_calls();
-        if let Some(entry) = layout_ctx.snapshot(node_data.instance_key) {
+        if let Some(entry) = snapshot.as_deref() {
             let deferred = layout_ctx.deferred_invalidation(node_data.instance_key);
             let same_constraint = entry.constraint_key == *parent_constraint;
             let node_self_measure_dirty = entry.consumed_insets != layout_ctx.consumed_insets.get()
@@ -1362,19 +1421,21 @@ pub(crate) fn measure_node(
                     let cached_result = &entry.layout_result;
                     let needs_relayout = node_self_placement_dirty || !same_constraint;
                     let relayout = if needs_relayout {
+                        let (_, layout_modifiers) =
+                            measurement.get_or_insert_with(&prepare_measurement);
                         crate::runtime::clear_phase_state_reads(
                             node_data.instance_key,
                             crate::runtime::ReadPhase::Place,
                         );
                         relayout_base_layout(
                             layout_node.as_ref(),
-                            &layout_modifiers,
+                            layout_modifiers,
                             &MeasureLayoutContext {
                                 tree,
                                 children: &children,
                                 layout_ctx: Some(layout_ctx),
                             },
-                            &entry,
+                            entry,
                             parent_constraint,
                             node_self_placement_dirty,
                         )
@@ -1419,7 +1480,12 @@ pub(crate) fn measure_node(
                             metadata.draw_layout = draw_layout.clone();
                             metadata.layout_cache_hit = true;
                         }
-                        if needs_relayout {
+                        if needs_relayout
+                            && (!same_constraint
+                                || placements != cached_result.placements
+                                || draw_layout != entry.draw_layout
+                                || base_placements != entry.base_placements)
+                        {
                             layout_ctx.insert_snapshot(
                                 node_data.instance_key,
                                 LayoutSnapshotEntry {
@@ -1435,6 +1501,7 @@ pub(crate) fn measure_node(
                                     draw_layout,
                                 },
                             );
+                            layout_ctx.inc_cache_store_count();
                         }
                         layout_ctx.acknowledge_deferred_invalidation(node_data.instance_key);
                         layout_ctx.inc_cache_hit_boundary();
@@ -1456,6 +1523,7 @@ pub(crate) fn measure_node(
         }
     }
 
+    let (_, layout_modifiers) = measurement.get_or_insert_with(prepare_measurement);
     if !layout_ctx.is_some_and(|context| context.intrinsic) {
         crate::runtime::clear_phase_state_reads(
             node_data.instance_key,
@@ -1473,7 +1541,7 @@ pub(crate) fn measure_node(
         layout_ctx,
     };
     let measured = measure_with_layout_modifiers(
-        &layout_modifiers,
+        layout_modifiers,
         &measure_layout_ctx,
         parent_constraint,
         &mut |constraint| {
@@ -1487,9 +1555,12 @@ pub(crate) fn measure_node(
     )
     .inspect_err(|_| component_node_metadatas.mark_geometry_dirty(node_id))?;
     let size = measured.size;
-    let measured_children = measured.measured_children;
-    let placements = measured.placements;
-    apply_layout_placements(&placements, tree, &children, component_node_metadatas);
+    apply_layout_placements(
+        &measured.placements,
+        tree,
+        &children,
+        component_node_metadatas,
+    );
 
     if previous_size != Some(size) {
         component_node_metadatas.mark_geometry_dirty(node_id);
@@ -1503,36 +1574,13 @@ pub(crate) fn measure_node(
         guard.set_computed_size(size.width.0, size.height.0);
     }
 
-    if let Some(layout_ctx) = layout_ctx {
-        let cached_children = children
-            .iter()
-            .map(|id| {
-                let measurement = measured_children.get(id)?;
-                measurement
-                    .consistent
-                    .then(|| (tree[*id].get().instance_key, *measurement))
-            })
-            .collect::<Option<Vec<_>>>();
-        if let Some(cached_children) = cached_children {
-            let layout_result = LayoutResult { size, placements };
-            layout_ctx.insert_snapshot(
-                node_data.instance_key,
-                LayoutSnapshotEntry {
-                    constraint_key: *parent_constraint,
-                    consumed_insets: layout_ctx.consumed_insets.get(),
-                    children: CachedLayoutChildren::new(cached_children),
-                    layout_result,
-                    base_placements: measured.base_placements,
-                    intrinsic_dependencies: measured.intrinsic_dependencies,
-                    draw_layout: measured.draw_layout,
-                },
-            );
-            layout_ctx.inc_cache_store_count();
-        } else {
-            layout_ctx.remove_snapshot(node_data.instance_key);
-            layout_ctx.inc_cache_drop_non_cacheable_count();
-        }
-    }
+    save_measured_snapshot(
+        node_data.instance_key,
+        parent_constraint,
+        &measure_layout_ctx,
+        snapshot.as_deref(),
+        measured,
+    );
 
     debug!(
         "Measured node {} in {:?} with size {:?}",

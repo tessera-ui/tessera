@@ -199,6 +199,7 @@ fn update_one_leaf(count: usize) -> (super::LayoutFrameDiagnostics, super::Layou
     pump_layout_test_session(&mut session, 16_000_000);
     let updated = session.diagnostics().expect("Updated frame diagnostics");
     assert_eq!(updated.cache_miss_dirty_self, 1);
+    assert_eq!(updated.cache_store_count, 0);
     assert_eq!(updated.geometry_nodes_updated, 0);
     assert_eq!(
         edited_node(&session),

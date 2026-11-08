@@ -93,6 +93,8 @@ replay and geometry. Layout input
 snapshots share the authored policy with component props, and each layout node
 measures with its own policy clone. Cached child measurements share
 their storage across placement updates, and leaf layouts need no child storage.
+When a new measurement reproduces the cached layout, the runtime keeps the
+previous snapshot. Cache hits that execute no policy skip the measurement scope.
 Layout adjacency stores a single child inline. Parents with a single composition
 child can share its wider flattened layout child list.
 The same ancestor walk marks dirty layout paths and records the affected children

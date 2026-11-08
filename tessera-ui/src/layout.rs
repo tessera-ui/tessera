@@ -26,7 +26,7 @@ use crate::{
     tessera,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) struct ChildMeasure {
     pub constraint: Constraint,
     pub size: ComputedData,
