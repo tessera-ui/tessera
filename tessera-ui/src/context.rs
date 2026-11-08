@@ -255,7 +255,7 @@ pub(crate) fn with_context_snapshot<R>(snapshot: &ContextMap, f: impl FnOnce() -
     with_context_map(normalize_context_snapshot(snapshot), f)
 }
 
-fn with_context_map<R>(map: ContextMap, f: impl FnOnce() -> R) -> R {
+pub(crate) fn with_context_map<R>(map: ContextMap, f: impl FnOnce() -> R) -> R {
     struct RestoreContext(ContextMap);
 
     impl Drop for RestoreContext {

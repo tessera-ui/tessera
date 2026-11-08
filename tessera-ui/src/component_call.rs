@@ -18,7 +18,7 @@ use slotmap::{SlotMap, new_key_type};
 
 use crate::{
     NodeId,
-    context::{ContextMap, with_context_snapshot},
+    context::{ContextMap, with_context_map},
     execution_context::{OrderFrame, with_execution_context, with_execution_context_mut},
     prop::{ErasedComponent, Prop},
     runtime::{
@@ -464,7 +464,8 @@ fn execute_call(call: PendingCall) {
             }
         }),
     };
-    with_context_snapshot(&context, || {
+    // Pending declarations execute before this build can recycle context slots.
+    with_context_map(context, || {
         for (property, occurrence, update) in updates {
             let mut hasher = FxHasher::default();
             (identity, name, property, occurrence).hash(&mut hasher);

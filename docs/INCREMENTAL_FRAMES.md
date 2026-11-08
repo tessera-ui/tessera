@@ -56,6 +56,8 @@ Replay snapshots share finalized props and inherited context maps. Empty
 contexts need no binding storage. Context and keyed scopes restore their prior
 bindings when they exit. Control-flow scopes extend and restore a compact path
 identity, which pending calls and replay snapshots store by value.
+Pending calls install the live bindings captured at declaration. Replay
+snapshots resolve bindings that can change across frames.
 Replay snapshot records are contiguous, with a separate index by instance key.
 Partial replay publishes all replacements before releasing retired props.
 Modifier snapshots share immutable chain links. The scene stores empty and
