@@ -553,7 +553,6 @@ pub struct ComponentTree {
     scale_factor_bits: u64,
     /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
-    replay_detached_root: Option<NodeId>,
     replay_insert_before: Option<(NodeId, NodeId)>,
     replay_retained_roots: HashSet<NodeId>,
     replay_ancestry: replay::ReplayAncestry,
@@ -629,10 +628,9 @@ pub(crate) struct ReplayReplaceContext {
     parent_id: indextree::NodeId,
     previous_sibling: Option<indextree::NodeId>,
     previous_queue: Option<Vec<indextree::NodeId>>,
-    detached_root_id: indextree::NodeId,
 }
 
-pub(crate) struct PreviousLayoutNode {
+pub(crate) struct PreviousBuildNode {
     node: ComponentNode,
     same_parent: bool,
 }
@@ -662,7 +660,6 @@ impl ComponentTree {
             #[cfg(feature = "profiling")]
             profiler_dirty_nodes: HashSet::default(),
             scale_factor_bits: crate::dp::scale_factor().to_bits(),
-            replay_detached_root: None,
             replay_insert_before: None,
             replay_retained_roots: HashSet::default(),
             replay_ancestry: replay::ReplayAncestry::default(),
@@ -711,7 +708,6 @@ impl ComponentTree {
         self.pointer_index = pointer::PointerIndex::default();
         self.stop_accessibility_updates();
         self.node_queue.clear();
-        self.replay_detached_root = None;
         self.replay_insert_before = None;
         self.replay_retained_roots.clear();
         self.replay_ancestry = replay::ReplayAncestry::default();
@@ -841,9 +837,10 @@ impl ComponentTree {
             .next_sibling(&self.tree)
             .map(|sibling| (parent_id, sibling));
 
-        self.replay_detached_root = Some(target_node_id);
+        self.replay_ancestry
+            .detached_roots
+            .insert(target_node_id, parent_id);
         self.replay_retained_roots.clear();
-        self.begin_replay_ancestry(parent_id);
         target_node_id.detach(&mut self.tree);
 
         let previous_queue =
@@ -853,7 +850,6 @@ impl ComponentTree {
             parent_id,
             previous_sibling,
             previous_queue,
-            detached_root_id: target_node_id,
         })
     }
 
@@ -867,7 +863,6 @@ impl ComponentTree {
             parent_id,
             previous_sibling,
             previous_queue,
-            detached_root_id,
         } = context;
         if let Some(previous_queue) = previous_queue {
             self.restore_build_queue(previous_queue);
@@ -887,12 +882,9 @@ impl ComponentTree {
             .collect();
         if pending.is_empty() {
             self.replay_ancestry = replay::ReplayAncestry::default();
-            self.replay_detached_root = None;
             self.replay_retained_roots.clear();
             return Err(ReplayReplaceError::ReplayDidNotCreateRoot);
         }
-
-        let detached_root_reused = pending.contains(&detached_root_id);
 
         let ReplayReplaceResult {
             removed_instance_keys,
@@ -918,8 +910,8 @@ impl ComponentTree {
         }
 
         let mut detached_node_ids = SmallVec::<[_; 8]>::new();
-        if !detached_root_reused {
-            detached_node_ids.extend(detached_root_id.descendants(&self.tree));
+        for &root in self.replay_ancestry.detached_roots.keys() {
+            detached_node_ids.extend(root.descendants(&self.tree));
         }
         for &old_id in &detached_node_ids {
             let old = &self.tree[old_id];
@@ -938,11 +930,9 @@ impl ComponentTree {
                 let new = &self.tree[new_id];
                 let input_geometry_changed =
                     !old.get().modifier.input_geometry_eq(&new.get().modifier);
-                let old_parent = if old_id == detached_root_id {
-                    Some(parent_id)
-                } else {
-                    old.parent()
-                };
+                let old_parent = old
+                    .parent()
+                    .or_else(|| self.replay_ancestry.detached_roots.get(&old_id).copied());
                 let parent_key = |id: NodeId| self.tree[id].get().instance_key;
                 let same_parent = old_parent.map(parent_key) == new.parent().map(parent_key);
                 let metadata = self.metadatas.entry_or_default(new_id);
@@ -977,10 +967,10 @@ impl ComponentTree {
         self.removed_focus_owners
             .extend(removed_instance_keys.iter().copied());
         crate::runtime::remove_layout_structure(removed_instance_keys);
-        if !detached_root_reused {
-            detached_root_id.remove_subtree(&mut self.tree);
+        for &root in self.replay_ancestry.detached_roots.keys() {
+            root.remove_subtree(&mut self.tree);
         }
-        self.replay_detached_root = None;
+        self.replay_ancestry.clear_detached();
         self.replay_retained_roots.clear();
 
         self.replay_changed_parents.insert(parent_id);
@@ -1047,9 +1037,15 @@ impl ComponentTree {
     }
 
     fn replay_candidate(&self, instance_key: u64) -> Option<NodeId> {
-        let root = self.replay_detached_root?;
+        if self.replay_ancestry.detached_roots.is_empty() {
+            return None;
+        }
         let id = self.find_node_id_by_instance_key(instance_key)?;
-        id.ancestors(&self.tree).any(|id| id == root).then_some(id)
+        let root = id.ancestors(&self.tree).last()?;
+        self.replay_ancestry
+            .detached_roots
+            .contains_key(&root)
+            .then_some(id)
     }
 
     pub(crate) fn attach_retained_subtree(
@@ -1064,6 +1060,7 @@ impl ComponentTree {
 
         self.capture_reused_ancestry(id);
         self.replay_retained_roots.insert(id);
+        self.replay_ancestry.detached_roots.remove(&id);
         id.detach(&mut self.tree);
         self.attach_build_node(id);
         Some(id)
@@ -1079,22 +1076,22 @@ impl ComponentTree {
         new_node_id
     }
 
-    pub(crate) fn add_layout_node(
+    pub(crate) fn rebuild_node(
         &mut self,
         mut node: ComponentNode,
-    ) -> (NodeId, Option<PreviousLayoutNode>) {
+    ) -> (NodeId, Option<PreviousBuildNode>) {
         let reusable = self.replay_candidate(node.instance_key).filter(|&id| {
-            let old = &self.tree[id];
-            old.parent().is_some()
-                && old.first_child().is_none()
-                && old.get().role == NodeRole::Layout
-                && old.get().instance_logic_id == node.instance_logic_id
+            let old = self.tree[id].get();
+            old.role == node.role && old.instance_logic_id == node.instance_logic_id
         });
         let Some(id) = reusable else {
             return (self.add_node(node), None);
         };
 
-        let previous_parent = self.tree[id].parent();
+        self.detach_replay_children(id);
+        let previous_parent = self.tree[id]
+            .parent()
+            .or(self.replay_ancestry.detached_roots.remove(&id));
         let new_parent = self.node_queue.last().copied();
         let parent_key = |id: NodeId| self.tree[id].get().instance_key;
         let same_parent = previous_parent.map(parent_key) == new_parent.map(parent_key);
@@ -1104,23 +1101,31 @@ impl ComponentTree {
         node.layout_children = old.layout_children.take();
         node.sibling_index = old.sibling_index;
         let previous = std::mem::replace(old, node);
+        if let Some(metadata) = self.metadatas.get_mut(&id) {
+            metadata.accessibility = None;
+            metadata.accessibility_action_handler = None;
+        }
         self.attach_build_node(id);
-        self.metadatas.mark_paint_dirty(id);
+        if previous.role == NodeRole::Layout {
+            self.metadatas.mark_paint_dirty(id);
+        }
         (
             id,
-            Some(PreviousLayoutNode {
+            Some(PreviousBuildNode {
                 node: previous,
                 same_parent,
             }),
         )
     }
 
-    pub(crate) fn reconcile_layout_node(&mut self, id: NodeId, previous: &PreviousLayoutNode) {
+    pub(crate) fn reconcile_build_node(&mut self, id: NodeId, previous: &PreviousBuildNode) {
+        let Some(metadata) = self.metadatas.get_mut(&id) else {
+            return;
+        };
         let input_changed = !previous
             .node
             .modifier
             .input_geometry_eq(&self.tree[id].get().modifier);
-        let metadata = self.metadatas.entry_or_default(id);
         metadata.geometry_initialized &= !input_changed;
         if input_changed || !previous.same_parent {
             self.metadatas.mark_geometry_dirty(id);

@@ -97,6 +97,12 @@ same update path.
 Component slot ownership shares the same inline set used for dependency readers.
 The slot key index stores handles and compares full keys in their slot records.
 
+Partial replay preserves the node and its layout metadata when the component
+identity and role match. Previous children remain eligible for reuse anywhere
+in the replacement subtree until its new order is known. Retained descendants
+compare their old and new consumer ancestry before the frame updates focus,
+semantics, and position observers.
+
 Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements attach at their original positions and
 share that refresh. Consumers compare retained ancestry after the round's order

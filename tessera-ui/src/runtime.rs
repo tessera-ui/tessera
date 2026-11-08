@@ -20,7 +20,7 @@ use crate::{
     NodeId,
     accessibility::{AccessibilityActionHandler, AccessibilityNode},
     component_call::ComponentCalls,
-    component_tree::{ComponentNode, ComponentTree, NodeRole, PreviousLayoutNode},
+    component_tree::{ComponentNode, ComponentTree, NodeRole, PreviousBuildNode},
     context::ContextMap,
     execution_context::{
         ExecutionContext, OrderFrame, with_execution_context, with_execution_context_mut,
@@ -2679,32 +2679,6 @@ fn enter_node_context(
     }
 }
 
-/// A component scope whose node also participates in layout.
-pub struct LayoutComponentScope {
-    component: ComponentNodeScope,
-    previous: Option<PreviousLayoutNode>,
-}
-
-impl std::ops::Deref for LayoutComponentScope {
-    type Target = ComponentNodeScope;
-
-    fn deref(&self) -> &Self::Target {
-        &self.component
-    }
-}
-
-impl Drop for LayoutComponentScope {
-    fn drop(&mut self) {
-        if let Some(previous) = &self.previous {
-            TesseraRuntime::with_mut(|runtime| {
-                let tree = &mut runtime.component_tree;
-                let id = tree.current_build_node_id().expect("active layout node");
-                tree.reconcile_layout_node(id, previous);
-            });
-        }
-    }
-}
-
 /// A component build scope that restores the previous node and build context on exit.
 pub struct ComponentNodeScope {
     instance_logic_id: u64,
@@ -2712,6 +2686,7 @@ pub struct ComponentNodeScope {
     _instance: CurrentComponentInstanceGuard,
     _context: NodeContextGuard,
     _phase: PhaseGuard,
+    previous: Option<PreviousBuildNode>,
 }
 
 impl ComponentNodeScope {
@@ -2728,7 +2703,14 @@ impl ComponentNodeScope {
 
 impl Drop for ComponentNodeScope {
     fn drop(&mut self) {
-        TesseraRuntime::with_mut(|runtime| runtime.component_tree.pop_node());
+        TesseraRuntime::with_mut(|runtime| {
+            let tree = &mut runtime.component_tree;
+            if let Some(previous) = &self.previous {
+                let id = tree.current_build_node_id().expect("active component node");
+                tree.reconcile_build_node(id, previous);
+            }
+            tree.pop_node();
+        });
     }
 }
 
@@ -2744,9 +2726,7 @@ pub fn begin_component_node<P: Prop>(
         props.as_ref(),
         &|| props.clone(),
         NodeRole::Composition,
-        |tree, node| (tree.add_node(node), ()),
     )
-    .0
 }
 
 enum ReplaySnapshotUpdate {
@@ -2754,14 +2734,13 @@ enum ReplaySnapshotUpdate {
     Replace(Option<Arc<dyn ErasedComponent>>),
 }
 
-fn begin_component_node_with<A: Default>(
+fn begin_component_node_with(
     name: &'static str,
     component_type_id: u64,
     props: &dyn ErasedComponent,
     current_replay: &dyn Fn() -> Arc<dyn ErasedComponent>,
     role: NodeRole,
-    attach: impl FnOnce(&mut ComponentTree, ComponentNode) -> (NodeId, A),
-) -> (ComponentNodeScope, A) {
+) -> ComponentNodeScope {
     let phase = push_phase(RuntimePhase::Build);
     let mut node = new_build_node(name, role, component_type_id);
     let instance_logic_id = node.instance_logic_id;
@@ -2794,7 +2773,7 @@ fn begin_component_node_with<A: Default>(
     let props_unchanged = !matches!(snapshot_update, ReplaySnapshotUpdate::Replace(None));
     let can_retain =
         props_unchanged && !pending_dirty && !is_instance_key_build_dirty(instance_key);
-    let (id, retained, attached) = TesseraRuntime::with_mut(|runtime| {
+    let (id, retained, previous) = TesseraRuntime::with_mut(|runtime| {
         let tree = &mut runtime.component_tree;
         if can_retain
             && let Some(id) = tree.attach_retained_subtree(instance_key, instance_logic_id)
@@ -2802,17 +2781,18 @@ fn begin_component_node_with<A: Default>(
             let retained = tree.get_mut(id).expect("retained component node");
             retained.replay_boundary = true;
             retained.props_unchanged_from_previous = true;
-            return (id, true, A::default());
+            return (id, true, None);
         }
         node.replay_boundary = true;
         node.props_unchanged_from_previous = props_unchanged;
-        let (id, attached) = attach(tree, node);
-        (id, false, attached)
+        let (id, previous) = tree.rebuild_node(node);
+        (id, false, previous)
     });
     let context = enter_node_context(id, name, |_| instance_logic_id);
     let scope = ComponentNodeScope {
         instance_logic_id,
         retained,
+        previous,
         _instance: instance,
         _context: context,
         _phase: phase,
@@ -2831,7 +2811,7 @@ fn begin_component_node_with<A: Default>(
         });
         drop(retired);
     }
-    (scope, attached)
+    scope
 }
 
 fn new_build_node(name: &'static str, role: NodeRole, component_type_id: u64) -> ComponentNode {
@@ -2850,19 +2830,14 @@ pub fn begin_layout_component_node<P: Prop>(
     name: &'static str,
     component_type_id: u64,
     props: &Arc<P>,
-) -> LayoutComponentScope {
-    let (component, previous) = begin_component_node_with(
+) -> ComponentNodeScope {
+    begin_component_node_with(
         name,
         component_type_id,
         props.as_ref(),
         &|| props.clone(),
         NodeRole::Layout,
-        ComponentTree::add_layout_node,
-    );
-    LayoutComponentScope {
-        component,
-        previous,
-    }
+    )
 }
 
 /// Installs the policy, drawing behavior, and modifiers for the current layout component.

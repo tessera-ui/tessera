@@ -796,12 +796,33 @@ fn replay_refreshes_retained_descendants_when_semantic_and_focus_ancestry_change
     assert!(!new_scope.has_focus());
     // Drain the focus host invalidation before changing its ancestor context.
     pump_layout_test_session(&mut session, 8_000_000);
+    let scope_nodes = |session: &crate::testing::LayoutTestSession<_>| {
+        let components = session.inspect_components();
+        let host = components
+            .nodes()
+            .iter()
+            .find(|node| node.name() == "scoped_fixture")
+            .expect("Scope host");
+        let layout = components
+            .nodes()
+            .iter()
+            .find(|node| {
+                node.name() == "layout"
+                    && node
+                        .semantics()
+                        .is_some_and(|semantics| semantics.tooltip.is_some())
+            })
+            .expect("Scope layout");
+        (host.node_id(), layout.node_id())
+    };
+    let scope = scope_nodes(&session);
     let retained = retained_node_ids(&session);
     let stabilized_builds = session
         .work_totals()
         .count("ordered_branch", crate::WorkPhase::Build);
     probe.reverse.get().expect("Changed state").set(true);
     pump_layout_test_session(&mut session, 16_000_000);
+    assert_eq!(scope_nodes(&session), scope);
     assert_eq!(
         session
             .work_totals()
