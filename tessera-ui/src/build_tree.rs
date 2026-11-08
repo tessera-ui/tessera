@@ -4,7 +4,7 @@
 //!
 //! Rebuild or partially replay the component tree before layout and rendering.
 
-use std::{borrow::Cow, fmt::Write as _, sync::Arc, time::Duration};
+use std::{fmt::Write as _, sync::Arc, time::Duration};
 
 use rustc_hash::FxHashSet as HashSet;
 use tracing::{debug, instrument};
@@ -191,43 +191,49 @@ impl BuildTreeResult {
 }
 
 struct ReplayPlan {
-    live: HashSet<u64>,
+    live: Arc<HashSet<u64>>,
     roots: Vec<u64>,
     recompose_root: bool,
 }
 
-fn plan_dirty_replay(dirty_instance_keys: &HashSet<u64>) -> ReplayPlan {
+fn plan_dirty_replay(dirty_instance_keys: &Arc<HashSet<u64>>) -> ReplayPlan {
     TesseraRuntime::with(|runtime| {
         let component_tree = &runtime.component_tree;
         let tree = component_tree.tree();
-        let live: HashSet<_> = dirty_instance_keys
-            .iter()
-            .copied()
-            .filter(|key| component_tree.find_node_id_by_instance_key(*key).is_some())
-            .collect();
+        let mut all_live = true;
         let mut roots = Vec::new();
-        for &key in &live {
-            let id = component_tree
-                .find_node_id_by_instance_key(key)
-                .expect("dirty component was verified live");
+        let mut recompose_root = false;
+        for &key in dirty_instance_keys.iter() {
+            let Some(id) = component_tree.find_node_id_by_instance_key(key) else {
+                all_live = false;
+                continue;
+            };
             let Some(parent) = tree.get(id).and_then(|node| node.parent()) else {
-                return ReplayPlan {
-                    live,
-                    roots: Vec::new(),
-                    recompose_root: true,
-                };
+                recompose_root = true;
+                continue;
             };
             if !parent
                 .ancestors(tree)
-                .any(|id| live.contains(&tree[id].get().instance_key))
+                .any(|id| dirty_instance_keys.contains(&tree[id].get().instance_key))
             {
                 roots.push(key);
             }
         }
+        let live = if all_live {
+            Arc::clone(dirty_instance_keys)
+        } else {
+            Arc::new(
+                dirty_instance_keys
+                    .iter()
+                    .copied()
+                    .filter(|&key| component_tree.find_node_id_by_instance_key(key).is_some())
+                    .collect(),
+            )
+        };
         ReplayPlan {
             live,
             roots,
-            recompose_root: false,
+            recompose_root,
         }
     })
 }
@@ -426,7 +432,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         let mut stale_instance_keys = HashSet::default();
         let mut stale_instance_logic_ids = HashSet::default();
         let mut recomposed_instance_logic_ids = HashSet::default();
-        let mut pending_dirty_instance_keys = Cow::Borrowed(dirty_instance_keys.as_ref());
+        let mut pending_dirty_instance_keys = Arc::clone(&dirty_instance_keys);
         #[cfg(feature = "debug-dirty-overlay")]
         let mut replay_roots_for_debug = Vec::new();
         let mut deferred_backwards_instance_keys = HashSet::default();
@@ -478,7 +484,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             #[cfg(feature = "debug-dirty-overlay")]
             replay_roots_for_debug.extend(dirty_roots.iter().copied());
 
-            with_build_dirty_instance_keys(Arc::new(live_dirty_instance_keys), || {
+            with_build_dirty_instance_keys(live_dirty_instance_keys, || {
                 for (instance_key, replay_snapshot) in dirty_roots.iter().zip(replay_snapshots) {
                     #[cfg(feature = "profiling")]
                     {
@@ -590,21 +596,21 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                 !stale_instance_keys.contains(instance_key)
                     && !executed_instance_keys.contains(instance_key)
             };
-            if let Cow::Borrowed(initial) = &pending_dirty_instance_keys
-                && initial
+            if Arc::ptr_eq(&pending_dirty_instance_keys, &dirty_instance_keys)
+                && pending_dirty_instance_keys
                     .iter()
                     .chain(&round_invalidations.dirty_instance_keys)
                     .all(|key| !still_pending(key))
             {
                 break;
             }
-            let pending = pending_dirty_instance_keys.to_mut();
+            let pending = Arc::make_mut(&mut pending_dirty_instance_keys);
             pending.extend(round_invalidations.dirty_instance_keys);
             pending.retain(still_pending);
             if pending.is_empty() {
                 break;
             }
-            plan = plan_dirty_replay(pending);
+            plan = plan_dirty_replay(&pending_dirty_instance_keys);
         }
 
         if fallback_to_root_recompose {

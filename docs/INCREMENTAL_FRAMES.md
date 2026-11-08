@@ -95,8 +95,9 @@ Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements attach at their original positions and
 share that refresh. Consumers compare retained ancestry after the round's order
 is available.
-Initial build invalidations stay shared until work remains pending after the
-first replay round.
+Replay planning shares the invalidation set when all keys are live and filters
+expired keys before execution. Pending work is copied only when the first
+round leaves invalidations to process.
 Component replay uses the same props allocation prepared by the registered call.
 Immediate setters take only the pending configuration while the declaration
 scope stays registered.

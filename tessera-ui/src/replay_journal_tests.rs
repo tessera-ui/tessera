@@ -412,6 +412,28 @@ fn a_later_replay_round_defers_writes_to_an_already_executed_boundary() {
     check_independent_nested_replay(true, true);
 }
 
+#[test]
+fn a_stale_invalidation_does_not_block_live_replay() {
+    let probe = ReplayProbe::default();
+    let mut session = start_layout_test_session(
+        layout_test(|| replay_fixture(1, probe.clone())).viewport_px(100, 100),
+    );
+    pump_layout_test_session(&mut session, 0);
+    let retained = retained_node_ids(&session);
+    assert!(!retained.is_empty());
+
+    crate::runtime::record_replay_boundary_invalidation_for_instance_key(u64::MAX);
+    probe.version.get().unwrap().set(1);
+    pump_layout_test_session(&mut session, 16_666_667);
+
+    assert!(
+        semantic_reading_order(&session)
+            .iter()
+            .any(|label| label == "Version 1")
+    );
+    assert_eq!(retained_node_ids(&session), retained);
+}
+
 #[tessera(crate)]
 fn cyclic_replay_peer(index: usize, own: State<u32>, other: State<u32>, armed: State<bool>) {
     let value = own.get();
