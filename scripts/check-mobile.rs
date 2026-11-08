@@ -7,7 +7,9 @@
 //! clap = { version = "4.6.7", features = ["derive"] }
 //! plist = "1.10.3"
 //! regex = "1.12.3"
-//! serde_json = "1.0.154"
+//! serde = "1.0.229"
+//! serde_json = { version = "1.0.154", features = ["unbounded_depth"] }
+//! serde_stacker = "0.1.14"
 //! tempfile = "3.27.0"
 //! wait-timeout = "0.2.1"
 //! walkdir = "2.5.0"
@@ -24,6 +26,7 @@ use std::{
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use regex::Regex;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use walkdir::WalkDir;
 
@@ -42,7 +45,11 @@ struct Cli {
 
 fn events(text: &str) -> Vec<Value> {
     text.lines()
-        .filter_map(|line| serde_json::from_str(line).ok())
+        .filter_map(|line| {
+            let mut deserializer = serde_json::Deserializer::from_str(line);
+            deserializer.disable_recursion_limit();
+            Value::deserialize(serde_stacker::Deserializer::new(&mut deserializer)).ok()
+        })
         .collect()
 }
 
@@ -492,5 +499,26 @@ mod tests {
         assert!(!ready(&[first.clone(), second.clone()], true));
         second["components"] = json!([{"children":[{"fn_name":"module::text"}]}]);
         assert!(ready(&[first, second], true));
+    }
+
+    #[test]
+    fn deeply_nested_mobile_frames_remain_visible_to_lifecycle_checks() {
+        let component = format!(
+            "{}{{\"fn_name\":\"text\"}}{}",
+            "{\"children\":[".repeat(160),
+            "]}".repeat(160)
+        );
+        let frame = |index, reason| {
+            format!(
+                "{{\"type\":\"frame\",\"frame\":{index},\"render_time_ns\":1,\"components\":[{component}],\"redraw_reasons\":[\"{reason}\"]}}"
+            )
+        };
+        let records = events(&format!(
+            "{}\n{}\n",
+            frame(0, "startup"),
+            frame(1, "runtime_invalidation")
+        ));
+        assert_eq!(records.len(), 2);
+        assert!(ready(&records, true));
     }
 }
