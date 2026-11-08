@@ -165,11 +165,8 @@ impl ComponentTree {
                 .get(&id)
                 .and_then(|metadata| metadata.accessibility.as_ref())
                 .map(|semantics| {
-                    (
-                        node.instance_key,
-                        semantics.merge_descendants,
-                        semantics.tooltip.clone(),
-                    )
+                    let (traverses, tooltip) = semantics.descendant_context();
+                    (node.instance_key, traverses, tooltip.map(str::to_owned))
                 }),
             focus: node
                 .interaction()

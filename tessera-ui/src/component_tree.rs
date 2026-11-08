@@ -1093,8 +1093,7 @@ impl ComponentTree {
         node.sibling_index = old.sibling_index;
         let previous = std::mem::replace(old, node);
         if let Some(metadata) = self.metadatas.get_mut(&id) {
-            metadata.accessibility = None;
-            metadata.accessibility_action_handler = None;
+            metadata.begin_accessibility_rebuild();
         }
         self.attach_replayed_node(id);
         if previous.role == NodeRole::Layout {
@@ -1113,6 +1112,7 @@ impl ComponentTree {
         let Some(metadata) = self.metadatas.get_mut(&id) else {
             return;
         };
+        metadata.finish_accessibility_rebuild();
         let input_changed = !previous
             .node
             .modifier
@@ -5112,11 +5112,14 @@ mod tests {
         tree.metadatas.entry_or_default(outside).rel_position =
             Some(PxPosition::new(Px(240), Px(240)));
         tree.metadatas.entry_or_default(root).clips_children = true;
-        tree.metadatas.entry_or_default(leaf).accessibility = Some(Box::new(
-            crate::accessibility::AccessibilityNode::new()
-                .with_role(accesskit::Role::Button)
-                .with_label("Panel action"),
-        ));
+        tree.metadatas.entry_or_default(leaf).set_accessibility(
+            Some(
+                crate::accessibility::AccessibilityNode::new()
+                    .with_role(accesskit::Role::Button)
+                    .with_label("Panel action"),
+            ),
+            None,
+        );
         for position in [Some(20), None, Some(40)] {
             tree.metadatas.mark_geometry_dirty(panel);
             tree.metadatas.entry_or_default(panel).rel_position =

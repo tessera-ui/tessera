@@ -826,6 +826,7 @@ fn snapshot_node(
     let accessibility = metadata
         .and_then(|metadata| metadata.accessibility.as_ref())
         .map(|accessibility| {
+            let accessibility = accessibility.snapshot();
             json!({
                 "role": accessibility.role.map(|role| format!("{role:?}")),
                 "label": accessibility.label,

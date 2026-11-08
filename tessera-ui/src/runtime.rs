@@ -2222,12 +2222,11 @@ impl TesseraRuntime {
         };
         let metadatas = self.component_tree.metadatas_mut();
         if accessibility.is_some() || handler.is_some() {
-            let metadata = metadatas.entry_or_default(node_id);
-            metadata.accessibility = accessibility.map(Box::new);
-            metadata.accessibility_action_handler = handler;
+            metadatas
+                .entry_or_default(node_id)
+                .set_accessibility(accessibility, handler);
         } else if let Some(metadata) = metadatas.get_mut(&node_id) {
-            metadata.accessibility = None;
-            metadata.accessibility_action_handler = None;
+            metadata.set_accessibility(None, None);
         }
     }
 

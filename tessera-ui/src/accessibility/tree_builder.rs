@@ -11,7 +11,7 @@ use indextree::NodeId as ComponentNodeId;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{
-    accessibility::AccessibilityId,
+    accessibility::{AccessibilityId, StoredSemantics},
     component_tree::{
         ComponentNodeMetaDatas, ComponentNodeTree, ComputedData, NodeRole, sibling_index,
     },
@@ -155,12 +155,12 @@ impl AccessibilityIndex {
                     .and_then(Option::as_ref);
                 let semantics = metadatas
                     .get(&id)
-                    .and_then(|node| node.accessibility.as_deref());
+                    .and_then(|node| node.accessibility.as_ref())
+                    .map(StoredSemantics::descendant_context);
                 let context_changed = match (previous, semantics) {
                     (None, None) => false,
-                    (Some(previous), Some(semantics)) => {
-                        previous.traverses != semantics.merge_descendants
-                            || previous.tooltip != semantics.tooltip
+                    (Some(previous), Some((traverses, tooltip))) => {
+                        previous.traverses != traverses || previous.tooltip.as_deref() != tooltip
                     }
                     _ => true,
                 };
@@ -184,7 +184,7 @@ impl AccessibilityIndex {
             let key = AccessKitNodeId(component.get().instance_key);
             let semantics = metadatas
                 .get(&id)
-                .and_then(|node| node.accessibility.as_deref());
+                .and_then(|node| node.accessibility.as_ref());
             if id != root && semantics.is_none() {
                 if self.components.remove(&id).is_some() {
                     self.remove(key, &mut child_changes);
@@ -192,9 +192,12 @@ impl AccessibilityIndex {
                 continue;
             }
             removed.remove(&key);
-            let context = semantics.map(|semantics| DescendantContext {
-                tooltip: semantics.tooltip.clone(),
-                traverses: semantics.merge_descendants,
+            let context = semantics.map(|semantics| {
+                let (traverses, tooltip) = semantics.descendant_context();
+                DescendantContext {
+                    tooltip: tooltip.map(str::to_owned),
+                    traverses,
+                }
             });
             self.components.insert(id, (key, context));
             let mut parent = None;
@@ -227,13 +230,12 @@ impl AccessibilityIndex {
                     path.push(sibling_index(ancestor, tree));
                 }
                 if let Some(semantics) =
-                    metadata.and_then(|metadata| metadata.accessibility.as_deref())
+                    metadata.and_then(|metadata| metadata.accessibility.as_ref())
                 {
-                    if tooltip.is_none() {
-                        tooltip = semantics.tooltip.as_deref();
-                    }
+                    let (traverses, hint) = semantics.descendant_context();
+                    tooltip = tooltip.or(hint);
                     if ancestor != id {
-                        if !semantics.merge_descendants {
+                        if !traverses {
                             visible = false;
                         }
                         if parent.is_none() {
@@ -441,7 +443,10 @@ fn build_node(
     inherited_tooltip: Option<&str>,
 ) -> Option<(Node, bool)> {
     let metadata = metadatas.get(&node_id)?;
-    let accessibility_node = metadata.accessibility.as_deref().cloned();
+    let accessibility_node = metadata
+        .accessibility
+        .as_ref()
+        .map(StoredSemantics::snapshot);
     let tooltip_description = accessibility_node.as_ref().and_then(|node| {
         (node.focusable && node.description.is_none())
             .then(|| inherited_tooltip.map(str::to_owned))
@@ -631,6 +636,7 @@ fn semantic_bounds(
     let bounds = match metadata
         .accessibility
         .as_ref()
+        .and_then(StoredSemantics::extended)
         .and_then(|node| node.bounds_padding)
     {
         Some(padding) => rect_from_geometry_with_padding(
@@ -786,8 +792,9 @@ pub fn dispatch_action(
         {
             return false;
         }
-        if let Some(semantics) = metadata.and_then(|metadata| metadata.accessibility.as_deref())
-            && (semantics.hidden || (ancestor != target && !semantics.merge_descendants))
+        if let Some(semantics) = metadata.and_then(|metadata| metadata.accessibility.as_ref())
+            && (semantics.extended().is_some_and(|node| node.hidden)
+                || (ancestor != target && !semantics.descendant_context().0))
         {
             return false;
         }
@@ -799,9 +806,11 @@ pub fn dispatch_action(
         };
         let eligible = metadatas.get(&node_id).is_some_and(|metadata| {
             metadata.abs_position.is_some()
-                && metadata.accessibility.as_ref().is_some_and(|semantics| {
-                    semantics.focusable && !semantics.disabled && !semantics.hidden
-                })
+                && metadata
+                    .accessibility
+                    .as_ref()
+                    .and_then(StoredSemantics::extended)
+                    .is_some_and(|node| node.focusable && !node.disabled && !node.hidden)
         });
         let registration = tree[node_id].get().interaction().focus_registration;
         if eligible && let Some(registration) = registration {
@@ -839,6 +848,21 @@ mod tests {
 
     use super::*;
 
+    fn edit_semantics(
+        metadatas: &mut ComponentNodeMetaDatas,
+        id: ComponentNodeId,
+        edit: impl FnOnce(&mut AccessibilityNode),
+    ) {
+        let metadata = metadatas.get_mut(&id).expect("semantic fixture");
+        let mut node = metadata
+            .accessibility
+            .as_ref()
+            .expect("semantic fixture")
+            .snapshot();
+        edit(&mut node);
+        StoredSemantics::write(&mut metadata.accessibility, node);
+    }
+
     fn append_node(
         tree: &mut ComponentNodeTree,
         metadatas: &mut ComponentNodeMetaDatas,
@@ -851,7 +875,7 @@ mod tests {
             parent.append(id, tree);
         }
         let metadata = metadatas.entry_or_default(id);
-        metadata.accessibility = accessibility.map(Box::new);
+        metadata.set_accessibility(accessibility, None);
         metadata.abs_position = Some(PxPosition::new(Px(10), Px(20)));
         metadata.computed_data = Some(ComputedData {
             width: Px(40),
@@ -1010,13 +1034,9 @@ mod tests {
         assert_eq!(index.ancestor_visits, 0);
         assert!(index.tree_update(&tree, Some(child), false).is_none());
 
-        metadatas
-            .get_mut(&parent)
-            .unwrap()
-            .accessibility
-            .as_mut()
-            .unwrap()
-            .tooltip = Some("Updated hint".into());
+        edit_semantics(&mut metadatas, parent, |node| {
+            node.tooltip = Some("Updated hint".into())
+        });
         index.invalidate(&[parent].into_iter().collect(), &HashSet::default());
         assert_eq!(index.update(&tree, &metadatas, root), wrappers.len() + 2);
         let delta = index.tree_update(&tree, Some(child), false).unwrap();
@@ -1076,10 +1096,13 @@ mod tests {
         assert!(index.tree_update(&tree, Some(child), false).is_none());
 
         let wrapper = wrappers[0];
-        metadatas.get_mut(&wrapper).unwrap().accessibility = Some(Box::new(AccessibilityNode {
-            tooltip: Some("New group hint".into()),
-            ..AccessibilityNode::new()
-        }));
+        metadatas.get_mut(&wrapper).unwrap().set_accessibility(
+            Some(AccessibilityNode {
+                tooltip: Some("New group hint".into()),
+                ..AccessibilityNode::new()
+            }),
+            None,
+        );
         index.invalidate(&[wrapper].into_iter().collect(), &HashSet::default());
         index.update(&tree, &metadatas, root);
         let delta = index.tree_update(&tree, Some(child), false).unwrap();
@@ -1621,13 +1644,7 @@ mod tests {
             Some(AccessibilityNode::new().with_role(Role::Button)),
         );
         for selected in [Some(true), Some(false), None] {
-            metadatas
-                .get_mut(&button)
-                .expect("semantic fixture")
-                .accessibility
-                .as_mut()
-                .expect("semantic fixture")
-                .selected = selected;
+            edit_semantics(&mut metadatas, button, |node| node.selected = selected);
             let update =
                 build_tree_update(&tree, &metadatas, root, None, None).expect("semantic fixture");
             assert_eq!(node(&update, button).is_selected(), selected);
@@ -1676,27 +1693,17 @@ mod tests {
         };
         assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
         assert_eq!(calls.get(), 1);
-        metadatas
-            .get_mut(&parent)
-            .unwrap()
-            .accessibility
-            .as_mut()
-            .unwrap()
-            .hidden = true;
+        edit_semantics(&mut metadatas, parent, |node| node.hidden = true);
         assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
         assert_eq!(calls.get(), 1);
-        let semantics = metadatas
-            .get_mut(&parent)
-            .unwrap()
-            .accessibility
-            .as_mut()
-            .unwrap();
-        semantics.hidden = false;
-        semantics.merge_descendants = false;
+        edit_semantics(&mut metadatas, parent, |node| {
+            node.hidden = false;
+            node.merge_descendants = false;
+        });
         assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
         assert_eq!(calls.get(), 1);
+        edit_semantics(&mut metadatas, parent, |node| node.merge_descendants = true);
         let metadata = metadatas.get_mut(&parent).unwrap();
-        metadata.accessibility.as_mut().unwrap().merge_descendants = true;
         let position = metadata.abs_position.take();
         assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
         assert_eq!(calls.get(), 1);
@@ -1751,22 +1758,10 @@ mod tests {
         assert_eq!(owner.active_component_node_id(), Some(target));
         assert!(owner.is_requester_focus_visible(requester.requester_id()));
         owner.clear_focus_global(true);
-        metadatas
-            .get_mut(&target)
-            .expect("semantic fixture")
-            .accessibility
-            .as_mut()
-            .expect("semantic fixture")
-            .disabled = true;
+        edit_semantics(&mut metadatas, target, |node| node.disabled = true);
         assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
         assert_eq!(owner.active_component_node_id(), None);
-        metadatas
-            .get_mut(&target)
-            .expect("semantic fixture")
-            .accessibility
-            .as_mut()
-            .expect("semantic fixture")
-            .disabled = false;
+        edit_semantics(&mut metadatas, target, |node| node.disabled = false);
         metadatas
             .get_mut(&target)
             .expect("semantic fixture")

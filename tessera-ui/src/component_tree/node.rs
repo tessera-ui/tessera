@@ -12,7 +12,7 @@ use winit::window::CursorIcon;
 
 use crate::{
     ClipRegion, Px,
-    accessibility::{AccessibilityActionHandler, AccessibilityNode},
+    accessibility::{AccessibilityActionHandler, AccessibilityNode, StoredSemantics},
     cursor::{CursorEventContent, PointerChange},
     focus::{
         FocusDirection, FocusRegistration, FocusRequester, FocusRevealRequest, FocusState,
@@ -209,6 +209,7 @@ pub(crate) struct ComponentNodeMetaData {
     pub(super) observes_geometry: bool,
     pub(super) observes_size: bool,
     pub(super) paint_dirty: bool,
+    accessibility_written: bool,
     /// The computed data (size) of the node.
     /// None if the node is not computed yet.
     pub computed_data: Option<ComputedData>,
@@ -244,7 +245,7 @@ pub(crate) struct ComponentNodeMetaData {
     /// Opacity multiplier applied to this node and its descendants.
     pub opacity: f32,
     /// Accessibility information for this node.
-    pub accessibility: Option<Box<AccessibilityNode>>,
+    pub accessibility: Option<StoredSemantics>,
     /// Handler for accessibility actions on this node.
     pub accessibility_action_handler: Option<AccessibilityActionHandler>,
 }
@@ -265,6 +266,7 @@ impl ComponentNodeMetaData {
             observes_geometry: false,
             observes_size: false,
             paint_dirty: true,
+            accessibility_written: false,
             computed_data: None,
             draw_layout: NodeDrawLayout::default(),
             layout_cache_hit: false,
@@ -281,6 +283,31 @@ impl ComponentNodeMetaData {
             opacity: 1.0,
             accessibility: None,
             accessibility_action_handler: None,
+        }
+    }
+
+    pub(crate) fn set_accessibility(
+        &mut self,
+        node: Option<AccessibilityNode>,
+        handler: Option<AccessibilityActionHandler>,
+    ) {
+        if let Some(node) = node {
+            StoredSemantics::write(&mut self.accessibility, node);
+        } else {
+            self.accessibility = None;
+        }
+        self.accessibility_action_handler = handler;
+        self.accessibility_written = true;
+    }
+
+    pub(super) fn begin_accessibility_rebuild(&mut self) {
+        self.accessibility_written = false;
+        self.accessibility_action_handler = None;
+    }
+
+    pub(super) fn finish_accessibility_rebuild(&mut self) {
+        if !self.accessibility_written {
+            self.accessibility = None;
         }
     }
 

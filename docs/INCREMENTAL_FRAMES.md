@@ -69,6 +69,9 @@ Scene culling uses the inherited clip bounds computed by layout.
 
 Nodes allocate interaction data, accessibility descriptions, and shape clip
 regions only when used.
+Descriptive semantics retain their text and inheritance fields and expand
+them when publishing a snapshot. Rebuilt nodes reuse semantic storage while
+the description keeps its representation.
 Rectangular clips retain fractional bounds and derive outward pixel bounds as needed.
 Scene branches and retained draw snapshots share clip records.
 Pointer modifier positions and their transform metadata are allocated on demand.

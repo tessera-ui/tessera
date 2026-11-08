@@ -294,6 +294,109 @@ impl Default for AccessibilityNode {
     }
 }
 
+pub(crate) enum StoredSemantics {
+    Description(Box<SemanticDescription>),
+    Extended(Box<AccessibilityNode>),
+}
+
+pub(crate) struct SemanticDescription {
+    role: Option<Role>,
+    label: Option<String>,
+    description: Option<String>,
+    key: Option<String>,
+    merge_descendants: bool,
+    tooltip: Option<String>,
+}
+
+impl StoredSemantics {
+    pub(crate) fn write(storage: &mut Option<Self>, node: AccessibilityNode) {
+        match node {
+            AccessibilityNode {
+                role,
+                label,
+                description,
+                key,
+                merge_descendants,
+                tooltip,
+                value: None,
+                numeric_value: None,
+                min_numeric_value: None,
+                max_numeric_value: None,
+                orientation: None,
+                focusable: false,
+                focused: false,
+                toggled: None,
+                invalid: None,
+                selected: None,
+                expanded: None,
+                has_popup: None,
+                disabled: false,
+                hidden: false,
+                modal: false,
+                actions,
+                bounds_padding: None,
+                state_description: None,
+                role_description: None,
+                live: None,
+                heading_level: None,
+                scroll_x: None,
+                scroll_y: None,
+                numeric_value_step: None,
+                numeric_value_jump: None,
+                collection_info: None,
+                collection_item_info: None,
+                is_editable_text: false,
+            } if actions.is_empty() => {
+                let description = SemanticDescription {
+                    role,
+                    label,
+                    description,
+                    key,
+                    merge_descendants,
+                    tooltip,
+                };
+                match storage {
+                    Some(Self::Description(previous)) => **previous = description,
+                    _ => *storage = Some(Self::Description(Box::new(description))),
+                }
+            }
+            node => match storage {
+                Some(Self::Extended(previous)) => **previous = node,
+                _ => *storage = Some(Self::Extended(Box::new(node))),
+            },
+        }
+    }
+
+    pub(crate) fn descendant_context(&self) -> (bool, Option<&str>) {
+        match self {
+            Self::Description(node) => (node.merge_descendants, node.tooltip.as_deref()),
+            Self::Extended(node) => (node.merge_descendants, node.tooltip.as_deref()),
+        }
+    }
+
+    pub(crate) fn extended(&self) -> Option<&AccessibilityNode> {
+        match self {
+            Self::Description(_) => None,
+            Self::Extended(node) => Some(node),
+        }
+    }
+
+    pub(crate) fn snapshot(&self) -> AccessibilityNode {
+        match self {
+            Self::Description(node) => AccessibilityNode {
+                role: node.role,
+                label: node.label.clone(),
+                description: node.description.clone(),
+                key: node.key.clone(),
+                merge_descendants: node.merge_descendants,
+                tooltip: node.tooltip.clone(),
+                ..AccessibilityNode::default()
+            },
+            Self::Extended(node) => node.as_ref().clone(),
+        }
+    }
+}
+
 /// Handler for accessibility actions.
 ///
 /// When an assistive technology requests an action (like clicking a button),

@@ -751,6 +751,44 @@ impl SemanticsModifierNode for Hint {
 }
 
 #[tessera(crate)]
+fn conditional_description(probe: ReplayProbe) {
+    let visible = remember(|| true);
+    probe.reverse.set(Some(visible));
+    if visible.get() {
+        Modifier::new()
+            .push_semantics(Hint("Help text".into()))
+            .attach();
+    }
+    layout().policy(Overlap);
+}
+
+#[test]
+fn rebuilding_a_node_without_semantics_discards_its_previous_description() {
+    let probe = ReplayProbe::default();
+    let mut session = start_layout_test_session(layout_test(|| {
+        conditional_description(probe.clone());
+    }));
+    let description = |session: &crate::testing::LayoutTestSession<_>| {
+        let components = session.inspect_components();
+        let host = components
+            .nodes()
+            .iter()
+            .find(|node| node.name() == "conditional_description")
+            .expect("Description host");
+        (
+            host.node_id(),
+            host.semantics().and_then(|node| node.tooltip.clone()),
+        )
+    };
+    pump_layout_test_session(&mut session, 0);
+    let (host, initial) = description(&session);
+    assert_eq!(initial.as_deref(), Some("Help text"));
+    probe.reverse.get().expect("Visibility state").set(false);
+    pump_layout_test_session(&mut session, 16_000_000);
+    assert_eq!(description(&session), (host, None));
+}
+
+#[tessera(crate)]
 fn scoped_fixture(probe: ReplayProbe) {
     let changed = remember(|| false);
     probe.reverse.set(Some(changed));

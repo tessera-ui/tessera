@@ -109,7 +109,11 @@ impl ComponentSnapshot {
                         instance: node.instance_logic_id,
                         name: node.fn_name,
                         coordinates,
-                        semantics: data.and_then(|data| data.accessibility.as_deref().cloned()),
+                        semantics: data.and_then(|data| {
+                            data.accessibility
+                                .as_ref()
+                                .map(|semantics| semantics.snapshot())
+                        }),
                     }
                 })
                 .collect();
