@@ -1320,20 +1320,15 @@ pub(crate) fn measure_node(
     if let Some(layout_ctx) = layout_ctx {
         layout_ctx.inc_measure_node_calls();
         if let Some(entry) = snapshot.as_deref() {
+            let path = layout_ctx.dirty_paths.and_then(|paths| paths.get(&node_id));
             let deferred = layout_ctx.deferred_invalidation(node_data.instance_key);
             let same_constraint = entry.constraint_key == *parent_constraint;
             let node_self_measure_dirty = entry.consumed_insets != layout_ctx.consumed_insets.get()
-                || layout_ctx
-                    .measure_self_nodes
-                    .contains(&node_data.instance_key)
+                || path.is_some_and(|path| path.measure)
                 || deferred.as_ref().is_some_and(|pending| pending.measure);
-            let node_self_placement_dirty = layout_ctx
-                .placement_self_nodes
-                .contains(&node_data.instance_key)
+            let node_self_placement_dirty = path.is_some_and(|path| path.placement)
                 || deferred.as_ref().is_some_and(|pending| pending.placement);
-            let node_effective_dirty = layout_ctx
-                .dirty_effective_nodes
-                .contains(&node_data.instance_key)
+            let node_effective_dirty = path.is_some()
                 || deferred
                     .as_ref()
                     .is_some_and(|pending| !pending.children.is_empty());
@@ -1357,9 +1352,8 @@ pub(crate) fn measure_node(
                     layout_ctx.inc_cache_hit_direct();
                     return Ok(entry.layout_result.size);
                 }
-                let dirty_children = layout_ctx
-                    .dirty_children
-                    .and_then(|children| children.get(&node_data.instance_key))
+                let dirty_children = path
+                    .map(|path| path.children.as_slice())
                     .into_iter()
                     .flatten()
                     .filter_map(|&id| {
@@ -1371,11 +1365,14 @@ pub(crate) fn measure_node(
                         deferred
                             .iter()
                             .flat_map(|pending| pending.children.iter())
-                            .filter(|key| !layout_ctx.dirty_effective_nodes.contains(key))
                             .filter_map(|key| {
                                 let index = entry.children.index_of(*key)?;
                                 let &id = children.get(index)?;
-                                if tree[id].get().instance_key != *key {
+                                if tree[id].get().instance_key != *key
+                                    || layout_ctx
+                                        .dirty_paths
+                                        .is_some_and(|paths| paths.contains_key(&id))
+                                {
                                     return None;
                                 }
                                 layout_ctx.inc_dirty_child_checked();

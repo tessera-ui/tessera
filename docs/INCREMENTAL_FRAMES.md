@@ -97,8 +97,8 @@ When a new measurement reproduces the cached layout, the runtime keeps the
 previous snapshot. Cache hits that execute no policy skip the measurement scope.
 Layout adjacency stores a single child inline. Parents with a single composition
 child can share its wider flattened layout child list.
-The same ancestor walk marks dirty layout paths and records the affected children
-for parents that can reuse their cached measurement.
+The ancestor walk records local invalidations and affected children together.
+A path with one affected child keeps that child inline.
 State, context, focus, and render-slot reads share a dependency index with inline
 storage for the first reader and dependency.
 Functor lookup keeps one slot per order buffer inline and reuses overflow

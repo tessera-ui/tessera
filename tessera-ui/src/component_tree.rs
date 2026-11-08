@@ -180,12 +180,15 @@ pub(crate) struct LayoutContext<'a> {
     pub consumed_insets: &'a Cell<crate::Insets>,
     pub state_reader_instance_key: Option<u64>,
     snapshots: *mut LayoutSnapshotMap,
-    pub measure_self_nodes: &'a HashSet<u64>,
-    pub placement_self_nodes: &'a HashSet<u64>,
-    pub dirty_effective_nodes: &'a HashSet<u64>,
-    pub dirty_children: Option<&'a HashMap<u64, Vec<NodeId>>>,
+    dirty_paths: Option<&'a HashMap<NodeId, DirtyLayoutPath>>,
     diagnostics: *mut LayoutDiagnosticsCollector,
     pub intrinsic: bool,
+}
+
+struct DirtyLayoutPath {
+    measure: bool,
+    placement: bool,
+    children: SmallVec<[NodeId; 1]>,
 }
 
 #[cfg_attr(not(feature = "profiling"), allow(dead_code))]
@@ -337,23 +340,17 @@ impl LayoutContext<'_> {
         measure()
     }
 
-    pub(crate) fn new<'a>(
+    fn new<'a>(
         consumed_insets: &'a Cell<crate::Insets>,
         snapshots: &'a mut LayoutSnapshotMap,
-        measure_self_nodes: &'a HashSet<u64>,
-        placement_self_nodes: &'a HashSet<u64>,
-        dirty_effective_nodes: &'a HashSet<u64>,
-        dirty_children: &'a HashMap<u64, Vec<NodeId>>,
+        dirty_paths: &'a HashMap<NodeId, DirtyLayoutPath>,
         diagnostics: &'a mut LayoutDiagnosticsCollector,
     ) -> LayoutContext<'a> {
         LayoutContext {
             consumed_insets,
             state_reader_instance_key: None,
             snapshots,
-            measure_self_nodes,
-            placement_self_nodes,
-            dirty_effective_nodes,
-            dirty_children: Some(dirty_children),
+            dirty_paths: Some(dirty_paths),
             diagnostics,
             intrinsic: false,
         }
@@ -362,7 +359,6 @@ impl LayoutContext<'_> {
     pub(crate) fn intrinsic_probe<'a>(
         consumed_insets: &'a Cell<crate::Insets>,
         snapshots: &'a mut LayoutSnapshotMap,
-        empty: &'a HashSet<u64>,
         diagnostics: &'a mut LayoutDiagnosticsCollector,
         parent: Option<&'a LayoutContext<'_>>,
     ) -> LayoutContext<'a> {
@@ -370,10 +366,7 @@ impl LayoutContext<'_> {
             consumed_insets,
             state_reader_instance_key: crate::runtime::current_measured_node_instance_key(),
             snapshots,
-            measure_self_nodes: empty,
-            placement_self_nodes: empty,
-            dirty_effective_nodes: empty,
-            dirty_children: None,
+            dirty_paths: None,
             diagnostics: parent.map_or(diagnostics, |parent| parent.diagnostics),
             intrinsic: true,
         }
@@ -2424,7 +2417,7 @@ impl ComponentTree {
         let dirty_prepare_start = Instant::now();
         // Remeasure structural changes so placements use the current child set.
         measure_self_nodes.extend(structural_dirty_nodes);
-        let (dirty_nodes_effective, dirty_children) = collect_dirty_layout_paths(
+        let dirty_paths = collect_dirty_layout_paths(
             &self.tree,
             &self.node_ids_by_instance_key,
             &measure_self_nodes,
@@ -2440,11 +2433,8 @@ impl ComponentTree {
                 .extend(self.changed_frame_nodes.iter().copied());
             self.profiler_dirty_nodes
                 .extend(self.removed_frame_nodes.iter().copied());
-            self.profiler_dirty_nodes.extend(
-                dirty_nodes_effective
-                    .iter()
-                    .filter_map(|key| self.node_ids_by_instance_key.get(key).copied()),
-            );
+            self.profiler_dirty_nodes
+                .extend(dirty_paths.keys().copied());
             self.profiler_dirty_nodes.insert(root_node);
         }
         self.pointer_index.invalidate(
@@ -2467,10 +2457,7 @@ impl ComponentTree {
             let layout_ctx = LayoutContext::new(
                 &consumed_insets,
                 &mut self.layout_snapshots,
-                &measure_self_nodes,
-                &layout_dirty_nodes.placement_self_nodes,
-                &dirty_nodes_effective,
-                &dirty_children,
+                &dirty_paths,
                 &mut diagnostics,
             );
 
@@ -2499,7 +2486,7 @@ impl ComponentTree {
         let mut diagnostics_snapshot = diagnostics.snapshot(
             dirty_nodes_param,
             dirty_nodes_structural,
-            dirty_nodes_effective.len() as u64,
+            dirty_paths.len() as u64,
             dirty_expand_ns,
         );
         diagnostics_snapshot.geometry_nodes_updated =
@@ -3704,9 +3691,10 @@ fn collect_dirty_layout_paths(
     node_ids: &HashMap<u64, indextree::NodeId>,
     measure_self: &HashSet<u64>,
     placement_self: &HashSet<u64>,
-) -> (HashSet<u64>, HashMap<u64, Vec<NodeId>>) {
-    let mut expanded = HashSet::default();
-    let mut children: HashMap<_, Vec<_>> = HashMap::default();
+) -> HashMap<NodeId, DirtyLayoutPath> {
+    use std::collections::hash_map::Entry;
+
+    let mut paths: HashMap<_, DirtyLayoutPath> = HashMap::default();
     for dirty_key in measure_self
         .iter()
         .chain(placement_self.difference(measure_self))
@@ -3720,19 +3708,30 @@ fn collect_dirty_layout_paths(
             if data.role != NodeRole::Layout && current.is_some() {
                 continue;
             }
+            let (path, new) = match paths.entry(node_id) {
+                Entry::Occupied(entry) => (entry.into_mut(), false),
+                Entry::Vacant(entry) => (
+                    entry.insert(DirtyLayoutPath {
+                        measure: measure_self.contains(&data.instance_key),
+                        placement: placement_self.contains(&data.instance_key),
+                        children: SmallVec::new(),
+                    }),
+                    true,
+                ),
+            };
             if let Some(child) = layout_child
-                && !measure_self.contains(&data.instance_key)
+                && !path.measure
             {
-                children.entry(data.instance_key).or_default().push(child);
+                path.children.push(child);
             }
             // A previously visited parent already carries its own path to the root.
-            if !expanded.insert(data.instance_key) {
+            if !new {
                 break;
             }
             layout_child = Some(node_id);
         }
     }
-    (expanded, children)
+    paths
 }
 
 fn record_layout_commands(

@@ -119,7 +119,6 @@ impl LayoutChild {
         let mut metadatas = ComponentNodeMetaDatas::new();
         let mut snapshots = LayoutSnapshotMap::default();
         let mut diagnostics = LayoutDiagnosticsCollector::default();
-        let empty = Default::default();
         let consumed_insets = std::cell::Cell::new(
             scope
                 .layout_ctx
@@ -128,7 +127,6 @@ impl LayoutChild {
         let context = LayoutContext::intrinsic_probe(
             &consumed_insets,
             &mut snapshots,
-            &empty,
             &mut diagnostics,
             scope.layout_ctx,
         );
