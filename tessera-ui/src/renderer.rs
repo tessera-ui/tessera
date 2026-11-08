@@ -51,9 +51,10 @@ use crate::{
     render_graph::RenderGraph,
     render_module::RenderModule,
     runtime::{
-        TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
-        has_pending_build_invalidations, has_pending_frame_nanos_receivers,
-        has_pending_layout_invalidations, has_pending_persistent_focus_prune, install_redraw_waker,
+        TesseraRuntime, begin_frame_build_invalidations, begin_frame_clock,
+        clear_persistent_focus_handles, clear_redraw_waker, has_pending_build_invalidations,
+        has_pending_frame_nanos_receivers, has_pending_layout_invalidations,
+        has_pending_persistent_focus_prune, has_ready_build_invalidations, install_redraw_waker,
         prune_persistent_focus_handles, reset_build_invalidations, reset_component_replay_tracking,
         reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
         reset_render_slot_read_dependencies, reset_state_read_dependencies,
@@ -140,10 +141,8 @@ struct RuntimePendingWork {
 
 pub(crate) const MAX_FRAME_SETTLING_RETRIES: usize = 8;
 
-pub(crate) fn focus_settling_can_progress(pending_keyboard_retry: bool) -> bool {
-    pending_keyboard_retry
-        || has_pending_build_invalidations()
-        || has_pending_layout_invalidations()
+pub(crate) fn frame_settling_can_progress(pending_keyboard_retry: bool) -> bool {
+    pending_keyboard_retry || has_ready_build_invalidations() || has_pending_layout_invalidations()
 }
 
 impl RuntimePendingWork {
@@ -1120,6 +1119,7 @@ Fps: {:.2}
         #[cfg(feature = "profiling")]
         profiler_begin_frame(frame_idx);
         begin_frame_clock(Instant::now());
+        begin_frame_build_invalidations();
         // Tick frame-nanos receivers before build so their state writes are
         // consumed by the current recomposition pass.
         tick_frame_nanos_receivers();
@@ -1148,23 +1148,22 @@ Fps: {:.2}
             mut pending_focus_reveal_retry,
             mut pending_keyboard_retry,
         ) = Self::compute_draw_commands(args, screen_size, frame_idx, None, false, false);
-        let mut beyond_bounds_retry_count = 0usize;
+        let mut settling_retries = 0usize;
         while pending_focus_move_retry.is_some()
             || pending_focus_reveal_retry
-            || pending_keyboard_retry
-            || has_pending_layout_invalidations()
+            || frame_settling_can_progress(pending_keyboard_retry)
         {
             let focus_retry = pending_focus_move_retry.is_some()
                 || pending_focus_reveal_retry
                 || pending_keyboard_retry;
-            if beyond_bounds_retry_count >= MAX_FRAME_SETTLING_RETRIES
-                || (focus_retry && !focus_settling_can_progress(pending_keyboard_retry))
+            if settling_retries >= MAX_FRAME_SETTLING_RETRIES
+                || (focus_retry && !frame_settling_can_progress(pending_keyboard_retry))
             {
                 break;
             }
 
-            beyond_bounds_retry_count += 1;
-            if focus_retry {
+            settling_retries += 1;
+            if focus_retry || has_ready_build_invalidations() {
                 build_tree_result.absorb_retry(build_component_tree(entry_point));
             }
 
@@ -2738,7 +2737,7 @@ mod tests {
     }
 
     #[test]
-    fn first_geometry_publication_wakes_the_runtime_until_its_conditional_child_is_placed() {
+    fn first_geometry_publication_settles_its_conditional_child_before_the_frame_finishes() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         struct WakerGuard;
@@ -2757,26 +2756,12 @@ mod tests {
             move || wakes.with_mut(|wakes| *wakes += 1)
         }));
         pump_layout_test_session(&mut session, 0);
-        assert_eq!(probe.child.get(), None);
         assert_eq!(probe.writes.get(), 1);
         let (before, after) = probe.counts.get();
         assert!(
             after > before,
-            "the observer's state write must request a new frame"
+            "the observer's state write must wake the runtime"
         );
-        assert!(
-            RuntimePendingWork::capture(false).requires_redraw(),
-            "the first geometry callback must leave its subscribed child pending at frame end"
-        );
-        let mut frame = 0;
-        while RuntimePendingWork::capture(false).requires_redraw() {
-            frame += 1;
-            assert!(
-                frame <= 8,
-                "geometry publication must settle without continuous redraw"
-            );
-            pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
         assert_eq!(
             probe.child.get(),
             Some(PxRect::new(
@@ -2785,12 +2770,12 @@ mod tests {
                 crate::Px(64),
                 crate::Px(24)
             )),
-            "a frame requested by the geometry update must place the newly inserted child"
+            "the geometry update must place the newly inserted child in the same frame"
         );
         assert_eq!(probe.writes.get(), 1);
         assert!(!RuntimePendingWork::capture(false).requires_redraw());
         let wakes = probe.wakes.get();
-        pump_layout_test_session(&mut session, (frame + 1) * 16_666_667);
+        pump_layout_test_session(&mut session, 16_666_667);
         assert_eq!(probe.writes.get(), 1);
         assert_eq!(
             probe.wakes.get(),

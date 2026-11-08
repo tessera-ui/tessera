@@ -371,6 +371,9 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         crate::nested_scroll::flush_attachment_changes();
         finalize_frame_component_replay_tracking();
         finalize_frame_layout_dirty_tracking();
+        // Build-time feedback must not become layout-settling work in this frame.
+        let deferred = take_build_invalidations();
+        crate::runtime::defer_build_invalidations(&deferred.dirty_instance_keys);
         crate::runtime::recycle_recomposed_slots_for_instance_logic_ids(
             &recomposed_state_instance_logic_ids,
         );

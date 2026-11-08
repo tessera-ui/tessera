@@ -10,6 +10,75 @@ use crate::{
     row::row,
 };
 
+#[tessera]
+fn layout_feedback_pixels_fixture(presses: tessera_ui::testing::TestProbe<usize>) {
+    let width = remember(|| Dp(16.0));
+    let measured_width = remember(|| Dp::ZERO);
+    boxed()
+        .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
+        .children(move || {
+            let presses = presses.clone();
+            boxed().modifier(with_pointer_input(
+                Modifier::new()
+                    .size(width.get(), Dp(16.0))
+                    .on_layout_size_changed(move |size: tessera_ui::PxSize| {
+                        let next = Dp::from(size.width);
+                        if measured_width.get() != next {
+                            measured_width.set(next);
+                        }
+                    }),
+                move |input| {
+                    for change in input.pointer_changes.iter() {
+                        if matches!(change.content, tessera_ui::CursorEventContent::Pressed(_)) {
+                            presses.with_mut(|count| *count += 1);
+                            width.set(Dp(24.0));
+                        }
+                    }
+                },
+            ));
+            boxed().modifier(
+                Modifier::new()
+                    .offset(Dp::ZERO, Dp(20.0))
+                    .size(measured_width.get(), Dp(16.0))
+                    .background(Color::RED),
+            );
+        });
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn layout_build_feedback_presents_current_pixels_without_replaying_input() {
+    crate::test_utils::run_isolated_test(
+        "layout_flex::drawing_tests::layout_build_feedback_presents_current_pixels_without_replaying_input",
+        || {
+            let presses = tessera_ui::testing::TestProbe::default();
+            let observed = presses.clone();
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(move || layout_feedback_pixels_fixture(presses.clone())),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 64,
+                    height: 64,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.step_frame();
+            assert_eq!(pixel(&renderer, 8, 24), [255, 0, 0, 255]);
+            assert_eq!(pixel(&renderer, 20, 24), [255, 255, 255, 255]);
+            renderer.pointer_press(
+                tessera_ui::MOUSE_POINTER_ID,
+                PxPosition::from_f32_xy(8.0, 8.0),
+                tessera_ui::PressKeyEventType::Left,
+            );
+            renderer.step_frame();
+            assert_eq!(observed.get(), 1);
+            assert_eq!(pixel(&renderer, 20, 24), [255, 0, 0, 255]);
+            assert_eq!(pixel(&renderer, 28, 24), [255, 255, 255, 255]);
+        },
+    );
+}
+
 #[derive(Clone)]
 struct Inputs {
     color: Color,

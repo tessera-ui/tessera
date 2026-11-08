@@ -41,7 +41,14 @@ fn paint_changes_reuse_order_but_supply_current_commands() {
 
 #[test]
 fn changed_read_write_bounds_and_clip_transitions_rebuild_order() {
-    let sample = |x| Some(SampleRegion::Absolute(PxRect::new(Px(x), Px(0), Px(4), Px(4))));
+    let sample = |x| {
+        Some(SampleRegion::Absolute(PxRect::new(
+            Px(x),
+            Px(0),
+            Px(4),
+            Px(4),
+        )))
+    };
     let previous = graph(1, 0, sample(10));
     let plan = previous.order_plan(None);
     for current in [graph(1, 2, sample(10)), graph(1, 0, sample(20))] {

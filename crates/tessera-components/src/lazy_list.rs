@@ -2767,7 +2767,7 @@ mod tests {
         tessera_ui::assert_layout! {
             viewport: (80, 60),
             content: {
-                lazy_column_layout_case();
+                material_theme().child(|| { lazy_column_layout_case(); });
             },
             expect: {
                 node("lazy_column_first").position(4, 4).size(20, 10);
@@ -2782,7 +2782,7 @@ mod tests {
         tessera_ui::assert_layout! {
             viewport: (90, 40),
             content: {
-                lazy_row_layout_case();
+                material_theme().child(|| { lazy_row_layout_case(); });
             },
             expect: {
                 node("lazy_row_first").position(4, 4).size(20, 10);
@@ -2797,7 +2797,7 @@ mod tests {
         tessera_ui::assert_layout! {
             viewport: (80, 60),
             content: {
-                lazy_column_scrolled_layout_case();
+                material_theme().child(|| { lazy_column_scrolled_layout_case(); });
             },
             expect: {
                 node("lazy_column_scrolled_first").position(4, -1).size(20, 10);
@@ -2812,7 +2812,7 @@ mod tests {
         tessera_ui::assert_layout! {
             viewport: (80, 50),
             content: {
-                lazy_column_sticky_layout_case();
+                material_theme().child(|| { lazy_column_sticky_layout_case(); });
             },
             expect: {
                 node("lazy_column_sticky_header").position(4, 4).size(20, 10);
@@ -2827,7 +2827,7 @@ mod tests {
         tessera_ui::assert_layout! {
             viewport: (80, 60),
             content: {
-                lazy_column_non_stretch_cross_axis_case();
+                material_theme().child(|| { lazy_column_non_stretch_cross_axis_case(); });
             },
             expect: {
                 node("lazy_column_non_stretch").position(4, 4).size(20, 10);

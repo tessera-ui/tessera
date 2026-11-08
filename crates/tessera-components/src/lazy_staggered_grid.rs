@@ -107,21 +107,24 @@ impl LazyStaggeredGridContent {
 /// use tessera_components::{
 ///     lazy_staggered_grid::{StaggeredGridCells, lazy_vertical_staggered_grid},
 ///     text::text,
+///     theme::material_theme,
 /// };
 /// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
 /// fn demo() {
-///     lazy_vertical_staggered_grid()
-///         .columns(StaggeredGridCells::fixed(2))
-///         .overscan(0)
-///         .items(4, move |i| {
-///             text(format!("Tile {i}")).modifier(
-///                 Modifier::new().semantics(SemanticsArgs {
-///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
-///                 })
-///             );
-///         });
+///     material_theme().child(|| {
+///         lazy_vertical_staggered_grid()
+///             .columns(StaggeredGridCells::fixed(2))
+///             .overscan(0)
+///             .items(4, move |i| {
+///                 text(format!("Tile {i}")).modifier(
+///                     Modifier::new().semantics(SemanticsArgs {
+///                         test_tag: Some(format!("tile-{i}")), ..Default::default()
+///                     })
+///                 );
+///             });
+///     });
 /// }
 ///
 /// let snapshot = tessera_ui::testing::layout_test(demo).run();
@@ -297,21 +300,24 @@ fn lazy_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs, axis: StaggeredGr
 /// use tessera_components::{
 ///     lazy_staggered_grid::{StaggeredGridCells, lazy_horizontal_staggered_grid},
 ///     text::text,
+///     theme::material_theme,
 /// };
 /// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
 /// fn demo() {
-///     lazy_horizontal_staggered_grid()
-///         .rows(StaggeredGridCells::fixed(2))
-///         .overscan(0)
-///         .items(3, move |i| {
-///             text(format!("Tile {i}")).modifier(
-///                 Modifier::new().semantics(SemanticsArgs {
-///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
-///                 })
-///             );
-///         });
+///     material_theme().child(|| {
+///         lazy_horizontal_staggered_grid()
+///             .rows(StaggeredGridCells::fixed(2))
+///             .overscan(0)
+///             .items(3, move |i| {
+///                 text(format!("Tile {i}")).modifier(
+///                     Modifier::new().semantics(SemanticsArgs {
+///                         test_tag: Some(format!("tile-{i}")), ..Default::default()
+///                     })
+///                 );
+///             });
+///     });
 /// }
 ///
 /// let snapshot = tessera_ui::testing::layout_test(demo).run();
@@ -1275,10 +1281,9 @@ fn compute_staggered_layout_positions(
 
 #[cfg(test)]
 mod tests {
-    use tessera_ui::RenderSlotWith;
-
     use tessera_ui::{
-        ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px, PxPosition,
+        AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
+        Px, PxPosition, RenderSlotWith,
         layout::{MeasureScope, layout},
         receive_frame_nanos, remember, tessera,
     };
@@ -1444,13 +1449,17 @@ mod tests {
         scroll_controller.with_mut(|c| {
             c.set_visible_size_for_test(ComputedData {
                 width: Px::new(60),
-                height: Px::new(60),
+                height: Px::new(20),
             });
             c.set_scroll_position(target_position);
         });
 
         scrollable()
             .scrollbar_behavior(ScrollBarBehavior::Hidden)
+            .modifier(Modifier::new().constrain(
+                Some(AxisConstraint::exact(Px::new(60))),
+                Some(AxisConstraint::exact(Px::new(20))),
+            ))
             .vertical(true)
             .horizontal(false)
             .apply_child_offset(false)
