@@ -412,9 +412,14 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             });
             renderer.step_frame();
             assert!(
-                renderer.diagnostics().cache_store_count > 0
-                    && renderer.diagnostics().cache_store_count < 16
+                renderer
+                    .work()
+                    .phase(tessera_ui::WorkPhase::Measure)
+                    .count()
+                    < 16,
+                "changing one tile must not remeasure the other tiles"
             );
+            assert!(renderer.diagnostics().cache_hits_boundary > 100);
             assert!(renderer.diagnostics().measure_dirty_children_checked < 16);
             assert_eq!(pixel(&renderer, 10, 2), [0, 0, 255, 255]);
             assert_eq!(pixel(&renderer, 14, 2), [255, 0, 0, 255]);

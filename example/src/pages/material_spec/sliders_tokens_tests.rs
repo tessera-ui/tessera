@@ -256,17 +256,20 @@ fn translated_expanded_tokens_reuse_drawing_and_keep_the_popup_on_its_selector()
         .unwrap()
         .with_mut(|scroll| scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -32.0)));
     let mut paint = 0;
-    let mut stores = 0;
+    let mut measurements = 0;
     let mut geometry = 0;
     for _ in 0..6 {
         renderer.render_frames(1);
         let work = renderer.diagnostics();
         paint += work.paint_nodes_recorded;
-        stores += work.cache_store_count;
+        measurements += renderer
+            .work()
+            .phase(tessera_ui::WorkPhase::Measure)
+            .count();
         geometry += work.geometry_nodes_updated;
     }
     assert!(geometry > 0, "the actual token subtree must move");
-    assert_eq!(stores, 0, "translation must reuse token measurements");
+    assert_eq!(measurements, 0, "translation must reuse token measurements");
     assert!(
         paint <= 24,
         "moving an unchanged token table must retain its recorded drawing: {paint} recordings"

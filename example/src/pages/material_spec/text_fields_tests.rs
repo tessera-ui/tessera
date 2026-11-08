@@ -1268,15 +1268,18 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
             scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -532.0));
         });
         let mut geometry = 0;
-        let mut stores = 0;
+        let mut measurements = 0;
         for _ in 0..6 {
             renderer.render_frames(1);
             let work = renderer.diagnostics();
             geometry += work.geometry_nodes_updated;
-            stores += work.cache_store_count;
+            measurements += renderer
+                .work()
+                .phase(tessera_ui::WorkPhase::Measure)
+                .count();
         }
         assert!(geometry > 0, "the actual field subtree must move");
-        assert_eq!(stores, 0, "translation must reuse field measurements");
+        assert_eq!(measurements, 0, "translation must reuse field measurements");
         let after = node(&renderer, &label, Role::Group).1.bounds().unwrap();
         assert_eq!(after.y0 - before.y0, -32.0);
         assert_eq!(after.width(), before.width());
