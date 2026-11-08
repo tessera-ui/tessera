@@ -83,6 +83,8 @@ State, context, focus, and render-slot reads share a dependency index with inlin
 storage for the first reader and dependency.
 Functor lookup keeps one slot per order buffer inline and reuses overflow
 storage in proportion to the previous build's order.
+An order hit reuses the slot record directly. Order and key lookups share the
+same update path.
 Component slot ownership shares the same inline set used for dependency readers.
 The slot key index stores handles and compares full keys in their slot records.
 

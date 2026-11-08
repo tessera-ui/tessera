@@ -66,41 +66,47 @@ fn pop_order_frame(underflow_message: &str) {
 }
 
 fn next_order_counter(kind: OrderCounterKind, empty_message: &str) -> u64 {
-    with_execution_context_mut(|context| {
-        debug_assert!(!context.order_frame_stack.is_empty(), "{empty_message}");
-        let frame = context.order_frame_stack.last_mut().expect(empty_message);
-        let counter = match kind {
-            OrderCounterKind::Remember => {
-                let counter = frame.remember;
-                frame.remember = frame.remember.wrapping_add(1);
-                counter
-            }
-            OrderCounterKind::Functor => {
-                let counter = frame.functor;
-                frame.functor = frame.functor.wrapping_add(1);
-                counter
-            }
-            OrderCounterKind::Context => {
-                let counter = frame.context;
-                frame.context = frame.context.wrapping_add(1);
-                counter
-            }
-            OrderCounterKind::ModifierAttachment => {
-                let counter = frame.modifier_attachment;
-                frame.modifier_attachment = frame
-                    .modifier_attachment
-                    .checked_add(1)
-                    .expect("modifier attachment counter exhausted");
-                counter
-            }
-            OrderCounterKind::FrameReceiver => {
-                let counter = frame.frame_receiver;
-                frame.frame_receiver = frame.frame_receiver.wrapping_add(1);
-                counter
-            }
-        };
-        salt_order_counter(frame.occurrence_salt, counter)
-    })
+    with_execution_context_mut(|context| next_order_counter_in(context, kind, empty_message))
+}
+
+fn next_order_counter_in(
+    context: &mut ExecutionContext,
+    kind: OrderCounterKind,
+    empty_message: &str,
+) -> u64 {
+    debug_assert!(!context.order_frame_stack.is_empty(), "{empty_message}");
+    let frame = context.order_frame_stack.last_mut().expect(empty_message);
+    let counter = match kind {
+        OrderCounterKind::Remember => {
+            let counter = frame.remember;
+            frame.remember = frame.remember.wrapping_add(1);
+            counter
+        }
+        OrderCounterKind::Functor => {
+            let counter = frame.functor;
+            frame.functor = frame.functor.wrapping_add(1);
+            counter
+        }
+        OrderCounterKind::Context => {
+            let counter = frame.context;
+            frame.context = frame.context.wrapping_add(1);
+            counter
+        }
+        OrderCounterKind::ModifierAttachment => {
+            let counter = frame.modifier_attachment;
+            frame.modifier_attachment = frame
+                .modifier_attachment
+                .checked_add(1)
+                .expect("modifier attachment counter exhausted");
+            counter
+        }
+        OrderCounterKind::FrameReceiver => {
+            let counter = frame.frame_receiver;
+            frame.frame_receiver = frame.frame_receiver.wrapping_add(1);
+            counter
+        }
+    };
+    salt_order_counter(frame.occurrence_salt, counter)
 }
 
 fn salt_order_counter(salt: u64, counter: u64) -> u64 {
@@ -163,6 +169,24 @@ struct SlotEntry {
     value: Option<Arc<dyn Any + Send + Sync>>,
     last_alive_epoch: u64,
     retained: bool,
+}
+
+impl SlotEntry {
+    fn reuse_functor<T: Send + Sync + 'static>(
+        &mut self,
+        slot: SlotHandle,
+        epoch: u64,
+        init: &mut Option<impl FnOnce() -> T>,
+    ) -> (Arc<T>, u64) {
+        debug_assert_eq!(self.key.type_id, TypeId::of::<T>());
+        self.last_alive_epoch = epoch;
+        let value = self.value.get_or_insert_with(|| {
+            let value = Arc::new(init.take().expect("functor slot initialized once")());
+            self.generation = self.generation.wrapping_add(1);
+            value
+        });
+        (clone_slot_value(value, slot), self.generation)
+    }
 }
 
 #[derive(Default)]
@@ -290,7 +314,7 @@ impl SlotTable {
         self.epoch = 0;
         removed
     }
-    fn try_fast_slot_lookup(&mut self, key: SlotKey) -> Option<SlotHandle> {
+    fn try_fast_slot_lookup(&mut self, key: &SlotKey) -> Option<(SlotHandle, &mut SlotEntry)> {
         let cursor = self
             .cursors_by_instance_logic_id
             .entry(key.instance_logic_id)
@@ -298,17 +322,13 @@ impl SlotTable {
         cursor.begin_epoch(self.epoch);
         let candidate = cursor.fast_candidate()?;
 
-        let is_match = self
+        let entry = self
             .entries
-            .get(candidate)
-            .is_some_and(|entry| entry.key == key);
-
-        if !is_match {
-            return None;
-        }
+            .get_mut(candidate)
+            .filter(|entry| entry.key == *key)?;
 
         cursor.record_fast_match(candidate);
-        Some(candidate)
+        Some((candidate, entry))
     }
 
     fn record_slot_usage_slow(&mut self, instance_logic_id: u64, slot: SlotHandle) {
@@ -3298,18 +3318,22 @@ fn hash_components<H: Hash + ?Sized>(parts: &[&H]) -> u64 {
     hasher.finish()
 }
 
-fn compute_functor_slot_key<K: Hash>(key: &K) -> (u64, u64) {
-    let instance_logic_id = current_instance_logic_id();
-    let group_path_hash = current_group_path_hash();
-    let key_hash = hash_components(&[key]);
-
-    let call_counter = next_order_counter(
-        OrderCounterKind::Functor,
-        "ORDER_FRAME_STACK is empty; callback constructors must be called inside a component",
-    );
-
-    let slot_hash = hash_components(&[&group_path_hash, &key_hash, &call_counter]);
-    (instance_logic_id, slot_hash)
+fn compute_functor_slot_key() -> (u64, u64) {
+    with_execution_context_mut(|context| {
+        let instance_logic_id = *context
+            .instance_logic_id_stack
+            .last()
+            .expect("current_instance_logic_id must be called inside a component");
+        let group_path_hash = context.group_path.digest();
+        let call_counter = next_order_counter_in(
+            context,
+            OrderCounterKind::Functor,
+            "ORDER_FRAME_STACK is empty; callback constructors must be called inside a component",
+        );
+        let key_hash = hash_components(&[&()]);
+        let slot_hash = hash_components(&[&group_path_hash, &key_hash, &call_counter]);
+        (instance_logic_id, slot_hash)
+    })
 }
 
 pub(crate) fn ensure_build_phase() {
@@ -3335,14 +3359,13 @@ pub(crate) fn ensure_build_phase() {
     }
 }
 
-fn remember_functor_cell_with_key<K, T, F>(key: K, init: F) -> (Arc<T>, FunctorHandle)
+fn remember_functor_cell<T, F>(init: F) -> (Arc<T>, FunctorHandle)
 where
-    K: Hash,
     T: Send + Sync + 'static,
     F: FnOnce() -> T,
 {
     ensure_build_phase();
-    let (instance_logic_id, slot_hash) = compute_functor_slot_key(&key);
+    let (instance_logic_id, slot_hash) = compute_functor_slot_key();
     let slot_key = SlotKey {
         owned_owner: None,
         instance_logic_id,
@@ -3350,116 +3373,33 @@ where
         type_id: TypeId::of::<T>(),
     };
 
-    with_slot_table_mut(|table| {
-        let mut init_opt = Some(init);
-        if let Some(slot) = table.try_fast_slot_lookup(slot_key) {
-            let epoch = table.epoch;
-            let (generation, value) = {
-                let entry = table
-                    .entries
-                    .get_mut(slot)
-                    .expect("functor slot entry should exist");
-
-                if entry.key.type_id != slot_key.type_id {
-                    panic!(
-                        "callback slot type mismatch: expected {}, found {:?}",
-                        std::any::type_name::<T>(),
-                        entry.key.type_id
-                    );
-                }
-
-                entry.last_alive_epoch = epoch;
-                if entry.value.is_none() {
-                    let init_fn = init_opt
-                        .take()
-                        .expect("callback slot init called more than once");
-                    entry.value = Some(Arc::new(init_fn()));
-                    entry.generation = entry.generation.wrapping_add(1);
-                }
-
-                (
-                    entry.generation,
-                    clone_slot_value::<T>(
-                        entry
-                            .value
-                            .as_ref()
-                            .expect("callback slot must contain a value"),
-                        slot,
-                    ),
-                )
-            };
-
-            (value, FunctorHandle::new(slot, generation))
-        } else if let Some(slot) = table.find_slot(&slot_key) {
-            table.record_slot_usage_slow(instance_logic_id, slot);
-            let epoch = table.epoch;
-            let (generation, value) = {
-                let entry = table
-                    .entries
-                    .get_mut(slot)
-                    .expect("functor slot entry should exist");
-
-                if entry.key.type_id != slot_key.type_id {
-                    panic!(
-                        "callback slot type mismatch: expected {}, found {:?}",
-                        std::any::type_name::<T>(),
-                        entry.key.type_id
-                    );
-                }
-
-                entry.last_alive_epoch = epoch;
-                if entry.value.is_none() {
-                    let init_fn = init_opt
-                        .take()
-                        .expect("callback slot init called more than once");
-                    entry.value = Some(Arc::new(init_fn()));
-                    entry.generation = entry.generation.wrapping_add(1);
-                }
-
-                (
-                    entry.generation,
-                    clone_slot_value::<T>(
-                        entry
-                            .value
-                            .as_ref()
-                            .expect("callback slot must contain a value"),
-                        slot,
-                    ),
-                )
-            };
-
-            (value, FunctorHandle::new(slot, generation))
-        } else {
-            let epoch = table.epoch;
-            let init_fn = init_opt
-                .take()
-                .expect("callback slot init called more than once");
-            let generation = 1u64;
-            let slot = table.entries.insert(SlotEntry {
-                key: slot_key,
-                generation,
-                value: Some(Arc::new(init_fn())),
-                last_alive_epoch: epoch,
-                retained: false,
-            });
-
-            table.index_slot(slot);
-            table.record_slot_usage_slow(instance_logic_id, slot);
-
-            let value = clone_slot_value::<T>(
-                table
-                    .entries
-                    .get(slot)
-                    .expect("functor slot entry should exist")
-                    .value
-                    .as_ref()
-                    .expect("callback slot must contain a value"),
-                slot,
-            );
-
-            (value, FunctorHandle::new(slot, generation))
+    let mut init = Some(init);
+    let (value, slot, generation) = with_slot_table_mut(|table| {
+        let epoch = table.epoch;
+        if let Some((slot, entry)) = table.try_fast_slot_lookup(&slot_key) {
+            let (value, generation) = entry.reuse_functor(slot, epoch, &mut init);
+            return (value, slot, generation);
         }
-    })
+        if let Some(slot) = table.find_slot(&slot_key) {
+            table.record_slot_usage_slow(instance_logic_id, slot);
+            let (value, generation) = table.entries[slot].reuse_functor(slot, epoch, &mut init);
+            return (value, slot, generation);
+        }
+
+        let value = Arc::new(init.take().expect("functor slot initialized once")());
+        let generation = 1;
+        let slot = table.entries.insert(SlotEntry {
+            key: slot_key,
+            generation,
+            value: Some(value.clone()),
+            last_alive_epoch: epoch,
+            retained: false,
+        });
+        table.index_slot(slot);
+        table.record_slot_usage_slow(instance_logic_id, slot);
+        (value, slot, generation)
+    });
+    (value, FunctorHandle::new(slot, generation))
 }
 
 fn load_functor_cell<T>(handle: FunctorHandle) -> Arc<T>
@@ -3508,7 +3448,7 @@ where
     F: Fn() + Send + Sync + 'static,
 {
     let handler = Arc::new(handler) as Arc<dyn Fn() + Send + Sync>;
-    let (cell, handle) = remember_functor_cell_with_key((), {
+    let (cell, handle) = remember_functor_cell({
         let handler = Arc::clone(&handler);
         move || CallbackCell::new(handler)
     });
@@ -3529,7 +3469,7 @@ where
     let render = Arc::new(render) as Arc<dyn Fn() + Send + Sync>;
     let creator_instance_key = current_replay_boundary_instance_key_from_scope()
         .unwrap_or_else(|| panic!("RenderSlot handles must be created during a component build"));
-    let (cell, handle) = remember_functor_cell_with_key((), {
+    let (cell, handle) = remember_functor_cell({
         let render = Arc::clone(&render);
         move || RenderSlotCell::new(render, static_type)
     });
@@ -3560,7 +3500,7 @@ where
         current_replay_boundary_instance_key_from_scope().unwrap_or_else(|| {
             panic!("RenderSlotWith handles must be created during a component build")
         });
-    let (cell, handle) = remember_functor_cell_with_key((), {
+    let (cell, handle) = remember_functor_cell({
         let render = Arc::clone(&render);
         move || RenderSlotWithCell::new(render, static_type)
     });
@@ -3590,7 +3530,7 @@ where
     F: Fn(T) -> R + Send + Sync + 'static,
 {
     let handler = Arc::new(handler) as Arc<dyn Fn(T) -> R + Send + Sync>;
-    let (cell, handle) = remember_functor_cell_with_key((), {
+    let (cell, handle) = remember_functor_cell({
         let handler = Arc::clone(&handler);
         move || CallbackWithCell::new(handler)
     });
