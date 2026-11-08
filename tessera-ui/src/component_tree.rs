@@ -553,8 +553,8 @@ pub struct ComponentTree {
     scale_factor_bits: u64,
     /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
-    replay_insert_before: Option<(NodeId, NodeId)>,
-    replay_retained_roots: HashSet<NodeId>,
+    replay_range: Option<ReplayRange>,
+    replay_insertions: ReplayInsertions,
     replay_ancestry: replay::ReplayAncestry,
     replay_changed_parents: HashSet<NodeId>,
     node_ids_by_instance_key: HashMap<u64, indextree::NodeId>,
@@ -596,32 +596,84 @@ pub(crate) enum ReplayReplaceError {
 pub(crate) struct ReplayReplaceResult {
     pub removed_instance_keys: HashSet<u64>,
     pub removed_instance_logic_ids: HashSet<u64>,
-    pub inserted_instance_keys: HashSet<u64>,
-    pub reused_instance_keys: HashSet<u64>,
-    pub inserted_instance_logic_ids: HashSet<u64>,
-    pub reused_instance_logic_ids: HashSet<u64>,
+    insertions: ReplayInsertions,
 }
 
 impl ReplayReplaceResult {
     fn clear(&mut self) {
-        // A large replacement should not make later small replacements clear large tables.
-        const MAX_REUSED_CAPACITY: usize = 256;
-
-        for set in [
-            &mut self.removed_instance_keys,
-            &mut self.removed_instance_logic_ids,
-            &mut self.inserted_instance_keys,
-            &mut self.reused_instance_keys,
-            &mut self.inserted_instance_logic_ids,
-            &mut self.reused_instance_logic_ids,
-        ] {
-            if set.capacity() > MAX_REUSED_CAPACITY {
-                *set = HashSet::default();
-            } else {
-                set.clear();
-            }
-        }
+        clear_replay_set(&mut self.removed_instance_keys);
+        clear_replay_set(&mut self.removed_instance_logic_ids);
+        self.insertions.clear();
     }
+
+    pub(crate) fn executed_keys(&self) -> impl Iterator<Item = u64> + '_ {
+        self.insertions
+            .rebuilt
+            .iter()
+            .filter_map(|&(key, _)| (!self.insertions.retained.keys.contains(&key)).then_some(key))
+    }
+
+    pub(crate) fn recomposed_logic_ids(&self) -> impl Iterator<Item = u64> + '_ {
+        self.insertions.rebuilt.iter().filter_map(|&(_, logic_id)| {
+            (!self.insertions.retained.logic_ids.contains(&logic_id)).then_some(logic_id)
+        })
+    }
+
+    pub(crate) fn retained_count(&self) -> usize {
+        self.insertions.retained.keys.len()
+    }
+
+    pub(crate) fn inserted_count(&self) -> usize {
+        self.insertions.rebuilt.len() + self.retained_count()
+    }
+}
+
+// A large replacement should not keep large scratch buffers for later small replays.
+const MAX_REPLAY_SCRATCH_CAPACITY: usize = 256;
+const INLINE_REPLAY_INSERTIONS: usize = 8;
+
+fn clear_replay_set(set: &mut HashSet<u64>) {
+    if set.capacity() > MAX_REPLAY_SCRATCH_CAPACITY {
+        *set = HashSet::default();
+    } else {
+        set.clear();
+    }
+}
+
+#[derive(Default)]
+struct ReplayIdentities {
+    keys: HashSet<u64>,
+    logic_ids: HashSet<u64>,
+}
+
+impl ReplayIdentities {
+    fn insert(&mut self, key: u64, logic_id: u64) {
+        self.keys.insert(key);
+        self.logic_ids.insert(logic_id);
+    }
+}
+
+#[derive(Default)]
+struct ReplayInsertions {
+    rebuilt: SmallVec<[(u64, u64); INLINE_REPLAY_INSERTIONS]>,
+    retained: ReplayIdentities,
+}
+
+impl ReplayInsertions {
+    fn clear(&mut self) {
+        if self.rebuilt.capacity() > MAX_REPLAY_SCRATCH_CAPACITY {
+            self.rebuilt = SmallVec::new();
+        } else {
+            self.rebuilt.clear();
+        }
+        clear_replay_set(&mut self.retained.keys);
+        clear_replay_set(&mut self.retained.logic_ids);
+    }
+}
+
+struct ReplayRange {
+    parent: NodeId,
+    next_sibling: Option<NodeId>,
 }
 
 pub(crate) struct ReplayReplaceContext {
@@ -660,8 +712,8 @@ impl ComponentTree {
             #[cfg(feature = "profiling")]
             profiler_dirty_nodes: HashSet::default(),
             scale_factor_bits: crate::dp::scale_factor().to_bits(),
-            replay_insert_before: None,
-            replay_retained_roots: HashSet::default(),
+            replay_range: None,
+            replay_insertions: ReplayInsertions::default(),
             replay_ancestry: replay::ReplayAncestry::default(),
             replay_changed_parents: HashSet::default(),
             node_ids_by_instance_key: HashMap::default(),
@@ -708,8 +760,8 @@ impl ComponentTree {
         self.pointer_index = pointer::PointerIndex::default();
         self.stop_accessibility_updates();
         self.node_queue.clear();
-        self.replay_insert_before = None;
-        self.replay_retained_roots.clear();
+        self.replay_range = None;
+        self.replay_insertions.clear();
         self.replay_ancestry = replay::ReplayAncestry::default();
         self.replay_changed_parents.clear();
         self.node_ids_by_instance_key.clear();
@@ -834,10 +886,12 @@ impl ComponentTree {
 
         let previous_sibling = target_node_id.previous_sibling(&self.tree);
         let next_sibling = target_node_id.next_sibling(&self.tree);
-        self.replay_insert_before = next_sibling.map(|sibling| (parent_id, sibling));
+        self.replay_range = Some(ReplayRange {
+            parent: parent_id,
+            next_sibling,
+        });
 
         self.queue_replay_children(parent_id, target_node_id, next_sibling);
-        self.replay_retained_roots.clear();
 
         let previous_queue =
             (!self.node_queue.is_empty()).then(|| std::mem::take(&mut self.node_queue));
@@ -867,44 +921,37 @@ impl ComponentTree {
         }
 
         self.detach_replay_suffix(parent_id);
-        let next_sibling = self.replay_insert_before.take().map(|(_, sibling)| sibling);
+        let next_sibling = self
+            .replay_range
+            .take()
+            .and_then(|range| range.next_sibling);
         let first_inserted = match previous_sibling {
             Some(child) => child.next_sibling(&self.tree),
             None => parent_id.first_child(&self.tree),
         };
-        let mut pending: SmallVec<[_; 8]> = first_inserted
-            .into_iter()
-            .flat_map(|child| child.following_siblings(&self.tree))
-            .take_while(|&id| Some(id) != next_sibling)
-            .collect();
-        if pending.is_empty() {
+        if first_inserted.is_none() || first_inserted == next_sibling {
             self.replay_ancestry = replay::ReplayAncestry::default();
-            self.replay_retained_roots.clear();
+            self.replay_insertions.clear();
             return Err(ReplayReplaceError::ReplayDidNotCreateRoot);
         }
 
+        std::mem::swap(&mut self.replay_insertions, &mut result.insertions);
         let ReplayReplaceResult {
             removed_instance_keys,
             removed_instance_logic_ids,
-            inserted_instance_keys,
-            reused_instance_keys,
-            inserted_instance_logic_ids,
-            reused_instance_logic_ids,
+            insertions,
         } = result;
-        while let Some(id) = pending.pop() {
-            let retained = self.replay_retained_roots.contains(&id);
-            if !retained {
-                pending.extend(id.children(&self.tree));
-            }
-            if let Some(node) = self.tree.get(id) {
-                inserted_instance_keys.insert(node.get().instance_key);
-                inserted_instance_logic_ids.insert(node.get().instance_logic_id);
-                if retained {
-                    reused_instance_keys.insert(node.get().instance_key);
-                    reused_instance_logic_ids.insert(node.get().instance_logic_id);
+        let rebuilt = &insertions.rebuilt;
+        let retained = &insertions.retained;
+        let rebuilt_index = (!self.replay_ancestry.detached_roots.is_empty()
+            && rebuilt.len() > INLINE_REPLAY_INSERTIONS)
+            .then(|| {
+                let mut identities = ReplayIdentities::default();
+                for &(key, logic_id) in rebuilt {
+                    identities.insert(key, logic_id);
                 }
-            }
-        }
+                identities
+            });
 
         let mut detached_node_ids = SmallVec::<[_; 8]>::new();
         for &root in self.replay_ancestry.detached_roots.keys() {
@@ -915,10 +962,20 @@ impl ComponentTree {
             let instance_key = old.get().instance_key;
             let instance_logic_id = old.get().instance_logic_id;
             let previous = self.metadatas.remove(&old_id);
-            if !inserted_instance_logic_ids.contains(&instance_logic_id) {
+            let logic_id_survives = retained.logic_ids.contains(&instance_logic_id)
+                || rebuilt_index.as_ref().map_or_else(
+                    || rebuilt.iter().any(|&(_, id)| id == instance_logic_id),
+                    |index| index.logic_ids.contains(&instance_logic_id),
+                );
+            let key_survives = retained.keys.contains(&instance_key)
+                || rebuilt_index.as_ref().map_or_else(
+                    || rebuilt.iter().any(|&(key, _)| key == instance_key),
+                    |index| index.keys.contains(&instance_key),
+                );
+            if !logic_id_survives {
                 removed_instance_logic_ids.insert(instance_logic_id);
             }
-            if !inserted_instance_keys.contains(&instance_key) {
+            if !key_survives {
                 removed_instance_keys.insert(instance_key);
             } else if instance_key != 0
                 && let Some(previous) = previous
@@ -968,7 +1025,6 @@ impl ComponentTree {
             root.remove_subtree(&mut self.tree);
         }
         self.replay_ancestry.clear_detached();
-        self.replay_retained_roots.clear();
 
         self.replay_changed_parents.insert(parent_id);
         Ok(())
@@ -1044,8 +1100,7 @@ impl ComponentTree {
         }
 
         self.capture_reused_ancestry(id);
-        self.replay_retained_roots.insert(id);
-        self.attach_replayed_node(id);
+        self.attach_replayed_node(id, true);
         Some(id)
     }
 
@@ -1064,7 +1119,7 @@ impl ComponentTree {
         if needs_geometry {
             self.metadatas.entry_or_default(new_node_id);
         }
-        self.attach_build_node(new_node_id);
+        self.attach_build_node(new_node_id, false);
         new_node_id
     }
 
@@ -1095,7 +1150,7 @@ impl ComponentTree {
         if let Some(metadata) = self.metadatas.get_mut(&id) {
             metadata.begin_accessibility_rebuild();
         }
-        self.attach_replayed_node(id);
+        self.attach_replayed_node(id, false);
         if previous.role == NodeRole::Layout {
             self.metadatas.mark_paint_dirty(id);
         }
@@ -1123,25 +1178,26 @@ impl ComponentTree {
         }
     }
 
-    fn attach_replayed_node(&mut self, id: NodeId) {
+    fn attach_replayed_node(&mut self, id: NodeId, retained: bool) {
         let parent = self
             .current_build_node_id()
             .expect("replay must have a parent");
         if self.keep_replay_link(parent, id) {
-            self.enter_build_node(id);
+            self.enter_build_node(id, retained);
             return;
         }
         self.replay_ancestry.detached_roots.remove(&id);
         id.detach(&mut self.tree);
-        self.attach_build_node(id);
+        self.attach_build_node(id, retained);
     }
 
-    fn attach_build_node(&mut self, id: NodeId) {
+    fn attach_build_node(&mut self, id: NodeId, retained: bool) {
         if let Some(&parent) = self.node_queue.last() {
             let next = self.next_replay_child(parent).or_else(|| {
-                self.replay_insert_before
-                    .filter(|&(replay_parent, _)| parent == replay_parent)
-                    .map(|(_, sibling)| sibling)
+                self.replay_range
+                    .as_ref()
+                    .filter(|range| parent == range.parent)
+                    .and_then(|range| range.next_sibling)
             });
             if let Some(sibling) = next {
                 sibling.insert_before(id, &mut self.tree);
@@ -1149,10 +1205,22 @@ impl ComponentTree {
                 parent.append(id, &mut self.tree);
             }
         }
-        self.enter_build_node(id);
+        self.enter_build_node(id, retained);
     }
 
-    fn enter_build_node(&mut self, id: NodeId) {
+    fn enter_build_node(&mut self, id: NodeId, retained: bool) {
+        if self.replay_range.is_some() {
+            let node = self.tree[id].get();
+            if retained {
+                self.replay_insertions
+                    .retained
+                    .insert(node.instance_key, node.instance_logic_id);
+            } else {
+                self.replay_insertions
+                    .rebuilt
+                    .push((node.instance_key, node.instance_logic_id));
+            }
+        }
         self.changed_frame_nodes.insert(id);
         self.node_queue.push(id);
     }
@@ -6223,11 +6291,11 @@ mod tests {
             Err(_) => panic!("replace context should be created"),
         };
 
-        let new_a = tree.add_node(node("new_a", 5, 5));
-        let _new_a_child = tree.add_node(node("new_a_child", 6, 6));
+        let new_a = tree.add_node(node("new_a", 2, 5));
+        let _new_a_child = tree.add_node(node("new_a_child", 60, 6));
         tree.pop_node();
         tree.pop_node();
-        let new_b = tree.add_node(node("new_b", 7, 7));
+        let new_b = tree.add_node(node("new_b", 70, 7));
         tree.pop_node();
 
         let mut replace_result = ReplayReplaceResult::default();
@@ -6247,14 +6315,20 @@ mod tests {
 
         assert!(replace_result.removed_instance_keys.contains(&2));
         assert!(replace_result.removed_instance_keys.contains(&3));
-        assert!(replace_result.inserted_instance_keys.contains(&5));
-        assert!(replace_result.inserted_instance_keys.contains(&6));
-        assert!(replace_result.inserted_instance_keys.contains(&7));
-        assert!(replace_result.removed_instance_logic_ids.contains(&2));
-        assert!(replace_result.removed_instance_logic_ids.contains(&3));
-        assert!(replace_result.inserted_instance_logic_ids.contains(&5));
-        assert!(replace_result.inserted_instance_logic_ids.contains(&6));
-        assert!(replace_result.inserted_instance_logic_ids.contains(&7));
+        assert_eq!(
+            replace_result.executed_keys().collect::<HashSet<_>>(),
+            [5, 6, 7].into_iter().collect()
+        );
+        assert_eq!(
+            replace_result.removed_instance_logic_ids,
+            [3].into_iter().collect()
+        );
+        assert_eq!(
+            replace_result
+                .recomposed_logic_ids()
+                .collect::<HashSet<_>>(),
+            [2, 60, 70].into_iter().collect()
+        );
 
         assert!(tree.get(second).is_some());
     }
@@ -6301,11 +6375,9 @@ mod tests {
         assert!(tree.find_node_id_by_instance_key(3).is_some());
         assert!(tree.get(second).is_some());
 
-        assert!(replace_result.inserted_instance_keys.contains(&2));
-        assert_eq!(replace_result.inserted_instance_keys.len(), 1);
+        assert_eq!(replace_result.executed_keys().next(), None);
         assert_eq!(tree.find_node_id_by_instance_key(3), Some(_first_child));
-        assert!(replace_result.reused_instance_logic_ids.contains(&2));
-        assert_eq!(replace_result.reused_instance_logic_ids.len(), 1);
+        assert_eq!(replace_result.recomposed_logic_ids().next(), None);
         assert!(tree.removed_frame_nodes.is_empty());
         assert!(!replace_result.removed_instance_keys.contains(&2));
         assert!(!replace_result.removed_instance_keys.contains(&3));
@@ -6321,16 +6393,12 @@ mod tests {
             tree.finish_replace_subtree(context, &mut replace_result)
                 .is_ok()
         );
-        assert_eq!(
-            replace_result.inserted_instance_keys,
-            [5].into_iter().collect()
-        );
+        assert!(replace_result.executed_keys().eq([5]));
+        assert!(replace_result.recomposed_logic_ids().eq([5]));
         assert_eq!(
             replace_result.removed_instance_keys,
             [4].into_iter().collect()
         );
-        assert!(replace_result.reused_instance_keys.is_empty());
-        assert!(replace_result.reused_instance_logic_ids.is_empty());
     }
 
     #[test]

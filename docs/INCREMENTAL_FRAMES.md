@@ -110,6 +110,9 @@ Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements attach at their original positions and
 share that refresh. Consumers compare retained ancestry after the round's order
 is available.
+Replay records rebuilt identities and retained roots as they attach. Removal
+checks index the rebuilt identities only when a large replacement has old
+branches to remove.
 Replay planning shares the invalidation set when all keys are live and filters
 expired keys before execution. Pending work is copied only when the first
 round leaves invalidations to process.

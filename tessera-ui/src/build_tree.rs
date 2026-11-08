@@ -548,23 +548,13 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                             detach_ns,
                             compose_ns,
                             attach_ns = attach_timer.map(|timer| timer.elapsed().as_nanos()),
-                            inserted = replace_result.inserted_instance_keys.len(),
-                            reused = replace_result.reused_instance_logic_ids.len(),
+                            inserted = replace_result.inserted_count(),
+                            reused = replace_result.retained_count(),
                             "replay_root_cpu"
                         );
                     }
-                    executed_instance_keys.extend(
-                        replace_result
-                            .inserted_instance_keys
-                            .difference(&replace_result.reused_instance_keys)
-                            .copied(),
-                    );
-                    recomposed_instance_logic_ids.extend(
-                        replace_result
-                            .inserted_instance_logic_ids
-                            .difference(&replace_result.reused_instance_logic_ids)
-                            .copied(),
-                    );
+                    executed_instance_keys.extend(replace_result.executed_keys());
+                    recomposed_instance_logic_ids.extend(replace_result.recomposed_logic_ids());
 
                     stale_instance_keys
                         .extend(replace_result.removed_instance_keys.iter().copied());
