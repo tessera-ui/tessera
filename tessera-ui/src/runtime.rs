@@ -2114,6 +2114,10 @@ pub(crate) struct RuntimeGlobals {
 }
 
 impl RuntimeGlobals {
+    pub(crate) fn with_runtime<R>(&self, read: impl FnOnce(&TesseraRuntime) -> R) -> R {
+        read(&self.runtime.borrow())
+    }
+
     fn new() -> Self {
         Self {
             component_calls: ComponentCalls::default(),
@@ -2159,7 +2163,7 @@ impl TesseraRuntime {
     where
         F: FnOnce(&Self) -> R,
     {
-        with_runtime_globals(|globals| f(&globals.runtime.borrow()))
+        with_runtime_globals(|globals| globals.with_runtime(f))
     }
 
     /// Executes a closure with an exclusive, mutable reference to the runtime.
@@ -2579,11 +2583,10 @@ pub(crate) fn current_measured_node_instance_key() -> Option<u64> {
     with_execution_context(|context| context.measured_node_instance_key_stack.last().copied())
 }
 
-pub(crate) fn reserve_component_identity(component_type_id: u64) -> u64 {
-    with_execution_context_mut(|context| reserve_component_identity_in(context, component_type_id))
-}
-
-fn reserve_component_identity_in(context: &mut ExecutionContext, component_type_id: u64) -> u64 {
+pub(crate) fn reserve_component_identity_in(
+    context: &mut ExecutionContext,
+    component_type_id: u64,
+) -> u64 {
     if let Some(identity) = context.next_node_instance_logic_id_override.take() {
         return identity;
     }
@@ -3442,7 +3445,11 @@ fn compute_functor_slot_key() -> (u64, u64) {
 }
 
 pub(crate) fn ensure_build_phase() {
-    match current_phase() {
+    ensure_build_phase_at(current_phase());
+}
+
+pub(crate) fn ensure_build_phase_at(phase: Option<RuntimePhase>) {
+    match phase {
         Some(RuntimePhase::Build) => {}
         Some(RuntimePhase::Measure) => {
             panic!("remember must not be called inside measure; move state to component render")

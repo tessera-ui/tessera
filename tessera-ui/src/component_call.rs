@@ -17,12 +17,12 @@ use rustc_hash::FxHasher;
 use slotmap::{SlotMap, new_key_type};
 
 use crate::{
-    NodeId,
+    NodeId, RuntimeSession, RuntimeSessionId,
     context::{ContextMap, with_context_map},
-    execution_context::{OrderFrame, with_execution_context, with_execution_context_mut},
+    execution_context::{OrderFrame, with_execution_context_mut},
     prop::{ErasedComponent, Prop},
     runtime::{
-        GroupPath, TesseraRuntime, ensure_build_phase, reserve_component_identity,
+        GroupPath, TesseraRuntime, ensure_build_phase_at, reserve_component_identity_in,
         with_replay_scope,
     },
     session::with_runtime_globals,
@@ -110,7 +110,7 @@ fn with_pending_calls<R>(access: impl FnOnce(&RefCell<PendingCalls>) -> R) -> R 
 
 /// A configuration handle to one registered component use.
 pub struct ComponentCall<P: Prop> {
-    session: u128,
+    session: RuntimeSessionId,
     id: PendingToken,
     marker: PhantomData<fn(P)>,
 }
@@ -124,12 +124,14 @@ impl<P: Prop> Clone for ComponentCall<P> {
 }
 
 impl<P: Prop> ComponentCall<P> {
-    fn validate_session(&self) {
+    fn owning_session(&self) -> RuntimeSession {
+        let session = RuntimeSession::current();
         assert_eq!(
-            crate::session::current_session_identity(),
+            session.as_ref().map(RuntimeSession::identity),
             Some(self.session),
             "component handle belongs to a different runtime session"
         );
+        session.expect("validated component session")
     }
     /// Set a property while this call is pending.
     #[track_caller]
@@ -137,8 +139,9 @@ impl<P: Prop> ComponentCall<P> {
     where
         F: FnOnce(&mut P),
     {
-        self.validate_session();
-        let mut guard = begin_configuration(self.id);
+        let session = self.owning_session();
+        let mut guard =
+            begin_configuration(&session.runtime_globals().component_calls.pending, self.id);
         let configuration = guard.configuration.as_mut().expect("active configuration");
         configuration.updates.retain(|entry| entry.0 != property);
         update(
@@ -155,7 +158,6 @@ impl<P: Prop> ComponentCall<P> {
     where
         F: FnOnce(&mut P) + Send + Sync + 'static,
     {
-        self.validate_session();
         self.store(property, false, update);
     }
 
@@ -165,7 +167,6 @@ impl<P: Prop> ComponentCall<P> {
     where
         F: FnOnce(&mut P) + Send + Sync + 'static,
     {
-        self.validate_session();
         self.store(property, true, update);
     }
 
@@ -174,6 +175,7 @@ impl<P: Prop> ComponentCall<P> {
     where
         F: FnOnce(&mut P) + Send + Sync + 'static,
     {
+        let session = self.owning_session();
         let update: PropUpdate = Box::new(move |props| {
             update(
                 props
@@ -181,12 +183,18 @@ impl<P: Prop> ComponentCall<P> {
                     .expect("registered component props type"),
             );
         });
-        store_update(self.id, property, append, update);
+        store_update(
+            &session.runtime_globals().component_calls.pending,
+            self.id,
+            property,
+            append,
+            update,
+        );
     }
 
     /// Expand this call at a controlled runtime boundary.
     pub(crate) fn execute_now(self) {
-        self.validate_session();
+        let _session = self.owning_session();
         loop {
             let (id, call) =
                 take_next_call().expect("render-slot call must belong to the active fragment");
@@ -201,8 +209,14 @@ impl<P: Prop> ComponentCall<P> {
 }
 
 #[track_caller]
-fn store_update(id: PendingToken, property: &'static str, append: bool, update: PropUpdate) {
-    let previous = with_pending_calls(|calls| {
+fn store_update(
+    calls: &RefCell<PendingCalls>,
+    id: PendingToken,
+    property: &'static str,
+    append: bool,
+    update: PropUpdate,
+) {
+    let previous = {
         let mut calls = calls.borrow_mut();
         let configuration = calls
             .entry_mut(id)
@@ -229,37 +243,35 @@ fn store_update(id: PendingToken, property: &'static str, append: bool, update: 
             configuration.updates.push((property, 0, update));
             previous
         }
-    });
+    };
     drop(previous);
 }
 
-struct ConfigurationGuard {
+struct ConfigurationGuard<'a> {
+    calls: &'a RefCell<PendingCalls>,
     id: PendingToken,
     configuration: Option<PendingConfiguration>,
 }
 
 #[track_caller]
-fn begin_configuration(id: PendingToken) -> ConfigurationGuard {
-    let configuration = with_pending_calls(|calls| {
-        calls
-            .borrow_mut()
-            .entry_mut(id)
-            .and_then(|entry| entry.configuration.take())
-            .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial))
-    });
+fn begin_configuration(calls: &RefCell<PendingCalls>, id: PendingToken) -> ConfigurationGuard<'_> {
+    let configuration = calls
+        .borrow_mut()
+        .entry_mut(id)
+        .and_then(|entry| entry.configuration.take())
+        .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial));
     ConfigurationGuard {
+        calls,
         id,
         configuration: Some(configuration),
     }
 }
 
-impl Drop for ConfigurationGuard {
+impl Drop for ConfigurationGuard<'_> {
     fn drop(&mut self) {
-        with_pending_calls(|calls| {
-            if let Some(entry) = calls.borrow_mut().entry_mut(self.id) {
-                entry.configuration = self.configuration.take();
-            }
-        });
+        if let Some(entry) = self.calls.borrow_mut().entry_mut(self.id) {
+            entry.configuration = self.configuration.take();
+        }
     }
 }
 
@@ -270,9 +282,9 @@ pub fn register_component_call<P: Prop>(
     component_type_id: u64,
     props: P,
 ) -> ComponentCall<P> {
-    let id = register_erased_call(name, component_type_id, Arc::new(props));
+    let (session, id) = register_erased_call(name, component_type_id, Arc::new(props));
     ComponentCall {
-        session: crate::session::current_session_identity().expect("active component session"),
+        session,
         id,
         marker: PhantomData,
     }
@@ -283,16 +295,20 @@ fn register_erased_call(
     name: &'static str,
     component_type_id: u64,
     props: Arc<dyn ErasedComponent>,
-) -> PendingToken {
-    ensure_build_phase();
-    with_pending_calls(|pending| {
+) -> (RuntimeSessionId, PendingToken) {
+    let session = RuntimeSession::current().expect("a runtime session must be active");
+    let mut context = session.execution_context().borrow_mut();
+    ensure_build_phase_at(context.phase_stack.last().copied());
+    let globals = session.runtime_globals();
+    let mut pending = globals.component_calls.pending.borrow_mut();
+    let declaration = {
         assert!(
-            !pending.borrow().scopes.is_empty(),
+            !pending.scopes.is_empty(),
             "component declarations require an active build fragment"
         );
-        let identity = reserve_component_identity(component_type_id);
-        let parent = TesseraRuntime::with(|runtime| runtime.component_tree.current_build_node_id());
-        let declaration = with_execution_context(|context| PendingDeclaration {
+        let identity = reserve_component_identity_in(&mut context, component_type_id);
+        let parent = globals.with_runtime(|runtime| runtime.component_tree.current_build_node_id());
+        PendingDeclaration {
             name,
             parent,
             execution_parent: context.node_context_stack.last().copied(),
@@ -306,29 +322,29 @@ fn register_erased_call(
             group_path: context.group_path,
             key_override: context.instance_key_override,
             context: context.context_map.clone(),
-        });
-        let mut pending = pending.borrow_mut();
-        let serial = pending
-            .next_serial
-            .checked_add(1)
-            .expect("component call token space exhausted");
-        pending.next_serial = serial;
-        let key = pending.calls.insert(PendingEntry {
-            serial,
-            declaration,
-            configuration: Some(PendingConfiguration {
-                props,
-                updates: Vec::new(),
-            }),
-        });
-        let token = PendingToken { key, serial };
-        pending
-            .scopes
-            .last_mut()
-            .expect("active build fragment")
-            .push_back(token);
-        token
-    })
+        }
+    };
+    drop(context);
+    let serial = pending
+        .next_serial
+        .checked_add(1)
+        .expect("component call token space exhausted");
+    pending.next_serial = serial;
+    let key = pending.calls.insert(PendingEntry {
+        serial,
+        declaration,
+        configuration: Some(PendingConfiguration {
+            props,
+            updates: Vec::new(),
+        }),
+    });
+    let token = PendingToken { key, serial };
+    pending
+        .scopes
+        .last_mut()
+        .expect("active build fragment")
+        .push_back(token);
+    (session.identity(), token)
 }
 
 struct ScopeGuard {
@@ -721,6 +737,34 @@ mod tests {
             });
         });
         assert_eq!(recorder.values(), [10, 2]);
+    }
+
+    #[test]
+    fn configuration_rejects_a_handle_from_another_session_with_the_same_token() {
+        let owner = crate::RuntimeSession::new();
+        let other = crate::RuntimeSession::new();
+        let first = Recorder::default();
+        let second = Recorder::default();
+        owner.run(|| {
+            first.build(|| {
+                let owned = first.declare(1);
+                other.run(|| {
+                    second.build(|| {
+                        let local = second.declare(2);
+                        assert!(owned.id == local.id);
+                        assert!(
+                            catch_unwind(AssertUnwindSafe(|| {
+                                owned.configure("value", |props| props.value = 99);
+                            }))
+                            .is_err()
+                        );
+                    });
+                });
+                owned.configure("value", |props| props.value = 10);
+            });
+        });
+        assert_eq!(first.values(), [10]);
+        assert_eq!(second.values(), [2]);
     }
 
     #[test]

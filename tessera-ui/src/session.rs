@@ -185,6 +185,14 @@ impl RuntimeSession {
         active_session_state().map(Self)
     }
 
+    pub(crate) fn execution_context(&self) -> &RefCell<ExecutionContext> {
+        self.0.execution_context.get_or_init(RefCell::default)
+    }
+
+    pub(crate) fn runtime_globals(&self) -> &RuntimeGlobals {
+        self.0.runtime_globals.get_or_init(Box::default)
+    }
+
     pub(crate) fn density(&self) -> f64 {
         self.0.density.get()
     }
@@ -220,7 +228,7 @@ pub(crate) fn with_active_execution_context<R>(
     read: impl FnOnce(&RefCell<ExecutionContext>) -> R,
 ) -> R {
     let session = RuntimeSession::current().expect("a runtime session must be active");
-    read(session.0.execution_context.get_or_init(RefCell::default))
+    read(session.execution_context())
 }
 
 pub(crate) fn with_runtime_globals<R>(read: impl FnOnce(&RuntimeGlobals) -> R) -> R {
@@ -231,7 +239,7 @@ pub(crate) fn try_with_runtime_globals<R>(
     read: impl FnOnce(&RuntimeGlobals) -> R,
 ) -> Result<R, ()> {
     let session = RuntimeSession::current().ok_or(())?;
-    Ok(read(session.0.runtime_globals.get_or_init(Box::default)))
+    Ok(read(session.runtime_globals()))
 }
 
 impl Drop for RuntimeSession {
