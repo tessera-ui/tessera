@@ -4,7 +4,7 @@
 //!
 //! Rebuild or partially replay the component tree before layout and rendering.
 
-use std::{fmt::Write as _, sync::Arc, time::Duration};
+use std::{borrow::Cow, fmt::Write as _, sync::Arc, time::Duration};
 
 use rustc_hash::FxHashSet as HashSet;
 use tracing::{debug, instrument};
@@ -426,7 +426,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         let mut stale_instance_keys = HashSet::default();
         let mut stale_instance_logic_ids = HashSet::default();
         let mut recomposed_instance_logic_ids = HashSet::default();
-        let mut pending_dirty_instance_keys = (*dirty_instance_keys).clone();
+        let mut pending_dirty_instance_keys = Cow::Borrowed(dirty_instance_keys.as_ref());
         #[cfg(feature = "debug-dirty-overlay")]
         let mut replay_roots_for_debug = Vec::new();
         let mut deferred_backwards_instance_keys = HashSet::default();
@@ -586,15 +586,25 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                     .copied()
                     .filter(|instance_key| executed_instance_keys.contains(instance_key)),
             );
-            pending_dirty_instance_keys.extend(round_invalidations.dirty_instance_keys);
-            pending_dirty_instance_keys.retain(|instance_key| {
+            let still_pending = |instance_key: &u64| {
                 !stale_instance_keys.contains(instance_key)
                     && !executed_instance_keys.contains(instance_key)
-            });
-            if pending_dirty_instance_keys.is_empty() {
+            };
+            if let Cow::Borrowed(initial) = &pending_dirty_instance_keys
+                && initial
+                    .iter()
+                    .chain(&round_invalidations.dirty_instance_keys)
+                    .all(|key| !still_pending(key))
+            {
                 break;
             }
-            plan = plan_dirty_replay(&pending_dirty_instance_keys);
+            let pending = pending_dirty_instance_keys.to_mut();
+            pending.extend(round_invalidations.dirty_instance_keys);
+            pending.retain(still_pending);
+            if pending.is_empty() {
+                break;
+            }
+            plan = plan_dirty_replay(pending);
         }
 
         if fallback_to_root_recompose {
