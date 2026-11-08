@@ -820,7 +820,9 @@ fn check_color_states_and_markers(
                                     .iter()
                                     .zip(expected)
                                     .all(|(actual, expected)| actual.abs_diff(expected) <= 2),
-                                "removing stops must retain endpoint ticks"
+                                "removing stops must retain endpoint ticks: {:?} != {:?}; {kind:?}, {palette:?}, {orientation:?}, reversed={reversed}, disabled={disabled}, overrides={overrides}",
+                                pixel(&without_stops, x, y),
+                                expected
                             );
                             if !disabled {
                                 let (x, y) = point(309, 39);

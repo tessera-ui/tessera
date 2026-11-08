@@ -122,6 +122,9 @@ before the frame updates focus, semantics, and position observers.
 An in-place composition rebuild with no modifiers, interaction, or geometry
 metadata stays out of the consumer journal unless the rebuilt node adds one
 of those capabilities. Layout child changes still use the structure journal.
+Rebuilt composition nodes invalidate paint for retained layout descendants,
+including fragments that were previously empty. This restores drawing after
+overlays or conditional marks change without forcing new measurements.
 
 Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements attach at their original positions and

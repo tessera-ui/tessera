@@ -1168,15 +1168,10 @@ impl ComponentTree {
         if previous.role == NodeRole::Layout {
             self.metadatas.mark_paint_dirty(id);
         } else {
-            // Reusing a composition ID can preserve draw fragments beneath a
-            // rebuilt overlay; repaint visible descendants before scene damage.
+            // Reusing a composition ID can leave retained drawing behind a
+            // rebuilt overlay. Even an empty fragment may become drawable.
             for descendant in id.descendants(&self.tree) {
-                if self.tree[descendant].get().role == NodeRole::Layout
-                    && self
-                        .metadatas
-                        .get(&descendant)
-                        .is_some_and(|metadata| !metadata.fragment.ops().is_empty())
-                {
+                if self.tree[descendant].get().role == NodeRole::Layout {
                     self.metadatas.mark_paint_dirty(descendant);
                 }
             }
