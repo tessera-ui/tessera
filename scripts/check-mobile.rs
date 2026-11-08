@@ -83,6 +83,7 @@ fn ready(records: &[Value], require_runtime_redraw: bool) -> bool {
 
 fn wait(
     read: &mut impl FnMut() -> Result<String>,
+    expected: &str,
     predicate: impl Fn(&[Value]) -> bool,
 ) -> Result<Vec<Value>> {
     let deadline = Instant::now() + Duration::from_secs(90);
@@ -93,7 +94,7 @@ fn wait(
         }
         ensure!(
             Instant::now() < deadline,
-            "Application did not publish the expected frame or lifecycle event; latest={:?}",
+            "Application did not publish {expected}; latest={:?}",
             &records[records.len().saturating_sub(5)..]
         );
         thread::sleep(Duration::from_millis(200));
@@ -106,21 +107,31 @@ fn verify(
     mut foreground: impl FnMut() -> Result<()>,
     require_runtime_redraw: bool,
 ) -> Result<()> {
-    let initial = wait(&mut read, |records| ready(records, require_runtime_redraw))?;
+    let initial = wait(&mut read, "the initial rendered frame", |records| {
+        ready(records, require_runtime_redraw)
+    })?;
     background()?;
-    let suspended = wait(&mut read, |records| {
-        records[initial.len().min(records.len())..]
-            .iter()
-            .any(|item| item["type"] == "runtime" && item["kind"] == "suspended")
-    })?;
+    let suspended = wait(
+        &mut read,
+        "a suspended event after backgrounding",
+        |records| {
+            records[initial.len().min(records.len())..]
+                .iter()
+                .any(|item| item["type"] == "runtime" && item["kind"] == "suspended")
+        },
+    )?;
     foreground()?;
-    let restored = wait(&mut read, |records| {
-        let following = &records[suspended.len().min(records.len())..];
-        following
-            .iter()
-            .position(|item| item["type"] == "runtime" && item["kind"] == "resumed")
-            .is_some_and(|position| ready(&following[position + 1..], require_runtime_redraw))
-    })?;
+    let restored = wait(
+        &mut read,
+        "a resumed frame after foregrounding",
+        |records| {
+            let following = &records[suspended.len().min(records.len())..];
+            following
+                .iter()
+                .position(|item| item["type"] == "runtime" && item["kind"] == "resumed")
+                .is_some_and(|position| ready(&following[position + 1..], require_runtime_redraw))
+        },
+    )?;
     println!(
         "{}",
         json!({"first_frame": frame(&initial).unwrap()["frame"], "restored_frame": frame(&restored).unwrap()["frame"]})
@@ -203,25 +214,37 @@ fn android(directory: &Path) -> Result<()> {
         ]);
         process::run_allow_failure(&mut command, Duration::from_secs(15))
     };
-    launch()?;
-    let pid = run(Command::new("adb").args(["shell", "pidof", &identifier]))?;
-    verify(
-        read,
-        || {
-            run(Command::new("adb").args(["shell", "input", "keyevent", "KEYCODE_HOME"]))
-                .map(|_| ())
-        },
-        || launch().map(|_| ()),
-        false,
-    )?;
-    ensure!(
-        run(Command::new("adb").args(["shell", "pidof", &identifier]))? == pid,
-        "Application restarted instead of resuming"
-    );
-    run(Command::new("adb").args(["shell", "am", "force-stop", &identifier]))?;
+    let result = (|| {
+        launch()?;
+        let pid = run(Command::new("adb").args(["shell", "pidof", &identifier]))?;
+        verify(
+            read,
+            || {
+                run(Command::new("adb").args([
+                    "shell",
+                    "am",
+                    "start",
+                    "-W",
+                    "-a",
+                    "android.intent.action.MAIN",
+                    "-c",
+                    "android.intent.category.HOME",
+                ]))?;
+                Ok(())
+            },
+            || launch().map(|_| ()),
+            false,
+        )?;
+        ensure!(
+            run(Command::new("adb").args(["shell", "pidof", &identifier]))? == pid,
+            "Application restarted instead of resuming"
+        );
+        run(Command::new("adb").args(["shell", "am", "force-stop", &identifier]))?;
+        Ok(())
+    })();
     fs::create_dir_all("target/mobile-acceptance")?;
     fs::write("target/mobile-acceptance/android.jsonl", read()?)?;
-    Ok(())
+    result
 }
 
 fn ios_with(
@@ -289,8 +312,13 @@ fn ios_with(
                         "com.apple.mobilesafari",
                     ]),
                     COMMAND_TIMEOUT,
-                )
-                .map(|_| ())
+                )?;
+                // simctl launch can start Safari without making it the foreground app.
+                execute.borrow_mut()(
+                    Command::new("xcrun").args(["simctl", "openurl", udid, "https://127.0.0.1/"]),
+                    COMMAND_TIMEOUT,
+                )?;
+                Ok(())
             },
             || execute.borrow_mut()(&mut launch(), COMMAND_TIMEOUT).map(|_| ()),
             true,
@@ -388,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn lifecycle_checks_resume_and_rejects_process_restart() -> Result<()> {
+    fn ios_lifecycle_activates_safari_and_rejects_process_restart() -> Result<()> {
         use std::io::Write;
 
         for restarted in [false, true] {
@@ -403,6 +431,12 @@ mod tests {
                     .collect::<Vec<_>>();
                 match args[1].as_str() {
                     "get_app_container" => return Ok(container.display().to_string()),
+                    "openurl" => {
+                        assert_eq!(args[3], "https://127.0.0.1/");
+                        let mut file = fs::OpenOptions::new().append(true).open(&trace)?;
+                        writeln!(file, "{}", json!({"type":"runtime", "kind":"suspended"}))?;
+                        return Ok(String::new());
+                    }
                     "launch" => {}
                     _ => return Ok(String::new()),
                 }
@@ -411,7 +445,6 @@ mod tests {
                     .append(true)
                     .open(&trace)?;
                 if args.last().unwrap() == "com.apple.mobilesafari" {
-                    writeln!(file, "{}", json!({"type":"runtime", "kind":"suspended"}))?;
                     return Ok("safari: 456".into());
                 }
                 launches += 1;

@@ -169,3 +169,10 @@ jobs:
           emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
           script: rust-script scripts/check-mobile.rs --android example/gen/android/app/build/outputs/apk
+      - name: Retain Android acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-acceptance-diagnostics
+          path: target/mobile-acceptance
+          if-no-files-found: ignore
