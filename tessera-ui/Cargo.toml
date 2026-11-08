@@ -23,6 +23,7 @@ bytemuck = { workspace = true, features = ["derive"] }
 dirs.workspace = true
 downcast-rs.workspace = true
 dyn-clone.workspace = true
+hashbrown.workspace = true
 im.workspace = true
 indextree.workspace = true
 interprocess = { workspace = true, optional = true }

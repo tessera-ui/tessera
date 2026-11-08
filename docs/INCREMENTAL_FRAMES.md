@@ -84,6 +84,7 @@ storage for the first reader and dependency.
 Functor lookup keeps one slot per order buffer inline and reuses overflow
 storage in proportion to the previous build's order.
 Component slot ownership shares the same inline set used for dependency readers.
+The slot key index stores handles and compares full keys in their slot records.
 
 Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements share that refresh. Consumers compare

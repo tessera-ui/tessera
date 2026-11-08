@@ -7460,6 +7460,7 @@ dependencies = [
  "dirs",
  "downcast-rs 2.0.2",
  "dyn-clone",
+ "hashbrown 0.17.1",
  "im",
  "indextree",
  "interprocess",

@@ -4,14 +4,15 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     collections::hash_map::Entry,
-    hash::{Hash, Hasher},
+    hash::{BuildHasher, Hash, Hasher},
     marker::PhantomData,
     sync::Arc,
     time::Duration,
 };
 
+use hashbrown::HashTable;
 use parking_lot::RwLock;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxBuildHasher, FxHashMap as HashMap, FxHashSet as HashSet};
 use slotmap::{SlotMap, new_key_type};
 use smallvec::SmallVec;
 
@@ -212,14 +213,26 @@ impl InstanceSlotCursor {
 struct SlotTable {
     owned_slots: HashMap<u128, HashSet<SlotHandle>>,
     entries: SlotMap<SlotHandle, SlotEntry>,
-    key_to_slot: HashMap<SlotKey, SlotHandle>,
+    slots_by_key: HashTable<SlotHandle>,
     slots_by_owner: HashMap<u64, InlineSet<SlotHandle>>,
     cursors_by_instance_logic_id: HashMap<u64, InstanceSlotCursor>,
     epoch: u64,
 }
 impl SlotTable {
-    fn index_slot(&mut self, key: SlotKey, slot: SlotHandle) {
-        self.key_to_slot.insert(key, slot);
+    fn find_slot(&self, key: &SlotKey) -> Option<SlotHandle> {
+        self.slots_by_key
+            .find(FxBuildHasher.hash_one(key), |&slot| {
+                self.entries[slot].key == *key
+            })
+            .copied()
+    }
+
+    fn index_slot(&mut self, slot: SlotHandle) {
+        let key = &self.entries[slot].key;
+        self.slots_by_key
+            .insert_unique(FxBuildHasher.hash_one(key), slot, |&slot| {
+                FxBuildHasher.hash_one(&self.entries[slot].key)
+            });
         if let Some(owner) = key.owned_owner {
             self.owned_slots.entry(owner).or_default().insert(slot);
             return;
@@ -229,7 +242,14 @@ impl SlotTable {
 
     fn remove_slot(&mut self, slot: SlotHandle) -> Option<SlotEntry> {
         let entry = self.entries.remove(slot)?;
-        self.key_to_slot.remove(&entry.key);
+        if let Ok(indexed) = self
+            .slots_by_key
+            .find_entry(FxBuildHasher.hash_one(&entry.key), |&candidate| {
+                candidate == slot
+            })
+        {
+            indexed.remove();
+        }
         if let Some(owner) = entry.key.owned_owner {
             if let Some(slots) = self.owned_slots.get_mut(&owner) {
                 slots.remove(&slot);
@@ -263,7 +283,7 @@ impl SlotTable {
 
     fn reset(&mut self) -> Vec<SlotEntry> {
         let removed = self.entries.drain().map(|(_, entry)| entry).collect();
-        self.key_to_slot.clear();
+        self.slots_by_key.clear();
         self.slots_by_owner.clear();
         self.owned_slots.clear();
         self.cursors_by_instance_logic_id.clear();
@@ -2965,7 +2985,7 @@ fn resolve_state_key<T: Send + Sync + 'static>(
     init: impl FnOnce() -> T,
 ) -> State<T> {
     if let Some(state) = with_slot_table_mut(|table| {
-        let slot = *table.key_to_slot.get(&key)?;
+        let slot = table.find_slot(&key)?;
         let epoch = table.epoch;
         let entry = table.entries.get_mut(slot)?;
         entry.last_alive_epoch = epoch;
@@ -2979,7 +2999,7 @@ fn resolve_state_key<T: Send + Sync + 'static>(
     }
     let value = init();
     let (state, unused) = with_slot_table_mut(|table| {
-        if let Some(&slot) = table.key_to_slot.get(&key) {
+        if let Some(slot) = table.find_slot(&key) {
             let epoch = table.epoch;
             let entry = &mut table.entries[slot];
             entry.last_alive_epoch = epoch;
@@ -3001,7 +3021,7 @@ fn resolve_state_key<T: Send + Sync + 'static>(
             last_alive_epoch: table.epoch,
             retained,
         });
-        table.index_slot(key, slot);
+        table.index_slot(slot);
         (State::new(slot, 1), None)
     });
     drop(unused);
@@ -3370,7 +3390,7 @@ where
             };
 
             (value, FunctorHandle::new(slot, generation))
-        } else if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
+        } else if let Some(slot) = table.find_slot(&slot_key) {
             table.record_slot_usage_slow(instance_logic_id, slot);
             let epoch = table.epoch;
             let (generation, value) = {
@@ -3423,7 +3443,7 @@ where
                 retained: false,
             });
 
-            table.index_slot(slot_key, slot);
+            table.index_slot(slot);
             table.record_slot_usage_slow(instance_logic_id, slot);
 
             let value = clone_slot_value::<T>(
@@ -4614,8 +4634,8 @@ mod tests {
             last_alive_epoch: 0,
             retained: false,
         });
-        table.index_slot(keep_key, keep_slot);
-        table.index_slot(drop_key, drop_slot);
+        table.index_slot(keep_slot);
+        table.index_slot(drop_slot);
         with_slot_table_mut(|slot_table| *slot_table = table);
 
         let mut stale = HashSet::default();
@@ -4624,9 +4644,9 @@ mod tests {
 
         with_slot_table(|table| {
             assert!(table.entries.get(keep_slot).is_some());
-            assert!(table.key_to_slot.contains_key(&keep_key));
+            assert_eq!(table.find_slot(&keep_key), Some(keep_slot));
             assert!(table.entries.get(drop_slot).is_none());
-            assert!(!table.key_to_slot.contains_key(&drop_key));
+            assert_eq!(table.find_slot(&drop_key), None);
         });
     }
 }

@@ -77,6 +77,7 @@ fluent-templates = { version = "0.15.1", default-features = false }
 futures-util = "0.3.34"
 globset = "0.4.21"
 handlebars = "6.4.4"
+hashbrown = { version = "0.17.1", default-features = false }
 heck = "0.5.0"
 hex = "0.4.3"
 home = "0.5.12"
