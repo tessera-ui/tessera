@@ -10,6 +10,7 @@ use rustc_hash::FxHashSet as HashSet;
 use tracing::{debug, instrument};
 
 use crate::{
+    NodeId,
     component_tree::{ComponentNode, NodeRole, ReplayReplaceError, ReplayReplaceResult},
     context::{
         begin_recompose_context_slot_epoch, drop_context_slots_for_instance_logic_ids,
@@ -19,7 +20,7 @@ use crate::{
         TesseraRuntime, begin_frame_component_replay_tracking, begin_frame_layout_dirty_tracking,
         begin_recompose_slot_epoch, clear_frame_nanos_receivers, drop_slots_for_instance_logic_ids,
         finalize_frame_component_replay_tracking, finalize_frame_component_replay_tracking_partial,
-        finalize_frame_layout_dirty_tracking, previous_component_replay_nodes,
+        finalize_frame_layout_dirty_tracking, previous_component_replay_node,
         remove_focus_read_dependencies, remove_frame_nanos_receivers,
         remove_layout_state_read_dependencies, remove_previous_component_replay_nodes,
         remove_render_slot_read_dependencies, remove_state_read_dependencies,
@@ -192,8 +193,13 @@ impl BuildTreeResult {
 
 struct ReplayPlan {
     live: Arc<HashSet<u64>>,
-    roots: Vec<u64>,
+    roots: Vec<ReplayRoot>,
     recompose_root: bool,
+}
+
+struct ReplayRoot {
+    instance_key: u64,
+    node_id: NodeId,
 }
 
 fn plan_dirty_replay(dirty_instance_keys: &Arc<HashSet<u64>>) -> ReplayPlan {
@@ -216,7 +222,10 @@ fn plan_dirty_replay(dirty_instance_keys: &Arc<HashSet<u64>>) -> ReplayPlan {
                 .ancestors(tree)
                 .any(|id| dirty_instance_keys.contains(&tree[id].get().instance_key))
             {
-                roots.push(key);
+                roots.push(ReplayRoot {
+                    instance_key: key,
+                    node_id: id,
+                });
             }
         }
         let live = if all_live {
@@ -314,18 +323,8 @@ fn missing_replay_snapshot_panic_message(instance_key: u64) -> String {
 }
 
 #[cfg(feature = "profiling")]
-fn subtree_node_count_by_instance_key(instance_key: u64) -> u64 {
-    TesseraRuntime::with(|runtime| {
-        let node_id = runtime
-            .component_tree
-            .find_node_id_by_instance_key(instance_key)
-            .unwrap_or_else(|| {
-                panic!(
-                    "missing node for dirty instance key {instance_key}; this violates replay invariants"
-                )
-            });
-        runtime.component_tree.tree()[node_id].get().subtree_len as u64
-    })
+fn subtree_node_count(node_id: NodeId) -> u64 {
+    TesseraRuntime::with(|runtime| runtime.component_tree.tree()[node_id].get().subtree_len as u64)
 }
 
 struct BuildRootNodeGuard;
@@ -478,37 +477,36 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             if dirty_roots.is_empty() {
                 break;
             }
-            let replay_snapshots = previous_component_replay_nodes(&dirty_roots)
-                .unwrap_or_else(|key| panic!("{}", missing_replay_snapshot_panic_message(key)));
-
             #[cfg(feature = "debug-dirty-overlay")]
-            replay_roots_for_debug.extend(dirty_roots.iter().copied());
+            replay_roots_for_debug.extend(dirty_roots.iter().map(|root| root.instance_key));
 
             with_build_dirty_instance_keys(live_dirty_instance_keys, || {
-                for (instance_key, replay_snapshot) in dirty_roots.iter().zip(replay_snapshots) {
+                // Disjoint roots keep their planned node IDs while earlier roots replay.
+                for ReplayRoot {
+                    instance_key,
+                    node_id,
+                } in dirty_roots
+                {
+                    let replay_snapshot = previous_component_replay_node(instance_key)
+                        .unwrap_or_else(|| {
+                            panic!("{}", missing_replay_snapshot_panic_message(instance_key))
+                        });
                     #[cfg(feature = "profiling")]
                     {
-                        replayed_nodes = replayed_nodes
-                            .saturating_add(subtree_node_count_by_instance_key(*instance_key));
+                        replayed_nodes = replayed_nodes.saturating_add(subtree_node_count(node_id));
                     }
                     let replay_trace =
                         tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG);
                     let trace_name = replay_trace
                         .then(|| {
                             TesseraRuntime::with(|runtime| {
-                                runtime
-                                    .component_tree
-                                    .find_node_id_by_instance_key(*instance_key)
-                                    .and_then(|id| runtime.component_tree.get(id))
-                                    .map(|node| node.fn_name)
+                                runtime.component_tree.get(node_id).map(|node| node.fn_name)
                             })
                         })
                         .flatten();
                     let detach_timer = replay_trace.then(Instant::now);
                     let replace_context = TesseraRuntime::with_mut(|runtime| {
-                        runtime
-                            .component_tree
-                            .begin_replace_subtree_by_instance_key(*instance_key)
+                        runtime.component_tree.begin_replace_subtree(node_id)
                     });
                     let replace_context = match replace_context {
                         Ok(context) => context,
@@ -517,9 +515,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                             instance_key
                         ),
                         Err(_) => {
-                            panic!(
-                                "begin_replace_subtree_by_instance_key failed for instance key {instance_key}"
-                            )
+                            panic!("begin_replace_subtree failed for instance key {instance_key}")
                         }
                     };
                     let detach_ns = detach_timer.map(|timer| timer.elapsed().as_nanos());

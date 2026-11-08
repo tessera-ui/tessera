@@ -767,14 +767,8 @@ pub(crate) fn reset_component_replay_tracking() {
     drop(removed);
 }
 
-pub(crate) fn previous_component_replay_nodes(
-    keys: &[u64],
-) -> Result<Vec<ReplayNodeSnapshot>, u64> {
-    with_component_replay_tracker(|tracker| {
-        keys.iter()
-            .map(|key| tracker.previous_nodes.get(key).cloned().ok_or(*key))
-            .collect()
-    })
+pub(crate) fn previous_component_replay_node(key: u64) -> Option<ReplayNodeSnapshot> {
+    with_component_replay_tracker(|tracker| tracker.previous_nodes.get(&key).cloned())
 }
 
 pub(crate) fn previous_component_context(key: u64) -> Option<ContextMap> {
@@ -3968,12 +3962,13 @@ mod tests {
         }
 
         remove_previous_component_replay_nodes(&[11].into_iter().collect());
-        assert_eq!(previous_component_replay_nodes(&[11]).err(), Some(11));
-        assert!(previous_component_replay_nodes(&[33, 22]).is_ok());
+        assert!(previous_component_replay_node(11).is_none());
+        assert!(previous_component_replay_node(33).is_some());
+        assert!(previous_component_replay_node(22).is_some());
 
         remove_previous_component_replay_nodes(&[33].into_iter().collect());
-        assert_eq!(previous_component_replay_nodes(&[33]).err(), Some(33));
-        assert!(previous_component_replay_nodes(&[22]).is_ok());
+        assert!(previous_component_replay_node(33).is_none());
+        assert!(previous_component_replay_node(22).is_some());
     }
 
     #[test]
@@ -3991,8 +3986,13 @@ mod tests {
 
         impl Drop for ReleaseOnDrop {
             fn drop(&mut self) {
-                let committed = previous_component_replay_nodes(&[11, 22]).unwrap();
-                assert_eq!(committed[0].instance_logic_id, 11);
+                assert_eq!(
+                    previous_component_replay_node(11)
+                        .unwrap()
+                        .instance_logic_id,
+                    11
+                );
+                assert!(previous_component_replay_node(22).is_some());
                 self.0.set(true);
             }
         }

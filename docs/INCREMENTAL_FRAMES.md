@@ -98,6 +98,8 @@ is available.
 Replay planning shares the invalidation set when all keys are live and filters
 expired keys before execution. Pending work is copied only when the first
 round leaves invalidations to process.
+Disjoint replay roots keep their planned node IDs and load their snapshots just
+before execution.
 Component replay uses the same props allocation prepared by the registered call.
 Immediate setters take only the pending configuration while the declaration
 scope stays registered.

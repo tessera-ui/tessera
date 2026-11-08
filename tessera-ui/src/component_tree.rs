@@ -812,6 +812,7 @@ impl ComponentTree {
         std::mem::take(&mut self.removed_focus_owners)
     }
 
+    #[cfg(test)]
     pub(crate) fn begin_replace_subtree_by_instance_key(
         &mut self,
         instance_key: u64,
@@ -819,10 +820,21 @@ impl ComponentTree {
         let Some(target_node_id) = self.find_node_id_by_instance_key(instance_key) else {
             return Err(ReplayReplaceError::NodeNotFound);
         };
+        self.begin_replace_subtree(target_node_id)
+    }
 
-        let Some(parent_id) = self.tree.get(target_node_id).and_then(|n| n.parent()) else {
-            return Err(ReplayReplaceError::RootNodeNotReplaceable);
-        };
+    pub(crate) fn begin_replace_subtree(
+        &mut self,
+        target_node_id: NodeId,
+    ) -> Result<ReplayReplaceContext, ReplayReplaceError> {
+        let node = self
+            .tree
+            .get(target_node_id)
+            .filter(|node| !node.is_removed())
+            .ok_or(ReplayReplaceError::NodeNotFound)?;
+        let parent_id = node
+            .parent()
+            .ok_or(ReplayReplaceError::RootNodeNotReplaceable)?;
 
         let previous_sibling = target_node_id.previous_sibling(&self.tree);
         self.replay_insert_before = target_node_id
