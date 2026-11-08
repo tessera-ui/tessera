@@ -3,6 +3,7 @@
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
+    collections::hash_map::Entry,
     hash::{Hash, Hasher},
     marker::PhantomData,
     sync::Arc,
@@ -28,6 +29,7 @@ use crate::{
         FocusRegistration, FocusRegistrationKind, FocusRequester, FocusRequesterId,
         FocusRevealRequest, FocusScopeNode, FocusState, FocusTraversalPolicy,
     },
+    inline_set::InlineSet,
     layout::LayoutModifierHandle,
     modifier::{DrawModifierNode, Modifier},
     prop::{CallbackWith, ErasedComponent, Prop},
@@ -164,8 +166,8 @@ struct SlotEntry {
 
 #[derive(Default)]
 struct InstanceSlotCursor {
-    previous_order: SmallVec<[SlotHandle; 4]>,
-    current_order: SmallVec<[SlotHandle; 4]>,
+    previous_order: SmallVec<[SlotHandle; 1]>,
+    current_order: SmallVec<[SlotHandle; 1]>,
     cursor: usize,
     epoch: u64,
 }
@@ -175,7 +177,12 @@ impl InstanceSlotCursor {
         if self.epoch == epoch {
             return;
         }
-        self.previous_order = std::mem::take(&mut self.current_order);
+        std::mem::swap(&mut self.previous_order, &mut self.current_order);
+        if self.current_order.capacity() > self.previous_order.len().saturating_mul(2).max(4) {
+            self.current_order = SmallVec::new();
+        } else {
+            self.current_order.clear();
+        }
         self.cursor = 0;
         self.epoch = epoch;
     }
@@ -206,7 +213,7 @@ struct SlotTable {
     owned_slots: HashMap<u128, HashSet<SlotHandle>>,
     entries: SlotMap<SlotHandle, SlotEntry>,
     key_to_slot: HashMap<SlotKey, SlotHandle>,
-    slots_by_owner: HashMap<u64, HashSet<SlotHandle>>,
+    slots_by_owner: HashMap<u64, InlineSet<SlotHandle>>,
     cursors_by_instance_logic_id: HashMap<u64, InstanceSlotCursor>,
     epoch: u64,
 }
@@ -217,10 +224,7 @@ impl SlotTable {
             self.owned_slots.entry(owner).or_default().insert(slot);
             return;
         }
-        self.slots_by_owner
-            .entry(key.instance_logic_id)
-            .or_default()
-            .insert(slot);
+        InlineSet::insert_at(self.slots_by_owner.entry(key.instance_logic_id), slot);
     }
 
     fn remove_slot(&mut self, slot: SlotHandle) -> Option<SlotEntry> {
@@ -235,13 +239,22 @@ impl SlotTable {
             }
             return Some(entry);
         }
-        if let Some(slots) = self.slots_by_owner.get_mut(&entry.key.instance_logic_id) {
-            slots.remove(&slot);
-            if slots.is_empty() {
-                self.slots_by_owner.remove(&entry.key.instance_logic_id);
-            }
+        if let Entry::Occupied(mut slots) = self.slots_by_owner.entry(entry.key.instance_logic_id)
+            && slots.get_mut().remove_and_is_empty(&slot)
+        {
+            slots.remove();
         }
         Some(entry)
+    }
+
+    fn slots_for_instances<'a>(
+        &'a self,
+        instance_logic_ids: &'a HashSet<u64>,
+    ) -> impl Iterator<Item = SlotHandle> + 'a {
+        instance_logic_ids
+            .iter()
+            .filter_map(|id| self.slots_by_owner.get(id))
+            .flat_map(InlineSet::iter)
     }
 
     fn begin_epoch(&mut self) {
@@ -258,15 +271,12 @@ impl SlotTable {
         removed
     }
     fn try_fast_slot_lookup(&mut self, key: SlotKey) -> Option<SlotHandle> {
-        let epoch = self.epoch;
-        let candidate = {
-            let cursor = self
-                .cursors_by_instance_logic_id
-                .entry(key.instance_logic_id)
-                .or_default();
-            cursor.begin_epoch(epoch);
-            cursor.fast_candidate()
-        }?;
+        let cursor = self
+            .cursors_by_instance_logic_id
+            .entry(key.instance_logic_id)
+            .or_default();
+        cursor.begin_epoch(self.epoch);
+        let candidate = cursor.fast_candidate()?;
 
         let is_match = self
             .entries
@@ -277,10 +287,6 @@ impl SlotTable {
             return None;
         }
 
-        let cursor = self
-            .cursors_by_instance_logic_id
-            .get_mut(&key.instance_logic_id)
-            .expect("cursor entry should exist");
         cursor.record_fast_match(candidate);
         Some(candidate)
     }
@@ -1557,24 +1563,19 @@ pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64
     }
 
     let removed = with_slot_table_mut(|table| {
-        let mut freed: Vec<(SlotHandle, SlotKey)> = Vec::new();
-        for slot in instance_logic_ids
-            .iter()
-            .flat_map(|id| table.slots_by_owner.get(id).into_iter().flatten())
-            .copied()
-        {
+        let mut freed = Vec::new();
+        for slot in table.slots_for_instances(instance_logic_ids) {
             let Some(entry) = table.entries.get(slot) else {
                 continue;
             };
             if entry.retained {
                 continue;
             }
-            freed.push((slot, entry.key));
+            freed.push(slot);
         }
         let mut removed = Vec::with_capacity(freed.len());
-        for (slot, key) in freed {
+        for slot in freed {
             removed.extend(table.remove_slot(slot));
-            table.key_to_slot.remove(&key);
         }
         for instance_logic_id in instance_logic_ids {
             table.cursors_by_instance_logic_id.remove(instance_logic_id);
@@ -3632,26 +3633,21 @@ pub(crate) fn recycle_recomposed_slots_for_instance_logic_ids(instance_logic_ids
 
     let removed = with_slot_table_mut(|table| {
         let epoch = table.epoch;
-        let mut freed: Vec<(SlotHandle, SlotKey)> = Vec::new();
+        let mut freed = Vec::new();
 
-        for slot in instance_logic_ids
-            .iter()
-            .flat_map(|id| table.slots_by_owner.get(id).into_iter().flatten())
-            .copied()
-        {
+        for slot in table.slots_for_instances(instance_logic_ids) {
             let Some(entry) = table.entries.get(slot) else {
                 continue;
             };
             if entry.last_alive_epoch == epoch || entry.retained {
                 continue;
             }
-            freed.push((slot, entry.key));
+            freed.push(slot);
         }
 
         let mut removed = Vec::with_capacity(freed.len());
-        for (slot, key) in freed {
+        for slot in freed {
             removed.extend(table.remove_slot(slot));
-            table.key_to_slot.remove(&key);
         }
         removed
     });

@@ -81,6 +81,9 @@ The same ancestor walk marks dirty layout paths and records the affected childre
 for parents that can reuse their cached measurement.
 State, context, focus, and render-slot reads share a dependency index with inline
 storage for the first reader and dependency.
+Functor lookup keeps one slot per order buffer inline and reuses overflow
+storage in proportion to the previous build's order.
+Component slot ownership shares the same inline set used for dependency readers.
 
 Each replay round refreshes affected parent layout lists from the deepest
 parent outward. Sibling replacements share that refresh. Consumers compare

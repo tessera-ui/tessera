@@ -1,13 +1,12 @@
-use std::{
-    collections::{hash_map::Entry, hash_set},
-    hash::Hash,
-};
+use std::{collections::hash_map::Entry, hash::Hash};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use smallvec::SmallVec;
 
+use crate::inline_set::InlineSet;
+
 pub(crate) struct ReadDependencies<K, R> {
-    readers_by_key: HashMap<K, Readers<R>>,
+    readers_by_key: HashMap<K, InlineSet<R>>,
     keys_by_reader: HashMap<R, SmallVec<[K; 1]>>,
 }
 
@@ -22,21 +21,14 @@ impl<K, R> Default for ReadDependencies<K, R> {
 
 impl<K: Copy + Eq + Hash, R: Copy + Eq + Hash> ReadDependencies<K, R> {
     pub(crate) fn record(&mut self, key: K, reader: R) {
-        match self.readers_by_key.entry(key) {
-            Entry::Vacant(entry) => {
-                entry.insert(Readers::One(reader));
-            }
-            Entry::Occupied(mut entry) => {
-                if !entry.get_mut().insert(reader) {
-                    return;
-                }
-            }
+        if !InlineSet::insert_at(self.readers_by_key.entry(key), reader) {
+            return;
         }
         self.keys_by_reader.entry(reader).or_default().push(key);
     }
 
     pub(crate) fn readers(&self, key: &K) -> Option<impl Iterator<Item = R> + '_> {
-        self.readers_by_key.get(key).map(Readers::iter)
+        self.readers_by_key.get(key).map(InlineSet::iter)
     }
 
     pub(crate) fn remove_reader(&mut self, reader: &R) {
@@ -55,46 +47,6 @@ impl<K: Copy + Eq + Hash, R: Copy + Eq + Hash> ReadDependencies<K, R> {
     pub(crate) fn remove_readers(&mut self, readers: &HashSet<R>) {
         for reader in readers {
             self.remove_reader(reader);
-        }
-    }
-}
-
-enum Readers<R> {
-    One(R),
-    Many(Box<HashSet<R>>),
-}
-
-impl<R: Copy + Eq + Hash> Readers<R> {
-    fn insert(&mut self, reader: R) -> bool {
-        match self {
-            Self::One(existing) if *existing == reader => false,
-            Self::One(existing) => {
-                let mut readers = HashSet::default();
-                readers.insert(*existing);
-                readers.insert(reader);
-                *self = Self::Many(Box::new(readers));
-                true
-            }
-            Self::Many(readers) => readers.insert(reader),
-        }
-    }
-
-    fn iter(&self) -> impl Iterator<Item = R> + '_ {
-        let (one, many) = match self {
-            Self::One(reader) => (Some(*reader), hash_set::Iter::default()),
-            Self::Many(readers) => (None, readers.iter()),
-        };
-        one.into_iter().chain(many.copied())
-    }
-
-    fn remove_and_is_empty(&mut self, reader: &R) -> bool {
-        match self {
-            Self::One(existing) => existing == reader,
-            Self::Many(readers) => {
-                readers.remove(reader);
-                // A layout phase can clear and record the same reader in one frame.
-                readers.is_empty()
-            }
         }
     }
 }

@@ -54,6 +54,7 @@ pub mod geometry;
 #[cfg(all(feature = "headless", not(target_family = "wasm")))]
 pub mod headless;
 mod ime_state;
+mod inline_set;
 mod keyboard_state;
 pub mod layout;
 pub mod modifier;
