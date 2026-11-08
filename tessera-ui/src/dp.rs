@@ -5,20 +5,11 @@
 //! Size public UI in Dp; conversions use the active runtime session density.
 
 use std::{
-    cell::Cell,
     fmt::Display,
     ops::{Div, Mul},
 };
 
-use crate::Px;
-
-struct ScaleFactor(Cell<f64>);
-
-impl Default for ScaleFactor {
-    fn default() -> Self {
-        Self(Cell::new(1.0))
-    }
-}
+use crate::{Px, RuntimeSession};
 
 /// Sets the positive finite density scale for the active UI session.
 ///
@@ -40,19 +31,15 @@ pub fn set_scale_factor(scale_factor: f64) {
          positive finite value."
     );
     if scale_factor.is_finite() && scale_factor > 0.0 {
-        assert!(
-            crate::RuntimeSession::current().is_some(),
-            "density changes require an active UI session"
-        );
-        crate::local_runtime_resource::<ScaleFactor>()
-            .0
-            .set(scale_factor);
+        RuntimeSession::current()
+            .expect("density changes require an active UI session")
+            .set_density(scale_factor);
     }
 }
 
 /// Returns the active session density, or 1.0 outside a session.
 pub fn scale_factor() -> f64 {
-    crate::local_runtime_resource::<ScaleFactor>().0.get()
+    RuntimeSession::current().map_or(1.0, |session| session.density())
 }
 
 /// Density-independent layout units, converted using the active session's scale.

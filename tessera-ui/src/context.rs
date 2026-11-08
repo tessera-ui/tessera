@@ -23,6 +23,7 @@ use crate::{
         current_replay_boundary_instance_key_from_scope, ensure_build_phase,
         record_replay_boundary_invalidation_for_instance_key,
     },
+    session::with_runtime_globals,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -118,11 +119,11 @@ impl SlotTable {
 }
 
 fn with_slot_table<R>(f: impl FnOnce(&SlotTable) -> R) -> R {
-    CONTEXT_GLOBALS.with(|globals| f(&globals.slot_table.borrow()))
+    with_runtime_globals(|globals| f(&globals.context.slot_table.borrow()))
 }
 
 fn with_slot_table_mut<R>(f: impl FnOnce(&mut SlotTable) -> R) -> R {
-    CONTEXT_GLOBALS.with(|globals| f(&mut globals.slot_table.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.context.slot_table.borrow_mut()))
 }
 
 pub(crate) fn reset_context_slots() {
@@ -153,23 +154,20 @@ type ContextReadDependencyTracker = ReadDependencies<ContextReadDependencyKey, u
 fn with_context_read_dependency_tracker<R>(
     f: impl FnOnce(&ContextReadDependencyTracker) -> R,
 ) -> R {
-    CONTEXT_GLOBALS.with(|globals| f(&globals.read_dependency_tracker.borrow()))
+    with_runtime_globals(|globals| f(&globals.context.read_dependency_tracker.borrow()))
 }
 
 fn with_context_read_dependency_tracker_mut<R>(
     f: impl FnOnce(&mut ContextReadDependencyTracker) -> R,
 ) -> R {
-    CONTEXT_GLOBALS.with(|globals| f(&mut globals.read_dependency_tracker.borrow_mut()))
+    with_runtime_globals(|globals| f(&mut globals.context.read_dependency_tracker.borrow_mut()))
 }
 
 #[derive(Default)]
-struct ContextGlobals {
+pub(crate) struct ContextGlobals {
     slot_table: RefCell<SlotTable>,
     read_dependency_tracker: RefCell<ContextReadDependencyTracker>,
 }
-
-const CONTEXT_GLOBALS: crate::session::SessionLocal<ContextGlobals> =
-    crate::session::SessionLocal::new();
 
 pub(crate) fn current_context_map() -> ContextMap {
     with_execution_context(|context| context.context_map.clone())

@@ -51,7 +51,9 @@ work still requests another frame.
 
 ## Retained runtime storage
 
-The session owns its core runtime tables directly and initializes them on first access.
+The session owns its density and core runtime tables directly. The runtime
+tables, including context slots, initialize on first access. Handle validation
+reads the selected identity while its owning session is alive.
 Replay snapshots share finalized props and inherited context maps. Empty
 contexts need no binding storage. Context and keyed scopes restore their prior
 bindings when they exit. Control-flow scopes extend and restore a compact path

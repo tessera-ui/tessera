@@ -6,7 +6,7 @@
 
 use std::{
     any::{Any, TypeId},
-    cell::{OnceCell, RefCell},
+    cell::{Cell, OnceCell, RefCell},
     marker::PhantomData,
     rc::{Rc, Weak},
     sync::Arc,
@@ -25,21 +25,44 @@ struct Resources {
 
 pub(crate) struct SessionState {
     identity: u128,
-    root_claimed: std::cell::Cell<bool>,
-    closing: std::cell::Cell<bool>,
+    root_claimed: Cell<bool>,
+    closing: Cell<bool>,
+    density: Cell<f64>,
     execution_context: OnceCell<RefCell<ExecutionContext>>,
     runtime_globals: OnceCell<Box<RuntimeGlobals>>,
     resources: RefCell<Resources>,
-    previous: RefCell<Weak<SessionState>>,
+    previous: RefCell<SessionSelection>,
+}
+
+#[derive(Clone, Default)]
+struct SessionSelection {
+    state: Weak<SessionState>,
+    identity: u128,
+}
+
+impl SessionSelection {
+    fn new(state: &Rc<SessionState>) -> Self {
+        Self {
+            state: Rc::downgrade(state),
+            identity: state.identity,
+        }
+    }
+
+    fn selects(&self, state: &Rc<SessionState>) -> bool {
+        self.state.as_ptr() == Rc::as_ptr(state)
+    }
 }
 
 thread_local! {
-    static ACTIVE_SESSION: RefCell<Weak<SessionState>> = const { RefCell::new(Weak::new()) };
+    static ACTIVE_SESSION: RefCell<SessionSelection> = const { RefCell::new(SessionSelection {
+        state: Weak::new(),
+        identity: 0,
+    }) };
 }
 
 fn active_session_state() -> Option<Rc<SessionState>> {
     ACTIVE_SESSION
-        .try_with(|active| active.borrow().upgrade())
+        .try_with(|active| active.borrow().state.upgrade())
         .ok()
         .flatten()
 }
@@ -123,12 +146,13 @@ impl RuntimeSession {
     pub fn new() -> Self {
         Self(Rc::new(SessionState {
             identity: uuid::Uuid::new_v4().as_u128(),
-            root_claimed: std::cell::Cell::new(false),
-            closing: std::cell::Cell::new(false),
+            root_claimed: Cell::new(false),
+            closing: Cell::new(false),
+            density: Cell::new(1.0),
             execution_context: OnceCell::new(),
             runtime_globals: OnceCell::new(),
             resources: RefCell::new(Resources::default()),
-            previous: RefCell::new(Weak::new()),
+            previous: RefCell::default(),
         }))
     }
 
@@ -140,7 +164,7 @@ impl RuntimeSession {
 
     /// Selects this session until the returned guard is dropped.
     pub fn enter(&self) -> RuntimeSessionGuard {
-        let previous = ACTIVE_SESSION.with(|active| active.replace(Rc::downgrade(&self.0)));
+        let previous = ACTIVE_SESSION.with(|active| active.replace(SessionSelection::new(&self.0)));
         RuntimeSessionGuard {
             previous,
             _owner: self.clone(),
@@ -150,15 +174,23 @@ impl RuntimeSession {
     pub(crate) fn activate(&self) {
         ACTIVE_SESSION.with(|active| {
             let mut active = active.borrow_mut();
-            if !active.ptr_eq(&Rc::downgrade(&self.0)) {
-                *self.0.previous.borrow_mut() = active.clone();
-                *active = Rc::downgrade(&self.0);
+            if !active.selects(&self.0) {
+                *self.0.previous.borrow_mut() =
+                    std::mem::replace(&mut *active, SessionSelection::new(&self.0));
             }
         });
     }
 
     pub(crate) fn current() -> Option<Self> {
         active_session_state().map(Self)
+    }
+
+    pub(crate) fn density(&self) -> f64 {
+        self.0.density.get()
+    }
+
+    pub(crate) fn set_density(&self, density: f64) {
+        self.0.density.set(density);
     }
 
     pub(crate) fn accepts_work(&self) -> bool {
@@ -175,7 +207,13 @@ impl RuntimeSession {
 }
 
 pub(crate) fn current_session_identity() -> Option<u128> {
-    active_session_state().map(|session| session.identity)
+    ACTIVE_SESSION
+        .try_with(|active| {
+            let selected = active.borrow();
+            (selected.state.strong_count() != 0).then_some(selected.identity)
+        })
+        .ok()
+        .flatten()
 }
 
 pub(crate) fn with_active_execution_context<R>(
@@ -211,7 +249,7 @@ impl RuntimeSession {
         self.0.closing.set(true);
         let previous = self.0.previous.borrow().clone();
         let was_active = ACTIVE_SESSION
-            .try_with(|active| active.borrow().ptr_eq(&Rc::downgrade(&self.0)))
+            .try_with(|active| active.borrow().selects(&self.0))
             .unwrap_or(false);
         {
             let _guard = self.enter();
@@ -240,7 +278,7 @@ impl RuntimeSession {
 
 /// Restores the previous active session when a scoped operation finishes.
 pub struct RuntimeSessionGuard {
-    previous: Weak<SessionState>,
+    previous: SessionSelection,
     _owner: RuntimeSession,
 }
 
@@ -287,7 +325,8 @@ impl<T: Copy + Default + 'static> SessionLocal<std::cell::Cell<T>> {
 
 impl Drop for RuntimeSessionGuard {
     fn drop(&mut self) {
-        let _ = ACTIVE_SESSION.try_with(|active| active.replace(self.previous.clone()));
+        let _ =
+            ACTIVE_SESSION.try_with(|active| active.replace(std::mem::take(&mut self.previous)));
     }
 }
 
@@ -383,6 +422,29 @@ mod tests {
             second.identity()
         );
         second.run(|| assert!(!state.is_alive()));
+    }
+
+    #[test]
+    fn session_selection_restores_density_and_rejects_an_expired_owner() {
+        let first = RuntimeSession::new();
+        first.activate();
+        crate::dp::set_scale_factor(2.0);
+        let second = RuntimeSession::new();
+        second.run(|| {
+            assert_eq!(crate::dp::scale_factor(), 1.0);
+            crate::dp::set_scale_factor(3.0);
+        });
+        assert_eq!(super::current_session_identity(), Some(first.identity().0));
+        assert_eq!(crate::dp::scale_factor(), 2.0);
+
+        let scope = second.enter();
+        drop(first);
+        assert_eq!(super::current_session_identity(), Some(second.identity().0));
+        assert_eq!(crate::dp::scale_factor(), 3.0);
+        drop(scope);
+
+        assert_eq!(super::current_session_identity(), None);
+        assert_eq!(crate::dp::scale_factor(), 1.0);
     }
 
     #[derive(Default)]

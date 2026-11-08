@@ -21,7 +21,7 @@ use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityNode},
     component_call::ComponentCalls,
     component_tree::{ComponentNode, ComponentTree, NodeRole, PreviousBuildNode},
-    context::ContextMap,
+    context::{ContextGlobals, ContextMap},
     execution_context::{
         ExecutionContext, OrderFrame, with_execution_context, with_execution_context_mut,
     },
@@ -2099,6 +2099,7 @@ fn publish_state_write(slot: SlotHandle, generation: u64) {
 
 pub(crate) struct RuntimeGlobals {
     pub(crate) component_calls: ComponentCalls,
+    pub(crate) context: ContextGlobals,
     slot_table: RefCell<SlotTable>,
     component_replay_tracker: RefCell<ComponentReplayTracker>,
     build_invalidation_tracker: RefCell<BuildInvalidationTracker>,
@@ -2116,6 +2117,7 @@ impl RuntimeGlobals {
     fn new() -> Self {
         Self {
             component_calls: ComponentCalls::default(),
+            context: ContextGlobals::default(),
             slot_table: RefCell::new(SlotTable::default()),
             component_replay_tracker: RefCell::new(ComponentReplayTracker::default()),
             build_invalidation_tracker: RefCell::new(BuildInvalidationTracker::default()),
