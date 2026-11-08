@@ -83,7 +83,8 @@ An explicit layout call uses one node for replay and geometry. Layout input
 snapshots share the authored policy with component props, and each layout node
 measures with its own policy clone. Cached child measurements share
 their storage across placement updates, and leaf layouts need no child storage.
-Parents with a single composition child can share its flattened layout child list.
+Layout adjacency stores a single child inline. Parents with a single composition
+child can share its wider flattened layout child list.
 The same ancestor walk marks dirty layout paths and records the affected children
 for parents that can reuse their cached measurement.
 State, context, focus, and render-slot reads share a dependency index with inline

@@ -1232,7 +1232,7 @@ impl ComponentTree {
         }
         if changed {
             node.layout_children =
-                Some(shared_children.unwrap_or_else(|| node::share_layout_children(&children)));
+                Some(shared_children.unwrap_or_else(|| node::LayoutChildren::new(&children)));
         }
         changed
     }
@@ -6357,10 +6357,16 @@ mod tests {
             let expected = extra.map_or_else(|| vec![leaf], |extra| vec![leaf, extra]);
             let actual = direct_layout_children(inner, &tree.tree);
             assert_eq!(actual.as_ref(), expected.as_slice());
-            assert!(Arc::ptr_eq(
-                &actual,
-                &direct_layout_children(wrapper, &tree.tree)
-            ));
+            let wrapped = direct_layout_children(wrapper, &tree.tree);
+            match (extra, actual, wrapped) {
+                (Some(_), node::LayoutChildren::Shared(a), node::LayoutChildren::Shared(b)) => {
+                    assert!(Arc::ptr_eq(&a, &b));
+                }
+                (None, node::LayoutChildren::One(a), node::LayoutChildren::One(b)) => {
+                    assert_eq!((a, b), (leaf, leaf));
+                }
+                _ => panic!("layout adjacency must store a singleton inline and share wider lists"),
+            }
             #[cfg(feature = "profiling")]
             for (id, base) in [(root, 5), (outer, 4), (inner, 3), (wrapper, 2)] {
                 assert_eq!(

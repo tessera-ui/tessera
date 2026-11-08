@@ -1,11 +1,12 @@
 use std::{
     collections::HashMap,
     num::NonZeroUsize,
-    ops::{Add, AddAssign},
-    sync::{Arc, OnceLock},
+    ops::{Add, AddAssign, Deref},
+    sync::Arc,
 };
 
 use indextree::NodeId;
+use smallvec::SmallVec;
 use tracing::debug;
 use winit::window::CursorIcon;
 
@@ -58,7 +59,7 @@ pub(crate) struct ComponentNode {
     /// Whether this tree node represents a composition boundary or an explicit
     /// layout node.
     pub(crate) role: NodeRole,
-    pub(crate) layout_children: Option<Arc<[NodeId]>>,
+    pub(super) layout_children: Option<LayoutChildren>,
     pub(crate) sibling_index: Option<NonZeroUsize>,
     #[cfg(feature = "profiling")]
     pub(crate) subtree_len: usize,
@@ -353,14 +354,49 @@ pub(crate) fn sibling_index(id: NodeId, tree: &ComponentNodeTree) -> usize {
     )
 }
 
-pub(crate) fn direct_layout_children(node_id: NodeId, tree: &ComponentNodeTree) -> Arc<[NodeId]> {
+#[derive(Clone)]
+pub(crate) enum LayoutChildren {
+    Empty,
+    One(NodeId),
+    Shared(Arc<[NodeId]>),
+}
+
+impl LayoutChildren {
+    pub(super) fn new(children: &[NodeId]) -> Self {
+        match children {
+            [] => Self::Empty,
+            [child] => Self::One(*child),
+            _ => Self::Shared(children.into()),
+        }
+    }
+}
+
+impl AsRef<[NodeId]> for LayoutChildren {
+    fn as_ref(&self) -> &[NodeId] {
+        self
+    }
+}
+
+impl Deref for LayoutChildren {
+    type Target = [NodeId];
+
+    fn deref(&self) -> &[NodeId] {
+        match self {
+            Self::Empty => &[],
+            Self::One(child) => std::slice::from_ref(child),
+            Self::Shared(children) => children,
+        }
+    }
+}
+
+pub(crate) fn direct_layout_children(node_id: NodeId, tree: &ComponentNodeTree) -> LayoutChildren {
     if let Some(children) = tree
         .get(node_id)
         .and_then(|node| node.get().layout_children.as_ref())
     {
-        return Arc::clone(children);
+        return children.clone();
     }
-    fn collect(node_id: NodeId, tree: &ComponentNodeTree, output: &mut Vec<NodeId>) {
+    fn collect(node_id: NodeId, tree: &ComponentNodeTree, output: &mut SmallVec<[NodeId; 4]>) {
         let Some(node_ref) = tree.get(node_id) else {
             return;
         };
@@ -374,20 +410,11 @@ pub(crate) fn direct_layout_children(node_id: NodeId, tree: &ComponentNodeTree) 
         }
     }
 
-    let mut children = Vec::new();
+    let mut children = SmallVec::new();
     for child_id in node_id.children(tree) {
         collect(child_id, tree, &mut children);
     }
-    share_layout_children(&children)
-}
-
-pub(super) fn share_layout_children(children: &[NodeId]) -> Arc<[NodeId]> {
-    static EMPTY: OnceLock<Arc<[NodeId]>> = OnceLock::new();
-    if children.is_empty() {
-        Arc::clone(EMPTY.get_or_init(|| Arc::from([])))
-    } else {
-        children.into()
-    }
+    LayoutChildren::new(&children)
 }
 
 fn reset_frame_metadata(node_id: NodeId, component_node_metadatas: &mut ComponentNodeMetaDatas) {
