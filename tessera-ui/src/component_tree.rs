@@ -561,6 +561,7 @@ pub struct ComponentTree {
     node_ids_by_instance_key: HashMap<u64, indextree::NodeId>,
     changed_frame_nodes: HashSet<NodeId>,
     removed_frame_nodes: HashSet<NodeId>,
+    previous_structure_change_counts: [usize; 2],
     removed_focus_owners: HashSet<u64>,
     /// Active pointer hit paths keyed by pointer id.
     /// Each path stores node instance keys from root to leaf.
@@ -669,6 +670,7 @@ impl ComponentTree {
             node_ids_by_instance_key: HashMap::default(),
             changed_frame_nodes: HashSet::default(),
             removed_frame_nodes: HashSet::default(),
+            previous_structure_change_counts: [0; 2],
             removed_focus_owners: HashSet::default(),
             active_pointer_paths: HashMap::default(),
             active_pointer_positions: HashMap::default(),
@@ -696,6 +698,7 @@ impl ComponentTree {
         self.removed_frame_nodes
             .extend(self.node_ids_by_instance_key.values().copied());
         self.changed_frame_nodes.clear();
+        self.previous_structure_change_counts = [0; 2];
         #[cfg(feature = "profiling")]
         {
             self.profiler_nodes_cache.clear();
@@ -2206,6 +2209,26 @@ impl ComponentTree {
         requests
     }
 
+    fn clear_frame_structure_changes(&mut self) {
+        let live_nodes = self.node_ids_by_instance_key.len();
+        for (nodes, previous_count) in
+            [&mut self.changed_frame_nodes, &mut self.removed_frame_nodes]
+                .into_iter()
+                .zip(&mut self.previous_structure_change_counts)
+        {
+            // Large journals pay for retained capacity only when the work recurs.
+            let recent_count = nodes
+                .len()
+                .min(std::mem::replace(previous_count, nodes.len()));
+            let capacity_limit = recent_count.min(live_nodes).max(64).saturating_mul(2);
+            if nodes.capacity() > capacity_limit {
+                *nodes = HashSet::default();
+            } else {
+                nodes.clear();
+            }
+        }
+    }
+
     /// Compute the ComponentTree into a render graph
     ///
     /// This method processes the component tree through three main phases:
@@ -2321,14 +2344,12 @@ impl ComponentTree {
         record_frame_stage(&mut stage_timer, "layout_dirty_paths");
         let mut diagnostics = LayoutDiagnosticsCollector::default();
 
-        let changed_frame_nodes = std::mem::take(&mut self.changed_frame_nodes);
-        let removed_frame_nodes = std::mem::take(&mut self.removed_frame_nodes);
         #[cfg(feature = "profiling")]
         {
             self.profiler_dirty_nodes
-                .extend(changed_frame_nodes.iter().copied());
+                .extend(self.changed_frame_nodes.iter().copied());
             self.profiler_dirty_nodes
-                .extend(removed_frame_nodes.iter().copied());
+                .extend(self.removed_frame_nodes.iter().copied());
             self.profiler_dirty_nodes.extend(
                 dirty_nodes_effective
                     .iter()
@@ -2336,12 +2357,18 @@ impl ComponentTree {
             );
             self.profiler_dirty_nodes.insert(root_node);
         }
-        self.pointer_index
-            .invalidate(&self.tree, &changed_frame_nodes, &removed_frame_nodes);
+        self.pointer_index.invalidate(
+            &self.tree,
+            &self.changed_frame_nodes,
+            &self.removed_frame_nodes,
+        );
         self.accessibility_index
-            .invalidate(&changed_frame_nodes, &removed_frame_nodes);
-        self.focus_owner
-            .sync_changes(&self.tree, &changed_frame_nodes, &removed_frame_nodes);
+            .invalidate(&self.changed_frame_nodes, &self.removed_frame_nodes);
+        self.focus_owner.sync_changes(
+            &self.tree,
+            &self.changed_frame_nodes,
+            &self.removed_frame_nodes,
+        );
         self.focus_owner.commit_pending();
 
         record_frame_stage(&mut stage_timer, "consumer_attachments");
@@ -2414,8 +2441,9 @@ impl ComponentTree {
                     &self.tree,
                     &self.metadatas,
                     &self.metadatas.geometry_changed,
-                    &changed_frame_nodes,
+                    &self.changed_frame_nodes,
                 );
+                self.clear_frame_structure_changes();
                 let _ = self.dispatch_pointer_input(
                     root_node,
                     pointer_changes.as_mut_slice(),
@@ -2465,8 +2493,8 @@ impl ComponentTree {
             root_node,
             &self.tree,
             &self.metadatas,
-            &changed_frame_nodes,
-            &removed_frame_nodes,
+            &self.changed_frame_nodes,
+            &self.removed_frame_nodes,
             screen_size,
         );
         diagnostics_snapshot.scene_nodes_updated = scene_updates;
@@ -2475,8 +2503,9 @@ impl ComponentTree {
             &self.tree,
             &self.metadatas,
             &self.metadatas.geometry_changed,
-            &changed_frame_nodes,
+            &self.changed_frame_nodes,
         );
+        self.clear_frame_structure_changes();
         record_frame_stage(&mut stage_timer, "focus_geometry");
         debug!(
             "Render graph built in {:?}, total ops: {}",

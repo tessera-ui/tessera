@@ -102,6 +102,8 @@ Detached subtrees transfer reusable geometry through the live instance index.
 Retained subtrees attach directly without allocating a temporary tree node.
 Focus, pointer dispatch, and accessibility read sibling order from the same
 indices stored on the component nodes.
+Frame structure journals reuse capacity in proportion to recent changes and the
+live tree after all consumers have read them.
 Focus reads the geometry and structure journals directly when it has attached
 targets or active focus.
 The pointer index reads the geometry journal directly and refreshes plans for
