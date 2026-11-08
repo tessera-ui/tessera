@@ -1063,12 +1063,6 @@ impl Modifier {
         let materialized =
             self.materialize(instance, owner, &crate::runtime::modifier_attachment_path());
 
-        let mut actions = Vec::new();
-        materialized
-            .element
-            .for_each_action_outer_first(&mut |action| {
-                actions.push(action);
-            });
         TesseraRuntime::with_mut(|runtime| {
             runtime.append_current_modifier(materialized.clone());
         });
@@ -1077,8 +1071,9 @@ impl Modifier {
         let mut accessibility = AccessibilityNode::new();
         let mut action_handler = None;
         let mut has_semantics = false;
-        for action in actions.into_iter().rev() {
-            match action {
+        materialized
+            .element
+            .fold_actions(&mut |action| match action {
                 ModifierAction::Build(node) => {
                     TesseraRuntime::with_mut(|runtime| node.apply(runtime));
                 }
@@ -1088,17 +1083,16 @@ impl Modifier {
                 }
                 ModifierAction::Focus(op) => {
                     TesseraRuntime::with_mut(|runtime| {
-                        apply_focus_op(runtime::FocusModifierRuntime::new(runtime), op);
+                        apply_focus_op(runtime::FocusModifierRuntime::new(runtime), op.clone());
                     });
                 }
                 ModifierAction::GloballyPositioned(handler) => {
                     TesseraRuntime::with_mut(|runtime| {
-                        runtime.push_current_globally_positioned_handler(handler);
+                        runtime.push_current_globally_positioned_handler(handler.clone());
                     });
                 }
                 _ => {}
-            }
-        }
+            });
 
         TesseraRuntime::with_mut(|runtime| {
             runtime
