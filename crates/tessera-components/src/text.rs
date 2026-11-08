@@ -126,23 +126,21 @@ pub fn text(
         .or(resolved_style.line_height)
         .unwrap_or(Dp(size.0 * 1.2));
 
-    let policy = TextLayout {
-        text: content,
-        single_line: single_line.unwrap_or(false),
-        color,
-        style: TextStyle {
-            font_size: size,
-            line_height: Some(line_height),
-            ..resolved_style
-        },
-        // A draw-only rebuild can reuse measurement, so its glyph buffer must
-        // survive independently of the newly constructed layout policy.
-        shaped: remember(|| Arc::new(Mutex::new(None))).get(),
-    };
+    // A draw-only rebuild can reuse measurement and its glyph buffer.
+    let shaped = remember(|| Arc::new(Mutex::new(None))).get();
     layout()
         .modifier(modifier.push_semantics(semantics))
-        .policy(policy.clone())
-        .draw(policy);
+        .policy(TextLayout {
+            text: content,
+            single_line: single_line.unwrap_or(false),
+            style: TextStyle {
+                font_size: size,
+                line_height: Some(line_height),
+                ..resolved_style
+            },
+            shaped: shaped.clone(),
+        })
+        .draw(TextDraw { color, shaped });
 }
 
 #[derive(Clone)]
@@ -176,7 +174,6 @@ impl SemanticsModifierNode for TextSemantics {
 struct TextLayout {
     text: Arc<str>,
     single_line: bool,
-    color: Color,
     style: TextStyle,
     shaped: Arc<Mutex<Option<CachedText>>>,
 }
@@ -192,7 +189,7 @@ struct CachedText {
 
 impl PartialEq for TextLayout {
     fn eq(&self, other: &Self) -> bool {
-        tessera_ui::LayoutModifierNode::measure_eq(self, other) && self.color == other.color
+        tessera_ui::LayoutModifierNode::measure_eq(self, other)
     }
 }
 
@@ -223,7 +220,7 @@ impl TextLayout {
                     constraint: constraint.clone(),
                     data: TextData::shape_prepared(
                         self.text.clone(),
-                        self.color,
+                        Color::WHITE,
                         self.style,
                         constraint,
                     ),
@@ -269,7 +266,19 @@ impl tessera_ui::LayoutModifierNode for TextLayout {
     }
 }
 
-impl tessera_ui::DrawModifierNode for TextLayout {
+#[derive(Clone)]
+struct TextDraw {
+    color: Color,
+    shaped: Arc<Mutex<Option<CachedText>>>,
+}
+
+impl PartialEq for TextDraw {
+    fn eq(&self, other: &Self) -> bool {
+        self.color == other.color && Arc::ptr_eq(&self.shaped, &other.shaped)
+    }
+}
+
+impl tessera_ui::DrawModifierNode for TextDraw {
     fn draw(
         &self,
         ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
