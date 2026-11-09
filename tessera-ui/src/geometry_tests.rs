@@ -128,11 +128,13 @@ fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_un
     probe
         .parent_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(128.5, 0.0));
     pump_layout_test_session(&mut session, 33_333_334);
     assert_eq!(
-        probe.visible_bounds.with(|items| *items.last().unwrap()),
+        probe
+            .visible_bounds
+            .with(|items| *items.last().expect("test fixture recorded a value")),
         Some(FloatRect {
             x: 138.75,
             y: 20.5,
@@ -140,16 +142,28 @@ fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_un
             height: 35.0,
         })
     );
-    probe.observer_visible.get().unwrap().set(false);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(false);
     pump_layout_test_session(&mut session, 50_000_001);
     assert_eq!(
-        probe.visible_bounds.with(|items| *items.last().unwrap()),
+        probe
+            .visible_bounds
+            .with(|items| *items.last().expect("test fixture recorded a value")),
         None
     );
-    probe.observer_visible.get().unwrap().set(true);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 66_666_668);
     assert_eq!(
-        probe.visible_bounds.with(|items| *items.last().unwrap()),
+        probe
+            .visible_bounds
+            .with(|items| *items.last().expect("test fixture recorded a value")),
         Some(FloatRect {
             x: 138.75,
             y: 20.5,
@@ -175,80 +189,146 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
     probe
         .parent_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(128.5, -0.25));
     pump_layout_test_session(&mut session, 16_666_667);
-    assert!(session.diagnostics().unwrap().geometry_nodes_updated > 0);
+    assert!(
+        session
+            .diagnostics()
+            .expect("test fixture provides diagnostics")
+            .geometry_nodes_updated
+            > 0
+    );
     probe
         .child_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(3.75, 4.0));
     pump_layout_test_session(&mut session, 33_333_334);
-    probe.outer_scale.get().unwrap().set(0.625);
+    probe
+        .outer_scale
+        .get()
+        .expect("test fixture entry exists")
+        .set(0.625);
     pump_layout_test_session(&mut session, 50_000_001);
     assert_eq!(probe.sizes.with(Vec::len), 1);
-    probe.content_size.get().unwrap().set(ComputedData {
-        width: Px(220),
-        height: Px(55),
-    });
+    probe
+        .content_size
+        .get()
+        .expect("test fixture entry exists")
+        .set(ComputedData {
+            width: Px(220),
+            height: Px(55),
+        });
     pump_layout_test_session(&mut session, 66_666_668);
     assert_eq!(
-        probe.sizes.with(|sizes| *sizes.last().unwrap()),
+        probe
+            .sizes
+            .with(|sizes| *sizes.last().expect("test fixture recorded a value")),
         crate::PxSize::new(Px(220), Px(55))
     );
     assert_eq!(probe.sizes.with(Vec::len), 2);
-    probe.observer_visible.get().unwrap().set(false);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(false);
     pump_layout_test_session(&mut session, 83_333_335);
-    probe.content_size.get().unwrap().set(ComputedData {
-        width: Px(250),
-        height: Px(60),
-    });
+    probe
+        .content_size
+        .get()
+        .expect("test fixture entry exists")
+        .set(ComputedData {
+            width: Px(250),
+            height: Px(60),
+        });
     pump_layout_test_session(&mut session, 100_000_002);
     assert_eq!(probe.sizes.with(Vec::len), 2);
-    probe.observer_visible.get().unwrap().set(true);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 116_666_669);
     assert_eq!(probe.sizes.with(Vec::len), 3);
     assert_eq!(
-        probe.sizes.with(|sizes| *sizes.last().unwrap()),
+        probe
+            .sizes
+            .with(|sizes| *sizes.last().expect("test fixture recorded a value")),
         crate::PxSize::new(Px(250), Px(60))
     );
-    probe.late_observer.get().unwrap().set(true);
+    probe
+        .late_observer
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 133_333_336);
     assert_eq!(probe.sizes.with(Vec::len), 3);
     assert_eq!(
         probe.late_sizes.with(|sizes| sizes.clone()),
         vec![crate::PxSize::new(Px(250), Px(60))]
     );
-    probe.observer_visible.get().unwrap().set(false);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(false);
     pump_layout_test_session(&mut session, 150_000_003);
-    probe.content_size.get().unwrap().set(ComputedData {
-        width: Px(310),
-        height: Px(70),
-    });
+    probe
+        .content_size
+        .get()
+        .expect("test fixture entry exists")
+        .set(ComputedData {
+            width: Px(310),
+            height: Px(70),
+        });
     pump_layout_test_session(&mut session, 166_666_670);
     assert_eq!(probe.sizes.with(Vec::len), 3);
     assert_eq!(probe.late_sizes.with(Vec::len), 1);
-    probe.observer_visible.get().unwrap().set(true);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 183_333_337);
     assert_eq!(probe.sizes.with(Vec::len), 4);
     assert_eq!(
-        probe.late_sizes.with(|sizes| *sizes.last().unwrap()),
+        probe
+            .late_sizes
+            .with(|sizes| *sizes.last().expect("test fixture recorded a value")),
         crate::PxSize::new(Px(310), Px(70))
     );
-    probe.late_observer.get().unwrap().set(false);
+    probe
+        .late_observer
+        .get()
+        .expect("test fixture entry exists")
+        .set(false);
     pump_layout_test_session(&mut session, 200_000_004);
-    probe.parent_offset.get().unwrap().set(PxPosition::ZERO);
+    probe
+        .parent_offset
+        .get()
+        .expect("test fixture entry exists")
+        .set(PxPosition::ZERO);
     pump_layout_test_session(&mut session, 216_666_671);
     assert_eq!(probe.sizes.with(Vec::len), 4);
     assert_eq!(probe.late_sizes.with(Vec::len), 2);
-    probe.observer_visible.get().unwrap().set(false);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(false);
     pump_layout_test_session(&mut session, 233_333_338);
-    probe.observer_visible.get().unwrap().set(true);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 250_000_005);
     assert_eq!(probe.sizes.with(Vec::len), 5);
     assert_eq!(
-        probe.sizes.with(|sizes| *sizes.last().unwrap()),
+        probe
+            .sizes
+            .with(|sizes| *sizes.last().expect("test fixture recorded a value")),
         crate::PxSize::new(Px(310), Px(70))
     );
     assert_eq!(probe.late_sizes.with(Vec::len), 2);
@@ -366,19 +446,29 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         probe
             .parent_offset
             .get()
-            .unwrap()
+            .expect("test fixture entry exists")
             .set(PxPosition::from_f32_xy(65536.25 * frame as f32, -0.5));
         pump_layout_test_session(&mut session, frame * 16_666_667);
     }
     assert_eq!(probe.space_rects.with(Vec::len), 1);
     assert_eq!(probe.coordinates.with(Vec::len), 6);
-    probe.outer_scale.get().unwrap().set(0.75);
+    probe
+        .outer_scale
+        .get()
+        .expect("test fixture entry exists")
+        .set(0.75);
     pump_layout_test_session(&mut session, 100_000_000);
     assert_eq!(probe.space_rects.with(Vec::len), 1);
-    probe.inner_scale.get().unwrap().set(0.5);
+    probe
+        .inner_scale
+        .get()
+        .expect("test fixture entry exists")
+        .set(0.5);
     pump_layout_test_session(&mut session, 116_666_667);
     assert_eq!(
-        probe.space_rects.with(|rects| *rects.last().unwrap()),
+        probe
+            .space_rects
+            .with(|rects| *rects.last().expect("test fixture recorded a value")),
         FloatRect {
             x: 16.5,
             y: 32.5,
@@ -389,11 +479,13 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
     probe
         .child_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(3.75, 4.0));
     pump_layout_test_session(&mut session, 133_333_334);
     assert_eq!(
-        probe.space_rects.with(|rects| *rects.last().unwrap()),
+        probe
+            .space_rects
+            .with(|rects| *rects.last().expect("test fixture recorded a value")),
         FloatRect {
             x: 17.25,
             y: 32.75,
@@ -401,10 +493,14 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
             height: 17.5
         }
     );
-    probe.content_size.get().unwrap().set(ComputedData {
-        width: Px(120),
-        height: Px(40),
-    });
+    probe
+        .content_size
+        .get()
+        .expect("test fixture entry exists")
+        .set(ComputedData {
+            width: Px(120),
+            height: Px(40),
+        });
     pump_layout_test_session(&mut session, 150_000_001);
     let resized = FloatRect {
         x: 17.25,
@@ -413,43 +509,78 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         height: 20.0,
     };
     assert_eq!(
-        probe.space_rects.with(|rects| *rects.last().unwrap()),
+        probe
+            .space_rects
+            .with(|rects| *rects.last().expect("test fixture recorded a value")),
         resized
     );
     let count = probe.space_rects.with(Vec::len);
-    probe.observer_visible.get().unwrap().set(false);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(false);
     pump_layout_test_session(&mut session, 166_666_668);
-    probe.parent_offset.get().unwrap().set(PxPosition::ZERO);
+    probe
+        .parent_offset
+        .get()
+        .expect("test fixture entry exists")
+        .set(PxPosition::ZERO);
     pump_layout_test_session(&mut session, 183_333_335);
     assert_eq!(probe.space_rects.with(Vec::len), count);
-    probe.observer_visible.get().unwrap().set(true);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 200_000_002);
     assert_eq!(probe.space_rects.with(Vec::len), count + 1);
     assert_eq!(
-        probe.space_rects.with(|rects| *rects.last().unwrap()),
+        probe
+            .space_rects
+            .with(|rects| *rects.last().expect("test fixture recorded a value")),
         resized
     );
-    probe.mark_space.get().unwrap().set(false);
+    probe
+        .mark_space
+        .get()
+        .expect("test fixture entry exists")
+        .set(false);
     pump_layout_test_session(&mut session, 216_666_669);
     assert_eq!(probe.space_rects.with(Vec::len), count + 2);
     assert_eq!(
-        probe.space_rects.with(|rects| *rects.last().unwrap()),
         probe
-            .coordinates
-            .with(|items| items.last().unwrap().window_bounds())
+            .space_rects
+            .with(|rects| *rects.last().expect("test fixture recorded a value")),
+        probe.coordinates.with(|items| items
+            .last()
+            .expect("test fixture recorded a value")
+            .window_bounds())
     );
-    probe.mark_space.get().unwrap().set(true);
+    probe
+        .mark_space
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 233_333_336);
     assert_eq!(probe.space_rects.with(Vec::len), count + 3);
     assert_eq!(
-        probe.space_rects.with(|rects| *rects.last().unwrap()),
+        probe
+            .space_rects
+            .with(|rects| *rects.last().expect("test fixture recorded a value")),
         resized
     );
-    probe.nested_space.get().unwrap().set(true);
+    probe
+        .nested_space
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 250_000_003);
     assert_eq!(probe.space_rects.with(Vec::len), count + 4);
     assert_eq!(
-        probe.space_rects.with(|rects| *rects.last().unwrap()),
+        probe
+            .space_rects
+            .with(|rects| *rects.last().expect("test fixture recorded a value")),
         FloatRect {
             x: 14.0,
             y: 24.5,
@@ -457,29 +588,37 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
             height: 40.0,
         }
     );
-    probe.nested_space.get().unwrap().set(false);
+    probe
+        .nested_space
+        .get()
+        .expect("test fixture entry exists")
+        .set(false);
     pump_layout_test_session(&mut session, 266_666_670);
     assert_eq!(probe.space_rects.with(Vec::len), count + 5);
     assert_eq!(
-        probe.space_rects.with(|rects| *rects.last().unwrap()),
+        probe
+            .space_rects
+            .with(|rects| *rects.last().expect("test fixture recorded a value")),
         resized
     );
     let window_count = probe.coordinates.with(Vec::len);
     probe
         .space_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(64.0, 0.0));
     probe
         .counter_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(-128.0, 0.0));
     pump_layout_test_session(&mut session, 283_333_337);
     assert_eq!(probe.coordinates.with(Vec::len), window_count);
     assert_eq!(probe.space_rects.with(Vec::len), count + 6);
     assert_eq!(
-        probe.space_rects.with(|rects| *rects.last().unwrap()),
+        probe
+            .space_rects
+            .with(|rects| *rects.last().expect("test fixture recorded a value")),
         FloatRect {
             x: -46.75,
             y: 32.75,
@@ -547,20 +686,54 @@ fn geometry_observer_updates_settle_placement_before_the_frame_snapshot() {
         layout_test(|| observer_follow_fixture(probe.clone())).viewport_px(300, 200),
     );
     pump_layout_test_session(&mut session, 0);
-    assert!(session.diagnostics().unwrap().cache_miss_no_entry > 0);
-    assert_eq!(session.diagnostics().unwrap().pointer_nodes_dispatched, 2);
+    assert!(
+        session
+            .diagnostics()
+            .expect("test fixture provides diagnostics")
+            .cache_miss_no_entry
+            > 0
+    );
+    assert_eq!(
+        session
+            .diagnostics()
+            .expect("test fixture provides diagnostics")
+            .pointer_nodes_dispatched,
+        2
+    );
     let before = session.inspect_components();
-    assert_eq!(before.tagged("geometry-child").bounds().unwrap().x, 0.0);
+    assert_eq!(
+        before
+            .tagged("geometry-child")
+            .bounds()
+            .expect("test fixture provides bounds")
+            .x,
+        0.0
+    );
     probe
         .parent_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(12.0, 2.0));
     pump_layout_test_session(&mut session, 1);
-    assert_eq!(session.diagnostics().unwrap().pointer_nodes_dispatched, 2);
-    assert_eq!(session.diagnostics().unwrap().cache_miss_no_entry, 0);
+    assert_eq!(
+        session
+            .diagnostics()
+            .expect("test fixture provides diagnostics")
+            .pointer_nodes_dispatched,
+        2
+    );
+    assert_eq!(
+        session
+            .diagnostics()
+            .expect("test fixture provides diagnostics")
+            .cache_miss_no_entry,
+        0
+    );
     let after = session.inspect_components();
-    let bounds = after.tagged("geometry-child").bounds().unwrap();
+    let bounds = after
+        .tagged("geometry-child")
+        .bounds()
+        .expect("test fixture provides bounds");
     assert_eq!((bounds.x, bounds.y), (7.5, 1.25));
     assert_eq!(
         session
@@ -575,8 +748,20 @@ fn geometry_observer_updates_settle_placement_before_the_frame_snapshot() {
         0
     );
     pump_layout_test_session(&mut session, 2);
-    assert_eq!(session.diagnostics().unwrap().pointer_nodes_dispatched, 0);
-    assert_eq!(session.diagnostics().unwrap().cache_miss_no_entry, 0);
+    assert_eq!(
+        session
+            .diagnostics()
+            .expect("test fixture provides diagnostics")
+            .pointer_nodes_dispatched,
+        0
+    );
+    assert_eq!(
+        session
+            .diagnostics()
+            .expect("test fixture provides diagnostics")
+            .cache_miss_no_entry,
+        0
+    );
     assert_eq!(
         session
             .work()
@@ -613,7 +798,13 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
         layout_test(|| inherited_translation_fixture(probe.clone())).viewport_px(300, 200),
     );
     pump_layout_test_session(&mut session, 0);
-    assert_eq!(session.diagnostics().unwrap().pointer_nodes_updated, 0);
+    assert_eq!(
+        session
+            .diagnostics()
+            .expect("test fixture provides diagnostics")
+            .pointer_nodes_updated,
+        0
+    );
     let snapshot = session.run(crate::testing::ComponentSnapshot::capture);
     let child = snapshot.tagged("geometry-child").instance_id();
     assert!(
@@ -627,11 +818,14 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
         probe
             .parent_offset
             .get()
-            .unwrap()
+            .expect("test fixture entry exists")
             .set(PxPosition::from_f32_xy(-0.5, offset));
         pump_layout_test_session(&mut session, frame * 16_666_667);
         assert_eq!(
-            session.diagnostics().unwrap().pointer_nodes_updated,
+            session
+                .diagnostics()
+                .expect("test fixture provides diagnostics")
+                .pointer_nodes_updated,
             0,
             "moving decorative layouts must not update the pointer index"
         );
@@ -641,16 +835,19 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
                 .for_instance(child, crate::WorkPhase::Transform),
             0
         );
-        let bounds = probe
-            .coordinates
-            .with(|items| items.last().unwrap().window_bounds());
+        let bounds = probe.coordinates.with(|items| {
+            items
+                .last()
+                .expect("test fixture recorded a value")
+                .window_bounds()
+        });
         assert_eq!(bounds.x, 12.0);
         assert_eq!(bounds.y, 24.0 + offset);
     }
     probe
         .child_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(3.75, 4.0));
     pump_layout_test_session(&mut session, 700_000_000);
     assert!(
@@ -659,9 +856,12 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
             .for_instance(child, crate::WorkPhase::Transform)
             > 0
     );
-    let bounds = probe
-        .coordinates
-        .with(|items| items.last().unwrap().window_bounds());
+    let bounds = probe.coordinates.with(|items| {
+        items
+            .last()
+            .expect("test fixture recorded a value")
+            .window_bounds()
+    });
     assert_eq!((bounds.x, bounds.y), (13.5, 24.5));
 }
 
@@ -709,22 +909,30 @@ fn position_observer_resumes_after_hidden_ancestor_moves() {
     );
     pump_layout_test_session(&mut session, 0);
     assert_eq!(probe.coordinates.with(Vec::len), 1);
-    probe.observer_visible.get().unwrap().set(false);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(false);
     probe
         .parent_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(0.0, 41.25));
     pump_layout_test_session(&mut session, 16_666_667);
     assert_eq!(probe.coordinates.with(Vec::len), 1);
     probe
         .parent_offset
         .get()
-        .unwrap()
+        .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(0.0, 80.5));
     pump_layout_test_session(&mut session, 33_333_334);
     assert_eq!(probe.coordinates.with(Vec::len), 1);
-    probe.observer_visible.get().unwrap().set(true);
+    probe
+        .observer_visible
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 50_000_001);
     let coordinates = probe.coordinates.with(|items| {
         assert_eq!(items.len(), 2);
@@ -870,10 +1078,14 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
     .into_iter()
     .enumerate()
     {
-        probe.content_size.get().unwrap().set(ComputedData {
-            width: Px(width),
-            height: Px(80),
-        });
+        probe
+            .content_size
+            .get()
+            .expect("test fixture entry exists")
+            .set(ComputedData {
+                width: Px(width),
+                height: Px(80),
+            });
         let frame = (index as u64 * 4 + 1) * 16_666_667;
         pump_layout_test_session(&mut session, frame);
         pump_layout_test_session(&mut session, frame + 16_666_667);

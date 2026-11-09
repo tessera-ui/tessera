@@ -62,15 +62,31 @@ mod tests {
         dependencies.record("shared", 1);
         dependencies.record("private", 1);
         dependencies.record("shared", 2);
-        assert_eq!(dependencies.readers(&"shared").unwrap().count(), 2);
+        assert_eq!(
+            dependencies
+                .readers(&"shared")
+                .expect("test fixture provides readers")
+                .count(),
+            2
+        );
 
         dependencies.remove_reader(&1);
-        assert!(dependencies.readers(&"shared").unwrap().eq([2]));
+        assert!(
+            dependencies
+                .readers(&"shared")
+                .expect("test fixture provides readers")
+                .eq([2])
+        );
         assert!(dependencies.readers(&"private").is_none());
 
         dependencies.record("shared", 1);
         dependencies.remove_reader(&2);
-        assert!(dependencies.readers(&"shared").unwrap().eq([1]));
+        assert!(
+            dependencies
+                .readers(&"shared")
+                .expect("test fixture provides readers")
+                .eq([1])
+        );
         dependencies.remove_reader(&1);
         assert!(dependencies.readers(&"shared").is_none());
     }

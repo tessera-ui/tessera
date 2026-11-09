@@ -131,12 +131,16 @@ impl GpuTimingProbe {
                 .map_err(|err| err.to_string())?
                 .map_err(|err| err.to_string())?;
             let mapped = slice.get_mapped_range().map_err(|err| err.to_string())?;
-            let start = u64::from_ne_bytes(mapped[..8].try_into().unwrap());
-            let end = u64::from_ne_bytes(mapped[mapped.len() - 8..].try_into().unwrap());
+            let start = u64::from_ne_bytes(mapped[..8].try_into().expect("timestamps are 8 bytes"));
+            let end = u64::from_ne_bytes(
+                mapped[mapped.len() - 8..]
+                    .try_into()
+                    .expect("timestamps are 8 bytes"),
+            );
             if self.detailed {
                 let timestamps: Vec<u64> = mapped
                     .chunks_exact(8)
-                    .map(|bytes| u64::from_ne_bytes(bytes.try_into().unwrap()))
+                    .map(|bytes| u64::from_ne_bytes(bytes.try_into().expect("chunks are 8 bytes")))
                     .collect();
                 for (index, (label, timestamps)) in self
                     .stage_labels

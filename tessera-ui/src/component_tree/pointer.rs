@@ -254,7 +254,7 @@ impl PointerIndex {
                     | OrderedModifierAction::PointerFinalInput(_) => {
                         let rect =
                             crate::LocalToWindow::new(context.local_to_window.scale(), position)
-                                .unwrap()
+                                .expect("layout scale is finite and positive")
                                 .map_rect(crate::FloatRect::from_position_size(
                                     PxPosition::ZERO,
                                     size,
@@ -572,7 +572,11 @@ mod tests {
         let target = TesseraRuntime::with(|runtime| {
             let index = &runtime.component_tree.pointer_index;
             assert_eq!(index.eligible.len(), 1);
-            *index.eligible.iter().next().unwrap()
+            *index
+                .eligible
+                .iter()
+                .next()
+                .expect("test fixture value is present")
         });
         let check = |additions, removals, hit: PxPosition, expected| {
             TesseraRuntime::with(|runtime| {
@@ -591,7 +595,7 @@ mod tests {
             });
         };
         check(1, 0, PxPosition::new(Px(15), Px(15)), true);
-        let position = probe.position.get().unwrap();
+        let position = probe.position.get().expect("test fixture entry exists");
         position.set(PxPosition::new(Px(40), Px(10)));
         pump_layout_test_session(&mut session, 16_666_667);
         check(0, 0, PxPosition::new(Px(15), Px(15)), false);
@@ -604,7 +608,7 @@ mod tests {
         check(0, 1, PxPosition::new(Px(265), Px(15)), false);
         check(0, 1, PxPosition::new(Px(275), Px(15)), true);
 
-        let placed = probe.placed.get().unwrap();
+        let placed = probe.placed.get().expect("test fixture entry exists");
         placed.set(false);
         pump_layout_test_session(&mut session, 66_666_668);
         check(0, 1, PxPosition::new(Px(275), Px(15)), false);
@@ -612,7 +616,7 @@ mod tests {
         pump_layout_test_session(&mut session, 83_333_335);
         check(1, 0, PxPosition::new(Px(275), Px(15)), true);
 
-        let size = probe.size.get().unwrap();
+        let size = probe.size.get().expect("test fixture entry exists");
         size.set(ComputedData {
             width: Px(5000),
             height: Px(5000),
@@ -629,7 +633,8 @@ mod tests {
 
         TesseraRuntime::with_mut(|runtime| {
             let tree = &mut runtime.component_tree;
-            let canvas = super::super::geometry_parent(tree.tree(), target).unwrap();
+            let canvas = super::super::geometry_parent(tree.tree(), target)
+                .expect("test fixture value is present");
             tree.metadatas.entry_or_default(canvas).clips_children = true;
             tree.metadatas.mark_geometry_dirty(canvas);
         });
@@ -652,7 +657,11 @@ mod tests {
         check(0, 0, PxPosition::new(Px(275), Px(15)), true);
 
         probe.observed_handler.set(false);
-        probe.rebuild.get().unwrap().set(true);
+        probe
+            .rebuild
+            .get()
+            .expect("test fixture entry exists")
+            .set(true);
         pump_layout_test_session(&mut session, 183_333_337);
         assert!(
             probe.observed_handler.get(),
@@ -660,7 +669,12 @@ mod tests {
         );
         TesseraRuntime::with(|runtime| {
             let tree = &runtime.component_tree;
-            let current = *tree.pointer_index.eligible.iter().next().unwrap();
+            let current = *tree
+                .pointer_index
+                .eligible
+                .iter()
+                .next()
+                .expect("test fixture value is present");
             assert!(
                 tree.pointer_index
                     .sample_targets(

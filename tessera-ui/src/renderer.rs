@@ -1809,7 +1809,11 @@ where
         });
         flush_pending_focus_callbacks();
         if let Some(request) = requests.request_window_drag {
-            let window = self.app.as_ref().unwrap().window_arc();
+            let window = self
+                .app
+                .as_ref()
+                .expect("window requests follow app creation")
+                .window_arc();
             self.apply_window_drag(&window, request);
         }
         let request = requests.ime_request.filter(|request| {
@@ -1818,8 +1822,13 @@ where
             })
         });
         // The next native event must see edits made by this event, before the next frame.
-        self.ime_bridge_state
-            .sync_window(self.app.as_ref().unwrap().window(), request);
+        self.ime_bridge_state.sync_window(
+            self.app
+                .as_ref()
+                .expect("IME requests follow app creation")
+                .window(),
+            request,
+        );
     }
 
     fn handle_redraw_requested(&mut self, event_loop: &ActiveEventLoop) {
@@ -2552,7 +2561,7 @@ mod tests {
         let mut session =
             start_layout_test_session(layout_test(|| focus_visibility_fixture(probe.clone())));
         pump_layout_test_session(&mut session, 0);
-        let (first, second) = probe.focus.get().unwrap();
+        let (first, second) = probe.focus.get().expect("test fixture entry exists");
         first.request_focus();
         first.capture_focus();
         pump_layout_test_session(&mut session, 1);
@@ -2654,7 +2663,7 @@ mod tests {
         let mut session =
             start_layout_test_session(layout_test(|| frame_end_focus_fixture(probe.clone())));
         pump_layout_test_session(&mut session, 0);
-        let (visible, removed, fallback) = probe.focus.get().unwrap();
+        let (visible, removed, fallback) = probe.focus.get().expect("test fixture entry exists");
         removed.request_focus();
         assert!(removed.is_focused());
         dispatch_frame_end_reveal();

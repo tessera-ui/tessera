@@ -1229,7 +1229,9 @@ mod tests {
                     source_origin: PxPosition::ZERO,
                 });
                 core.queue.submit(Some(encoder.finish()));
-                let output = core.read_offscreen_rgba().unwrap();
+                let output = core
+                    .read_offscreen_rgba()
+                    .expect("read_offscreen_rgba succeeds in the test fixture");
                 assert_eq!(output.len(), (width * height * 4) as usize);
                 for (index, pixel) in output.chunks_exact(4).enumerate() {
                     let x = index as u32 % width;
@@ -1357,21 +1359,33 @@ mod tests {
 
         impl ComputablePipeline<ComputeProbe> for Probe {
             fn dispatch(&mut self, _: &mut ComputeContext<'_, '_, '_, ComputeProbe>) {
-                self.0.lock().unwrap().push("compute");
+                self.0
+                    .lock()
+                    .expect("test lock is not poisoned")
+                    .push("compute");
             }
         }
 
         impl DrawablePipeline<SampleCommand> for Probe {
             fn begin_frame(&mut self, _: &FrameContext<'_>) {
-                self.0.lock().unwrap().push("begin");
+                self.0
+                    .lock()
+                    .expect("test lock is not poisoned")
+                    .push("begin");
             }
 
             fn draw(&mut self, _: &mut DrawContext<'_, '_, '_, SampleCommand>) {
-                self.0.lock().unwrap().push("draw");
+                self.0
+                    .lock()
+                    .expect("test lock is not poisoned")
+                    .push("draw");
             }
 
             fn end_frame(&mut self, _: &FrameContext<'_>) {
-                self.0.lock().unwrap().push("end");
+                self.0
+                    .lock()
+                    .expect("test lock is not poisoned")
+                    .push("end");
             }
         }
 
@@ -1387,14 +1401,20 @@ mod tests {
         core.register_draw_pipeline_factory({
             let events = events.clone();
             move |_| {
-                events.lock().unwrap().push("create");
+                events
+                    .lock()
+                    .expect("test lock is not poisoned")
+                    .push("create");
                 Probe(events)
             }
         });
         core.register_compute_pipeline_factory({
             let events = events.clone();
             move |_| {
-                events.lock().unwrap().push("create compute");
+                events
+                    .lock()
+                    .expect("test lock is not poisoned")
+                    .push("create compute");
                 Probe(events)
             }
         });
@@ -1406,7 +1426,7 @@ mod tests {
             );
         };
         render(&mut core, RenderGraph::default());
-        assert!(events.lock().unwrap().is_empty());
+        assert!(events.lock().expect("test lock is not poisoned").is_empty());
         let mut fragment = crate::render_graph::RenderFragment::default();
         fragment.push_draw_command(SampleCommand(None));
         let mut graph = crate::render_graph::RenderGraphBuilder::new();
@@ -1419,10 +1439,10 @@ mod tests {
         render(&mut core, graph.clone());
         render(&mut core, graph);
         assert_eq!(
-            *events.lock().unwrap(),
+            *events.lock().expect("test lock is not poisoned"),
             ["create", "begin", "draw", "end", "begin", "draw", "end"]
         );
-        events.lock().unwrap().clear();
+        events.lock().expect("test lock is not poisoned").clear();
         let mut fragment = crate::render_graph::RenderFragment::default();
         fragment.push_compute_command(ComputeProbe);
         let mut graph = crate::render_graph::RenderGraphBuilder::new();
@@ -1433,7 +1453,7 @@ mod tests {
         );
         render(&mut core, graph.finish());
         assert_eq!(
-            *events.lock().unwrap(),
+            *events.lock().expect("test lock is not poisoned"),
             ["create compute", "begin", "compute", "end"]
         );
     }

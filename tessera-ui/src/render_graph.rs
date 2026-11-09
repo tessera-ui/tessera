@@ -535,7 +535,8 @@ mod tests {
             &fragment,
             DrawGeometry::new(
                 PxSize::new(Px(240), Px(56)),
-                LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5)).unwrap(),
+                LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5))
+                    .expect("test fixture provides from_f32_xy"),
             ),
             1.0,
         );

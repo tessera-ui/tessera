@@ -331,7 +331,8 @@ mod tests {
     fn fractional_scale_preserves_exact_control_geometry_and_outward_clip() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let transform = LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5)).unwrap();
+        let transform = LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5))
+            .expect("test fixture provides from_f32_xy");
         let bounds = transform.map_rect(FloatRect::from_position_size(
             PxPosition::ZERO,
             PxSize::new(Px(240), Px(56)),
@@ -368,9 +369,13 @@ mod tests {
     fn nested_uniform_transforms_compose_once_and_reject_noninvertible_values() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let parent = LocalToWindow::new(0.5, PxPosition::from_f32_xy(10.25, 20.5)).unwrap();
-        let child = LocalToWindow::new(1.25, PxPosition::from_f32_xy(8.0, 12.0)).unwrap();
-        let combined = parent.compose(child).unwrap();
+        let parent = LocalToWindow::new(0.5, PxPosition::from_f32_xy(10.25, 20.5))
+            .expect("test fixture provides from_f32_xy");
+        let child = LocalToWindow::new(1.25, PxPosition::from_f32_xy(8.0, 12.0))
+            .expect("test fixture provides from_f32_xy");
+        let combined = parent
+            .compose(child)
+            .expect("test fixture provides compose");
         assert_eq!(
             combined.map_point(PxPosition::from_f32_xy(16.0, 24.0)),
             PxPosition::from_f32_xy(24.25, 41.5)

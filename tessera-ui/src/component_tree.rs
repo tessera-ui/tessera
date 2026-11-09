@@ -1527,9 +1527,9 @@ impl ComponentTree {
                 width: size.width,
                 height: size.height,
             };
-            let transform = metadata
-                .local_to_window
-                .unwrap_or_else(|| crate::LocalToWindow::new(1.0, position).unwrap());
+            let transform = metadata.local_to_window.unwrap_or_else(|| {
+                crate::LocalToWindow::new(1.0, position).expect("unit scale is a valid transform")
+            });
             let precise = transform.map_rect(crate::FloatRect::from_position_size(
                 PxPosition::ZERO,
                 PxSize::new(size.width, size.height),
@@ -2237,7 +2237,7 @@ impl ComponentTree {
         ime: Vec<QueuedInput<crate::ime_state::ImeEvent>>,
     ) -> WindowRequests {
         self.queue_focused_input(keyboard, ime);
-        let Some(root) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
+        let Some(root) = self.tree.get_node_id_at(NonZero::<usize>::MIN) else {
             return WindowRequests::default();
         };
         if self
@@ -2697,9 +2697,9 @@ fn resolve_node_input_context(
     let parent_id = node_ref.parent();
 
     Some(NodeInputContext {
-        local_to_window: metadata
-            .local_to_window
-            .unwrap_or_else(|| crate::LocalToWindow::new(1.0, abs_pos).unwrap()),
+        local_to_window: metadata.local_to_window.unwrap_or_else(|| {
+            crate::LocalToWindow::new(1.0, abs_pos).expect("unit scale is a valid transform")
+        }),
         input_transforms: metadata.input_transforms.as_deref().cloned(),
         event_clip_bounds: metadata.event_clip_bounds,
         base_abs_pos,
@@ -2761,9 +2761,9 @@ fn inside_shape_clips(
         let (Some(&region), Some(origin)) = (metadata.clip_region(), metadata.abs_position) else {
             return true;
         };
-        let transform = metadata
-            .local_to_window
-            .unwrap_or_else(|| crate::LocalToWindow::new(1.0, origin).unwrap());
+        let transform = metadata.local_to_window.unwrap_or_else(|| {
+            crate::LocalToWindow::new(1.0, origin).expect("unit scale is a valid transform")
+        });
         map_clip_region(region, transform).contains(position)
     })
 }
@@ -2799,9 +2799,9 @@ fn bounds_hit_path(
     if !inside_shape_clips(tree, metadatas, node_id, position) {
         return None;
     }
-    let transform = metadata
-        .local_to_window
-        .unwrap_or_else(|| crate::LocalToWindow::new(1.0, abs_pos).unwrap());
+    let transform = metadata.local_to_window.unwrap_or_else(|| {
+        crate::LocalToWindow::new(1.0, abs_pos).expect("unit scale is a valid transform")
+    });
     let bounds = transform.map_rect(crate::FloatRect::from_position_size(
         PxPosition::ZERO,
         PxSize::new(size.width, size.height),
@@ -2863,7 +2863,7 @@ fn node_handles_pointer_at_position(
             | OrderedModifierAction::PointerInput(_)
             | OrderedModifierAction::PointerFinalInput(_) => {
                 let bounds = crate::LocalToWindow::new(scale, current_abs_pos)
-                    .unwrap()
+                    .expect("layout scale is finite and positive")
                     .map_rect(crate::FloatRect::from_position_size(PxPosition::ZERO, size));
                 if bounds.contains(position) {
                     return true;
@@ -2903,7 +2903,7 @@ fn resolve_node_hover_cursor_icon(
             }
             OrderedModifierAction::Cursor(cursor) => {
                 let bounds = crate::LocalToWindow::new(scale, current_abs_pos)
-                    .unwrap()
+                    .expect("layout scale is finite and positive")
                     .map_rect(crate::FloatRect::from_position_size(PxPosition::ZERO, size));
                 if bounds.contains(position) {
                     resolved = Some(cursor.cursor_icon());
@@ -3163,7 +3163,8 @@ fn run_pointer_input_for_node<F>(
     let _ = parent_id;
 
     let abs_pos = abs_pos_override;
-    let transform = crate::LocalToWindow::new(local_to_window.scale(), abs_pos).unwrap();
+    let transform = crate::LocalToWindow::new(local_to_window.scale(), abs_pos)
+        .expect("layout scale is finite and positive");
 
     let owns_sample = dispatch_ctx
         .pointer_change_paths
@@ -3599,9 +3600,9 @@ fn dispatch_focus_reveal_request(
                 .get(&node_id)
                 .expect("Reveal container must have metadata");
             let origin = metadata.abs_position.unwrap_or(PxPosition::ZERO);
-            let transform = metadata
-                .local_to_window
-                .unwrap_or_else(|| crate::LocalToWindow::new(1.0, origin).unwrap());
+            let transform = metadata.local_to_window.unwrap_or_else(|| {
+                crate::LocalToWindow::new(1.0, origin).expect("unit scale is a valid transform")
+            });
             let viewport_bounds = component_node_bounds_precise(metadatas, node_id)
                 .and_then(|bounds| {
                     metadata
@@ -3630,9 +3631,9 @@ fn component_node_bounds_precise(
     let metadata = metadatas.get(&node_id)?;
     let origin = metadata.abs_position?;
     let size = metadata.computed_data?;
-    let transform = metadata
-        .local_to_window
-        .unwrap_or_else(|| crate::LocalToWindow::new(1.0, origin).unwrap());
+    let transform = metadata.local_to_window.unwrap_or_else(|| {
+        crate::LocalToWindow::new(1.0, origin).expect("unit scale is a valid transform")
+    });
     Some(transform.map_rect(crate::FloatRect::from_position_size(
         PxPosition::ZERO,
         PxSize::new(size.width, size.height),
@@ -4393,7 +4394,10 @@ mod tests {
         );
         populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
         assert_eq!(
-            tree.metadatas.get(&leaf).unwrap().abs_position,
+            tree.metadatas
+                .get(&leaf)
+                .expect("test fixture entry exists")
+                .abs_position,
             Some(PxPosition::new(Px(2), Px(2)))
         );
         assert!(
@@ -4417,7 +4421,10 @@ mod tests {
         node::place_node(leaf, PxPosition::new(Px(3), Px(3)), 0, &mut tree.metadatas);
         populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
         assert_eq!(
-            tree.metadatas.get(&leaf).unwrap().abs_position,
+            tree.metadatas
+                .get(&leaf)
+                .expect("test fixture entry exists")
+                .abs_position,
             Some(PxPosition::new(Px(3), Px(3)))
         );
         assert!(tree.metadatas.geometry_changed.contains(&leaf));
@@ -4477,7 +4484,13 @@ mod tests {
         tree.metadatas.entry_or_default(pinned).rel_position = None;
         tree.metadatas.mark_geometry_dirty(pinned);
         populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
-        assert!(tree.metadatas.get(&leaf).unwrap().abs_position.is_none());
+        assert!(
+            tree.metadatas
+                .get(&leaf)
+                .expect("test fixture entry exists")
+                .abs_position
+                .is_none()
+        );
         tree.metadatas.entry_or_default(inner).geometry_initialized = false;
         node::place_node(
             pinned,
@@ -4487,7 +4500,10 @@ mod tests {
         );
         populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
         assert_eq!(
-            tree.metadatas.get(&leaf).unwrap().abs_position,
+            tree.metadatas
+                .get(&leaf)
+                .expect("test fixture entry exists")
+                .abs_position,
             Some(PxPosition::new(Px(3), Px(3)))
         );
     }
@@ -4545,7 +4561,10 @@ mod tests {
         tree.pop_node();
         tree.pop_node();
         for (id, y, width, height) in [(root, 0, 200, 100), (target, 300, 80, 24)] {
-            let metadata = tree.metadatas.get_mut(&id).unwrap();
+            let metadata = tree
+                .metadatas
+                .get_mut(&id)
+                .expect("test fixture entry exists");
             metadata.abs_position = Some(PxPosition::new(Px::ZERO, Px(y)));
             metadata.base_abs_position = metadata.abs_position;
             metadata.computed_data = Some(ComputedData {
@@ -4635,7 +4654,9 @@ mod tests {
         let mut changes = [crate::PointerChange {
             timestamp: crate::time::Instant::now(),
             pointer_id: crate::MOUSE_POINTER_ID,
-            content: crate::CursorEventContent::Moved(pointer.unwrap()),
+            content: crate::CursorEventContent::Moved(
+                pointer.expect("test fixture provides pointer"),
+            ),
             gesture_state: crate::GestureState::TapCandidate,
             sampled_position: Default::default(),
             consumed: false,
@@ -4685,7 +4706,10 @@ mod tests {
         for delta_y in [0.0, -24.0] {
             for newer_request_before_attach in [false, true] {
                 let (mut tree, root, original, _session) = reveal_viewport_tree(probe.clone());
-                let original_node = tree.focus_owner.component_node_id_of(original.id).unwrap();
+                let original_node = tree
+                    .focus_owner
+                    .component_node_id_of(original.id)
+                    .expect("test fixture provides component_node_id_of");
                 let delayed = FocusRegistration::target(FocusNode::new());
                 tree.focus_owner.request_focus(delayed.id);
                 let mut pointer = Some(PxPosition::new(Px(180), Px(50)));
@@ -4719,7 +4743,10 @@ mod tests {
                 let target = tree.add_node(target);
                 tree.pop_node();
                 root.append(target, &mut tree.tree);
-                let metadata = tree.metadatas.get_mut(&target).unwrap();
+                let metadata = tree
+                    .metadatas
+                    .get_mut(&target)
+                    .expect("test fixture entry exists");
                 metadata.abs_position = Some(PxPosition::new(Px(0), Px(500)));
                 metadata.base_abs_position = metadata.abs_position;
                 metadata.computed_data = Some(ComputedData {
@@ -5006,7 +5033,10 @@ mod tests {
                 "a passive layout must not publish geometry notifications for its own translation"
             );
             assert_eq!(
-                tree.metadatas.get(&root).unwrap().abs_position,
+                tree.metadatas
+                    .get(&root)
+                    .expect("test fixture entry exists")
+                    .abs_position,
                 Some(PxPosition::from_f32_xy(offset, 0.0)),
                 "passive layout coordinates must remain available for inspection"
             );
@@ -5028,8 +5058,11 @@ mod tests {
                 .ops()
                 .iter()
                 .find(|op| op.command.downcast_draw_ref::<Marker>().is_some())
-                .unwrap();
-            let marker = op.command.downcast_draw_ref::<Marker>().unwrap();
+                .expect("test fixture value is present");
+            let marker = op
+                .command
+                .downcast_draw_ref::<Marker>()
+                .expect("test fixture provides downcast_draw_ref");
             assert_eq!(marker.value, 1);
             assert_eq!(marker.opacity, opacity);
             assert_eq!(
@@ -5057,7 +5090,7 @@ mod tests {
             .ops()
             .iter()
             .find_map(|op| op.command.downcast_draw_ref::<Marker>())
-            .unwrap();
+            .expect("test fixture provides downcast_draw_ref");
         assert_eq!(marker.value, 2);
         assert_eq!(marker.opacity, 0.5);
         tree.metadatas.paint_changed.clear();
@@ -5173,7 +5206,10 @@ mod tests {
             metadata.fragment.push_draw_command(Marker);
             populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
             assert_eq!(
-                tree.metadatas.get(&outside).unwrap().event_clip_rect(),
+                tree.metadatas
+                    .get(&outside)
+                    .expect("test fixture entry exists")
+                    .event_clip_rect(),
                 Some(PxRect::new(Px::ZERO, Px::ZERO, Px(200), Px(200))),
                 "the placed traversal target is outside its ancestor's clip"
             );
@@ -5225,9 +5261,18 @@ mod tests {
             );
             let expected =
                 position.map(|position| PxPosition::new(Px(position + 4), Px(position + 5)));
-            assert_eq!(tree.metadatas.get(&leaf).unwrap().abs_position, expected);
             assert_eq!(
-                tree.metadatas.get(&leaf).unwrap().base_abs_position,
+                tree.metadatas
+                    .get(&leaf)
+                    .expect("test fixture entry exists")
+                    .abs_position,
+                expected
+            );
+            assert_eq!(
+                tree.metadatas
+                    .get(&leaf)
+                    .expect("test fixture entry exists")
+                    .base_abs_position,
                 expected
             );
             assert_eq!(
@@ -5275,7 +5320,13 @@ mod tests {
                     !tree.metadatas.geometry_changed.contains(&leaf),
                     "moving an ancestor must not invalidate an already hidden subtree"
                 );
-                assert!(tree.metadatas.get(&leaf).unwrap().abs_position.is_none());
+                assert!(
+                    tree.metadatas
+                        .get(&leaf)
+                        .expect("test fixture entry exists")
+                        .abs_position
+                        .is_none()
+                );
                 tree.metadatas.entry_or_default(root).rel_position = None;
                 tree.metadatas.mark_geometry_dirty(root);
             }
@@ -5302,7 +5353,7 @@ mod tests {
                 let log = Arc::clone(&log);
                 let handler: Box<PointerInputHandlerFn> = Box::new(move |input| {
                     for change in input.pointer_changes.iter() {
-                        log.lock().unwrap().push((
+                        log.lock().expect("test lock is not poisoned").push((
                             index,
                             pass,
                             change.timestamp.duration_since(origin).as_nanos(),
@@ -5325,7 +5376,10 @@ mod tests {
                 }
             }
             let id = tree.add_node(target);
-            let metadata = tree.metadatas.get_mut(&id).unwrap();
+            let metadata = tree
+                .metadatas
+                .get_mut(&id)
+                .expect("test fixture entry exists");
             let position = PxPosition::new(Px(index as i32 * 200), Px::ZERO);
             metadata.base_abs_position = Some(position);
             metadata.abs_position = Some(position);
@@ -5336,7 +5390,10 @@ mod tests {
             tree.pop_node();
         }
         tree.pop_node();
-        let metadata = tree.metadatas.get_mut(&root).unwrap();
+        let metadata = tree
+            .metadatas
+            .get_mut(&root)
+            .expect("test fixture entry exists");
         metadata.base_abs_position = Some(PxPosition::ZERO);
         metadata.abs_position = Some(PxPosition::ZERO);
         metadata.computed_data = Some(ComputedData {
@@ -5395,9 +5452,9 @@ mod tests {
                 .map(|pass| (index, pass, sample, Some(left)))
             })
             .collect();
-        assert_eq!(*log.lock().unwrap(), expected);
+        assert_eq!(*log.lock().expect("test lock is not poisoned"), expected);
         assert!(tree.active_pointer_paths.is_empty());
-        log.lock().unwrap().clear();
+        log.lock().expect("test lock is not poisoned").clear();
         let mut captured: Vec<_> = [
             (
                 CursorEventContent::Pressed(PressKeyEventType::Left),
@@ -5437,7 +5494,7 @@ mod tests {
             })
             .collect();
         assert_eq!(
-            *log.lock().unwrap(),
+            *log.lock().expect("test lock is not poisoned"),
             expected,
             "capture delivers outside movement and an unavailable-position release to the original target"
         );
@@ -5456,10 +5513,15 @@ mod tests {
             &mut Some(left),
             winit::keyboard::ModifiersState::empty(),
         );
-        let target = tree.find_node_id_by_instance_key(2).unwrap();
-        tree.metadatas.get_mut(&target).unwrap().event_clip_bounds = Some(crate::FloatRect::ZERO);
+        let target = tree
+            .find_node_id_by_instance_key(2)
+            .expect("test fixture entry exists");
+        tree.metadatas
+            .get_mut(&target)
+            .expect("test fixture entry exists")
+            .event_clip_bounds = Some(crate::FloatRect::ZERO);
         tree.metadatas.geometry_changed.insert(target);
-        log.lock().unwrap().clear();
+        log.lock().expect("test lock is not poisoned").clear();
         let mut release = [PointerChange::new(
             origin + std::time::Duration::from_nanos(1),
             MOUSE_POINTER_ID,
@@ -5474,7 +5536,7 @@ mod tests {
             winit::keyboard::ModifiersState::empty(),
         );
         assert_eq!(
-            *log.lock().unwrap(),
+            *log.lock().expect("test lock is not poisoned"),
             [
                 PointerEventPass::Initial,
                 PointerEventPass::Main,
@@ -5600,7 +5662,12 @@ mod tests {
         let (mut tree, targets) = focus_targets(false);
         tree.focus_owner.request_focus(targets[0].1);
         tree.focus_owner.request_focus(targets[0].1);
-        let root = tree.tree.get(targets[0].0).unwrap().parent().unwrap();
+        let root = tree
+            .tree
+            .get(targets[0].0)
+            .expect("test fixture entry exists")
+            .parent()
+            .expect("test fixture provides parent");
         tree.focus_owner.sync_from_component_tree(root, &tree.tree);
         tree.focus_owner.commit_pending();
         assert_eq!(
@@ -5621,15 +5688,20 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         let (mut tree, targets) = focus_targets(false);
         tree.focus_owner.request_focus(targets[0].1);
-        let root = tree.tree.get(targets[0].0).unwrap().parent().unwrap();
+        let root = tree
+            .tree
+            .get(targets[0].0)
+            .expect("test fixture entry exists")
+            .parent()
+            .expect("test fixture provides parent");
         tree.tree
             .get_mut(targets[0].0)
-            .unwrap()
+            .expect("test fixture entry exists")
             .get_mut()
             .interaction_mut()
             .focus_registration
             .as_mut()
-            .unwrap()
+            .expect("test fixture value is present")
             .properties
             .can_focus = false;
         tree.focus_owner.sync_from_component_tree(root, &tree.tree);
@@ -5637,12 +5709,12 @@ mod tests {
         assert_eq!(tree.focus_owner.active_component_node_id(), None);
         tree.tree
             .get_mut(targets[0].0)
-            .unwrap()
+            .expect("test fixture entry exists")
             .get_mut()
             .interaction_mut()
             .focus_registration
             .as_mut()
-            .unwrap()
+            .expect("test fixture value is present")
             .properties
             .can_focus = true;
         tree.focus_owner.sync_from_component_tree(root, &tree.tree);
@@ -5753,7 +5825,7 @@ mod tests {
                 .interaction_mut()
                 .focus_registration
                 .as_mut()
-                .unwrap()
+                .expect("test fixture value is present")
                 .properties
                 .can_focus = false;
         }
@@ -6057,7 +6129,9 @@ mod tests {
                 .keyboard_handlers
                 .push(Box::new(move |input| {
                     for _ in input.keyboard_events.drain(..) {
-                        keys.lock().unwrap().push((index, "key".into()));
+                        keys.lock()
+                            .expect("test lock is not poisoned")
+                            .push((index, "key".into()));
                     }
                 }));
             let delivered = Arc::clone(&delivered);
@@ -6067,7 +6141,10 @@ mod tests {
                 .push(Box::new(move |input| {
                     for event in input.ime_events.drain(..) {
                         if let winit::event::Ime::Commit(text) = event {
-                            delivered.lock().unwrap().push((index, text));
+                            delivered
+                                .lock()
+                                .expect("test lock is not poisoned")
+                                .push((index, text));
                         }
                     }
                 }));
@@ -6089,7 +6166,10 @@ mod tests {
         }
         tree.pop_node();
         for id in root.descendants(&tree.tree) {
-            let metadata = tree.metadatas.get_mut(&id).unwrap();
+            let metadata = tree
+                .metadatas
+                .get_mut(&id)
+                .expect("test fixture entry exists");
             metadata.base_abs_position = Some(PxPosition::ZERO);
             metadata.abs_position = Some(PxPosition::ZERO);
             metadata.computed_data = Some(ComputedData {
@@ -6107,7 +6187,9 @@ mod tests {
             &mut Some(PxPosition::new(Px(5), Px(5))),
             winit::keyboard::ModifiersState::empty(),
         );
-        let request = requests.ime_request.unwrap();
+        let request = requests
+            .ime_request
+            .expect("test fixture provides ime_request");
         assert_eq!(request.client_id, tree.focus_owner.active_handle_id());
         assert!(request.show_keyboard);
         let mut events = vec![
@@ -6120,7 +6202,10 @@ mod tests {
         let mut requests = WindowRequests::default();
         tree.dispatch_ime_input(root, &mut events, &mut requests);
         tree.dispatch_ime_input(root, &mut events, &mut requests);
-        assert_eq!(*delivered.lock().unwrap(), [(1, "composed text".into())]);
+        assert_eq!(
+            *delivered.lock().expect("test lock is not poisoned"),
+            [(1, "composed text".into())]
+        );
         let mut ime = crate::ime_state::ImeState::default();
         let mut keyboard = crate::keyboard_state::KeyboardState::default();
         ime.push_event_for(None, winit::event::Ime::Commit("before".into()));
@@ -6136,13 +6221,13 @@ mod tests {
             ime.take_events(),
         );
         assert_eq!(
-            &delivered.lock().unwrap()[1..],
+            &delivered.lock().expect("test lock is not poisoned")[1..],
             [(1, "before".into()), (1, "key".into()), (1, "after".into())]
         );
         let inputs: Vec<_> = root.children(&tree.tree).collect();
         tree.tree
             .get_mut(inputs[0])
-            .unwrap()
+            .expect("test fixture entry exists")
             .get_mut()
             .interaction_mut()
             .ime_handlers = vec![Box::new(|mut input| {
@@ -6154,7 +6239,7 @@ mod tests {
         })];
         tree.tree
             .get_mut(inputs[1])
-            .unwrap()
+            .expect("test fixture entry exists")
             .get_mut()
             .interaction_mut()
             .ime_handlers
@@ -6176,17 +6261,23 @@ mod tests {
         ));
         tree.dispatch_ime_input(root, &mut events, &mut requests);
         assert_eq!(
-            requests.ime_request.unwrap().client_id,
+            requests
+                .ime_request
+                .expect("test fixture provides ime_request")
+                .client_id,
             tree.focus_owner.active_handle_id()
         );
         assert_eq!(
-            delivered.lock().unwrap().last(),
+            delivered.lock().expect("test lock is not poisoned").last(),
             Some(&(1, "next text".into()))
         );
         requests = WindowRequests::default();
         tree.dispatch_ime_input(root, &mut events, &mut requests);
         assert_eq!(
-            requests.ime_request.unwrap().client_id,
+            requests
+                .ime_request
+                .expect("test fixture provides ime_request")
+                .client_id,
             tree.focus_owner.active_handle_id()
         );
         for (source, expected) in [
@@ -6204,11 +6295,17 @@ mod tests {
                 Vec::new(),
                 ime.take_events(),
             );
-            assert_eq!(requests.ime_request.unwrap().change_cause, expected);
+            assert_eq!(
+                requests
+                    .ime_request
+                    .expect("test fixture provides ime_request")
+                    .change_cause,
+                expected
+            );
         }
         tree.tree
             .get_mut(inputs[0])
-            .unwrap()
+            .expect("test fixture entry exists")
             .get_mut()
             .interaction_mut()
             .ime_handlers = vec![Box::new(|mut input| {
@@ -6218,7 +6315,7 @@ mod tests {
         })];
         tree.tree
             .get_mut(root)
-            .unwrap()
+            .expect("test fixture entry exists")
             .get_mut()
             .interaction_mut()
             .ime_preview_handlers = vec![Box::new(|_| {
@@ -6281,7 +6378,7 @@ mod tests {
         end_call(&mut tree, 2);
         let following = leaf(&mut tree, 5);
         tree.pop_node();
-        let root = tree.calls.host(2).unwrap();
+        let root = tree.calls.host(2).expect("test fixture provides host");
 
         let result = replay(&mut tree, 2, |tree| {
             tree.begin_call(2, 2, "composition");
@@ -6291,7 +6388,9 @@ mod tests {
             end_call(tree, 2);
         });
 
-        let added = tree.find_node_id_by_instance_key(7).unwrap();
+        let added = tree
+            .find_node_id_by_instance_key(7)
+            .expect("test fixture entry exists");
         assert_eq!(
             root.children(tree.tree()).collect::<Vec<_>>(),
             vec![reused, added, following]
@@ -6318,7 +6417,7 @@ mod tests {
         end_call(&mut tree, 2);
         let after = leaf(&mut tree, 3);
         tree.pop_node();
-        let root = tree.calls.host(2).unwrap();
+        let root = tree.calls.host(2).expect("test fixture provides host");
 
         replay(&mut tree, 2, |tree| {
             tree.begin_call(2, 2, "composition");
@@ -6343,7 +6442,7 @@ mod tests {
         end_call(&mut tree, 2);
         let following = leaf(&mut tree, 4);
         tree.pop_node();
-        let root = tree.calls.host(2).unwrap();
+        let root = tree.calls.host(2).expect("test fixture provides host");
 
         let result = replay(&mut tree, 2, |tree| {
             tree.begin_call(2, 2, "composition");

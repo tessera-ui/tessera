@@ -391,7 +391,7 @@ mod tests {
             reactive_fixture(probe.clone());
         }));
         pump_layout_test_session(&mut session, 0);
-        let (router, root_state, value) = output.get().unwrap();
+        let (router, root_state, value) = output.get().expect("fixture published router output");
         assert_eq!(value, 0);
         pump_layout_test_session(&mut session, 1);
         assert_eq!(
@@ -402,7 +402,7 @@ mod tests {
         );
         session.run(|| root_state.set(7));
         pump_layout_test_session(&mut session, 2);
-        assert_eq!(output.get().unwrap().2, 7);
+        assert_eq!(output.get().expect("fixture published router output").2, 7);
         assert_eq!(
             session
                 .work()
@@ -412,20 +412,20 @@ mod tests {
 
         session.run(|| router.with_mut(|router| router.push(DummyDestination)));
         pump_layout_test_session(&mut session, 3);
-        let (_, top_state, value) = output.get().unwrap();
+        let (_, top_state, value) = output.get().expect("fixture published router output");
         assert_eq!(value, 0);
         assert!(top_state != root_state);
         session.run(|| top_state.set(12));
         pump_layout_test_session(&mut session, 4);
-        assert_eq!(output.get().unwrap().2, 12);
+        assert_eq!(output.get().expect("fixture published router output").2, 12);
         session.run(|| {
             router.with_mut(|router| {
                 router.pop();
             })
         });
         pump_layout_test_session(&mut session, 5);
-        assert!(output.get().unwrap().1 == root_state);
-        assert_eq!(output.get().unwrap().2, 7);
+        assert!(output.get().expect("fixture published router output").1 == root_state);
+        assert_eq!(output.get().expect("fixture published router output").2, 7);
         assert_eq!(
             session.run(|| top_state.try_with(|value| *value)),
             Err(crate::state::ShardStateError::Stale)

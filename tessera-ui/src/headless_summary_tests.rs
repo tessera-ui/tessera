@@ -54,22 +54,37 @@ fn worker_summary_retains_real_timings_counters_and_explicit_snapshot() {
             ] {
                 assert!(record[timing].is_u64(), "Missing actual {timing}");
             }
-            assert!(record["frame_total_ns"].as_u64().unwrap() > 0);
+            assert!(
+                record["frame_total_ns"]
+                    .as_u64()
+                    .expect("test fixture provides as_u64")
+                    > 0
+            );
             assert!(
                 record["layout_diagnostics"]["measure_node_calls"]
                     .as_u64()
-                    .unwrap()
+                    .expect("test fixture provides as_u64")
                     >= 1
             );
         }
         for record in &records[..2] {
-            assert!(record["components"].as_array().unwrap().is_empty());
-            assert!(serde_json::to_vec(record).unwrap().len() < 8192);
+            assert!(
+                record["components"]
+                    .as_array()
+                    .expect("test fixture provides as_array")
+                    .is_empty()
+            );
+            assert!(
+                serde_json::to_vec(record)
+                    .expect("to_vec succeeds in the test fixture")
+                    .len()
+                    < 8192
+            );
         }
         assert!(
             records[0]["layout_diagnostics"]["geometry_nodes_updated"]
                 .as_u64()
-                .unwrap()
+                .expect("test fixture provides as_u64")
                 > 0
         );
         assert_eq!(records[1]["layout_diagnostics"]["measure_node_calls"], 1);
@@ -79,11 +94,26 @@ fn worker_summary_retains_real_timings_counters_and_explicit_snapshot() {
             records[1]["layout_diagnostics"]["geometry_nodes_updated"],
             0
         );
-        assert!(!records[2]["components"].as_array().unwrap().is_empty());
-        assert!(!records[3]["components"].as_array().unwrap().is_empty());
+        assert!(
+            !records[2]["components"]
+                .as_array()
+                .expect("test fixture provides as_array")
+                .is_empty()
+        );
+        assert!(
+            !records[3]["components"]
+                .as_array()
+                .expect("test fixture provides as_array")
+                .is_empty()
+        );
         if records[2].get("render_gpu_ns").is_some() {
             for record in &records[..2] {
-                assert!(record["render_gpu_ns"].as_u64().unwrap() > 0);
+                assert!(
+                    record["render_gpu_ns"]
+                        .as_u64()
+                        .expect("test fixture provides as_u64")
+                        > 0
+                );
             }
         }
         return;
@@ -131,7 +161,7 @@ fn worker_summary_retains_real_timings_counters_and_explicit_snapshot() {
     let request: WorkerRequest = serde_json::from_value(json!({
         "cmd":"input", "kind":"press", "x":40.25, "y":35.5
     }))
-    .unwrap();
+    .expect("from_value succeeds in the test fixture");
     handle_request(&mut renderer, request).expect("Real input after summary");
     handle_request(
         &mut renderer,

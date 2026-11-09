@@ -86,7 +86,7 @@ impl ComponentSnapshot {
             let tree = runtime.component_tree.tree();
             let metadata = runtime.component_tree.metadatas();
             let nodes = tree
-                .get_node_id_at(NonZero::new(1).unwrap())
+                .get_node_id_at(NonZero::<usize>::MIN)
                 .into_iter()
                 .flat_map(|root| root.descendants(tree))
                 .map(|id| {
@@ -356,7 +356,7 @@ mod tests {
         pump_layout_test_session(&mut session, 0);
         let components = ComponentSnapshot::capture();
         let target = components.tagged("target");
-        let bounds = target.bounds().unwrap();
+        let bounds = target.bounds().expect("test fixture provides bounds");
         assert_eq!(
             (bounds.x, bounds.y, bounds.width, bounds.height),
             (1.25, 2.5, 30.0, 20.0)
@@ -370,14 +370,18 @@ mod tests {
         let publication = TesseraRuntime::with_mut(|runtime| {
             runtime.component_tree.accessibility_update(None, true)
         })
-        .unwrap();
+        .expect("test fixture provides accessibility_update");
         let accessibility = AccessibilitySnapshot::new(publication, session.session_id());
-        let (target, _) = accessibility.find("target", Role::Button).unwrap();
-        let (parent, _) = accessibility.find("parent", Role::Group).unwrap();
+        let (target, _) = accessibility
+            .find("target", Role::Button)
+            .expect("test fixture entry exists");
+        let (parent, _) = accessibility
+            .find("parent", Role::Group)
+            .expect("test fixture entry exists");
         assert_eq!(
             accessibility
                 .ancestor_with_role(target, Role::Group)
-                .unwrap()
+                .expect("test fixture provides ancestor_with_role")
                 .0,
             parent
         );

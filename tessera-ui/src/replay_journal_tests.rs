@@ -337,7 +337,7 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
             .tree()
             .iter()
             .find(|node| !node.is_removed() && node.get().fn_name == "retained_dirty_branch")
-            .unwrap()
+            .expect("test fixture entry exists")
             .get()
             .instance_key;
         (
@@ -345,7 +345,7 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
             runtime
                 .component_tree
                 .find_node_id_by_instance_key(key)
-                .unwrap(),
+                .expect("test fixture entry exists"),
         )
     });
     assert_eq!(
@@ -354,9 +354,17 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
             .count("retained_dirty_branch", crate::WorkPhase::Build),
         1
     );
-    probe.version.get().unwrap().set(1);
+    probe
+        .version
+        .get()
+        .expect("test fixture entry exists")
+        .set(1);
     if !write_during_replay {
-        probe.leaf_version.get().unwrap().set(1);
+        probe
+            .leaf_version
+            .get()
+            .expect("test fixture entry exists")
+            .set(1);
     }
     pump_layout_test_session(&mut session, 16_000_000);
     assert_eq!(
@@ -438,7 +446,11 @@ fn a_stale_invalidation_does_not_block_live_replay() {
     assert!(!retained.is_empty());
 
     crate::runtime::record_replay_boundary_invalidation_for_instance_key(u64::MAX);
-    probe.version.get().unwrap().set(1);
+    probe
+        .version
+        .get()
+        .expect("test fixture entry exists")
+        .set(1);
     pump_layout_test_session(&mut session, 16_666_667);
 
     assert!(
@@ -493,7 +505,11 @@ fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
         .collect();
     assert_eq!(peers.len(), 2);
     assert_ne!(peers[0], peers[1]);
-    probe.armed.get().unwrap().set(true);
+    probe
+        .armed
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     for frame in 1..=3 {
         pump_layout_test_session(&mut session, frame * 16_666_667);
         assert_eq!(
@@ -589,7 +605,11 @@ fn placement_order_changes_update_retained_descendant_focus_traversal_without_re
     let before = session
         .work_totals()
         .count("ordered_branch", crate::WorkPhase::Build);
-    probe.reverse.get().unwrap().set(true);
+    probe
+        .reverse
+        .get()
+        .expect("test fixture entry exists")
+        .set(true);
     pump_layout_test_session(&mut session, 16_000_000);
     assert_eq!(
         session
@@ -729,7 +749,11 @@ fn retained_layout_leaves_pointer_index_when_its_last_handler_is_removed() {
     let position = PxPosition::from_f32_xy(10.0, 10.0);
     let button = PressKeyEventType::Left;
     for (frame, enabled, hits) in [(1, true, 1), (2, false, 1), (3, true, 2)] {
-        probe.armed.get().unwrap().set(enabled);
+        probe
+            .armed
+            .get()
+            .expect("test fixture entry exists")
+            .set(enabled);
         let timestamp = Instant::now();
         let changes = [
             CursorEventContent::Pressed(button),

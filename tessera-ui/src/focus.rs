@@ -1427,9 +1427,10 @@ impl FocusOwner {
             let rect = metadatas.get(node_id).and_then(|metadata| {
                 let position = metadata.abs_position?;
                 let size = metadata.computed_data?;
-                let transform = metadata
-                    .local_to_window
-                    .unwrap_or_else(|| crate::LocalToWindow::new(1.0, position).unwrap());
+                let transform = metadata.local_to_window.unwrap_or_else(|| {
+                    crate::LocalToWindow::new(1.0, position)
+                        .expect("unit scale is a valid transform")
+                });
                 let rect = transform
                     .map_rect(crate::FloatRect::from_position_size(
                         PxPosition::ZERO,

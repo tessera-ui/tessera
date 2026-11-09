@@ -34,8 +34,18 @@ fn paint_changes_reuse_order_but_supply_current_commands() {
     let previous = graph(1, 0, None);
     let current = graph(2, 0, None);
     let plan = previous.order_plan(None);
-    let command = &current.ordered_ops(Some(&previous)).next().unwrap().command;
-    assert_eq!(command.downcast_draw_ref::<Draw>().unwrap().paint, 2);
+    let command = &current
+        .ordered_ops(Some(&previous))
+        .next()
+        .expect("test fixture value is present")
+        .command;
+    assert_eq!(
+        command
+            .downcast_draw_ref::<Draw>()
+            .expect("test fixture provides downcast_draw_ref")
+            .paint,
+        2
+    );
     assert!(Arc::ptr_eq(plan, current.order_plan(None)));
 }
 

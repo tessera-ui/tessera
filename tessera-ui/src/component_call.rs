@@ -694,7 +694,7 @@ mod tests {
             assert!(
                 catch_unwind(AssertUnwindSafe(|| {
                     abandoned
-                        .unwrap()
+                        .expect("test fixture provides abandoned")
                         .configure("value", |props| props.value = 99);
                 }))
                 .is_err()

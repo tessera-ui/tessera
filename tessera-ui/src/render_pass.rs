@@ -349,7 +349,8 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         let geometry = DrawGeometry::new(
             PxSize::new(Px(240), Px(56)),
-            crate::LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5)).unwrap(),
+            crate::LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5))
+                .expect("test fixture provides from_f32_xy"),
         );
         let mut draw = op(Command::Draw(Box::new(ProbeDraw(true))), 1, 0);
         draw.geometry = geometry;

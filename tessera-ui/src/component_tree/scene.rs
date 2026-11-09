@@ -167,7 +167,9 @@ impl BranchChildren {
             } => SceneChildren::One(Arc::clone(rope)),
             Self::Many(many) => match many.outputs.len() {
                 0 => SceneChildren::Empty,
-                1 => SceneChildren::One(Arc::clone(many.outputs.values().next().unwrap())),
+                1 => SceneChildren::One(Arc::clone(
+                    many.outputs.values().next().expect("one output is present"),
+                )),
                 _ => SceneChildren::Many(many.outputs.clone()),
             },
         }
@@ -897,7 +899,12 @@ mod tests {
             };
 
             let initial = frame(tree, &[root, wrapper, first, second], &[]);
-            let previous_root = Arc::clone(tree.frame_scene.root.as_ref().unwrap());
+            let previous_root = Arc::clone(
+                tree.frame_scene
+                    .root
+                    .as_ref()
+                    .expect("test fixture provides as_ref"),
+            );
             let zero = PxPosition::ZERO;
             assert_eq!(drawing(&initial), [(0, zero), (1, zero), (2, zero)]);
 

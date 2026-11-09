@@ -302,12 +302,24 @@ mod tests {
             readback
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, move |result| {
-                    sender.send(result).unwrap();
+                    sender
+                        .send(result)
+                        .expect("send succeeds in the test fixture");
                 });
-            device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
-            receiver.recv().unwrap().unwrap();
+            device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .expect("wait_indefinitely succeeds in the test fixture");
+            receiver
+                .recv()
+                .expect("recv succeeds in the test fixture")
+                .expect("test fixture operation succeeds");
             assert_eq!(
-                bytemuck::cast_slice::<u8, u32>(&readback.slice(..).get_mapped_range().unwrap()),
+                bytemuck::cast_slice::<u8, u32>(
+                    &readback
+                        .slice(..)
+                        .get_mapped_range()
+                        .expect("get_mapped_range succeeds in the test fixture")
+                ),
                 values
             );
             readback.unmap();

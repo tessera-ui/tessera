@@ -405,7 +405,7 @@ mod tests {
             move || observed_state(output.clone())
         }));
         pump_layout_test_session(&mut first, 0);
-        let state = output.get().unwrap();
+        let state = output.get().expect("test fixture entry exists");
         let resource = first.run(local_runtime_resource::<Cell<usize>>);
         let weak = Rc::downgrade(&resource);
         drop(resource);
@@ -431,7 +431,9 @@ mod tests {
         drop(first);
         assert!(weak.upgrade().is_none());
         assert_eq!(
-            RuntimeSession::current().unwrap().identity(),
+            RuntimeSession::current()
+                .expect("test fixture provides current")
+                .identity(),
             second.identity()
         );
         second.run(|| assert!(!state.is_alive()));
@@ -562,7 +564,7 @@ mod tests {
             move || observed_state(output.clone())
         }));
         pump_layout_test_session(&mut session, 0);
-        let state = output.get().unwrap();
+        let state = output.get().expect("test fixture entry exists");
         assert!(!state.set_if_changed(7));
         assert!(!crate::runtime::has_pending_build_invalidations());
         pump_layout_test_session(&mut session, 1);
@@ -609,7 +611,7 @@ mod tests {
         assert!(
             std::thread::spawn(move || dispatcher.dispatch(move || value.set(11)))
                 .join()
-                .unwrap()
+                .expect("join succeeds in the test fixture")
         );
         assert_eq!(output.get(), 7);
         pump_layout_test_session(&mut session, 1);

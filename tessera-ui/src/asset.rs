@@ -370,8 +370,8 @@ mod tests {
     #[cfg(not(any(target_family = "wasm", target_os = "android")))]
     #[test]
     fn sources_decode_off_the_ui_thread_and_share_live_results() {
-        let file = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(file.path(), b"file").unwrap();
+        let file = tempfile::NamedTempFile::new().expect("new succeeds in the test fixture");
+        std::fs::write(file.path(), b"file").expect("path succeeds in the test fixture");
         crate::RuntimeSession::new().run(|| {
             let asset = Asset::embedded("test/shared", b"original");
             let decoded = Resource::load(asset, upper);

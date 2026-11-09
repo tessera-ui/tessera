@@ -725,7 +725,9 @@ mod tests {
         cursor.update_position(position(100));
         cursor.handle_touch_start(1, position(0));
         cursor.handle_touch_start(2, position(20));
-        let scroll = cursor.handle_touch_move(1, position(10)).unwrap();
+        let scroll = cursor
+            .handle_touch_move(1, position(10))
+            .expect("test fixture provides position");
         cursor.handle_touch_move(2, position(50));
         cursor.push_event(scroll);
         cursor.handle_touch_end(1);

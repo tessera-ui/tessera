@@ -858,7 +858,7 @@ mod tests {
         pump_layout_test_session(&mut session, 0);
         let snapshot = session.inspect_components();
         let instances = ["left", "right", "stable"].map(|tag| snapshot.tagged(tag).instance_id());
-        probe.get().unwrap().set(1);
+        probe.get().expect("test fixture entry exists").set(1);
         pump_layout_test_session(&mut session, 16_000_000);
         assert_eq!(
             instances.map(|instance| session
@@ -939,7 +939,7 @@ mod tests {
         pump_layout_test_session(&mut session, 0)
             .node("layout-dependent-build")
             .width(40);
-        let width = probe.width.get().unwrap();
+        let width = probe.width.get().expect("test fixture entry exists");
         session.run(|| width.set(80));
         pump_layout_test_session(&mut session, 16_666_667)
             .node("layout-dependent-build")
@@ -975,7 +975,7 @@ mod tests {
             layout_test(|| layout_feedback_fixture(probe.clone())).viewport_px(200, 100),
         );
         pump_layout_test_session(&mut session, 0);
-        let width = probe.get().unwrap();
+        let width = probe.get().expect("test fixture entry exists");
         assert_eq!(
             session.run(|| width.get()),
             crate::renderer::MAX_FRAME_SETTLING_RETRIES as i32 + 2
@@ -1041,28 +1041,53 @@ mod tests {
             pump_layout_test_session(&mut session, 0)
                 .node("retained-measure")
                 .width(40);
-            probe.visible.get().unwrap().set(false);
+            probe
+                .visible
+                .get()
+                .expect("test fixture entry exists")
+                .set(false);
             if update_before_hiding {
-                probe.width.get().unwrap().set(80);
+                probe
+                    .width
+                    .get()
+                    .expect("test fixture entry exists")
+                    .set(80);
             }
             pump_layout_test_session(&mut session, 16_666_667);
             if !update_before_hiding {
-                probe.width.get().unwrap().set(80);
+                probe
+                    .width
+                    .get()
+                    .expect("test fixture entry exists")
+                    .set(80);
             }
             pump_layout_test_session(&mut session, 33_333_334);
             pump_layout_test_session(&mut session, 50_000_001);
             assert_eq!(
-                session.diagnostics().unwrap().measure_node_calls,
+                session
+                    .diagnostics()
+                    .expect("test fixture provides diagnostics")
+                    .measure_node_calls,
                 1,
                 "an invalid unplaced subtree must not schedule repeated hidden measurements"
             );
-            probe.visible.get().unwrap().set(true);
+            probe
+                .visible
+                .get()
+                .expect("test fixture entry exists")
+                .set(true);
             pump_layout_test_session(&mut session, 66_666_668)
                 .node("retained-measure")
                 .width(80)
                 .position(0, 0);
             pump_layout_test_session(&mut session, 83_333_335);
-            assert_eq!(session.diagnostics().unwrap().measure_node_calls, 1);
+            assert_eq!(
+                session
+                    .diagnostics()
+                    .expect("test fixture provides diagnostics")
+                    .measure_node_calls,
+                1
+            );
         }
     }
     #[derive(Clone, PartialEq)]
@@ -1644,7 +1669,7 @@ mod tests {
         pump_layout_test_session(&mut session, 0)
             .node("deep-slot-value")
             .size(20, 20);
-        probe.get().unwrap().set(60);
+        probe.get().expect("test fixture entry exists").set(60);
         pump_layout_test_session(&mut session, 16_666_667)
             .node("deep-slot-value")
             .size(60, 20);
@@ -1652,7 +1677,10 @@ mod tests {
             .node("deep-slot-value")
             .size(60, 20);
         assert_eq!(
-            session.diagnostics().unwrap().measure_node_calls,
+            session
+                .diagnostics()
+                .expect("test fixture provides diagnostics")
+                .measure_node_calls,
             1,
             "Completed slot updates must leave the following idle layout cached"
         );
@@ -2096,7 +2124,7 @@ mod tests {
             .node("intrinsic-state")
             .size(20, 20)
             .position(40, 0);
-        let width = probe.get().unwrap();
+        let width = probe.get().expect("test fixture entry exists");
         for (frame, value) in [(16_666_667, 70), (33_333_334, 30)] {
             width.set(value);
             assert!(!crate::runtime::has_pending_build_invalidations());
@@ -2217,14 +2245,24 @@ mod tests {
             pump_layout_test_session(&mut session, 16_666_667)
                 .node("phase-child")
                 .position(0, 0);
-            assert_eq!(session.diagnostics().unwrap().geometry_nodes_updated, 0);
+            assert_eq!(
+                session
+                    .diagnostics()
+                    .expect("test fixture provides diagnostics")
+                    .geometry_nodes_updated,
+                0
+            );
             assert_eq!(
                 session
                     .work()
                     .executed::<StateOffsetModifier>(crate::WorkPhase::Transform),
                 0
             );
-            probe.offset.get().unwrap().set(35);
+            probe
+                .offset
+                .get()
+                .expect("test fixture entry exists")
+                .set(35);
             assert!(!crate::runtime::has_pending_build_invalidations());
             pump_layout_test_session(&mut session, 33_333_334)
                 .node("phase-child")
@@ -2241,11 +2279,23 @@ mod tests {
                     .count("placement_state_fixture", crate::WorkPhase::Build),
                 0
             );
-            assert!(session.diagnostics().unwrap().geometry_nodes_updated > 0);
+            assert!(
+                session
+                    .diagnostics()
+                    .expect("test fixture provides diagnostics")
+                    .geometry_nodes_updated
+                    > 0
+            );
             pump_layout_test_session(&mut session, 50_000_001)
                 .node("phase-child")
                 .position(35, 0);
-            assert_eq!(session.diagnostics().unwrap().geometry_nodes_updated, 0);
+            assert_eq!(
+                session
+                    .diagnostics()
+                    .expect("test fixture provides diagnostics")
+                    .geometry_nodes_updated,
+                0
+            );
         }
     }
 
@@ -2285,9 +2335,17 @@ mod tests {
                         .executed::<PlacementStatePolicy>(crate::WorkPhase::Measure)
                         > 0
                 );
-                probe.visible.get().unwrap().set(false);
+                probe
+                    .visible
+                    .get()
+                    .expect("test fixture entry exists")
+                    .set(false);
                 if update_before_hiding {
-                    probe.offset.get().unwrap().set(35);
+                    probe
+                        .offset
+                        .get()
+                        .expect("test fixture entry exists")
+                        .set(35);
                 }
                 pump_layout_test_session(&mut session, 16_666_667);
                 assert_eq!(
@@ -2297,7 +2355,11 @@ mod tests {
                     0
                 );
                 if !update_before_hiding {
-                    probe.offset.get().unwrap().set(35);
+                    probe
+                        .offset
+                        .get()
+                        .expect("test fixture entry exists")
+                        .set(35);
                 }
                 pump_layout_test_session(&mut session, 33_333_334);
                 assert_eq!(
@@ -2313,8 +2375,18 @@ mod tests {
                         .executed::<PlacementStatePolicy>(crate::WorkPhase::Measure),
                     0
                 );
-                assert_eq!(session.diagnostics().unwrap().measure_node_calls, 1);
-                probe.visible.get().unwrap().set(true);
+                assert_eq!(
+                    session
+                        .diagnostics()
+                        .expect("test fixture provides diagnostics")
+                        .measure_node_calls,
+                    1
+                );
+                probe
+                    .visible
+                    .get()
+                    .expect("test fixture entry exists")
+                    .set(true);
                 pump_layout_test_session(&mut session, 66_666_668)
                     .node("phase-child")
                     .position(35, 0);
@@ -2426,7 +2498,7 @@ mod tests {
                 > 0
         );
 
-        probe.get().unwrap().set(true);
+        probe.get().expect("test fixture entry exists").set(true);
         pump_layout_test_session(&mut session, 16_000_000)
             .node("renamed")
             .size(20, 10);
@@ -2529,7 +2601,7 @@ mod tests {
         assert!(
             error
                 .downcast_ref::<String>()
-                .unwrap()
+                .expect("test fixture provides downcast_ref")
                 .contains("is no longer Pending")
         );
         probe.rejected.set(probe.rejected.get() + 1);
@@ -2565,7 +2637,11 @@ mod tests {
             .node("committed-call")
             .size(10, 8);
         assert_eq!(probe.rejected.get(), 1);
-        probe.rebuild.get().unwrap().set(1);
+        probe
+            .rebuild
+            .get()
+            .expect("test fixture entry exists")
+            .set(1);
         pump_layout_test_session(&mut session, 16_666_667)
             .node("committed-call")
             .size(11, 8);
@@ -2584,9 +2660,15 @@ mod tests {
 
     #[tessera]
     fn contextual_call(tag: String, child: Option<RenderSlot>, probe: ContextProbe) {
-        assert_eq!(crate::use_context::<CallTheme>().unwrap().get().0, 17);
+        assert_eq!(
+            crate::use_context::<CallTheme>()
+                .expect("test fixture provides use_context")
+                .get()
+                .0,
+            17
+        );
         let local = remember(|| 0);
-        let child = child.unwrap();
+        let child = child.expect("test fixture provides child");
         probe.owners.with_mut(|owners| {
             if let Some(previous) = owners.iter_mut().find(|entry| entry.0 == tag) {
                 assert!(
@@ -2606,7 +2688,9 @@ mod tests {
 
     fn configure_contextual_call(handle: &ContextualCallBuilder, tag: &'static str, delta: i32) {
         handle.child(move || {
-            let context = crate::use_context::<CallTheme>().unwrap().get();
+            let context = crate::use_context::<CallTheme>()
+                .expect("test fixture provides use_context")
+                .get();
             tagged_box()
                 .tag(tag.to_owned())
                 .width(context.0 + delta)
@@ -2655,7 +2739,11 @@ mod tests {
         let snapshot = pump_layout_test_session(&mut session, 0);
         snapshot.node("context-first").size(17, 8).position(0, 0);
         snapshot.node("context-second").size(18, 8).position(0, 8);
-        probe.reversed.get().unwrap().set(true);
+        probe
+            .reversed
+            .get()
+            .expect("test fixture entry exists")
+            .set(true);
         let snapshot = pump_layout_test_session(&mut session, 16_666_667);
         snapshot.node("context-first").size(20, 8).position(0, 0);
         snapshot.node("context-second").size(22, 8).position(0, 8);
@@ -2702,7 +2790,7 @@ mod tests {
         }));
         for frame in 0..3 {
             if frame > 0 {
-                probe.get().unwrap().set(frame);
+                probe.get().expect("test fixture entry exists").set(frame);
             }
             pump_layout_test_session(&mut session, frame as u64 * 16_666_667)
                 .node("root-prop-child")
@@ -2743,7 +2831,7 @@ mod tests {
         pump_layout_test_session(&mut session, 0)
             .node("static-slot-a")
             .size(10, 8);
-        probe.get().unwrap().set(true);
+        probe.get().expect("test fixture entry exists").set(true);
         pump_layout_test_session(&mut session, 16_666_667)
             .node("static-slot-b")
             .size(20, 8);

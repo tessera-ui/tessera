@@ -710,9 +710,9 @@ fn clipped_shape_bounds(
         let (Some(clip), Some(origin)) = (metadata.clip_region(), metadata.abs_position) else {
             continue;
         };
-        let transform = metadata
-            .local_to_window
-            .unwrap_or_else(|| crate::LocalToWindow::new(1.0, origin).unwrap());
+        let transform = metadata.local_to_window.unwrap_or_else(|| {
+            crate::LocalToWindow::new(1.0, origin).expect("unit scale is a valid transform")
+        });
         let origin = transform.map_point(clip.position);
         let scale = transform.scale();
         bounds = intersect(
@@ -913,7 +913,7 @@ mod tests {
         assert!(
             index
                 .tree_update(&tree, None, false)
-                .unwrap()
+                .expect("test fixture provides tree_update")
                 .tree
                 .is_some()
         );
@@ -933,8 +933,10 @@ mod tests {
                 ),
             );
             tree[child].get_mut().instance_key = 1000 + revision;
-            metadatas.get_mut(&child).unwrap().abs_position =
-                Some(PxPosition::from_f32_xy(12.5, revision as f32));
+            metadatas
+                .get_mut(&child)
+                .expect("test fixture entry exists")
+                .abs_position = Some(PxPosition::from_f32_xy(12.5, revision as f32));
             index.invalidate(
                 &[root, child].into_iter().collect(),
                 &[previous].into_iter().collect(),
@@ -945,16 +947,24 @@ mod tests {
             assert!(index.geometry_changed.len() <= 1);
         }
         index.update(&tree, &metadatas, root);
-        let delta = index.tree_update(&tree, None, false).unwrap();
+        let delta = index
+            .tree_update(&tree, None, false)
+            .expect("test fixture provides tree_update");
         assert_eq!(delta.nodes.len(), 2);
         let current = delta
             .nodes
             .iter()
             .find(|(id, _)| *id == AccessKitNodeId(1128))
-            .unwrap();
+            .expect("test fixture provides AccessKitNodeId");
         assert_eq!(current.1.label(), Some("Revision 128"));
-        assert_eq!(current.1.bounds().unwrap().x0, 12.5);
-        assert_eq!(current.1.bounds().unwrap().y0, 128.0);
+        assert_eq!(
+            current.1.bounds().expect("test fixture provides bounds").x0,
+            12.5
+        );
+        assert_eq!(
+            current.1.bounds().expect("test fixture provides bounds").y0,
+            128.0
+        );
         assert!(current.1.supports_action(Action::Click));
         assert_eq!(
             node(&delta, root).children(),
@@ -1006,7 +1016,9 @@ mod tests {
         );
         let mut index = AccessibilityIndex::default();
         index.update(&tree, &metadatas, root);
-        let initial = index.tree_update(&tree, Some(child), true).unwrap();
+        let initial = index
+            .tree_update(&tree, Some(child), true)
+            .expect("test fixture value is present");
         assert_eq!(
             initial
                 .nodes
@@ -1021,7 +1033,7 @@ mod tests {
                 .nodes
                 .iter()
                 .find(|(id, _)| *id == child_key)
-                .unwrap()
+                .expect("test fixture entry exists")
                 .1
                 .description(),
             Some("First hint")
@@ -1039,7 +1051,9 @@ mod tests {
         });
         index.invalidate(&[parent].into_iter().collect(), &HashSet::default());
         assert_eq!(index.update(&tree, &metadatas, root), wrappers.len() + 2);
-        let delta = index.tree_update(&tree, Some(child), false).unwrap();
+        let delta = index
+            .tree_update(&tree, Some(child), false)
+            .expect("test fixture value is present");
         assert_eq!(delta.nodes.len(), 2);
         assert_eq!(delta.focus, child_key);
         assert_eq!(
@@ -1047,7 +1061,7 @@ mod tests {
                 .nodes
                 .iter()
                 .find(|(id, _)| *id == child_key)
-                .unwrap()
+                .expect("test fixture entry exists")
                 .1
                 .description(),
             Some("Updated hint")
@@ -1059,10 +1073,15 @@ mod tests {
                 .any(|(id, _)| *id == AccessKitNodeId(tree[sibling].get().instance_key))
         );
 
-        metadatas.get_mut(&parent).unwrap().accessibility = None;
+        metadatas
+            .get_mut(&parent)
+            .expect("test fixture entry exists")
+            .accessibility = None;
         index.invalidate(&[parent].into_iter().collect(), &HashSet::default());
         index.update(&tree, &metadatas, root);
-        let delta = index.tree_update(&tree, Some(child), false).unwrap();
+        let delta = index
+            .tree_update(&tree, Some(child), false)
+            .expect("test fixture value is present");
         assert_eq!(delta.focus, child_key);
         assert_eq!(delta.nodes.len(), 2);
         assert_eq!(node(&delta, child).description(), None);
@@ -1072,15 +1091,19 @@ mod tests {
         );
         assert!(!index.nodes.contains_key(&accesskit_id(parent)));
 
-        metadatas.get_mut(&child).unwrap().abs_position =
-            Some(PxPosition::from_f32_xy(10.25, -20.75));
+        metadatas
+            .get_mut(&child)
+            .expect("test fixture entry exists")
+            .abs_position = Some(PxPosition::from_f32_xy(10.25, -20.75));
         index.invalidate(
             &wrappers.iter().copied().chain([child]).collect(),
             &HashSet::default(),
         );
         index.update(&tree, &metadatas, root);
         assert!(index.ancestor_visits > 0);
-        let delta = index.tree_update(&tree, Some(child), false).unwrap();
+        let delta = index
+            .tree_update(&tree, Some(child), false)
+            .expect("test fixture value is present");
         assert_eq!(delta.nodes.len(), 1);
         assert_eq!(delta.nodes[0].0, child_key);
         assert_eq!(
@@ -1096,16 +1119,21 @@ mod tests {
         assert!(index.tree_update(&tree, Some(child), false).is_none());
 
         let wrapper = wrappers[0];
-        metadatas.get_mut(&wrapper).unwrap().set_accessibility(
-            Some(AccessibilityNode {
-                tooltip: Some("New group hint".into()),
-                ..AccessibilityNode::new()
-            }),
-            None,
-        );
+        metadatas
+            .get_mut(&wrapper)
+            .expect("test fixture entry exists")
+            .set_accessibility(
+                Some(AccessibilityNode {
+                    tooltip: Some("New group hint".into()),
+                    ..AccessibilityNode::new()
+                }),
+                None,
+            );
         index.invalidate(&[wrapper].into_iter().collect(), &HashSet::default());
         index.update(&tree, &metadatas, root);
-        let delta = index.tree_update(&tree, Some(child), false).unwrap();
+        let delta = index
+            .tree_update(&tree, Some(child), false)
+            .expect("test fixture value is present");
         assert_eq!(delta.focus, child_key);
         assert_eq!(delta.nodes.len(), 3);
         assert_eq!(node(&delta, child).description(), Some("New group hint"));
@@ -1135,12 +1163,14 @@ mod tests {
         let key = tree[old].get().instance_key;
         let mut index = AccessibilityIndex::default();
         index.update(&tree, &metadatas, root);
-        let initial = index.tree_update(&tree, None, true).unwrap();
+        let initial = index
+            .tree_update(&tree, None, true)
+            .expect("test fixture provides tree_update");
         let children = initial
             .nodes
             .iter()
             .find(|(id, _)| *id == AccessKitNodeId(tree[root].get().instance_key))
-            .unwrap()
+            .expect("test fixture entry exists")
             .1
             .children()
             .to_vec();
@@ -1158,18 +1188,20 @@ mod tests {
         tree[new].get_mut().instance_key = key;
         index.invalidate(&[new].into_iter().collect(), &[old].into_iter().collect());
         index.update(&tree, &metadatas, root);
-        let delta = index.tree_update(&tree, None, false).unwrap();
+        let delta = index
+            .tree_update(&tree, None, false)
+            .expect("test fixture provides tree_update");
         assert_eq!(delta.nodes.len(), 1);
         assert_eq!(delta.nodes[0].0, AccessKitNodeId(key));
         assert_eq!(delta.nodes[0].1.label(), Some("After"));
         assert_eq!(
             index
                 .tree_update(&tree, None, true)
-                .unwrap()
+                .expect("test fixture provides tree_update")
                 .nodes
                 .iter()
                 .find(|(id, _)| *id == AccessKitNodeId(tree[root].get().instance_key))
-                .unwrap()
+                .expect("test fixture entry exists")
                 .1
                 .children(),
             children
@@ -1226,12 +1258,16 @@ mod tests {
         assert!(node(&update, child).supports_action(Action::Focus));
         assert_eq!(update.focus, accesskit_id(child));
 
-        metadatas.get_mut(&child).unwrap().abs_position =
-            Some(PxPosition::from_f32_xy(20.5, 25.25));
+        metadatas
+            .get_mut(&child)
+            .expect("test fixture entry exists")
+            .abs_position = Some(PxPosition::from_f32_xy(20.5, 25.25));
         index.invalidate_geometry(&[child].into_iter().collect());
         index.update(&tree, &metadatas, root);
         assert_eq!(index.ancestor_visits, 0);
-        let delta = index.tree_update(&tree, None, false).unwrap();
+        let delta = index
+            .tree_update(&tree, None, false)
+            .expect("test fixture provides tree_update");
         assert_eq!(delta.nodes.len(), 1);
         assert_eq!(node(&delta, child).label(), Some("Masked action"));
         assert!(node(&delta, child).supports_action(Action::Click));
@@ -1246,21 +1282,30 @@ mod tests {
             })
         );
 
-        metadatas.get_mut(&child).unwrap().abs_position = None;
+        metadatas
+            .get_mut(&child)
+            .expect("test fixture entry exists")
+            .abs_position = None;
         index.invalidate_geometry(&[child].into_iter().collect());
         index.update(&tree, &metadatas, root);
-        let hidden = index.tree_update(&tree, None, true).unwrap();
+        let hidden = index
+            .tree_update(&tree, None, true)
+            .expect("test fixture provides tree_update");
         assert!(
             !hidden
                 .nodes
                 .iter()
                 .any(|(id, _)| *id == accesskit_id(child))
         );
-        metadatas.get_mut(&child).unwrap().abs_position =
-            Some(PxPosition::from_f32_xy(20.5, 25.25));
+        metadatas
+            .get_mut(&child)
+            .expect("test fixture entry exists")
+            .abs_position = Some(PxPosition::from_f32_xy(20.5, 25.25));
         index.invalidate_geometry(&[child].into_iter().collect());
         index.update(&tree, &metadatas, root);
-        let restored = index.tree_update(&tree, None, true).unwrap();
+        let restored = index
+            .tree_update(&tree, None, true)
+            .expect("test fixture provides tree_update");
         assert!(node(&restored, child).supports_action(Action::Focus));
         assert_eq!(restored.focus, accesskit_id(child));
     }
@@ -1311,24 +1356,40 @@ mod tests {
                     .with_label("Navigation"),
             ),
         );
-        metadatas.get_mut(&content).unwrap().placement_order = Some(1);
-        metadatas.get_mut(&navigation).unwrap().placement_order = Some(0);
+        metadatas
+            .get_mut(&content)
+            .expect("test fixture entry exists")
+            .placement_order = Some(1);
+        metadatas
+            .get_mut(&navigation)
+            .expect("test fixture entry exists")
+            .placement_order = Some(0);
         let mut index = AccessibilityIndex::default();
         index.update(&tree, &metadatas, root);
-        let initial = index.tree_update(&tree, Some(navigation), true).unwrap();
+        let initial = index
+            .tree_update(&tree, Some(navigation), true)
+            .expect("test fixture value is present");
         assert_eq!(
             node(&initial, root).children(),
             &[accesskit_id(navigation), accesskit_id(content)]
         );
-        metadatas.get_mut(&content).unwrap().placement_order = Some(0);
-        metadatas.get_mut(&navigation).unwrap().placement_order = Some(1);
+        metadatas
+            .get_mut(&content)
+            .expect("test fixture entry exists")
+            .placement_order = Some(0);
+        metadatas
+            .get_mut(&navigation)
+            .expect("test fixture entry exists")
+            .placement_order = Some(1);
         let changed = [content, navigation].into_iter().collect();
         metadatas.placement_order_changed = changed;
         index.invalidate_geometry(&metadatas.placement_order_changed);
         index.invalidate_placement_order(&metadatas.placement_order_changed);
         metadatas.placement_order_changed.clear();
         index.update(&tree, &metadatas, root);
-        let delta = index.tree_update(&tree, Some(navigation), false).unwrap();
+        let delta = index
+            .tree_update(&tree, Some(navigation), false)
+            .expect("test fixture value is present");
         assert_eq!(
             node(&delta, root).children(),
             &[accesskit_id(content), accesskit_id(navigation)]
@@ -1449,7 +1510,8 @@ mod tests {
             Some(AccessibilityNode::new().with_role(Role::Slider).focused()),
         );
         tree[slider].get_mut().instance_key = 700;
-        let before = build_tree_update(&tree, &metadatas, root, None, None).unwrap();
+        let before = build_tree_update(&tree, &metadatas, root, None, None)
+            .expect("test fixture provides build_tree_update");
         let target = before.focus;
         assert_eq!(target, AccessKitNodeId(700));
 
@@ -1467,14 +1529,15 @@ mod tests {
             Some(AccessibilityNode::new().with_role(Role::Slider).focused()),
         );
         tree[slider].get_mut().instance_key = 700;
-        let after = build_tree_update(&tree, &metadatas, root, None, None).unwrap();
+        let after = build_tree_update(&tree, &metadatas, root, None, None)
+            .expect("test fixture provides build_tree_update");
         assert_eq!(after.focus, target);
         assert_eq!(
             after
                 .nodes
                 .iter()
                 .find(|(id, _)| *id == target)
-                .unwrap()
+                .expect("test fixture entry exists")
                 .1
                 .role(),
             Role::Slider
@@ -1484,14 +1547,14 @@ mod tests {
         let observed = calls.clone();
         metadatas
             .get_mut(&slider)
-            .unwrap()
+            .expect("test fixture entry exists")
             .accessibility_action_handler = Some(Box::new(move |action| {
             assert_eq!(action, Action::Increment);
             observed.with_mut(|calls| *calls += 1);
         }));
         metadatas
             .get_mut(&decoration)
-            .unwrap()
+            .expect("test fixture entry exists")
             .accessibility_action_handler = Some(Box::new(|_| {
             panic!("an arena index must not receive another control's action")
         }));
@@ -1599,7 +1662,8 @@ mod tests {
         semantics.orientation = Some(accesskit::Orientation::Vertical);
         let slider = append_node(&mut tree, &mut metadatas, Some(root), Some(semantics));
 
-        let update = build_tree_update(&tree, &metadatas, root, None, None).unwrap();
+        let update = build_tree_update(&tree, &metadatas, root, None, None)
+            .expect("test fixture provides build_tree_update");
         let slider = node(&update, slider);
         assert_eq!(slider.numeric_value(), Some(0.4));
         assert_eq!(slider.min_numeric_value(), Some(0.2));
@@ -1622,7 +1686,8 @@ mod tests {
         semantics.expanded = Some(true);
         semantics.has_popup = Some(accesskit::HasPopup::Menu);
         let trigger = append_node(&mut tree, &mut metadatas, Some(root), Some(semantics));
-        let update = build_tree_update(&tree, &metadatas, root, None, None).unwrap();
+        let update = build_tree_update(&tree, &metadatas, root, None, None)
+            .expect("test fixture provides build_tree_update");
         assert_eq!(node(&update, trigger).is_expanded(), Some(true));
         assert_eq!(
             node(&update, trigger).has_popup(),
@@ -1679,7 +1744,7 @@ mod tests {
         let observed = calls.clone();
         metadatas
             .get_mut(&target)
-            .unwrap()
+            .expect("test fixture entry exists")
             .accessibility_action_handler = Some(Box::new(move |action| {
             assert_eq!(action, Action::Click);
             observed.with_mut(|calls| *calls += 1);
@@ -1703,11 +1768,16 @@ mod tests {
         assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
         assert_eq!(calls.get(), 1);
         edit_semantics(&mut metadatas, parent, |node| node.merge_descendants = true);
-        let metadata = metadatas.get_mut(&parent).unwrap();
+        let metadata = metadatas
+            .get_mut(&parent)
+            .expect("test fixture entry exists");
         let position = metadata.abs_position.take();
         assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
         assert_eq!(calls.get(), 1);
-        metadatas.get_mut(&parent).unwrap().abs_position = position;
+        metadatas
+            .get_mut(&parent)
+            .expect("test fixture entry exists")
+            .abs_position = position;
         assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
         assert_eq!(calls.get(), 2);
     }

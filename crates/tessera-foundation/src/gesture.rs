@@ -605,7 +605,10 @@ impl LongPressRecognizer {
         if !self.needs_frame() || !self.within_bounds {
             return false;
         }
-        let elapsed = frame_nanos.saturating_sub(self.frame_press_start.unwrap());
+        let elapsed = frame_nanos.saturating_sub(
+            self.frame_press_start
+                .expect("pending frames start with a press"),
+        );
         if u128::from(elapsed) < self.settings.threshold.as_nanos() {
             return false;
         }
@@ -1143,7 +1146,7 @@ mod slop_tests {
                 0.625,
                 PxPosition::from_f32_xy(x as f32 * 10.25, 20.5),
             )
-            .unwrap();
+            .expect("test scale is finite and positive");
             deltas.push(
                 drag.local_integer_delta(result.delta_x, result.delta_y, transform)
                     .0

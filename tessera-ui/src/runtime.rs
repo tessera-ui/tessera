@@ -4118,8 +4118,8 @@ mod tests {
             );
             let initial = crate::testing::pump_layout_test_session(&mut session, 0);
             let values = probe.values.get();
-            let first = values[1].unwrap();
-            let second = values[2].unwrap();
+            let first = values[1].expect("test fixture value is present");
+            let second = values[2].expect("test fixture value is present");
             assert_eq!(first.get(), 1);
             assert_eq!(second.get(), 2);
             initial.node("loop-item-1").size(1, 10).position(0, 0);
@@ -4130,20 +4130,28 @@ mod tests {
             changed.node("loop-item-1").size(11, 10).position(0, 0);
             changed.node("loop-item-2").size(2, 10).position(11, 0);
             assert_eq!(second.get(), 2);
-            probe.tick.get().unwrap().set(1);
+            probe.tick.get().expect("test fixture entry exists").set(1);
             let replayed = crate::testing::pump_layout_test_session(&mut session, 33_333_334);
             replayed.node("loop-item-1").size(11, 10).position(0, 0);
             replayed.node("loop-item-2").size(2, 10).position(11, 0);
 
             if keyed {
-                probe.order.get().unwrap().set(vec![0, 2, 1]);
+                probe
+                    .order
+                    .get()
+                    .expect("test fixture entry exists")
+                    .set(vec![0, 2, 1]);
                 let reordered = crate::testing::pump_layout_test_session(&mut session, 50_000_001);
                 reordered.node("loop-item-2").size(2, 10).position(0, 0);
                 reordered.node("loop-item-1").size(11, 10).position(2, 0);
-                assert!(probe.values.get()[1].unwrap() == first);
-                assert!(probe.values.get()[2].unwrap() == second);
+                assert!(probe.values.get()[1].expect("test fixture entry exists") == first);
+                assert!(probe.values.get()[2].expect("test fixture entry exists") == second);
 
-                probe.order.get().unwrap().set(vec![0, 2]);
+                probe
+                    .order
+                    .get()
+                    .expect("test fixture entry exists")
+                    .set(vec![0, 2]);
                 let removed = crate::testing::pump_layout_test_session(&mut session, 66_666_668);
                 removed.node("loop-item-2").size(2, 10).position(0, 0);
                 assert!(!first.is_alive());
@@ -4165,8 +4173,8 @@ mod tests {
             .viewport_px(100, 20),
         );
         crate::testing::pump_layout_test_session(&mut session, 0);
-        let first = probe.values.get()[1].unwrap();
-        let second = probe.values.get()[2].unwrap();
+        let first = probe.values.get()[1].expect("test fixture entry exists");
+        let second = probe.values.get()[2].expect("test fixture entry exists");
 
         with_batched_state_writes(|| {
             first.set(11);
@@ -4260,16 +4268,25 @@ mod tests {
             let snapshots = &tracker.previous_nodes;
             let root = snapshots.get_for_replay_root(&22).expect("root snapshot");
             assert_eq!(snapshots.next_ordered.get(), 1);
-            assert!(std::ptr::eq(root, snapshots.get_ordered(&22).unwrap()));
+            assert!(std::ptr::eq(
+                root,
+                snapshots
+                    .get_ordered(&22)
+                    .expect("test fixture entry exists")
+            ));
             assert_eq!(snapshots.next_ordered.get(), 2);
             assert!(std::ptr::eq(
-                snapshots.get_ordered(&33).unwrap(),
-                snapshots.get(&33).unwrap(),
+                snapshots
+                    .get_ordered(&33)
+                    .expect("test fixture entry exists"),
+                snapshots.get(&33).expect("test fixture entry exists"),
             ));
             assert_eq!(snapshots.next_ordered.get(), 3);
             assert!(std::ptr::eq(
-                snapshots.get_ordered(&11).unwrap(),
-                snapshots.get(&11).unwrap(),
+                snapshots
+                    .get_ordered(&11)
+                    .expect("test fixture entry exists"),
+                snapshots.get(&11).expect("test fixture entry exists"),
             ));
         });
 
@@ -4277,8 +4294,10 @@ mod tests {
         with_component_replay_tracker(|tracker| {
             let snapshots = &tracker.previous_nodes;
             assert!(std::ptr::eq(
-                snapshots.get_ordered(&44).unwrap(),
-                snapshots.get(&44).unwrap(),
+                snapshots
+                    .get_ordered(&44)
+                    .expect("test fixture entry exists"),
+                snapshots.get(&44).expect("test fixture entry exists"),
             ));
             assert!(snapshots.get_ordered(&22).is_none());
         });
@@ -4319,7 +4338,7 @@ mod tests {
             fn drop(&mut self) {
                 assert_eq!(
                     previous_component_replay_node(11)
-                        .unwrap()
+                        .expect("test fixture provides previous_component_replay_node")
                         .instance_logic_id,
                     11
                 );
@@ -4333,7 +4352,11 @@ mod tests {
         let released = crate::testing::TestProbe::new(false);
         seed_previous_replay_snapshot(11);
         with_component_replay_tracker_mut(|tracker| {
-            let mut snapshot = tracker.previous_nodes.get(&11).unwrap().clone();
+            let mut snapshot = tracker
+                .previous_nodes
+                .get(&11)
+                .expect("test fixture entry exists")
+                .clone();
             tracker.previous_nodes.insert(
                 11,
                 ReplayNodeSnapshot {
