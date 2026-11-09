@@ -27,6 +27,7 @@ use tessera_ui::{
 use crate::res::I18N;
 
 pub(super) use super::article_helpers::{badge, prose};
+
 use super::{
     ACCENT,
     article::{ArticlePage, SpecSection, article},
