@@ -65,10 +65,16 @@ impl TaskHandles {
     where
         F: Future<Output = ()> + Send + 'static,
     {
+        let (cancel, registration) = AbortHandle::new_pair();
+        let wrapped = Abortable::new(fut, registration);
         #[cfg(not(target_family = "wasm"))]
-        let (handle, cancel) = spawn_task(&self.executor, fut);
+        let handle = self.executor.spawn(async move {
+            let _ = wrapped.await;
+        });
         #[cfg(target_family = "wasm")]
-        let (handle, cancel) = spawn_task(fut);
+        let handle = spawn_local(async move {
+            let _ = wrapped.await;
+        });
         self.tasks.lock().push(TaskHandle { handle, cancel });
     }
 
@@ -79,32 +85,6 @@ impl TaskHandles {
             task.cancel.abort();
         }
     }
-}
-
-#[cfg(not(target_family = "wasm"))]
-fn spawn_task<F>(executor: &tokio::runtime::Handle, fut: F) -> (TaskRuntimeHandle, AbortHandle)
-where
-    F: Future<Output = ()> + Send + 'static,
-{
-    let (cancel, registration) = AbortHandle::new_pair();
-    let wrapped = Abortable::new(fut, registration);
-    let handle = executor.spawn(async move {
-        let _ = wrapped.await;
-    });
-    (handle, cancel)
-}
-
-#[cfg(target_family = "wasm")]
-fn spawn_task<F>(fut: F) -> (TaskRuntimeHandle, AbortHandle)
-where
-    F: Future<Output = ()> + Send + 'static,
-{
-    let (cancel, registration) = AbortHandle::new_pair();
-    let wrapped = Abortable::new(fut, registration);
-    spawn_local(async move {
-        let _ = wrapped.await;
-    });
-    ((), cancel)
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]

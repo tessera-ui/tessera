@@ -26,8 +26,6 @@ the old and new drawing bounds of changed or removed branches. Eligible frames
 clear that damage rectangle and replay intersecting commands in scene order,
 with the same shape clips, blending, and MSAA as a full redraw. Unchanged frames
 do not upload or draw scene batches; presentation still copies the scene target.
-Small damage regions can build their draw list directly from intersecting scene
-branches, retaining ancestor clips. The full draw list remains available on demand.
 
 The retained scene follows the layout tree. Changes to direct layout children
 update the parent branch, including when calls or group nodes reorder retained
@@ -59,101 +57,15 @@ consumed input. Build-time feedback to an already executed boundary remains
 deferred until the next frame, and nonconverging layout feedback yields after
 the retry limit instead of monopolizing the event loop.
 
-## Retained runtime storage
-
-The session owns its density and core runtime tables directly. The runtime
-tables, including context slots, initialize on first access. Handle validation
-reads the selected identity while its owning session is alive.
-Replay snapshots share finalized props and inherited context maps. Empty
-contexts need no binding storage. Context and keyed scopes restore their prior
-bindings when they exit. Control-flow scopes extend and restore a compact path
-identity, which pending calls and replay snapshots store by value.
-Pending calls install the live bindings captured at declaration. Replay
-snapshots resolve bindings that can change across frames.
-Replay snapshot records are contiguous, with a separate index by instance key.
-Partial replay leaves unchanged snapshots in place and publishes all replacements
-before releasing retired props.
-Modifier snapshots share immutable chain links. Each chain records the action
-categories it contains, so capability queries and change comparisons skip
-categories absent from both chains. The scene stores empty and
-single-child branches inline and uses persistent ordered maps for wider branches
-so updating one child can preserve the previous frame's snapshot.
-Scene branches and layout metadata use dense node tables with generation checks.
-Scene culling uses the inherited clip bounds computed by layout.
-
-Nodes allocate interaction data, accessibility descriptions, and shape clip
-regions only when used.
-Descriptive semantics retain their text and inheritance fields and expand
-them when publishing a snapshot. Rebuilt nodes reuse semantic storage while
-the description keeps its representation.
-Rectangular clips retain fractional bounds and derive outward pixel bounds as needed.
-Scene branches and retained draw snapshots share clip records.
-Pointer modifier positions and their transform metadata are allocated on demand.
-The node and its dispatch plans share the position buffer.
-The accessibility index starts from the live tree on first publication and
-tracks only semantic nodes and the window root. A deactivated adapter releases
-its index and stops collecting changes until publication resumes.
-
-Component calls occupy no tree node; call records carry their identity, state,
-and replay snapshots. Group nodes without semantics need no geometry metadata.
-Nodes and input dispatch plans borrow static function names. Layout input
-snapshots share the authored policy with component props, and each layout node
-measures with its own policy clone. Cached child measurements share
-their storage across placement updates, and leaf layouts need no child storage.
-When a new measurement reproduces the cached layout, the runtime keeps the
-previous snapshot. Cache hits that execute no policy skip the measurement scope.
-Layout adjacency stores a single child inline. Parents with a single group
-child can share its wider flattened layout child list.
-The ancestor walk records local invalidations and affected children together.
-A path with one affected child keeps that child inline.
-State, context, focus, and render-slot reads share a dependency index with inline
-storage for the first reader and dependency.
-Functor lookup keeps one slot per order buffer inline and reuses overflow
-storage in proportion to the previous build's order.
-An order hit reuses the slot record directly. Order and key lookups share the
-same update path.
-Component slot ownership shares the same inline set used for dependency readers.
-The slot key index stores handles and compares full keys in their slot records.
-
 Partial replay preserves the node and its layout metadata when the component
 identity and role match. Children declared in the same order keep their tree
 links. Reordered children remain eligible for reuse until the replacement
 finishes. Retained descendants compare their old and new consumer ancestry
 before the frame updates focus, semantics, and position observers.
-An in-place group rebuild with no modifiers, interaction, or geometry
-metadata stays out of the consumer journal unless the rebuilt node adds one
-of those capabilities. Layout child changes still use the structure journal.
 Rebuilt group nodes invalidate paint for retained layout descendants,
 including fragments that were previously empty. This restores drawing after
 overlays or conditional marks change without forcing new measurements.
 
-Each replay round refreshes affected parent layout lists from the deepest
-parent outward. Sibling replacements attach at their original positions and
-share that refresh. Consumers compare retained ancestry after the round's order
-is available.
-Replay records rebuilt identities and retained roots as they attach. Removal
-checks index the rebuilt identities only when a large replacement has old
-branches to remove.
-Replay planning shares the invalidation set when all keys are live and filters
-expired keys before execution. Pending work is copied only when the first
-round leaves invalidations to process.
-Disjoint replay roots keep their planned node IDs and load their snapshots just
-before execution.
-Component replay uses the same props allocation prepared by the registered call.
-Immediate setters take only the pending configuration while the declaration
-scope stays registered.
-Call replays replace the call's contiguous output nodes and reuse the build queue and bounded temporary identity sets.
-Detached subtrees transfer reusable geometry through the live instance index.
-Retained calls reattach every output node directly; a call without output
-reinserts new content at its composition position.
-Focus, pointer dispatch, and accessibility read sibling order from the same
-indices stored on the component nodes.
-Frame structure journals reuse capacity in proportion to recent changes and the
-live tree after all consumers have read them.
-Focus reads the geometry and structure journals directly when it has attached
-targets or active focus.
-The pointer index reads the geometry journal directly and refreshes plans for
-nodes with pointer handlers or cursor modifiers.
 Rebuilt layout leaves with a matching instance keep their node IDs and cached
 geometry. Changes to input geometry or the parent invalidate placement.
 
@@ -176,23 +88,10 @@ must use the actual texture dimensions and the valid region separately. Scene
 filters operate on region-sized targets, with `scene_rect` mapping sampled
 pixels back to window coordinates.
 
-Vector atlas pages retain recently used sizes for up to 120 unused frames.
-The cache evicts oldest inactive pages above 32 MiB; pages sampled by the current
-frame are never evicted to satisfy that budget.
-
 Native component-package registration starts system-font scanning and matching
 for normal, medium, and bold text on a worker, overlapping renderer startup.
 The first text layout waits only if that preparation has not completed; custom
 font registration still invalidates the affected matching caches normally.
-Plain text shares immutable content across component props, layout, and semantics.
-Text measurement and drawing share the shaped buffer, and only drawing keeps
-the text color.
-The measurement cache compares the text and pixel format stored in the shaped
-data.
-Initial layout and reflow share live glyph buffers and measurements for identical
-short text and constraints within a runtime session. A mutable font-system borrow
-clears the bounded weak lookup and invalidates older buffers as reflow sources.
-
 Scene, MSAA, and stencil attachments reuse nearby allocation sizes while layout,
 clipping, and drawing retain the exact viewport dimensions. Capacity grows in
 128-pixel steps with shrink hysteresis: each axis keeps less than 256 pixels of
@@ -213,13 +112,6 @@ profiling output includes the same fields.
 Render-graph ordering is deferred until the target needs scene work and is
 included in `render_build_passes_ns`; `render_prepare_ns` is not emitted for a
 separate pre-render ordering step.
-
-Draw order can be reused across scene updates when the authoring sequence,
-pipeline types, clip transitions, and ordering bounds still match. The order
-plan contains indices into the current commands and does not retain prior paint
-payloads. Scene snapshots share recorded fragments until the fragment changes.
-Pass planning borrows commands from the graph. A partial redraw keeps the clip
-stack and only plans draws that intersect the damage rectangle.
 
 Windowed `frame_total_ns` includes pending surface and render-target resize work.
 

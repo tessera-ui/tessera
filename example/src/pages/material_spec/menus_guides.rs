@@ -18,6 +18,7 @@ use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera, use_
 
 use crate::res::I18N;
 
+pub(super) use super::super::article_helpers::caption;
 use super::{
     ACCENT, INK,
     annotations::{self, Geometry, dotted, relative, watch},
@@ -82,14 +83,6 @@ fn baseline_mark(geometry: Option<State<Geometry>>, slot: Option<usize>, part: u
         (Some(geometry), Some(slot)) => watch(geometry, BASELINE_NAMES[slot][part]),
         _ => Modifier::new(),
     }
-}
-
-#[tessera]
-pub(super) fn caption(#[prop(into)] value: String) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text(I18N.text(value))
-        .color(scheme.on_surface_variant)
-        .style(type_style(14.0, 20.0));
 }
 
 #[tessera]

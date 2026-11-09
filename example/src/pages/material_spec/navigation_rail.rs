@@ -25,6 +25,7 @@ use crate::res::I18N;
 use super::{
     ACCENT,
     article::{ArticlePage, SpecSection, article},
+    article_helpers::{bullets, caption, prose},
     gap,
     navigation::{NAMES, destination_icon, navigation_color_roles},
     panel, spec_table, srgb, subheading, type_style,
@@ -249,29 +250,6 @@ pub(super) fn navigation_rail_spec(
     } else {
         live_rail_modal(modal_open, modal_selected, content);
     }
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
-}
-
-#[tessera]
-fn caption(#[prop(into)] value: String) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text(I18N.text(value))
-        .color(scheme.on_surface_variant)
-        .style(type_style(14.0, 20.0));
-}
-
-#[tessera]
-fn bullets(items: Vec<String>) {
-    column().children(move || {
-        for item in items.clone() {
-            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
-            gap(Dp(8.0));
-        }
-    });
 }
 
 #[tessera]

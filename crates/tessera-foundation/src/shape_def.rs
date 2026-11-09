@@ -134,12 +134,7 @@ impl Default for Shape {
 
 impl Shape {
     /// A pure rectangle shape with no rounded corners.
-    pub const RECTANGLE: Self = Shape::RoundedRectangle {
-        top_left: RoundedCorner::manual(Dp(0.0), 3.0),
-        top_right: RoundedCorner::manual(Dp(0.0), 3.0),
-        bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-    };
+    pub const RECTANGLE: Self = Self::rounded_rectangle(Dp(0.0));
 
     /// A helper to create a uniform rounded rectangle shape with manual
     /// corners.

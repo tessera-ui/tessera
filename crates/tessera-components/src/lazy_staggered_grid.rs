@@ -6,9 +6,8 @@
 use std::{hash::Hash, ops::Range, sync::Arc};
 
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
-    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlotWith,
-    State, key,
+    AxisConstraint, CallbackWith, Color, ComputedData, Dp, LayoutResult, MeasurementError,
+    Modifier, Px, PxPosition, RenderSlotWith, State, key,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     remember, tessera,
@@ -16,11 +15,11 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    layout_flex::{cross_axis_child_constraint, px_mul},
+    layout_flex::px_mul,
     lazy_grid::{GridCells, GridSlots, compute_cell_offset, resolve_grid_slots},
     lazy_shared::{
-        LazyItemsPlan as LazySlotPlan, LazyItemsSlot as LazySlot, MeasuredMain, ZeroLayout,
-        clamp_reported_main, hash_key,
+        LazyAxis, LazyItemsPlan as LazySlotPlan, LazyItemsSlot as LazySlot, MeasuredMain,
+        ZeroLayout, clamp_reported_main, hash_key,
     },
     scrollable::{
         ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable,
@@ -192,7 +191,7 @@ pub fn lazy_vertical_staggered_grid(
             scroll_controller,
             slots: content.slots,
         },
-        StaggeredGridAxis::Vertical,
+        LazyAxis::Vertical,
     );
 }
 
@@ -220,17 +219,17 @@ struct LazyStaggeredGridSlotsArgs {
 }
 
 #[tessera]
-fn lazy_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs, axis: StaggeredGridAxis) {
+fn lazy_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs, axis: LazyAxis) {
     let scroll_controller = args.scroll_controller;
-    let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
-    let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
+    let main_axis_spacing = Px::from(args.main_axis_spacing).max(Px::ZERO);
+    let cross_axis_spacing = Px::from(args.cross_axis_spacing).max(Px::ZERO);
     let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
-    let padding_main = sanitize_spacing(Px::from(args.content_padding));
-    let padding_cross = sanitize_spacing(Px::from(args.content_padding));
+    let padding_main = Px::from(args.content_padding).max(Px::ZERO);
+    let padding_cross = Px::from(args.content_padding).max(Px::ZERO);
     scrollable()
         .modifier(args.modifier)
-        .vertical(axis == StaggeredGridAxis::Vertical)
-        .horizontal(axis == StaggeredGridAxis::Horizontal)
+        .vertical(axis == LazyAxis::Vertical)
+        .horizontal(axis == LazyAxis::Horizontal)
         .apply_child_offset(false)
         .scroll_smoothing(args.scroll_smoothing)
         .scrollbar_behavior(args.scrollbar_behavior)
@@ -385,7 +384,7 @@ pub fn lazy_horizontal_staggered_grid(
             scroll_controller,
             slots: content.slots,
         },
-        StaggeredGridAxis::Horizontal,
+        LazyAxis::Horizontal,
     );
 }
 
@@ -395,13 +394,6 @@ crate::lazy_shared::impl_lazy_builder!(
     LazyStaggeredGridContent
 );
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
-enum StaggeredGridAxis {
-    #[default]
-    Vertical,
-    Horizontal,
-}
-
 #[derive(Clone, PartialEq, Eq)]
 struct VisibleStaggeredLayoutItem {
     item_index: usize,
@@ -409,7 +401,7 @@ struct VisibleStaggeredLayoutItem {
 
 #[derive(Clone)]
 struct LazyStaggeredGridLayout {
-    axis: StaggeredGridAxis,
+    axis: LazyAxis,
     item_alignment: CrossAxisAlignment,
     estimated_item_main: Px,
     main_spacing: Px,
@@ -456,7 +448,10 @@ impl tessera_ui::LayoutModifierNode for LazyStaggeredGridLayout {
                     continue;
                 };
                 let lane_cross = self.slots.sizes.get(lane).copied().unwrap_or(Px::ZERO);
-                let child_constraint = self.axis.child_constraint(lane_cross, self.item_alignment);
+                let child_constraint = self.axis.child_constraint(
+                    AxisConstraint::exact(lane_cross.max(Px::ZERO)),
+                    self.item_alignment,
+                );
                 let child_size = child.measure(input, &child_constraint)?;
                 let child_size = child_size.size();
                 let item_main = self.axis.main(&child_size);
@@ -564,7 +559,7 @@ impl tessera_ui::LayoutModifierNode for LazyStaggeredGridLayout {
 
 #[tessera]
 fn lazy_staggered_grid_view(
-    axis: Option<StaggeredGridAxis>,
+    axis: Option<LazyAxis>,
     grid_cells: Option<StaggeredGridCells>,
     main_axis_spacing: Option<Px>,
     cross_axis_spacing: Option<Px>,
@@ -598,7 +593,7 @@ fn lazy_staggered_grid_view(
     let total_count = plan.total_count();
 
     let visible_size = scroll_controller.with(|s| s.visible_size());
-    let available_cross = axis.visible_cross(visible_size);
+    let available_cross = axis.cross(&visible_size);
     let available_cross = (available_cross - padding_cross * 2).max(Px::ZERO);
     let grid_slots = resolve_grid_slots(
         available_cross,
@@ -625,7 +620,7 @@ fn lazy_staggered_grid_view(
 
     let scroll_offset = axis.scroll_offset(scroll_controller.with(|s| s.child_position()));
     let viewport_span = resolve_viewport_span(
-        axis.visible_span(visible_size),
+        axis.main(&visible_size),
         estimated_item_main,
         main_axis_spacing,
     );
@@ -780,112 +775,6 @@ fn compute_visible_range(
     start..end
 }
 
-#[derive(Clone, Copy)]
-enum FocusScrollDirection {
-    Forward,
-    Backward,
-}
-
-impl StaggeredGridAxis {
-    fn main(&self, size: &ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.height,
-            Self::Horizontal => size.width,
-        }
-    }
-
-    fn cross(&self, size: &ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.width,
-            Self::Horizontal => size.height,
-        }
-    }
-
-    fn pack_size(&self, main: Px, cross: Px) -> ComputedData {
-        match self {
-            Self::Vertical => ComputedData {
-                width: cross,
-                height: main,
-            },
-            Self::Horizontal => ComputedData {
-                width: main,
-                height: cross,
-            },
-        }
-    }
-
-    fn position(&self, main: Px, cross: Px) -> PxPosition {
-        match self {
-            Self::Vertical => PxPosition::new(cross, main),
-            Self::Horizontal => PxPosition::new(main, cross),
-        }
-    }
-
-    fn visible_span(&self, size: ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.height,
-            Self::Horizontal => size.width,
-        }
-    }
-
-    fn visible_cross(&self, size: ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.width,
-            Self::Horizontal => size.height,
-        }
-    }
-
-    fn scroll_position(&self, offset: Px) -> PxPosition {
-        match self {
-            Self::Vertical => PxPosition::new(Px::ZERO, -offset),
-            Self::Horizontal => PxPosition::new(-offset, Px::ZERO),
-        }
-    }
-
-    fn scroll_offset(&self, position: PxPosition) -> Px {
-        match self {
-            Self::Vertical => Px((-position.y).max(0.0) as i32),
-            Self::Horizontal => Px((-position.x).max(0.0) as i32),
-        }
-    }
-
-    fn focus_scroll_direction(&self, direction: FocusDirection) -> Option<FocusScrollDirection> {
-        match (self, direction) {
-            (_, FocusDirection::Next | FocusDirection::Enter) => {
-                Some(FocusScrollDirection::Forward)
-            }
-            (_, FocusDirection::Previous | FocusDirection::Exit) => {
-                Some(FocusScrollDirection::Backward)
-            }
-            (Self::Vertical, FocusDirection::Down) => Some(FocusScrollDirection::Forward),
-            (Self::Vertical, FocusDirection::Up) => Some(FocusScrollDirection::Backward),
-            (Self::Horizontal, FocusDirection::Right) => Some(FocusScrollDirection::Forward),
-            (Self::Horizontal, FocusDirection::Left) => Some(FocusScrollDirection::Backward),
-            _ => None,
-        }
-    }
-
-    fn child_constraint(&self, cross: Px, alignment: CrossAxisAlignment) -> Constraint {
-        let cross = cross.max(Px::ZERO);
-        // The cell defines an exact cross extent, so the shared rule reproduces
-        // the previous behavior: `Stretch` fills the cell, other alignments let
-        // the item measure itself within that extent.
-        let cross_constraint = cross_axis_child_constraint(AxisConstraint::exact(cross), alignment);
-
-        match self {
-            Self::Vertical => Constraint::new(cross_constraint, AxisConstraint::NONE),
-            Self::Horizontal => Constraint::new(AxisConstraint::NONE, cross_constraint),
-        }
-    }
-
-    fn constraint_max(&self, constraint: ParentConstraint<'_>) -> Option<Px> {
-        match self {
-            Self::Vertical => constraint.height().resolve_max(),
-            Self::Horizontal => constraint.width().resolve_max(),
-        }
-    }
-}
-
 fn visible_items(plan: &LazySlotPlan, range: Range<usize>) -> Vec<VisibleStaggeredItem> {
     let mut result = Vec::new();
     for index in range {
@@ -916,7 +805,7 @@ struct VisibleStaggeredItem {
 }
 
 struct LazyStaggeredGridFocusArgs {
-    axis: StaggeredGridAxis,
+    axis: LazyAxis,
     controller: State<LazyStaggeredGridController>,
     scroll_controller: State<ScrollableController>,
     total_count: usize,
@@ -932,26 +821,23 @@ fn lazy_staggered_grid_focus_beyond_bounds_modifier(args: LazyStaggeredGridFocus
         .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
     let max_scroll = (args.total_main - args.viewport_span).max(Px::ZERO);
     Modifier::new().focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
-        let Some(scroll_direction) = args.axis.focus_scroll_direction(direction) else {
+        let Some(forward) = args.axis.focus_forward(direction) else {
             return false;
         };
         if args.total_count == 0 || args.lane_count == 0 || args.viewport_span <= Px::ZERO {
             return false;
         }
 
-        let target_index = match scroll_direction {
-            FocusScrollDirection::Forward => {
-                if args.visible_range.end >= args.total_count {
-                    return false;
-                }
-                args.visible_range.end
+        let target_index = if forward {
+            if args.visible_range.end >= args.total_count {
+                return false;
             }
-            FocusScrollDirection::Backward => {
-                let Some(index) = args.visible_range.start.checked_sub(1) else {
-                    return false;
-                };
-                index
-            }
+            args.visible_range.end
+        } else {
+            let Some(index) = args.visible_range.start.checked_sub(1) else {
+                return false;
+            };
+            index
         };
 
         let Some((target_offset, target_main)) =
@@ -960,11 +846,10 @@ fn lazy_staggered_grid_focus_beyond_bounds_modifier(args: LazyStaggeredGridFocus
             return false;
         };
 
-        let desired_scroll = match scroll_direction {
-            FocusScrollDirection::Forward => {
-                (target_offset + target_main - args.viewport_span).max(Px::ZERO)
-            }
-            FocusScrollDirection::Backward => target_offset,
+        let desired_scroll = if forward {
+            (target_offset + target_main - args.viewport_span).max(Px::ZERO)
+        } else {
+            target_offset
         }
         .min(max_scroll);
 
@@ -1227,12 +1112,8 @@ fn ensure_positive_px(px: Px) -> Px {
     if px <= Px::ZERO { Px(1) } else { px }
 }
 
-fn sanitize_spacing(px: Px) -> Px {
-    if px < Px::ZERO { Px::ZERO } else { px }
-}
-
 struct ComputeStaggeredLayoutPositionsArgs<'a> {
-    axis: StaggeredGridAxis,
+    axis: LazyAxis,
     item_alignment: CrossAxisAlignment,
     cache: &'a StaggeredGridCache,
     slots: &'a GridSlots,
@@ -1290,14 +1171,13 @@ mod tests {
 
     use crate::{
         alignment::{CrossAxisAlignment, MainAxisAlignment},
+        lazy_shared::LazyAxis,
         modifier::{ModifierExt as _, SemanticsArgs},
         scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
         theme::{MaterialTheme, material_theme},
     };
 
-    use super::{
-        GridCells, LazyStaggeredGridController, StaggeredGridAxis, lazy_staggered_grid_view,
-    };
+    use super::{GridCells, LazyStaggeredGridController, lazy_staggered_grid_view};
 
     #[derive(Clone, PartialEq)]
     struct FixedTestLayout {
@@ -1341,7 +1221,7 @@ mod tests {
         });
 
         lazy_staggered_grid_view()
-            .axis(StaggeredGridAxis::Vertical)
+            .axis(LazyAxis::Vertical)
             .grid_cells(GridCells::fixed(2))
             .main_axis_spacing(Px::new(3))
             .cross_axis_spacing(Px::new(3))
@@ -1397,7 +1277,7 @@ mod tests {
         });
 
         lazy_staggered_grid_view()
-            .axis(StaggeredGridAxis::Horizontal)
+            .axis(LazyAxis::Horizontal)
             .grid_cells(GridCells::fixed(2))
             .main_axis_spacing(Px::new(3))
             .cross_axis_spacing(Px::new(3))
@@ -1466,7 +1346,7 @@ mod tests {
             .controller(scroll_controller)
             .child(move || {
                 lazy_staggered_grid_view()
-                    .axis(StaggeredGridAxis::Vertical)
+                    .axis(LazyAxis::Vertical)
                     .grid_cells(GridCells::fixed(2))
                     .main_axis_spacing(Px::new(3))
                     .cross_axis_spacing(Px::new(3))
@@ -1539,7 +1419,7 @@ mod tests {
             .theme(MaterialTheme::default)
             .child(move || {
                 lazy_staggered_grid_view()
-                    .axis(StaggeredGridAxis::Vertical)
+                    .axis(LazyAxis::Vertical)
                     .grid_cells(GridCells::fixed(2))
                     .main_axis_spacing(Px::new(3))
                     .cross_axis_spacing(Px::new(3))

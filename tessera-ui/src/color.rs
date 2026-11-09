@@ -211,8 +211,6 @@ mod tests {
 
     #[test]
     fn state_layer_over_a_transparent_container_keeps_its_rgb() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
         let layer = Color::new(0.2, 0.4, 0.8, 1.0);
         assert_color(
             Color::TRANSPARENT.blend_over(layer, 0.1),
@@ -226,8 +224,6 @@ mod tests {
 
     #[test]
     fn source_over_combines_both_alphas_instead_of_interpolating_them() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
         assert_color(
             Color::RED
                 .with_alpha(0.5)
@@ -242,8 +238,6 @@ mod tests {
 
     #[test]
     fn transparent_and_opaque_source_endpoints_are_preserved() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
         let base = Color::RED.with_alpha(0.4);
         assert_color(base.blend_over(Color::BLUE, 0.0), base);
         assert_color(base.blend_over(Color::BLUE.with_alpha(0.0), 1.0), base);

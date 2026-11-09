@@ -31,6 +31,7 @@ use super::{
     INK,
     annotations::{self, PreciseGeometry as Geometry, Rect, dotted, watch_precise as watch},
     article::{ArticlePage, SpecSection, article},
+    article_helpers::{caption, do_dont},
     gap, spec_table, subheading, type_style,
 };
 
@@ -248,14 +249,6 @@ fn bullets(items: Vec<String>) {
 }
 
 #[tessera]
-fn caption(#[prop(into)] value: String) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text(I18N.text(value))
-        .color(scheme.on_surface_variant)
-        .style(type_style(14.0, 20.0));
-}
-
-#[tessera]
 fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     row()
@@ -313,15 +306,6 @@ fn legend(items: Vec<String>) {
                 });
             gap(Dp(6.0));
         }
-    });
-}
-
-#[tessera]
-fn do_dont(#[prop(into)] good: String, #[prop(into)] bad: String) {
-    column().children(move || {
-        guidance_line("Do", good.clone(), DO_COLOR);
-        gap(Dp(12.0));
-        guidance_line("Don't", bad.clone(), DONT_COLOR);
     });
 }
 

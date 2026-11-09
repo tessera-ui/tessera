@@ -16,6 +16,7 @@ use crate::res::I18N;
 use super::{
     INK,
     article::{ArticlePage, SpecSection, article},
+    article_helpers::{dot_bullets as bullets, prose, spaced_caption as caption},
     gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
@@ -109,46 +110,6 @@ pub(super) fn loading_indicator_spec(
             ],
         },
     ]);
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
-}
-
-#[tessera]
-fn caption(#[prop(into)] value: String) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    gap(Dp(16.0));
-    text(I18N.text(value))
-        .color(scheme.on_surface_variant)
-        .style(type_style(14.0, 20.0));
-}
-
-#[tessera]
-fn bullets(items: Vec<String>) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    column()
-        .modifier(Modifier::new().fill_max_width())
-        .children(move || {
-            for item in items.clone() {
-                row()
-                    .modifier(
-                        Modifier::new()
-                            .fill_max_width()
-                            .padding_symmetric(Dp::ZERO, Dp(4.0)),
-                    )
-                    .children(move || {
-                        spacer().modifier(
-                            Modifier::new()
-                                .size(Dp(8.0), Dp(8.0))
-                                .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
-                        );
-                        spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text(I18N.text(&(item))).style(type_style(16.0, 24.0));
-                    });
-            }
-        });
 }
 
 /// Renders one loading indicator with optional configuration overrides.

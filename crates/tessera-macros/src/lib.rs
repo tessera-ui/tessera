@@ -883,17 +883,6 @@ impl VisitMut for ControlFlowInstrumenter {
 ///
 /// Annotate a plain free function with `#[tessera]`.
 ///
-/// The macro turns the function into a Tessera component entrypoint. Public
-/// components use the generated builder syntax, while the original function
-/// body runs inside Tessera's build/replay context.
-///
-/// A component call carries identity, state, and replay without occupying a
-/// tree node; only the `layout` and `group` primitives emit nodes.
-///
-/// # When NOT to Use
-///
-/// * For functions that should not participate in the component tree.
-///
 /// # See Also
 ///
 /// * [`#[shard]`](crate::shard) for navigation‑aware components with injectable

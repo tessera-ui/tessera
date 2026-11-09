@@ -2316,16 +2316,7 @@ impl ComponentTree {
         }
     }
 
-    /// Compute the ComponentTree into a render graph
-    ///
-    /// This method processes the component tree through three main phases:
-    /// 1. **Measure Phase**: Calculate sizes and positions for all components
-    /// 2. **Graph Generation**: Extract render fragments from component
-    ///    metadata
-    /// 3. **State Handling**: Process user interactions and events
-    ///
-    /// Returns a tuple of (graph, window_requests) where the graph contains
-    /// the render ops for the current frame.
+    /// Computes the frame's render graph, window requests, and diagnostics.
     #[tracing::instrument(level = "debug", skip(self, params))]
     pub(crate) fn compute(
         &mut self,

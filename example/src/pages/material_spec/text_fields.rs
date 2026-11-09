@@ -31,6 +31,7 @@ use super::{
     ACCENT, BACKGROUND, INK,
     annotations::{self, Rect, SpaceGeometry, watch_in_space},
     article::{ArticlePage, SpecSection, article},
+    article_helpers::prose,
     gap, panel, spec_table, srgb, subheading, type_style,
 };
 
@@ -671,11 +672,6 @@ fn tokens() {
             vec!["ui-outlined-resting-border".into(), "Outline".into()],
         ],
     );
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]

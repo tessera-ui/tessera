@@ -697,10 +697,6 @@ fn compute_cross_offset(container: Px, child: Px, alignment: CrossAxisAlignment)
     }
 }
 
-fn sanitize_spacing(px: Px) -> Px {
-    if px < Px::ZERO { Px::ZERO } else { px }
-}
-
 struct PagerKeyboardModifierNode {
     controller: State<PagerController>,
     axis: PagerAxis,
@@ -1107,8 +1103,8 @@ fn pager_render(
         axis,
         cross_axis_alignment: args.cross_axis_alignment,
         page_size: args.page_size,
-        page_spacing: sanitize_spacing(Px::from(args.page_spacing)),
-        content_padding: sanitize_spacing(Px::from(args.content_padding)),
+        page_spacing: Px::from(args.page_spacing).max(Px::ZERO),
+        content_padding: Px::from(args.content_padding).max(Px::ZERO),
         page_count: args.page_count,
         visible_pages: visible_pages.clone(),
         scroll_offset: controller.with(|current| current.scroll_offset_px()),

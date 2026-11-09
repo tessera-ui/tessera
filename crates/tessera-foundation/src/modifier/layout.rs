@@ -48,15 +48,7 @@ fn resolve_axis_constraint(
     match override_axis {
         None => parent,
         Some(axis) if enforce_incoming => constrain_axis_to_parent(axis, parent),
-        Some(axis) => AxisConstraint::new(
-            axis.min,
-            match (axis.max, parent.max) {
-                (Some(lhs), Some(rhs)) => Some(lhs.min(rhs)),
-                (Some(lhs), None) => Some(lhs),
-                (None, Some(rhs)) => Some(rhs),
-                (None, None) => None,
-            },
-        ),
+        Some(axis) => axis.intersect(AxisConstraint::new(axis.min, parent.max)),
     }
 }
 

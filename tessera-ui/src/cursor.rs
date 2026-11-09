@@ -78,10 +78,6 @@ impl CursorState {
     /// Each sample retains its pointer's position when queued. Motion samples
     /// are compacted above a soft queue limit; scroll deltas and gesture
     /// boundaries remain available even during a long frame.
-    ///
-    /// # Arguments
-    ///
-    /// * `event` - The pointer change to add to the queue
     pub fn push_event(&mut self, mut event: PointerChange) {
         if event.position_snapshot().is_none() {
             let position = self
@@ -121,14 +117,8 @@ impl CursorState {
 
     /// Updates the mouse position and current cursor position.
     ///
-    /// For another pointer, use [`Self::update_pointer_position`].
-    /// This method accepts any type that can be converted into
-    /// `Option<PxPosition>`, allowing for flexible position updates
-    /// including clearing the position by passing `None`.
-    ///
-    /// # Arguments
-    ///
-    /// * `position` - New cursor position or `None` to clear the position
+    /// Pass `None` to clear it. For another pointer, use
+    /// [`Self::update_pointer_position`].
     pub fn update_position(&mut self, position: impl Into<Option<PxPosition>>) {
         self.update_pointer_position(MOUSE_POINTER_ID, position);
     }
@@ -146,31 +136,12 @@ impl CursorState {
         self.position = position;
     }
 
-    /// Retrieves and clears all pending pointer changes.
-    ///
-    /// This method returns all queued pointer changes and clears the internal
-    /// event queue. Events are returned in chronological order (oldest first).
-    ///
-    /// This is typically called once per frame by the UI framework to process
-    /// all accumulated input events.
-    ///
-    /// # Returns
-    ///
-    /// A vector of [`PointerChange`]s ordered from oldest to newest.
-    ///
-    /// # Note
-    ///
-    /// Events are ordered from oldest to newest to ensure proper event
-    /// processing order.
+    /// Takes queued pointer changes in chronological order.
     pub fn take_events(&mut self) -> Vec<PointerChange> {
         self.events.drain(..).collect()
     }
 
     /// Clears all cursor state and pending events.
-    ///
-    /// This is typically used when the UI context changes significantly,
-    /// such as when switching between different UI screens or when input
-    /// focus changes.
     pub fn clear(&mut self) {
         self.events.clear();
         self.pointer_positions.clear();
@@ -181,26 +152,14 @@ impl CursorState {
 
     /// Returns the current cursor position, if any.
     ///
-    /// The position represents the last known location of the cursor or active
-    /// touch point. Returns `None` if no cursor is currently active or if
-    /// the position has been cleared.
-    ///
-    /// # Returns
-    ///
-    /// - `Some(PxPosition)` if a cursor position is currently tracked
-    /// - `None` if no cursor is active
+    /// This is the last mouse or active touch position, if any.
     pub fn position(&self) -> Option<PxPosition> {
         self.position
     }
 
     /// Handles the start of a touch gesture.
     ///
-    /// This method registers a new touch point and generates a press event.
-    ///
-    /// # Arguments
-    ///
-    /// * `touch_id` - Unique identifier for this touch point
-    /// * `position` - Initial position of the touch in pixel coordinates
+    /// Registers a touch point and generates a press event.
     pub fn handle_touch_start(&mut self, touch_id: u64, position: PxPosition) {
         self.clear_position_on_next_frame = false;
         let now = Instant::now();
@@ -226,34 +185,18 @@ impl CursorState {
             },
         );
         self.update_pointer_position(pointer_id, position);
-        let press_event = PointerChange {
-            timestamp: now,
+        let press_event = PointerChange::new(
+            now,
             pointer_id,
-            content: CursorEventContent::Pressed(PressKeyEventType::Left),
-            gesture_state: GestureState::TapCandidate,
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        };
+            CursorEventContent::Pressed(PressKeyEventType::Left),
+            GestureState::TapCandidate,
+        );
         self.push_event(press_event);
     }
 
     /// Handles touch movement and generates scroll events when appropriate.
     ///
-    /// This method tracks touch movement and generates scroll events when the
-    /// movement exceeds the minimum threshold.
-    ///
-    /// # Arguments
-    ///
-    /// * `touch_id` - Unique identifier for the touch point being moved
-    /// * `current_position` - New position of the touch in pixel coordinates
-    ///
-    /// # Returns
-    ///
-    /// - `Some(PointerChange)` containing a scroll event if movement exceeds
-    ///   threshold
-    /// - `None` if movement is below threshold or touch scrolling is disabled
+    /// Returns a scroll event after the movement threshold when scrolling is enabled.
     pub fn handle_touch_move(
         &mut self,
         touch_id: u64,
@@ -285,31 +228,26 @@ impl CursorState {
             GestureState::TapCandidate
         };
         self.update_pointer_position(pointer_id, current_position);
-        self.push_event(PointerChange {
-            timestamp: now,
+        self.push_event(PointerChange::new(
+            now,
             pointer_id,
-            content: CursorEventContent::Moved(current_position),
+            CursorEventContent::Moved(current_position),
             gesture_state,
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        });
-        (self.touch_scroll_config.enabled && dragging).then_some(PointerChange {
-            timestamp: now,
-            pointer_id,
-            content: CursorEventContent::Scroll(ScrollEventContent {
-                delta_x,
-                delta_y,
-                unit: ScrollDeltaUnit::Pixel,
-                source: ScrollEventSource::Touch,
-            }),
-            gesture_state,
-            sampled_position: PointerPosition::At(current_position),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        })
+        ));
+        (self.touch_scroll_config.enabled && dragging).then_some(
+            PointerChange::new(
+                now,
+                pointer_id,
+                CursorEventContent::Scroll(ScrollEventContent {
+                    delta_x,
+                    delta_y,
+                    unit: ScrollDeltaUnit::Pixel,
+                    source: ScrollEventSource::Touch,
+                }),
+                gesture_state,
+            )
+            .with_position(current_position),
+        )
     }
 
     /// Ends a touch as a completed gesture and emits a release event.
@@ -330,24 +268,20 @@ impl CursorState {
         };
         let was_drag = touch_state.generated_scroll_event;
         self.update_pointer_position(touch_state.pointer_id, touch_state.last_position);
-        self.push_event(PointerChange {
-            timestamp: now,
-            pointer_id: touch_state.pointer_id,
-            content: if cancelled {
+        self.push_event(PointerChange::new(
+            now,
+            touch_state.pointer_id,
+            if cancelled {
                 CursorEventContent::Cancelled(PressKeyEventType::Left)
             } else {
                 CursorEventContent::Released(PressKeyEventType::Left)
             },
-            gesture_state: if cancelled || was_drag {
+            if cancelled || was_drag {
                 GestureState::Dragged
             } else {
                 GestureState::TapCandidate
             },
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        });
+        ));
         self.pointer_positions.remove(&touch_state.pointer_id);
         if self.touch_points.is_empty() {
             self.clear_position_on_next_frame = true;
@@ -550,22 +484,8 @@ pub enum GestureState {
 }
 
 impl CursorEventContent {
-    /// Creates a cursor press/release event from winit mouse button events.
-    ///
-    /// This method converts winit's mouse button events into Tessera's cursor
-    /// event format. It handles the three standard mouse buttons (left,
-    /// right, middle) and ignores any additional buttons that may be
-    /// present on some mice.
-    ///
-    /// # Arguments
-    ///
-    /// * `state` - Whether the button was pressed or released
-    /// * `button` - Which mouse button was affected
-    ///
-    /// # Returns
-    ///
-    /// - `Some(CursorEventContent)` for supported mouse buttons
-    /// - `None` for unsupported mouse buttons
+    /// Converts left, right, or middle button presses and releases; other
+    /// buttons return `None`.
     pub fn from_press_event(
         state: winit::event::ElementState,
         button: winit::event::MouseButton,
@@ -574,7 +494,7 @@ impl CursorEventContent {
             winit::event::MouseButton::Left => PressKeyEventType::Left,
             winit::event::MouseButton::Right => PressKeyEventType::Right,
             winit::event::MouseButton::Middle => PressKeyEventType::Middle,
-            _ => return None, // Ignore other buttons
+            _ => return None,
         };
         let state = match state {
             winit::event::ElementState::Pressed => Self::Pressed(event_type),
@@ -583,20 +503,7 @@ impl CursorEventContent {
         Some(state)
     }
 
-    /// Creates a scroll event from winit mouse wheel events.
-    ///
-    /// This method converts winit's mouse scroll delta into Tessera's scroll
-    /// event format while preserving whether the platform reported the value
-    /// in line or pixel units.
-    ///
-    /// # Arguments
-    ///
-    /// * `delta` - The scroll delta from winit
-    ///
-    /// # Returns
-    ///
-    /// A `CursorEventContent::Scroll` event with raw line or pixel delta
-    /// values.
+    /// Creates a scroll event preserving the platform's line or pixel units.
     pub fn from_scroll_event(delta: winit::event::MouseScrollDelta) -> Self {
         Self::Scroll(ScrollEventContent::from_wheel(delta))
     }

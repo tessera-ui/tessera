@@ -342,21 +342,8 @@ impl InteractionState {
     }
 }
 
-#[derive(Clone)]
-enum DragRecognizerHandle {
-    State(State<DragRecognizer>),
-}
-
-impl DragRecognizerHandle {
-    fn with_mut<R>(&self, f: impl FnOnce(&mut DragRecognizer) -> R) -> R {
-        match self {
-            Self::State(state) => state.with_mut(f),
-        }
-    }
-}
-
 struct DraggablePointerModifierNode {
-    drag_recognizer: DragRecognizerHandle,
+    drag_recognizer: State<DragRecognizer>,
     on_drag_delta: DragCallback,
     enabled: bool,
     on_drag_started: Option<Callback>,
@@ -475,7 +462,7 @@ impl BuildModifierNode for DraggableBuild {
         recognizer.with_mut(|recognizer| recognizer.set_settings(self.settings));
         Some(
             Modifier::new().push_pointer_input(DraggablePointerModifierNode {
-                drag_recognizer: DragRecognizerHandle::State(recognizer),
+                drag_recognizer: recognizer,
                 on_drag_delta: self.on_drag_delta,
                 enabled: self.enabled,
                 on_drag_started: self.on_drag_started,

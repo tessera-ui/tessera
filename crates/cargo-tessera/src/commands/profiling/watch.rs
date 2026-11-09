@@ -1003,7 +1003,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_with_and_without_frames() {
+    fn renders_waiting_and_recorded_frame_summaries() {
         let options = options();
         let directory = tempfile::tempdir().unwrap();
         let listener = bind_ipc_listener(&endpoint(&directory)).unwrap();
@@ -1018,6 +1018,7 @@ mod tests {
         terminal
             .draw(|frame| draw(frame, &mut state, &options))
             .unwrap();
+        assert_eq!(terminal.backend().buffer()[(0, 1)].symbol(), "w");
 
         let event: TraceEvent = parse_json_line(&frame_line(1, 1_000_000, 400_000)).unwrap();
         state.ingest(event, options.window);
@@ -1025,6 +1026,6 @@ mod tests {
         terminal
             .draw(|frame| draw(frame, &mut state, &options))
             .unwrap();
-        assert_eq!(state.frames, 1);
+        assert_eq!(terminal.backend().buffer()[(0, 1)].symbol(), "f");
     }
 }

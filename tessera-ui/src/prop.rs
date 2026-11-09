@@ -60,7 +60,7 @@ impl<F: ?Sized> Eq for Slot<F> {}
 /// changes. Pass the handle through component props or attach it to an action.
 ///
 /// Create callbacks during a Tessera component build.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Callback {
     repr: CallbackRepr,
 }
@@ -115,14 +115,6 @@ impl Default for Callback {
         Self::noop()
     }
 }
-
-impl PartialEq for Callback {
-    fn eq(&self, other: &Self) -> bool {
-        self.repr == other.repr
-    }
-}
-
-impl Eq for Callback {}
 
 /// Stable, comparable callback handle for `Fn(T) -> R`.
 ///
@@ -280,7 +272,7 @@ where
 /// }
 /// ```
 ///
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct RenderSlot {
     repr: RenderSlotRepr,
 }
@@ -353,18 +345,6 @@ impl Default for RenderSlot {
         Self::empty()
     }
 }
-
-impl PartialEq for RenderSlot {
-    fn eq(&self, other: &Self) -> bool {
-        match (&self.repr, &other.repr) {
-            (RenderSlotRepr::Empty, RenderSlotRepr::Empty) => true,
-            (RenderSlotRepr::Handle(lhs), RenderSlotRepr::Handle(rhs)) => lhs == rhs,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for RenderSlot {}
 
 /// Stable, comparable render slot handle for `Fn(T)`.
 ///

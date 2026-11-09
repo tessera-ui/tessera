@@ -20,6 +20,7 @@ use crate::res::I18N;
 
 use super::{
     article::{ArticlePage, SpecSection, article},
+    article_helpers::prose,
     gap,
     selection_articles::option_label,
     spec_table, type_style,
@@ -136,11 +137,6 @@ pub(super) fn radio_buttons_spec(
             ],
         },
     ]);
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]

@@ -127,24 +127,15 @@ pub(super) fn install(window: Arc<Window>) -> Result<(), web_sys::wasm_bindgen::
             window.set_prevent_default(false);
         }
     })?);
-    listeners.push(Listener::new(&target, "keydown", false, {
+    for (name, capture) in [("keydown", false), ("keyup", true)] {
         let window = window.clone();
         let restore = restore.clone();
-        move |_| {
+        listeners.push(Listener::new(&target, name, capture, move |_| {
             if let Some(previous) = restore.take() {
                 window.set_prevent_default(previous);
             }
-        }
-    })?);
-    listeners.push(Listener::new(&target, "keyup", true, {
-        let window = window.clone();
-        let restore = restore.clone();
-        move |_| {
-            if let Some(previous) = restore.take() {
-                window.set_prevent_default(previous);
-            }
-        }
-    })?);
+        })?);
+    }
     for name in ["copy", "cut", "paste"] {
         let session = session.clone();
         let canvas = canvas.clone();
@@ -184,8 +175,7 @@ pub(super) fn install(window: Arc<Window>) -> Result<(), web_sys::wasm_bindgen::
 }
 
 pub(super) fn clear() {
-    let bridge = bridge().take();
-    drop(bridge);
+    bridge().take();
 }
 
 fn handle_response(response: ClipboardResponse) {

@@ -33,6 +33,7 @@ use super::{
     ACCENT,
     annotations::{self, Geometry, Rect, relative, watch},
     article::{ArticlePage, SpecSection, article},
+    article_helpers::prose,
     gap, panel, spec_table, srgb, subheading, type_style,
 };
 
@@ -189,11 +190,6 @@ pub(super) fn snackbars_spec(route: Option<crate::pages::material_spec::article:
             ],
         },
     ]);
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]

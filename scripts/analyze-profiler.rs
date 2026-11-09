@@ -89,40 +89,35 @@ struct PhaseDurations {
 #[derive(Default)]
 struct Summary {
     frames: u64,
-    frame_total_sum: u128,
-    frame_total_min: Option<u128>,
-    frame_total_max: Option<u128>,
-    frame_total_count: u64,
-    render_total: u128,
-    render_count: u64,
-    build_tree_total: u128,
-    build_tree_min: Option<u128>,
-    build_tree_max: Option<u128>,
-    build_tree_count: u64,
-    draw_total: u128,
-    draw_min: Option<u128>,
-    draw_max: Option<u128>,
-    draw_count: u64,
-    build_total_sum: u128,
-    build_total_min: Option<u128>,
-    build_total_max: Option<u128>,
-    build_total_count: u64,
-    measure_total_sum: u128,
-    measure_total_min: Option<u128>,
-    measure_total_max: Option<u128>,
-    measure_total_count: u64,
-    input_total_sum: u128,
-    input_total_min: Option<u128>,
-    input_total_max: Option<u128>,
-    input_total_count: u64,
-    unaccounted_total_sum: u128,
-    unaccounted_total_min: Option<u128>,
-    unaccounted_total_max: Option<u128>,
-    unaccounted_total_count: u64,
+    frame_total: DurationStats,
+    render: DurationStats,
+    build_tree: DurationStats,
+    draw: DurationStats,
+    build: DurationStats,
+    measure: DurationStats,
+    input: DurationStats,
+    unaccounted: DurationStats,
     node_count: u64,
     cache_hit: u64,
     cache_miss: u64,
     cache_unknown: u64,
+}
+
+#[derive(Default, Clone, Copy)]
+struct DurationStats {
+    total: u128,
+    min: Option<u128>,
+    max: Option<u128>,
+    count: u64,
+}
+
+impl DurationStats {
+    fn record(&mut self, value: u128) {
+        self.total += value;
+        self.min = Some(self.min.map_or(value, |min| min.min(value)));
+        self.max = Some(self.max.map_or(value, |max| max.max(value)));
+        self.count += 1;
+    }
 }
 
 #[derive(Default, Clone)]
@@ -254,27 +249,7 @@ fn export_csv(path: &PathBuf, stats: &HashMap<String, Stats>) -> Result<()> {
 
     for (name, stat) in rows {
         let count = stat.count;
-        let build_avg_ns = if count == 0 {
-            0.0
-        } else {
-            stat.build_ns as f64 / count as f64
-        };
-        let measure_avg_ns = if count == 0 {
-            0.0
-        } else {
-            stat.measure_ns as f64 / count as f64
-        };
-        let input_avg_ns = if count == 0 {
-            0.0
-        } else {
-            stat.input_ns as f64 / count as f64
-        };
         let total_ns = stat.total_ns();
-        let total_avg_ns = if count == 0 {
-            0.0
-        } else {
-            total_ns as f64 / count as f64
-        };
 
         writer
             .serialize(CsvRow {
@@ -283,19 +258,19 @@ fn export_csv(path: &PathBuf, stats: &HashMap<String, Stats>) -> Result<()> {
 
                 build_total_ns: stat.build_ns,
                 build_total_ms: stat.build_ns as f64 / 1_000_000.0,
-                build_avg_us: build_avg_ns / 1_000.0,
+                build_avg_us: avg_ns(stat.build_ns, count) / 1_000.0,
 
                 measure_total_ns: stat.measure_ns,
                 measure_total_ms: stat.measure_ns as f64 / 1_000_000.0,
-                measure_avg_us: measure_avg_ns / 1_000.0,
+                measure_avg_us: avg_ns(stat.measure_ns, count) / 1_000.0,
 
                 input_total_ns: stat.input_ns,
                 input_total_ms: stat.input_ns as f64 / 1_000_000.0,
-                input_avg_us: input_avg_ns / 1_000.0,
+                input_avg_us: avg_ns(stat.input_ns, count) / 1_000.0,
 
                 total_total_ns: total_ns,
                 total_total_ms: total_ns as f64 / 1_000_000.0,
-                total_avg_us: total_avg_ns / 1_000.0,
+                total_avg_us: avg_ns(total_ns, count) / 1_000.0,
 
                 cache_hit: stat.cache_hit,
                 cache_miss: stat.cache_miss,
@@ -324,90 +299,22 @@ fn process_frame(
             accumulate_component_exclusive(component, summary, stats_by_name, &mut frame_totals);
     }
 
-    summary.build_total_sum += frame_totals.build;
-    summary.build_total_count += 1;
-    summary.build_total_min = Some(
-        summary
-            .build_total_min
-            .map_or(frame_totals.build, |v| v.min(frame_totals.build)),
-    );
-    summary.build_total_max = Some(
-        summary
-            .build_total_max
-            .map_or(frame_totals.build, |v| v.max(frame_totals.build)),
-    );
-
-    summary.measure_total_sum += frame_totals.measure;
-    summary.measure_total_count += 1;
-    summary.measure_total_min = Some(
-        summary
-            .measure_total_min
-            .map_or(frame_totals.measure, |v| v.min(frame_totals.measure)),
-    );
-    summary.measure_total_max = Some(
-        summary
-            .measure_total_max
-            .map_or(frame_totals.measure, |v| v.max(frame_totals.measure)),
-    );
-
-    summary.input_total_sum += frame_totals.input;
-    summary.input_total_count += 1;
-    summary.input_total_min = Some(
-        summary
-            .input_total_min
-            .map_or(frame_totals.input, |v| v.min(frame_totals.input)),
-    );
-    summary.input_total_max = Some(
-        summary
-            .input_total_max
-            .map_or(frame_totals.input, |v| v.max(frame_totals.input)),
-    );
+    summary.build.record(frame_totals.build);
+    summary.measure.record(frame_totals.measure);
+    summary.input.record(frame_totals.input);
 
     if let Some(total) = frame.frame_total_ns {
-        summary.frame_total_sum += total;
-        summary.frame_total_count += 1;
-        summary.frame_total_min = Some(summary.frame_total_min.map_or(total, |v| v.min(total)));
-        summary.frame_total_max = Some(summary.frame_total_max.map_or(total, |v| v.max(total)));
-
+        summary.frame_total.record(total);
         if let Some(build_tree) = frame.build_tree_time_ns {
-            summary.build_tree_total += build_tree;
-            summary.build_tree_count += 1;
-            summary.build_tree_min = Some(
-                summary
-                    .build_tree_min
-                    .map_or(build_tree, |v| v.min(build_tree)),
-            );
-            summary.build_tree_max = Some(
-                summary
-                    .build_tree_max
-                    .map_or(build_tree, |v| v.max(build_tree)),
-            );
+            summary.build_tree.record(build_tree);
         }
         if let Some(draw) = frame.draw_time_ns {
-            summary.draw_total += draw;
-            summary.draw_count += 1;
-            summary.draw_min = Some(summary.draw_min.map_or(draw, |v| v.min(draw)));
-            summary.draw_max = Some(summary.draw_max.map_or(draw, |v| v.max(draw)));
+            summary.draw.record(draw);
         }
-
         if let Some(render) = frame.render_time_ns {
-            summary.render_total += render;
-            summary.render_count += 1;
-
+            summary.render.record(render);
             let accounted = frame_totals.build + frame_totals.measure + frame_totals.input + render;
-            let unaccounted = total.saturating_sub(accounted);
-            summary.unaccounted_total_sum += unaccounted;
-            summary.unaccounted_total_count += 1;
-            summary.unaccounted_total_min = Some(
-                summary
-                    .unaccounted_total_min
-                    .map_or(unaccounted, |v| v.min(unaccounted)),
-            );
-            summary.unaccounted_total_max = Some(
-                summary
-                    .unaccounted_total_max
-                    .map_or(unaccounted, |v| v.max(unaccounted)),
-            );
+            summary.unaccounted.record(total.saturating_sub(accounted));
         }
     }
 }
@@ -474,6 +381,35 @@ fn accumulate_component_exclusive(
     inclusive
 }
 
+fn add_duration_row(
+    table: &mut Table,
+    label: &str,
+    stat: DurationStats,
+    show_bounds: bool,
+    color: Option<Color>,
+) {
+    if stat.count == 0 {
+        return;
+    }
+    let bounds = show_bounds.then(|| stat.min.zip(stat.max)).flatten();
+    let value = |ns: f64| Cell::new(format!("{} ms", format_ms(ns)));
+    let cells = [
+        Cell::new(label),
+        value(avg_ns(stat.total, stat.count)),
+        bounds.map_or_else(|| Cell::new(""), |(min, _)| value(min as f64)),
+        bounds.map_or_else(|| Cell::new(""), |(_, max)| value(max as f64)),
+    ];
+    table.add_row(Row::from(
+        cells
+            .into_iter()
+            .map(|cell| match color {
+                Some(color) => cell.fg(color),
+                None => cell,
+            })
+            .collect::<Vec<_>>(),
+    ));
+}
+
 fn print_summary(summary: &Summary) {
     println!("{}", "Profiler summary".bold());
 
@@ -495,126 +431,22 @@ fn print_summary(summary: &Summary) {
         Cell::new(""),
     ]));
 
-    if summary.frame_total_count > 0 {
-        let avg = summary.frame_total_sum as f64 / summary.frame_total_count as f64;
-        table.add_row(Row::from(vec![
-            Cell::new("Frame cost"),
-            Cell::new(format!("{} ms", format_ms(avg))),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.frame_total_min.unwrap_or(0) as f64)
-            )),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.frame_total_max.unwrap_or(0) as f64)
-            )),
-        ]));
-    }
-
-    // Renderer wall-time breakdown (additive on the main thread).
-    if summary.build_tree_count > 0 {
-        let avg = summary.build_tree_total as f64 / summary.build_tree_count as f64;
-        table.add_row(Row::from(vec![
-            Cell::new("Build cost"),
-            Cell::new(format!("{} ms", format_ms(avg))),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.build_tree_min.unwrap_or(0) as f64)
-            )),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.build_tree_max.unwrap_or(0) as f64)
-            )),
-        ]));
-    }
-    if summary.draw_count > 0 {
-        let avg = summary.draw_total as f64 / summary.draw_count as f64;
-        table.add_row(Row::from(vec![
-            Cell::new("Draw/compute cost"),
-            Cell::new(format!("{} ms", format_ms(avg))),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.draw_min.unwrap_or(0) as f64)
-            )),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.draw_max.unwrap_or(0) as f64)
-            )),
-        ]));
-    }
-    if summary.render_count > 0 {
-        let avg = summary.render_total as f64 / summary.render_count as f64;
-        table.add_row(Row::from(vec![
-            Cell::new("Render cost"),
-            Cell::new(format!("{} ms", format_ms(avg))),
-            Cell::new(""),
-            Cell::new(""),
-        ]));
-    }
-
-    // Node-scope totals (exclusive time attributed to component nodes).
-    if summary.build_total_count > 0 {
-        let avg = summary.build_total_sum as f64 / summary.build_total_count as f64;
-        table.add_row(Row::from(vec![
-            Cell::new("Build total"),
-            Cell::new(format!("{} ms", format_ms(avg))),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.build_total_min.unwrap_or(0) as f64)
-            )),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.build_total_max.unwrap_or(0) as f64)
-            )),
-        ]));
-    }
-    if summary.measure_total_count > 0 {
-        let avg = summary.measure_total_sum as f64 / summary.measure_total_count as f64;
-        table.add_row(Row::from(vec![
-            Cell::new("Measure total"),
-            Cell::new(format!("{} ms", format_ms(avg))),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.measure_total_min.unwrap_or(0) as f64)
-            )),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.measure_total_max.unwrap_or(0) as f64)
-            )),
-        ]));
-    }
-    if summary.input_total_count > 0 {
-        let avg = summary.input_total_sum as f64 / summary.input_total_count as f64;
-        table.add_row(Row::from(vec![
-            Cell::new("Input total"),
-            Cell::new(format!("{} ms", format_ms(avg))),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.input_total_min.unwrap_or(0) as f64)
-            )),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.input_total_max.unwrap_or(0) as f64)
-            )),
-        ]));
-    }
-
-    if summary.unaccounted_total_count > 0 {
-        let avg = summary.unaccounted_total_sum as f64 / summary.unaccounted_total_count as f64;
-        table.add_row(Row::from(vec![
-            Cell::new("Unaccounted cost").fg(Color::DarkGrey),
-            Cell::new(format!("{} ms", format_ms(avg))).fg(Color::DarkGrey),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.unaccounted_total_min.unwrap_or(0) as f64)
-            ))
-            .fg(Color::DarkGrey),
-            Cell::new(format!(
-                "{} ms",
-                format_ms(summary.unaccounted_total_max.unwrap_or(0) as f64)
-            ))
-            .fg(Color::DarkGrey),
-        ]));
+    for (label, stat, show_bounds, color) in [
+        ("Frame cost", summary.frame_total, true, None),
+        ("Build cost", summary.build_tree, true, None),
+        ("Draw/compute cost", summary.draw, true, None),
+        ("Render cost", summary.render, false, None),
+        ("Build total", summary.build, true, None),
+        ("Measure total", summary.measure, true, None),
+        ("Input total", summary.input, true, None),
+        (
+            "Unaccounted cost",
+            summary.unaccounted,
+            true,
+            Some(Color::DarkGrey),
+        ),
+    ] {
+        add_duration_row(&mut table, label, stat, show_bounds, color);
     }
 
     let cache_total = summary.cache_hit + summary.cache_miss;
@@ -693,11 +525,7 @@ where
 
     for (idx, (name, stat)) in rows.iter().take(top).enumerate() {
         let total_ns = value(stat);
-        let avg_ns = if stat.count == 0 {
-            0.0
-        } else {
-            total_ns as f64 / stat.count as f64
-        };
+        let avg_ns = avg_ns(total_ns, stat.count);
         let hit_rate_display = stat
             .hit_rate()
             .map(format_pct)
@@ -722,6 +550,14 @@ fn format_ms(value_ns: f64) -> String {
     format!("{:.3}", value_ns / 1_000_000.0)
 }
 
+fn avg_ns(total: u128, count: u64) -> f64 {
+    if count == 0 {
+        0.0
+    } else {
+        total as f64 / count as f64
+    }
+}
+
 fn format_us(value_ns: f64) -> String {
     format!("{:.2}", value_ns / 1_000.0)
 }
@@ -743,7 +579,35 @@ fn truncate(text: &str, limit: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::truncate;
+    use super::{FrameRecord, Summary, process_frame, truncate};
+
+    #[test]
+    fn optional_timings_require_frame_totals_and_unaccounted_saturates() {
+        let mut summary = Summary::default();
+        let mut stats = Default::default();
+        let frame = |total, render, draw| FrameRecord {
+            frame: 0,
+            frame_total_ns: total,
+            render_time_ns: render,
+            build_tree_time_ns: None,
+            draw_time_ns: draw,
+            components: Vec::new(),
+        };
+        process_frame(frame(None, Some(4), Some(3)), &mut summary, &mut stats);
+        process_frame(frame(Some(10), Some(20), Some(3)), &mut summary, &mut stats);
+        process_frame(frame(Some(20), Some(5), None), &mut summary, &mut stats);
+
+        assert_eq!(summary.build.count, 3);
+        assert_eq!(summary.frame_total.count, 2);
+        assert_eq!(summary.render.count, 2);
+        assert_eq!(summary.draw.count, 1);
+        assert_eq!(summary.build_tree.count, 0);
+        assert_eq!(summary.unaccounted.total, 15);
+        assert_eq!(
+            (summary.unaccounted.min, summary.unaccounted.max),
+            (Some(0), Some(15))
+        );
+    }
 
     #[test]
     fn truncation_handles_unicode_and_small_limits() {

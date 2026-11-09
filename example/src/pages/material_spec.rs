@@ -31,6 +31,7 @@ mod action_articles;
 mod annotations;
 mod app_bars;
 mod article;
+mod article_helpers;
 mod article_navigation;
 mod article_tab_visual;
 mod badges;

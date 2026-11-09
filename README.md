@@ -44,53 +44,13 @@ Tessera is an experimental framework. If you encounter any issues, please feel f
 
 Tessera uses a declarative programming paradigm inspired by modern UI frameworks such as React and Compose.
 
-We start by declaring a UI component:
-
-```rust
-use tessera_ui::tessera;
-
-#[tessera]
-fn app() {
-    // Component logic
-}
-```
-
 Calling a component registers one UI use and returns a typed configuration
 handle. Chain setters or save the handle and configure it before execution;
 declaration order follows entry calls. The runtime expands component bodies
 during build, before layout and drawing. Pass deferred child content through
 `RenderSlot` closures. See [component calls](docs/COMPONENT_CALLS.md).
 
-Then we write its UI logic:
-
-```rust
-use tessera_components::{
-    button::button,
-    column::column,
-    surface::surface,
-    text::text,
-};
-use tessera_ui::{Modifier, tessera};
-
-#[tessera]
-fn app() {
-    surface()
-        .modifier(Modifier::new().fill_max_size())
-        .child(|| {
-            column().children(|| {
-                button().filled().on_click(|| {}).child(|| {
-                    text("+");
-                });
-                text("Count: 0");
-                button().filled().on_click(|| {}).child(|| {
-                    text("-");
-                });
-            });
-        });
-}
-```
-
-Next, to actually implement the counter we need to use `remember` to store the counter state:
+Use `remember` to store state in a counter:
 
 ```rust
 use tessera_components::{
@@ -128,18 +88,6 @@ This is a complete counter application! For more details, please refer to the [Q
 ## Contributing
 
 Please read the [Contributing Guide](https://github.com/tessera-ui/tessera/blob/main/CONTRIBUTING.md) to learn how to contribute to the project.
-
-Tests should protect observable framework behavior and meaningful algorithmic
-invariants through production code. Use the layout/headless runtime for component
-interaction and explicit frame times for animation. See the
-[Unit Test Standards](AGENTS.md#unit-test-standards) for test boundaries, review
-criteria, and deterministic execution. CI runs crate tests and runnable rustdoc
-examples.
-
-Keep expected results independent of the implementation, identify the intended
-failure in negative tests, and avoid fixtures that supply the behavior under test.
-Run tests that change process-global density in child processes to keep parallel
-layout tests isolated.
 
 ## Acknowledgements
 

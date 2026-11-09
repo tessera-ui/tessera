@@ -1600,16 +1600,12 @@ where
         let px_position = PxPosition::from_f64_arr2([position.x, position.y]);
         // Update cursor position
         self.cursor_state.update_position(px_position);
-        self.cursor_state.push_event(PointerChange {
-            timestamp: Instant::now(),
-            pointer_id: MOUSE_POINTER_ID,
-            content: CursorEventContent::Moved(px_position),
-            gesture_state: GestureState::TapCandidate,
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        });
+        self.cursor_state.push_event(PointerChange::new(
+            Instant::now(),
+            MOUSE_POINTER_ID,
+            CursorEventContent::Moved(px_position),
+            GestureState::TapCandidate,
+        ));
         debug!("Cursor moved to: {}, {}", position.x, position.y);
     }
 
@@ -1688,16 +1684,12 @@ where
                 return;
             }
         }
-        let event = PointerChange {
-            timestamp: Instant::now(),
-            pointer_id: MOUSE_POINTER_ID,
-            content: event_content,
-            gesture_state: GestureState::TapCandidate,
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        };
+        let event = PointerChange::new(
+            Instant::now(),
+            MOUSE_POINTER_ID,
+            event_content,
+            GestureState::TapCandidate,
+        );
         #[cfg(target_os = "macos")]
         if matches!(
             event.content,

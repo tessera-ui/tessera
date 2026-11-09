@@ -144,21 +144,19 @@ fn main() -> Result<()> {
 
     let mut errors = Vec::new();
 
-    // Collect file paths that need rustfmt writes in fix mode.
     let mut fmt_targets = Vec::new();
 
     for file_path in &files_to_process {
-        match process_file(file_path, !cli.check, &mut fmt_targets) {
-            Ok(_) => {}
-            Err(e) => {
-                errors.push(format!("{}: {}", file_path.display(), e));
-                continue;
-            }
+        let result = if cli.check {
+            check_file(file_path)
+        } else {
+            fix_file(file_path).map(|_| fmt_targets.push(file_path.to_path_buf()))
+        };
+        if let Err(error) = result {
+            errors.push(format!("{}: {}", file_path.display(), error));
         }
     }
 
-    // In check mode, run rustfmt --check on all discovered Rust files.
-    // In fix mode, run rustfmt on files that were rewritten by this script.
     match run_rustfmt_if_needed(cli.check, &files_to_process, &fmt_targets) {
         Ok(failed_batches) => {
             if failed_batches > 0 {
@@ -296,20 +294,6 @@ fn parse_package_edition(manifest_path: &Path) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn process_file(file_path: &Path, cli_fix: bool, fmt_targets: &mut Vec<PathBuf>) -> Result<()> {
-    if cli_fix {
-        match fix_file(file_path) {
-            Ok(_) => {
-                fmt_targets.push(file_path.to_path_buf());
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    } else {
-        check_file(file_path)
-    }
-}
-
 fn collect_rs_files(paths: &[PathBuf]) -> Vec<PathBuf> {
     paths
         .par_iter()
@@ -397,19 +381,7 @@ fn fix_imports(content: &str) -> Result<String> {
     Ok(lines.join("\n") + "\n")
 }
 
-/// Format a sequence of flattened `Import` entries into the canonical `use`
-/// block string. This function groups imports by attributes (doc / cfg / etc),
-/// then by (category, pub) to maintain the required group ordering, and finally
-/// merges imports with the same root path into `{}` groups when possible.
-/// Format a sequence of flattened `Import` entries into the canonical `use`
-/// block string. This implementation delegates two responsibilities to focused
-/// helpers:
-///  - `format_with_attrs` handles imports that carry attributes (doc/cfg/etc)
-///  - `format_without_attrs` handles the common case: grouping by (category,
-///    is_pub) then merging root paths into `{}` groups via `merge_path_groups`.
 fn format_imports_from_collected(imports: Vec<Import>) -> String {
-    // Helper for imports that have attributes (keeps each as its own `use`
-    // line).
     fn format_with_attrs(attrs: &str, imports: &[Import]) -> String {
         imports
             .iter()
@@ -424,8 +396,6 @@ fn format_imports_from_collected(imports: Vec<Import>) -> String {
             .join("\n")
     }
 
-    // Merge a group of imports that share the same root into `root::{...}`
-    // forms.
     fn merge_path_groups(group: impl IntoIterator<Item = Import>, visibility: &str) -> String {
         let mut path_groups: BTreeMap<String, UseNode> = BTreeMap::new();
         for import in group {
@@ -452,8 +422,6 @@ fn format_imports_from_collected(imports: Vec<Import>) -> String {
             .join("\n")
     }
 
-    // Format the imports that don't have attributes by grouping and merging
-    // roots.
     fn format_without_attrs(imports: Vec<Import>) -> String {
         imports
             .into_iter()
@@ -504,17 +472,10 @@ fn format_use_tree(tree: &UseTree) -> String {
     }
 }
 
-/// Join a prefix of idents into a `::` separated path string.
-/// Extracted to remove duplicated `.iter().map(|s| s.to_string()).join("::")`
-/// uses.
 fn prefix_to_string(prefix: &Vec<&syn::Ident>) -> String {
     prefix.iter().map(|s| s.to_string()).join("::")
 }
 
-/// Format a visibility modifier into a string representation.
-/// - `Visibility::Public` -> "pub"
-/// - `Visibility::Restricted` -> "pub(crate)", "pub(super)", etc.
-/// - `Visibility::Inherited` -> "" (empty string for private)
 fn format_visibility(vis: &Visibility) -> String {
     match vis {
         Visibility::Public(_) => "pub".to_string(),
@@ -583,11 +544,6 @@ fn collect_imports(items: &[Item], local_mods: &HashSet<String>) -> Result<Vec<I
     Ok(imports)
 }
 
-/// Recursively traverse a `UseTree` producing flattened path strings and the
-/// corresponding identifier prefixes. The callback receives (path_string,
-/// idents). Implementation preserves the original behaviour but documents the
-/// shape of recursion and explains why cloning of `prefix` is performed in some
-/// branches.
 fn collect_paths_from_tree<'a>(
     tree: &'a UseTree,
     prefix: Vec<&'a syn::Ident>,

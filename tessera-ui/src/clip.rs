@@ -122,8 +122,6 @@ mod tests {
 
     #[test]
     fn shape_hit_testing_matches_mask_geometry() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
         let mut region = ClipRegion {
             position: PxPosition::from_f32_xy(10.0, 20.0),
             size: [100.0, 60.0],
@@ -142,8 +140,6 @@ mod tests {
 
     #[test]
     fn invalid_radii_and_exponents_are_sanitized() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
         assert_eq!(finite_radius(f32::NAN, 10.0), 0.0);
         assert_eq!(finite_radius(100.0, 10.0), 10.0);
         assert_eq!(finite_exponent(f32::INFINITY), 2.0);
@@ -152,8 +148,6 @@ mod tests {
 
     #[test]
     fn fractional_masks_keep_geometry_and_round_scissors_outwards() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
         let region = ClipRegion {
             position: PxPosition::from_f32_xy(-0.25, 0.75),
             size: [20.0, 10.0],

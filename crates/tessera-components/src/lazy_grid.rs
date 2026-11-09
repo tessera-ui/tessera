@@ -6,9 +6,8 @@
 use std::{hash::Hash, ops::Range, sync::Arc};
 
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
-    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlotWith,
-    State, key,
+    AxisConstraint, CallbackWith, Color, ComputedData, Dp, LayoutResult, MeasurementError,
+    Modifier, Px, RenderSlotWith, State, key,
     layout::{LayoutChild, MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     remember, tessera,
@@ -16,10 +15,10 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    layout_flex::{cross_axis_child_constraint, px_mul},
+    layout_flex::px_mul,
     lazy_shared::{
-        FenwickTree, LazyItemsPlan as LazySlotPlan, LazyItemsSlot as LazySlot, MeasuredMain,
-        ZeroLayout, clamp_reported_main, hash_key,
+        FenwickTree, LazyAxis, LazyItemsPlan as LazySlotPlan, LazyItemsSlot as LazySlot,
+        MeasuredMain, ZeroLayout, clamp_reported_main, hash_key,
     },
     scrollable::{
         ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable,
@@ -64,7 +63,7 @@ impl GridCells {
             }
             Self::Adaptive(min_size) => {
                 let min_px = ensure_positive_px(Px::from(*min_size));
-                let spacing = sanitize_spacing(spacing);
+                let spacing = spacing.max(Px::ZERO);
                 let available_i32 = available.0.max(0);
                 let min_i32 = min_px.0.max(1);
                 let spacing_i32 = spacing.0.max(0);
@@ -74,7 +73,7 @@ impl GridCells {
             }
             Self::FixedSize(size) => {
                 let cell_size = ensure_positive_px(Px::from(*size));
-                let spacing = sanitize_spacing(spacing);
+                let spacing = spacing.max(Px::ZERO);
                 let available_i32 = available.0.max(0);
                 let cell_i32 = cell_size.0.max(1);
                 let spacing_i32 = spacing.0.max(0);
@@ -136,7 +135,7 @@ struct VisibleGridLayoutItem {
 
 #[derive(Clone)]
 struct LazyGridLayout {
-    axis: LazyGridAxis,
+    axis: LazyAxis,
     item_alignment: CrossAxisAlignment,
     estimated_line_main: Px,
     main_spacing: Px,
@@ -190,7 +189,10 @@ impl tessera_ui::LayoutModifierNode for LazyGridLayout {
                 .get(visible.slot_index)
                 .copied()
                 .unwrap_or(Px::ZERO);
-            let child_constraint = self.axis.child_constraint(cell_cross, self.item_alignment);
+            let child_constraint = self.axis.child_constraint(
+                AxisConstraint::exact(cell_cross.max(Px::ZERO)),
+                self.item_alignment,
+            );
             let child_size = child.measure(input, &child_constraint)?;
             let line_idx = visible.line_index - self.line_range.start;
             if let Some(line_value) = line_max.get_mut(line_idx) {
@@ -490,7 +492,7 @@ pub fn lazy_vertical_grid(
             scroll_controller,
             slots: content.slots,
         },
-        LazyGridAxis::Vertical,
+        LazyAxis::Vertical,
     );
 }
 
@@ -518,17 +520,17 @@ struct LazyGridSlotsArgs {
 }
 
 #[tessera]
-fn lazy_grid_slots(args: LazyGridSlotsArgs, axis: LazyGridAxis) {
+fn lazy_grid_slots(args: LazyGridSlotsArgs, axis: LazyAxis) {
     let scroll_controller = args.scroll_controller;
-    let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
-    let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
+    let main_axis_spacing = Px::from(args.main_axis_spacing).max(Px::ZERO);
+    let cross_axis_spacing = Px::from(args.cross_axis_spacing).max(Px::ZERO);
     let estimated_line_main = ensure_positive_px(Px::from(args.estimated_item_size));
-    let padding_main = sanitize_spacing(Px::from(args.content_padding));
-    let padding_cross = sanitize_spacing(Px::from(args.content_padding));
+    let padding_main = Px::from(args.content_padding).max(Px::ZERO);
+    let padding_cross = Px::from(args.content_padding).max(Px::ZERO);
     scrollable()
         .modifier(args.modifier)
-        .vertical(axis == LazyGridAxis::Vertical)
-        .horizontal(axis == LazyGridAxis::Horizontal)
+        .vertical(axis == LazyAxis::Vertical)
+        .horizontal(axis == LazyAxis::Horizontal)
         .apply_child_offset(false)
         .scroll_smoothing(args.scroll_smoothing)
         .scrollbar_behavior(args.scrollbar_behavior)
@@ -683,23 +685,16 @@ pub fn lazy_horizontal_grid(
             scroll_controller,
             slots: content.slots,
         },
-        LazyGridAxis::Horizontal,
+        LazyAxis::Horizontal,
     );
 }
 
 crate::lazy_shared::impl_lazy_builder!(LazyVerticalGridBuilder, LazyGridContent);
 crate::lazy_shared::impl_lazy_builder!(LazyHorizontalGridBuilder, LazyGridContent);
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
-enum LazyGridAxis {
-    #[default]
-    Vertical,
-    Horizontal,
-}
-
 #[tessera]
 fn lazy_grid_view(
-    axis: Option<LazyGridAxis>,
+    axis: Option<LazyAxis>,
     grid_cells: Option<GridCells>,
     main_axis_spacing: Option<Px>,
     cross_axis_spacing: Option<Px>,
@@ -733,7 +728,7 @@ fn lazy_grid_view(
     let total_count = plan.total_count();
 
     let visible_size = scroll_controller.with(|s| s.visible_size());
-    let available_cross = axis.visible_cross(visible_size);
+    let available_cross = axis.cross(&visible_size);
     let available_cross = (available_cross - padding_cross * 2).max(Px::ZERO);
     let grid_slots = resolve_grid_slots(
         available_cross,
@@ -768,7 +763,7 @@ fn lazy_grid_view(
 
     let scroll_offset = axis.scroll_offset(scroll_controller.with(|s| s.child_position()));
     let viewport_span = resolve_viewport_span(
-        axis.visible_span(visible_size),
+        axis.main(&visible_size),
         estimated_line_main,
         main_axis_spacing,
     );
@@ -933,111 +928,6 @@ pub(crate) fn compute_cell_offset(
     }
 }
 
-#[derive(Clone, Copy)]
-enum FocusScrollDirection {
-    Forward,
-    Backward,
-}
-
-impl LazyGridAxis {
-    fn main(&self, size: &ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.height,
-            Self::Horizontal => size.width,
-        }
-    }
-
-    fn cross(&self, size: &ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.width,
-            Self::Horizontal => size.height,
-        }
-    }
-
-    fn pack_size(&self, main: Px, cross: Px) -> ComputedData {
-        match self {
-            Self::Vertical => ComputedData {
-                width: cross,
-                height: main,
-            },
-            Self::Horizontal => ComputedData {
-                width: main,
-                height: cross,
-            },
-        }
-    }
-
-    fn position(&self, main: Px, cross: Px) -> PxPosition {
-        match self {
-            Self::Vertical => PxPosition::new(cross, main),
-            Self::Horizontal => PxPosition::new(main, cross),
-        }
-    }
-
-    fn visible_span(&self, size: ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.height,
-            Self::Horizontal => size.width,
-        }
-    }
-
-    fn visible_cross(&self, size: ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.width,
-            Self::Horizontal => size.height,
-        }
-    }
-
-    fn scroll_position(&self, offset: Px) -> PxPosition {
-        match self {
-            Self::Vertical => PxPosition::new(Px::ZERO, -offset),
-            Self::Horizontal => PxPosition::new(-offset, Px::ZERO),
-        }
-    }
-
-    fn scroll_offset(&self, position: PxPosition) -> Px {
-        match self {
-            Self::Vertical => Px((-position.y).max(0.0) as i32),
-            Self::Horizontal => Px((-position.x).max(0.0) as i32),
-        }
-    }
-
-    fn focus_scroll_direction(&self, direction: FocusDirection) -> Option<FocusScrollDirection> {
-        match (self, direction) {
-            (_, FocusDirection::Next | FocusDirection::Enter) => {
-                Some(FocusScrollDirection::Forward)
-            }
-            (_, FocusDirection::Previous | FocusDirection::Exit) => {
-                Some(FocusScrollDirection::Backward)
-            }
-            (Self::Vertical, FocusDirection::Down) => Some(FocusScrollDirection::Forward),
-            (Self::Vertical, FocusDirection::Up) => Some(FocusScrollDirection::Backward),
-            (Self::Horizontal, FocusDirection::Right) => Some(FocusScrollDirection::Forward),
-            (Self::Horizontal, FocusDirection::Left) => Some(FocusScrollDirection::Backward),
-            _ => None,
-        }
-    }
-
-    fn child_constraint(&self, cross: Px, alignment: CrossAxisAlignment) -> Constraint {
-        let cross = cross.max(Px::ZERO);
-        // The cell defines an exact cross extent, so the shared rule reproduces
-        // the previous behavior: `Stretch` fills the cell, other alignments let
-        // the item measure itself within that extent.
-        let cross_constraint = cross_axis_child_constraint(AxisConstraint::exact(cross), alignment);
-
-        match self {
-            Self::Vertical => Constraint::new(cross_constraint, AxisConstraint::NONE),
-            Self::Horizontal => Constraint::new(AxisConstraint::NONE, cross_constraint),
-        }
-    }
-
-    fn constraint_max(&self, constraint: ParentConstraint<'_>) -> Option<Px> {
-        match self {
-            Self::Vertical => constraint.height().resolve_max(),
-            Self::Horizontal => constraint.width().resolve_max(),
-        }
-    }
-}
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct GridSlots {
     pub(crate) sizes: Vec<Px>,
@@ -1057,7 +947,7 @@ pub(crate) fn resolve_grid_slots(
     spacing: Px,
     alignment: MainAxisAlignment,
 ) -> GridSlots {
-    let spacing = sanitize_spacing(spacing);
+    let spacing = spacing.max(Px::ZERO);
     let sizes = grid_cells.resolve_slots(available_cross, spacing);
     if sizes.is_empty() {
         return GridSlots {
@@ -1169,7 +1059,7 @@ impl VisibleGridPlan {
 }
 
 struct LazyGridFocusArgs {
-    axis: LazyGridAxis,
+    axis: LazyAxis,
     controller: State<LazyGridController>,
     scroll_controller: State<ScrollableController>,
     estimated_line_main: Px,
@@ -1186,26 +1076,23 @@ fn lazy_grid_focus_beyond_bounds_modifier(args: LazyGridFocusArgs) -> Modifier {
         .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
     let max_scroll = (args.total_main - args.viewport_span).max(Px::ZERO);
     Modifier::new().focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
-        let Some(scroll_direction) = args.axis.focus_scroll_direction(direction) else {
+        let Some(forward) = args.axis.focus_forward(direction) else {
             return false;
         };
         if args.total_lines == 0 || args.viewport_span <= Px::ZERO {
             return false;
         }
 
-        let target_line = match scroll_direction {
-            FocusScrollDirection::Forward => {
-                if args.visible_line_range.end >= args.total_lines {
-                    return false;
-                }
-                args.visible_line_range.end
+        let target_line = if forward {
+            if args.visible_line_range.end >= args.total_lines {
+                return false;
             }
-            FocusScrollDirection::Backward => {
-                let Some(line) = args.visible_line_range.start.checked_sub(1) else {
-                    return false;
-                };
-                line
-            }
+            args.visible_line_range.end
+        } else {
+            let Some(line) = args.visible_line_range.start.checked_sub(1) else {
+                return false;
+            };
+            line
         };
 
         let (target_offset, target_main) = args.controller.with(|c| {
@@ -1225,11 +1112,10 @@ fn lazy_grid_focus_beyond_bounds_modifier(args: LazyGridFocusArgs) -> Modifier {
             )
         });
 
-        let desired_scroll = match scroll_direction {
-            FocusScrollDirection::Forward => {
-                (target_offset + target_main - args.viewport_span).max(Px::ZERO)
-            }
-            FocusScrollDirection::Backward => target_offset,
+        let desired_scroll = if forward {
+            (target_offset + target_main - args.viewport_span).max(Px::ZERO)
+        } else {
+            target_offset
         }
         .min(max_scroll);
 
@@ -1366,10 +1252,6 @@ fn ensure_positive_px(px: Px) -> Px {
     if px <= Px::ZERO { Px(1) } else { px }
 }
 
-fn sanitize_spacing(px: Px) -> Px {
-    if px < Px::ZERO { Px::ZERO } else { px }
-}
-
 #[cfg(test)]
 mod tests {
     use tessera_ui::RenderSlotWith;
@@ -1383,16 +1265,14 @@ mod tests {
 
     use crate::{
         alignment::{CrossAxisAlignment, MainAxisAlignment},
+        lazy_shared::LazyAxis,
         modifier::{ModifierExt as _, SemanticsArgs},
         scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
         text::text,
         theme::{MaterialTheme, material_theme},
     };
 
-    use super::{
-        GridCells, LazyGridAxis, LazyGridCache, LazyGridController, lazy_grid_view,
-        lazy_vertical_grid,
-    };
+    use super::{GridCells, LazyGridCache, LazyGridController, lazy_grid_view, lazy_vertical_grid};
 
     #[tessera]
     fn collapsed_viewport_fixture(
@@ -1537,7 +1417,7 @@ mod tests {
         });
 
         lazy_grid_view()
-            .axis(LazyGridAxis::Vertical)
+            .axis(LazyAxis::Vertical)
             .grid_cells(GridCells::fixed(2))
             .main_axis_spacing(Px::new(3))
             .cross_axis_spacing(Px::new(3))
@@ -1593,7 +1473,7 @@ mod tests {
         });
 
         lazy_grid_view()
-            .axis(LazyGridAxis::Horizontal)
+            .axis(LazyAxis::Horizontal)
             .grid_cells(GridCells::fixed(2))
             .main_axis_spacing(Px::new(3))
             .cross_axis_spacing(Px::new(3))
@@ -1662,7 +1542,7 @@ mod tests {
             .controller(scroll_controller)
             .child(move || {
                 lazy_grid_view()
-                    .axis(LazyGridAxis::Vertical)
+                    .axis(LazyAxis::Vertical)
                     .grid_cells(GridCells::fixed(2))
                     .main_axis_spacing(Px::new(3))
                     .cross_axis_spacing(Px::new(3))
@@ -1735,7 +1615,7 @@ mod tests {
             .theme(MaterialTheme::default)
             .child(move || {
                 lazy_grid_view()
-                    .axis(LazyGridAxis::Vertical)
+                    .axis(LazyAxis::Vertical)
                     .grid_cells(GridCells::fixed(2))
                     .main_axis_spacing(Px::new(3))
                     .cross_axis_spacing(Px::new(3))

@@ -6,9 +6,8 @@
 use std::{collections::BTreeMap, hash::Hash, ops::Range, sync::Arc};
 
 use tessera_ui::{
-    AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusDirection, FocusScopeNode,
-    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlotWith,
-    State, key,
+    AxisConstraint, CallbackWith, Constraint, Dp, FocusScopeNode, LayoutResult, MeasurementError,
+    Modifier, Px, PxPosition, RenderSlotWith, State, key,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     remember, remember_with_key, tessera,
@@ -16,9 +15,10 @@ use tessera_ui::{
 
 use crate::{
     alignment::CrossAxisAlignment,
-    layout_flex::{cross_axis_child_constraint, px_mul},
+    layout_flex::px_mul,
     lazy_shared::{
-        FenwickTree, LazyItemsSlot, MeasuredMain, ZeroLayout, clamp_reported_main, hash_key,
+        FenwickTree, LazyAxis, LazyItemsSlot, MeasuredMain, ZeroLayout, clamp_reported_main,
+        hash_key,
     },
     scrollable::{ScrollBarBehavior, ScrollableController, scrollable, synchronize_scroll_density},
 };
@@ -94,7 +94,7 @@ struct ItemScrollRequest {
 
 #[derive(Clone, Copy, PartialEq)]
 struct ListScrollGeometry {
-    axis: LazyListAxis,
+    axis: LazyAxis,
     estimated_main: Px,
     spacing: Px,
     padding: Px,
@@ -366,10 +366,10 @@ fn lazy_column_slots(parameters: State<LazyListSlotsArgs>) {
         .child(move || {
             let args = parameters.get();
             let scroll_controller = args.scroll_controller;
-            let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
+            let item_spacing = Px::from(args.item_spacing).max(Px::ZERO);
             let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
-            let padding_main = sanitize_spacing(Px::from(args.content_padding));
-            let padding_cross = sanitize_spacing(Px::from(args.content_padding));
+            let padding_main = Px::from(args.content_padding).max(Px::ZERO);
+            let padding_cross = Px::from(args.content_padding).max(Px::ZERO);
             // Sync scroll position back to controller
             let current_pos = scroll_controller.with(|sc| sc.child_position());
             let should_sync_position = args
@@ -380,7 +380,7 @@ fn lazy_column_slots(parameters: State<LazyListSlotsArgs>) {
                     .with_mut(|c| c.scroll.set_scroll_position(current_pos));
             }
             lazy_list_view()
-                .axis(LazyListAxis::Vertical)
+                .axis(LazyAxis::Vertical)
                 .cross_axis_alignment(args.cross_axis_alignment)
                 .item_spacing(item_spacing)
                 .estimated_item_main(estimated_item_main)
@@ -619,10 +619,10 @@ fn lazy_row_slots(parameters: State<LazyListSlotsArgs>) {
         .child(move || {
             let args = parameters.get();
             let scroll_controller = args.scroll_controller;
-            let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
+            let item_spacing = Px::from(args.item_spacing).max(Px::ZERO);
             let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
-            let padding_main = sanitize_spacing(Px::from(args.content_padding));
-            let padding_cross = sanitize_spacing(Px::from(args.content_padding));
+            let padding_main = Px::from(args.content_padding).max(Px::ZERO);
+            let padding_cross = Px::from(args.content_padding).max(Px::ZERO);
             // Sync scroll position back to controller
             let current_pos = scroll_controller.with(|sc| sc.child_position());
             let should_sync_position = args
@@ -633,7 +633,7 @@ fn lazy_row_slots(parameters: State<LazyListSlotsArgs>) {
                     .with_mut(|c| c.scroll.set_scroll_position(current_pos));
             }
             lazy_list_view()
-                .axis(LazyListAxis::Horizontal)
+                .axis(LazyAxis::Horizontal)
                 .cross_axis_alignment(args.cross_axis_alignment)
                 .item_spacing(item_spacing)
                 .estimated_item_main(estimated_item_main)
@@ -650,7 +650,7 @@ fn lazy_row_slots(parameters: State<LazyListSlotsArgs>) {
 
 #[tessera]
 fn lazy_list_view(
-    axis: Option<LazyListAxis>,
+    axis: Option<LazyAxis>,
     cross_axis_alignment: Option<CrossAxisAlignment>,
     item_spacing: Option<Px>,
     estimated_item_main: Option<Px>,
@@ -742,7 +742,7 @@ fn lazy_list_view(
     }
     let scroll_offset = axis.scroll_offset(scroll_controller.with(|s| s.child_position()));
     let viewport_span = resolve_viewport_span(
-        axis.visible_span(scroll_controller.with(|s| s.visible_size())),
+        axis.main(&scroll_controller.with(|s| s.visible_size())),
         estimated_item_main,
         item_spacing,
     );
@@ -915,7 +915,7 @@ fn lazy_list_view(
 
 #[derive(Clone, PartialEq)]
 struct LazyListLayout {
-    axis: LazyListAxis,
+    axis: LazyAxis,
     cross_axis_alignment: CrossAxisAlignment,
     item_spacing: Px,
     estimated_item_main: Px,
@@ -950,9 +950,10 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
             .collect();
         measured_children.sort_unstable_by_key(|(item_index, _)| *item_index);
 
-        let mut child_constraint = self
-            .axis
-            .child_constraint(input.parent_constraint(), self.cross_axis_alignment);
+        let mut child_constraint = self.axis.child_constraint(
+            self.axis.cross_constraint(input.parent_constraint()),
+            self.cross_axis_alignment,
+        );
         apply_cross_padding(&mut child_constraint, self.axis, self.padding_cross);
         let mut measured_entries = Vec::with_capacity(self.visible_item_indices.len());
         let mut inner_cross = Px::ZERO;
@@ -965,8 +966,8 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
         }
 
         let cross_limit = match self.axis {
-            LazyListAxis::Vertical => child_constraint.width.resolve_max(),
-            LazyListAxis::Horizontal => child_constraint.height.resolve_max(),
+            LazyAxis::Vertical => child_constraint.width.resolve_max(),
+            LazyAxis::Horizontal => child_constraint.height.resolve_max(),
         };
         // Collapsed viewports can wrap text into misleading main-axis sizes.
         let has_cache_updates = cross_limit.is_none_or(|size| size > Px::ZERO)
@@ -1348,115 +1349,6 @@ fn retained_lazy_item(
     });
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
-enum LazyListAxis {
-    #[default]
-    Vertical,
-    Horizontal,
-}
-
-#[derive(Clone, Copy)]
-enum FocusScrollDirection {
-    Forward,
-    Backward,
-}
-
-impl LazyListAxis {
-    fn main(&self, size: &ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.height,
-            Self::Horizontal => size.width,
-        }
-    }
-
-    fn cross(&self, size: &ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.width,
-            Self::Horizontal => size.height,
-        }
-    }
-
-    fn pack_size(&self, main: Px, cross: Px) -> ComputedData {
-        match self {
-            Self::Vertical => ComputedData {
-                width: cross,
-                height: main,
-            },
-            Self::Horizontal => ComputedData {
-                width: main,
-                height: cross,
-            },
-        }
-    }
-
-    fn position(&self, main: Px, cross: Px) -> PxPosition {
-        match self {
-            Self::Vertical => PxPosition::new(cross, main),
-            Self::Horizontal => PxPosition::new(main, cross),
-        }
-    }
-
-    fn visible_span(&self, size: ComputedData) -> Px {
-        match self {
-            Self::Vertical => size.height,
-            Self::Horizontal => size.width,
-        }
-    }
-
-    fn scroll_position(&self, offset: Px) -> PxPosition {
-        match self {
-            Self::Vertical => PxPosition::new(Px::ZERO, -offset),
-            Self::Horizontal => PxPosition::new(-offset, Px::ZERO),
-        }
-    }
-
-    fn scroll_offset(&self, position: PxPosition) -> Px {
-        match self {
-            Self::Vertical => Px((-position.y).max(0.0) as i32),
-            Self::Horizontal => Px((-position.x).max(0.0) as i32),
-        }
-    }
-
-    fn focus_scroll_direction(&self, direction: FocusDirection) -> Option<FocusScrollDirection> {
-        match (self, direction) {
-            (_, FocusDirection::Next | FocusDirection::Enter) => {
-                Some(FocusScrollDirection::Forward)
-            }
-            (_, FocusDirection::Previous | FocusDirection::Exit) => {
-                Some(FocusScrollDirection::Backward)
-            }
-            (Self::Vertical, FocusDirection::Down) => Some(FocusScrollDirection::Forward),
-            (Self::Vertical, FocusDirection::Up) => Some(FocusScrollDirection::Backward),
-            (Self::Horizontal, FocusDirection::Right) => Some(FocusScrollDirection::Forward),
-            (Self::Horizontal, FocusDirection::Left) => Some(FocusScrollDirection::Backward),
-            _ => None,
-        }
-    }
-
-    fn child_constraint(
-        &self,
-        parent: ParentConstraint<'_>,
-        alignment: CrossAxisAlignment,
-    ) -> Constraint {
-        let cross_constraint = match self {
-            Self::Vertical => cross_axis_child_constraint(parent.width(), alignment),
-            Self::Horizontal => cross_axis_child_constraint(parent.height(), alignment),
-        };
-
-        match self {
-            Self::Vertical => Constraint::new(cross_constraint, AxisConstraint::NONE),
-            Self::Horizontal => Constraint::new(AxisConstraint::NONE, cross_constraint),
-        }
-    }
-
-    fn constraint_max(&self, constraint: ParentConstraint<'_>) -> Option<Px> {
-        match self {
-            Self::Vertical => constraint.height().resolve_max(),
-            Self::Horizontal => constraint.width().resolve_max(),
-        }
-    }
-}
-
 #[derive(Clone)]
 struct VisibleChildrenPlan {
     children: Vec<VisibleChild>,
@@ -1474,7 +1366,7 @@ impl VisibleChildrenPlan {
 
 #[derive(Clone, PartialEq)]
 struct LazyListFocusArgs {
-    axis: LazyListAxis,
+    axis: LazyAxis,
     controller: State<LazyListController>,
     scroll_controller: State<ScrollableController>,
     total_count: usize,
@@ -1493,26 +1385,23 @@ fn lazy_list_focus_beyond_bounds_modifier(args: State<LazyListFocusArgs>) -> Mod
         }
         let args = args.get();
         let max_scroll = (args.total_main - args.viewport_span).max(Px::ZERO);
-        let Some(scroll_direction) = args.axis.focus_scroll_direction(direction) else {
+        let Some(forward) = args.axis.focus_forward(direction) else {
             return false;
         };
         if args.total_count == 0 || args.viewport_span <= Px::ZERO {
             return false;
         }
 
-        let target_index = match scroll_direction {
-            FocusScrollDirection::Forward => {
-                if args.visible_range.end >= args.total_count {
-                    return false;
-                }
-                args.visible_range.end
+        let target_index = if forward {
+            if args.visible_range.end >= args.total_count {
+                return false;
             }
-            FocusScrollDirection::Backward => {
-                let Some(index) = args.visible_range.start.checked_sub(1) else {
-                    return false;
-                };
-                index
-            }
+            args.visible_range.end
+        } else {
+            let Some(index) = args.visible_range.start.checked_sub(1) else {
+                return false;
+            };
+            index
         };
 
         let (target_offset, target_main) = args.controller.with(|c| {
@@ -1525,11 +1414,10 @@ fn lazy_list_focus_beyond_bounds_modifier(args: State<LazyListFocusArgs>) -> Mod
             )
         });
 
-        let desired_scroll = match scroll_direction {
-            FocusScrollDirection::Forward => {
-                (target_offset + target_main - args.viewport_span).max(Px::ZERO)
-            }
-            FocusScrollDirection::Backward => target_offset,
+        let desired_scroll = if forward {
+            (target_offset + target_main - args.viewport_span).max(Px::ZERO)
+        } else {
+            target_offset
         }
         .min(max_scroll);
 
@@ -1802,17 +1690,13 @@ fn ensure_positive_px(px: Px) -> Px {
     if px <= Px::ZERO { Px(1) } else { px }
 }
 
-fn sanitize_spacing(px: Px) -> Px {
-    if px < Px::ZERO { Px::ZERO } else { px }
-}
-
-fn apply_cross_padding(constraint: &mut Constraint, axis: LazyListAxis, padding: Px) {
+fn apply_cross_padding(constraint: &mut Constraint, axis: LazyAxis, padding: Px) {
     let total_padding = padding + padding;
     match axis {
-        LazyListAxis::Vertical => {
+        LazyAxis::Vertical => {
             constraint.width = shrink_axis_max(constraint.width, total_padding);
         }
-        LazyListAxis::Horizontal => {
+        LazyAxis::Horizontal => {
             constraint.height = shrink_axis_max(constraint.height, total_padding);
         }
     }

@@ -24,6 +24,7 @@ use crate::res::I18N;
 
 use super::{
     article::{ArticlePage, SpecSection, article},
+    article_helpers::prose,
     gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
@@ -129,11 +130,6 @@ pub(super) fn progress_indicators_spec(
             });
         }));
     });
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]

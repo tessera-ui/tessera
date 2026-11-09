@@ -749,22 +749,8 @@ fn rect_from_geometry_with_padding(
     Some(Rect { x0, y0, x1, y1 })
 }
 
-/// Dispatches an accessibility action to the appropriate component handler.
-///
-/// This function:
-/// 1. Converts the AccessKit NodeId back to a component NodeId
-/// 2. Looks up the component's metadata
-/// 3. Calls the component's accessibility_action_handler if present
-///
-/// # Arguments
-///
-/// * `tree` - The component tree structure (for NodeId validation)
-/// * `metadatas` - Component metadata including action handlers
-/// * `action_request` - The action request from AccessKit
-///
-/// # Returns
-///
-/// `true` if the action was handled, `false` if no handler was found.
+/// Dispatches an action to a visible component. Focus requests the registered
+/// focus target without activating it. Returns whether the action was handled.
 pub fn dispatch_action(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
@@ -777,12 +763,11 @@ pub fn dispatch_action(
 
     let accessibility_id = AccessibilityId::from_accesskit_id(action_request.target_node);
 
-    let component_node_id = tree
+    let Some(target) = tree
         .iter()
         .find(|node| !node.is_removed() && node.get().instance_key == accessibility_id.0)
-        .and_then(|node| tree.get_node_id(node));
-
-    let Some(target) = component_node_id else {
+        .and_then(|node| tree.get_node_id(node))
+    else {
         return false;
     };
     for ancestor in target.ancestors(tree) {
@@ -801,10 +786,7 @@ pub fn dispatch_action(
     }
 
     if action_request.action == accesskit::Action::Focus {
-        let Some(node_id) = component_node_id else {
-            return false;
-        };
-        let eligible = metadatas.get(&node_id).is_some_and(|metadata| {
+        let eligible = metadatas.get(&target).is_some_and(|metadata| {
             metadata.abs_position.is_some()
                 && metadata
                     .accessibility
@@ -812,7 +794,7 @@ pub fn dispatch_action(
                     .and_then(StoredSemantics::extended)
                     .is_some_and(|node| node.focusable && !node.disabled && !node.hidden)
         });
-        let registration = tree[node_id].get().interaction().focus_registration;
+        let registration = tree[target].get().interaction().focus_registration;
         if eligible && let Some(registration) = registration {
             focus_owner.record_accessibility_focus(crate::time::Instant::now());
             focus_owner.request_focus(registration.id);
@@ -821,12 +803,9 @@ pub fn dispatch_action(
         return false;
     }
 
-    // Look up the component's metadata and call handler
-    if let Some(node_id) = component_node_id
-        && let Some(metadata) = metadatas.get(&node_id)
+    if let Some(metadata) = metadatas.get(&target)
         && let Some(handler) = &metadata.accessibility_action_handler
     {
-        // Call the handler
         let _focus_owner_guard = bind_focus_owner(focus_owner);
         handler(action_request.action);
         return true;

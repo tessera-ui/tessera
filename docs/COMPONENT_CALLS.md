@@ -29,12 +29,7 @@ run Cargo's compilation checks. Tessera components and runtime APIs must be
 called inside a component or a recognized render-slot closure. Ordinary helpers,
 callbacks, and iterator closures remain uncolored, including inside components.
 
-The terminal shows `Running tessera checkers` and `Checking <crate> v<version>`
-for each crate. A white Cargo-style progress bar shows the completed crate count
-and currently active crates. `Finished` reports the result and elapsed time.
-Crates are checked in parallel; `--jobs` controls the worker count. Progress uses
-stderr and is cleared before diagnostics. Redirected output keeps static status
-lines; `--quiet` and `--message-format=json` suppress progress entirely.
+`--jobs` controls the checker worker count.
 
 The checker checks the selected targets and library dependencies that directly
 use `tessera-ui`, `tessera-foundation`, `tessera-components`, or `tessera-shard` in

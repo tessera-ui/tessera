@@ -4,6 +4,9 @@
 //!
 //! Use recognizers to derive reusable pointer interaction behavior in shared
 //! modifiers and components.
+//! Pointer samples share one coordinate space; the press position anchors slop,
+//! or the first movement sample does when the press has no position. Callers
+//! supply `within_bounds` from the node's relative coordinates.
 
 use std::time::Duration;
 
@@ -143,21 +146,6 @@ impl TapRecognizer {
     }
 
     /// Updates the recognizer with the current pointer pass and events.
-    ///
-    /// # Position source
-    ///
-    /// Positions come from the samples themselves in a shared coordinate space.
-    ///
-    /// # Slop origin
-    ///
-    /// The recorded press position anchors slop and movement. A press without
-    /// a recorded position uses the first movement sample as its origin.
-    ///
-    /// # `within_bounds`
-    ///
-    /// `within_bounds` is a semantic flag the caller computes from the node's
-    /// relative coordinates; it reports whether the pointer was inside this
-    /// node when the update ran.
     pub fn update(
         &mut self,
         pass: PointerEventPass,
@@ -330,17 +318,6 @@ impl DragRecognizer {
     }
 
     /// Updates the recognizer with the current pointer pass and events.
-    ///
-    /// # Slop origin
-    ///
-    /// The recorded press position anchors slop and movement. A press without
-    /// a recorded position uses the first movement sample as its origin.
-    ///
-    /// # `within_bounds`
-    ///
-    /// `within_bounds` is a semantic flag the caller computes from the node's
-    /// relative coordinates; it reports whether the pointer was inside this
-    /// node when the update ran.
     pub fn update(
         &mut self,
         pass: PointerEventPass,
@@ -511,17 +488,6 @@ impl LongPressRecognizer {
     }
 
     /// Updates the recognizer with the current pointer pass and events.
-    ///
-    /// # Slop origin
-    ///
-    /// The recorded press position anchors slop and movement. A press without
-    /// a recorded position uses the first movement sample as its origin.
-    ///
-    /// # `within_bounds`
-    ///
-    /// `within_bounds` is a semantic flag the caller computes from the node's
-    /// relative coordinates; it reports whether the pointer was inside this
-    /// node when the update ran.
     pub fn update(
         &mut self,
         pass: PointerEventPass,

@@ -32,9 +32,7 @@ cargo tessera skill
 
 The command shows a compact selector below your shell output, with **Local**
 selected initially and the destination of each scope previewed. Use Up/Down or
-Tab to select and Enter to confirm. Esc, q, or Ctrl-C cancels without
-installing. The selector rows are removed when it exits and the terminal is
-restored, including after cancellation and errors.
+Tab to select and Enter to confirm. Esc, q, or Ctrl-C cancels without installing.
 
 - Local: `<project>/.agents/skills/tessera-good-taste/` (current directory by default).
 - Global: `~/.agents/skills/tessera-good-taste/`, using your operating-system home directory.
@@ -57,7 +55,6 @@ Both scopes leave `AGENTS.md`, other skills, and unrelated files unchanged.
 Matching files are left untouched; use `--force` to replace locally modified
 bundled skill files. Invoke the installed skill as `$tessera-good-taste` in an
 agent that supports its installation location, or read its `SKILL.md` directly.
-Project creation still only generates guidance; it does not install the skill.
 
 For agent-specific installation through the Skills CLI, select the skill from
 this repository:
@@ -65,9 +62,6 @@ this repository:
 ```bash
 npx skills add tessera-ui/tessera --skill tessera-good-taste
 ```
-
-The repository's `skills.sh.json` exposes `crates/cargo-tessera/skills/` as a skill
-container. `SKILL.md` routes tasks to focused references, which are read as needed.
 
 ### Start development server
 
@@ -279,24 +273,6 @@ cargo tessera android dev \
   --device 8cd1353b \
   --debug-dirty-overlay
 ```
-
-Then pull and analyze:
-
-```bash
-cargo tessera profiling analyze-android \
-  --package com.example.my_app \
-  --device 8cd1353b \
-  --remote-path files/tessera-profiler.jsonl
-```
-
-## Commands
-
-- `cargo tessera new <name>` - Create a new Tessera project
-- `cargo tessera dev` - Start development server with automatic rebuild/restart
-- `cargo tessera build` - Build desktop targets
-- `cargo tessera profiling analyze <file>` - Analyze profiler JSONL output
-- `cargo tessera profiling analyze-android` - Pull Android profiler JSONL via adb, then analyze
-- `cargo tessera android <subcommand>` - Android helpers (`build`, `dev`)
 
 ## License
 

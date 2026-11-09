@@ -29,6 +29,7 @@ use super::{
     INK,
     annotations::{self, PreciseGeometry as Geometry},
     article::{ArticlePage, SpecSection, article},
+    article_helpers::caption,
     gap, spec_table, subheading, type_style,
 };
 
@@ -177,14 +178,6 @@ fn sheet_article(
             ],
         },
     ]);
-}
-
-#[tessera]
-fn caption(#[prop(into)] value: String) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text(I18N.text(value))
-        .color(scheme.on_surface_variant)
-        .style(type_style(14.0, 20.0));
 }
 
 #[tessera]

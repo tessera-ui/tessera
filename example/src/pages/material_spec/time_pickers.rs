@@ -30,6 +30,7 @@ use super::{
     ACCENT,
     annotations::{self, PreciseGeometry, Rect, dotted, watch_precise},
     article::{ArticlePage, SpecSection, article},
+    article_helpers::prose,
     gap, spec_table, subheading, type_style,
 };
 
@@ -871,11 +872,6 @@ enum FigureKind {
     Guidelines,
     Measurements,
     Colors,
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]

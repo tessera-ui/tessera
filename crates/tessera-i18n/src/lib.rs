@@ -133,13 +133,9 @@ impl Loader for EmbeddedLoader {
             .into_iter()
             .find_map(|locale| Self::format(locale, text_id, args))
             .or_else(|| {
-                let fallback = self
-                    .locales
+                self.locales
                     .iter()
-                    .find(|locale| locale.id == self.fallback);
-                (*lang != self.fallback)
-                    .then_some(fallback)
-                    .flatten()
+                    .find(|locale| *lang != self.fallback && locale.id == self.fallback)
                     .and_then(|locale| Self::format(locale, text_id, args))
             })
     }

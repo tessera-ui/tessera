@@ -176,18 +176,12 @@ impl PxPosition {
 
     /// Creates a position from a 2D f32 array.
     pub fn from_f32_arr2(arr: [f32; 2]) -> Self {
-        Self {
-            x: arr[0],
-            y: arr[1],
-        }
+        Self::from_f32_xy(arr[0], arr[1])
     }
 
     /// Creates a position from a 3D f32 array, ignoring z.
     pub fn from_f32_arr3(arr: [f32; 3]) -> Self {
-        Self {
-            x: arr[0],
-            y: arr[1],
-        }
+        Self::from_f32_xy(arr[0], arr[1])
     }
 
     /// Converts the position to a 2D f64 array.
@@ -202,18 +196,12 @@ impl PxPosition {
 
     /// Creates a position from a 2D f64 array.
     pub fn from_f64_arr2(arr: [f64; 2]) -> Self {
-        Self {
-            x: arr[0] as f32,
-            y: arr[1] as f32,
-        }
+        Self::from_f32_xy(arr[0] as f32, arr[1] as f32)
     }
 
     /// Creates a position from a 3D f64 array, ignoring the z component.
     pub fn from_f64_arr3(arr: [f64; 3]) -> Self {
-        Self {
-            x: arr[0] as f32,
-            y: arr[1] as f32,
-        }
+        Self::from_f32_xy(arr[0] as f32, arr[1] as f32)
     }
 }
 
@@ -278,12 +266,7 @@ impl PxRect {
 
     /// Creates a new rectangle from a position and size.
     pub fn from_position_size(position: PxPosition, size: PxSize) -> Self {
-        Self {
-            x: position.x_px(),
-            y: position.y_px(),
-            width: size.width,
-            height: size.height,
-        }
+        Self::new(position.x_px(), position.y_px(), size.width, size.height)
     }
 
     pub(crate) fn enclosing(position: PxPosition, size: PxSize) -> Self {

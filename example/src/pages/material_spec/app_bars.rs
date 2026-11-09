@@ -33,6 +33,7 @@ use super::{
     ACCENT,
     annotations::{self, Geometry, Rect, dotted, relative, watch},
     article::{ArticlePage, SpecSection, article},
+    article_helpers::{bullets, caption},
     gap, panel, spec_table, subheading, type_style,
 };
 
@@ -87,24 +88,6 @@ pub(super) fn app_bars_spec(route: Option<crate::pages::material_spec::article::
             ],
         },
     ]);
-}
-
-#[tessera]
-fn caption(#[prop(into)] value: String) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text(I18N.text(value))
-        .color(scheme.on_surface_variant)
-        .style(type_style(14.0, 20.0));
-}
-
-#[tessera]
-fn bullets(items: Vec<String>) {
-    column().children(move || {
-        for item in items.clone() {
-            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
-            gap(Dp(8.0));
-        }
-    });
 }
 
 #[tessera]

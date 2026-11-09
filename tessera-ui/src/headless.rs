@@ -337,16 +337,12 @@ impl HeadlessRenderer {
     pub fn pointer_move(&mut self, pointer_id: PointerId, position: PxPosition) {
         let _session = self.session.enter();
         self.cursor.update_pointer_position(pointer_id, position);
-        self.cursor.push_event(PointerChange {
-            timestamp: Instant::now(),
+        self.cursor.push_event(PointerChange::new(
+            Instant::now(),
             pointer_id,
-            content: CursorEventContent::Moved(position),
-            gesture_state: GestureState::TapCandidate,
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        });
+            CursorEventContent::Moved(position),
+            GestureState::TapCandidate,
+        ));
     }
 
     /// Presses a pointer button at `position`.
@@ -358,16 +354,12 @@ impl HeadlessRenderer {
     ) {
         let _session = self.session.enter();
         self.cursor.update_pointer_position(pointer_id, position);
-        self.cursor.push_event(PointerChange {
-            timestamp: Instant::now(),
+        self.cursor.push_event(PointerChange::new(
+            Instant::now(),
             pointer_id,
-            content: CursorEventContent::Pressed(button),
-            gesture_state: GestureState::TapCandidate,
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        });
+            CursorEventContent::Pressed(button),
+            GestureState::TapCandidate,
+        ));
     }
 
     /// Releases a pointer button at `position`.
@@ -379,16 +371,12 @@ impl HeadlessRenderer {
     ) {
         let _session = self.session.enter();
         self.cursor.update_pointer_position(pointer_id, position);
-        self.cursor.push_event(PointerChange {
-            timestamp: Instant::now(),
+        self.cursor.push_event(PointerChange::new(
+            Instant::now(),
             pointer_id,
-            content: CursorEventContent::Released(button),
-            gesture_state: GestureState::TapCandidate,
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        });
+            CursorEventContent::Released(button),
+            GestureState::TapCandidate,
+        ));
     }
 
     /// Queues a mouse-wheel scroll at `position`.
@@ -401,21 +389,17 @@ impl HeadlessRenderer {
     ) {
         let _session = self.session.enter();
         self.cursor.update_pointer_position(pointer_id, position);
-        self.cursor.push_event(PointerChange {
-            timestamp: Instant::now(),
+        self.cursor.push_event(PointerChange::new(
+            Instant::now(),
             pointer_id,
-            content: CursorEventContent::Scroll(ScrollEventContent {
+            CursorEventContent::Scroll(ScrollEventContent {
                 delta_x,
                 delta_y,
                 unit: ScrollDeltaUnit::Pixel,
                 source: ScrollEventSource::Wheel,
             }),
-            gesture_state: GestureState::TapCandidate,
-            sampled_position: Default::default(),
-            consumed: false,
-            tap_claimed: false,
-            scroll_discrete: None,
-        });
+            GestureState::TapCandidate,
+        ));
     }
 
     /// Starts a touch contact at the given window position.

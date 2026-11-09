@@ -23,6 +23,7 @@ use super::{
     ACCENT, INK,
     annotations::{self, SpaceGeometry, space_geometry, watch_in_space},
     article::{ArticlePage, SpecSection, article},
+    article_helpers::prose,
     gap, spec_table, srgb, subheading, type_style,
 };
 
@@ -223,11 +224,6 @@ pub(super) fn divider_spec(route: Option<crate::pages::material_spec::article::A
             sections: vec![],
         },
     ]);
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]

@@ -9,9 +9,108 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use tessera_ui::{CallbackWith, Px, RenderSlotWith};
+use tessera_ui::{
+    AxisConstraint, CallbackWith, ComputedData, Constraint, FocusDirection, ParentConstraint, Px,
+    PxPosition, RenderSlotWith,
+};
 
-use crate::layout_flex::px_from_i64;
+use crate::{
+    alignment::CrossAxisAlignment,
+    layout_flex::{cross_axis_child_constraint, px_from_i64},
+};
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum LazyAxis {
+    #[default]
+    Vertical,
+    Horizontal,
+}
+
+impl LazyAxis {
+    pub(crate) fn main(self, size: &ComputedData) -> Px {
+        match self {
+            Self::Vertical => size.height,
+            Self::Horizontal => size.width,
+        }
+    }
+
+    pub(crate) fn cross(self, size: &ComputedData) -> Px {
+        match self {
+            Self::Vertical => size.width,
+            Self::Horizontal => size.height,
+        }
+    }
+
+    pub(crate) fn pack_size(self, main: Px, cross: Px) -> ComputedData {
+        match self {
+            Self::Vertical => ComputedData {
+                width: cross,
+                height: main,
+            },
+            Self::Horizontal => ComputedData {
+                width: main,
+                height: cross,
+            },
+        }
+    }
+
+    pub(crate) fn position(self, main: Px, cross: Px) -> PxPosition {
+        match self {
+            Self::Vertical => PxPosition::new(cross, main),
+            Self::Horizontal => PxPosition::new(main, cross),
+        }
+    }
+
+    pub(crate) fn scroll_position(self, offset: Px) -> PxPosition {
+        self.position(-offset, Px::ZERO)
+    }
+
+    pub(crate) fn scroll_offset(self, position: PxPosition) -> Px {
+        let main = match self {
+            Self::Vertical => position.y,
+            Self::Horizontal => position.x,
+        };
+        Px((-main).max(0.0) as i32)
+    }
+
+    pub(crate) fn focus_forward(self, direction: FocusDirection) -> Option<bool> {
+        match (self, direction) {
+            (_, FocusDirection::Next | FocusDirection::Enter) => Some(true),
+            (_, FocusDirection::Previous | FocusDirection::Exit) => Some(false),
+            (Self::Vertical, FocusDirection::Down) => Some(true),
+            (Self::Vertical, FocusDirection::Up) => Some(false),
+            (Self::Horizontal, FocusDirection::Right) => Some(true),
+            (Self::Horizontal, FocusDirection::Left) => Some(false),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn child_constraint(
+        self,
+        cross: AxisConstraint,
+        alignment: CrossAxisAlignment,
+    ) -> Constraint {
+        let cross = cross_axis_child_constraint(cross, alignment);
+        match self {
+            Self::Vertical => Constraint::new(cross, AxisConstraint::NONE),
+            Self::Horizontal => Constraint::new(AxisConstraint::NONE, cross),
+        }
+    }
+
+    pub(crate) fn cross_constraint(self, parent: ParentConstraint<'_>) -> AxisConstraint {
+        match self {
+            Self::Vertical => parent.width(),
+            Self::Horizontal => parent.height(),
+        }
+    }
+
+    pub(crate) fn constraint_max(self, parent: ParentConstraint<'_>) -> Option<Px> {
+        match self {
+            Self::Vertical => parent.height().resolve_max(),
+            Self::Horizontal => parent.width().resolve_max(),
+        }
+    }
+}
 
 pub(crate) fn hash_key(key: impl Hash) -> u64 {
     let mut hasher = DefaultHasher::new();

@@ -33,9 +33,7 @@ impl RouterController {
 
     /// Creates a controller seeded with a root destination.
     pub fn with_root(root_dest: impl RouterDestination + 'static) -> Self {
-        let mut router = Self::new();
-        router.push(root_dest);
-        router
+        Self::with_root_shared(Arc::new(root_dest))
     }
 
     /// Creates a controller seeded with a shared root destination.
@@ -72,9 +70,7 @@ impl RouterController {
         &mut self,
         destination: T,
     ) -> Option<Arc<dyn RouterDestination>> {
-        let previous = self.pop();
-        self.push(destination);
-        previous
+        self.replace_shared(Arc::new(destination))
     }
 
     /// Replaces the current destination with a shared destination.
@@ -111,10 +107,6 @@ impl RouterController {
             .rev()
             .nth(depth)
             .map(|entry| (entry.id, entry.destination.clone()))
-    }
-
-    pub(crate) fn state_context(&self, lifecycle: ShardStateLifeCycle) -> (StateOwner, State<()>) {
-        self.route_state_context(lifecycle, None)
     }
 
     pub(crate) fn route_state_context(
@@ -157,7 +149,7 @@ impl RouterController {
         T: Default + Send + Sync + 'static,
         F: FnOnce(ShardState<T>) -> R,
     {
-        let (owner, marker) = self.state_context(lifecycle);
+        let (owner, marker) = self.route_state_context(lifecycle, None);
         f(ShardState::new(
             owner.state_with_key(("shard", id), T::default),
             marker,
@@ -170,8 +162,7 @@ impl RouterController {
     }
     /// Clears the stack and installs a new root destination.
     pub fn reset(&mut self, root_dest: impl RouterDestination + 'static) {
-        self.clear();
-        self.push(root_dest);
+        self.reset_shared(Arc::new(root_dest));
     }
     /// Clears the stack and installs a shared root destination.
     pub fn reset_shared(&mut self, root_dest: Arc<dyn RouterDestination>) {

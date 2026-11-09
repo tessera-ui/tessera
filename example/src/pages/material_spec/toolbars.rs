@@ -32,6 +32,7 @@ use super::{
     INK,
     annotations::{self, Geometry, dotted, relative, watch},
     article::{ArticlePage, SpecSection, article},
+    article_helpers::{caption, prose},
     gap, panel, spec_table, subheading, type_style,
 };
 
@@ -688,19 +689,6 @@ fn toolbar_annotations(geometry: State<Geometry>, measurements: bool, variant: V
         );
     }
     annotations::lines(width, height, svg);
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
-}
-
-#[tessera]
-fn caption(#[prop(into)] value: String) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text(I18N.text(value))
-        .color(scheme.on_surface_variant)
-        .style(type_style(14.0, 20.0));
 }
 
 #[tessera]

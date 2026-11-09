@@ -1,6 +1,4 @@
 use tessera_components::{
-    alignment::{Alignment, CrossAxisAlignment},
-    boxed::boxed,
     column::column,
     floating_action_button_menu::{
         FloatingActionButtonMenuAlignment, FloatingActionButtonMenuColor,
@@ -8,28 +6,22 @@ use tessera_components::{
     },
     material_icons::filled,
     modifier::{ModifierExt as _, Padding, SemanticsArgs},
-    row::row,
-    shape_def::Shape,
-    spacer::spacer,
     surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, accesskit::Role, remember, tessera, use_context,
+    Callback, Dp, Modifier, RenderSlot, accesskit::Role, remember, tessera, use_context,
 };
 
 use crate::res::I18N;
 
 use super::{
-    ACCENT, INK,
+    ACCENT,
     article::{ArticlePage, SpecSection, article},
+    article_helpers::{bullets, caption, do_dont, legend, prose},
     gap, panel, spec_table, subheading, type_style,
 };
-
-const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
-const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
-
 const ITEMS: [(&str, &str); 3] = [
     ("ui-new-document", "ui-document"),
     ("ui-new-folder", "ui-folder"),
@@ -132,93 +124,6 @@ pub(super) fn fab_menu_spec(route: Option<crate::pages::material_spec::article::
             ],
         },
     ]);
-}
-
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
-}
-
-#[tessera]
-fn caption(#[prop(into)] value: String) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text(I18N.text(value))
-        .color(scheme.on_surface_variant)
-        .style(type_style(14.0, 20.0));
-}
-
-#[tessera]
-fn bullets(items: Vec<String>) {
-    column().children(move || {
-        for item in items.clone() {
-            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
-            gap(Dp(8.0));
-        }
-    });
-}
-
-#[tessera]
-fn badge(number: usize) {
-    boxed()
-        .alignment(Alignment::Center)
-        .modifier(
-            Modifier::new()
-                .size(Dp(24.0), Dp(24.0))
-                .background_with_shape(INK, Shape::Ellipse),
-        )
-        .children(move || {
-            text((number).to_string())
-                .style(type_style(12.0, 16.0))
-                .color(Color::WHITE);
-        });
-}
-
-#[tessera]
-fn legend(number: usize, #[prop(into)] label: String) {
-    row()
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .modifier(Modifier::new().fill_max_width().height(Dp(32.0)))
-        .children(move || {
-            badge(number);
-            spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
-        });
-}
-
-#[tessera]
-fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    row()
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .modifier(Modifier::new().fill_max_width())
-        .children(move || {
-            let mark = mark.clone();
-            boxed()
-                .alignment(Alignment::Center)
-                .modifier(
-                    Modifier::new()
-                        .padding(Padding::symmetric(Dp(12.0), Dp(4.0)))
-                        .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
-                )
-                .children(move || {
-                    text(I18N.text(&(mark)))
-                        .style(type_style(14.0, 20.0))
-                        .color(Color::WHITE);
-                });
-            spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text(I18N.text(&(note)))
-                .color(scheme.on_surface_variant)
-                .style(type_style(14.0, 20.0));
-        });
-}
-
-#[tessera]
-fn do_dont(#[prop(into)] good: String, #[prop(into)] bad: String) {
-    column().children(move || {
-        guidance_line("Do", good.clone(), DO_COLOR);
-        gap(Dp(12.0));
-        guidance_line("Don't", bad.clone(), DONT_COLOR);
-    });
 }
 
 #[tessera]

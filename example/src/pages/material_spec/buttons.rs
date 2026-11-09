@@ -26,8 +26,9 @@ use tessera_ui::{
 
 use crate::res::I18N;
 
+pub(super) use super::article_helpers::{badge, prose};
 use super::{
-    ACCENT, INK,
+    ACCENT,
     article::{ArticlePage, SpecSection, article},
     gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
@@ -1114,11 +1115,6 @@ fn size_name(size: ButtonSize) -> &'static str {
 }
 
 #[tessera]
-pub(super) fn prose(#[prop(into)] value: String) {
-    text(I18N.text(value)).style(type_style(16.0, 24.0));
-}
-
-#[tessera]
 pub(super) fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
@@ -1151,22 +1147,6 @@ pub(super) fn bullets(items: Vec<String>) {
                         text(I18N.text(&(item))).style(type_style(16.0, 24.0));
                     });
             }
-        });
-}
-
-#[tessera]
-pub(super) fn badge(number: usize) {
-    boxed()
-        .alignment(Alignment::Center)
-        .modifier(
-            Modifier::new()
-                .size(Dp(24.0), Dp(24.0))
-                .background_with_shape(INK, Shape::Ellipse),
-        )
-        .children(move || {
-            text((number).to_string())
-                .style(type_style(12.0, 16.0))
-                .color(Color::WHITE);
         });
 }
 
