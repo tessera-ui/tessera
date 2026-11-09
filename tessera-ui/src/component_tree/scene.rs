@@ -215,6 +215,9 @@ pub(super) struct FrameScene {
     branches: DenseNodeMap<SceneBranch>,
     geometry_consumers: HashSet<NodeId>,
     structure_changed: HashSet<NodeId>,
+    scratch_changes: HashMap<NodeId, BranchChange>,
+    scratch_candidates: Vec<NodeId>,
+    scratch_ordered: Vec<(NodeId, Option<NodeId>)>,
     root: Option<Arc<SceneRope>>,
     graph: Option<RenderGraph>,
     viewport: Option<PxSize>,
@@ -257,11 +260,12 @@ impl FrameScene {
         let mut stage_timer =
             tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
                 .then(Instant::now);
-        let mut changes = HashMap::<NodeId, BranchChange>::with_capacity_and_hasher(
+        let mut changes = std::mem::take(&mut self.scratch_changes);
+        changes.clear();
+        changes.reserve(
             self.structure_changed
                 .len()
                 .max(metadata.paint_changed.len()),
-            Default::default(),
         );
         let mut damage = None;
         for node_id in removed {
@@ -357,12 +361,15 @@ impl FrameScene {
             }
         }
         record_frame_stage(&mut stage_timer, "scene_candidates");
-        let candidates: Vec<_> = changes
-            .iter()
-            .filter_map(|(&id, change)| (change.dirty || change.affects_pixels()).then_some(id))
-            .collect();
-        let mut ordered = Vec::with_capacity(candidates.len());
-        for node_id in candidates {
+        let mut candidates = std::mem::take(&mut self.scratch_candidates);
+        candidates.extend(
+            changes.iter().filter_map(|(&id, change)| {
+                (change.dirty || change.affects_pixels()).then_some(id)
+            }),
+        );
+        let mut ordered = std::mem::take(&mut self.scratch_ordered);
+        ordered.reserve(candidates.len());
+        for node_id in candidates.drain(..) {
             if tree.get(node_id).is_none_or(|node| node.is_removed()) {
                 continue;
             }
@@ -398,7 +405,7 @@ impl FrameScene {
             "scene_update_work"
         );
         let updated = ordered.len() as u64;
-        for (node_id, parent) in ordered.into_iter().rev() {
+        for (node_id, parent) in ordered.drain(..).rev() {
             let change = &changes[&node_id];
             let node = &tree[node_id];
             let mut branch = self
@@ -596,7 +603,12 @@ impl FrameScene {
                     RenderGraph::from_partial_scene(Arc::clone(root))
                 }
                 root => {
-                    let mut builder = RenderGraphBuilder::new();
+                    let capacity = self
+                        .graph
+                        .as_ref()
+                        .and_then(RenderGraph::cached_op_count)
+                        .unwrap_or(metadata.paint_changed.len());
+                    let mut builder = RenderGraphBuilder::with_capacity(capacity);
                     if let Some(root) = root {
                         root.emit(&mut builder, None);
                     }
@@ -607,17 +619,26 @@ impl FrameScene {
         record_frame_stage(&mut stage_timer, "scene_emit");
         self.root = next_root;
         self.viewport = Some(viewport);
-        (
-            self.graph
-                .as_ref()
-                .expect("frame scene is initialized")
-                .clone()
-                .with_damage(
-                    (!full).then_some(damage.unwrap_or(PxRect::ZERO)),
-                    previous_graph.as_ref(),
-                ),
-            updated,
-        )
+        let graph = self
+            .graph
+            .as_ref()
+            .expect("frame scene is initialized")
+            .clone()
+            .with_damage(
+                (!full).then_some(damage.unwrap_or(PxRect::ZERO)),
+                previous_graph.as_ref(),
+            );
+        const MAX_SCRATCH_CAPACITY: usize = 65_536;
+        if changes.capacity() <= MAX_SCRATCH_CAPACITY {
+            self.scratch_changes = changes;
+        }
+        if candidates.capacity() <= MAX_SCRATCH_CAPACITY {
+            self.scratch_candidates = candidates;
+        }
+        if ordered.capacity() <= MAX_SCRATCH_CAPACITY {
+            self.scratch_ordered = ordered;
+        }
+        (graph, updated)
     }
 }
 

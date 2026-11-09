@@ -65,6 +65,8 @@ struct ActiveCall {
     previous_children: CallIds,
     /// Position in `previous_children` expected to match the next child call.
     cursor: usize,
+    /// The previous output of this call was already marked dirty by an ancestor.
+    output_paint_marked: bool,
     emitted: Option<EmittedNode>,
 }
 
@@ -248,12 +250,58 @@ impl ComponentTree {
             .sum()
     }
 
+    pub(crate) fn call_id(&self, key: u64) -> Option<CallId> {
+        self.calls.id(key)
+    }
+
+    /// Groups adjacent dirty outputs under the same layout host. Calls with
+    /// multiple or non-contiguous outputs keep their independent replay path.
+    pub(crate) fn group_replay_roots(&self, roots: Vec<(u64, CallId)>) -> Vec<Vec<(u64, CallId)>> {
+        let mut by_node = HashMap::default();
+        let mut hosts = Vec::new();
+        let mut seen_hosts = rustc_hash::FxHashSet::default();
+        let mut batches = Vec::new();
+        for root @ (_, id) in roots {
+            let mut output = CallOutput::new();
+            self.calls.output(id, &mut output);
+            let Some(host) = self.calls.host(id) else {
+                batches.push(vec![root]);
+                continue;
+            };
+            if output.len() != 1 || self.tree[output[0]].parent() != Some(host) {
+                batches.push(vec![root]);
+                continue;
+            }
+            if seen_hosts.insert(host) {
+                hosts.push(host);
+            }
+            by_node.insert(output[0], root);
+        }
+        for host in hosts {
+            let mut adjacent = Vec::new();
+            for child in host.children(&self.tree) {
+                if let Some(root) = by_node.remove(&child) {
+                    adjacent.push(root);
+                } else if !adjacent.is_empty() {
+                    batches.push(std::mem::take(&mut adjacent));
+                }
+            }
+            if !adjacent.is_empty() {
+                batches.push(adjacent);
+            }
+        }
+        debug_assert!(by_node.is_empty());
+        batches
+    }
+
     /// Returns the keys of the calls enclosing `key`, nearest first.
     pub(crate) fn call_ancestors(&self, key: u64) -> impl Iterator<Item = u64> + '_ {
-        let start = self
-            .calls
-            .id(key)
-            .and_then(|id| self.calls.records[id].parent);
+        self.call_ancestors_of(self.calls.id(key))
+    }
+
+    /// Returns the keys of the calls enclosing `id`, nearest first.
+    pub(crate) fn call_ancestors_of(&self, id: Option<CallId>) -> impl Iterator<Item = u64> + '_ {
+        let start = id.and_then(|id| self.calls.records.get(id)?.parent);
         std::iter::successors(start, |&id| self.calls.records[id].parent)
             .filter(|&id| Some(id) != self.calls.root)
             .map(|id| self.calls.records[id].key)
@@ -319,15 +367,29 @@ impl ComponentTree {
         name: &'static str,
     ) -> CallId {
         let parent = self.calls.parent_of_new_call(id);
-        let (id, previous_children) = match id {
+        let inherited_paint = self
+            .calls
+            .active
+            .last()
+            .is_some_and(|call| call.output_paint_marked);
+        let (id, previous_children, output_paint_marked) = match id {
             Some(id) => {
-                if self.calls.records[id].node.is_none() {
-                    self.mark_call_output_paint_dirty(id);
-                }
+                let record = &self.calls.records[id];
+                let output_paint_marked = if inherited_paint && record.parent == parent {
+                    true
+                } else if record.node.is_none() {
+                    self.mark_call_output_paint_dirty(id)
+                } else {
+                    false
+                };
                 let record = &mut self.calls.records[id];
                 record.parent = parent;
                 record.logic_id = logic_id;
-                (id, std::mem::take(&mut record.children))
+                (
+                    id,
+                    std::mem::take(&mut record.children),
+                    output_paint_marked,
+                )
             }
             None => {
                 let id = self
@@ -335,7 +397,7 @@ impl ComponentTree {
                     .records
                     .insert(CallRecord::new(key, parent, logic_id, name));
                 self.calls.index.insert(key, id);
-                (id, CallIds::new())
+                (id, CallIds::new(), false)
             }
         };
         if self.calls.replay_root != Some(id) {
@@ -346,6 +408,7 @@ impl ComponentTree {
             id,
             previous_children,
             cursor: 0,
+            output_paint_marked,
             emitted: None,
         });
         id
@@ -353,9 +416,10 @@ impl ComponentTree {
 
     /// Re-executing a call can leave retained drawing behind rebuilt content,
     /// and even an empty fragment may become drawable.
-    fn mark_call_output_paint_dirty(&mut self, id: CallId) {
+    fn mark_call_output_paint_dirty(&mut self, id: CallId) -> bool {
         let mut output = CallOutput::new();
         self.calls.output(id, &mut output);
+        let marked = !output.is_empty();
         for root in output {
             for descendant in root.descendants(&self.tree) {
                 if self.tree[descendant].get().role == super::NodeRole::Layout {
@@ -363,6 +427,7 @@ impl ComponentTree {
                 }
             }
         }
+        marked
     }
 
     fn register_child_call(&mut self, parent: Option<CallId>, id: CallId) {
@@ -452,10 +517,14 @@ impl ComponentTree {
         true
     }
 
+    /// Returns the snapshot of a call that is still live.
+    pub(crate) fn live_call_snapshot(&self, id: CallId) -> Option<ReplayNodeSnapshot> {
+        self.calls.records.get(id)?.snapshot.clone()
+    }
+
     /// Prepares the host range of a call for replay.
-    pub(crate) fn begin_replace_call(&mut self, key: u64) -> ReplayReplaceContext {
+    pub(crate) fn begin_replace_call(&mut self, id: CallId) -> ReplayReplaceContext {
         self.calls.clear_replay_results();
-        let id = self.calls.id(key).expect("replayed call is live");
         let host = self.calls.host(id).expect("replayed call has a host");
         let mut output = CallOutput::new();
         self.calls.output(id, &mut output);
@@ -478,6 +547,46 @@ impl ComponentTree {
             parent_id: host,
             previous_queue,
         }
+    }
+
+    /// Replaces one contiguous range for several sibling calls. Their bodies
+    /// still execute in their own replay scopes and retain their own snapshots.
+    pub(crate) fn begin_replace_batch(&mut self, roots: &[(u64, CallId)]) -> ReplayReplaceContext {
+        assert!(!roots.is_empty(), "replay batch must contain a call");
+        self.calls.clear_replay_results();
+        let host = self
+            .calls
+            .host(roots[0].1)
+            .expect("batched calls have a host");
+        let mut first = CallOutput::new();
+        let mut last = CallOutput::new();
+        self.calls.output(roots[0].1, &mut first);
+        self.calls
+            .output(roots.last().expect("nonempty batch").1, &mut last);
+        debug_assert!(
+            roots
+                .iter()
+                .all(|&(_, id)| self.calls.host(id) == Some(host))
+        );
+        let next_sibling = last[0].next_sibling(&self.tree);
+        self.replay_range = Some(ReplayRange {
+            parent: host,
+            next_sibling,
+        });
+        self.queue_replay_children(host, first[0], next_sibling);
+        self.calls.replay_root = Some(roots[0].1);
+        let previous_queue =
+            (!self.node_queue.is_empty()).then(|| std::mem::take(&mut self.node_queue));
+        self.node_queue.push(host);
+        ReplayReplaceContext {
+            parent_id: host,
+            previous_queue,
+        }
+    }
+
+    pub(crate) fn select_replay_batch_call(&mut self, id: CallId) {
+        debug_assert!(self.replay_range.is_some());
+        self.calls.replay_root = Some(id);
     }
 
     pub(super) fn finish_replay_root(&mut self) {

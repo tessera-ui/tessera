@@ -10,7 +10,7 @@ use rustc_hash::FxHashSet as HashSet;
 use tracing::{debug, instrument};
 
 use crate::{
-    component_tree::ReplayReplaceResult,
+    component_tree::{CallId, ReplayReplaceResult},
     context::{
         begin_recompose_context_slot_epoch, drop_context_slots_for_instance_logic_ids,
         normalize_context_snapshot, remove_context_read_dependencies,
@@ -19,13 +19,12 @@ use crate::{
     runtime::{
         TesseraRuntime, begin_frame_component_replay_tracking, begin_frame_layout_dirty_tracking,
         begin_recompose_slot_epoch, clear_frame_nanos_receivers, drop_slots_for_instance_logic_ids,
-        finalize_frame_layout_dirty_tracking, previous_component_replay_node,
-        release_retired_replay_snapshots, remove_focus_read_dependencies,
-        remove_frame_nanos_receivers, remove_layout_state_read_dependencies,
-        remove_render_slot_read_dependencies, remove_state_read_dependencies,
-        reset_focus_read_dependencies, reset_render_slot_read_dependencies,
-        reset_state_read_dependencies, take_build_invalidations, with_build_dirty_instance_keys,
-        with_replay_scope,
+        finalize_frame_layout_dirty_tracking, release_retired_replay_snapshots,
+        remove_focus_read_dependencies, remove_frame_nanos_receivers,
+        remove_layout_state_read_dependencies, remove_render_slot_read_dependencies,
+        remove_state_read_dependencies, reset_focus_read_dependencies,
+        reset_render_slot_read_dependencies, reset_state_read_dependencies,
+        take_build_invalidations, with_build_dirty_instance_keys, with_replay_scope,
     },
     time::Instant,
 };
@@ -192,7 +191,7 @@ impl BuildTreeResult {
 
 struct ReplayPlan {
     live: Arc<HashSet<u64>>,
-    roots: Vec<u64>,
+    roots: Vec<(u64, CallId)>,
 }
 
 fn plan_dirty_replay(dirty_instance_keys: &Arc<HashSet<u64>>) -> ReplayPlan {
@@ -201,15 +200,15 @@ fn plan_dirty_replay(dirty_instance_keys: &Arc<HashSet<u64>>) -> ReplayPlan {
         let mut all_live = true;
         let mut roots = Vec::new();
         for &key in dirty_instance_keys.iter() {
-            if !component_tree.has_call(key) {
+            let Some(id) = component_tree.call_id(key) else {
                 all_live = false;
                 continue;
-            }
+            };
             if !component_tree
-                .call_ancestors(key)
+                .call_ancestors_of(Some(id))
                 .any(|parent| dirty_instance_keys.contains(&parent))
             {
-                roots.push(key);
+                roots.push((key, id));
             }
         }
         let live = if all_live {
@@ -343,14 +342,18 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         begin_recompose_slot_epoch();
         begin_recompose_context_slot_epoch();
         let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
+        // Replay touches at least every dirty call; size the frame sets once.
+        let capacity = dirty_instance_keys.len().saturating_mul(4);
         let mut stale_instance_keys = HashSet::default();
         let mut stale_instance_logic_ids = HashSet::default();
-        let mut recomposed_instance_logic_ids = HashSet::default();
+        let mut recomposed_instance_logic_ids =
+            HashSet::with_capacity_and_hasher(capacity, Default::default());
         let mut pending_dirty_instance_keys = Arc::clone(&dirty_instance_keys);
         #[cfg(feature = "debug-dirty-overlay")]
         let mut replay_roots_for_debug = Vec::new();
         let mut deferred_backwards_instance_keys = HashSet::default();
-        let mut executed_instance_keys = HashSet::default();
+        let mut executed_instance_keys =
+            HashSet::with_capacity_and_hasher(capacity, Default::default());
         let mut replace_result = ReplayReplaceResult::default();
         #[cfg(feature = "profiling")]
         let mut replayed_nodes = 0_u64;
@@ -379,71 +382,98 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                 break;
             }
             #[cfg(feature = "debug-dirty-overlay")]
-            replay_roots_for_debug.extend(dirty_roots.iter().copied());
+            replay_roots_for_debug.extend(dirty_roots.iter().map(|&(key, _)| key));
 
             with_build_dirty_instance_keys(live_dirty_instance_keys, || {
-                for instance_key in dirty_roots {
-                    let replay_snapshot = previous_component_replay_node(instance_key)
-                        .unwrap_or_else(|| {
-                            panic!("{}", missing_replay_snapshot_panic_message(instance_key))
+                crate::session::with_runtime_globals(|globals| {
+                    let batches = globals.with_runtime(|runtime| {
+                        runtime.component_tree.group_replay_roots(dirty_roots)
+                    });
+                    for batch in batches {
+                        let replay_trace =
+                            tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG);
+                        let detach_timer = replay_trace.then(Instant::now);
+                        let (first_snapshot, replace_context) =
+                            globals.with_runtime_mut(|runtime| {
+                                let tree = &mut runtime.component_tree;
+                                let (instance_key, call) = batch[0];
+                                let snapshot = tree.live_call_snapshot(call).unwrap_or_else(|| {
+                                    panic!(
+                                        "{}",
+                                        missing_replay_snapshot_panic_message(instance_key)
+                                    )
+                                });
+                                let context = if batch.len() == 1 {
+                                    tree.begin_replace_call(call)
+                                } else {
+                                    tree.begin_replace_batch(&batch)
+                                };
+                                (snapshot, context)
+                            });
+                        let detach_ns = detach_timer.map(|timer| timer.elapsed().as_nanos());
+                        let mut first_snapshot = Some(first_snapshot);
+                        let compose_timer = replay_trace.then(Instant::now);
+                        for (index, &(instance_key, call)) in batch.iter().enumerate() {
+                            let replay_snapshot = if index == 0 {
+                                first_snapshot.take().expect("first replay snapshot")
+                            } else {
+                                globals.with_runtime_mut(|runtime| {
+                                    let tree = &mut runtime.component_tree;
+                                    tree.select_replay_batch_call(call);
+                                    tree.live_call_snapshot(call).unwrap_or_else(|| {
+                                        panic!(
+                                            "{}",
+                                            missing_replay_snapshot_panic_message(instance_key)
+                                        )
+                                    })
+                                })
+                            };
+                            #[cfg(feature = "profiling")]
+                            {
+                                replayed_nodes = replayed_nodes.saturating_add(
+                                    globals.with_runtime(|runtime| {
+                                        runtime.component_tree.call_subtree_len(instance_key)
+                                    }),
+                                );
+                            }
+                            with_replay_scope(
+                                replay_snapshot.instance_logic_id,
+                                replay_snapshot.group_path,
+                                replay_snapshot.instance_key_override,
+                                normalize_context_snapshot(&replay_snapshot.context),
+                                || replay_snapshot.replay.run(),
+                            );
+                        }
+                        let compose_ns = compose_timer.map(|timer| timer.elapsed().as_nanos());
+
+                        let attach_timer = replay_trace.then(Instant::now);
+                        globals.with_runtime_mut(|runtime| {
+                            runtime
+                                .component_tree
+                                .finish_replace_subtree(replace_context, &mut replace_result)
                         });
-                    #[cfg(feature = "profiling")]
-                    {
-                        replayed_nodes =
-                            replayed_nodes.saturating_add(TesseraRuntime::with(|runtime| {
-                                runtime.component_tree.call_subtree_len(instance_key)
-                            }));
+                        if replay_trace {
+                            tracing::debug!(
+                                target: "tessera_ui::replay",
+                                first_instance_key = batch[0].0,
+                                batch_size = batch.len(),
+                                detach_ns,
+                                compose_ns,
+                                attach_ns = attach_timer.map(|timer| timer.elapsed().as_nanos()),
+                                inserted = replace_result.inserted_count(),
+                                reused = replace_result.retained_count(),
+                                "replay_batch_cpu"
+                            );
+                        }
+                        executed_instance_keys.extend(replace_result.executed_keys());
+                        recomposed_instance_logic_ids.extend(replace_result.recomposed_logic_ids());
+
+                        stale_instance_keys
+                            .extend(replace_result.removed_instance_keys.iter().copied());
+                        stale_instance_logic_ids
+                            .extend(replace_result.removed_instance_logic_ids.iter().copied());
                     }
-                    let replay_trace =
-                        tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG);
-                    let trace_name = replay_trace.then(|| {
-                        TesseraRuntime::with(|runtime| {
-                            runtime.component_tree.call_name(instance_key)
-                        })
-                    });
-                    let detach_timer = replay_trace.then(Instant::now);
-                    let replace_context = TesseraRuntime::with_mut(|runtime| {
-                        runtime.component_tree.begin_replace_call(instance_key)
-                    });
-                    let detach_ns = detach_timer.map(|timer| timer.elapsed().as_nanos());
-
-                    let compose_timer = replay_trace.then(Instant::now);
-                    with_replay_scope(
-                        replay_snapshot.instance_logic_id,
-                        replay_snapshot.group_path,
-                        replay_snapshot.instance_key_override,
-                        normalize_context_snapshot(&replay_snapshot.context),
-                        || replay_snapshot.replay.run(),
-                    );
-                    let compose_ns = compose_timer.map(|timer| timer.elapsed().as_nanos());
-
-                    let attach_timer = replay_trace.then(Instant::now);
-                    TesseraRuntime::with_mut(|runtime| {
-                        runtime
-                            .component_tree
-                            .finish_replace_subtree(replace_context, &mut replace_result)
-                    });
-                    if replay_trace {
-                        tracing::debug!(
-                            target: "tessera_ui::replay",
-                            instance_key,
-                            fn_name = trace_name.unwrap_or("<missing>"),
-                            detach_ns,
-                            compose_ns,
-                            attach_ns = attach_timer.map(|timer| timer.elapsed().as_nanos()),
-                            inserted = replace_result.inserted_count(),
-                            reused = replace_result.retained_count(),
-                            "replay_root_cpu"
-                        );
-                    }
-                    executed_instance_keys.extend(replace_result.executed_keys());
-                    recomposed_instance_logic_ids.extend(replace_result.recomposed_logic_ids());
-
-                    stale_instance_keys
-                        .extend(replace_result.removed_instance_keys.iter().copied());
-                    stale_instance_logic_ids
-                        .extend(replace_result.removed_instance_logic_ids.iter().copied());
-                }
+                });
             });
 
             TesseraRuntime::with_mut(|runtime| runtime.component_tree.finish_replay_round());

@@ -404,7 +404,7 @@ enum FocusModifierOp {
 }
 
 pub(crate) trait ErasedLayoutModifierNode: Send + Sync + 'static {
-    fn node(&self) -> Arc<dyn LayoutModifierNode>;
+    fn node(self: Arc<Self>) -> Arc<dyn LayoutModifierNode>;
 
     fn eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
 
@@ -418,7 +418,7 @@ pub(crate) trait ErasedLayoutModifierNode: Send + Sync + 'static {
 }
 
 pub(crate) trait ErasedPlacementModifierNode: Send + Sync + 'static {
-    fn node(&self) -> Arc<dyn PlacementModifierNode>;
+    fn node(&self) -> &dyn PlacementModifierNode;
 
     fn eq(&self, other: &dyn ErasedPlacementModifierNode) -> bool;
 
@@ -431,36 +431,61 @@ struct ComparableLayoutModifierNode<N>
 where
     N: LayoutModifierNode + PartialEq,
 {
-    node: Arc<N>,
+    node: N,
+}
+
+impl<N> LayoutModifierNode for ComparableLayoutModifierNode<N>
+where
+    N: LayoutModifierNode + PartialEq,
+{
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        self.node.measure(scope)
+    }
+
+    fn measure_content(
+        &self,
+        input: &LayoutModifierInput<'_>,
+        child: &mut dyn LayoutModifierChild,
+    ) -> Result<LayoutResult, MeasurementError> {
+        self.node.measure_content(input, child)
+    }
+
+    fn place_children(
+        &self,
+        scope: &PlacementScope<'_>,
+        inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        self.node.place_children(scope, inner)
+    }
 }
 
 impl<N> ErasedLayoutModifierNode for ComparableLayoutModifierNode<N>
 where
     N: LayoutModifierNode + PartialEq,
 {
-    fn node(&self) -> Arc<dyn LayoutModifierNode> {
-        self.node.clone()
+    fn node(self: Arc<Self>) -> Arc<dyn LayoutModifierNode> {
+        self
     }
 
     fn eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
         other
             .as_any()
             .downcast_ref::<Self>()
-            .is_some_and(|other| self.node.as_ref() == other.node.as_ref())
+            .is_some_and(|other| self.node == other.node)
     }
 
     fn measure_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
         other
             .as_any()
             .downcast_ref::<Self>()
-            .is_some_and(|other| self.node.measure_eq(other.node.as_ref()))
+            .is_some_and(|other| self.node.measure_eq(&other.node))
     }
 
     fn placement_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
         other
             .as_any()
             .downcast_ref::<Self>()
-            .is_some_and(|other| self.node.placement_eq(other.node.as_ref()))
+            .is_some_and(|other| self.node.placement_eq(&other.node))
     }
 
     fn hash_node(&self, state: &mut dyn Hasher) {
@@ -480,22 +505,22 @@ struct ComparablePlacementModifierNode<N>
 where
     N: PlacementModifierNode + PartialEq,
 {
-    node: Arc<N>,
+    node: N,
 }
 
 impl<N> ErasedPlacementModifierNode for ComparablePlacementModifierNode<N>
 where
     N: PlacementModifierNode + PartialEq,
 {
-    fn node(&self) -> Arc<dyn PlacementModifierNode> {
-        self.node.clone()
+    fn node(&self) -> &dyn PlacementModifierNode {
+        &self.node
     }
 
     fn eq(&self, other: &dyn ErasedPlacementModifierNode) -> bool {
         other
             .as_any()
             .downcast_ref::<Self>()
-            .is_some_and(|other| self.node.as_ref() == other.node.as_ref())
+            .is_some_and(|other| self.node == other.node)
     }
 
     fn hash_node(&self, state: &mut dyn Hasher) {
@@ -533,13 +558,6 @@ enum ModifierAction {
 }
 
 impl ModifierAction {
-    fn layout_node(&self) -> Option<&dyn ErasedLayoutModifierNode> {
-        match self {
-            Self::Layout(node) => Some(node.as_ref()),
-            _ => None,
-        }
-    }
-
     fn kind(&self) -> ActionKinds {
         match self {
             Self::Layout(_) => ActionKinds::LAYOUT,
@@ -583,8 +601,9 @@ impl ActionKinds {
     const INPUT_GEOMETRY: Self = Self(Self::POINTER.0 | Self::KEY_INPUT.0);
     const ATTACH_EFFECTS: Self =
         Self(Self::BUILD.0 | Self::SEMANTICS.0 | Self::FOCUS.0 | Self::POSITIONED.0);
-    const COMPARED: Self =
-        Self(Self::LAYOUT.0 | Self::PLACEMENT.0 | Self::PARENT_DATA.0 | Self::POINTER.0);
+    const COMPARED: Self = Self(
+        Self::LAYOUT.0 | Self::PLACEMENT.0 | Self::DRAW.0 | Self::PARENT_DATA.0 | Self::POINTER.0,
+    );
 
     fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
@@ -883,9 +902,7 @@ impl Modifier {
         N: LayoutModifierNode + PartialEq,
     {
         self.push_action(ModifierAction::Layout(Arc::new(
-            ComparableLayoutModifierNode {
-                node: Arc::new(node),
-            },
+            ComparableLayoutModifierNode { node },
         )))
     }
 
@@ -894,9 +911,7 @@ impl Modifier {
         N: PlacementModifierNode + PartialEq,
     {
         self.push_action(ModifierAction::Placement(Arc::new(
-            ComparablePlacementModifierNode {
-                node: Arc::new(node),
-            },
+            ComparablePlacementModifierNode { node },
         )))
     }
 
@@ -1285,15 +1300,14 @@ impl Modifier {
                 .fold_actions(&mut |action| actions.push(action));
             actions
         }
-        fn select<'a>(
-            actions: &[&'a ModifierAction],
+        fn select<'a, 'b>(
+            actions: &'b [&'a ModifierAction],
             kind: ActionKinds,
-        ) -> SmallVec<[&'a ModifierAction; 4]> {
+        ) -> impl Iterator<Item = &'a ModifierAction> + Clone + 'b {
             actions
                 .iter()
                 .copied()
-                .filter(|action| action.kind().intersects(kind))
-                .collect()
+                .filter(move |action| action.kind().intersects(kind))
         }
         let (current, previous) = (collect(self), collect(previous));
         let mut changes = ModifierChanges::default();
@@ -1302,11 +1316,11 @@ impl Modifier {
                 select(&current, ActionKinds::LAYOUT),
                 select(&previous, ActionKinds::LAYOUT),
             );
-            if lhs.len() != rhs.len() {
+            if lhs.clone().count() != rhs.clone().count() {
                 changes.measure = true;
                 changes.placement = true;
             }
-            for (lhs, rhs) in lhs.iter().zip(&rhs) {
+            for (lhs, rhs) in lhs.zip(rhs) {
                 if let (ModifierAction::Layout(lhs), ModifierAction::Layout(rhs)) = (lhs, rhs) {
                     changes.measure |= !lhs.measure_eq(rhs.as_ref());
                     changes.placement |= !lhs.placement_eq(rhs.as_ref());
@@ -1318,10 +1332,23 @@ impl Modifier {
                 select(&current, ActionKinds::PLACEMENT),
                 select(&previous, ActionKinds::PLACEMENT),
             );
-            changes.transform = lhs.len() != rhs.len()
-                || lhs.iter().zip(&rhs).any(|pair| match pair {
+            changes.transform = lhs.clone().count() != rhs.clone().count()
+                || lhs.zip(rhs).any(|pair| match pair {
                     (ModifierAction::Placement(lhs), ModifierAction::Placement(rhs)) => {
                         !lhs.eq(rhs.as_ref())
+                    }
+                    _ => true,
+                });
+        }
+        if kinds.intersects(ActionKinds::DRAW) {
+            let (lhs, rhs) = (
+                select(&current, ActionKinds::DRAW),
+                select(&previous, ActionKinds::DRAW),
+            );
+            changes.draw = lhs.clone().count() != rhs.clone().count()
+                || lhs.zip(rhs).any(|pair| match pair {
+                    (ModifierAction::Draw(lhs), ModifierAction::Draw(rhs)) => {
+                        !Arc::ptr_eq(lhs, rhs)
                     }
                     _ => true,
                 });
@@ -1331,8 +1358,8 @@ impl Modifier {
                 select(&current, ActionKinds::PARENT_DATA),
                 select(&previous, ActionKinds::PARENT_DATA),
             );
-            changes.parent_data = lhs.len() != rhs.len()
-                || lhs.iter().zip(&rhs).any(|pair| match pair {
+            changes.parent_data = lhs.clone().count() != rhs.clone().count()
+                || lhs.zip(rhs).any(|pair| match pair {
                     (ModifierAction::ParentData(lhs), ModifierAction::ParentData(rhs)) => {
                         !Arc::ptr_eq(lhs, rhs) && !lhs.equivalent(rhs.as_ref())
                     }
@@ -1410,7 +1437,10 @@ impl Modifier {
         if !self.contains(ActionKinds::LAYOUT) {
             return SmallVec::new();
         }
-        self.select_actions(|action| action.layout_node().map(|node| node.node()))
+        self.select_actions(|action| match action {
+            ModifierAction::Layout(node) => Some(node.clone().node()),
+            _ => None,
+        })
     }
 
     pub(crate) fn parent_data<T: Clone + Send + Sync + 'static>(&self) -> Option<T> {
@@ -1433,6 +1463,7 @@ pub(crate) struct ModifierChanges {
     pub(crate) measure: bool,
     pub(crate) placement: bool,
     pub(crate) transform: bool,
+    pub(crate) draw: bool,
     pub(crate) parent_data: bool,
     pub(crate) input_geometry: bool,
 }
@@ -1993,5 +2024,17 @@ mod tests {
 
         assert_ne!(left, flag(true).then(flag(true)).then(flag(true)));
         assert_ne!(left, right.then(flag(false)));
+    }
+
+    #[test]
+    fn draw_modifier_changes_are_reported_without_layout_changes() {
+        let old = Modifier::new().push_draw(crate::layout::NoopDrawModifier);
+        let same = old.clone();
+        let next = Modifier::new().push_draw(crate::layout::NoopDrawModifier);
+        assert!(!same.changes_from(&old).draw);
+        let changes = next.changes_from(&old);
+        assert!(changes.draw);
+        assert!(!changes.measure);
+        assert!(!changes.transform);
     }
 }

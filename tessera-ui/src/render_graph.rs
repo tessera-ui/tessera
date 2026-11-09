@@ -233,6 +233,10 @@ impl RenderOrderPlan {
 }
 
 impl RenderGraph {
+    pub(crate) fn cached_op_count(&self) -> Option<usize> {
+        self.data.flat.get().map(|flat| flat.ops.len())
+    }
+
     pub(crate) fn from_partial_scene(scene: Arc<SceneRope>) -> Self {
         Self {
             data: Arc::new(RenderGraphData {
@@ -322,6 +326,12 @@ impl RenderGraphBuilder {
         Self { ops: Vec::new() }
     }
 
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
+        Self {
+            ops: Vec::with_capacity(capacity),
+        }
+    }
+
     fn push_state(&mut self, command: Command) {
         self.ops.push(RenderGraphOp {
             command,
@@ -356,7 +366,9 @@ impl RenderGraphBuilder {
     ) {
         for op in fragment.ops() {
             let mut command = op.command.clone();
-            if let Command::Draw(ref mut command) = command {
+            if opacity != 1.0
+                && let Command::Draw(ref mut command) = command
+            {
                 command.apply_opacity(opacity);
             }
             let mapping = geometry
@@ -566,6 +578,35 @@ mod tests {
         }
 
         fn apply_opacity(&mut self, _opacity: f32) {}
+    }
+
+    #[test]
+    fn graph_builder_keeps_opaque_commands_and_applies_partial_opacity() {
+        #[derive(Clone)]
+        struct AlphaDraw(f32);
+        impl DrawCommand for AlphaDraw {
+            fn apply_opacity(&mut self, opacity: f32) {
+                self.0 *= opacity;
+            }
+        }
+        let mut fragment = RenderFragment::default();
+        fragment.push_draw_command(AlphaDraw(0.4));
+        let geometry =
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(8), Px(8)));
+        let mut builder = RenderGraphBuilder::with_capacity(2);
+        builder.append_fragment(&fragment, geometry, 1.0);
+        builder.append_fragment(&fragment, geometry, 0.5);
+        let graph = builder.finish();
+        let alphas: Vec<_> = graph
+            .ops()
+            .iter()
+            .map(|op| match &op.command {
+                Command::Draw(command) => command.downcast_ref::<AlphaDraw>().unwrap().0,
+                _ => panic!("expected a draw command"),
+            })
+            .collect();
+        assert_eq!(alphas, [0.4, 0.2]);
+        assert_eq!(graph.cached_op_count(), Some(2));
     }
 
     #[test]

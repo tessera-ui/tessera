@@ -38,6 +38,8 @@ pub(crate) struct SessionState {
 struct SessionSelection {
     state: Weak<SessionState>,
     identity: u128,
+    // Only guards may own the selection; persistent activation remains weak.
+    scoped: Option<Rc<SessionState>>,
 }
 
 impl SessionSelection {
@@ -45,11 +47,18 @@ impl SessionSelection {
         Self {
             state: Rc::downgrade(state),
             identity: state.identity,
+            scoped: None,
         }
     }
 
     fn selects(&self, state: &Rc<SessionState>) -> bool {
         self.state.as_ptr() == Rc::as_ptr(state)
+    }
+
+    fn scoped(state: &Rc<SessionState>) -> Self {
+        let mut selection = Self::new(state);
+        selection.scoped = Some(state.clone());
+        selection
     }
 }
 
@@ -57,12 +66,16 @@ thread_local! {
     static ACTIVE_SESSION: RefCell<SessionSelection> = const { RefCell::new(SessionSelection {
         state: Weak::new(),
         identity: 0,
+        scoped: None,
     }) };
 }
 
 fn active_session_state() -> Option<Rc<SessionState>> {
     ACTIVE_SESSION
-        .try_with(|active| active.borrow().state.upgrade())
+        .try_with(|active| {
+            let selected = active.borrow();
+            selected.scoped.clone().or_else(|| selected.state.upgrade())
+        })
         .ok()
         .flatten()
 }
@@ -169,7 +182,8 @@ impl RuntimeSession {
 
     /// Selects this session until the returned guard is dropped.
     pub fn enter(&self) -> RuntimeSessionGuard {
-        let previous = ACTIVE_SESSION.with(|active| active.replace(SessionSelection::new(&self.0)));
+        let previous =
+            ACTIVE_SESSION.with(|active| active.replace(SessionSelection::scoped(&self.0)));
         RuntimeSessionGuard {
             previous,
             _owner: self.clone(),
@@ -180,8 +194,9 @@ impl RuntimeSession {
         ACTIVE_SESSION.with(|active| {
             let mut active = active.borrow_mut();
             if !active.selects(&self.0) {
-                *self.0.previous.borrow_mut() =
-                    std::mem::replace(&mut *active, SessionSelection::new(&self.0));
+                let mut previous = std::mem::replace(&mut *active, SessionSelection::new(&self.0));
+                previous.scoped = None;
+                *self.0.previous.borrow_mut() = previous;
             }
         });
     }
@@ -229,6 +244,7 @@ pub(crate) fn current_session_identity() -> Option<u128> {
         .flatten()
 }
 
+#[inline]
 pub(crate) fn with_active_execution_context<R>(
     read: impl FnOnce(&RefCell<ExecutionContext>) -> R,
 ) -> R {
@@ -236,10 +252,12 @@ pub(crate) fn with_active_execution_context<R>(
     read(session.execution_context())
 }
 
+#[inline]
 pub(crate) fn with_runtime_globals<R>(read: impl FnOnce(&RuntimeGlobals) -> R) -> R {
     try_with_runtime_globals(read).expect("a runtime session must be active")
 }
 
+#[inline]
 pub(crate) fn try_with_runtime_globals<R>(
     read: impl FnOnce(&RuntimeGlobals) -> R,
 ) -> Result<R, ()> {
@@ -460,6 +478,24 @@ mod tests {
 
         assert_eq!(super::current_session_identity(), None);
         assert_eq!(crate::dp::scale_factor(), 1.0);
+    }
+
+    #[test]
+    fn activation_during_a_scoped_selection_does_not_retain_the_previous_owner() {
+        let first = RuntimeSession::new();
+        let first_owner = Rc::downgrade(&first.0);
+        let second = RuntimeSession::new();
+        {
+            let _scope = first.enter();
+            second.activate();
+            assert_eq!(
+                RuntimeSession::current().unwrap().identity(),
+                second.identity()
+            );
+        }
+        drop(first);
+        assert!(first_owner.upgrade().is_none());
+        drop(second);
     }
 
     #[derive(Default)]

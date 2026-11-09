@@ -27,7 +27,7 @@ use crate::{
     keyboard_state::QueuedInput,
     layout::{LayoutModifierHandle, LayoutResult, RenderInput},
     modifier::{
-        DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier,
+        DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier, ModifierChanges,
         OrderedModifierAction, PointerInputModifierNode,
     },
     px::{PxPosition, PxSize},
@@ -46,7 +46,7 @@ pub use node::{
     PointerInputHandlerFn,
 };
 
-pub(crate) use calls::{EmittedNode, SnapshotUpdate};
+pub(crate) use calls::{CallId, EmittedNode, SnapshotUpdate};
 pub(crate) use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
     WindowDragRequest, WindowRequests, direct_layout_children, measure_node, sibling_index,
@@ -1130,8 +1130,15 @@ impl ComponentTree {
         &mut self,
         id: NodeId,
         previous: &PreviousBuildNode,
-        input_changed: bool,
+        changes: ModifierChanges,
     ) {
+        debug_assert!(
+            !changes.draw
+                || self.tree[id].get().role != NodeRole::Layout
+                || self.metadatas.paint_dirty_nodes.contains(&id),
+            "changed draw modifiers must invalidate paint"
+        );
+        let input_changed = changes.input_geometry;
         let metadata = self.metadatas.get_mut(&id);
         let node = self.tree[id].get();
         if previous.defer_consumer_change
@@ -6408,7 +6415,7 @@ mod tests {
         key: u64,
         build: impl FnOnce(&mut ComponentTree),
     ) -> ReplayReplaceResult {
-        let context = tree.begin_replace_call(key);
+        let context = tree.begin_replace_call(tree.call_id(key).expect("replayed call is live"));
         build(tree);
         let mut result = ReplayReplaceResult::default();
         tree.finish_replace_subtree(context, &mut result);
@@ -6456,6 +6463,48 @@ mod tests {
             assert!(!tree.has_call(removed));
         }
         assert!(!result.removed_instance_keys.contains(&3));
+    }
+
+    #[test]
+    fn adjacent_replay_roots_share_a_replacement_without_touching_the_next_sibling() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let mut tree = built_tree();
+        begin(&mut tree, 2);
+        let first = leaf(&mut tree, 3);
+        let second = leaf(&mut tree, 4);
+        end_call(&mut tree, 2);
+        let following = leaf(&mut tree, 5);
+        tree.pop_node();
+        let host = host(&tree, 3);
+        let roots = [(3, tree.call_id(3).unwrap()), (4, tree.call_id(4).unwrap())];
+        assert_eq!(tree.group_replay_roots(roots.to_vec()), [roots.to_vec()]);
+        assert_eq!(
+            tree.group_replay_roots(vec![roots[0], (5, tree.call_id(5).unwrap())])
+                .len(),
+            2
+        );
+
+        let context = tree.begin_replace_batch(&roots);
+        assert_eq!(emit(&mut tree, 3, NodeRole::Layout), first);
+        end_call(&mut tree, 3);
+        tree.select_replay_batch_call(roots[1].1);
+        assert_eq!(emit(&mut tree, 4, NodeRole::Layout), second);
+        end_call(&mut tree, 4);
+        let mut result = ReplayReplaceResult::default();
+        tree.finish_replace_subtree(context, &mut result);
+        tree.finish_replay_round();
+
+        assert_eq!(
+            host.children(tree.tree()).collect::<Vec<_>>(),
+            vec![first, second, following]
+        );
+        assert_eq!(
+            result.executed_keys().collect::<HashSet<_>>(),
+            [3, 4].into_iter().collect()
+        );
+        assert!(result.removed_instance_keys.is_empty());
+        assert!(tree.has_call(5));
     }
 
     #[test]

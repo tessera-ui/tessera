@@ -712,10 +712,6 @@ pub(crate) fn release_retired_replay_snapshots() {
     drop(retired);
 }
 
-pub(crate) fn previous_component_replay_node(key: u64) -> Option<ReplayNodeSnapshot> {
-    TesseraRuntime::with(|runtime| runtime.component_tree.call_snapshot(key).cloned())
-}
-
 pub(crate) fn previous_component_context(key: u64) -> Option<ContextMap> {
     TesseraRuntime::with(|runtime| {
         runtime
@@ -2169,8 +2165,14 @@ pub(crate) struct RuntimeGlobals {
 }
 
 impl RuntimeGlobals {
+    #[inline]
     pub(crate) fn with_runtime<R>(&self, read: impl FnOnce(&TesseraRuntime) -> R) -> R {
         read(&self.runtime.borrow())
+    }
+
+    #[inline]
+    pub(crate) fn with_runtime_mut<R>(&self, update: impl FnOnce(&mut TesseraRuntime) -> R) -> R {
+        update(&mut self.runtime.borrow_mut())
     }
 
     fn new() -> Self {
@@ -2214,6 +2216,7 @@ pub struct TesseraRuntime {
 
 impl TesseraRuntime {
     /// Executes a closure with a shared, read-only reference to the runtime.
+    #[inline]
     pub fn with<F, R>(f: F) -> R
     where
         F: FnOnce(&Self) -> R,
@@ -2222,11 +2225,12 @@ impl TesseraRuntime {
     }
 
     /// Executes a closure with an exclusive, mutable reference to the runtime.
+    #[inline]
     pub fn with_mut<F, R>(f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {
-        with_runtime_globals(|globals| f(&mut globals.runtime.borrow_mut()))
+        with_runtime_globals(|globals| globals.with_runtime_mut(f))
     }
 
     /// Get the current window size in physical pixels.
@@ -2244,7 +2248,7 @@ impl TesseraRuntime {
     /// Appends a modifier chain to the current component node.
     pub(crate) fn append_current_modifier(&mut self, modifier: Modifier) {
         if let Some(node) = self.component_tree.current_node_mut() {
-            node.modifier = node.modifier.clone().then(modifier);
+            node.modifier = std::mem::take(&mut node.modifier).then(modifier);
         } else {
             debug_assert!(
                 false,
@@ -2834,7 +2838,7 @@ impl Drop for ComponentNodeScope {
             let changes = previous.as_ref().map(|previous| {
                 let node = tree.get(id).expect("emitted component node");
                 let changes = node.modifier.changes_from(&previous.modifier);
-                tree.reconcile_build_node(id, previous, changes.input_geometry);
+                tree.reconcile_build_node(id, previous, changes);
                 (&previous.policy, changes)
             });
             let node = tree.get(id).expect("emitted component node");

@@ -152,6 +152,36 @@ impl<P: Prop> ComponentCall<P> {
         );
     }
 
+    /// Assign a generated value property without detaching its pending call.
+    /// The update must only move the previous value out; it is dropped after
+    /// the pending registry borrow ends. Reentrant updates use `configure`.
+    #[doc(hidden)]
+    #[track_caller]
+    pub fn configure_value<T>(&self, property: &'static str, update: impl FnOnce(&mut P) -> T) {
+        let session = self.owning_session();
+        let calls = &session.runtime_globals().component_calls.pending;
+        let mut pending = calls.borrow_mut();
+        let configuration = pending
+            .entry_mut(self.id)
+            .and_then(|entry| entry.configuration.as_mut())
+            .unwrap_or_else(|| panic!("component call {} is no longer Pending", self.id.serial));
+        if !configuration.updates.is_empty() {
+            drop(pending);
+            let mut previous = None;
+            self.configure(property, |props| previous = Some(update(props)));
+            drop(previous);
+            return;
+        }
+        let previous = update(
+            pending_props_mut(&mut configuration.props)
+                .as_any_mut()
+                .downcast_mut::<P>()
+                .expect("registered component props type"),
+        );
+        drop(pending);
+        drop(previous);
+    }
+
     /// Materialize a property in this call's declaration scope before execution.
     #[track_caller]
     pub fn configure_deferred<F>(&self, property: &'static str, update: F)
@@ -194,10 +224,11 @@ impl<P: Prop> ComponentCall<P> {
 
     /// Expand this call at a controlled runtime boundary.
     pub(crate) fn execute_now(self) {
-        let _session = self.owning_session();
+        let session = self.owning_session();
+        let calls = &session.runtime_globals().component_calls.pending;
         loop {
             let (id, call) =
-                take_next_call().expect("render-slot call must belong to the active fragment");
+                take_next_call(calls).expect("render-slot call must belong to the active fragment");
             if let Some(call) = call {
                 execute_call(call);
             }
@@ -400,23 +431,23 @@ fn begin_pending_scope() -> ScopeGuard {
 }
 
 fn drain_pending_scope() {
-    while let Some((_, call)) = take_next_call() {
-        if let Some(call) = call {
-            execute_call(call);
+    with_pending_calls(|calls| {
+        while let Some((_, call)) = take_next_call(calls) {
+            if let Some(call) = call {
+                execute_call(call);
+            }
         }
-    }
+    });
 }
 
-fn take_next_call() -> Option<(PendingToken, Option<PendingCall>)> {
-    with_pending_calls(|calls| {
-        let mut calls = calls.borrow_mut();
-        let id = calls
-            .scopes
-            .last_mut()
-            .expect("active build fragment")
-            .pop_front()?;
-        Some((id, calls.remove(id)))
-    })
+fn take_next_call(calls: &RefCell<PendingCalls>) -> Option<(PendingToken, Option<PendingCall>)> {
+    let mut calls = calls.borrow_mut();
+    let id = calls
+        .scopes
+        .last_mut()
+        .expect("active build fragment")
+        .pop_front()?;
+    Some((id, calls.remove(id)))
 }
 
 struct ParentGuard {
@@ -619,6 +650,53 @@ mod tests {
             call.configure_deferred("value", |props| props.value = 9);
         });
         assert_eq!(recorder.values(), [9]);
+    }
+
+    #[test]
+    fn direct_value_assignment_supersedes_a_deferred_property_update() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
+        recorder.build(|| {
+            let call = recorder.declare(1);
+            call.configure_deferred("value", |_| panic!("superseded update ran"));
+            call.configure_value("value", |props| std::mem::replace(&mut props.value, 9));
+        });
+        assert_eq!(recorder.values(), [9]);
+    }
+
+    #[test]
+    fn generated_value_assignment_drops_replaced_props_after_registry_borrow() {
+        #[derive(Clone)]
+        struct Value(Recorder, u32);
+        impl Drop for Value {
+            fn drop(&mut self) {
+                if self.1 == 1 {
+                    self.0.declare(2);
+                }
+            }
+        }
+        #[derive(Clone)]
+        struct ValueProps(Option<Value>);
+        impl Prop for ValueProps {
+            fn prop_eq(&self, _other: &Self) -> bool {
+                true
+            }
+            fn run_component(self: Rc<Self>) {}
+        }
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
+        recorder.build(|| {
+            let call = register_component_call("drop_probe", 345, ValueProps(None));
+            call.configure_value("value", |props| {
+                std::mem::replace(&mut props.0, Some(Value(recorder.clone(), 1)))
+            });
+            call.configure_value("value", |props| {
+                std::mem::replace(&mut props.0, Some(Value(recorder.clone(), 0)))
+            });
+        });
+        assert_eq!(recorder.values(), [2]);
     }
 
     #[test]

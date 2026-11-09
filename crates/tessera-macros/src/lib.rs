@@ -466,7 +466,9 @@ fn generate_constructor_param_and_assignment(
         };
         quote! {
             let #ident = #value;
-            __tessera_call.configure(stringify!(#ident), move |__tessera_pending_props| __tessera_pending_props.#ident = Some(#ident));
+            __tessera_call.configure_value(stringify!(#ident), move |__tessera_pending_props| {
+                ::core::mem::replace(&mut __tessera_pending_props.#ident, Some(#ident))
+            });
         }
     };
 
@@ -733,7 +735,9 @@ fn generate_builder_methods(
                 #[track_caller]
                 pub fn #ident(&self, value: #parameter) -> Self {
                     let value = #value;
-                    self.props.configure(stringify!(#ident), move |props| props.#ident = Some(value));
+                    self.props.configure_value(stringify!(#ident), move |props| {
+                        ::core::mem::replace(&mut props.#ident, Some(value))
+                    });
                     Self { props: self.props }
                 }
             });
@@ -743,7 +747,9 @@ fn generate_builder_methods(
             #[doc = #method_doc]
             #[track_caller]
             pub fn #optional(&self, value: Option<#ty>) -> Self {
-                self.props.configure(stringify!(#ident), move |props| props.#ident = value);
+                self.props.configure_value(stringify!(#ident), move |props| {
+                    ::core::mem::replace(&mut props.#ident, value)
+                });
                 Self { props: self.props }
             }
         });
