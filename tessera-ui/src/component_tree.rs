@@ -25,9 +25,10 @@ use crate::{
         FocusDirection, FocusHandleId, FocusOwner, PendingFocusCallbackInvocation, bind_focus_owner,
     },
     keyboard_state::QueuedInput,
-    layout::{LayoutResult, RenderInput},
+    layout::{LayoutModifierHandle, LayoutResult, RenderInput},
     modifier::{
-        DrawModifierContent, DrawModifierContext, OrderedModifierAction, PointerInputModifierNode,
+        DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier,
+        OrderedModifierAction, PointerInputModifierNode,
     },
     px::{PxPosition, PxSize},
     render_graph::RenderGraph,
@@ -45,7 +46,7 @@ pub use node::{
     PointerInputHandlerFn,
 };
 
-pub(crate) use calls::EmittedNode;
+pub(crate) use calls::{EmittedNode, SnapshotUpdate};
 pub(crate) use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
     WindowDragRequest, WindowRequests, direct_layout_children, measure_node, sibling_index,
@@ -649,10 +650,37 @@ pub(crate) struct ReplayReplaceContext {
     previous_queue: Option<Vec<indextree::NodeId>>,
 }
 
+/// Values a rebuilt node replaced in place, kept until the new ones are attached.
 pub(crate) struct PreviousBuildNode {
-    pub(crate) node: ComponentNode,
+    pub(crate) modifier: Modifier,
+    pub(crate) policy: LayoutModifierHandle,
+    fn_name: &'static str,
+    children_scale: f32,
     same_parent: bool,
     defer_consumer_change: bool,
+}
+
+/// Build inputs of a node emitted by a layout or group primitive.
+pub(crate) struct NodeInput {
+    pub(crate) fn_name: &'static str,
+    pub(crate) role: NodeRole,
+    pub(crate) instance_logic_id: u64,
+    pub(crate) instance_key: u64,
+    pub(crate) policy: LayoutModifierHandle,
+    pub(crate) draw: Box<dyn DrawModifierNode>,
+}
+
+impl NodeInput {
+    fn into_node(self) -> ComponentNode {
+        ComponentNode {
+            instance_logic_id: self.instance_logic_id,
+            instance_key: self.instance_key,
+            layout_node: self.policy.as_policy().clone_box(),
+            layout_input_policy: self.policy,
+            draw_node: self.draw,
+            ..ComponentNode::new(self.fn_name, self.role)
+        }
+    }
 }
 
 fn has_frame_consumers(node: &ComponentNode) -> bool {
@@ -1034,15 +1062,13 @@ impl ComponentTree {
         new_node_id
     }
 
-    pub(crate) fn rebuild_node(
-        &mut self,
-        mut node: ComponentNode,
-    ) -> (NodeId, Option<PreviousBuildNode>) {
-        let reusable = self.claim_replay_candidate(node.instance_key, |old| {
-            old.role == node.role && old.instance_logic_id == node.instance_logic_id
+    /// Reuses the matching node in place, or inserts a new one.
+    pub(crate) fn rebuild_node(&mut self, input: NodeInput) -> (NodeId, Option<PreviousBuildNode>) {
+        let reusable = self.claim_replay_candidate(input.instance_key, |old| {
+            old.role == input.role && old.instance_logic_id == input.instance_logic_id
         });
         let Some(candidate) = reusable else {
-            return (self.add_node(node), None);
+            return (self.add_node(input.into_node()), None);
         };
         let id = candidate.id;
 
@@ -1056,54 +1082,60 @@ impl ComponentTree {
             previous_parent.map(parent_key) == new_parent.map(parent_key)
         };
         self.remove_position_observer(id);
+        let had_consumers = has_frame_consumers(self.tree[id].get());
         let old = self.tree[id].get_mut();
-        node.layout_children = old.layout_children.take();
-        node.layout_children_dirty = old.layout_children_dirty;
-        node.sibling_index = old.sibling_index;
-        #[cfg(feature = "profiling")]
-        {
-            node.subtree_len = old.subtree_len;
+        let role = old.role;
+        // Attachment repopulates the remaining node-local state.
+        let interaction = old.interaction.take();
+        old.layout_coordinate_space = false;
+        old.draw_node = input.draw;
+        if !old.layout_policy().dyn_eq(input.policy.as_policy()) {
+            old.layout_node = input.policy.as_policy().clone_box();
         }
-        let previous = std::mem::replace(old, node);
+        let mut previous = PreviousBuildNode {
+            modifier: std::mem::take(&mut old.modifier),
+            policy: std::mem::replace(&mut old.layout_input_policy, input.policy),
+            fn_name: std::mem::replace(&mut old.fn_name, input.fn_name),
+            children_scale: std::mem::replace(&mut old.children_scale, 1.0),
+            same_parent,
+            defer_consumer_change: false,
+        };
         let metadata = self.metadatas.get_mut(&id);
-        let defer_consumer_change =
-            candidate.keeps_link && metadata.is_none() && !has_frame_consumers(&previous);
+        previous.defer_consumer_change =
+            candidate.keeps_link && metadata.is_none() && !had_consumers;
         if let Some(metadata) = metadata {
             metadata.begin_accessibility_rebuild();
         }
-        if defer_consumer_change {
+        if previous.defer_consumer_change {
             self.enter_build_node(id, false, false);
         } else {
             self.attach_replayed_node(candidate, false);
         }
-        if previous.role == NodeRole::Layout {
+        if role == NodeRole::Layout {
             self.metadatas.mark_paint_dirty(id);
         } else {
-            // Reusing a composition ID can leave retained drawing behind a
-            // rebuilt overlay. Even an empty fragment may become drawable.
+            // A rebuilt group can leave retained drawing behind rebuilt
+            // overlays. Even an empty fragment may become drawable.
             for descendant in id.descendants(&self.tree) {
                 if self.tree[descendant].get().role == NodeRole::Layout {
                     self.metadatas.mark_paint_dirty(descendant);
                 }
             }
         }
-        (
-            id,
-            Some(PreviousBuildNode {
-                node: previous,
-                same_parent,
-                defer_consumer_change,
-            }),
-        )
+        drop(interaction);
+        (id, Some(previous))
     }
 
-    pub(crate) fn reconcile_build_node(&mut self, id: NodeId, previous: &PreviousBuildNode) {
+    pub(crate) fn reconcile_build_node(
+        &mut self,
+        id: NodeId,
+        previous: &PreviousBuildNode,
+        input_changed: bool,
+    ) {
         let metadata = self.metadatas.get_mut(&id);
         let node = self.tree[id].get();
         if previous.defer_consumer_change
-            && (metadata.is_some()
-                || has_frame_consumers(node)
-                || previous.node.fn_name != node.fn_name)
+            && (metadata.is_some() || has_frame_consumers(node) || previous.fn_name != node.fn_name)
         {
             self.changed_frame_nodes.insert(id);
         }
@@ -1111,16 +1143,12 @@ impl ComponentTree {
             return;
         };
         metadata.finish_accessibility_rebuild();
-        let input_changed = !previous.node.modifier.input_geometry_eq(&node.modifier);
         metadata.geometry_initialized &= !input_changed;
-        if input_changed
-            || !previous.same_parent
-            || previous.node.children_scale != node.children_scale
+        if input_changed || !previous.same_parent || previous.children_scale != node.children_scale
         {
             self.metadatas.mark_geometry_dirty(id);
         }
     }
-
     fn attach_replayed_node(&mut self, candidate: replay::ReplayCandidate, retained: bool) {
         let replay::ReplayCandidate { id, keeps_link } = candidate;
         if keeps_link {
@@ -6333,15 +6361,38 @@ mod tests {
         tree
     }
 
+    fn begin(tree: &mut ComponentTree, key: u64) {
+        let (id, _) = tree.locate_call(key, |_, _| SnapshotUpdate::Keep);
+        tree.begin_call(id, key, key, "node");
+    }
+
+    fn retain(tree: &mut ComponentTree, key: u64) -> bool {
+        let (id, _) = tree.locate_call(key, |_, _| SnapshotUpdate::Keep);
+        tree.attach_retained_call(id.expect("retained call is live"), key)
+    }
+
+    fn host(tree: &ComponentTree, key: u64) -> NodeId {
+        let id = tree.calls.id(key).expect("call is live");
+        tree.calls.host(id).expect("call has a host")
+    }
+
     fn emit(tree: &mut ComponentTree, key: u64, role: NodeRole) -> NodeId {
-        tree.begin_call(key, key, "node");
-        let (id, previous) = tree.rebuild_node(node_with_role("node", role, key, key));
+        begin(tree, key);
+        let (id, previous) = tree.rebuild_node(NodeInput {
+            fn_name: "node",
+            role,
+            instance_logic_id: key,
+            instance_key: key,
+            policy: LayoutModifierHandle::default(),
+            draw: Box::new(crate::layout::NoopDrawModifier),
+        });
         tree.emit_call_node(id, previous);
         id
     }
 
     fn end_call(tree: &mut ComponentTree, key: u64) {
-        if tree.finish_call(key).is_some() {
+        let _ = key;
+        if tree.finish_call().is_some() {
             tree.pop_node();
         }
     }
@@ -6370,7 +6421,7 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let mut tree = built_tree();
-        tree.begin_call(2, 2, "composition");
+        begin(&mut tree, 2);
         let reused = emit(&mut tree, 3, NodeRole::Layout);
         leaf(&mut tree, 30);
         end_call(&mut tree, 3);
@@ -6378,10 +6429,10 @@ mod tests {
         end_call(&mut tree, 2);
         let following = leaf(&mut tree, 5);
         tree.pop_node();
-        let root = tree.calls.host(2).expect("test fixture provides host");
+        let root = host(&tree, 2);
 
         let result = replay(&mut tree, 2, |tree| {
-            tree.begin_call(2, 2, "composition");
+            begin(tree, 2);
             assert_eq!(emit(tree, 3, NodeRole::Layout), reused);
             end_call(tree, 3);
             leaf(tree, 7);
@@ -6413,14 +6464,14 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         let mut tree = built_tree();
         let before = leaf(&mut tree, 1);
-        tree.begin_call(2, 2, "composition");
+        begin(&mut tree, 2);
         end_call(&mut tree, 2);
         let after = leaf(&mut tree, 3);
         tree.pop_node();
-        let root = tree.calls.host(2).expect("test fixture provides host");
+        let root = host(&tree, 2);
 
         replay(&mut tree, 2, |tree| {
-            tree.begin_call(2, 2, "composition");
+            begin(tree, 2);
             let inserted = leaf(tree, 4);
             end_call(tree, 2);
             assert_eq!(
@@ -6435,18 +6486,18 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let mut tree = built_tree();
-        tree.begin_call(2, 2, "composition");
+        begin(&mut tree, 2);
         let retained = emit(&mut tree, 3, NodeRole::Layout);
         let nested = leaf(&mut tree, 30);
         end_call(&mut tree, 3);
         end_call(&mut tree, 2);
         let following = leaf(&mut tree, 4);
         tree.pop_node();
-        let root = tree.calls.host(2).expect("test fixture provides host");
+        let root = host(&tree, 2);
 
         let result = replay(&mut tree, 2, |tree| {
-            tree.begin_call(2, 2, "composition");
-            assert!(tree.attach_retained_call(3, 3));
+            begin(tree, 2);
+            assert!(retain(tree, 3));
             end_call(tree, 2);
         });
 
@@ -6480,8 +6531,8 @@ mod tests {
 
         replay(&mut tree, 3, |tree| {
             assert_eq!(emit(tree, 3, NodeRole::Group), group);
-            assert!(tree.attach_retained_call(5, 5));
-            assert!(tree.attach_retained_call(4, 4));
+            assert!(retain(tree, 5));
+            assert!(retain(tree, 4));
             end_call(tree, 3);
         });
 

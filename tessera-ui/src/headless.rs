@@ -34,10 +34,10 @@ use crate::{
         TesseraRuntime, begin_frame_build_invalidations, begin_frame_clock,
         clear_persistent_focus_handles, clear_redraw_waker, has_pending_build_invalidations,
         has_pending_layout_invalidations, has_ready_build_invalidations,
-        prune_persistent_focus_handles, reset_build_invalidations, reset_component_replay_tracking,
-        reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
-        reset_render_slot_read_dependencies, reset_state_read_dependencies,
-        take_layout_dirty_nodes, tick_frame_nanos_receivers,
+        prune_persistent_focus_handles, release_retired_replay_snapshots,
+        reset_build_invalidations, reset_focus_read_dependencies, reset_frame_clock,
+        reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
+        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_nanos_receivers,
     },
     time::Instant,
 };
@@ -872,7 +872,7 @@ fn reset_headless_runtime(size: winit::dpi::PhysicalSize<u32>) {
         runtime.window_size = [size.width, size.height];
     });
     reset_layout_dirty_tracking();
-    reset_component_replay_tracking();
+    release_retired_replay_snapshots();
     reset_focus_read_dependencies();
     reset_render_slot_read_dependencies();
     reset_state_read_dependencies();

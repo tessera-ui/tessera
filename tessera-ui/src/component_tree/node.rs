@@ -72,7 +72,7 @@ pub(crate) struct ComponentNode {
     pub(crate) layout_coordinate_space: bool,
     /// Node-local modifier chain attached during build.
     pub(crate) modifier: Modifier,
-    /// The unified layout node applied at the innermost layer.
+    /// Measurement copy of the policy; measurement may mutate its local state.
     pub(crate) layout_node: Box<dyn LayoutModifierDyn>,
     pub(crate) layout_input_policy: LayoutModifierHandle,
     /// Draw modifier node used to record draw and compute commands.
@@ -1317,7 +1317,7 @@ pub(crate) fn measure_node(
         )
     };
     let mut measurement = None;
-    let layout_node = &node_data.layout_node;
+    let layout_node = node_data.layout_node.as_ref();
     let snapshot = layout_ctx.and_then(|context| context.snapshot(node_data.instance_key));
     if let Some(layout_ctx) = layout_ctx {
         layout_ctx.inc_measure_node_calls();
@@ -1427,7 +1427,7 @@ pub(crate) fn measure_node(
                             crate::runtime::ReadPhase::Place,
                         );
                         relayout_base_layout(
-                            layout_node.as_ref(),
+                            layout_node,
                             layout_modifiers,
                             &MeasureLayoutContext {
                                 tree,
@@ -1545,7 +1545,7 @@ pub(crate) fn measure_node(
         parent_constraint,
         &mut |constraint| {
             measure_base_layout(
-                layout_node.as_ref(),
+                layout_node,
                 &measure_layout_ctx,
                 component_node_metadatas,
                 constraint,

@@ -2,7 +2,7 @@
 
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, RefCell},
+    cell::RefCell,
     collections::hash_map::Entry,
     hash::{BuildHasher, Hash, Hasher},
     marker::PhantomData,
@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use hashbrown::{HashTable, hash_table::Entry as TableEntry};
+use hashbrown::HashTable;
 use rustc_hash::{FxBuildHasher, FxHashMap as HashMap, FxHashSet as HashSet};
 use slotmap::{SlotMap, new_key_type};
 use smallvec::SmallVec;
@@ -20,7 +20,9 @@ use crate::{
     NodeId,
     accessibility::{AccessibilityActionHandler, AccessibilityNode},
     component_call::ComponentCalls,
-    component_tree::{ComponentNode, ComponentTree, EmittedNode, NodeRole},
+    component_tree::{
+        ComponentNode, ComponentTree, EmittedNode, NodeInput, NodeRole, SnapshotUpdate,
+    },
     context::{ContextGlobals, ContextMap},
     execution_context::{
         ExecutionContext, OrderFrame, with_execution_context, with_execution_context_mut,
@@ -32,7 +34,7 @@ use crate::{
     },
     inline_set::InlineSet,
     layout::{DrawModifierHandle, LayoutModifierHandle},
-    modifier::Modifier,
+    modifier::{Modifier, ModifierChanges},
     prop::{CallbackWith, ErasedComponent, Prop},
     read_dependencies::ReadDependencies,
     session::{try_with_runtime_globals, with_runtime_globals},
@@ -167,7 +169,7 @@ impl Default for SlotKey {
 }
 
 new_key_type! {
-    struct SlotHandle;
+    pub(crate) struct SlotHandle;
 }
 
 #[derive(Default)]
@@ -197,8 +199,9 @@ impl SlotEntry {
     }
 }
 
+/// Slot order of one component instance, compared positionally on replay.
 #[derive(Default)]
-struct InstanceSlotCursor {
+pub(crate) struct InstanceSlotCursor {
     previous_order: SmallVec<[SlotHandle; 1]>,
     current_order: SmallVec<[SlotHandle; 1]>,
     cursor: usize,
@@ -322,34 +325,74 @@ impl SlotTable {
         self.epoch = 0;
         removed
     }
-    fn try_fast_slot_lookup(&mut self, key: &SlotKey) -> Option<(SlotHandle, &mut SlotEntry)> {
-        let cursor = self
-            .cursors_by_instance_logic_id
-            .entry(key.instance_logic_id)
-            .or_default();
-        cursor.begin_epoch(self.epoch);
-        let candidate = cursor.fast_candidate()?;
-
-        let entry = self
-            .entries
-            .get_mut(candidate)
-            .filter(|entry| entry.key == *key)?;
-
-        cursor.record_fast_match(candidate);
-        Some((candidate, entry))
+    fn cursor_for<'a>(
+        cursors: &'a mut HashMap<u64, InstanceSlotCursor>,
+        key: &SlotKey,
+        cursor: Option<&'a mut InstanceSlotCursor>,
+    ) -> &'a mut InstanceSlotCursor {
+        cursor.unwrap_or_else(|| cursors.entry(key.instance_logic_id).or_default())
     }
 
-    fn record_slot_usage_slow(&mut self, instance_logic_id: u64, slot: SlotHandle) {
-        let epoch = self.epoch;
-        let cursor = self
-            .cursors_by_instance_logic_id
-            .entry(instance_logic_id)
-            .or_default();
-        cursor.begin_epoch(epoch);
+    /// Finds a slot at its previous position in the instance's slot order,
+    /// falling back to the key index when the order changed.
+    fn locate_slot(
+        &mut self,
+        key: &SlotKey,
+        cursor: Option<&mut InstanceSlotCursor>,
+    ) -> Option<SlotHandle> {
+        let cursor = Self::cursor_for(&mut self.cursors_by_instance_logic_id, key, cursor);
+        cursor.begin_epoch(self.epoch);
+        if let Some(candidate) = cursor.fast_candidate()
+            && self
+                .entries
+                .get(candidate)
+                .is_some_and(|entry| entry.key == *key)
+        {
+            cursor.record_fast_match(candidate);
+            return Some(candidate);
+        }
+        let entries = &self.entries;
+        let slot = self
+            .slots_by_key
+            .find(FxBuildHasher.hash_one(key), |&slot| {
+                entries[slot].key == *key
+            })
+            .copied()?;
+        cursor.record_slow_match(slot);
+        Some(slot)
+    }
+
+    fn record_new_slot(
+        &mut self,
+        key: &SlotKey,
+        slot: SlotHandle,
+        cursor: Option<&mut InstanceSlotCursor>,
+    ) {
+        let cursor = Self::cursor_for(&mut self.cursors_by_instance_logic_id, key, cursor);
+        cursor.begin_epoch(self.epoch);
         cursor.record_slow_match(slot);
     }
 }
 
+/// Runs `access` with the slot table and the slot order of the executing call
+/// that owns `key`, when that call is available.
+fn with_slot_order<R>(
+    key: &SlotKey,
+    access: impl FnOnce(&mut SlotTable, Option<&mut InstanceSlotCursor>) -> R,
+) -> R {
+    with_runtime_globals(|globals| {
+        let mut table = globals.slot_table.borrow_mut();
+        // Build modifiers may run while the runtime is borrowed; they use the
+        // indexed order instead.
+        let mut runtime = globals.runtime.try_borrow_mut().ok();
+        let cursor = runtime.as_mut().and_then(|runtime| {
+            runtime
+                .component_tree
+                .executing_call_slots(key.instance_logic_id)
+        });
+        access(&mut table, cursor)
+    })
+}
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct PersistentFocusHandleKey {
     instance_key: u64,
@@ -657,187 +700,30 @@ pub(crate) struct ReplayNodeSnapshot {
     pub replay: Rc<dyn ErasedComponent>,
 }
 
-#[derive(Default)]
-struct ReplaySnapshots {
-    entries: Vec<(u64, ReplayNodeSnapshot)>,
-    indices: HashTable<usize>,
-    next_ordered: Cell<usize>,
+/// Starts recording replay snapshots for a build pass.
+pub(crate) fn begin_frame_component_replay_tracking() {
+    TesseraRuntime::with_mut(|runtime| runtime.component_tree.begin_call_epoch());
 }
 
-impl ReplaySnapshots {
-    fn index_of(&self, key: &u64) -> Option<usize> {
-        self.indices
-            .find(FxBuildHasher.hash_one(key), |&index| {
-                self.entries[index].0 == *key
-            })
-            .copied()
-    }
-
-    fn get(&self, key: &u64) -> Option<&ReplayNodeSnapshot> {
-        Some(&self.entries[self.index_of(key)?].1)
-    }
-
-    fn get_for_replay_root(&self, key: &u64) -> Option<&ReplayNodeSnapshot> {
-        let index = self.index_of(key)?;
-        self.next_ordered.set(index);
-        Some(&self.entries[index].1)
-    }
-
-    fn get_ordered(&self, key: &u64) -> Option<&ReplayNodeSnapshot> {
-        let cursor = self.next_ordered.get();
-        // Replay follows prior declaration order until a subtree is retained or reordered.
-        let index = if self
-            .entries
-            .get(cursor)
-            .is_some_and(|entry| entry.0 == *key)
-        {
-            cursor
-        } else {
-            self.index_of(key)?
-        };
-        self.next_ordered.set(index + 1);
-        Some(&self.entries[index].1)
-    }
-
-    fn insert(&mut self, key: u64, snapshot: ReplayNodeSnapshot) -> Option<ReplayNodeSnapshot> {
-        let entry = self.indices.entry(
-            FxBuildHasher.hash_one(key),
-            |&index| self.entries[index].0 == key,
-            |&index| FxBuildHasher.hash_one(self.entries[index].0),
-        );
-        match entry {
-            TableEntry::Occupied(entry) => Some(std::mem::replace(
-                &mut self.entries[*entry.get()].1,
-                snapshot,
-            )),
-            TableEntry::Vacant(entry) => {
-                let index = self.entries.len();
-                self.entries.push((key, snapshot));
-                entry.insert(index);
-                None
-            }
-        }
-    }
-
-    fn remove(&mut self, key: &u64) -> Option<ReplayNodeSnapshot> {
-        let entry = self
-            .indices
-            .find_entry(FxBuildHasher.hash_one(key), |&index| {
-                self.entries[index].0 == *key
-            })
-            .ok()?;
-        let (index, _) = entry.remove();
-        let (_, snapshot) = self.entries.swap_remove(index);
-        if let Some((moved_key, _)) = self.entries.get(index) {
-            let previous_index = self.entries.len();
-            let mut moved = self
-                .indices
-                .find_entry(FxBuildHasher.hash_one(moved_key), |&index| {
-                    index == previous_index
-                })
-                .unwrap_or_else(|_| unreachable!("moved replay snapshot must be indexed"));
-            *moved.get_mut() = index;
-        }
-        Some(snapshot)
-    }
-
-    fn drain(&mut self) -> impl Iterator<Item = (u64, ReplayNodeSnapshot)> + '_ {
-        self.indices.clear();
-        self.entries.drain(..)
-    }
-}
-
-#[derive(Default)]
-struct ComponentReplayTracker {
-    previous_nodes: ReplaySnapshots,
-    current_nodes: ReplaySnapshots,
-    mode: ReplayTrackingMode,
-}
-
-#[derive(Default, PartialEq, Eq)]
-pub(crate) enum ReplayTrackingMode {
-    #[default]
-    Full,
-    Partial,
-}
-
-fn with_component_replay_tracker<R>(f: impl FnOnce(&ComponentReplayTracker) -> R) -> R {
-    with_runtime_globals(|globals| f(&globals.component_replay_tracker.borrow()))
-}
-
-fn with_component_replay_tracker_mut<R>(f: impl FnOnce(&mut ComponentReplayTracker) -> R) -> R {
-    with_runtime_globals(|globals| f(&mut globals.component_replay_tracker.borrow_mut()))
-}
-
-pub(crate) fn begin_frame_component_replay_tracking(mode: ReplayTrackingMode) {
-    let retired = with_component_replay_tracker_mut(|tracker| {
-        tracker.mode = mode;
-        tracker.previous_nodes.next_ordered.set(0);
-        (!tracker.current_nodes.entries.is_empty())
-            .then(|| std::mem::take(&mut tracker.current_nodes))
-    });
+/// Drops replay snapshots of removed calls once no runtime state is borrowed.
+pub(crate) fn release_retired_replay_snapshots() {
+    let retired =
+        TesseraRuntime::with_mut(|runtime| runtime.component_tree.take_retired_snapshots());
     drop(retired);
-}
-
-pub(crate) fn finalize_frame_component_replay_tracking() {
-    let retired = with_component_replay_tracker_mut(|tracker| {
-        std::mem::replace(
-            &mut tracker.previous_nodes,
-            std::mem::take(&mut tracker.current_nodes),
-        )
-    });
-    drop(retired);
-}
-
-pub(crate) fn finalize_frame_component_replay_tracking_partial() {
-    let retired = with_component_replay_tracker_mut(|tracker| {
-        tracker.mode = ReplayTrackingMode::Full;
-        tracker
-            .current_nodes
-            .drain()
-            .filter_map(|(key, snapshot)| tracker.previous_nodes.insert(key, snapshot))
-            // Only props own user data. Release those after the borrow ends.
-            .map(|snapshot| snapshot.replay)
-            .collect::<Vec<_>>()
-    });
-    drop(retired);
-}
-
-pub(crate) fn reset_component_replay_tracking() {
-    let removed = with_component_replay_tracker_mut(std::mem::take);
-    drop(removed);
 }
 
 pub(crate) fn previous_component_replay_node(key: u64) -> Option<ReplayNodeSnapshot> {
-    with_component_replay_tracker(|tracker| {
-        tracker.previous_nodes.get_for_replay_root(&key).cloned()
-    })
+    TesseraRuntime::with(|runtime| runtime.component_tree.call_snapshot(key).cloned())
 }
 
 pub(crate) fn previous_component_context(key: u64) -> Option<ContextMap> {
-    with_component_replay_tracker(|tracker| {
-        tracker
-            .previous_nodes
-            .get(&key)
-            .map(|node| node.context.clone())
+    TesseraRuntime::with(|runtime| {
+        runtime
+            .component_tree
+            .call_snapshot(key)
+            .map(|snapshot| snapshot.context.clone())
     })
 }
-
-pub(crate) fn remove_previous_component_replay_nodes(instance_keys: &HashSet<u64>) {
-    if instance_keys.is_empty() {
-        return;
-    }
-    let retired = with_component_replay_tracker_mut(|tracker| {
-        let mut retired = Vec::new();
-        for key in instance_keys {
-            retired.extend(tracker.previous_nodes.remove(key));
-            retired.extend(tracker.current_nodes.remove(key));
-        }
-        retired
-    });
-    drop(retired);
-}
-
 #[derive(Default)]
 struct BuildInvalidationTracker {
     dirty_instance_keys: HashSet<u64>,
@@ -1754,21 +1640,19 @@ fn with_layout_dirty_tracker_mut<R>(f: impl FnOnce(&mut LayoutDirtyTracker) -> R
     with_runtime_globals(|globals| f(&mut globals.layout_dirty_tracker.borrow_mut()))
 }
 
-fn record_layout_node_dirty(previous: Option<&ComponentNode>, node: &ComponentNode) {
+fn record_layout_node_dirty(
+    previous: Option<(&LayoutModifierHandle, ModifierChanges)>,
+    node: &ComponentNode,
+) {
     let instance_key = node.instance_key;
     let (measure_changed, placement_changed, transform_changed, parent_data_changed) =
-        if let Some(previous) = previous {
+        if let Some((policy, changes)) = previous {
+            let policy = policy.as_policy();
             (
-                !previous
-                    .layout_policy()
-                    .dyn_measure_eq(node.layout_policy())
-                    || !previous.modifier.layout_measure_eq(&node.modifier),
-                !previous
-                    .layout_policy()
-                    .dyn_placement_eq(node.layout_policy())
-                    || !previous.modifier.layout_placement_eq(&node.modifier),
-                !previous.modifier.position_eq(&node.modifier),
-                !previous.modifier.parent_data_eq(&node.modifier),
+                changes.measure || !policy.dyn_measure_eq(node.layout_policy()),
+                changes.placement || !policy.dyn_placement_eq(node.layout_policy()),
+                changes.transform,
+                changes.parent_data,
             )
         } else {
             (true, true, true, true)
@@ -2272,7 +2156,6 @@ pub(crate) struct RuntimeGlobals {
     pub(crate) component_calls: ComponentCalls,
     pub(crate) context: ContextGlobals,
     slot_table: RefCell<SlotTable>,
-    component_replay_tracker: RefCell<ComponentReplayTracker>,
     build_invalidation_tracker: RefCell<BuildInvalidationTracker>,
     state_read_dependency_tracker: RefCell<StateReadDependencyTracker>,
     focus_read_dependency_tracker: RefCell<FocusReadDependencyTracker>,
@@ -2295,7 +2178,6 @@ impl RuntimeGlobals {
             component_calls: ComponentCalls::default(),
             context: ContextGlobals::default(),
             slot_table: RefCell::new(SlotTable::default()),
-            component_replay_tracker: RefCell::new(ComponentReplayTracker::default()),
             build_invalidation_tracker: RefCell::new(BuildInvalidationTracker::default()),
             state_read_dependency_tracker: RefCell::new(StateReadDependencyTracker::default()),
             focus_read_dependency_tracker: RefCell::new(FocusReadDependencyTracker::default()),
@@ -2923,7 +2805,6 @@ impl Drop for ComponentBuildContext {
 /// A component build scope that restores the previous node and build context on exit.
 pub struct ComponentNodeScope {
     instance_logic_id: u64,
-    instance_key: u64,
     retained: bool,
     _context: ComponentBuildContext,
 }
@@ -2947,24 +2828,22 @@ impl Drop for ComponentNodeScope {
         }
         TesseraRuntime::with_mut(|runtime| {
             let tree = &mut runtime.component_tree;
-            let Some(EmittedNode { id, previous }) = tree.finish_call(self.instance_key) else {
+            let Some(EmittedNode { id, previous }) = tree.finish_call() else {
                 return;
             };
-            if let Some(previous) = &previous {
-                tree.reconcile_build_node(id, previous);
-            }
+            let changes = previous.as_ref().map(|previous| {
+                let node = tree.get(id).expect("emitted component node");
+                let changes = node.modifier.changes_from(&previous.modifier);
+                tree.reconcile_build_node(id, previous, changes.input_geometry);
+                (&previous.policy, changes)
+            });
             let node = tree.get(id).expect("emitted component node");
             if node.role == NodeRole::Layout {
-                record_layout_node_dirty(previous.as_ref().map(|previous| &previous.node), node);
+                record_layout_node_dirty(changes, node);
             }
             tree.pop_node();
         });
     }
-}
-
-enum ReplaySnapshotUpdate {
-    Keep,
-    Replace(Option<Rc<dyn ErasedComponent>>),
 }
 
 /// Enter the build scope for one registered component call.
@@ -2973,42 +2852,55 @@ pub fn begin_component_node<P: Prop>(
     component_type_id: u64,
     props: &Rc<P>,
 ) -> ComponentNodeScope {
-    let current_replay = || -> Rc<dyn ErasedComponent> { props.clone() };
+    let replay = props;
     let props: &dyn ErasedComponent = props.as_ref();
     let (mut context, instance_logic_id, instance_key) =
         ComponentBuildContext::begin(component_type_id);
-    let snapshot_update = with_component_replay_tracker(|tracker| {
-        let Some(previous) = tracker
-            .previous_nodes
-            .get_ordered(&instance_key)
-            .filter(|previous| {
-                previous.instance_logic_id == instance_logic_id && previous.replay.equals(props)
-            })
-        else {
-            return ReplaySnapshotUpdate::Replace(None);
-        };
-        if tracker.mode == ReplayTrackingMode::Partial
-            && with_execution_context(|context| {
+    let pending_dirty = consume_pending_build_invalidation(instance_key);
+    let dirty = pending_dirty || is_instance_key_build_dirty(instance_key);
+    let (host, retained) = TesseraRuntime::with_mut(|runtime| {
+        let tree = &mut runtime.component_tree;
+        let (call, update) = tree.locate_call(instance_key, |previous, executed| {
+            if previous.instance_logic_id != instance_logic_id || !previous.replay.equals(props) {
+                return SnapshotUpdate::Replace;
+            }
+            let same_scope = with_execution_context(|context| {
                 previous.group_path == context.group_path
                     && previous.instance_key_override == context.instance_key_override
                     && previous.context.ptr_eq(&context.context_map)
-            })
-            && tracker.current_nodes.get(&instance_key).is_none()
-        {
-            ReplaySnapshotUpdate::Keep
-        } else {
-            ReplaySnapshotUpdate::Replace(Some(previous.replay.clone()))
-        }
-    });
-    let pending_dirty = consume_pending_build_invalidation(instance_key);
-    let props_unchanged = !matches!(snapshot_update, ReplaySnapshotUpdate::Replace(None));
-    let can_retain =
-        props_unchanged && !pending_dirty && !is_instance_key_build_dirty(instance_key);
-    let (host, retained) = TesseraRuntime::with_mut(|runtime| {
-        let tree = &mut runtime.component_tree;
-        let retained = can_retain && tree.attach_retained_call(instance_key, instance_logic_id);
-        if !retained {
-            tree.begin_call(instance_key, instance_logic_id, name);
+            });
+            if same_scope && !executed {
+                SnapshotUpdate::Keep
+            } else {
+                SnapshotUpdate::Refresh
+            }
+        });
+        let retained = !dirty
+            && !matches!(update, SnapshotUpdate::Replace)
+            && call.is_some_and(|id| tree.attach_retained_call(id, instance_logic_id));
+        let id = match call {
+            Some(id) if retained => id,
+            call => tree.begin_call(call, instance_key, instance_logic_id, name),
+        };
+        match update {
+            SnapshotUpdate::Keep => {}
+            SnapshotUpdate::Refresh => tree.refresh_call_snapshot(id, |snapshot| {
+                with_execution_context(|context| {
+                    snapshot.group_path = context.group_path;
+                    snapshot.instance_key_override = context.instance_key_override;
+                    snapshot.context = context.context_map.clone();
+                });
+            }),
+            SnapshotUpdate::Replace => {
+                let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
+                    instance_logic_id,
+                    group_path: context.group_path,
+                    instance_key_override: context.instance_key_override,
+                    context: context.context_map.clone(),
+                    replay: replay.clone(),
+                });
+                tree.store_call_snapshot(id, snapshot);
+            }
         }
         let host = tree
             .current_build_node_id()
@@ -3016,29 +2908,12 @@ pub fn begin_component_node<P: Prop>(
         (host, retained)
     });
     context.enter_node(host, instance_logic_id, name);
-    let scope = ComponentNodeScope {
+    ComponentNodeScope {
         instance_logic_id,
-        instance_key,
         retained,
         _context: context,
-    };
-    if let ReplaySnapshotUpdate::Replace(previous_replay) = snapshot_update {
-        let replay = previous_replay.unwrap_or_else(current_replay);
-        let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
-            instance_logic_id,
-            group_path: context.group_path,
-            instance_key_override: context.instance_key_override,
-            context: context.context_map.clone(),
-            replay,
-        });
-        let retired = with_component_replay_tracker_mut(|tracker| {
-            tracker.current_nodes.insert(instance_key, snapshot)
-        });
-        drop(retired);
     }
-    scope
 }
-
 /// Emits the tree node owned by the executing call and attaches its modifiers.
 pub(crate) fn emit_node(
     role: NodeRole,
@@ -3062,14 +2937,14 @@ pub(crate) fn emit_node(
     });
     let id = TesseraRuntime::with_mut(|runtime| {
         let tree = &mut runtime.component_tree;
-        let mut node = ComponentNode::new(tree.executing_call_name(), role);
-        node.instance_logic_id = instance_logic_id;
-        node.instance_key = instance_key;
-        // Measurement may mutate local policy state, so keep the build input separate.
-        node.layout_node = policy.as_policy().clone_box();
-        node.layout_input_policy = policy;
-        node.draw_node = draw.into_node();
-        let (id, previous) = tree.rebuild_node(node);
+        let (id, previous) = tree.rebuild_node(NodeInput {
+            fn_name: tree.executing_call_name(),
+            role,
+            instance_logic_id,
+            instance_key,
+            policy,
+            draw: draw.into_node(),
+        });
         tree.emit_call_node(id, previous);
         id
     });
@@ -3308,8 +3183,13 @@ fn resolve_state_key<T: 'static>(
     retained: bool,
     init: impl FnOnce() -> T,
 ) -> State<T> {
-    if let Some(state) = with_slot_table_mut(|table| {
-        let slot = table.find_slot(&key)?;
+    let ordered = key.owned_owner.is_none();
+    if let Some(state) = with_slot_order(&key, |table, cursor| {
+        let slot = if ordered {
+            table.locate_slot(&key, cursor)?
+        } else {
+            table.find_slot(&key)?
+        };
         let epoch = table.epoch;
         let entry = table.entries.get_mut(slot)?;
         entry.last_alive_epoch = epoch;
@@ -3322,7 +3202,7 @@ fn resolve_state_key<T: 'static>(
         return state;
     }
     let value = init();
-    let (state, unused) = with_slot_table_mut(|table| {
+    let (state, unused) = with_slot_order(&key, |table, cursor| {
         if let Some(slot) = table.find_slot(&key) {
             let epoch = table.epoch;
             let entry = &mut table.entries[slot];
@@ -3346,6 +3226,9 @@ fn resolve_state_key<T: 'static>(
             retained,
         });
         table.index_slot(slot);
+        if ordered {
+            table.record_new_slot(&key, slot, cursor);
+        }
         (State::new(slot, 1), None)
     });
     drop(unused);
@@ -3685,14 +3568,9 @@ where
     };
 
     let mut init = Some(init);
-    let (value, slot, generation) = with_slot_table_mut(|table| {
+    let (value, slot, generation) = with_slot_order(&slot_key, |table, mut cursor| {
         let epoch = table.epoch;
-        if let Some((slot, entry)) = table.try_fast_slot_lookup(&slot_key) {
-            let (value, generation) = entry.reuse_functor(slot, epoch, &mut init);
-            return (value, slot, generation);
-        }
-        if let Some(slot) = table.find_slot(&slot_key) {
-            table.record_slot_usage_slow(instance_logic_id, slot);
+        if let Some(slot) = table.locate_slot(&slot_key, cursor.as_deref_mut()) {
             let (value, generation) = table.entries[slot].reuse_functor(slot, epoch, &mut init);
             return (value, slot, generation);
         }
@@ -3707,7 +3585,7 @@ where
             retained: false,
         });
         table.index_slot(slot);
-        table.record_slot_usage_slow(instance_logic_id, slot);
+        table.record_new_slot(&slot_key, slot, cursor);
         (value, slot, generation)
     });
     (value, FunctorHandle::new(slot, generation))
@@ -3853,7 +3731,7 @@ pub fn begin_recompose_slot_epoch() {
 pub(crate) fn shutdown_runtime() {
     clear_frame_nanos_receivers();
     reset_slots();
-    reset_component_replay_tracking();
+    release_retired_replay_snapshots();
     clear_redraw_waker();
     let tree = TesseraRuntime::with_mut(|runtime| std::mem::take(&mut runtime.component_tree));
     drop(tree);
@@ -3998,7 +3876,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::{
+        cell::Cell,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
 
     use super::*;
     use crate::component_tree::{ComponentNode, NodeRole};
@@ -4230,149 +4111,65 @@ mod tests {
         children.unwrap_or_else(RenderSlot::empty).render();
     }
 
-    fn seed_previous_replay_snapshot(instance_key: u64) {
-        #[derive(Clone)]
-        struct Noop;
+    #[derive(Clone)]
+    struct RuntimeOnDrop {
+        generation: u32,
+        dropped: crate::testing::TestProbe<u32>,
+    }
 
-        impl Prop for Noop {
-            fn prop_eq(&self, _: &Self) -> bool {
-                true
-            }
-
-            fn run_component(self: Rc<Self>) {}
+    impl PartialEq for RuntimeOnDrop {
+        fn eq(&self, other: &Self) -> bool {
+            self.generation == other.generation
         }
+    }
 
-        with_component_replay_tracker_mut(|tracker| {
-            tracker.previous_nodes.insert(
-                instance_key,
-                ReplayNodeSnapshot {
-                    instance_logic_id: 0,
-                    group_path: GroupPath::default(),
-                    instance_key_override: None,
-                    context: ContextMap::default(),
-                    replay: Rc::new(Noop),
-                },
-            );
+    impl Drop for RuntimeOnDrop {
+        fn drop(&mut self) {
+            // Props may own values whose destructors read runtime state.
+            TesseraRuntime::with(|runtime| runtime.component_tree.has_call(0));
+            self.dropped.with_mut(|count| *count += 1);
+        }
+    }
+
+    #[tessera]
+    fn runtime_on_drop_holder(props: RuntimeOnDrop) {
+        let _ = props.generation;
+        crate::layout::layout();
+    }
+
+    #[tessera]
+    fn runtime_on_drop_parent(
+        generation: crate::testing::TestProbe<Option<State<u32>>>,
+        dropped: crate::testing::TestProbe<u32>,
+    ) {
+        let state = remember(|| 0_u32);
+        generation.set(Some(state));
+        runtime_on_drop_holder(RuntimeOnDrop {
+            generation: state.get(),
+            dropped: dropped.clone(),
         });
     }
 
     #[test]
-    fn replay_snapshot_cursor_tracks_order_and_recovers_after_reordering() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        for key in [11, 22, 33, 44] {
-            seed_previous_replay_snapshot(key);
+    fn replaced_props_drop_after_runtime_borrows_end() {
+        use crate::testing::{layout_test, pump_layout_test_session, start_layout_test_session};
+
+        let generation = crate::testing::TestProbe::default();
+        let dropped = crate::testing::TestProbe::new(0_u32);
+        let mut session = start_layout_test_session(layout_test({
+            let generation = generation.clone();
+            let dropped = dropped.clone();
+            move || runtime_on_drop_parent(generation.clone(), dropped.clone())
+        }));
+        pump_layout_test_session(&mut session, 0);
+        let state = generation.get().expect("parent published its state");
+        for frame in 1..=3 {
+            session.run(|| state.set(frame));
+            pump_layout_test_session(&mut session, u64::from(frame) * 16_000_000);
         }
-
-        with_component_replay_tracker(|tracker| {
-            let snapshots = &tracker.previous_nodes;
-            let root = snapshots.get_for_replay_root(&22).expect("root snapshot");
-            assert_eq!(snapshots.next_ordered.get(), 1);
-            assert!(std::ptr::eq(
-                root,
-                snapshots
-                    .get_ordered(&22)
-                    .expect("test fixture entry exists")
-            ));
-            assert_eq!(snapshots.next_ordered.get(), 2);
-            assert!(std::ptr::eq(
-                snapshots
-                    .get_ordered(&33)
-                    .expect("test fixture entry exists"),
-                snapshots.get(&33).expect("test fixture entry exists"),
-            ));
-            assert_eq!(snapshots.next_ordered.get(), 3);
-            assert!(std::ptr::eq(
-                snapshots
-                    .get_ordered(&11)
-                    .expect("test fixture entry exists"),
-                snapshots.get(&11).expect("test fixture entry exists"),
-            ));
-        });
-
-        remove_previous_component_replay_nodes(&[22].into_iter().collect());
-        with_component_replay_tracker(|tracker| {
-            let snapshots = &tracker.previous_nodes;
-            assert!(std::ptr::eq(
-                snapshots
-                    .get_ordered(&44)
-                    .expect("test fixture entry exists"),
-                snapshots.get(&44).expect("test fixture entry exists"),
-            ));
-            assert!(snapshots.get_ordered(&22).is_none());
-        });
+        let replaced = dropped.get();
+        assert!(replaced > 0, "replaced props must be released");
     }
-
-    #[test]
-    fn removing_a_replay_snapshot_preserves_lookup_for_the_moved_snapshot() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        for key in [11, 22, 33] {
-            seed_previous_replay_snapshot(key);
-        }
-
-        remove_previous_component_replay_nodes(&[11].into_iter().collect());
-        assert!(previous_component_replay_node(11).is_none());
-        assert!(previous_component_replay_node(33).is_some());
-        assert!(previous_component_replay_node(22).is_some());
-
-        remove_previous_component_replay_nodes(&[33].into_iter().collect());
-        assert!(previous_component_replay_node(33).is_none());
-        assert!(previous_component_replay_node(22).is_some());
-    }
-
-    #[test]
-    fn partial_replay_publishes_all_snapshots_before_dropping_old_props() {
-        #[derive(Clone)]
-        struct ReleaseOnDrop(crate::testing::TestProbe<bool>);
-
-        impl Prop for ReleaseOnDrop {
-            fn prop_eq(&self, _: &Self) -> bool {
-                true
-            }
-
-            fn run_component(self: Rc<Self>) {}
-        }
-
-        impl Drop for ReleaseOnDrop {
-            fn drop(&mut self) {
-                assert_eq!(
-                    previous_component_replay_node(11)
-                        .expect("test fixture provides previous_component_replay_node")
-                        .instance_logic_id,
-                    11
-                );
-                assert!(previous_component_replay_node(22).is_some());
-                self.0.set(true);
-            }
-        }
-
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        let released = crate::testing::TestProbe::new(false);
-        seed_previous_replay_snapshot(11);
-        with_component_replay_tracker_mut(|tracker| {
-            let mut snapshot = tracker
-                .previous_nodes
-                .get(&11)
-                .expect("test fixture entry exists")
-                .clone();
-            tracker.previous_nodes.insert(
-                11,
-                ReplayNodeSnapshot {
-                    replay: Rc::new(ReleaseOnDrop(released.clone())),
-                    ..snapshot.clone()
-                },
-            );
-            snapshot.instance_logic_id = 11;
-            tracker.current_nodes.insert(11, snapshot.clone());
-            tracker.current_nodes.insert(22, snapshot);
-        });
-
-        finalize_frame_component_replay_tracking_partial();
-        assert!(released.get());
-    }
-
     fn with_test_component_scope<R>(component_type_id: u64, f: impl FnOnce() -> R) -> R {
         reset_execution_context();
         let node_id = TesseraRuntime::with_mut(|runtime| {
@@ -4598,6 +4395,11 @@ mod tests {
         node
     }
 
+    fn record_rebuilt_node_dirty(previous: &ComponentNode, node: &ComponentNode) {
+        let changes = node.modifier.changes_from(&previous.modifier);
+        record_layout_node_dirty(Some((&previous.layout_input_policy, changes)), node);
+    }
+
     #[test]
     fn layout_dirty_tracking_separates_measure_and_placement_changes() {
         let _runtime_session = crate::RuntimeSession::new();
@@ -4626,7 +4428,7 @@ mod tests {
             Modifier::new(),
         );
         begin_frame_layout_dirty_tracking();
-        record_layout_node_dirty(Some(&first), &second);
+        record_rebuilt_node_dirty(&first, &second);
         finalize_frame_layout_dirty_tracking();
         let dirty = take_layout_dirty_nodes();
         assert!(!dirty.measure_self_nodes.contains(&1));
@@ -4640,7 +4442,7 @@ mod tests {
             Modifier::new(),
         );
         begin_frame_layout_dirty_tracking();
-        record_layout_node_dirty(Some(&second), &third);
+        record_rebuilt_node_dirty(&second, &third);
         finalize_frame_layout_dirty_tracking();
         let dirty = take_layout_dirty_nodes();
         assert!(dirty.measure_self_nodes.contains(&1));
@@ -4702,7 +4504,7 @@ mod tests {
             Modifier::new().push_layout(DirtyMeasureModifierNode { width: 20 }),
         );
         begin_frame_layout_dirty_tracking();
-        record_layout_node_dirty(Some(&first), &second);
+        record_rebuilt_node_dirty(&first, &second);
         finalize_frame_layout_dirty_tracking();
         let dirty = take_layout_dirty_nodes();
         assert!(dirty.measure_self_nodes.contains(&1));
@@ -4883,7 +4685,7 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         reset_slots();
-        reset_component_replay_tracking();
+        release_retired_replay_snapshots();
         reset_render_slot_read_dependencies();
         reset_build_invalidations();
 
@@ -4910,7 +4712,6 @@ mod tests {
         });
         let reader_instance_key = reader_boundary_key.get();
         assert!(reader_instance_key != 0);
-        seed_previous_replay_snapshot(reader_instance_key);
 
         assert!(!has_pending_build_invalidations());
 
@@ -4935,7 +4736,7 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         reset_slots();
-        reset_component_replay_tracking();
+        release_retired_replay_snapshots();
         reset_render_slot_read_dependencies();
         reset_build_invalidations();
         reset_execution_context();
@@ -4957,7 +4758,6 @@ mod tests {
         });
         let reader_instance_key = reader_boundary_key.get();
         assert!(reader_instance_key != 0);
-        seed_previous_replay_snapshot(reader_instance_key);
 
         assert!(!has_pending_build_invalidations());
 

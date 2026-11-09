@@ -583,6 +583,8 @@ impl ActionKinds {
     const INPUT_GEOMETRY: Self = Self(Self::POINTER.0 | Self::KEY_INPUT.0);
     const ATTACH_EFFECTS: Self =
         Self(Self::BUILD.0 | Self::SEMANTICS.0 | Self::FOCUS.0 | Self::POSITIONED.0);
+    const COMPARED: Self =
+        Self(Self::LAYOUT.0 | Self::PLACEMENT.0 | Self::PARENT_DATA.0 | Self::POINTER.0);
 
     fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
@@ -637,6 +639,14 @@ impl Default for ModifierElement {
 impl ModifierElement {
     fn is_empty(&self) -> bool {
         matches!(self, Self::Empty)
+    }
+
+    fn is_same(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Empty, Self::Empty) => true,
+            (Self::Combined(lhs), Self::Combined(rhs)) => Arc::ptr_eq(lhs, rhs),
+            _ => false,
+        }
     }
 
     fn kinds(&self) -> ActionKinds {
@@ -1259,23 +1269,94 @@ impl Modifier {
     }
 
     pub(crate) fn input_geometry_eq(&self, other: &Self) -> bool {
-        let (left_pointer, right_pointer) = (self.has_pointer_input(), other.has_pointer_input());
-        if !left_pointer && !right_pointer {
-            return true;
+        !self.changes_from(other).input_geometry
+    }
+
+    /// Compares this chain with the previously attached one in a single walk.
+    pub(crate) fn changes_from(&self, previous: &Self) -> ModifierChanges {
+        let kinds = self.element.kinds().union(previous.element.kinds());
+        if !kinds.intersects(ActionKinds::COMPARED) || self.element.is_same(&previous.element) {
+            return ModifierChanges::default();
         }
-        if left_pointer != right_pointer {
-            return false;
-        }
-        let shape = |modifier: &Self| {
-            let mut actions = SmallVec::<[_; 4]>::new();
-            modifier.element.fold_actions(&mut |action| {
-                if !action.kind().intersects(ActionKinds::ATTACH_EFFECTS) {
-                    actions.push(std::mem::discriminant(action));
-                }
-            });
+        fn collect(modifier: &Modifier) -> SmallVec<[&ModifierAction; 8]> {
+            let mut actions = SmallVec::new();
+            modifier
+                .element
+                .fold_actions(&mut |action| actions.push(action));
             actions
+        }
+        fn select<'a>(
+            actions: &[&'a ModifierAction],
+            kind: ActionKinds,
+        ) -> SmallVec<[&'a ModifierAction; 4]> {
+            actions
+                .iter()
+                .copied()
+                .filter(|action| action.kind().intersects(kind))
+                .collect()
+        }
+        let (current, previous) = (collect(self), collect(previous));
+        let mut changes = ModifierChanges::default();
+        if kinds.intersects(ActionKinds::LAYOUT) {
+            let (lhs, rhs) = (
+                select(&current, ActionKinds::LAYOUT),
+                select(&previous, ActionKinds::LAYOUT),
+            );
+            if lhs.len() != rhs.len() {
+                changes.measure = true;
+                changes.placement = true;
+            }
+            for (lhs, rhs) in lhs.iter().zip(&rhs) {
+                if let (ModifierAction::Layout(lhs), ModifierAction::Layout(rhs)) = (lhs, rhs) {
+                    changes.measure |= !lhs.measure_eq(rhs.as_ref());
+                    changes.placement |= !lhs.placement_eq(rhs.as_ref());
+                }
+            }
+        }
+        if kinds.intersects(ActionKinds::PLACEMENT) {
+            let (lhs, rhs) = (
+                select(&current, ActionKinds::PLACEMENT),
+                select(&previous, ActionKinds::PLACEMENT),
+            );
+            changes.transform = lhs.len() != rhs.len()
+                || lhs.iter().zip(&rhs).any(|pair| match pair {
+                    (ModifierAction::Placement(lhs), ModifierAction::Placement(rhs)) => {
+                        !lhs.eq(rhs.as_ref())
+                    }
+                    _ => true,
+                });
+        }
+        if kinds.intersects(ActionKinds::PARENT_DATA) {
+            let (lhs, rhs) = (
+                select(&current, ActionKinds::PARENT_DATA),
+                select(&previous, ActionKinds::PARENT_DATA),
+            );
+            changes.parent_data = lhs.len() != rhs.len()
+                || lhs.iter().zip(&rhs).any(|pair| match pair {
+                    (ModifierAction::ParentData(lhs), ModifierAction::ParentData(rhs)) => {
+                        !Arc::ptr_eq(lhs, rhs) && !lhs.equivalent(rhs.as_ref())
+                    }
+                    _ => true,
+                });
+        }
+        let pointer = |actions: &[&ModifierAction]| {
+            actions
+                .iter()
+                .any(|action| action.kind().intersects(ActionKinds::POINTER))
         };
-        shape(self) == shape(other)
+        let (current_pointer, previous_pointer) = (pointer(&current), pointer(&previous));
+        if current_pointer || previous_pointer {
+            let shape = |actions: &[&ModifierAction]| {
+                actions
+                    .iter()
+                    .filter(|action| !action.kind().intersects(ActionKinds::ATTACH_EFFECTS))
+                    .map(|action| std::mem::discriminant(*action))
+                    .collect::<SmallVec<[_; 8]>>()
+            };
+            changes.input_geometry =
+                current_pointer != previous_pointer || shape(&current) != shape(&previous);
+        }
+        changes
     }
 
     pub(crate) fn has_pointer_input(&self) -> bool {
@@ -1325,56 +1406,11 @@ impl Modifier {
         selected
     }
 
-    fn selected_actions_eq<'a, T>(
-        &'a self,
-        other: &'a Self,
-        kind: ActionKinds,
-        select: impl Fn(&'a ModifierAction) -> Option<T>,
-        mut eq: impl FnMut(T, T) -> bool,
-    ) -> bool {
-        if !self.contains(kind) && !other.contains(kind) {
-            return true;
-        }
-        let lhs = self.select_actions(&select);
-        let rhs = other.select_actions(select);
-        lhs.len() == rhs.len() && lhs.into_iter().zip(rhs).all(|(lhs, rhs)| eq(lhs, rhs))
-    }
-
     pub(crate) fn layout_modifiers(&self) -> SmallVec<[Arc<dyn LayoutModifierNode>; 4]> {
         if !self.contains(ActionKinds::LAYOUT) {
             return SmallVec::new();
         }
         self.select_actions(|action| action.layout_node().map(|node| node.node()))
-    }
-
-    pub(crate) fn layout_measure_eq(&self, other: &Self) -> bool {
-        self.selected_actions_eq(
-            other,
-            ActionKinds::LAYOUT,
-            ModifierAction::layout_node,
-            |lhs, rhs| lhs.measure_eq(rhs),
-        )
-    }
-
-    pub(crate) fn layout_placement_eq(&self, other: &Self) -> bool {
-        self.selected_actions_eq(
-            other,
-            ActionKinds::LAYOUT,
-            ModifierAction::layout_node,
-            |lhs, rhs| lhs.placement_eq(rhs),
-        )
-    }
-
-    pub(crate) fn position_eq(&self, other: &Self) -> bool {
-        self.selected_actions_eq(
-            other,
-            ActionKinds::PLACEMENT,
-            |action| match action {
-                ModifierAction::Placement(node) => Some(node.as_ref()),
-                _ => None,
-            },
-            |lhs, rhs| lhs.eq(rhs),
-        )
     }
 
     pub(crate) fn parent_data<T: Clone + Send + Sync + 'static>(&self) -> Option<T> {
@@ -1389,18 +1425,16 @@ impl Modifier {
         });
         data.get(&TypeId::of::<T>())?.downcast_ref::<T>().cloned()
     }
+}
 
-    pub(crate) fn parent_data_eq(&self, other: &Self) -> bool {
-        self.selected_actions_eq(
-            other,
-            ActionKinds::PARENT_DATA,
-            |action| match action {
-                ModifierAction::ParentData(node) => Some(node),
-                _ => None,
-            },
-            |lhs, rhs| Arc::ptr_eq(lhs, rhs) || lhs.equivalent(rhs.as_ref()),
-        )
-    }
+/// Node behavior categories that differ between two attached modifier chains.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ModifierChanges {
+    pub(crate) measure: bool,
+    pub(crate) placement: bool,
+    pub(crate) transform: bool,
+    pub(crate) parent_data: bool,
+    pub(crate) input_geometry: bool,
 }
 
 impl ModifierCapabilityExt for Modifier {

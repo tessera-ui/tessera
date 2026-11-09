@@ -15,7 +15,7 @@ use crate::{
     focus::flush_pending_focus_callbacks,
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
-        reset_build_invalidations, reset_component_replay_tracking, reset_focus_read_dependencies,
+        release_retired_replay_snapshots, reset_build_invalidations, reset_focus_read_dependencies,
         reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
         reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_nanos_receivers,
     },
@@ -692,7 +692,7 @@ fn reset_runtime_for_layout_test(viewport: (u32, u32)) {
     });
     clear_layout_snapshots();
     reset_layout_dirty_tracking();
-    reset_component_replay_tracking();
+    release_retired_replay_snapshots();
     reset_focus_read_dependencies();
     reset_render_slot_read_dependencies();
     reset_state_read_dependencies();

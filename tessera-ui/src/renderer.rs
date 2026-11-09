@@ -55,10 +55,10 @@ use crate::{
         clear_persistent_focus_handles, clear_redraw_waker, has_pending_build_invalidations,
         has_pending_frame_nanos_receivers, has_pending_layout_invalidations,
         has_pending_persistent_focus_prune, has_ready_build_invalidations, install_redraw_waker,
-        prune_persistent_focus_handles, reset_build_invalidations, reset_component_replay_tracking,
-        reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
-        reset_render_slot_read_dependencies, reset_state_read_dependencies,
-        take_layout_dirty_nodes, tick_frame_nanos_receivers,
+        prune_persistent_focus_handles, release_retired_replay_snapshots,
+        reset_build_invalidations, reset_focus_read_dependencies, reset_frame_clock,
+        reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
+        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_nanos_receivers,
     },
     thread_utils,
     time::Instant,
@@ -2192,7 +2192,7 @@ where
         });
         clear_layout_snapshots();
         reset_layout_dirty_tracking();
-        reset_component_replay_tracking();
+        release_retired_replay_snapshots();
         reset_focus_read_dependencies();
         reset_render_slot_read_dependencies();
         reset_state_read_dependencies();

@@ -17,16 +17,15 @@ use crate::{
         reset_context_read_dependencies,
     },
     runtime::{
-        ReplayTrackingMode, TesseraRuntime, begin_frame_component_replay_tracking,
-        begin_frame_layout_dirty_tracking, begin_recompose_slot_epoch, clear_frame_nanos_receivers,
-        drop_slots_for_instance_logic_ids, finalize_frame_component_replay_tracking,
-        finalize_frame_component_replay_tracking_partial, finalize_frame_layout_dirty_tracking,
-        previous_component_replay_node, remove_focus_read_dependencies,
+        TesseraRuntime, begin_frame_component_replay_tracking, begin_frame_layout_dirty_tracking,
+        begin_recompose_slot_epoch, clear_frame_nanos_receivers, drop_slots_for_instance_logic_ids,
+        finalize_frame_layout_dirty_tracking, previous_component_replay_node,
+        release_retired_replay_snapshots, remove_focus_read_dependencies,
         remove_frame_nanos_receivers, remove_layout_state_read_dependencies,
-        remove_previous_component_replay_nodes, remove_render_slot_read_dependencies,
-        remove_state_read_dependencies, reset_focus_read_dependencies,
-        reset_render_slot_read_dependencies, reset_state_read_dependencies,
-        take_build_invalidations, with_build_dirty_instance_keys, with_replay_scope,
+        remove_render_slot_read_dependencies, remove_state_read_dependencies,
+        reset_focus_read_dependencies, reset_render_slot_read_dependencies,
+        reset_state_read_dependencies, take_build_invalidations, with_build_dirty_instance_keys,
+        with_replay_scope,
     },
     time::Instant,
 };
@@ -206,16 +205,10 @@ fn plan_dirty_replay(dirty_instance_keys: &Arc<HashSet<u64>>) -> ReplayPlan {
                 all_live = false;
                 continue;
             }
-            let mut ancestor = component_tree.call_parent(key);
-            let mut nested = false;
-            while let Some(parent) = ancestor {
-                if dirty_instance_keys.contains(&parent) {
-                    nested = true;
-                    break;
-                }
-                ancestor = component_tree.call_parent(parent);
-            }
-            if !nested {
+            if !component_tree
+                .call_ancestors(key)
+                .any(|parent| dirty_instance_keys.contains(&parent))
+            {
                 roots.push(key);
             }
         }
@@ -244,10 +237,13 @@ fn missing_replay_snapshot_panic_message(instance_key: u64) -> String {
     TesseraRuntime::with(|runtime| {
         let tree = &runtime.component_tree;
         let _ = writeln!(message, "call ancestry (self -> root):");
-        let mut cursor = tree.has_call(instance_key).then_some(instance_key);
-        while let Some(key) = cursor {
+        let ancestry = tree
+            .has_call(instance_key)
+            .then_some(instance_key)
+            .into_iter()
+            .chain(tree.call_ancestors(instance_key));
+        for key in ancestry {
             let _ = writeln!(message, "  - {}[key={key}]", tree.call_name(key));
-            cursor = tree.call_parent(key);
         }
     });
 
@@ -280,7 +276,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         reset_state_read_dependencies();
         reset_context_read_dependencies();
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.clear());
-        begin_frame_component_replay_tracking(ReplayTrackingMode::Full);
+        begin_frame_component_replay_tracking();
         begin_frame_layout_dirty_tracking();
         begin_recompose_slot_epoch();
         begin_recompose_context_slot_epoch();
@@ -290,7 +286,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             entry_point();
         });
         crate::nested_scroll::flush_attachment_changes();
-        finalize_frame_component_replay_tracking();
+        release_retired_replay_snapshots();
         finalize_frame_layout_dirty_tracking();
         // Build-time feedback must not become layout-settling work in this frame.
         let deferred = take_build_invalidations();
@@ -342,7 +338,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
 
         let tree_timer = Instant::now();
         debug!("Building dirty subtrees with replay...");
-        begin_frame_component_replay_tracking(ReplayTrackingMode::Partial);
+        begin_frame_component_replay_tracking();
         begin_frame_layout_dirty_tracking();
         begin_recompose_slot_epoch();
         begin_recompose_context_slot_epoch();
@@ -486,9 +482,8 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             plan = plan_dirty_replay(&pending_dirty_instance_keys);
         }
 
-        finalize_frame_component_replay_tracking_partial();
+        release_retired_replay_snapshots();
         finalize_frame_layout_dirty_tracking();
-        remove_previous_component_replay_nodes(&stale_instance_keys);
         remove_frame_nanos_receivers(&stale_instance_keys);
         remove_focus_read_dependencies(&stale_instance_keys);
         remove_render_slot_read_dependencies(&stale_instance_keys);

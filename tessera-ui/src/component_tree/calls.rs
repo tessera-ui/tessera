@@ -4,25 +4,54 @@
 //!
 //! Replay and retain components that emit any number of layout nodes.
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
+use slotmap::{SlotMap, new_key_type};
 use smallvec::SmallVec;
 
-use crate::NodeId;
+use crate::{
+    NodeId,
+    runtime::{InstanceSlotCursor, ReplayNodeSnapshot},
+};
 
 use super::{ComponentTree, PreviousBuildNode, ReplayRange, ReplayReplaceContext};
 
-/// Call key of the synthetic record that hosts top-level calls in the root node.
-pub(super) const ROOT_CALL: u64 = 0;
+new_key_type! {
+    /// Dense handle of a call record.
+    pub(crate) struct CallId;
+}
 
-type CallKeys = SmallVec<[u64; 2]>;
+type CallIds = SmallVec<[CallId; 2]>;
 pub(super) type CallOutput = SmallVec<[NodeId; 4]>;
 
-pub(super) struct CallRecord {
-    parent: u64,
+struct CallRecord {
+    key: u64,
+    parent: Option<CallId>,
     logic_id: u64,
     name: &'static str,
     node: Option<NodeId>,
-    children: CallKeys,
+    children: CallIds,
+    snapshot: Option<ReplayNodeSnapshot>,
+    /// Build epoch in which `snapshot` was last replaced.
+    snapshot_epoch: u64,
+    slots: InstanceSlotCursor,
+    mark: u64,
+}
+
+impl CallRecord {
+    fn new(key: u64, parent: Option<CallId>, logic_id: u64, name: &'static str) -> Self {
+        Self {
+            key,
+            parent,
+            logic_id,
+            name,
+            node: None,
+            children: CallIds::new(),
+            snapshot: None,
+            snapshot_epoch: 0,
+            slots: InstanceSlotCursor::default(),
+            mark: 0,
+        }
+    }
 }
 
 /// A node emitted by the executing call together with its replaced value.
@@ -32,24 +61,44 @@ pub(crate) struct EmittedNode {
 }
 
 struct ActiveCall {
-    key: u64,
-    previous_children: CallKeys,
+    id: CallId,
+    previous_children: CallIds,
+    /// Position in `previous_children` expected to match the next child call.
+    cursor: usize,
     emitted: Option<EmittedNode>,
+}
+
+/// How a component call should update its stored replay snapshot.
+pub(crate) enum SnapshotUpdate {
+    Keep,
+    Refresh,
+    Replace,
 }
 
 #[derive(Default)]
 pub(super) struct CallTable {
-    records: HashMap<u64, CallRecord>,
+    records: SlotMap<CallId, CallRecord>,
+    index: HashMap<u64, CallId>,
+    root: Option<CallId>,
     active: Vec<ActiveCall>,
-    replay_root: Option<u64>,
+    replay_root: Option<CallId>,
+    epoch: u64,
+    mark: u64,
     pub(super) executed: Vec<(u64, u64)>,
-    pub(super) removed_keys: HashSet<u64>,
-    pub(super) removed_logic_ids: HashSet<u64>,
+    pub(super) removed_keys: rustc_hash::FxHashSet<u64>,
+    pub(super) removed_logic_ids: rustc_hash::FxHashSet<u64>,
+    retired: Vec<ReplayNodeSnapshot>,
 }
 
 impl CallTable {
     pub(super) fn clear(&mut self) {
-        self.records.clear();
+        self.retired.extend(
+            self.records
+                .drain()
+                .filter_map(|(_, record)| record.snapshot),
+        );
+        self.index.clear();
+        self.root = None;
         self.active.clear();
         self.replay_root = None;
         self.clear_replay_results();
@@ -61,29 +110,40 @@ impl CallTable {
         self.removed_logic_ids.clear();
     }
 
-    pub(super) fn set_root(&mut self, root: NodeId) {
-        self.records.insert(
-            ROOT_CALL,
-            CallRecord {
-                parent: ROOT_CALL,
-                logic_id: 0,
-                name: "layout",
-                node: Some(root),
-                children: CallKeys::new(),
-            },
-        );
+    fn set_root(&mut self, root: NodeId) {
+        let mut record = CallRecord::new(0, None, 0, "layout");
+        record.node = Some(root);
+        self.root = Some(self.records.insert(record));
     }
 
-    fn parent_of_new_call(&self, key: u64) -> u64 {
-        if self.replay_root == Some(key) {
-            self.records[&key].parent
-        } else {
-            self.active.last().map_or(ROOT_CALL, |call| call.key)
+    pub(super) fn id(&self, key: u64) -> Option<CallId> {
+        self.index.get(&key).copied()
+    }
+
+    fn parent_of_new_call(&self, id: Option<CallId>) -> Option<CallId> {
+        match id {
+            Some(id) if self.replay_root == Some(id) => self.records[id].parent,
+            _ => self.active.last().map(|call| call.id).or(self.root),
         }
     }
 
-    fn output(&self, key: u64, output: &mut CallOutput) {
-        let record = &self.records[&key];
+    /// Finds the record of a declared call, preferring its previous position.
+    fn locate(&mut self, key: u64) -> Option<CallId> {
+        if let Some(call) = self.active.last_mut()
+            && let Some(&candidate) = call.previous_children.get(call.cursor)
+            && self
+                .records
+                .get(candidate)
+                .is_some_and(|record| record.key == key)
+        {
+            call.cursor += 1;
+            return Some(candidate);
+        }
+        self.id(key)
+    }
+
+    fn output(&self, id: CallId, output: &mut CallOutput) {
+        let record = &self.records[id];
         match record.node {
             Some(node) => output.push(node),
             None => {
@@ -94,23 +154,22 @@ impl CallTable {
         }
     }
 
-    pub(super) fn host(&self, key: u64) -> Option<NodeId> {
-        let mut parent = self.records.get(&key)?.parent;
+    pub(super) fn host(&self, id: CallId) -> Option<NodeId> {
+        let mut parent = self.records.get(id)?.parent?;
         loop {
-            let record = self.records.get(&parent)?;
+            let record = self.records.get(parent)?;
             if let Some(node) = record.node {
                 return Some(node);
             }
-            parent = record.parent;
+            parent = record.parent?;
         }
     }
 
-    /// First node emitted after `key` in composition order within its host.
-    fn anchor_after(&self, mut key: u64) -> Option<NodeId> {
-        while key != ROOT_CALL {
-            let parent = self.records[&key].parent;
-            let siblings = &self.records[&parent].children;
-            let index = siblings.iter().position(|&sibling| sibling == key)?;
+    /// First node emitted after `id` in composition order within its host.
+    fn anchor_after(&self, mut id: CallId) -> Option<NodeId> {
+        while let Some(parent) = self.records[id].parent {
+            let siblings = &self.records[parent].children;
+            let index = siblings.iter().position(|&sibling| sibling == id)?;
             let mut output = CallOutput::new();
             for &sibling in &siblings[index + 1..] {
                 self.output(sibling, &mut output);
@@ -118,20 +177,22 @@ impl CallTable {
                     return Some(first);
                 }
             }
-            if self.records[&parent].node.is_some() {
+            if self.records[parent].node.is_some() {
                 return None;
             }
-            key = parent;
+            id = parent;
         }
         None
     }
 
-    fn remove(&mut self, key: u64) {
-        let Some(record) = self.records.remove(&key) else {
+    fn remove(&mut self, id: CallId) {
+        let Some(record) = self.records.remove(id) else {
             return;
         };
-        self.removed_keys.insert(key);
+        self.index.remove(&record.key);
+        self.removed_keys.insert(record.key);
         self.removed_logic_ids.insert(record.logic_id);
+        self.retired.extend(record.snapshot);
         for child in record.children {
             self.remove(child);
         }
@@ -148,80 +209,153 @@ impl ComponentTree {
         self.calls.set_root(root);
     }
 
+    /// Starts a build pass; snapshots replaced afterwards belong to it.
+    pub(crate) fn begin_call_epoch(&mut self) {
+        self.calls.epoch = self.calls.epoch.wrapping_add(1);
+    }
+
+    /// Releases replay snapshots removed since the last call, outside any
+    /// runtime borrow.
+    pub(crate) fn take_retired_snapshots(&mut self) -> Vec<ReplayNodeSnapshot> {
+        std::mem::take(&mut self.calls.retired)
+    }
+
     pub(crate) fn has_call(&self, key: u64) -> bool {
-        self.calls.records.contains_key(&key)
+        self.calls.index.contains_key(&key)
     }
 
     pub(crate) fn call_name(&self, key: u64) -> &'static str {
-        self.calls.records[&key].name
+        self.calls
+            .id(key)
+            .map_or("<missing>", |id| self.calls.records[id].name)
+    }
+
+    pub(crate) fn call_snapshot(&self, key: u64) -> Option<&ReplayNodeSnapshot> {
+        let id = self.calls.id(key)?;
+        self.calls.records[id].snapshot.as_ref()
     }
 
     #[cfg(feature = "profiling")]
     pub(crate) fn call_subtree_len(&self, key: u64) -> u64 {
+        let Some(id) = self.calls.id(key) else {
+            return 0;
+        };
         let mut output = CallOutput::new();
-        self.calls.output(key, &mut output);
+        self.calls.output(id, &mut output);
         output
             .iter()
             .map(|&id| self.tree[id].get().subtree_len as u64)
             .sum()
     }
 
-    /// Returns the nearest enclosing call key, excluding the root record.
-    pub(crate) fn call_parent(&self, key: u64) -> Option<u64> {
-        self.calls
-            .records
-            .get(&key)
-            .map(|record| record.parent)
-            .filter(|&parent| parent != ROOT_CALL)
+    /// Returns the keys of the calls enclosing `key`, nearest first.
+    pub(crate) fn call_ancestors(&self, key: u64) -> impl Iterator<Item = u64> + '_ {
+        let start = self
+            .calls
+            .id(key)
+            .and_then(|id| self.calls.records[id].parent);
+        std::iter::successors(start, |&id| self.calls.records[id].parent)
+            .filter(|&id| Some(id) != self.calls.root)
+            .map(|id| self.calls.records[id].key)
+    }
+
+    /// Finds the record of a declared call and decides how to update its
+    /// replay snapshot.
+    pub(crate) fn locate_call(
+        &mut self,
+        key: u64,
+        decide: impl FnOnce(&ReplayNodeSnapshot, bool) -> SnapshotUpdate,
+    ) -> (Option<CallId>, SnapshotUpdate) {
+        let id = self.calls.locate(key);
+        let update = id
+            .and_then(|id| {
+                let record = &self.calls.records[id];
+                let executed = record.snapshot_epoch == self.calls.epoch;
+                record
+                    .snapshot
+                    .as_ref()
+                    .map(|snapshot| decide(snapshot, executed))
+            })
+            .unwrap_or(SnapshotUpdate::Replace);
+        (id, update)
+    }
+
+    /// Stores the snapshot of an executed or retained call.
+    pub(crate) fn store_call_snapshot(&mut self, id: CallId, snapshot: ReplayNodeSnapshot) {
+        let record = &mut self.calls.records[id];
+        record.snapshot_epoch = self.calls.epoch;
+        self.calls.retired.extend(record.snapshot.replace(snapshot));
+    }
+
+    /// Updates a snapshot's declaration scope while keeping its props.
+    pub(crate) fn refresh_call_snapshot(
+        &mut self,
+        id: CallId,
+        refresh: impl FnOnce(&mut ReplayNodeSnapshot),
+    ) {
+        let record = &mut self.calls.records[id];
+        record.snapshot_epoch = self.calls.epoch;
+        if let Some(snapshot) = &mut record.snapshot {
+            refresh(snapshot);
+        }
+    }
+
+    /// Returns the slot order of the executing call when it owns `logic_id`.
+    pub(crate) fn executing_call_slots(
+        &mut self,
+        logic_id: u64,
+    ) -> Option<&mut InstanceSlotCursor> {
+        let id = self.calls.active.last()?.id;
+        let record = &mut self.calls.records[id];
+        (record.logic_id == logic_id).then_some(&mut record.slots)
     }
 
     /// Records a call before its body executes.
-    pub(crate) fn begin_call(&mut self, key: u64, logic_id: u64, name: &'static str) {
-        let parent = self.calls.parent_of_new_call(key);
-        if self
-            .calls
-            .records
-            .get(&key)
-            .is_some_and(|record| record.node.is_none())
-        {
-            self.mark_call_output_paint_dirty(key);
-        }
-        let previous_children = match self.calls.records.get_mut(&key) {
-            Some(record) => {
+    pub(crate) fn begin_call(
+        &mut self,
+        id: Option<CallId>,
+        key: u64,
+        logic_id: u64,
+        name: &'static str,
+    ) -> CallId {
+        let parent = self.calls.parent_of_new_call(id);
+        let (id, previous_children) = match id {
+            Some(id) => {
+                if self.calls.records[id].node.is_none() {
+                    self.mark_call_output_paint_dirty(id);
+                }
+                let record = &mut self.calls.records[id];
                 record.parent = parent;
                 record.logic_id = logic_id;
-                std::mem::take(&mut record.children)
+                (id, std::mem::take(&mut record.children))
             }
             None => {
-                self.calls.records.insert(
-                    key,
-                    CallRecord {
-                        parent,
-                        logic_id,
-                        name,
-                        node: None,
-                        children: CallKeys::new(),
-                    },
-                );
-                CallKeys::new()
+                let id = self
+                    .calls
+                    .records
+                    .insert(CallRecord::new(key, parent, logic_id, name));
+                self.calls.index.insert(key, id);
+                (id, CallIds::new())
             }
         };
-        if self.calls.replay_root != Some(key) {
-            self.register_child_call(parent, key);
+        if self.calls.replay_root != Some(id) {
+            self.register_child_call(parent, id);
         }
         self.calls.executed.push((key, logic_id));
         self.calls.active.push(ActiveCall {
-            key,
+            id,
             previous_children,
+            cursor: 0,
             emitted: None,
         });
+        id
     }
 
     /// Re-executing a call can leave retained drawing behind rebuilt content,
     /// and even an empty fragment may become drawable.
-    fn mark_call_output_paint_dirty(&mut self, key: u64) {
+    fn mark_call_output_paint_dirty(&mut self, id: CallId) {
         let mut output = CallOutput::new();
-        self.calls.output(key, &mut output);
+        self.calls.output(id, &mut output);
         for root in output {
             for descendant in root.descendants(&self.tree) {
                 if self.tree[descendant].get().role == super::NodeRole::Layout {
@@ -231,9 +365,9 @@ impl ComponentTree {
         }
     }
 
-    fn register_child_call(&mut self, parent: u64, key: u64) {
-        if let Some(record) = self.calls.records.get_mut(&parent) {
-            record.children.push(key);
+    fn register_child_call(&mut self, parent: Option<CallId>, id: CallId) {
+        if let Some(record) = parent.and_then(|parent| self.calls.records.get_mut(parent)) {
+            record.children.push(id);
         }
     }
 
@@ -245,22 +379,21 @@ impl ComponentTree {
             .last_mut()
             .expect("layout nodes are emitted by an executing call");
         assert!(call.emitted.is_none(), "a call emits at most one node");
-        if let Some(record) = self.calls.records.get_mut(&call.key) {
-            record.node = Some(id);
-        }
+        self.calls.records[call.id].node = Some(id);
         call.emitted = Some(EmittedNode { id, previous });
     }
 
     /// Names an emitted node after the component that requested it.
     pub(crate) fn executing_call_name(&self) -> &'static str {
-        let key = self
+        let id = self
             .calls
             .active
             .last()
             .expect("nodes are emitted by an executing call")
-            .key;
-        let parent = self.calls.records[&key].parent;
-        self.calls.records[&parent].name
+            .id;
+        self.calls.records[id]
+            .parent
+            .map_or("layout", |parent| self.calls.records[parent].name)
     }
 
     /// Returns the node emitted by the executing call, if any.
@@ -273,33 +406,39 @@ impl ComponentTree {
     }
 
     /// Ends the executing call, removing child calls it no longer declares.
-    pub(crate) fn finish_call(&mut self, key: u64) -> Option<EmittedNode> {
+    pub(crate) fn finish_call(&mut self) -> Option<EmittedNode> {
         let call = self.calls.active.pop().expect("balanced component calls");
-        debug_assert_eq!(call.key, key, "component calls finish in order");
-        let current: HashSet<u64> = self.calls.records[&key].children.iter().copied().collect();
-        for stale in call.previous_children {
-            if !current.contains(&stale) {
-                self.calls.remove(stale);
+        let calls = &mut self.calls;
+        if calls.records[call.id].children != call.previous_children {
+            calls.mark = calls.mark.wrapping_add(1);
+            let mark = calls.mark;
+            let current = std::mem::take(&mut calls.records[call.id].children);
+            for &child in &current {
+                calls.records[child].mark = mark;
+            }
+            calls.records[call.id].children = current;
+            for stale in call.previous_children {
+                if calls
+                    .records
+                    .get(stale)
+                    .is_some_and(|record| record.mark != mark && record.parent == Some(call.id))
+                {
+                    calls.remove(stale);
+                }
             }
         }
         call.emitted
     }
 
     /// Reattaches every node emitted by an unchanged call.
-    pub(crate) fn attach_retained_call(&mut self, key: u64, logic_id: u64) -> bool {
-        if self.calls.replay_root == Some(key)
-            || self
-                .calls
-                .records
-                .get(&key)
-                .is_none_or(|record| record.logic_id != logic_id)
-        {
+    pub(crate) fn attach_retained_call(&mut self, id: CallId, logic_id: u64) -> bool {
+        if self.calls.replay_root == Some(id) || self.calls.records[id].logic_id != logic_id {
             return false;
         }
         let mut output = CallOutput::new();
-        self.calls.output(key, &mut output);
-        for id in output {
-            let instance_key = self.tree[id].get().instance_key;
+        self.calls.output(id, &mut output);
+        for node in output {
+            let instance_key = self.tree[node].get().instance_key;
             let candidate = self
                 .claim_replay_candidate(instance_key, |_| true)
                 .expect("retained call output stays live");
@@ -307,20 +446,22 @@ impl ComponentTree {
             self.attach_replayed_node(candidate, true);
             self.pop_node();
         }
-        let parent = self.calls.parent_of_new_call(key);
-        self.register_child_call(parent, key);
+        let parent = self.calls.parent_of_new_call(Some(id));
+        self.calls.records[id].parent = parent;
+        self.register_child_call(parent, id);
         true
     }
 
     /// Prepares the host range of a call for replay.
     pub(crate) fn begin_replace_call(&mut self, key: u64) -> ReplayReplaceContext {
         self.calls.clear_replay_results();
-        let host = self.calls.host(key).expect("replayed call has a host");
+        let id = self.calls.id(key).expect("replayed call is live");
+        let host = self.calls.host(id).expect("replayed call has a host");
         let mut output = CallOutput::new();
-        self.calls.output(key, &mut output);
+        self.calls.output(id, &mut output);
         let next_sibling = match output.last() {
             Some(&last) => last.next_sibling(&self.tree),
-            None => self.calls.anchor_after(key),
+            None => self.calls.anchor_after(id),
         };
         self.replay_range = Some(ReplayRange {
             parent: host,
@@ -329,7 +470,7 @@ impl ComponentTree {
         if let Some(&first) = output.first() {
             self.queue_replay_children(host, first, next_sibling);
         }
-        self.calls.replay_root = Some(key);
+        self.calls.replay_root = Some(id);
         let previous_queue =
             (!self.node_queue.is_empty()).then(|| std::mem::take(&mut self.node_queue));
         self.node_queue.push(host);
