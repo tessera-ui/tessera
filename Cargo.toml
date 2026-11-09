@@ -131,7 +131,7 @@ ra_ap_ide = "=0.0.358"
 ra_ap_intern = "=0.0.358"
 ra_ap_load-cargo = "=0.0.358"
 ra_ap_project_model = "=0.0.358"
-ra_ap_span = "=0.0.358"
+ra_ap_span = "=0.0.360"
 ra_ap_syntax = "=0.0.358"
 ra_ap_vfs = "=0.0.358"
 # The rust-analyzer lexer requires Unicode 17 in both Unicode dependencies.
