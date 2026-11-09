@@ -30,7 +30,7 @@ Small damage regions can build their draw list directly from intersecting scene
 branches, retaining ancestor clips. The full draw list remains available on demand.
 
 The retained scene follows the layout tree. Changes to direct layout children
-update the parent branch, including when composition wrappers reorder retained
+update the parent branch, including when calls or group nodes reorder retained
 children. Repainting a retained branch preserves its child links and limits
 damage to the changed drawing bounds. The walk over changed branches and their
 ancestors builds the child-before-parent update order as it goes.
@@ -73,7 +73,9 @@ snapshots resolve bindings that can change across frames.
 Replay snapshot records are contiguous, with a separate index by instance key.
 Partial replay leaves unchanged snapshots in place and publishes all replacements
 before releasing retired props.
-Modifier snapshots share immutable chain links. The scene stores empty and
+Modifier snapshots share immutable chain links. Each chain records the action
+categories it contains, so capability queries and change comparisons skip
+categories absent from both chains. The scene stores empty and
 single-child branches inline and uses persistent ordered maps for wider branches
 so updating one child can preserve the previous frame's snapshot.
 Scene branches and layout metadata use dense node tables with generation checks.
@@ -92,16 +94,15 @@ The accessibility index starts from the live tree on first publication and
 tracks only semantic nodes and the window root. A deactivated adapter releases
 its index and stops collecting changes until publication resumes.
 
-Composition wrappers without semantics need no geometry metadata outside the
-root. Component nodes and input dispatch plans borrow static function names.
-The layout primitive and built-in layout components can use the same node for
-replay and geometry. Layout input
+Component calls occupy no tree node; call records carry their identity, state,
+and replay snapshots. Group nodes without semantics need no geometry metadata.
+Nodes and input dispatch plans borrow static function names. Layout input
 snapshots share the authored policy with component props, and each layout node
 measures with its own policy clone. Cached child measurements share
 their storage across placement updates, and leaf layouts need no child storage.
 When a new measurement reproduces the cached layout, the runtime keeps the
 previous snapshot. Cache hits that execute no policy skip the measurement scope.
-Layout adjacency stores a single child inline. Parents with a single composition
+Layout adjacency stores a single child inline. Parents with a single group
 child can share its wider flattened layout child list.
 The ancestor walk records local invalidations and affected children together.
 A path with one affected child keeps that child inline.
@@ -119,10 +120,10 @@ identity and role match. Children declared in the same order keep their tree
 links. Reordered children remain eligible for reuse until the replacement
 finishes. Retained descendants compare their old and new consumer ancestry
 before the frame updates focus, semantics, and position observers.
-An in-place composition rebuild with no modifiers, interaction, or geometry
+An in-place group rebuild with no modifiers, interaction, or geometry
 metadata stays out of the consumer journal unless the rebuilt node adds one
 of those capabilities. Layout child changes still use the structure journal.
-Rebuilt composition nodes invalidate paint for retained layout descendants,
+Rebuilt group nodes invalidate paint for retained layout descendants,
 including fragments that were previously empty. This restores drawing after
 overlays or conditional marks change without forcing new measurements.
 
@@ -141,9 +142,10 @@ before execution.
 Component replay uses the same props allocation prepared by the registered call.
 Immediate setters take only the pending configuration while the declaration
 scope stays registered.
-Subtree replacements reuse the build queue and bounded temporary identity sets.
+Call replays replace the call's contiguous output nodes and reuse the build queue and bounded temporary identity sets.
 Detached subtrees transfer reusable geometry through the live instance index.
-Retained subtrees attach directly without allocating a temporary tree node.
+Retained calls reattach every output node directly; a call without output
+reinserts new content at its composition position.
 Focus, pointer dispatch, and accessibility read sibling order from the same
 indices stored on the component nodes.
 Frame structure journals reuse capacity in proportion to recent changes and the

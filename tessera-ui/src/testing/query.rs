@@ -338,7 +338,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn query_figure() {
         layout()
             .policy(Figure(true))

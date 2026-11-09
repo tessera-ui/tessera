@@ -29,34 +29,6 @@ fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Result<syn::Path> {
     }
 }
 
-struct ComponentAttr {
-    crate_path: Path,
-    layout: bool,
-}
-
-impl Parse for ComponentAttr {
-    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-        if input.is_empty() {
-            return Ok(Self {
-                crate_path: parse_quote!(::tessera_ui),
-                layout: false,
-            });
-        }
-        let crate_path: Path = input.parse()?;
-        let layout = if input.is_empty() {
-            false
-        } else {
-            input.parse::<Token![,]>()?;
-            let role: Ident = input.parse()?;
-            if role != "layout" {
-                return Err(syn::Error::new_spanned(role, "expected `layout`"));
-            }
-            true
-        };
-        Ok(Self { crate_path, layout })
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default)]
 struct PropAttrConfig {
     into: bool,
@@ -244,8 +216,6 @@ fn field_compare_expr(field_ident: &Ident, ty: &Type) -> proc_macro2::TokenStrea
 #[cfg(feature = "shard")]
 #[derive(Default)]
 struct ShardMacroArgs {
-    crate_path: Option<Path>,
-    shard_crate_path: Option<Path>,
     state_type: Option<Type>,
     lifecycle: Option<Ident>,
 }
@@ -322,24 +292,6 @@ impl Parse for ShardMacroArgs {
             let key: Ident = input.parse()?;
             input.parse::<Token![=]>()?;
             match key.to_string().as_str() {
-                "crate_path" => {
-                    if args.crate_path.is_some() {
-                        return Err(syn::Error::new(
-                            key.span(),
-                            "duplicate `crate_path` argument",
-                        ));
-                    }
-                    args.crate_path = Some(input.parse::<Path>()?);
-                }
-                "shard_crate_path" => {
-                    if args.shard_crate_path.is_some() {
-                        return Err(syn::Error::new(
-                            key.span(),
-                            "duplicate `shard_crate_path` argument",
-                        ));
-                    }
-                    args.shard_crate_path = Some(input.parse::<Path>()?);
-                }
                 "state" => {
                     if args.state_type.is_some() {
                         return Err(syn::Error::new(key.span(), "duplicate `state` argument"));
@@ -358,7 +310,7 @@ impl Parse for ShardMacroArgs {
                 _ => {
                     return Err(syn::Error::new(
                         key.span(),
-                        "unsupported #[shard(...)] argument; expected `state`, `lifecycle`, `crate_path`, or `shard_crate_path`",
+                        "unsupported #[shard(...)] argument; expected `state` or `lifecycle`",
                     ));
                 }
             }
@@ -465,7 +417,7 @@ fn generate_constructor_param_and_assignment(
         match helper {
             PropHelperKind::CallbackWith { arg, ret } if is_unit_type(arg) => {
                 let param = quote! {
-                    #ident: impl Fn() -> #ret + Send + Sync + 'static
+                    #ident: impl Fn() -> #ret + 'static
                 };
                 let assignment = quote! {
                     __tessera_call.configure_deferred(stringify!(#ident), move |__tessera_pending_props| {
@@ -477,7 +429,7 @@ fn generate_constructor_param_and_assignment(
             PropHelperKind::RenderSlotWith { arg } if is_unit_type(arg) => {
                 let output = format_ident!("__Tessera{}Output", pascal_case_ident(ident, ""));
                 let param = quote! {
-                    #ident: impl Fn() -> #output + Send + Sync + 'static
+                    #ident: impl Fn() -> #output + 'static
                 };
                 let assignment = quote! {
                     __tessera_call.configure_deferred(stringify!(#ident), move |__tessera_pending_props| {
@@ -494,7 +446,7 @@ fn generate_constructor_param_and_assignment(
     }
 
     let constructor_param = if helper_uses_into {
-        quote!(#ident: impl Into<#field_ty> + Send + Sync + 'static)
+        quote!(#ident: impl Into<#field_ty> + 'static)
     } else if field.attrs.into {
         quote!(#ident: impl Into<#field_ty>)
     } else {
@@ -696,7 +648,7 @@ fn generate_prop_like_impls(
                 <Self as ::core::cmp::PartialEq>::eq(self, other)
             }
 
-            fn run_component(self: ::std::sync::Arc<Self>) {
+            fn run_component(self: ::std::rc::Rc<Self>) {
                 #component_impl(&self);
             }
         }
@@ -720,32 +672,32 @@ fn generate_builder_methods(
             let (generics, bound, value) = match helper {
                 PropHelperKind::Callback => (
                     quote!(<F>),
-                    quote!(F: Fn() + Send + Sync + 'static),
+                    quote!(F: Fn() + 'static),
                     quote!(#crate_path::Callback::new(value)),
                 ),
                 PropHelperKind::CallbackWith { arg, ret } if is_unit_type(arg) => (
                     quote!(<F>),
-                    quote!(F: Fn() -> #ret + Send + Sync + 'static),
+                    quote!(F: Fn() -> #ret + 'static),
                     quote!(#crate_path::CallbackWith::new(move |()| value())),
                 ),
                 PropHelperKind::CallbackWith { arg, ret } => (
                     quote!(<F>),
-                    quote!(F: Fn(#arg) -> #ret + Send + Sync + 'static),
+                    quote!(F: Fn(#arg) -> #ret + 'static),
                     quote!(#crate_path::CallbackWith::new(value)),
                 ),
                 PropHelperKind::RenderSlot => (
                     quote!(<F, Output>),
-                    quote!(F: Fn() -> Output + Send + Sync + 'static),
+                    quote!(F: Fn() -> Output + 'static),
                     quote!(#crate_path::RenderSlot::new(value)),
                 ),
                 PropHelperKind::RenderSlotWith { arg } if is_unit_type(arg) => (
                     quote!(<F, Output>),
-                    quote!(F: Fn() -> Output + Send + Sync + 'static),
+                    quote!(F: Fn() -> Output + 'static),
                     quote!(#crate_path::RenderSlotWith::new(move |()| value())),
                 ),
                 PropHelperKind::RenderSlotWith { arg } => (
                     quote!(<F, Output>),
-                    quote!(F: Fn(#arg) -> Output + Send + Sync + 'static),
+                    quote!(F: Fn(#arg) -> Output + 'static),
                     quote!(#crate_path::RenderSlotWith::new(value)),
                 ),
             };
@@ -760,7 +712,7 @@ fn generate_builder_methods(
                 }
                 #[doc = #method_doc]
                 #[track_caller]
-                pub fn #shared(&self, value: impl Into<#ty> + Send + Sync + 'static) -> Self {
+                pub fn #shared(&self, value: impl Into<#ty> + 'static) -> Self {
                     self.props.configure_deferred(stringify!(#ident), move |props| props.#ident = Some(value.into()));
                     Self { props: self.props }
                 }
@@ -929,10 +881,8 @@ impl VisitMut for ControlFlowInstrumenter {
 /// components use the generated builder syntax, while the original function
 /// body runs inside Tessera's build/replay context.
 ///
-/// # Parameters
-///
-/// * Attribute arguments select the Tessera crate path. Use `#[tessera]` for
-///   normal external authoring, or `#[tessera(crate)]` inside Tessera crates.
+/// A component call carries identity, state, and replay without occupying a
+/// tree node; only the `layout` and `group` primitives emit nodes.
 ///
 /// # When NOT to Use
 ///
@@ -944,12 +894,14 @@ impl VisitMut for ControlFlowInstrumenter {
 ///   shard state.
 #[proc_macro_attribute]
 pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let ComponentAttr { crate_path, layout } = parse_macro_input!(attr as ComponentAttr);
-    let begin_scope = if layout {
-        quote!(#crate_path::__private::begin_layout_component_node)
-    } else {
-        quote!(#crate_path::__private::begin_component_node)
-    };
+    if !attr.is_empty() {
+        let attr = proc_macro2::TokenStream::from(attr);
+        return syn::Error::new_spanned(attr, "#[tessera] takes no arguments")
+            .to_compile_error()
+            .into();
+    }
+    let crate_path: Path = parse_quote!(::tessera_ui);
+    let begin_scope = quote!(#crate_path::__private::begin_component_node);
 
     let mut input_fn = parse_macro_input!(item as ItemFn);
     if let Some(conflicting_attr) = input_fn
@@ -1172,7 +1124,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #builder_ident { props: __tessera_call }
             }
 
-            fn #impl_ident #item_generics(__tessera_props: &::std::sync::Arc<#props_ident #ty_generics>) #where_clause {
+            fn #impl_ident #item_generics(__tessera_props: &::std::rc::Rc<#props_ident #ty_generics>) #where_clause {
                 #prop_assert_tokens
                 let __tessera_scope = #begin_scope(
                     stringify!(#fn_name),
@@ -1297,12 +1249,8 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         }
     };
 
-    let ui_crate_path: syn::Path = shard_args
-        .crate_path
-        .unwrap_or_else(|| syn::parse_quote!(::tessera_ui));
-    let shard_crate_path: syn::Path = shard_args
-        .shard_crate_path
-        .unwrap_or_else(|| syn::parse_quote!(::tessera_shard));
+    let ui_crate_path: syn::Path = syn::parse_quote!(::tessera_ui);
+    let shard_crate_path: syn::Path = syn::parse_quote!(::tessera_shard);
 
     let func = parse_macro_input!(input as ItemFn);
     if let Some(conflicting_attr) = func
@@ -1476,7 +1424,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
 
                 #(#func_attrs)*
-                #[#ui_crate_path::tessera(#ui_crate_path)]
+                #[#ui_crate_path::tessera]
                 #func_vis #func_sig_modified {
                     const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
                     let __router_controller = #router_controller_resolution;
@@ -1517,7 +1465,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
 
                 #(#func_attrs)*
-                #[#ui_crate_path::tessera(#ui_crate_path)]
+                #[#ui_crate_path::tessera]
                 #func_vis #func_sig_modified {
                     #router_binding
                     #func_body

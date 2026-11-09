@@ -209,14 +209,14 @@ impl From<TextStyle> for TextFormat {
 
 /// Borrows the font system owned by the active runtime session.
 pub fn read_font_system() -> ArcRwLockReadGuard<RawRwLock, glyphon::FontSystem> {
-    tessera_ui::__private::runtime_resource::<TextResources>()
+    tessera_ui::runtime_resource::<TextResources>()
         .font_system
         .read_arc()
 }
 
 /// Mutably borrows the font system owned by the active runtime session.
 pub fn write_font_system() -> ArcRwLockWriteGuard<RawRwLock, glyphon::FontSystem> {
-    let resources = tessera_ui::__private::runtime_resource::<TextResources>();
+    let resources = tessera_ui::runtime_resource::<TextResources>();
     let fonts = resources.font_system.write_arc();
     let revision = resources.font_revision.load(Ordering::Relaxed);
     resources.font_revision.store(
@@ -228,7 +228,7 @@ pub fn write_font_system() -> ArcRwLockWriteGuard<RawRwLock, glyphon::FontSystem
 }
 
 pub(crate) fn shaping_fonts() -> ArcRwLockWriteGuard<RawRwLock, glyphon::FontSystem> {
-    tessera_ui::__private::runtime_resource::<TextResources>()
+    tessera_ui::runtime_resource::<TextResources>()
         .font_system
         .write_arc()
 }
@@ -477,7 +477,7 @@ impl TextData {
         format: TextFormat,
         constraint: TextConstraint,
     ) -> Self {
-        let resources = tessera_ui::__private::runtime_resource::<TextResources>();
+        let resources = tessera_ui::runtime_resource::<TextResources>();
         let key = (text.len() <= SHORT_TEXT_BYTES)
             .then(|| TextLayoutKey::new(&text, format, &constraint));
         let layout = resources.cached_layout(key.as_ref()).unwrap_or_else(|| {
@@ -502,7 +502,7 @@ impl TextData {
     }
 
     pub(crate) fn relayout(&mut self, constraint: &TextConstraint) {
-        let resources = tessera_ui::__private::runtime_resource::<TextResources>();
+        let resources = tessera_ui::runtime_resource::<TextResources>();
         let key = (self.text.len() <= SHORT_TEXT_BYTES)
             .then(|| TextLayoutKey::new(&self.text, self.format, constraint));
         self.layout = resources.cached_layout(key.as_ref()).unwrap_or_else(|| {
@@ -737,7 +737,7 @@ mod tests {
             &shape(Color::BLACK, Some(10.0)).layout
         ));
 
-        tessera_ui::__private::runtime_resource::<super::TextResources>()
+        tessera_ui::runtime_resource::<super::TextResources>()
             .short_layouts
             .lock()
             .clear();

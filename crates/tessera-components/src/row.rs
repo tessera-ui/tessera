@@ -4,10 +4,11 @@
 //!
 //! Use to stack children horizontally.
 use tessera_ui::{
-    __private::configure_layout_node,
-    AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier,
-    NoopDrawModifier, Px, PxPosition, RenderSlot,
-    layout::{LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope},
+    AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlot,
+    layout::{
+        LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout,
+    },
     tessera,
 };
 
@@ -147,7 +148,7 @@ impl tessera_ui::LayoutModifierNode for RowLayout {
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();
 /// ```
-#[tessera(tessera_ui, layout)]
+#[tessera]
 pub fn row(
     modifier: Option<Modifier>,
     main_axis_alignment: Option<MainAxisAlignment>,
@@ -157,15 +158,13 @@ pub fn row(
     let modifier = modifier.unwrap_or_default();
     let main_axis_alignment = main_axis_alignment.unwrap_or_default();
     let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
-    configure_layout_node(
-        RowLayout {
+    layout()
+        .policy(RowLayout {
             main_axis_alignment,
             cross_axis_alignment,
-        },
-        NoopDrawModifier,
-        modifier,
-    );
-    children.unwrap_or_else(RenderSlot::empty).render();
+        })
+        .modifier(modifier)
+        .child_shared(children.unwrap_or_else(RenderSlot::empty));
 }
 
 fn measure_weighted_row(

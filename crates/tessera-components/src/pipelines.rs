@@ -59,7 +59,7 @@ struct SharedQuadCache(RefCell<Option<SharedQuadSlot>>);
 
 impl SharedQuad {
     fn clear() {
-        let cache = tessera_ui::__private::local_runtime_resource::<SharedQuadCache>();
+        let cache = tessera_ui::local_runtime_resource::<SharedQuadCache>();
         let removed = cache.0.replace(None);
         drop(removed);
     }
@@ -68,7 +68,7 @@ impl SharedQuad {
     ///
     /// Repeated calls on the same device and runtime session reuse the buffers.
     pub(crate) fn get(device: &wgpu::Device) -> Self {
-        let cache = tessera_ui::__private::local_runtime_resource::<SharedQuadCache>();
+        let cache = tessera_ui::local_runtime_resource::<SharedQuadCache>();
         let mut slot = cache.0.borrow_mut();
         if let Some(slot) = slot.as_ref()
             && slot.device == *device

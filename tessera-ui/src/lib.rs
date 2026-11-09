@@ -38,9 +38,10 @@ pub use work::{FrameWork, WorkExecution, WorkPhase, WorkTotals};
 mod session;
 pub mod system_back;
 
-pub use session::{RuntimeSession, RuntimeSessionGuard, RuntimeSessionId, WeakRuntimeSession};
-
-pub(crate) use session::{local_runtime_resource, runtime_resource};
+pub use session::{
+    RuntimeSession, RuntimeSessionGuard, RuntimeSessionId, WeakRuntimeSession,
+    local_runtime_resource, runtime_resource,
+};
 
 mod component_tree;
 pub mod context;

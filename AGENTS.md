@@ -39,6 +39,9 @@ programming contract; the guidelines below also govern framework implementation.
   - Compose child components to build the complete component tree
   - Use `Modifier` chains for node-local behavior such as layout modifiers, input, semantics, drawing, and focus
   - Use the internal layout primitive only inside framework/internal crates when a component must provide a custom layout policy
+  - A component call does not occupy a tree node: its identity, state, and replay snapshot live on a call record. Only the `layout()` and `group()` primitives emit nodes, so a component that wraps one `layout()` call costs one node. `#[tessera]` takes no arguments; Tessera crates alias themselves with `extern crate self as ...;`
+  - Modifiers attach only to the node emitted by the executing primitive. Use `group()` to attach semantics, focus, or input to content laid out by an enclosing layout.
+  - `__private` modules of `tessera_ui` and `tessera_shard` serve official macro expansions only. `cargo tessera check` rejects other uses outside the defining crate (T0005); expose a public API instead.
   - Expand selected child content through `RenderSlot` / `RenderSlotWith` during build. A parent decides whether, when, and where its slots expand.
 
 ### Component API Pattern
@@ -51,13 +54,13 @@ programming contract; the guidelines below also govern framework implementation.
 - Keep child content in `RenderSlot` / `RenderSlotWith`. Controlled slot expansion can commit earlier Pending calls in the current fragment, so handle validity is per call rather than per frame. See [component calls](docs/COMPONENT_CALLS.md).
 - Pass required values at entry, such as `text("Title")`; configure optional props with named setters.
 - Do not introduce public wrapper variants (`*_with_controller`, `*_impl`, or extra public forwarding layers).
-- Component parameters must use owned types that satisfy the macro requirements (`Clone`, `Default`, `Send`, `Sync`, and `'static` through the generated props model).
+- Component parameters must use owned types satisfying the generated props model's `Clone + 'static` requirements. Component props and remembered values are UI-session-local and do not need `Send + Sync`.
 - `#[tessera]` parameter-level `#[default(...)]` is not supported. Do not introduce it in new or migrated code.
 - For parameters with optional/default behavior, use `Option<T>` and resolve defaults explicitly in the component body (for example, `unwrap_or`, `unwrap_or_else`, or an explicit `if let Some(...)` fallback).
 - Keep truly required parameters as non-`Option` constructor parameters.
 - For optional external controllers, use `Option<State<...>>`; when `None`, create internal state with `remember`.
-- Callback parameters should use `Callback` / `CallbackWith<...>`.
-- Slot parameters should use `RenderSlot` / slot wrappers as needed by signature.
+- Callback parameters should use `Callback` / `CallbackWith<...>`; callback closures may capture UI-thread-local values.
+- Slot parameters should use `RenderSlot` / slot wrappers as needed by signature; slot closures may capture UI-thread-local values.
 - The parameter type is the single source of truth for the generated builder surface; there is no per-prop helper attribute:
   - `Callback` / `CallbackWith<...>` parameters get a closure setter plus a `<name>_shared(impl Into<...>)` setter.
   - `RenderSlot` / `RenderSlotWith<...>` parameters get a closure setter plus a `<name>_shared(impl Into<...>)` setter.
@@ -70,7 +73,7 @@ programming contract; the guidelines below also govern framework implementation.
 - Prefer `#[prop(into)]` for public `Option<T>` fields whose inner type has a useful conversion surface.
 - Reserve `#[prop(skip_setter)]` for true internal plumbing fields that must not appear in the public builder surface. Do not use it on public authoring parameters that should already be expressible through the macro-generated setters.
 - Exception: when a public builder needs a deliberately custom semantic surface (for example, mutually exclusive modes such as `title(...)` vs `label(...)`), use hidden backing fields with `#[prop(skip_setter)]` and expose explicit hand-written semantic setters instead of leaking mechanical field setters.
-- `Callback`/`RenderSlot` are immutable handles in practice; do not rely on closure hot-swap semantics.
+- `Callback`/`RenderSlot` are immutable handles in practice; do not rely on closure hot-swap semantics. Their closures execute in the owning UI session and do not require `Send + Sync`.
 - If callback behavior depends on changing values, capture `State<T>` (or other stable handles) and read latest values at call time.
 - Do not add runtime callback/slot helper wrappers (`callback`, `callback_with`, `render_slot`, `render_slot_with`); construct handles directly via `Callback::new`, `CallbackWith::new`, `RenderSlot::new`, and `RenderSlotWith::new`.
 
@@ -101,7 +104,7 @@ programming contract; the guidelines below also govern framework implementation.
 ### Component Tree & Node Metadata
 
 - The component tree is managed internally by `ComponentTree` and node metadata structures, supporting layout, rendering, and event dispatch.
-- Accessibility updates flatten layout and composition nodes without semantics. Preserve explicit semantic nodes, their order, bounds, actions, and focus; synthesize only the root window node.
+- Accessibility updates flatten layout and group nodes without semantics. Preserve explicit semantic nodes, their order, bounds, actions, and focus; synthesize only the root window node.
 - Publish item selection separately from checked/toggled state. Accessibility focus actions must request the registered focus target without invoking its activation callback.
 - Newly attached global-position observers must receive the first valid window rectangle even if another observer already watched the same unchanged node. Existing observers should run only when the rectangle changes.
 
@@ -113,7 +116,7 @@ programming contract; the guidelines below also govern framework implementation.
 - Layout policies measure direct child layout nodes through handle-based APIs such as `MeasureScope`, `LayoutChild`, and `LayoutResult`.
 - `LayoutChild::probe_intrinsic` probes natural content dimensions in isolated metadata and caches. It excludes minimum interactive-size padding while preserving visual sizing and content padding. Use normal `measure` to publish final layout and retain interaction bounds; intrinsic probes must not replace normal measurement.
 - `place_node` is used to position child nodes.
-- Measuring a layout child does not place it. An unplaced layout node hides its entire subtree from drawing, input geometry, semantics, and keyboard focus. Hiding the active target releases focus and capture. Placed targets outside a scroll viewport remain eligible for keyboard focus and reveal; composition nodes remain transparent to placed descendants. Cached layouts must clear placements that are no longer present.
+- Measuring a layout child does not place it. An unplaced layout node hides its entire subtree from drawing, input geometry, semantics, and keyboard focus. Hiding the active target releases focus and capture. Placed targets outside a scroll viewport remain eligible for keyboard focus and reveal; group nodes remain transparent to placed descendants. Cached layouts must clear placements that are no longer present.
 - Default layout: If no layout policy is attached to the current node, `DefaultLayoutPolicy` stacks children at (0,0), and the container size is the minimal bounding rectangle.
 - Keep direct layout adjacency and layout metadata across frames. Refresh adjacency when composition changes; a measurement cache hit must not restore an unchanged subtree or enumerate unrelated siblings to find dirty descendants.
 - Track composition, measurement, placement, transforms, paint, and pointer-state reads separately. Frame consumers (focus, pointer input, position observers, the render scene, and accessibility) must update from structural and geometry journals. Full snapshots are appropriate for explicit inspection and initial accessibility publication; normal accessibility frames publish deltas. See [incremental frame maintenance](docs/INCREMENTAL_FRAMES.md).

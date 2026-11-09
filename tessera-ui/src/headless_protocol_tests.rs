@@ -56,7 +56,7 @@ impl SemanticsModifierNode for Tag {
     }
 }
 
-#[crate::tessera(crate)]
+#[crate::tessera]
 fn protocol_fixture(probe: TestProbe<Option<PxPosition>>) {
     layout().policy(Anchor).child(move || {
         let probe = probe.clone();

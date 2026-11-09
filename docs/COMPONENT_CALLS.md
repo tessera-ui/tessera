@@ -106,9 +106,10 @@ subsequent UI construction reflects the result. Create `Callback` / `CallbackWit
 handles only for independent storage, sharing, or forwarding, and pass existing
 handles through the matching `_shared` setter.
 
-Props own their values. Stored callbacks and slots require owned captures that
-satisfy `Send + Sync + 'static`; keep changing values in `State<T>` and read them
-when the action or content runs. Slot closures can end with a component call:
+Props own their values. Stored callbacks and slots require owned `'static`
+captures and execute in the owning UI session, so their captures need not be
+`Send + Sync`. Keep changing values in `State<T>` and read them when the action
+or content runs. Slot closures can end with a component call:
 its returned handle is discarded after the declaration has been registered.
 
 ## Built-in render setters

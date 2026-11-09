@@ -52,6 +52,7 @@ impl tessera_ui::LayoutModifierNode for SpacerLayout {
 /// ```
 #[tessera]
 pub fn spacer(modifier: Option<Modifier>) {
-    let modifier = modifier.unwrap_or_default();
-    layout().modifier(modifier).policy(SpacerLayout);
+    layout()
+        .policy(SpacerLayout)
+        .modifier(modifier.unwrap_or_default());
 }

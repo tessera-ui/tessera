@@ -865,7 +865,7 @@ mod tests {
         TesseraRuntime::with_mut(|runtime| {
             let tree = &mut runtime.component_tree;
             let root = tree.add_node(ComponentNode::new("root", NodeRole::Layout));
-            let wrapper = tree.add_node(ComponentNode::new("wrapper", NodeRole::Composition));
+            let wrapper = tree.add_node(ComponentNode::new("wrapper", NodeRole::Group));
             let first = tree.add_node(ComponentNode::new("first", NodeRole::Layout));
             tree.pop_node();
             tree.pop_node();

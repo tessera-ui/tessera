@@ -227,7 +227,7 @@ impl ModifierBuildContext {
     ///
     /// Calls of a different value type do not shift existing state. Multiple
     /// values of the same type follow their declaration order.
-    pub fn state<T: Send + Sync + 'static>(&mut self, init: impl FnOnce() -> T) -> crate::State<T> {
+    pub fn state<T: 'static>(&mut self, init: impl FnOnce() -> T) -> crate::State<T> {
         let ordinal = next_type_position(&mut self.state_positions, TypeId::of::<T>());
         crate::runtime::modifier_state(self.instance, &self.path, ordinal, init)
     }
@@ -539,6 +539,58 @@ impl ModifierAction {
             _ => None,
         }
     }
+
+    fn kind(&self) -> ActionKinds {
+        match self {
+            Self::Layout(_) => ActionKinds::LAYOUT,
+            Self::Placement(_) => ActionKinds::PLACEMENT,
+            Self::Draw(_) => ActionKinds::DRAW,
+            Self::ParentData(_) => ActionKinds::PARENT_DATA,
+            Self::Build(_) => ActionKinds::BUILD,
+            Self::Semantics(_) => ActionKinds::SEMANTICS,
+            Self::Cursor(_)
+            | Self::PointerPreviewInput(_)
+            | Self::PointerInput(_)
+            | Self::PointerFinalInput(_) => ActionKinds::POINTER,
+            Self::KeyboardPreviewInput(_)
+            | Self::KeyboardInput(_)
+            | Self::ImePreviewInput(_)
+            | Self::ImeInput(_) => ActionKinds::KEY_INPUT,
+            Self::ClipboardInput(_) => ActionKinds::CLIPBOARD,
+            Self::Focus(_) => ActionKinds::FOCUS,
+            Self::GloballyPositioned(_) => ActionKinds::POSITIONED,
+        }
+    }
+}
+
+/// Action categories present in a modifier chain, combined when chains are
+/// joined so capability queries and comparisons can skip absent categories.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct ActionKinds(u16);
+
+impl ActionKinds {
+    const LAYOUT: Self = Self(1);
+    const PLACEMENT: Self = Self(1 << 1);
+    const DRAW: Self = Self(1 << 2);
+    const PARENT_DATA: Self = Self(1 << 3);
+    const BUILD: Self = Self(1 << 4);
+    const SEMANTICS: Self = Self(1 << 5);
+    const POINTER: Self = Self(1 << 6);
+    const KEY_INPUT: Self = Self(1 << 7);
+    const CLIPBOARD: Self = Self(1 << 8);
+    const FOCUS: Self = Self(1 << 9);
+    const POSITIONED: Self = Self(1 << 10);
+    const INPUT_GEOMETRY: Self = Self(Self::POINTER.0 | Self::KEY_INPUT.0);
+    const ATTACH_EFFECTS: Self =
+        Self(Self::BUILD.0 | Self::SEMANTICS.0 | Self::FOCUS.0 | Self::POSITIONED.0);
+
+    fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    fn intersects(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
 }
 
 #[derive(Clone)]
@@ -573,6 +625,7 @@ enum ModifierElement {
 struct ModifierCombination {
     outer: ModifierElement,
     inner: ModifierElement,
+    kinds: ActionKinds,
 }
 
 impl Default for ModifierElement {
@@ -586,11 +639,26 @@ impl ModifierElement {
         matches!(self, Self::Empty)
     }
 
+    fn kinds(&self) -> ActionKinds {
+        match self {
+            Self::Empty => ActionKinds::default(),
+            Self::Action(action) => action.kind(),
+            Self::Combined(combination) => combination.kinds,
+        }
+    }
+
     fn then(self, inner: Self) -> Self {
         match (self, inner) {
             (lhs, Self::Empty) => lhs,
             (Self::Empty, rhs) => rhs,
-            (outer, inner) => Self::Combined(Arc::new(ModifierCombination { outer, inner })),
+            (outer, inner) => {
+                let kinds = outer.kinds().union(inner.kinds());
+                Self::Combined(Arc::new(ModifierCombination {
+                    outer,
+                    inner,
+                    kinds,
+                }))
+            }
         }
     }
 
@@ -1005,6 +1073,9 @@ impl Modifier {
     pub(crate) fn nested_scroll_connection(
         &self,
     ) -> Option<crate::nested_scroll::NestedScrollConnection> {
+        if !self.contains(ActionKinds::BUILD) {
+            return None;
+        }
         let mut connection = None;
         self.element.for_each_action_outer_first(&mut |action| {
             if let ModifierAction::Build(node) = action {
@@ -1016,7 +1087,14 @@ impl Modifier {
         connection
     }
 
+    fn contains(&self, kinds: ActionKinds) -> bool {
+        self.element.kinds().intersects(kinds)
+    }
+
     fn materialize(self, instance: u64, owner: u64, path: &[u64]) -> Self {
+        if !self.contains(ActionKinds::BUILD) {
+            return self;
+        }
         fn expand(
             element: &ModifierElement,
             instance: u64,
@@ -1046,7 +1124,7 @@ impl Modifier {
                         .map(|modifier| modifier.materialize(instance, owner, &path).element)
                 }
                 ModifierElement::Combined(combination) => {
-                    let ModifierCombination { outer, inner } = combination.as_ref();
+                    let ModifierCombination { outer, inner, .. } = combination.as_ref();
                     let first = expand(outer, instance, owner, path, positions);
                     let second = expand(inner, instance, owner, path, positions);
                     if first.is_none() && second.is_none() {
@@ -1072,10 +1150,15 @@ impl Modifier {
         ensure_build_phase();
 
         let (instance, owner) = TesseraRuntime::with(|runtime| {
-            let node = runtime
-                .component_tree
-                .current_node()
-                .expect("modifier attachment requires a node");
+            let tree = &runtime.component_tree;
+            let node = tree
+                .executing_call_node()
+                .filter(|&id| tree.current_build_node_id() == Some(id))
+                .and_then(|id| tree.get(id))
+                .expect(
+                    "modifiers attach to a node emitted by the current component; \
+                     emit one with `layout()` or `group()`",
+                );
             (node.instance_logic_id, node.instance_key)
         });
         let materialized =
@@ -1089,28 +1172,30 @@ impl Modifier {
         let mut accessibility = AccessibilityNode::new();
         let mut action_handler = None;
         let mut has_semantics = false;
-        materialized
-            .element
-            .fold_actions(&mut |action| match action {
-                ModifierAction::Build(node) => {
-                    TesseraRuntime::with_mut(|runtime| node.apply(runtime));
-                }
-                ModifierAction::Semantics(node) => {
-                    has_semantics = true;
-                    node.apply(&mut accessibility, &mut action_handler);
-                }
-                ModifierAction::Focus(op) => {
-                    TesseraRuntime::with_mut(|runtime| {
-                        apply_focus_op(runtime::FocusModifierRuntime::new(runtime), op.clone());
-                    });
-                }
-                ModifierAction::GloballyPositioned(handler) => {
-                    TesseraRuntime::with_mut(|runtime| {
-                        runtime.push_current_globally_positioned_handler(handler.clone());
-                    });
-                }
-                _ => {}
-            });
+        if materialized.contains(ActionKinds::ATTACH_EFFECTS) {
+            materialized
+                .element
+                .fold_actions(&mut |action| match action {
+                    ModifierAction::Build(node) => {
+                        TesseraRuntime::with_mut(|runtime| node.apply(runtime));
+                    }
+                    ModifierAction::Semantics(node) => {
+                        has_semantics = true;
+                        node.apply(&mut accessibility, &mut action_handler);
+                    }
+                    ModifierAction::Focus(op) => {
+                        TesseraRuntime::with_mut(|runtime| {
+                            apply_focus_op(runtime::FocusModifierRuntime::new(runtime), op.clone());
+                        });
+                    }
+                    ModifierAction::GloballyPositioned(handler) => {
+                        TesseraRuntime::with_mut(|runtime| {
+                            runtime.push_current_globally_positioned_handler(handler.clone());
+                        });
+                    }
+                    _ => {}
+                });
+        }
 
         TesseraRuntime::with_mut(|runtime| {
             runtime
@@ -1121,7 +1206,7 @@ impl Modifier {
     /// Attaches this modifier chain to the current node and then runs `child`.
     pub fn run<F>(self, child: F)
     where
-        F: Fn() + Send + Sync + 'static,
+        F: Fn() + 'static,
     {
         self.attach();
         child();
@@ -1174,64 +1259,31 @@ impl Modifier {
     }
 
     pub(crate) fn input_geometry_eq(&self, other: &Self) -> bool {
+        let (left_pointer, right_pointer) = (self.has_pointer_input(), other.has_pointer_input());
+        if !left_pointer && !right_pointer {
+            return true;
+        }
+        if left_pointer != right_pointer {
+            return false;
+        }
         let shape = |modifier: &Self| {
-            let mut pointer = false;
             let mut actions = SmallVec::<[_; 4]>::new();
             modifier.element.fold_actions(&mut |action| {
-                pointer |= matches!(
-                    action,
-                    ModifierAction::Cursor(_)
-                        | ModifierAction::PointerPreviewInput(_)
-                        | ModifierAction::PointerInput(_)
-                        | ModifierAction::PointerFinalInput(_)
-                );
-                if !matches!(
-                    action,
-                    ModifierAction::Build(_)
-                        | ModifierAction::Semantics(_)
-                        | ModifierAction::Focus(_)
-                        | ModifierAction::GloballyPositioned(_)
-                ) {
+                if !action.kind().intersects(ActionKinds::ATTACH_EFFECTS) {
                     actions.push(std::mem::discriminant(action));
                 }
             });
-            (pointer, actions)
+            actions
         };
-        let (left_pointer, left) = shape(self);
-        let (right_pointer, right) = shape(other);
-        (!left_pointer && !right_pointer) || (left_pointer == right_pointer && left == right)
+        shape(self) == shape(other)
     }
 
     pub(crate) fn has_pointer_input(&self) -> bool {
-        let mut pointer = false;
-        self.element.fold_actions(&mut |action| {
-            pointer |= matches!(
-                action,
-                ModifierAction::Cursor(_)
-                    | ModifierAction::PointerPreviewInput(_)
-                    | ModifierAction::PointerInput(_)
-                    | ModifierAction::PointerFinalInput(_)
-            );
-        });
-        pointer
+        self.contains(ActionKinds::POINTER)
     }
 
     pub(crate) fn has_input_geometry(&self) -> bool {
-        let mut input = false;
-        self.element.fold_actions(&mut |action| {
-            input |= matches!(
-                action,
-                ModifierAction::Cursor(_)
-                    | ModifierAction::PointerPreviewInput(_)
-                    | ModifierAction::PointerInput(_)
-                    | ModifierAction::PointerFinalInput(_)
-                    | ModifierAction::KeyboardPreviewInput(_)
-                    | ModifierAction::KeyboardInput(_)
-                    | ModifierAction::ImePreviewInput(_)
-                    | ModifierAction::ImeInput(_)
-            );
-        });
-        input
+        self.contains(ActionKinds::INPUT_GEOMETRY)
     }
 
     pub(crate) fn resolve_placement(
@@ -1241,6 +1293,9 @@ impl Modifier {
     ) -> (PxPosition, Vec<PxPosition>) {
         let pointer = self.has_pointer_input();
         let mut positions = Vec::new();
+        if !pointer && !self.contains(ActionKinds::PLACEMENT) {
+            return (position, positions);
+        }
         self.element.fold_actions(&mut |action| {
             if let ModifierAction::Placement(node) = action {
                 crate::work::record(
@@ -1250,15 +1305,7 @@ impl Modifier {
                 );
                 position = node.node().transform_position(position);
             }
-            if pointer
-                && !matches!(
-                    action,
-                    ModifierAction::Build(_)
-                        | ModifierAction::Semantics(_)
-                        | ModifierAction::Focus(_)
-                        | ModifierAction::GloballyPositioned(_)
-                )
-            {
+            if pointer && !action.kind().intersects(ActionKinds::ATTACH_EFFECTS) {
                 positions.push(position);
             }
         });
@@ -1281,33 +1328,47 @@ impl Modifier {
     fn selected_actions_eq<'a, T>(
         &'a self,
         other: &'a Self,
+        kind: ActionKinds,
         select: impl Fn(&'a ModifierAction) -> Option<T>,
         mut eq: impl FnMut(T, T) -> bool,
     ) -> bool {
+        if !self.contains(kind) && !other.contains(kind) {
+            return true;
+        }
         let lhs = self.select_actions(&select);
         let rhs = other.select_actions(select);
         lhs.len() == rhs.len() && lhs.into_iter().zip(rhs).all(|(lhs, rhs)| eq(lhs, rhs))
     }
 
     pub(crate) fn layout_modifiers(&self) -> SmallVec<[Arc<dyn LayoutModifierNode>; 4]> {
+        if !self.contains(ActionKinds::LAYOUT) {
+            return SmallVec::new();
+        }
         self.select_actions(|action| action.layout_node().map(|node| node.node()))
     }
 
     pub(crate) fn layout_measure_eq(&self, other: &Self) -> bool {
-        self.selected_actions_eq(other, ModifierAction::layout_node, |lhs, rhs| {
-            lhs.measure_eq(rhs)
-        })
+        self.selected_actions_eq(
+            other,
+            ActionKinds::LAYOUT,
+            ModifierAction::layout_node,
+            |lhs, rhs| lhs.measure_eq(rhs),
+        )
     }
 
     pub(crate) fn layout_placement_eq(&self, other: &Self) -> bool {
-        self.selected_actions_eq(other, ModifierAction::layout_node, |lhs, rhs| {
-            lhs.placement_eq(rhs)
-        })
+        self.selected_actions_eq(
+            other,
+            ActionKinds::LAYOUT,
+            ModifierAction::layout_node,
+            |lhs, rhs| lhs.placement_eq(rhs),
+        )
     }
 
     pub(crate) fn position_eq(&self, other: &Self) -> bool {
         self.selected_actions_eq(
             other,
+            ActionKinds::PLACEMENT,
             |action| match action {
                 ModifierAction::Placement(node) => Some(node.as_ref()),
                 _ => None,
@@ -1317,6 +1378,9 @@ impl Modifier {
     }
 
     pub(crate) fn parent_data<T: Clone + Send + Sync + 'static>(&self) -> Option<T> {
+        if !self.contains(ActionKinds::PARENT_DATA) {
+            return None;
+        }
         let mut data = ParentDataMap::default();
         self.element.fold_actions(&mut |action| {
             if let ModifierAction::ParentData(node) = action {
@@ -1329,6 +1393,7 @@ impl Modifier {
     pub(crate) fn parent_data_eq(&self, other: &Self) -> bool {
         self.selected_actions_eq(
             other,
+            ActionKinds::PARENT_DATA,
             |action| match action {
                 ModifierAction::ParentData(node) => Some(node),
                 _ => None,
@@ -1707,6 +1772,9 @@ fn hash_callback_bits<T, R, H: Hasher>(callback: &CallbackWith<T, R>, state: &mu
 
 impl PartialEq for Modifier {
     fn eq(&self, other: &Self) -> bool {
+        if self.element.kinds() != other.element.kinds() {
+            return false;
+        }
         let mut lhs = self.element.actions();
         let mut rhs = other.element.actions();
         loop {

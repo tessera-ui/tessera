@@ -94,7 +94,7 @@ impl Drop for Registration {
 /// Enable it only while its destination or overlay can go back. With no enabled
 /// handler, Android performs its normal back action. A predictive gesture keeps
 /// its starting handler until it commits or is cancelled.
-#[crate::tessera(crate)]
+#[crate::tessera]
 pub fn system_back_handler(enabled: bool, on_back: Option<CallbackWith<SystemBackEvent>>) {
     if crate::use_context::<BackPreviewScope>().is_some_and(|scope| scope.get().0) {
         return;
@@ -143,7 +143,7 @@ mod tests {
 
     use super::*;
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn fixture(
         overlay: TestProbe<Option<State<bool>>>,
         events: TestProbe<Vec<(&'static str, SystemBackEvent)>>,

@@ -21,7 +21,7 @@ struct Preview {
     restoring: Option<(u64, f32)>,
 }
 
-#[tessera(tessera_ui)]
+#[tessera]
 pub(super) fn route_display(controller: State<RouterController>) {
     let (route_id, route) = controller
         .with(|router| router.route_at_depth(0))
@@ -117,7 +117,7 @@ pub(super) fn route_display(controller: State<RouterController>) {
     });
 }
 
-#[tessera(tessera_ui)]
+#[tessera]
 fn route_layer(
     controller: State<RouterController>,
     route_id: u64,
@@ -181,7 +181,7 @@ mod tests {
     use super::*;
     use crate::{shard, shard_home};
 
-    #[shard(state = usize, shard_crate_path = crate)]
+    #[shard(state = usize)]
     fn preview_page(label: Option<u8>, observed: Option<TestProbe<Vec<(u8, usize)>>>) {
         if let (Some(label), Some(observed)) = (label, observed) {
             observed.with_mut(|pages| pages.push((label, state.get())));
@@ -189,7 +189,7 @@ mod tests {
         layout().child(|| {});
     }
 
-    #[tessera(tessera_ui)]
+    #[tessera]
     fn fixture(
         observed: TestProbe<Vec<(u8, usize)>>,
         stack: TestProbe<Option<State<RouterController>>>,

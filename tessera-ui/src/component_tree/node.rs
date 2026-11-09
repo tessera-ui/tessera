@@ -45,19 +45,18 @@ use super::{
 #[cfg(feature = "profiling")]
 use crate::profiler::{Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
 
-/// A ComponentNode is a node in the component tree.
-/// It represents all information about a component.
+/// Whether a node measures its children or groups them for its nearest
+/// layout ancestor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum NodeRole {
-    Composition,
+    Group,
     Layout,
 }
 
+/// A node emitted by a layout or group primitive call.
 pub(crate) struct ComponentNode {
-    /// Component function's name, for debugging purposes.
+    /// Name of the component that emitted this node, for diagnostics.
     pub(crate) fn_name: &'static str,
-    /// Whether this tree node represents a composition boundary or an explicit
-    /// layout node.
     pub(crate) role: NodeRole,
     pub(super) layout_children: Option<LayoutChildren>,
     pub(super) layout_children_dirty: bool,
@@ -78,9 +77,6 @@ pub(crate) struct ComponentNode {
     pub(crate) layout_input_policy: LayoutModifierHandle,
     /// Draw modifier node used to record draw and compute commands.
     pub(crate) draw_node: Box<dyn DrawModifierNode>,
-    pub(crate) replay_boundary: bool,
-    /// Whether props are equal to the previous frame snapshot.
-    pub(crate) props_unchanged_from_previous: bool,
 }
 
 impl ComponentNode {
@@ -102,8 +98,6 @@ impl ComponentNode {
             layout_node: Box::new(DefaultLayoutNode),
             layout_input_policy: LayoutModifierHandle::default(),
             draw_node: Box::new(NoopDrawModifier),
-            replay_boundary: false,
-            props_unchanged_from_previous: false,
         }
     }
 

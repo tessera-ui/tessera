@@ -271,7 +271,7 @@ impl CheckmarkState {
 ///
 /// ```
 /// use tessera_components::checkbox::{CheckboxController, checkbox};
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{State, remember, tessera};
 ///
 /// #[tessera]
 /// fn checkbox_demo() {
@@ -285,15 +285,18 @@ impl CheckmarkState {
 ///         controller
 ///     });
 ///     checkbox().controller(controller);
-///     let choices = remember(|| [true, false]);
-///     let all = choices.with(|values| values.iter().all(|value| *value));
-///     let some = choices.with(|values| values.iter().any(|value| *value));
+///     let first_choice = remember(|| true);
+///     let second_choice = remember(|| false);
+///     let all = first_choice.get() && second_choice.get();
+///     let some = first_choice.get() || second_choice.get();
 ///     checkbox()
 ///         .checked(all)
 ///         .indeterminate(some && !all)
 ///         .is_error(!some)
 ///         .accessibility_description("Choose at least one option")
-///         .on_toggle(move |value| choices.set([value; 2]));
+///         .on_toggle(move |value| {
+///             State::set_many([(first_choice, value), (second_choice, value)]);
+///         });
 /// }
 /// # #[tessera]
 /// # fn demo() {

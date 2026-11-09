@@ -1287,8 +1287,8 @@ mod tests {
         let root = append_node(&mut tree, &mut metadatas, None, None);
         let content_wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
         let navigation_wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
-        tree[content_wrapper].get_mut().role = NodeRole::Composition;
-        tree[navigation_wrapper].get_mut().role = NodeRole::Composition;
+        tree[content_wrapper].get_mut().role = NodeRole::Group;
+        tree[navigation_wrapper].get_mut().role = NodeRole::Group;
         metadatas.remove(&content_wrapper);
         metadatas.remove(&navigation_wrapper);
         let content = append_node(
@@ -1458,7 +1458,7 @@ mod tests {
         let root = append_node(&mut tree, &mut metadatas, None, None);
         let decoration = append_node(&mut tree, &mut metadatas, Some(root), None);
         let wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
-        tree[wrapper].get_mut().role = NodeRole::Composition;
+        tree[wrapper].get_mut().role = NodeRole::Group;
         metadatas.remove(&wrapper);
         let slider = append_node(
             &mut tree,

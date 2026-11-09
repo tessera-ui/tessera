@@ -55,6 +55,16 @@ struct DividerLayout {
     orientation: DividerOrientation,
 }
 
+impl DividerLayout {
+    fn new(thickness: Option<Dp>, color: Color, orientation: DividerOrientation) -> Self {
+        Self {
+            thickness: resolve_thickness_px(thickness.unwrap_or(DividerDefaults::THICKNESS)),
+            color,
+            orientation,
+        }
+    }
+}
+
 impl tessera_ui::LayoutModifierNode for DividerLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.thickness == other.thickness && self.orientation == other.orientation
@@ -155,26 +165,21 @@ impl tessera_ui::DrawModifierNode for DividerLayout {
 /// ```
 #[tessera]
 pub fn horizontal_divider(modifier: Option<Modifier>, thickness: Option<Dp>, color: Option<Color>) {
-    let thickness_px = resolve_thickness_px(thickness.unwrap_or(DividerDefaults::THICKNESS));
-    let color = if let Some(color) = color {
-        color
-    } else {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .outline_variant
+    let color = match color {
+        Some(color) => color,
+        None => {
+            use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme
+                .outline_variant
+        }
     };
-
-    let policy = DividerLayout {
-        thickness: thickness_px,
-        color,
-        orientation: DividerOrientation::Horizontal,
-    };
+    let policy = DividerLayout::new(thickness, color, DividerOrientation::Horizontal);
     layout()
-        .modifier(modifier.unwrap_or_default())
         .policy(policy)
-        .draw(policy);
+        .draw(policy)
+        .modifier(modifier.unwrap_or_default());
 }
 
 /// # vertical_divider
@@ -206,26 +211,21 @@ pub fn horizontal_divider(modifier: Option<Modifier>, thickness: Option<Dp>, col
 /// ```
 #[tessera]
 pub fn vertical_divider(modifier: Option<Modifier>, thickness: Option<Dp>, color: Option<Color>) {
-    let thickness_px = resolve_thickness_px(thickness.unwrap_or(DividerDefaults::THICKNESS));
-    let color = if let Some(color) = color {
-        color
-    } else {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .outline_variant
+    let color = match color {
+        Some(color) => color,
+        None => {
+            use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme
+                .outline_variant
+        }
     };
-
-    let policy = DividerLayout {
-        thickness: thickness_px,
-        color,
-        orientation: DividerOrientation::Vertical,
-    };
+    let policy = DividerLayout::new(thickness, color, DividerOrientation::Vertical);
     layout()
-        .modifier(modifier.unwrap_or_default())
         .policy(policy)
-        .draw(policy);
+        .draw(policy)
+        .modifier(modifier.unwrap_or_default());
 }
 
 #[cfg(test)]

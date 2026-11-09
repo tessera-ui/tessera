@@ -374,6 +374,7 @@ impl NestedScrollSpace<'_> {
 #[derive(Clone)]
 struct ScrollReader {
     anchor_instance: u64,
+    include_anchor: bool,
     provider: Option<u64>,
     connection: Option<NestedScrollConnection>,
 }
@@ -389,10 +390,17 @@ struct ScrollDependencies {
 #[derive(Default)]
 struct ScrollObserver(std::cell::RefCell<ScrollDependencies>);
 
-fn nearest_above(anchor: crate::NodeId) -> (Option<u64>, Option<NestedScrollConnection>) {
+fn nearest_above(
+    anchor: crate::NodeId,
+    include_anchor: bool,
+) -> (Option<u64>, Option<NestedScrollConnection>) {
     crate::runtime::TesseraRuntime::with(|runtime| {
         let tree = runtime.component_tree.tree();
-        let mut parent = tree.get(anchor).and_then(|node| node.parent());
+        let mut parent = if include_anchor {
+            Some(anchor)
+        } else {
+            tree.get(anchor).and_then(|node| node.parent())
+        };
         while let Some(id) = parent {
             let Some(node) = tree.get(id) else { break };
             if let Some(connection) = node.get().modifier.nested_scroll_connection() {
@@ -408,17 +416,15 @@ impl NestedScrollConnection {
     /// Returns the nearest connection attached above the current build node.
     pub fn nearest() -> Option<Self> {
         crate::runtime::ensure_build_phase();
-        let (anchor, anchor_instance) = crate::runtime::TesseraRuntime::with(|runtime| {
-            let anchor = runtime.component_tree.current_build_node_id()?;
-            let instance = runtime
-                .component_tree
-                .tree()
-                .get(anchor)?
-                .get()
-                .instance_key;
-            Some((anchor, instance))
-        })?;
-        let (provider, connection) = nearest_above(anchor);
+        let (anchor, anchor_instance, include_anchor) =
+            crate::runtime::TesseraRuntime::with(|runtime| {
+                let tree = &runtime.component_tree;
+                let anchor = tree.current_build_node_id()?;
+                let instance = tree.get(anchor)?.instance_key;
+                // A host node emitted by an enclosing call lies above the reader.
+                Some((anchor, instance, tree.executing_call_node() != Some(anchor)))
+            })?;
+        let (provider, connection) = nearest_above(anchor, include_anchor);
         if let Some(boundary) = crate::runtime::current_replay_boundary_instance_key_from_scope() {
             let observer = crate::local_runtime_resource::<ScrollObserver>();
             let previous = {
@@ -438,6 +444,7 @@ impl NestedScrollConnection {
                     boundary,
                     ScrollReader {
                         anchor_instance,
+                        include_anchor,
                         provider,
                         connection: connection.clone(),
                     },
@@ -473,7 +480,7 @@ pub(crate) fn attachment_changed() {
             return;
         }
         let previous = dependencies.owners.insert(owner, connection);
-        let parent_provider = nearest_above(anchor).0;
+        let parent_provider = nearest_above(anchor, false).0;
         for provider in [Some(owner), parent_provider] {
             if let Some(readers) = dependencies.by_provider.get(&provider) {
                 let readers = readers.iter().copied().collect::<Vec<_>>();
@@ -509,7 +516,7 @@ pub(crate) fn flush_attachment_changes() {
         let Some(anchor) = anchor else {
             continue;
         };
-        let current = nearest_above(anchor);
+        let current = nearest_above(anchor, dependency.include_anchor);
         if current.0 != dependency.provider || current.1 != dependency.connection {
             crate::runtime::record_replay_boundary_invalidation_for_instance_key(reader);
         }

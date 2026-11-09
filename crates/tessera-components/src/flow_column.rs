@@ -4,10 +4,9 @@
 //!
 //! Wrap tall lists or cards into multiple columns.
 use tessera_ui::{
-    __private::configure_layout_node,
-    AxisConstraint, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
-    NoopDrawModifier, Px, PxPosition, RenderSlot,
-    layout::{LayoutChild, MeasureScope},
+    AxisConstraint, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlot,
+    layout::{LayoutChild, MeasureScope, layout},
     tessera,
 };
 
@@ -61,7 +60,7 @@ use crate::{
 /// snapshot.node("first").position(0, 0).size(10, 30);
 /// snapshot.node("second").position(10, 0).size(10, 30);
 /// ```
-#[tessera(tessera_ui, layout)]
+#[tessera]
 pub fn flow_column(
     modifier: Option<Modifier>,
     main_axis_alignment: Option<MainAxisAlignment>,
@@ -81,8 +80,8 @@ pub fn flow_column(
     let line_spacing = sanitize_spacing(Px::from(line_spacing.unwrap_or(Dp(0.0))));
     let max_items_per_line = max_items_per_line.unwrap_or(usize::MAX);
     let max_lines = max_lines.unwrap_or(usize::MAX);
-    configure_layout_node(
-        FlowColumnLayout {
+    layout()
+        .policy(FlowColumnLayout {
             main_axis_alignment,
             cross_axis_alignment,
             line_alignment,
@@ -90,11 +89,9 @@ pub fn flow_column(
             line_spacing,
             max_items_per_line,
             max_lines,
-        },
-        NoopDrawModifier,
-        modifier,
-    );
-    children.unwrap_or_else(RenderSlot::empty).render();
+        })
+        .modifier(modifier)
+        .child_shared(children.unwrap_or_else(RenderSlot::empty));
 }
 
 #[derive(Clone, PartialEq)]

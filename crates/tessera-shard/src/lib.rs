@@ -12,6 +12,8 @@
     rustdoc::invalid_html_tags
 )]
 
+extern crate self as tessera_shard;
+
 #[doc(hidden)]
 pub mod __private;
 pub mod async_support;

@@ -6,7 +6,7 @@ use std::{
 
 use cargo_metadata::diagnostic::DiagnosticLevel as Severity;
 use ra_ap_base_db::Crate;
-use ra_ap_hir::{Function, Semantics};
+use ra_ap_hir::{Function, ModuleDef, Semantics};
 use ra_ap_ide::{AnalysisHost, FileId, RootDatabase};
 use ra_ap_span::TextRange;
 use ra_ap_vfs::Vfs;
@@ -145,6 +145,7 @@ pub(crate) struct CallAnalyzer<'db> {
     pub(crate) diagnostics: Vec<Diagnostic>,
     pub(crate) inactive_bodies: HashMap<FileId, Vec<TextRange>>,
     pub(crate) call_targets: RefCell<HashMap<Function, Option<CallTarget>>>,
+    pub(crate) private_api_items: RefCell<HashMap<Crate, HashSet<ModuleDef>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

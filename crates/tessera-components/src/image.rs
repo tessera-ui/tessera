@@ -125,17 +125,14 @@ impl tessera_ui::DrawModifierNode for ImageLayout {
 /// ```
 #[tessera]
 pub fn image(#[prop(skip_setter)] painter: Option<Painter>, modifier: Option<Modifier>) {
-    let modifier = modifier.unwrap_or_default();
     let painter = painter
         .and_then(Painter::resolve)
         .unwrap_or_else(|| Painter::Raster(placeholder_image_data()));
-    let policy = ImageLayout {
-        painter: painter.clone(),
-    };
+    let policy = ImageLayout { painter };
     layout()
-        .modifier(modifier)
         .policy(policy.clone())
-        .draw(policy);
+        .draw(policy)
+        .modifier(modifier.unwrap_or_default());
 }
 
 pub(crate) fn clamp_f32_to_px(value: f32) -> Px {

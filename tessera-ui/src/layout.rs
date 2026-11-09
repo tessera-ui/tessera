@@ -15,14 +15,14 @@ use crate::{
     ComputedData, Constraint, MeasurementError, ParentConstraint, Px, RenderSlot,
     component_tree::{
         ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, DrawLayoutBounds,
-        LayoutContext, LayoutDiagnosticsCollector, LayoutSnapshotMap, measure_node,
+        LayoutContext, LayoutDiagnosticsCollector, LayoutSnapshotMap, NodeRole, measure_node,
     },
     modifier::{
         DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutModifierNode, Modifier,
     },
     px::PxPosition,
     render_graph::RenderFragment,
-    runtime::configure_layout_node,
+    runtime::emit_node,
     tessera,
 };
 
@@ -1063,16 +1063,54 @@ impl Clone for Box<dyn ErasedDrawModifierNode> {
 ///         .child(move || child.render());
 /// }
 /// ```
-#[tessera(crate, layout)]
+#[tessera]
 pub fn layout(
     #[prop(into)] policy: Option<LayoutModifierHandle>,
     #[prop(into)] draw: Option<DrawModifierHandle>,
     modifier: Option<Modifier>,
     child: Option<RenderSlot>,
 ) {
-    configure_layout_node(
+    emit_node(
+        NodeRole::Layout,
         policy.unwrap_or_default(),
         draw.unwrap_or_default(),
+        modifier.unwrap_or_default(),
+    );
+    if let Some(child) = child {
+        child.render();
+    }
+}
+
+/// # group
+///
+/// Attach node-local semantics, focus, or input to child content without
+/// introducing a layout boundary.
+///
+/// ## Usage
+///
+/// Group table rows or other content whose children are measured and placed by
+/// an enclosing layout.
+///
+/// ## Parameters
+///
+/// - `modifier` - semantics, focus, and input modifiers for the grouped content
+/// - `child` - content laid out by the nearest enclosing layout node
+///
+/// ## Examples
+/// ```
+/// use tessera_ui::{Modifier, layout::group};
+///
+/// #[tessera_ui::tessera]
+/// fn grouped_row(modifier: Modifier) {
+///     group().modifier(modifier).child(|| {});
+/// }
+/// ```
+#[tessera]
+pub fn group(modifier: Option<Modifier>, child: Option<RenderSlot>) {
+    emit_node(
+        NodeRole::Group,
+        LayoutModifierHandle::default(),
+        DrawModifierHandle::default(),
         modifier.unwrap_or_default(),
     );
     if let Some(child) = child {

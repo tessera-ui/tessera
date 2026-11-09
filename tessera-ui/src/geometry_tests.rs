@@ -68,7 +68,7 @@ impl LayoutModifierNode for SizeOnlyContent {
     }
 }
 
-#[crate::tessera(crate)]
+#[crate::tessera]
 fn size_only_observer_fixture(probe: GeometryProbe) {
     let parent = crate::remember(|| PxPosition::ZERO);
     let child = crate::remember(|| PxPosition::ZERO);
@@ -276,7 +276,7 @@ impl LayoutModifierNode for SpaceContent {
     }
 }
 
-#[crate::tessera(crate)]
+#[crate::tessera]
 fn relative_observer_fixture(probe: GeometryProbe) {
     let parent = crate::remember(|| PxPosition::ZERO);
     let child = crate::remember(|| PxPosition::from_f32_xy(2.25, 3.5));
@@ -509,7 +509,7 @@ impl crate::PlacementModifierNode for StateTranslation {
     }
 }
 
-#[crate::tessera(crate)]
+#[crate::tessera]
 fn observer_follow_fixture(probe: GeometryProbe) {
     let source = crate::remember(|| PxPosition::ZERO);
     let observed = crate::remember(|| PxPosition::from_f32_xy(100.0, 0.0));
@@ -585,7 +585,7 @@ fn geometry_observer_updates_settle_placement_before_the_frame_snapshot() {
     );
 }
 
-#[crate::tessera(crate)]
+#[crate::tessera]
 fn inherited_translation_fixture(probe: GeometryProbe) {
     let parent = crate::remember(|| PxPosition::ZERO);
     let child = crate::remember(|| PxPosition::from_f32_xy(2.25, 3.5));
@@ -685,7 +685,7 @@ impl LayoutModifierNode for PlaceWhenVisible {
     }
 }
 
-#[crate::tessera(crate)]
+#[crate::tessera]
 fn hidden_position_observer_fixture(probe: GeometryProbe) {
     let visible = crate::remember(|| true);
     let parent = crate::remember(|| PxPosition::ZERO);
@@ -812,7 +812,7 @@ impl LayoutModifierNode for ResponsiveInputStage {
     }
 }
 
-#[crate::tessera(crate)]
+#[crate::tessera]
 fn dynamic_scale_input_fixture(probe: GeometryProbe) {
     let scale = crate::remember(|| 1.0_f32);
     let visible = crate::remember(|| true);
@@ -918,7 +918,7 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
     }
 }
 
-#[crate::tessera(crate)]
+#[crate::tessera]
 fn scale_fixture(probe: GeometryProbe) {
     layout()
         .policy(Anchor)

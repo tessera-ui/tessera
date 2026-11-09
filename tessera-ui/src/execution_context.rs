@@ -25,6 +25,7 @@ pub(crate) struct ExecutionContext {
     pub(crate) build_dirty_instance_keys_stack: Vec<Arc<HashSet<u64>>>,
     pub(crate) context_map: ContextMap,
     pub(crate) current_focus_owner_stack: Vec<NonNull<FocusOwner>>,
+    pub(crate) pointer_state_reader: Option<u64>,
 }
 
 #[derive(Clone, Default)]

@@ -106,7 +106,7 @@ impl StateOwner {
     pub fn state_with_key<K, T>(&self, key: K, init: impl FnOnce() -> T) -> State<T>
     where
         K: Hash,
-        T: Send + Sync + 'static,
+        T: 'static,
     {
         assert_eq!(
             crate::session::current_session_identity(),
@@ -117,6 +117,7 @@ impl StateOwner {
         let mut hasher = FxHasher::default();
         key.hash(&mut hasher);
         let key = SlotKey {
+            kind: super::SlotKind::State,
             owned_owner: Some(self.0.id),
             instance_logic_id: 0,
             slot_hash: hasher.finish(),

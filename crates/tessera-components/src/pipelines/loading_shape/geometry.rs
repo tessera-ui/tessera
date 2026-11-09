@@ -64,7 +64,7 @@ impl Default for Geometry {
 }
 
 pub(crate) fn geometry() -> Arc<Geometry> {
-    tessera_ui::__private::runtime_resource::<Geometry>()
+    tessera_ui::runtime_resource::<Geometry>()
 }
 
 pub(crate) fn center(sequence: Sequence, progress: f32) -> [f32; 2] {

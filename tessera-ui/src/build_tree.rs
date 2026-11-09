@@ -10,8 +10,7 @@ use rustc_hash::FxHashSet as HashSet;
 use tracing::{debug, instrument};
 
 use crate::{
-    NodeId,
-    component_tree::{ComponentNode, NodeRole, ReplayReplaceError, ReplayReplaceResult},
+    component_tree::ReplayReplaceResult,
     context::{
         begin_recompose_context_slot_epoch, drop_context_slots_for_instance_logic_ids,
         normalize_context_snapshot, remove_context_read_dependencies,
@@ -194,39 +193,30 @@ impl BuildTreeResult {
 
 struct ReplayPlan {
     live: Arc<HashSet<u64>>,
-    roots: Vec<ReplayRoot>,
-    recompose_root: bool,
-}
-
-struct ReplayRoot {
-    instance_key: u64,
-    node_id: NodeId,
+    roots: Vec<u64>,
 }
 
 fn plan_dirty_replay(dirty_instance_keys: &Arc<HashSet<u64>>) -> ReplayPlan {
     TesseraRuntime::with(|runtime| {
         let component_tree = &runtime.component_tree;
-        let tree = component_tree.tree();
         let mut all_live = true;
         let mut roots = Vec::new();
-        let mut recompose_root = false;
         for &key in dirty_instance_keys.iter() {
-            let Some(id) = component_tree.find_node_id_by_instance_key(key) else {
+            if !component_tree.has_call(key) {
                 all_live = false;
                 continue;
-            };
-            let Some(parent) = tree.get(id).and_then(|node| node.parent()) else {
-                recompose_root = true;
-                continue;
-            };
-            if !parent
-                .ancestors(tree)
-                .any(|id| dirty_instance_keys.contains(&tree[id].get().instance_key))
-            {
-                roots.push(ReplayRoot {
-                    instance_key: key,
-                    node_id: id,
-                });
+            }
+            let mut ancestor = component_tree.call_parent(key);
+            let mut nested = false;
+            while let Some(parent) = ancestor {
+                if dirty_instance_keys.contains(&parent) {
+                    nested = true;
+                    break;
+                }
+                ancestor = component_tree.call_parent(parent);
+            }
+            if !nested {
+                roots.push(key);
             }
         }
         let live = if all_live {
@@ -236,15 +226,11 @@ fn plan_dirty_replay(dirty_instance_keys: &Arc<HashSet<u64>>) -> ReplayPlan {
                 dirty_instance_keys
                     .iter()
                     .copied()
-                    .filter(|&key| component_tree.find_node_id_by_instance_key(key).is_some())
+                    .filter(|&key| component_tree.has_call(key))
                     .collect(),
             )
         };
-        ReplayPlan {
-            live,
-            roots,
-            recompose_root,
-        }
+        ReplayPlan { live, roots }
     })
 }
 
@@ -256,76 +242,16 @@ fn missing_replay_snapshot_panic_message(instance_key: u64) -> String {
     );
 
     TesseraRuntime::with(|runtime| {
-        let tree = runtime.component_tree.tree();
-        let Some(node_id) = runtime
-            .component_tree
-            .find_node_id_by_instance_key(instance_key)
-        else {
-            let _ = writeln!(message, "current tree node: <missing>");
-            return;
-        };
-
-        let Some(node_ref) = tree.get(node_id) else {
-            let _ = writeln!(message, "current tree node: <removed>");
-            return;
-        };
-
-        let node = node_ref.get();
-        let _ = writeln!(
-            message,
-            "current node: fn={}, role={:?}, instance_logic_id={}, has_replay={}, props_unchanged_from_previous={}",
-            node.fn_name,
-            node.role,
-            node.instance_logic_id,
-            node.replay_boundary,
-            node.props_unchanged_from_previous,
-        );
-
-        let mut nearest_replayable_ancestor = None;
-        let mut ancestry = Vec::new();
-        let mut cursor = Some(node_id);
-        while let Some(current_id) = cursor {
-            let Some(current_ref) = tree.get(current_id) else {
-                break;
-            };
-            let current = current_ref.get();
-            if nearest_replayable_ancestor.is_none() && current.replay_boundary {
-                nearest_replayable_ancestor = Some((current.instance_key, current.fn_name));
-            }
-
-            ancestry.push(format!(
-                "{}[key={}, logic={}, role={:?}, replay={}]",
-                current.fn_name,
-                current.instance_key,
-                current.instance_logic_id,
-                current.role,
-                current.replay_boundary,
-            ));
-
-            cursor = current_ref.parent();
-        }
-
-        if let Some((ancestor_key, ancestor_name)) = nearest_replayable_ancestor {
-            let _ = writeln!(
-                message,
-                "nearest replayable ancestor: {ancestor_name}[key={ancestor_key}]",
-            );
-        } else {
-            let _ = writeln!(message, "nearest replayable ancestor: <none>");
-        }
-
-        let _ = writeln!(message, "ancestry (self -> root):");
-        for entry in ancestry {
-            let _ = writeln!(message, "  - {entry}");
+        let tree = &runtime.component_tree;
+        let _ = writeln!(message, "call ancestry (self -> root):");
+        let mut cursor = tree.has_call(instance_key).then_some(instance_key);
+        while let Some(key) = cursor {
+            let _ = writeln!(message, "  - {}[key={key}]", tree.call_name(key));
+            cursor = tree.call_parent(key);
         }
     });
 
     message
-}
-
-#[cfg(feature = "profiling")]
-fn subtree_node_count(node_id: NodeId) -> u64 {
-    TesseraRuntime::with(|runtime| runtime.component_tree.tree()[node_id].get().subtree_len as u64)
 }
 
 struct BuildRootNodeGuard;
@@ -337,12 +263,7 @@ impl Drop for BuildRootNodeGuard {
 }
 
 fn push_build_root_node() -> BuildRootNodeGuard {
-    TesseraRuntime::with_mut(|runtime| {
-        runtime.component_tree.add_node(ComponentNode::new(
-            "__tessera_build_root",
-            NodeRole::Composition,
-        ));
-    });
+    TesseraRuntime::with_mut(|runtime| runtime.component_tree.begin_build_root());
     BuildRootNodeGuard
 }
 
@@ -411,12 +332,6 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         }
 
         let mut plan = plan_dirty_replay(&dirty_instance_keys);
-        if plan.recompose_root {
-            let result = run_root_recompose();
-            #[cfg(feature = "debug-dirty-overlay")]
-            let result = result.with_dirty_replay_info(had_invalidations, Vec::new());
-            return result;
-        }
         if plan.roots.is_empty() {
             debug!("Skipping component tree build: no dirty replay roots");
             let result = BuildTreeResult::skip_no_invalidation();
@@ -441,7 +356,6 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         let mut deferred_backwards_instance_keys = HashSet::default();
         let mut executed_instance_keys = HashSet::default();
         let mut replace_result = ReplayReplaceResult::default();
-        let mut fallback_to_root_recompose = false;
         #[cfg(feature = "profiling")]
         let mut replayed_nodes = 0_u64;
         #[cfg(feature = "profiling")]
@@ -455,73 +369,46 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             let ReplayPlan {
                 live: live_dirty_instance_keys,
                 roots: dirty_roots,
-                recompose_root,
             } = plan;
             if tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG) {
                 let dirty = TesseraRuntime::with(|runtime| {
                     live_dirty_instance_keys
                         .iter()
-                        .map(|&key| {
-                            let name = runtime
-                                .component_tree
-                                .find_node_id_by_instance_key(key)
-                                .and_then(|id| runtime.component_tree.get(id))
-                                .map(|node| node.fn_name)
-                                .unwrap_or("<missing>");
-                            (key, name)
-                        })
+                        .map(|&key| (key, runtime.component_tree.call_name(key)))
                         .collect::<Vec<_>>()
                 });
                 tracing::debug!(target: "tessera_ui::replay", ?dirty, "replay_dirty_boundaries");
-            }
-            if recompose_root {
-                fallback_to_root_recompose = true;
-                break;
             }
             if dirty_roots.is_empty() {
                 break;
             }
             #[cfg(feature = "debug-dirty-overlay")]
-            replay_roots_for_debug.extend(dirty_roots.iter().map(|root| root.instance_key));
+            replay_roots_for_debug.extend(dirty_roots.iter().copied());
 
             with_build_dirty_instance_keys(live_dirty_instance_keys, || {
-                // Disjoint roots keep their planned node IDs while earlier roots replay.
-                for ReplayRoot {
-                    instance_key,
-                    node_id,
-                } in dirty_roots
-                {
+                for instance_key in dirty_roots {
                     let replay_snapshot = previous_component_replay_node(instance_key)
                         .unwrap_or_else(|| {
                             panic!("{}", missing_replay_snapshot_panic_message(instance_key))
                         });
                     #[cfg(feature = "profiling")]
                     {
-                        replayed_nodes = replayed_nodes.saturating_add(subtree_node_count(node_id));
+                        replayed_nodes =
+                            replayed_nodes.saturating_add(TesseraRuntime::with(|runtime| {
+                                runtime.component_tree.call_subtree_len(instance_key)
+                            }));
                     }
                     let replay_trace =
                         tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG);
-                    let trace_name = replay_trace
-                        .then(|| {
-                            TesseraRuntime::with(|runtime| {
-                                runtime.component_tree.get(node_id).map(|node| node.fn_name)
-                            })
+                    let trace_name = replay_trace.then(|| {
+                        TesseraRuntime::with(|runtime| {
+                            runtime.component_tree.call_name(instance_key)
                         })
-                        .flatten();
+                    });
                     let detach_timer = replay_trace.then(Instant::now);
                     let replace_context = TesseraRuntime::with_mut(|runtime| {
-                        runtime.component_tree.begin_replace_subtree(node_id)
+                        runtime.component_tree.begin_replace_call(instance_key)
                     });
-                    let replace_context = match replace_context {
-                        Ok(context) => context,
-                        Err(ReplayReplaceError::RootNodeNotReplaceable) => panic!(
-                            "dirty root {} resolved to component tree root; root recomposition must be selected before partial replay",
-                            instance_key
-                        ),
-                        Err(_) => {
-                            panic!("begin_replace_subtree failed for instance key {instance_key}")
-                        }
-                    };
                     let detach_ns = detach_timer.map(|timer| timer.elapsed().as_nanos());
 
                     let compose_timer = replay_trace.then(Instant::now);
@@ -539,9 +426,6 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                         runtime
                             .component_tree
                             .finish_replace_subtree(replace_context, &mut replace_result)
-                    })
-                    .unwrap_or_else(|_| {
-                        panic!("finish_replace_subtree failed for instance key {instance_key}")
                     });
                     if replay_trace {
                         tracing::debug!(
@@ -602,12 +486,6 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
             plan = plan_dirty_replay(&pending_dirty_instance_keys);
         }
 
-        if fallback_to_root_recompose {
-            let result = run_root_recompose();
-            #[cfg(feature = "debug-dirty-overlay")]
-            let result = result.with_dirty_replay_info(had_invalidations, Vec::new());
-            return result;
-        }
         finalize_frame_component_replay_tracking_partial();
         finalize_frame_layout_dirty_tracking();
         remove_previous_component_replay_nodes(&stale_instance_keys);

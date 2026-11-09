@@ -2466,14 +2466,14 @@ mod tests {
         }
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn frame_end_removable_target(requester: FocusRequester) {
         layout()
             .policy(FocusLeafLayout)
             .modifier(Modifier::new().focusable().focus_requester(requester));
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn frame_end_focus_fixture(probe: FrameEndProbe) {
         let visible = remember(|| true);
         let removed = remember(FocusRequester::new).get();
@@ -2514,7 +2514,7 @@ mod tests {
         reads: crate::testing::TestProbe<Vec<bool>>,
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn focus_visibility_observer(
         requester: FocusRequester,
         reads: crate::testing::TestProbe<Vec<bool>>,
@@ -2523,7 +2523,7 @@ mod tests {
         layout().policy(FocusLeafLayout);
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn focus_visibility_fixture(probe: VisibilityProbe) {
         let first = remember(FocusRequester::new).get();
         let second = remember(FocusRequester::new).get();
@@ -2708,14 +2708,14 @@ mod tests {
         counts: crate::testing::TestProbe<(usize, usize)>,
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn cold_geometry_child(probe: crate::testing::TestProbe<Option<PxRect>>) {
         layout()
             .policy(FocusLeafLayout)
             .modifier(Modifier::new().on_globally_positioned(move |rect| probe.set(Some(rect))));
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn cold_geometry_fixture(probe: ColdProbe) {
         let observed = remember(|| None::<PxRect>);
         let output = probe.clone();

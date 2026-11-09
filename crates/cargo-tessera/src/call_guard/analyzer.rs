@@ -36,6 +36,7 @@ use super::{
 
 mod lint_levels;
 mod lints;
+mod private_api;
 
 const RENDER_SLOT_TYPE_PATH: &str = "tessera_ui::prop::RenderSlot";
 const RENDER_SLOT_WITH_TYPE_PATH: &str = "tessera_ui::prop::RenderSlotWith";
@@ -60,7 +61,6 @@ const PUBLIC_RECEIVE_FRAME_NANOS_PATH: &str = "tessera_ui::receive_frame_nanos";
 const KEY_PATH: &str = "tessera_ui::runtime::key";
 const PUBLIC_KEY_PATH: &str = "tessera_ui::key";
 const RUNTIME_MODULE_PATH_PREFIX: &str = "tessera_ui::runtime::";
-const PRIVATE_MODULE_PATH_PREFIX: &str = "tessera_ui::__private::";
 const RENDER_SLOT_NEW_PATH: &str = "tessera_ui::prop::RenderSlot::new";
 const RENDER_SLOT_WITH_NEW_PATH: &str = "tessera_ui::prop::RenderSlotWith::new";
 const PUBLIC_RENDER_SLOT_NEW_PATH: &str = "tessera_ui::RenderSlot::new";
@@ -143,6 +143,7 @@ impl<'db> CallAnalyzer<'db> {
             diagnostics: Vec::new(),
             inactive_bodies: HashMap::new(),
             call_targets: RefCell::new(HashMap::new()),
+            private_api_items: RefCell::new(HashMap::new()),
         })
     }
 
@@ -173,6 +174,7 @@ impl<'db> CallAnalyzer<'db> {
             diagnostics: Vec::new(),
             inactive_bodies: HashMap::new(),
             call_targets: RefCell::new(HashMap::new()),
+            private_api_items: RefCell::new(HashMap::new()),
         }
     }
 
@@ -223,6 +225,7 @@ impl<'db> CallAnalyzer<'db> {
         for item in tree.items() {
             self.analyze_item(item);
         }
+        self.check_private_api_uses(tree.syntax());
         Ok(())
     }
 
@@ -955,10 +958,7 @@ impl<'db> CallAnalyzer<'db> {
             KEY_PATH | PUBLIC_KEY_PATH => Some(TesseraRuntimeApi::Key),
             path => {
                 let name = path.rsplit("::").next().unwrap_or(path);
-                if (path.starts_with(RUNTIME_MODULE_PATH_PREFIX)
-                    || path.starts_with(PRIVATE_MODULE_PATH_PREFIX))
-                    && is_internal_runtime_name(name)
-                {
+                if path.starts_with(RUNTIME_MODULE_PATH_PREFIX) && is_internal_runtime_name(name) {
                     Some(TesseraRuntimeApi::InternalRuntime)
                 } else {
                     None
@@ -2129,6 +2129,118 @@ pub fn helper() {
             "unexpected diagnostics for user-owned function names:\n{}",
             diagnostics.join("\n")
         );
+    }
+
+    #[test]
+    fn private_macro_support_items_are_rejected_outside_official_expansions() {
+        let source = r#"
+use tessera_ui::__private::GroupGuard;
+use tessera_ui::{Dp, __private::current_instance_key as instance_key};
+use tessera_ui::__private as support;
+
+mod shim {
+    pub use tessera_ui::__private::current_instance_key as instance;
+}
+
+macro_rules! leak {
+    () => { tessera_ui::__private::current_instance_key() };
+}
+
+#[tessera_ui::tessera]
+fn generated(width: Dp) {
+    let _ = width;
+}
+
+fn direct() -> u64 { tessera_ui::__private::current_instance_key() }
+fn imported() -> u64 { instance_key() }
+fn reexported() -> u64 { shim::instance() }
+fn module_alias<T: support::Prop>() {}
+fn expanded() -> u64 { leak!() }
+fn guard(_: Option<GroupGuard>) {}
+"#;
+        with_analyzer(source, |analyzer| {
+            use ra_ap_base_db::SourceDatabase;
+            use ra_ap_syntax::{AstNode, ast::HasName};
+
+            use super::super::error_codes::ErrorCode;
+
+            let file_id = analyzer
+                .local_files
+                .iter()
+                .copied()
+                .find(|file| analyzer.absolute_path(*file).ends_with("lib.rs"))
+                .expect("fixture library");
+            let tree = analyzer
+                .sema
+                .parse(ra_ap_hir::EditionedFileId::current_edition(
+                    analyzer.db,
+                    file_id,
+                ));
+            let generated = tree
+                .syntax()
+                .descendants()
+                .filter_map(ra_ap_syntax::ast::Fn::cast)
+                .find(|function| {
+                    function
+                        .name()
+                        .is_some_and(|name| name.text() == "generated")
+                })
+                .expect("generated component");
+            let expansion = analyzer
+                .sema
+                .expand_attr_macro(&ra_ap_syntax::ast::Item::Fn(generated))
+                .expect("#[tessera] expansion");
+            assert!(
+                expansion.value.value.to_string().contains("__private"),
+                "the exempt expansion must exercise macro-support paths"
+            );
+
+            let text = analyzer.db.file_text(file_id).text(analyzer.db);
+            let mut reported = analyzer
+                .diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == ErrorCode::PrivateApi.into())
+                .map(|diagnostic| {
+                    assert_eq!(diagnostic.file_id, file_id);
+                    (
+                        text[diagnostic.range].to_string(),
+                        diagnostic.message.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            reported.sort();
+            let item = |name: &str| {
+                format!(
+                    "cannot use private Tessera macro-support item `tessera_ui::__private{name}`"
+                )
+            };
+            let mut expected = vec![
+                ("GroupGuard".to_string(), item("::GroupGuard")),
+                (
+                    "__private::current_instance_key".to_string(),
+                    item("::current_instance_key"),
+                ),
+                ("instance_key".to_string(), item("::current_instance_key")),
+                ("leak!".to_string(), item("::current_instance_key")),
+                ("shim::instance".to_string(), item("::current_instance_key")),
+                ("support::Prop".to_string(), item("::Prop")),
+                ("tessera_ui::__private".to_string(), item("")),
+                (
+                    "tessera_ui::__private::GroupGuard".to_string(),
+                    item("::GroupGuard"),
+                ),
+                (
+                    "tessera_ui::__private::current_instance_key".to_string(),
+                    item("::current_instance_key"),
+                ),
+                (
+                    "tessera_ui::__private::current_instance_key".to_string(),
+                    item("::current_instance_key"),
+                ),
+            ];
+            expected.sort();
+            assert_eq!(reported, expected);
+        });
     }
 
     #[test]

@@ -6,12 +6,12 @@ use std::{
     collections::hash_map::Entry,
     hash::{BuildHasher, Hash, Hasher},
     marker::PhantomData,
+    rc::Rc,
     sync::Arc,
     time::Duration,
 };
 
 use hashbrown::{HashTable, hash_table::Entry as TableEntry};
-use parking_lot::RwLock;
 use rustc_hash::{FxBuildHasher, FxHashMap as HashMap, FxHashSet as HashSet};
 use slotmap::{SlotMap, new_key_type};
 use smallvec::SmallVec;
@@ -20,7 +20,7 @@ use crate::{
     NodeId,
     accessibility::{AccessibilityActionHandler, AccessibilityNode},
     component_call::ComponentCalls,
-    component_tree::{ComponentNode, ComponentTree, NodeRole, PreviousBuildNode},
+    component_tree::{ComponentNode, ComponentTree, EmittedNode, NodeRole},
     context::{ContextGlobals, ContextMap},
     execution_context::{
         ExecutionContext, OrderFrame, with_execution_context, with_execution_context_mut,
@@ -139,8 +139,15 @@ pub(crate) fn compute_context_slot_key() -> (u64, u64) {
     (instance_logic_id, slot_hash)
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum SlotKind {
+    State,
+    Functor,
+}
+
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct SlotKey {
+    kind: SlotKind,
     owned_owner: Option<u128>,
     instance_logic_id: u64,
     slot_hash: u64,
@@ -150,6 +157,7 @@ struct SlotKey {
 impl Default for SlotKey {
     fn default() -> Self {
         Self {
+            kind: SlotKind::State,
             owned_owner: None,
             instance_logic_id: 0,
             slot_hash: 0,
@@ -166,22 +174,22 @@ new_key_type! {
 struct SlotEntry {
     key: SlotKey,
     generation: u64,
-    value: Option<Arc<dyn Any + Send + Sync>>,
+    value: Option<Rc<dyn Any>>,
     last_alive_epoch: u64,
     retained: bool,
 }
 
 impl SlotEntry {
-    fn reuse_functor<T: Send + Sync + 'static>(
+    fn reuse_functor<T: 'static>(
         &mut self,
         slot: SlotHandle,
         epoch: u64,
         init: &mut Option<impl FnOnce() -> T>,
-    ) -> (Arc<T>, u64) {
+    ) -> (Rc<T>, u64) {
         debug_assert_eq!(self.key.type_id, TypeId::of::<T>());
         self.last_alive_epoch = epoch;
         let value = self.value.get_or_insert_with(|| {
-            let value = Arc::new(init.take().expect("functor slot initialized once")());
+            let value = Rc::new(init.take().expect("functor slot initialized once")());
             self.generation = self.generation.wrapping_add(1);
             value
         });
@@ -495,61 +503,61 @@ impl FunctorHandle {
 }
 
 struct CallbackCell {
-    current: RwLock<Arc<dyn Fn() + Send + Sync>>,
+    current: RefCell<Rc<dyn Fn()>>,
 }
 
 impl CallbackCell {
-    fn new(current: Arc<dyn Fn() + Send + Sync>) -> Self {
+    fn new(current: Rc<dyn Fn()>) -> Self {
         Self {
-            current: RwLock::new(current),
+            current: RefCell::new(current),
         }
     }
 
-    fn update(&self, next: Arc<dyn Fn() + Send + Sync>) {
-        let previous = std::mem::replace(&mut *self.current.write(), next);
+    fn update(&self, next: Rc<dyn Fn()>) {
+        let previous = std::mem::replace(&mut *self.current.borrow_mut(), next);
         drop(previous);
     }
 
-    fn shared(&self) -> Arc<dyn Fn() + Send + Sync> {
-        Arc::clone(&self.current.read())
+    fn shared(&self) -> Rc<dyn Fn()> {
+        Rc::clone(&self.current.borrow())
     }
 }
 
 struct CallbackWithCell<T, R> {
-    current: RwLock<Arc<dyn Fn(T) -> R + Send + Sync>>,
+    current: RefCell<Rc<dyn Fn(T) -> R>>,
 }
 
 impl<T, R> CallbackWithCell<T, R> {
-    fn new(current: Arc<dyn Fn(T) -> R + Send + Sync>) -> Self {
+    fn new(current: Rc<dyn Fn(T) -> R>) -> Self {
         Self {
-            current: RwLock::new(current),
+            current: RefCell::new(current),
         }
     }
 
-    fn update(&self, next: Arc<dyn Fn(T) -> R + Send + Sync>) {
-        let previous = std::mem::replace(&mut *self.current.write(), next);
+    fn update(&self, next: Rc<dyn Fn(T) -> R>) {
+        let previous = std::mem::replace(&mut *self.current.borrow_mut(), next);
         drop(previous);
     }
 
-    fn shared(&self) -> Arc<dyn Fn(T) -> R + Send + Sync> {
-        Arc::clone(&self.current.read())
+    fn shared(&self) -> Rc<dyn Fn(T) -> R> {
+        Rc::clone(&self.current.borrow())
     }
 }
 
 struct RenderSlotCell {
-    current: RwLock<(Arc<dyn Fn() + Send + Sync>, Option<TypeId>)>,
+    current: RefCell<(Rc<dyn Fn()>, Option<TypeId>)>,
 }
 
 impl RenderSlotCell {
-    fn new(current: Arc<dyn Fn() + Send + Sync>, static_type: Option<TypeId>) -> Self {
+    fn new(current: Rc<dyn Fn()>, static_type: Option<TypeId>) -> Self {
         Self {
-            current: RwLock::new((current, static_type)),
+            current: RefCell::new((current, static_type)),
         }
     }
 
-    fn update(&self, next: Arc<dyn Fn() + Send + Sync>, static_type: Option<TypeId>) -> bool {
+    fn update(&self, next: Rc<dyn Fn()>, static_type: Option<TypeId>) -> bool {
         let previous = {
-            let mut current = self.current.write();
+            let mut current = self.current.borrow_mut();
             // A new allocation alone must not invalidate unchanged capture-free content.
             if static_type.is_some() && current.1 == static_type {
                 return false;
@@ -560,25 +568,25 @@ impl RenderSlotCell {
         true
     }
 
-    fn shared(&self) -> Arc<dyn Fn() + Send + Sync> {
-        Arc::clone(&self.current.read().0)
+    fn shared(&self) -> Rc<dyn Fn()> {
+        Rc::clone(&self.current.borrow().0)
     }
 }
 
 struct RenderSlotWithCell<T> {
-    current: RwLock<(Arc<dyn Fn(T) + Send + Sync>, Option<TypeId>)>,
+    current: RefCell<(Rc<dyn Fn(T)>, Option<TypeId>)>,
 }
 
 impl<T> RenderSlotWithCell<T> {
-    fn new(current: Arc<dyn Fn(T) + Send + Sync>, static_type: Option<TypeId>) -> Self {
+    fn new(current: Rc<dyn Fn(T)>, static_type: Option<TypeId>) -> Self {
         Self {
-            current: RwLock::new((current, static_type)),
+            current: RefCell::new((current, static_type)),
         }
     }
 
-    fn update(&self, next: Arc<dyn Fn(T) + Send + Sync>, static_type: Option<TypeId>) -> bool {
+    fn update(&self, next: Rc<dyn Fn(T)>, static_type: Option<TypeId>) -> bool {
         let previous = {
-            let mut current = self.current.write();
+            let mut current = self.current.borrow_mut();
             // Closure type still distinguishes different capture-free bodies at one slot.
             if static_type.is_some() && current.1 == static_type {
                 return false;
@@ -589,8 +597,8 @@ impl<T> RenderSlotWithCell<T> {
         true
     }
 
-    fn shared(&self) -> Arc<dyn Fn(T) + Send + Sync> {
-        Arc::clone(&self.current.read().0)
+    fn shared(&self) -> Rc<dyn Fn(T)> {
+        Rc::clone(&self.current.borrow().0)
     }
 }
 
@@ -646,7 +654,7 @@ pub(crate) struct ReplayNodeSnapshot {
     pub group_path: GroupPath,
     pub instance_key_override: Option<u64>,
     pub context: ContextMap,
-    pub replay: Arc<dyn ErasedComponent>,
+    pub replay: Rc<dyn ErasedComponent>,
 }
 
 #[derive(Default)]
@@ -1042,12 +1050,7 @@ pub(crate) fn prune_persistent_focus_handles() {
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.take_removed_focus_owners());
     let removed = with_persistent_focus_handle_store_mut(|store| {
         store.prune_removed(removed_owners, |key| {
-            TesseraRuntime::with(|runtime| {
-                runtime
-                    .component_tree
-                    .find_node_id_by_instance_key(key)
-                    .is_some()
-            })
+            TesseraRuntime::with(|runtime| runtime.component_tree.has_call(key))
         })
     });
     if !removed.handle_ids.is_empty() || !removed.requester_ids.is_empty() {
@@ -1188,17 +1191,16 @@ pub(crate) fn defer_build_invalidations(instance_keys: &HashSet<u64>) {
     schedule_runtime_redraw();
 }
 
-const POINTER_STATE_READER: crate::session::SessionLocal<std::cell::Cell<Option<u64>>> =
-    crate::session::SessionLocal::new();
-
 pub(crate) fn with_pointer_state_reader<R>(key: u64, run: impl FnOnce() -> R) -> R {
     struct ReaderGuard(Option<u64>);
     impl Drop for ReaderGuard {
         fn drop(&mut self) {
-            POINTER_STATE_READER.with(|reader| reader.set(self.0));
+            with_execution_context_mut(|context| context.pointer_state_reader = self.0);
         }
     }
-    let _guard = ReaderGuard(POINTER_STATE_READER.with(|reader| reader.replace(Some(key))));
+    let _guard = ReaderGuard(with_execution_context_mut(|context| {
+        context.pointer_state_reader.replace(key)
+    }));
     run()
 }
 
@@ -1209,65 +1211,59 @@ pub(crate) fn take_pointer_dirty_nodes() -> HashSet<u64> {
 }
 
 fn track_state_read_dependency(slot: SlotHandle, generation: u64) {
-    let phase = match current_phase() {
-        Some(RuntimePhase::Input) if POINTER_STATE_READER.with(|reader| reader.get().is_some()) => {
-            Some(ReadPhase::Pointer)
-        }
-        Some(RuntimePhase::Measure) => Some(ReadPhase::Measure),
-        Some(RuntimePhase::Place) if current_measured_node_instance_key().is_some() => {
-            Some(ReadPhase::Place)
-        }
-        Some(RuntimePhase::Place) => Some(ReadPhase::Transform),
-        Some(RuntimePhase::Paint) => Some(ReadPhase::Paint),
-        _ => None,
-    };
-    if let Some(phase) = phase {
-        track_layout_state_read_dependency(slot, generation, phase);
-        return;
-    }
-    if !matches!(current_phase(), Some(RuntimePhase::Build)) {
-        return;
-    }
-    let Some(reader_instance_key) = current_replay_boundary_instance_key_from_scope() else {
-        return;
-    };
-
-    let key = StateReadDependencyKey { slot, generation };
-    with_state_read_dependency_tracker_mut(|tracker| tracker.record(key, reader_instance_key));
-}
-
-fn track_layout_state_read_dependency(slot: SlotHandle, generation: u64, phase: ReadPhase) {
-    let Some(reader_instance_key) = POINTER_STATE_READER
-        .with(|reader| reader.get())
-        .or_else(current_measured_node_instance_key)
-        .or_else(current_replay_boundary_instance_key_from_scope)
-    else {
-        return;
-    };
-    let reader_instance_key = PhaseReader {
-        instance_key: reader_instance_key,
-        phase,
-    };
-    let key = StateReadDependencyKey { slot, generation };
-    with_layout_dirty_tracker_mut(|tracker| tracker.state_reads.record(key, reader_instance_key));
-}
-
-fn mark_layout_state_readers_dirty(key: StateReadDependencyKey) -> bool {
-    with_layout_dirty_tracker_mut(|tracker| {
-        let Some(readers) = tracker.state_reads.readers(&key) else {
-            return false;
+    let reader = with_execution_context(|context| {
+        let pointer = context.pointer_state_reader;
+        let measured = context.measured_node_instance_key_stack.last().copied();
+        let component = context.current_component_instance_stack.last().copied();
+        let phase = match context.phase_stack.last() {
+            Some(RuntimePhase::Build) => return component.map(|key| (key, None)),
+            Some(RuntimePhase::Input) if pointer.is_some() => ReadPhase::Pointer,
+            Some(RuntimePhase::Measure) => ReadPhase::Measure,
+            Some(RuntimePhase::Place) if measured.is_some() => ReadPhase::Place,
+            Some(RuntimePhase::Place) => ReadPhase::Transform,
+            Some(RuntimePhase::Paint) => ReadPhase::Paint,
+            _ => return None,
         };
-        for reader in readers {
-            let target = match reader.phase {
-                ReadPhase::Measure => &mut tracker.pending_measure_self_dirty_nodes,
-                ReadPhase::Place => &mut tracker.pending_placement_self_dirty_nodes,
-                ReadPhase::Transform => &mut tracker.pending_transform_dirty_nodes,
-                ReadPhase::Paint => &mut tracker.pending_paint_dirty_nodes,
-                ReadPhase::Pointer => &mut tracker.pending_pointer_dirty_nodes,
-            };
-            target.insert(reader.instance_key);
+        pointer
+            .or(measured)
+            .or(component)
+            .map(|key| (key, Some(phase)))
+    });
+    let key = StateReadDependencyKey { slot, generation };
+    match reader {
+        Some((instance_key, None)) => {
+            with_state_read_dependency_tracker_mut(|tracker| tracker.record(key, instance_key));
         }
-        true
+        Some((instance_key, Some(phase))) => {
+            let reader = PhaseReader {
+                instance_key,
+                phase,
+            };
+            with_layout_dirty_tracker_mut(|tracker| tracker.state_reads.record(key, reader));
+        }
+        None => {}
+    }
+}
+
+fn mark_layout_state_readers_dirty(keys: &[StateReadDependencyKey]) -> bool {
+    with_layout_dirty_tracker_mut(|tracker| {
+        let mut changed = false;
+        for key in keys {
+            if let Some(readers) = tracker.state_reads.readers(key) {
+                for reader in readers {
+                    let target = match reader.phase {
+                        ReadPhase::Measure => &mut tracker.pending_measure_self_dirty_nodes,
+                        ReadPhase::Place => &mut tracker.pending_placement_self_dirty_nodes,
+                        ReadPhase::Transform => &mut tracker.pending_transform_dirty_nodes,
+                        ReadPhase::Paint => &mut tracker.pending_paint_dirty_nodes,
+                        ReadPhase::Pointer => &mut tracker.pending_pointer_dirty_nodes,
+                    };
+                    target.insert(reader.instance_key);
+                    changed = true;
+                }
+            }
+        }
+        changed
     })
 }
 
@@ -1547,6 +1543,10 @@ pub(crate) fn frame_clock_diagnostics() -> FrameClockDiagnostics {
 }
 
 pub(crate) fn tick_frame_nanos_receivers() {
+    with_batched_state_writes(tick_frame_nanos_receivers_inner);
+}
+
+fn tick_frame_nanos_receivers_inner() {
     crate::dispatcher::flush();
     let (frame_nanos, receivers) = with_frame_clock_tracker_mut(|tracker| {
         tracker.executed_receiver_owners.clear();
@@ -1914,7 +1914,8 @@ pub(crate) fn take_layout_structure_changes() -> StructureReconcileResult {
 /// Handle to memoized state created by [`remember`] and [`remember_with_key`].
 ///
 /// `State<T>` is `Copy + Send + Sync` and provides `with`, `with_mut`, `get`,
-/// `set`, and `cloned` to read or update the stored value.
+/// `set`, and `cloned` to read or update the stored value. Use [`State::set_many`]
+/// to atomically update several states of the same type.
 ///
 /// Component factories such as [`remember`] run only during a Tessera build.
 /// Remembered state survives recomposition while its slot is used; [`retain`]
@@ -1940,7 +1941,7 @@ pub struct State<T> {
     session: u128,
     slot: SlotHandle,
     generation: u64,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<fn() -> T>,
 }
 
 impl<T> Copy for State<T> {}
@@ -1982,7 +1983,7 @@ impl<T> State<T> {
 
 impl<T> State<T>
 where
-    T: Send + Sync + 'static,
+    T: 'static,
 {
     /// Returns whether this handle still refers to a live state slot.
     ///
@@ -2096,15 +2097,155 @@ where
     /// Replace the stored value.
     #[track_caller]
     pub fn set(&self, value: T) {
-        self.with_mut(|slot| *slot = value);
+        assert_eq!(
+            crate::session::current_session_identity(),
+            Some(self.session),
+            "state belongs to a different runtime session"
+        );
+        let discarded = with_slot_table_mut(|table| {
+            let entry = table
+                .entries
+                .get_mut(self.slot)
+                .unwrap_or_else(|| panic!("State points to freed slot: {:?}", self.slot));
+            assert_eq!(entry.generation, self.generation, "State handle is stale");
+            assert_eq!(entry.key.type_id, TypeId::of::<T>(), "State type mismatch");
+            let stored = entry
+                .value
+                .as_mut()
+                .unwrap_or_else(|| panic!("State slot {:?} has been cleared", self.slot));
+            let stored = Rc::get_mut(stored)
+                .unwrap_or_else(|| panic!("State slot {:?} is being read", self.slot));
+            std::mem::replace(
+                stored
+                    .downcast_mut::<T>()
+                    .unwrap_or_else(|| panic!("State slot {:?} downcast failed", self.slot)),
+                value,
+            )
+        });
+        publish_state_write(self.slot, self.generation);
+        drop(discarded);
+    }
+
+    /// Atomically replaces several values of the same type and publishes their
+    /// invalidations together.
+    ///
+    /// Every handle is validated before any value is changed. If validation
+    /// fails, the batch leaves all states untouched.
+    #[track_caller]
+    pub fn set_many(updates: impl IntoIterator<Item = (Self, T)>) {
+        let updates = updates.into_iter().collect::<Vec<_>>();
+        if updates.is_empty() {
+            return;
+        }
+
+        let session = crate::session::current_session_identity();
+        let mut keys = Vec::with_capacity(updates.len());
+        let mut discarded = Vec::with_capacity(updates.len());
+        with_slot_table_mut(|table| {
+            for (state, _) in &updates {
+                assert_eq!(
+                    session,
+                    Some(state.session),
+                    "state belongs to a different runtime session"
+                );
+                let entry = table
+                    .entries
+                    .get(state.slot)
+                    .unwrap_or_else(|| panic!("State points to freed slot: {:?}", state.slot));
+                assert_eq!(entry.generation, state.generation, "State handle is stale");
+                assert_eq!(entry.key.type_id, TypeId::of::<T>(), "State type mismatch");
+                let stored = entry
+                    .value
+                    .as_ref()
+                    .unwrap_or_else(|| panic!("State slot {:?} has been cleared", state.slot));
+                assert_eq!(
+                    Rc::strong_count(stored),
+                    1,
+                    "State slot {:?} is being read",
+                    state.slot
+                );
+                keys.push(StateReadDependencyKey {
+                    slot: state.slot,
+                    generation: state.generation,
+                });
+            }
+
+            for ((state, value), _) in updates.into_iter().zip(&keys) {
+                let entry = table
+                    .entries
+                    .get_mut(state.slot)
+                    .expect("state slot was validated");
+                let stored = Rc::get_mut(entry.value.as_mut().expect("state slot was validated"))
+                    .expect("state value was validated as uniquely owned")
+                    .downcast_mut::<T>()
+                    .expect("state value type was validated");
+                discarded.push(std::mem::replace(stored, value));
+            }
+        });
+
+        publish_state_writes(&keys);
+        drop(discarded);
     }
 }
 
 fn publish_state_write(slot: SlotHandle, generation: u64) {
-    // A write performed while another component is building is a backwards
-    // write for every other reader: they may already have been rebuilt in
-    // this pass with the old value, so their invalidation must not be
-    // treated as already covered by the current replay round.
+    let key = StateReadDependencyKey { slot, generation };
+    if with_state_write_batch(|batch| {
+        if batch.depth == 0 {
+            false
+        } else {
+            batch.pending.push(key);
+            true
+        }
+    }) {
+        return;
+    }
+    publish_state_writes(std::slice::from_ref(&key));
+}
+
+#[derive(Default)]
+struct StateWriteBatch {
+    depth: usize,
+    pending: Vec<StateReadDependencyKey>,
+}
+
+fn with_state_write_batch<R>(update: impl FnOnce(&mut StateWriteBatch) -> R) -> R {
+    with_runtime_globals(|globals| update(&mut globals.state_write_batch.borrow_mut()))
+}
+
+fn with_batched_state_writes<R>(run: impl FnOnce() -> R) -> R {
+    with_state_write_batch(|batch| batch.depth += 1);
+    struct BatchGuard;
+    impl Drop for BatchGuard {
+        fn drop(&mut self) {
+            let pending = with_state_write_batch(|batch| {
+                batch.depth -= 1;
+                if batch.depth == 0 {
+                    Some(std::mem::take(&mut batch.pending))
+                } else {
+                    None
+                }
+            });
+            if let Some(mut pending) = pending {
+                publish_state_writes(&pending);
+                pending.clear();
+                with_state_write_batch(|batch| {
+                    pending.append(&mut batch.pending);
+                    batch.pending = pending;
+                });
+            }
+        }
+    }
+    let _guard = BatchGuard;
+    run()
+}
+
+fn publish_state_writes(keys: &[StateReadDependencyKey]) {
+    if keys.is_empty() {
+        return;
+    }
+    // Writes during a build may invalidate readers that have already run, so
+    // retain the writer identity for the same backwards-write handling as set.
     let writer_instance_key = with_execution_context(|context| {
         if context.phase_stack.last() == Some(&RuntimePhase::Build) {
             context.current_component_instance_stack.last().copied()
@@ -2112,17 +2253,16 @@ fn publish_state_write(slot: SlotHandle, generation: u64) {
             None
         }
     });
-    let key = StateReadDependencyKey { slot, generation };
     let build_dirty = with_runtime_globals(|globals| {
         let dependencies = globals.state_read_dependency_tracker.borrow();
-        dependencies.readers(&key).is_some_and(|readers| {
-            globals
-                .build_invalidation_tracker
-                .borrow_mut()
-                .invalidate(readers, writer_instance_key)
+        let mut tracker = globals.build_invalidation_tracker.borrow_mut();
+        keys.iter().fold(false, |wake, key| {
+            wake | dependencies
+                .readers(key)
+                .is_some_and(|readers| tracker.invalidate(readers, writer_instance_key))
         })
     });
-    let layout_dirty = mark_layout_state_readers_dirty(key);
+    let layout_dirty = mark_layout_state_readers_dirty(&keys);
     if build_dirty || layout_dirty {
         schedule_runtime_redraw();
     }
@@ -2141,6 +2281,7 @@ pub(crate) struct RuntimeGlobals {
     persistent_focus_handle_store: RefCell<PersistentFocusHandleStore>,
     frame_clock_tracker: RefCell<FrameClockTracker>,
     layout_dirty_tracker: RefCell<LayoutDirtyTracker>,
+    state_write_batch: RefCell<StateWriteBatch>,
     runtime: RefCell<TesseraRuntime>,
 }
 
@@ -2165,6 +2306,7 @@ impl RuntimeGlobals {
             persistent_focus_handle_store: RefCell::new(PersistentFocusHandleStore::default()),
             frame_clock_tracker: RefCell::new(FrameClockTracker::default()),
             layout_dirty_tracker: RefCell::new(LayoutDirtyTracker::default()),
+            state_write_batch: RefCell::new(StateWriteBatch::default()),
             runtime: RefCell::new(TesseraRuntime::default()),
         }
     }
@@ -2781,9 +2923,9 @@ impl Drop for ComponentBuildContext {
 /// A component build scope that restores the previous node and build context on exit.
 pub struct ComponentNodeScope {
     instance_logic_id: u64,
+    instance_key: u64,
     retained: bool,
     _context: ComponentBuildContext,
-    previous: Option<PreviousBuildNode>,
 }
 
 impl ComponentNodeScope {
@@ -2800,52 +2942,39 @@ impl ComponentNodeScope {
 
 impl Drop for ComponentNodeScope {
     fn drop(&mut self) {
+        if self.retained {
+            return;
+        }
         TesseraRuntime::with_mut(|runtime| {
             let tree = &mut runtime.component_tree;
-            if let Some(previous) = &self.previous {
-                let id = tree.current_build_node_id().expect("active component node");
+            let Some(EmittedNode { id, previous }) = tree.finish_call(self.instance_key) else {
+                return;
+            };
+            if let Some(previous) = &previous {
                 tree.reconcile_build_node(id, previous);
             }
-            let id = tree.current_build_node_id().expect("active component node");
-            let node = tree.get(id).expect("active component node");
-            if node.role == NodeRole::Layout && !self.retained {
-                record_layout_node_dirty(
-                    self.previous.as_ref().map(|previous| &previous.node),
-                    node,
-                );
+            let node = tree.get(id).expect("emitted component node");
+            if node.role == NodeRole::Layout {
+                record_layout_node_dirty(previous.as_ref().map(|previous| &previous.node), node);
             }
             tree.pop_node();
         });
     }
 }
 
+enum ReplaySnapshotUpdate {
+    Keep,
+    Replace(Option<Rc<dyn ErasedComponent>>),
+}
+
 /// Enter the build scope for one registered component call.
 pub fn begin_component_node<P: Prop>(
     name: &'static str,
     component_type_id: u64,
-    props: &Arc<P>,
+    props: &Rc<P>,
 ) -> ComponentNodeScope {
-    begin_component_node_with(
-        name,
-        component_type_id,
-        props.as_ref(),
-        &|| props.clone(),
-        NodeRole::Composition,
-    )
-}
-
-enum ReplaySnapshotUpdate {
-    Keep,
-    Replace(Option<Arc<dyn ErasedComponent>>),
-}
-
-fn begin_component_node_with(
-    name: &'static str,
-    component_type_id: u64,
-    props: &dyn ErasedComponent,
-    current_replay: &dyn Fn() -> Arc<dyn ErasedComponent>,
-    role: NodeRole,
-) -> ComponentNodeScope {
+    let current_replay = || -> Rc<dyn ErasedComponent> { props.clone() };
+    let props: &dyn ErasedComponent = props.as_ref();
     let (mut context, instance_logic_id, instance_key) =
         ComponentBuildContext::begin(component_type_id);
     let snapshot_update = with_component_replay_tracker(|tracker| {
@@ -2875,29 +3004,22 @@ fn begin_component_node_with(
     let props_unchanged = !matches!(snapshot_update, ReplaySnapshotUpdate::Replace(None));
     let can_retain =
         props_unchanged && !pending_dirty && !is_instance_key_build_dirty(instance_key);
-    let (id, retained, previous) = TesseraRuntime::with_mut(|runtime| {
+    let (host, retained) = TesseraRuntime::with_mut(|runtime| {
         let tree = &mut runtime.component_tree;
-        if can_retain
-            && let Some(id) = tree.attach_retained_subtree(instance_key, instance_logic_id)
-        {
-            let retained = tree.get_mut(id).expect("retained component node");
-            retained.replay_boundary = true;
-            retained.props_unchanged_from_previous = true;
-            return (id, true, None);
+        let retained = can_retain && tree.attach_retained_call(instance_key, instance_logic_id);
+        if !retained {
+            tree.begin_call(instance_key, instance_logic_id, name);
         }
-        let mut node = ComponentNode::new(name, role);
-        node.instance_logic_id = instance_logic_id;
-        node.instance_key = instance_key;
-        node.replay_boundary = true;
-        node.props_unchanged_from_previous = props_unchanged;
-        let (id, previous) = tree.rebuild_node(node);
-        (id, false, previous)
+        let host = tree
+            .current_build_node_id()
+            .expect("component calls execute inside a host node");
+        (host, retained)
     });
-    context.enter_node(id, instance_logic_id, name);
+    context.enter_node(host, instance_logic_id, name);
     let scope = ComponentNodeScope {
         instance_logic_id,
+        instance_key,
         retained,
-        previous,
         _context: context,
     };
     if let ReplaySnapshotUpdate::Replace(previous_replay) = snapshot_update {
@@ -2917,44 +3039,45 @@ fn begin_component_node_with(
     scope
 }
 
-/// Enters the build scope of a component that defines its own layout.
-pub fn begin_layout_component_node<P: Prop>(
-    name: &'static str,
-    component_type_id: u64,
-    props: &Arc<P>,
-) -> ComponentNodeScope {
-    begin_component_node_with(
-        name,
-        component_type_id,
-        props.as_ref(),
-        &|| props.clone(),
-        NodeRole::Layout,
-    )
-}
-
-/// Installs the policy, drawing behavior, and modifiers for the current layout component.
-pub fn configure_layout_node(
-    policy: impl Into<LayoutModifierHandle>,
-    draw: impl Into<DrawModifierHandle>,
+/// Emits the tree node owned by the executing call and attaches its modifiers.
+pub(crate) fn emit_node(
+    role: NodeRole,
+    policy: LayoutModifierHandle,
+    draw: DrawModifierHandle,
     modifier: Modifier,
 ) {
-    let policy = policy.into();
-    let draw = draw.into().into_node();
-    // Measurement may mutate local policy state, so keep the build input separate.
-    let measurement_policy = policy.as_policy().clone_box();
-    TesseraRuntime::with_mut(|runtime| {
-        let node = runtime
-            .component_tree
-            .current_node_mut()
-            .expect("active layout node");
-        assert_eq!(
-            node.role,
-            NodeRole::Layout,
-            "active node must be a layout component"
-        );
-        node.layout_node = measurement_policy;
+    let (instance_key, instance_logic_id) = with_execution_context(|context| {
+        (
+            context
+                .current_component_instance_stack
+                .last()
+                .copied()
+                .expect("nodes are emitted by a component call"),
+            context
+                .instance_logic_id_stack
+                .last()
+                .copied()
+                .expect("nodes are emitted by a component call"),
+        )
+    });
+    let id = TesseraRuntime::with_mut(|runtime| {
+        let tree = &mut runtime.component_tree;
+        let mut node = ComponentNode::new(tree.executing_call_name(), role);
+        node.instance_logic_id = instance_logic_id;
+        node.instance_key = instance_key;
+        // Measurement may mutate local policy state, so keep the build input separate.
+        node.layout_node = policy.as_policy().clone_box();
         node.layout_input_policy = policy;
-        node.draw_node = draw;
+        node.draw_node = draw.into_node();
+        let (id, previous) = tree.rebuild_node(node);
+        tree.emit_call_node(id, previous);
+        id
+    });
+    with_execution_context_mut(|context| {
+        *context
+            .node_context_stack
+            .last_mut()
+            .expect("component calls enter a node context") = id;
     });
     modifier.attach();
 }
@@ -3071,11 +3194,7 @@ fn current_group_path_hash() -> u64 {
     with_execution_context(|context| context.group_path.digest())
 }
 
-fn state_value<T: Send + Sync + 'static>(
-    table: &SlotTable,
-    slot: SlotHandle,
-    generation: u64,
-) -> Arc<T> {
+fn state_value<T: 'static>(table: &SlotTable, slot: SlotHandle, generation: u64) -> Rc<T> {
     let entry = table
         .entries
         .get(slot)
@@ -3093,23 +3212,23 @@ fn state_value<T: Send + Sync + 'static>(
             entry.key.type_id
         );
     }
-    clone_slot_value(
-        entry
-            .value
-            .as_ref()
-            .unwrap_or_else(|| panic!("State slot {slot:?} has been cleared")),
-        slot,
-    )
+    let Some(value) = entry.value.as_ref() else {
+        panic!("State slot {slot:?} has been cleared")
+    };
+    value
+        .clone()
+        .downcast::<T>()
+        .unwrap_or_else(|_| panic!("State slot {slot:?} downcast failed"))
 }
 
 /// Restores a value moved out of the slot table by [`State::with_mut`].
-struct StateValueRestore<T: Send + Sync + 'static> {
+struct StateValueRestore<T: 'static> {
     slot: SlotHandle,
     generation: u64,
     value: Option<T>,
 }
 
-impl<T: Send + Sync + 'static> Drop for StateValueRestore<T> {
+impl<T: 'static> Drop for StateValueRestore<T> {
     fn drop(&mut self) {
         if let Some(value) = self.value.take() {
             let slot = self.slot;
@@ -3122,11 +3241,7 @@ impl<T: Send + Sync + 'static> Drop for StateValueRestore<T> {
     }
 }
 
-fn take_state_value<T: Send + Sync + 'static>(
-    table: &mut SlotTable,
-    slot: SlotHandle,
-    generation: u64,
-) -> T {
+fn take_state_value<T: 'static>(table: &mut SlotTable, slot: SlotHandle, generation: u64) -> T {
     let entry = table
         .entries
         .get_mut(slot)
@@ -3149,12 +3264,12 @@ fn take_state_value<T: Send + Sync + 'static>(
         .as_ref()
         .unwrap_or_else(|| panic!("State slot {slot:?} has been cleared"));
     assert_eq!(
-        Arc::strong_count(value),
+        Rc::strong_count(value),
         1,
         "State slot {slot:?} is being read"
     );
     let value = entry.value.take().expect("state value is present");
-    Arc::try_unwrap(
+    Rc::try_unwrap(
         value
             .downcast::<T>()
             .unwrap_or_else(|_| panic!("State slot {slot:?} downcast failed")),
@@ -3162,7 +3277,7 @@ fn take_state_value<T: Send + Sync + 'static>(
     .unwrap_or_else(|_| unreachable!("state value must be unique"))
 }
 
-fn restore_state_value<T: Send + Sync + 'static>(
+fn restore_state_value<T: 'static>(
     table: &mut SlotTable,
     slot: SlotHandle,
     generation: u64,
@@ -3177,21 +3292,18 @@ fn restore_state_value<T: Send + Sync + 'static>(
     {
         return Some(value);
     }
-    entry.value = Some(Arc::new(value));
+    entry.value = Some(Rc::new(value));
     None
 }
 
-fn clone_slot_value<T: Send + Sync + 'static>(
-    value: &Arc<dyn Any + Send + Sync>,
-    slot: SlotHandle,
-) -> Arc<T> {
+fn clone_slot_value<T: 'static>(value: &Rc<dyn Any>, slot: SlotHandle) -> Rc<T> {
     value
         .clone()
         .downcast::<T>()
         .unwrap_or_else(|_| panic!("Slot {slot:?} downcast failed"))
 }
 
-fn resolve_state_key<T: Send + Sync + 'static>(
+fn resolve_state_key<T: 'static>(
     key: SlotKey,
     retained: bool,
     init: impl FnOnce() -> T,
@@ -3219,7 +3331,7 @@ fn resolve_state_key<T: Send + Sync + 'static>(
             if entry.value.is_some() || key.owned_owner.is_some() {
                 return (State::new(slot, entry.generation), Some(value));
             }
-            entry.value = Some(Arc::new(value));
+            entry.value = Some(Rc::new(value));
             entry.generation = entry
                 .generation
                 .checked_add(1)
@@ -3229,7 +3341,7 @@ fn resolve_state_key<T: Send + Sync + 'static>(
         let slot = table.entries.insert(SlotEntry {
             key,
             generation: 1,
-            value: Some(Arc::new(value)),
+            value: Some(Rc::new(value)),
             last_alive_epoch: table.epoch,
             retained,
         });
@@ -3250,13 +3362,14 @@ pub(crate) fn modifier_attachment_path() -> [u64; 2] {
     ]
 }
 
-pub(crate) fn modifier_state<T: Send + Sync + 'static>(
+pub(crate) fn modifier_state<T: 'static>(
     instance: u64,
     path: &[u64],
     ordinal: usize,
     init: impl FnOnce() -> T,
 ) -> State<T> {
     let key = SlotKey {
+        kind: SlotKind::State,
         owned_owner: None,
         instance_logic_id: instance,
         slot_hash: hash_components(&[&("modifier-state", path, ordinal)]),
@@ -3342,7 +3455,7 @@ fn resolve_state_slot<K, F, T>(
 where
     K: Hash,
     F: FnOnce() -> T,
-    T: Send + Sync + 'static,
+    T: 'static,
 {
     ensure_build_phase();
     let instance_logic_id = current_instance_logic_id();
@@ -3366,6 +3479,7 @@ where
         hash_components(&[&group_path_hash, &key_hash])
     };
     let slot_key = SlotKey {
+        kind: SlotKind::State,
         owned_owner: None,
         instance_logic_id,
         slot_hash,
@@ -3555,14 +3669,15 @@ pub(crate) fn ensure_build_phase_at(phase: Option<RuntimePhase>) {
     }
 }
 
-fn remember_functor_cell<T, F>(init: F) -> (Arc<T>, FunctorHandle)
+fn remember_functor_cell<T, F>(init: F) -> (Rc<T>, FunctorHandle)
 where
-    T: Send + Sync + 'static,
+    T: 'static,
     F: FnOnce() -> T,
 {
     ensure_build_phase();
     let (instance_logic_id, slot_hash) = compute_functor_slot_key();
     let slot_key = SlotKey {
+        kind: SlotKind::Functor,
         owned_owner: None,
         instance_logic_id,
         slot_hash,
@@ -3582,7 +3697,7 @@ where
             return (value, slot, generation);
         }
 
-        let value = Arc::new(init.take().expect("functor slot initialized once")());
+        let value = Rc::new(init.take().expect("functor slot initialized once")());
         let generation = 1;
         let slot = table.entries.insert(SlotEntry {
             key: slot_key,
@@ -3598,10 +3713,7 @@ where
     (value, FunctorHandle::new(slot, generation))
 }
 
-fn load_functor_cell<T>(handle: FunctorHandle) -> Arc<T>
-where
-    T: Send + Sync + 'static,
-{
+fn load_functor_cell<T: 'static>(handle: FunctorHandle) -> Rc<T> {
     assert_eq!(
         crate::session::current_session_identity(),
         Some(handle.session),
@@ -3629,23 +3741,21 @@ where
             );
         }
 
-        clone_slot_value::<T>(
-            entry
-                .value
-                .as_ref()
-                .unwrap_or_else(|| panic!("Callback slot {:?} has been cleared", handle.slot)),
-            handle.slot,
-        )
+        let value = entry
+            .value
+            .as_ref()
+            .unwrap_or_else(|| panic!("Callback slot {:?} has been cleared", handle.slot));
+        clone_slot_value::<T>(value, handle.slot)
     })
 }
 
 pub(crate) fn remember_callback_handle<F>(handler: F) -> FunctorHandle
 where
-    F: Fn() + Send + Sync + 'static,
+    F: Fn() + 'static,
 {
-    let handler = Arc::new(handler) as Arc<dyn Fn() + Send + Sync>;
+    let handler = Rc::new(handler) as Rc<dyn Fn()>;
     let (cell, handle) = remember_functor_cell({
-        let handler = Arc::clone(&handler);
+        let handler = Rc::clone(&handler);
         move || CallbackCell::new(handler)
     });
     cell.update(handler);
@@ -3659,14 +3769,14 @@ pub(crate) fn invoke_callback_handle(handle: FunctorHandle) {
 
 pub(crate) fn remember_render_slot_handle<F>(render: F) -> FunctorHandle
 where
-    F: Fn() + Send + Sync + 'static,
+    F: Fn() + 'static,
 {
     let static_type = (std::mem::size_of::<F>() == 0).then(TypeId::of::<F>);
-    let render = Arc::new(render) as Arc<dyn Fn() + Send + Sync>;
+    let render = Rc::new(render) as Rc<dyn Fn()>;
     let creator_instance_key = current_replay_boundary_instance_key_from_scope()
         .unwrap_or_else(|| panic!("RenderSlot handles must be created during a component build"));
     let (cell, handle) = remember_functor_cell({
-        let render = Arc::clone(&render);
+        let render = Rc::clone(&render);
         move || RenderSlotCell::new(render, static_type)
     });
     if !cell.update(render, static_type) {
@@ -3684,16 +3794,16 @@ pub(crate) fn invoke_render_slot_handle(handle: FunctorHandle) {
 pub(crate) fn remember_render_slot_with_handle<T, F>(render: F) -> FunctorHandle
 where
     T: 'static,
-    F: Fn(T) + Send + Sync + 'static,
+    F: Fn(T) + 'static,
 {
     let static_type = (std::mem::size_of::<F>() == 0).then(TypeId::of::<F>);
-    let render = Arc::new(render) as Arc<dyn Fn(T) + Send + Sync>;
+    let render = Rc::new(render) as Rc<dyn Fn(T)>;
     let creator_instance_key =
         current_replay_boundary_instance_key_from_scope().unwrap_or_else(|| {
             panic!("RenderSlotWith handles must be created during a component build")
         });
     let (cell, handle) = remember_functor_cell({
-        let render = Arc::clone(&render);
+        let render = Rc::clone(&render);
         move || RenderSlotWithCell::new(render, static_type)
     });
     if !cell.update(render, static_type) {
@@ -3715,11 +3825,11 @@ pub(crate) fn remember_callback_with_handle<T, R, F>(handler: F) -> FunctorHandl
 where
     T: 'static,
     R: 'static,
-    F: Fn(T) -> R + Send + Sync + 'static,
+    F: Fn(T) -> R + 'static,
 {
-    let handler = Arc::new(handler) as Arc<dyn Fn(T) -> R + Send + Sync>;
+    let handler = Rc::new(handler) as Rc<dyn Fn(T) -> R>;
     let (cell, handle) = remember_functor_cell({
-        let handler = Arc::clone(&handler);
+        let handler = Rc::clone(&handler);
         move || CallbackWithCell::new(handler)
     });
     cell.update(handler);
@@ -3814,7 +3924,7 @@ pub fn remember_with_key<K, F, T>(key: K, init: F) -> State<T>
 where
     K: Hash,
     F: FnOnce() -> T,
-    T: Send + Sync + 'static,
+    T: 'static,
 {
     resolve_state_slot(key, init, false, "remember_with_key")
 }
@@ -3826,7 +3936,7 @@ where
 pub fn remember<F, T>(init: F) -> State<T>
 where
     F: FnOnce() -> T,
-    T: Send + Sync + 'static,
+    T: 'static,
 {
     remember_with_key((), init)
 }
@@ -3839,7 +3949,7 @@ pub fn retain_with_key<K, F, T>(key: K, init: F) -> State<T>
 where
     K: Hash,
     F: FnOnce() -> T,
-    T: Send + Sync + 'static,
+    T: 'static,
 {
     resolve_state_slot(key, init, true, "retain_with_key")
 }
@@ -3851,7 +3961,7 @@ where
 pub fn retain<F, T>(init: F) -> State<T>
 where
     F: FnOnce() -> T,
-    T: Send + Sync + 'static,
+    T: 'static,
 {
     retain_with_key((), init)
 }
@@ -3897,7 +4007,7 @@ mod tests {
     };
     use crate::layout::MeasureScope;
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
-    use crate::prop::{CallbackWith, RenderSlot};
+    use crate::prop::{CallbackWith, RenderSlot, RenderSlotWith};
     use crate::tessera;
 
     #[derive(Clone, Default, PartialEq)]
@@ -3937,6 +4047,9 @@ mod tests {
     #[derive(Clone, Copy, PartialEq)]
     struct ConditionalLoopRow;
 
+    #[derive(Clone, PartialEq)]
+    struct LocalOnly(Rc<Cell<usize>>);
+
     impl LayoutModifierNode for ConditionalLoopRow {
         fn measure(
             &self,
@@ -3955,7 +4068,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn conditional_loop_item(index: usize, probe: ConditionalLoopProbe) {
         let value = remember(|| index);
         let mut values = probe.values.get();
@@ -3966,7 +4079,7 @@ mod tests {
             .modifier(crate::Modifier::new().push_semantics(ConditionalLoopTag(index)));
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn conditional_loop_fixture(keyed: bool, probe: ConditionalLoopProbe) {
         let order = remember(|| vec![0, 1, 2]);
         let tick = remember(|| 0);
@@ -4039,7 +4152,49 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[test]
+    fn batched_state_writes_invalidate_each_changed_component_reader() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let probe = ConditionalLoopProbe::default();
+        let mut session = crate::testing::start_layout_test_session(
+            crate::testing::layout_test({
+                let probe = probe.clone();
+                move || conditional_loop_fixture(false, probe.clone())
+            })
+            .viewport_px(100, 20),
+        );
+        crate::testing::pump_layout_test_session(&mut session, 0);
+        let first = probe.values.get()[1].unwrap();
+        let second = probe.values.get()[2].unwrap();
+
+        with_batched_state_writes(|| {
+            first.set(11);
+            second.set(22);
+        });
+
+        let changed = crate::testing::pump_layout_test_session(&mut session, 16_666_667);
+        changed.node("loop-item-1").size(11, 10).position(0, 0);
+        changed.node("loop-item-2").size(22, 10).position(11, 0);
+    }
+
+    #[test]
+    fn set_many_validates_the_whole_batch_before_mutating_any_state() {
+        let first_session = crate::RuntimeSession::new();
+        let first = first_session.run(|| with_test_component_scope(11020, || remember(|| 4usize)));
+        let other_session = crate::RuntimeSession::new();
+        let foreign =
+            other_session.run(|| with_test_component_scope(11021, || remember(|| 8usize)));
+
+        first_session.run(|| {
+            assert!(
+                std::panic::catch_unwind(|| State::set_many([(first, 40), (foreign, 80)])).is_err()
+            );
+            assert_eq!(first.get(), 4);
+        });
+    }
+
+    #[tessera]
     fn required_value_component(value: Option<usize>, on_value: Option<CallbackWith<usize>>) {
         let value = value.expect("missing required prop `value` in `required_value_component`");
         if let Some(on_value) = on_value {
@@ -4047,7 +4202,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn optional_value_component(
         value: Option<usize>,
         on_value: Option<CallbackWith<Option<usize>>>,
@@ -4055,6 +4210,16 @@ mod tests {
         if let Some(on_value) = on_value {
             on_value.call(value);
         }
+    }
+
+    #[tessera]
+    fn local_value_component(value: LocalOnly) {
+        value.0.set(value.0.get() + 1);
+    }
+
+    #[tessera]
+    fn local_slot_component(children: Option<RenderSlot>) {
+        children.unwrap_or_else(RenderSlot::empty).render();
     }
 
     fn seed_previous_replay_snapshot(instance_key: u64) {
@@ -4066,7 +4231,7 @@ mod tests {
                 true
             }
 
-            fn run_component(self: Arc<Self>) {}
+            fn run_component(self: Rc<Self>) {}
         }
 
         with_component_replay_tracker_mut(|tracker| {
@@ -4077,7 +4242,7 @@ mod tests {
                     group_path: GroupPath::default(),
                     instance_key_override: None,
                     context: ContextMap::default(),
-                    replay: Arc::new(Noop),
+                    replay: Rc::new(Noop),
                 },
             );
         });
@@ -4147,7 +4312,7 @@ mod tests {
                 true
             }
 
-            fn run_component(self: Arc<Self>) {}
+            fn run_component(self: Rc<Self>) {}
         }
 
         impl Drop for ReleaseOnDrop {
@@ -4172,7 +4337,7 @@ mod tests {
             tracker.previous_nodes.insert(
                 11,
                 ReplayNodeSnapshot {
-                    replay: Arc::new(ReleaseOnDrop(released.clone())),
+                    replay: Rc::new(ReleaseOnDrop(released.clone())),
                     ..snapshot.clone()
                 },
             );
@@ -4187,8 +4352,14 @@ mod tests {
 
     fn with_test_component_scope<R>(component_type_id: u64, f: impl FnOnce() -> R) -> R {
         reset_execution_context();
-        let mut arena = crate::Arena::<()>::new();
-        let node_id = arena.new_node(());
+        let node_id = TesseraRuntime::with_mut(|runtime| {
+            runtime.component_tree.clear();
+            runtime.component_tree.begin_build_root();
+            runtime
+                .component_tree
+                .current_build_node_id()
+                .expect("build root")
+        });
         let _phase_guard = push_phase(RuntimePhase::Build);
         let _node_guard = push_current_node(node_id, component_type_id, "test_component");
         let _instance_guard = push_current_component_instance_key(current_instance_key());
@@ -4220,6 +4391,56 @@ mod tests {
         let replacement = with_test_component_scope(815, || remember(|| 7_u32));
         assert!(replacement.is_alive());
         assert!(!state.is_alive());
+    }
+
+    #[test]
+    fn remembered_state_accepts_ui_thread_local_values() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        reset_slots();
+        let state = with_test_component_scope(817, || remember(|| Rc::new(Cell::new(4))));
+
+        state.with(|value| value.set(9));
+        assert_eq!(state.with(|value| value.get()), 9);
+        state.set(Rc::new(Cell::new(12)));
+        assert_eq!(state.with(|value| value.get()), 12);
+
+        let owner = StateOwner::new();
+        let owned = owner.state_with_key("local", || Rc::new(Cell::new(3)));
+        owned.with(|value| value.set(8));
+        assert_eq!(owned.with(|value| value.get()), 8);
+        owner.close();
+        assert!(!owned.is_alive());
+    }
+
+    #[test]
+    fn callbacks_and_render_slots_accept_ui_thread_local_captures() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        reset_slots();
+        let value = Rc::new(Cell::new(0));
+
+        let callback = with_test_component_scope(818, || {
+            let value = Rc::clone(&value);
+            crate::Callback::new(move || value.set(1))
+        });
+        callback.call();
+        assert_eq!(value.get(), 1);
+
+        let slot = with_test_component_scope(819, || {
+            let value = Rc::clone(&value);
+            RenderSlot::new(move || value.set(2))
+        });
+        with_test_component_scope(820, || slot.render());
+        assert_eq!(value.get(), 2);
+
+        let with_value = with_test_component_scope(821, || {
+            let value = Rc::clone(&value);
+            RenderSlotWith::new(move |next: Rc<Cell<usize>>| value.set(next.get()))
+        });
+        let next = Rc::new(Cell::new(7));
+        with_test_component_scope(822, || with_value.render(Rc::clone(&next)));
+        assert_eq!(value.get(), 7);
     }
 
     #[test]
@@ -4608,6 +4829,33 @@ mod tests {
     }
 
     #[test]
+    fn component_props_accept_ui_thread_local_values() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let value = Rc::new(Cell::new(4));
+
+        with_test_component_scope(11017, || local_value_component(LocalOnly(value.clone())));
+
+        assert_eq!(value.get(), 5);
+
+        let callback_value = Rc::new(Cell::new(0));
+        with_test_component_scope(11018, || {
+            let callback_value = Rc::clone(&callback_value);
+            optional_value_component().on_value(move |value: Option<usize>| {
+                callback_value.set(value.unwrap_or_default());
+            });
+        });
+        assert_eq!(callback_value.get(), 0);
+
+        let slot_value = Rc::new(Cell::new(0));
+        with_test_component_scope(11019, || {
+            let slot_value = Rc::clone(&slot_value);
+            local_slot_component().children(move || slot_value.set(9));
+        });
+        assert_eq!(slot_value.get(), 9);
+    }
+
+    #[test]
     fn render_slot_update_invalidates_reader_instance() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
@@ -4804,7 +5052,7 @@ mod tests {
         let root_node = TesseraRuntime::with_mut(|runtime| {
             runtime
                 .component_tree
-                .add_node(ComponentNode::new("root", NodeRole::Composition))
+                .add_node(ComponentNode::new("root", NodeRole::Group))
         });
         let _phase_guard = push_phase(RuntimePhase::Build);
 
@@ -4838,12 +5086,14 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         let mut table = SlotTable::default();
         let keep_key = SlotKey {
+            kind: SlotKind::State,
             owned_owner: None,
             instance_logic_id: 7,
             slot_hash: 11,
             type_id: TypeId::of::<i32>(),
         };
         let drop_key = SlotKey {
+            kind: SlotKind::State,
             owned_owner: None,
             instance_logic_id: 7,
             slot_hash: 12,
@@ -4853,14 +5103,14 @@ mod tests {
         let keep_slot = table.entries.insert(SlotEntry {
             key: keep_key,
             generation: 1,
-            value: Some(Arc::new(10_i32)),
+            value: Some(Rc::new(10_i32)),
             last_alive_epoch: 0,
             retained: true,
         });
         let drop_slot = table.entries.insert(SlotEntry {
             key: drop_key,
             generation: 1,
-            value: Some(Arc::new(20_i32)),
+            value: Some(Rc::new(20_i32)),
             last_alive_epoch: 0,
             retained: false,
         });

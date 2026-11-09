@@ -10,7 +10,7 @@ use std::{
     collections::VecDeque,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    sync::Arc,
+    rc::Rc,
 };
 
 use rustc_hash::FxHasher;
@@ -28,7 +28,7 @@ use crate::{
     session::with_runtime_globals,
 };
 
-type PropUpdate = Box<dyn FnOnce(&mut dyn Any) + Send + Sync>;
+type PropUpdate = Box<dyn FnOnce(&mut dyn Any)>;
 
 const MAX_RECYCLED_QUEUE_CAPACITY: usize = 256;
 
@@ -50,12 +50,12 @@ struct PendingDeclaration {
 }
 
 struct PendingConfiguration {
-    props: Arc<dyn ErasedComponent>,
+    props: Rc<dyn ErasedComponent>,
     updates: Vec<(&'static str, usize, PropUpdate)>,
 }
 
-fn pending_props_mut(props: &mut Arc<dyn ErasedComponent>) -> &mut dyn ErasedComponent {
-    Arc::get_mut(props).expect("pending props have a single owner")
+fn pending_props_mut(props: &mut Rc<dyn ErasedComponent>) -> &mut dyn ErasedComponent {
+    Rc::get_mut(props).expect("pending props have a single owner")
 }
 
 new_key_type! {
@@ -156,7 +156,7 @@ impl<P: Prop> ComponentCall<P> {
     #[track_caller]
     pub fn configure_deferred<F>(&self, property: &'static str, update: F)
     where
-        F: FnOnce(&mut P) + Send + Sync + 'static,
+        F: FnOnce(&mut P) + 'static,
     {
         self.store(property, false, update);
     }
@@ -165,7 +165,7 @@ impl<P: Prop> ComponentCall<P> {
     #[track_caller]
     pub fn append<F>(&self, property: &'static str, update: F)
     where
-        F: FnOnce(&mut P) + Send + Sync + 'static,
+        F: FnOnce(&mut P) + 'static,
     {
         self.store(property, true, update);
     }
@@ -173,7 +173,7 @@ impl<P: Prop> ComponentCall<P> {
     #[track_caller]
     fn store<F>(&self, property: &'static str, append: bool, update: F)
     where
-        F: FnOnce(&mut P) + Send + Sync + 'static,
+        F: FnOnce(&mut P) + 'static,
     {
         let session = self.owning_session();
         let update: PropUpdate = Box::new(move |props| {
@@ -282,7 +282,7 @@ pub fn register_component_call<P: Prop>(
     component_type_id: u64,
     props: P,
 ) -> ComponentCall<P> {
-    let (session, id) = register_erased_call(name, component_type_id, Arc::new(props));
+    let (session, id) = register_erased_call(name, component_type_id, Rc::new(props));
     ComponentCall {
         session,
         id,
@@ -294,7 +294,7 @@ pub fn register_component_call<P: Prop>(
 fn register_erased_call(
     name: &'static str,
     component_type_id: u64,
-    props: Arc<dyn ErasedComponent>,
+    props: Rc<dyn ErasedComponent>,
 ) -> (RuntimeSessionId, PendingToken) {
     let session = RuntimeSession::current().expect("a runtime session must be active");
     let mut context = session.execution_context().borrow_mut();
@@ -525,7 +525,7 @@ pub(crate) fn reset_pending_calls() {
 mod tests {
     use std::{
         panic::{AssertUnwindSafe, catch_unwind},
-        sync::Arc,
+        rc::Rc,
     };
 
     use crate::{
@@ -549,7 +549,7 @@ mod tests {
             self.value == other.value && self.slot == other.slot
         }
 
-        fn run_component(self: Arc<Self>) {
+        fn run_component(self: Rc<Self>) {
             self.recorder
                 .observed
                 .with_mut(|values| values.push((self.value, self.slot)));

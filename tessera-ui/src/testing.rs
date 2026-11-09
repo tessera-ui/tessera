@@ -828,7 +828,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn transparent_dirty_siblings(revision: State<u8>) {
         let stable = remember(|| 0_u8);
         for (tag, revision) in [("left", revision), ("right", revision), ("stable", stable)] {
@@ -840,7 +840,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn dirty_siblings_fixture(probe: super::TestProbe<Option<State<u8>>>) {
         let revision = remember(|| 0_u8);
         probe.set(Some(revision));
@@ -868,7 +868,7 @@ mod tests {
         );
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn measure_only_width_fixture(probe: MeasureProbe) {
         let width = remember(|| 40);
         probe.width.set(Some(width));
@@ -905,7 +905,7 @@ mod tests {
             .width(120);
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn layout_dependent_build_fixture(probe: MeasureProbe) {
         let width = remember(|| 40);
         let observed_width = remember(|| 0);
@@ -953,7 +953,7 @@ mod tests {
         assert!(!session.run(|| crate::renderer::frame_settling_can_progress(false)));
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn layout_feedback_fixture(probe: super::TestProbe<Option<State<i32>>>) {
         let width = remember(|| 1);
         probe.set(Some(width));
@@ -1006,7 +1006,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn retained_measure_fixture(probe: MeasureProbe) {
         let visible = remember(|| true);
         let width = remember(|| 40);
@@ -1079,7 +1079,7 @@ mod tests {
         geometry_counts: super::TestProbe<Option<State<(u32, u32, u32)>>>,
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn position_handler_fixture(probe: PositionProbe) {
         use crate::modifier::FocusModifierExt as _;
 
@@ -1199,13 +1199,13 @@ mod tests {
         child: super::TestProbe<Option<State<bool>>>,
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn remembered_resource_child(owner: State<u32>, drops: super::TestProbe<usize>) {
         let _lease = remember(|| ResourceLease { owner, drops });
         crate::layout::layout();
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn remembered_resource_fixture(drops: super::TestProbe<usize>, probe: ResourceProbe) {
         let owner = remember(|| 0_u32);
         let local = remember(|| true);
@@ -1441,7 +1441,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn tagged_box(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
         let tag = tag.unwrap_or_default();
         let width = width.unwrap_or_default();
@@ -1452,7 +1452,7 @@ mod tests {
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn responsive_box(tag: Option<String>) {
         let tag = tag.unwrap_or_default();
         crate::layout::layout()
@@ -1461,7 +1461,7 @@ mod tests {
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn stack_content() {
         crate::layout::layout()
             .policy(VerticalStackPolicy)
@@ -1473,7 +1473,7 @@ mod tests {
             });
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn sample_layout() {
         crate::layout::layout()
             .policy(FixedSizePolicy {
@@ -1487,17 +1487,17 @@ mod tests {
             });
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn title_box() {
         tagged_box().tag("title".to_string()).width(200).height(40);
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn button_box() {
         tagged_box().tag("button".to_string()).width(120).height(32);
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn animated_layout_sample() {
         let offset = remember(|| 0_i32);
 
@@ -1526,7 +1526,7 @@ mod tests {
             });
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn animated_modifier_layout_sample() {
         let width = remember(|| 20_i32);
 
@@ -1564,7 +1564,7 @@ mod tests {
             });
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn animated_offset_modifier_sample() {
         let x = remember(|| 0_i32);
 
@@ -1599,7 +1599,7 @@ mod tests {
             );
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn slot_host(slot: Option<RenderSlot>) {
         let slot = slot.unwrap_or_default();
         crate::layout::layout()
@@ -1611,7 +1611,7 @@ mod tests {
             });
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn nested_prop_slot(width: i32, remaining: usize) {
         if remaining == 0 {
             crate::layout::layout()
@@ -1626,7 +1626,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn nested_prop_slot_fixture(probe: super::TestProbe<Option<State<i32>>>) {
         let width = remember(|| 20);
         probe.set(Some(width));
@@ -1658,7 +1658,7 @@ mod tests {
         );
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn animated_nested_slot_sample() {
         let width = remember(|| 20_i32);
 
@@ -1697,7 +1697,7 @@ mod tests {
             });
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn ordered_layout_modifier_sample() {
         crate::layout::layout()
             .policy(crate::layout::DefaultLayoutNode)
@@ -1718,7 +1718,7 @@ mod tests {
             });
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn explicit_layout_boundary_sample(width: super::TestProbe<Option<State<i32>>>) {
         let state = remember(|| 24);
         width.set(Some(state));
@@ -1804,7 +1804,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn intrinsic_probe_fixture(intrinsic_first: bool) {
         crate::layout::layout()
             .policy(IntrinsicProbePolicy { intrinsic_first })
@@ -2006,22 +2006,21 @@ mod tests {
                     .expect("build root");
                 let mut nodes = root
                     .descendants(tree)
-                    .filter(|&id| tree[id].get().fn_name == "layout");
+                    .filter(|&id| tree[id].get().fn_name == "explicit_layout_boundary_sample");
                 let id = nodes.next().expect("layout node");
                 assert_eq!(tree[id].get().role, NodeRole::Layout);
-                assert!(tree[id].get().replay_boundary);
                 assert!(nodes.next().is_none());
                 id
             })
         };
 
         pump_layout_test_session(&mut session, 0)
-            .node("layout")
+            .node("explicit_layout_boundary_sample")
             .size(24, 12);
         let initial = session.session.run(layout_id);
         width.get().expect("width state").set(36);
         pump_layout_test_session(&mut session, 16_666_667)
-            .node("layout")
+            .node("explicit_layout_boundary_sample")
             .size(36, 12);
         assert_eq!(session.session.run(layout_id), initial);
     }
@@ -2067,7 +2066,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn intrinsic_state_fixture(probe: super::TestProbe<Option<State<i32>>>) {
         let width = remember(|| 40);
         probe.set(Some(width));
@@ -2159,7 +2158,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn placement_state_fixture(transform: bool, probe: PhaseProbe) {
         let offset = remember(|| 0);
         probe.offset.set(Some(offset));
@@ -2250,7 +2249,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn retained_phase_fixture(transform: bool, probe: PhaseProbe) {
         let visible = remember(|| true);
         probe.visible.set(Some(visible));
@@ -2330,12 +2329,12 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn inner_layout_cache_sample() {
         crate::layout::layout();
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn nested_composition_layout_sample() {
         crate::layout::layout().child(|| inner_layout_cache_sample());
     }
@@ -2397,7 +2396,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn policy_snapshot_fixture(probe: super::TestProbe<Option<State<bool>>>) {
         let renamed = remember(|| false);
         probe.set(Some(renamed));
@@ -2439,7 +2438,7 @@ mod tests {
         );
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn registered_handles_layout() {
         crate::layout::layout()
             .policy(VerticalStackPolicy)
@@ -2468,7 +2467,7 @@ mod tests {
         snapshot.node("forgotten").size(5, 6).position(0, 20);
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn closed_slot_host(slot: Option<RenderSlot>) {
         let _ = slot;
     }
@@ -2477,7 +2476,7 @@ mod tests {
     fn a_parent_that_does_not_expand_its_slot_registers_no_child_content() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        #[tessera(crate)]
+        #[tessera]
         fn fixture() {
             closed_slot_host().slot(|| panic!("unexpanded slot was invoked"));
             tagged_box().tag("visible".to_owned()).width(10).height(10);
@@ -2485,7 +2484,7 @@ mod tests {
         layout_test(fixture).run().node("visible").size(10, 10);
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn interleaved_slot_fixture() {
         crate::layout::layout()
             .policy(VerticalStackPolicy)
@@ -2536,7 +2535,7 @@ mod tests {
         probe.rejected.set(probe.rejected.get() + 1);
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn committed_call_fixture(probe: CommittedProbe) {
         let revision = remember(|| 0);
         probe.rebuild.set(Some(revision));
@@ -2583,7 +2582,7 @@ mod tests {
         owners: super::TestProbe<Vec<(String, State<u32>, RenderSlot)>>,
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn contextual_call(tag: String, child: Option<RenderSlot>, probe: ContextProbe) {
         assert_eq!(crate::use_context::<CallTheme>().unwrap().get().0, 17);
         let local = remember(|| 0);
@@ -2615,7 +2614,7 @@ mod tests {
         });
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn contextual_calls_fixture(probe: ContextProbe) {
         let reversed = remember(|| false);
         probe.reversed.set(Some(reversed));
@@ -2663,7 +2662,7 @@ mod tests {
         probe.owners.with(|owners| assert_eq!(owners.len(), 2));
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn root_props_call(
         action: crate::Callback,
         child: RenderSlot,
@@ -2712,7 +2711,7 @@ mod tests {
         assert_eq!(calls.get(), 3);
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn static_slot_choice_fixture(probe: super::TestProbe<Option<State<bool>>>) {
         let choice = remember(|| false);
         probe.set(Some(choice));
@@ -2750,12 +2749,12 @@ mod tests {
             .size(20, 8);
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn required_unit_slot_probe(child: crate::RenderSlotWith<()>) {
         child.render(());
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn unit_slot_leaf() {
         tagged_box()
             .tag("required-unit-child".to_owned())

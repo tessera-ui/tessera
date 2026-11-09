@@ -5,7 +5,7 @@
 //! Internal prop comparison and replay support used by generated component
 //! props.
 
-use std::{any::Any, marker::PhantomData, ptr, sync::Arc};
+use std::{any::Any, marker::PhantomData, ptr, rc::Rc, sync::Arc};
 
 use crate::{
     runtime::{
@@ -78,7 +78,7 @@ impl Callback {
     #[track_caller]
     pub fn new<F>(handler: F) -> Self
     where
-        F: Fn() + Send + Sync + 'static,
+        F: Fn() + 'static,
     {
         Self {
             repr: CallbackRepr::Handle(remember_callback_handle(handler)),
@@ -103,7 +103,7 @@ impl Callback {
 
 impl<F> From<F> for Callback
 where
-    F: Fn() + Send + Sync + 'static,
+    F: Fn() + 'static,
 {
     fn from(handler: F) -> Self {
         Self::new(handler)
@@ -158,7 +158,7 @@ where
     #[track_caller]
     pub fn new<F>(handler: F) -> Self
     where
-        F: Fn(T) -> R + Send + Sync + 'static,
+        F: Fn(T) -> R + 'static,
     {
         Self {
             repr: CallbackWithRepr::Handle(remember_callback_with_handle(handler)),
@@ -184,7 +184,7 @@ impl<T, R, F> From<F> for CallbackWith<T, R>
 where
     T: 'static,
     R: 'static,
-    F: Fn(T) -> R + Send + Sync + 'static,
+    F: Fn(T) -> R + 'static,
 {
     fn from(handler: F) -> Self {
         Self::new(handler)
@@ -246,7 +246,7 @@ where
 /// Owned UI content expanded by its parent during a Tessera build.
 ///
 /// The parent decides whether, when, and where content expands. Captures must
-/// be owned, Send, Sync, and static; capture stable State handles for changing data.
+/// be owned and static; capture stable state handles for changing data.
 ///
 /// Stored content owns its captures. Move local values into its closure:
 ///
@@ -298,7 +298,7 @@ impl RenderSlot {
     #[track_caller]
     pub fn new<F, Output>(render: F) -> Self
     where
-        F: Fn() -> Output + Send + Sync + 'static,
+        F: Fn() -> Output + 'static,
     {
         Self {
             repr: RenderSlotRepr::Handle(remember_render_slot_handle(move || {
@@ -327,7 +327,7 @@ impl RenderSlot {
     }
 }
 
-#[tessera(crate)]
+#[tessera]
 fn render_slot_boundary(handle: FunctorHandle) {
     track_render_slot_read_dependency(handle);
     invoke_render_slot_handle(handle);
@@ -335,7 +335,7 @@ fn render_slot_boundary(handle: FunctorHandle) {
 
 impl<F, Output> From<F> for RenderSlot
 where
-    F: Fn() -> Output + Send + Sync + 'static,
+    F: Fn() -> Output + 'static,
 {
     fn from(render: F) -> Self {
         Self::new(render)
@@ -383,7 +383,7 @@ impl<T> RenderSlotWith<T> {
     pub fn new<F, Output>(render: F) -> Self
     where
         T: 'static,
-        F: Fn(T) -> Output + Send + Sync + 'static,
+        F: Fn(T) -> Output + 'static,
     {
         Self {
             handle: remember_render_slot_with_handle(move |value| {
@@ -398,7 +398,7 @@ impl<T> RenderSlotWith<T> {
     /// Call this only from a component or recognized build closure.
     pub fn render(&self, value: T)
     where
-        T: Clone + PartialEq + Send + Sync + 'static,
+        T: Clone + PartialEq + 'static,
     {
         render_slot_with_boundary(self.handle, value)
             .props
@@ -406,10 +406,10 @@ impl<T> RenderSlotWith<T> {
     }
 }
 
-#[tessera(crate)]
+#[tessera]
 fn render_slot_with_boundary<T>(handle: FunctorHandle, value: T)
 where
-    T: Clone + PartialEq + Send + Sync + 'static,
+    T: Clone + PartialEq + 'static,
 {
     track_render_slot_read_dependency(handle);
     invoke_render_slot_with_handle(handle, value)
@@ -418,7 +418,7 @@ where
 impl<T, F, Output> From<F> for RenderSlotWith<T>
 where
     T: 'static,
-    F: Fn(T) -> Output + Send + Sync + 'static,
+    F: Fn(T) -> Output + 'static,
 {
     fn from(render: F) -> Self {
         Self::new(render)
@@ -453,18 +453,18 @@ impl<T> PartialEq for RenderSlotWith<T> {
 impl<T> Eq for RenderSlotWith<T> {}
 
 /// Internal component props contract used by replay and prop comparison.
-pub trait Prop: Clone + Send + Sync + 'static {
+pub trait Prop: Clone + 'static {
     /// Compare current props with another props value.
     fn prop_eq(&self, other: &Self) -> bool;
     /// Execute the component with these props.
-    fn run_component(self: Arc<Self>);
+    fn run_component(self: Rc<Self>);
 }
 
-pub(crate) trait ErasedComponent: Send + Sync {
+pub(crate) trait ErasedComponent {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn equals(&self, other: &dyn ErasedComponent) -> bool;
-    fn run(self: Arc<Self>);
+    fn run(self: Rc<Self>);
 }
 
 impl<T> ErasedComponent for T
@@ -485,7 +485,7 @@ where
         };
         self.prop_eq(other)
     }
-    fn run(self: Arc<Self>) {
+    fn run(self: Rc<Self>) {
         self.run_component();
     }
 }

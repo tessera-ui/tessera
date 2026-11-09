@@ -40,7 +40,7 @@ use crate::router::{RouterController, RouterDestination, back::route_display};
 /// # }
 /// # tessera_ui::testing::layout_test(demo).run();
 /// ```
-#[tessera(tessera_ui)]
+#[tessera]
 pub fn shard_home(
     #[prop(skip_setter)] root: Option<Arc<dyn RouterDestination>>,
     controller: Option<State<RouterController>>,

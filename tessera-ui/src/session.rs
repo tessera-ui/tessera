@@ -76,6 +76,11 @@ pub struct RuntimeSession(Rc<SessionState>);
 pub struct WeakRuntimeSession(Weak<SessionState>);
 
 impl WeakRuntimeSession {
+    /// Returns a reference to the active session, if any.
+    pub fn current() -> Option<Self> {
+        RuntimeSession::current().map(|session| session.downgrade())
+    }
+
     /// Runs work on the owning UI thread while the session is still alive.
     pub fn run<R>(&self, work: impl FnOnce() -> R) -> Option<R> {
         self.0
@@ -385,7 +390,7 @@ mod tests {
 
     use super::{RuntimeSession, local_runtime_resource};
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn observed_state(output: TestProbe<Option<State<usize>>>) {
         let state = remember(|| 7usize);
         let _value = state.get();
@@ -494,7 +499,7 @@ mod tests {
         }
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn clock_probe(output: TestProbe<Vec<u64>>) {
         let active = remember(|| true);
         if active.get() {
@@ -526,7 +531,7 @@ mod tests {
         assert_eq!(session.frame_clock_diagnostics().callbacks_executed, 0);
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn persistent_clock_probe(output: TestProbe<Vec<u64>>) {
         let capture = ObserveClockOnDrop(output);
         crate::receive_frame_nanos(move |_| {
@@ -579,7 +584,7 @@ mod tests {
         );
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn owned_state_reader(value: State<usize>, output: TestProbe<usize>) {
         output.set(value.get());
     }
@@ -645,7 +650,7 @@ mod tests {
         }
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn modifier_owner_fixture(
         visible: State<bool>,
         extra: State<bool>,
@@ -729,7 +734,7 @@ mod tests {
         }
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn clock_modifier_fixture(visible: State<bool>, output: TestProbe<Vec<u64>>) {
         let modifier = if visible.get() {
             crate::Modifier::new().push_build(ClockModifier(output))

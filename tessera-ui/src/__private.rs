@@ -6,10 +6,9 @@ pub use crate::{
     prop::Prop,
     runtime::{
         CurrentComponentInstanceGuard, GroupGuard, NodeContextGuard, PathGroupGuard, PhaseGuard,
-        RuntimePhase, begin_component_node, begin_layout_component_node, configure_layout_node,
-        push_current_component_instance_key, push_current_node, push_phase,
+        RuntimePhase, begin_component_node, push_current_component_instance_key, push_current_node,
+        push_phase,
     },
-    session::{local_runtime_resource, runtime_resource},
 };
 
 pub fn current_instance_logic_id() -> u64 {
@@ -26,10 +25,6 @@ pub fn current_instance_key() -> u64 {
 
 pub fn current_phase() -> Option<RuntimePhase> {
     crate::runtime::current_phase()
-}
-
-pub fn current_runtime_session() -> Option<crate::WeakRuntimeSession> {
-    crate::RuntimeSession::current().map(|session| session.downgrade())
 }
 
 pub fn current_replay_boundary_instance_key_from_scope() -> Option<u64> {

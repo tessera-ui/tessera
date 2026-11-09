@@ -221,11 +221,7 @@ mod tests {
             let sizes: Vec<_> = snapshot
                 .nodes()
                 .iter()
-                .filter(|node| {
-                    std::iter::successors(snapshot.parent(node), |parent| snapshot.parent(parent))
-                        .take_while(|parent| parent.layout_coordinates().is_none())
-                        .any(|parent| parent.name() == "fluid_glass_inner")
-                })
+                .filter(|node| node.name() == "fluid_glass_inner")
                 .filter_map(|node| {
                     node.layout_coordinates()
                         .map(|coordinates| coordinates.local_size)

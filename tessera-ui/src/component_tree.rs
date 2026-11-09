@@ -1,3 +1,4 @@
+mod calls;
 mod constraint;
 mod node;
 mod node_map;
@@ -44,6 +45,7 @@ pub use node::{
     PointerInputHandlerFn,
 };
 
+pub(crate) use calls::EmittedNode;
 pub(crate) use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
     WindowDragRequest, WindowRequests, direct_layout_children, measure_node, sibling_index,
@@ -127,29 +129,12 @@ impl LayoutSnapshotMap {
     }
 }
 
+/// Returns the key of the call that emitted `node_id`.
 pub(crate) fn nearest_replay_boundary_instance_key(
     node_id: NodeId,
     tree: &ComponentNodeTree,
 ) -> u64 {
-    let mut current_id = node_id;
-    let mut fallback = 0;
-
-    loop {
-        let Some(node_ref) = tree.get(current_id) else {
-            return fallback;
-        };
-        let node = node_ref.get();
-        if fallback == 0 {
-            fallback = node.instance_key;
-        }
-        if node.replay_boundary {
-            return node.instance_key;
-        }
-        let Some(parent_id) = node_ref.parent() else {
-            return fallback;
-        };
-        current_id = parent_id;
-    }
+    tree.get(node_id).map_or(0, |node| node.get().instance_key)
 }
 
 pub(crate) fn clear_layout_snapshots() {
@@ -549,6 +534,7 @@ pub struct ComponentTree {
     replay_insertions: ReplayInsertions,
     replay_ancestry: replay::ReplayAncestry,
     replay_changed_parents: HashSet<NodeId>,
+    calls: calls::CallTable,
     node_ids_by_instance_key: HashMap<u64, indextree::NodeId>,
     changed_frame_nodes: HashSet<NodeId>,
     removed_frame_nodes: HashSet<NodeId>,
@@ -577,17 +563,11 @@ pub struct ComponentTree {
         Vec<(GloballyPositionedHandler, node::GeometryObservation)>,
 }
 
-#[derive(Clone, PartialEq)]
-pub(crate) enum ReplayReplaceError {
-    NodeNotFound,
-    RootNodeNotReplaceable,
-    ReplayDidNotCreateRoot,
-}
-
 #[derive(Default)]
 pub(crate) struct ReplayReplaceResult {
     pub removed_instance_keys: HashSet<u64>,
     pub removed_instance_logic_ids: HashSet<u64>,
+    executed_calls: Vec<(u64, u64)>,
     insertions: ReplayInsertions,
 }
 
@@ -595,20 +575,16 @@ impl ReplayReplaceResult {
     fn clear(&mut self) {
         clear_replay_set(&mut self.removed_instance_keys);
         clear_replay_set(&mut self.removed_instance_logic_ids);
+        self.executed_calls.clear();
         self.insertions.clear();
     }
 
     pub(crate) fn executed_keys(&self) -> impl Iterator<Item = u64> + '_ {
-        self.insertions
-            .rebuilt
-            .iter()
-            .filter_map(|&(key, _)| (!self.insertions.retained.keys.contains(&key)).then_some(key))
+        self.executed_calls.iter().map(|&(key, _)| key)
     }
 
     pub(crate) fn recomposed_logic_ids(&self) -> impl Iterator<Item = u64> + '_ {
-        self.insertions.rebuilt.iter().filter_map(|&(_, logic_id)| {
-            (!self.insertions.retained.logic_ids.contains(&logic_id)).then_some(logic_id)
-        })
+        self.executed_calls.iter().map(|&(_, logic_id)| logic_id)
     }
 
     pub(crate) fn retained_count(&self) -> usize {
@@ -670,7 +646,6 @@ struct ReplayRange {
 
 pub(crate) struct ReplayReplaceContext {
     parent_id: indextree::NodeId,
-    previous_sibling: Option<indextree::NodeId>,
     previous_queue: Option<Vec<indextree::NodeId>>,
 }
 
@@ -717,6 +692,7 @@ impl ComponentTree {
             replay_insertions: ReplayInsertions::default(),
             replay_ancestry: replay::ReplayAncestry::default(),
             replay_changed_parents: HashSet::default(),
+            calls: calls::CallTable::default(),
             node_ids_by_instance_key: HashMap::default(),
             changed_frame_nodes: HashSet::default(),
             removed_frame_nodes: HashSet::default(),
@@ -765,6 +741,7 @@ impl ComponentTree {
         self.replay_insertions.clear();
         self.replay_ancestry = replay::ReplayAncestry::default();
         self.replay_changed_parents.clear();
+        self.calls.clear();
         self.node_ids_by_instance_key.clear();
         self.last_global_rects.clear();
         self.observer_viewport = None;
@@ -861,58 +838,14 @@ impl ComponentTree {
         std::mem::take(&mut self.removed_focus_owners)
     }
 
-    #[cfg(test)]
-    pub(crate) fn begin_replace_subtree_by_instance_key(
-        &mut self,
-        instance_key: u64,
-    ) -> Result<ReplayReplaceContext, ReplayReplaceError> {
-        let Some(target_node_id) = self.find_node_id_by_instance_key(instance_key) else {
-            return Err(ReplayReplaceError::NodeNotFound);
-        };
-        self.begin_replace_subtree(target_node_id)
-    }
-
-    pub(crate) fn begin_replace_subtree(
-        &mut self,
-        target_node_id: NodeId,
-    ) -> Result<ReplayReplaceContext, ReplayReplaceError> {
-        let node = self
-            .tree
-            .get(target_node_id)
-            .filter(|node| !node.is_removed())
-            .ok_or(ReplayReplaceError::NodeNotFound)?;
-        let parent_id = node
-            .parent()
-            .ok_or(ReplayReplaceError::RootNodeNotReplaceable)?;
-
-        let previous_sibling = target_node_id.previous_sibling(&self.tree);
-        let next_sibling = target_node_id.next_sibling(&self.tree);
-        self.replay_range = Some(ReplayRange {
-            parent: parent_id,
-            next_sibling,
-        });
-
-        self.queue_replay_children(parent_id, target_node_id, next_sibling);
-
-        let previous_queue =
-            (!self.node_queue.is_empty()).then(|| std::mem::take(&mut self.node_queue));
-        self.node_queue.push(parent_id);
-        Ok(ReplayReplaceContext {
-            parent_id,
-            previous_sibling,
-            previous_queue,
-        })
-    }
-
     pub(crate) fn finish_replace_subtree(
         &mut self,
         context: ReplayReplaceContext,
         result: &mut ReplayReplaceResult,
-    ) -> Result<(), ReplayReplaceError> {
+    ) {
         result.clear();
         let ReplayReplaceContext {
             parent_id,
-            previous_sibling,
             previous_queue,
         } = context;
         if let Some(previous_queue) = previous_queue {
@@ -922,26 +855,19 @@ impl ComponentTree {
         }
 
         self.detach_replay_suffix(parent_id);
-        let next_sibling = self
-            .replay_range
-            .take()
-            .and_then(|range| range.next_sibling);
-        let first_inserted = match previous_sibling {
-            Some(child) => child.next_sibling(&self.tree),
-            None => parent_id.first_child(&self.tree),
-        };
-        if first_inserted.is_none() || first_inserted == next_sibling {
-            self.replay_ancestry = replay::ReplayAncestry::default();
-            self.replay_insertions.clear();
-            return Err(ReplayReplaceError::ReplayDidNotCreateRoot);
-        }
+        self.replay_range = None;
+        self.finish_replay_root();
 
         std::mem::swap(&mut self.replay_insertions, &mut result.insertions);
         let ReplayReplaceResult {
             removed_instance_keys,
             removed_instance_logic_ids,
+            executed_calls,
             insertions,
         } = result;
+        removed_instance_keys.extend(self.calls.removed_keys.drain());
+        removed_instance_logic_ids.extend(self.calls.removed_logic_ids.drain());
+        executed_calls.append(&mut self.calls.executed);
         let rebuilt = &insertions.rebuilt;
         let retained = &insertions.retained;
         let rebuilt_index = (!self.replay_ancestry.detached_roots.is_empty()
@@ -1028,7 +954,6 @@ impl ComponentTree {
         self.replay_ancestry.clear_detached();
 
         self.replay_changed_parents.insert(parent_id);
-        Ok(())
     }
 
     pub(crate) fn finish_replay_round(&mut self) {
@@ -1043,7 +968,7 @@ impl ComponentTree {
             let previous_len = self.tree[id].get().subtree_len;
             let changed = self.refresh_changed_layout_children(id);
             let node = &self.tree[id];
-            let propagate = changed && node.get().role == NodeRole::Composition;
+            let propagate = changed && node.get().role == NodeRole::Group;
             #[cfg(feature = "profiling")]
             let propagate = propagate || previous_len != node.get().subtree_len;
             if propagate
@@ -1088,20 +1013,6 @@ impl ComponentTree {
     pub(crate) fn current_node_mut(&mut self) -> Option<&mut ComponentNode> {
         let node_id = self.node_queue.last()?;
         self.get_mut(*node_id)
-    }
-
-    pub(crate) fn attach_retained_subtree(
-        &mut self,
-        instance_key: u64,
-        instance_logic_id: u64,
-    ) -> Option<NodeId> {
-        let candidate = self.claim_replay_candidate(instance_key, |node| {
-            node.instance_logic_id == instance_logic_id
-        })?;
-        let id = candidate.id;
-        self.capture_reused_ancestry(id);
-        self.attach_replayed_node(candidate, true);
-        Some(id)
     }
 
     /// Add a new node to the tree
@@ -1357,7 +1268,7 @@ impl ComponentTree {
             node.layout_children =
                 Some(shared_children.unwrap_or_else(|| node::LayoutChildren::new(&children)));
         }
-        let propagate = changed && node.role == NodeRole::Composition;
+        let propagate = changed && node.role == NodeRole::Group;
         #[cfg(feature = "profiling")]
         let propagate = propagate || previous_subtree_len != node.subtree_len;
         if propagate && let Some(parent) = self.tree[node_id].parent() {
@@ -4590,7 +4501,7 @@ mod tests {
         rects: crate::testing::TestProbe<Vec<crate::PxRect>>,
     }
 
-    #[crate::tessera(crate)]
+    #[crate::tessera]
     fn retry_reveal_callback_fixture(probe: RevealProbe) {
         let handler = crate::CallbackWith::new({
             let probe = probe.clone();
@@ -5219,9 +5130,9 @@ mod tests {
 
         let mut tree = ComponentTree::new();
         let root = tree.add_node(node("root", 1, 1));
-        tree.add_node(node_with_role("transparent", NodeRole::Composition, 2, 2));
+        tree.add_node(node_with_role("transparent", NodeRole::Group, 2, 2));
         let panel = tree.add_node(node("panel", 3, 3));
-        tree.add_node(node_with_role("content", NodeRole::Composition, 4, 4));
+        tree.add_node(node_with_role("content", NodeRole::Group, 4, 4));
         let leaf_focus = FocusRegistration::target(FocusNode::new());
         let mut leaf_node = node("leaf", 5, 5);
         leaf_node.interaction_mut().focus_registration = Some(leaf_focus);
@@ -5918,7 +5829,7 @@ mod tests {
 
         let mut tree = ComponentTree::new();
         let root = tree.add_node(node("root", 1, 1));
-        let mut container = node_with_role("scope", NodeRole::Composition, 2, 2);
+        let mut container = node_with_role("scope", NodeRole::Group, 2, 2);
         container.interaction_mut().focus_registration =
             Some(FocusRegistration::scope(FocusScopeNode::new()));
         let scope = tree.add_node(container);
@@ -6319,287 +6230,170 @@ mod tests {
         assert!(requests.ime_request.is_none());
     }
 
-    #[test]
-    fn begin_replace_subtree_rejects_root_instance_key() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
+    fn built_tree() -> ComponentTree {
         let mut tree = ComponentTree::new();
-
-        let root = tree.add_node(node("root", 1, 1));
-        tree.pop_node();
-
-        let result = tree.begin_replace_subtree_by_instance_key(1);
-        assert!(matches!(
-            result,
-            Err(ReplayReplaceError::RootNodeNotReplaceable)
-        ));
-        assert!(tree.get(root).is_some());
+        tree.begin_build_root();
+        tree
     }
 
-    #[test]
-    fn finish_replace_subtree_keeps_inserted_roots_before_next_sibling() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        let mut tree = ComponentTree::new();
-
-        let root = tree.add_node(node("root", 1, 1));
-
-        let _first = tree.add_node(node("first", 2, 2));
-        let _first_child = tree.add_node(node("first_child", 3, 3));
-        tree.pop_node();
-        tree.pop_node();
-
-        let second = tree.add_node(node("second", 4, 4));
-
-        let context = match tree.begin_replace_subtree_by_instance_key(2) {
-            Ok(context) => context,
-            Err(_) => panic!("replace context should be created"),
-        };
-
-        let new_a = tree.add_node(node("new_a", 2, 5));
-        let _new_a_child = tree.add_node(node("new_a_child", 60, 6));
-        tree.pop_node();
-        tree.pop_node();
-        let new_b = tree.add_node(node("new_b", 70, 7));
-        tree.pop_node();
-
-        let mut replace_result = ReplayReplaceResult::default();
-        assert!(
-            tree.finish_replace_subtree(context, &mut replace_result)
-                .is_ok()
-        );
-        assert_eq!(tree.current_build_node_id(), Some(second));
-        tree.pop_node();
-        tree.pop_node();
-        tree.finish_replay_round();
-
-        let root_children = root.children(tree.tree()).collect::<Vec<_>>();
-        assert_eq!(root_children, vec![new_a, new_b, second]);
-        #[cfg(feature = "profiling")]
-        assert_eq!(tree.get(root).unwrap().subtree_len, 5);
-
-        assert!(replace_result.removed_instance_keys.contains(&2));
-        assert!(replace_result.removed_instance_keys.contains(&3));
-        assert_eq!(
-            replace_result.executed_keys().collect::<HashSet<_>>(),
-            [5, 6, 7].into_iter().collect()
-        );
-        assert_eq!(
-            replace_result.removed_instance_logic_ids,
-            [3].into_iter().collect()
-        );
-        assert_eq!(
-            replace_result
-                .recomposed_logic_ids()
-                .collect::<HashSet<_>>(),
-            [2, 60, 70].into_iter().collect()
-        );
-
-        assert!(tree.get(second).is_some());
+    fn emit(tree: &mut ComponentTree, key: u64, role: NodeRole) -> NodeId {
+        tree.begin_call(key, key, "node");
+        let (id, previous) = tree.rebuild_node(node_with_role("node", role, key, key));
+        tree.emit_call_node(id, previous);
+        id
     }
 
-    #[test]
-    fn finish_replace_subtree_keeps_reused_subtree_and_excludes_it_from_removed_sets() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        let mut tree = ComponentTree::new();
-
-        let root = tree.add_node(node("root", 1, 1));
-
-        let _first = tree.add_node(node("first", 2, 2));
-        let _first_child = tree.add_node(node("first_child", 3, 3));
-        tree.pop_node();
-        tree.pop_node();
-
-        let second = tree.add_node(node("second", 4, 4));
-        tree.pop_node();
-        tree.pop_node();
-
-        let context = match tree.begin_replace_subtree_by_instance_key(2) {
-            Ok(context) => context,
-            Err(_) => panic!("replace context should be created"),
-        };
-
-        assert_eq!(tree.attach_retained_subtree(2, 2), Some(_first));
-        tree.pop_node();
-
-        let mut replace_result = ReplayReplaceResult::default();
-        assert!(
-            tree.finish_replace_subtree(context, &mut replace_result)
-                .is_ok()
-        );
-        tree.finish_replay_round();
-
-        let root_children = root
-            .children(tree.tree())
-            .map(|id| tree.get(id).expect("child must exist").fn_name)
-            .collect::<Vec<_>>();
-        assert_eq!(root_children, vec!["first", "second"]);
-        #[cfg(feature = "profiling")]
-        assert_eq!(tree.get(root).unwrap().subtree_len, 4);
-        assert!(tree.find_node_id_by_instance_key(3).is_some());
-        assert!(tree.get(second).is_some());
-
-        assert_eq!(replace_result.executed_keys().next(), None);
-        assert_eq!(tree.find_node_id_by_instance_key(3), Some(_first_child));
-        assert_eq!(replace_result.recomposed_logic_ids().next(), None);
-        assert!(tree.removed_frame_nodes.is_empty());
-        assert!(!replace_result.removed_instance_keys.contains(&2));
-        assert!(!replace_result.removed_instance_keys.contains(&3));
-        assert!(!replace_result.removed_instance_logic_ids.contains(&2));
-        assert!(!replace_result.removed_instance_logic_ids.contains(&3));
-
-        let Ok(context) = tree.begin_replace_subtree_by_instance_key(4) else {
-            panic!("second replace context should be created");
-        };
-        tree.add_node(node("new_second", 5, 5));
-        tree.pop_node();
-        assert!(
-            tree.finish_replace_subtree(context, &mut replace_result)
-                .is_ok()
-        );
-        assert!(replace_result.executed_keys().eq([5]));
-        assert!(replace_result.recomposed_logic_ids().eq([5]));
-        assert_eq!(
-            replace_result.removed_instance_keys,
-            [4].into_iter().collect()
-        );
-    }
-
-    #[test]
-    fn replay_preserves_nested_layout_adjacency_and_ancestor_counts() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        let mut tree = ComponentTree::new();
-        let root = tree.add_node(node_with_role("root", NodeRole::Composition, 1, 1));
-        let outer = tree.add_node(node("outer", 2, 2));
-        let inner = tree.add_node(node("inner", 3, 3));
-        tree.add_node(node_with_role("wrapper", NodeRole::Composition, 4, 4));
-        let leaf = tree.add_node(node("leaf", 5, 5));
-        for _ in 0..5 {
+    fn end_call(tree: &mut ComponentTree, key: u64) {
+        if tree.finish_call(key).is_some() {
             tree.pop_node();
         }
-        for add_extra in [true, false] {
-            let context = tree
-                .begin_replace_subtree_by_instance_key(4)
-                .unwrap_or_else(|_| panic!("wrapper exists"));
-            let wrapper = tree.add_node(node_with_role("wrapper", NodeRole::Composition, 4, 4));
-            assert_eq!(tree.attach_retained_subtree(5, 5), Some(leaf));
-            tree.pop_node();
-            let extra = add_extra.then(|| {
-                let extra = tree.add_node(node("extra", 6, 6));
-                tree.pop_node();
-                extra
-            });
-            tree.pop_node();
-            assert!(
-                tree.finish_replace_subtree(context, &mut ReplayReplaceResult::default())
-                    .is_ok()
+    }
+
+    fn leaf(tree: &mut ComponentTree, key: u64) -> NodeId {
+        let id = emit(tree, key, NodeRole::Layout);
+        end_call(tree, key);
+        id
+    }
+
+    fn replay(
+        tree: &mut ComponentTree,
+        key: u64,
+        build: impl FnOnce(&mut ComponentTree),
+    ) -> ReplayReplaceResult {
+        let context = tree.begin_replace_call(key);
+        build(tree);
+        let mut result = ReplayReplaceResult::default();
+        tree.finish_replace_subtree(context, &mut result);
+        tree.finish_replay_round();
+        result
+    }
+
+    #[test]
+    fn replaying_a_call_replaces_its_output_before_the_following_sibling() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let mut tree = built_tree();
+        tree.begin_call(2, 2, "composition");
+        let reused = emit(&mut tree, 3, NodeRole::Layout);
+        leaf(&mut tree, 30);
+        end_call(&mut tree, 3);
+        leaf(&mut tree, 4);
+        end_call(&mut tree, 2);
+        let following = leaf(&mut tree, 5);
+        tree.pop_node();
+        let root = tree.calls.host(2).unwrap();
+
+        let result = replay(&mut tree, 2, |tree| {
+            tree.begin_call(2, 2, "composition");
+            assert_eq!(emit(tree, 3, NodeRole::Layout), reused);
+            end_call(tree, 3);
+            leaf(tree, 7);
+            end_call(tree, 2);
+        });
+
+        let added = tree.find_node_id_by_instance_key(7).unwrap();
+        assert_eq!(
+            root.children(tree.tree()).collect::<Vec<_>>(),
+            vec![reused, added, following]
+        );
+        assert_eq!(
+            result.executed_keys().collect::<HashSet<_>>(),
+            [2, 3, 7].into_iter().collect()
+        );
+        for removed in [4, 30] {
+            assert!(result.removed_instance_keys.contains(&removed));
+            assert!(result.removed_instance_logic_ids.contains(&removed));
+            assert!(!tree.has_call(removed));
+        }
+        assert!(!result.removed_instance_keys.contains(&3));
+    }
+
+    #[test]
+    fn a_call_without_output_reinserts_content_at_its_composition_position() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let mut tree = built_tree();
+        let before = leaf(&mut tree, 1);
+        tree.begin_call(2, 2, "composition");
+        end_call(&mut tree, 2);
+        let after = leaf(&mut tree, 3);
+        tree.pop_node();
+        let root = tree.calls.host(2).unwrap();
+
+        replay(&mut tree, 2, |tree| {
+            tree.begin_call(2, 2, "composition");
+            let inserted = leaf(tree, 4);
+            end_call(tree, 2);
+            assert_eq!(
+                root.children(tree.tree()).collect::<Vec<_>>(),
+                vec![before, inserted, after]
             );
-            tree.finish_replay_round();
-            assert_eq!(direct_layout_children(root, &tree.tree).as_ref(), &[outer]);
-            assert_eq!(direct_layout_children(outer, &tree.tree).as_ref(), &[inner]);
-            let expected = extra.map_or_else(|| vec![leaf], |extra| vec![leaf, extra]);
-            let actual = direct_layout_children(inner, &tree.tree);
-            assert_eq!(actual.as_ref(), expected.as_slice());
-            let wrapped = direct_layout_children(wrapper, &tree.tree);
-            match (extra, actual, wrapped) {
-                (Some(_), node::LayoutChildren::Shared(a), node::LayoutChildren::Shared(b)) => {
-                    assert!(Arc::ptr_eq(&a, &b));
-                }
-                (None, node::LayoutChildren::One(a), node::LayoutChildren::One(b)) => {
-                    assert_eq!((a, b), (leaf, leaf));
-                }
-                _ => panic!("layout adjacency must store a singleton inline and share wider lists"),
-            }
-            #[cfg(feature = "profiling")]
-            for (id, base) in [(root, 5), (outer, 4), (inner, 3), (wrapper, 2)] {
-                assert_eq!(
-                    tree.get(id).unwrap().subtree_len,
-                    base + usize::from(add_extra)
-                );
-            }
-        }
+        });
     }
 
     #[test]
-    fn layout_adjacency_tracks_transparent_subtree_replacement() {
+    fn retained_calls_keep_their_nodes_and_stay_out_of_removed_sets() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let mut tree = ComponentTree::new();
+        let mut tree = built_tree();
+        tree.begin_call(2, 2, "composition");
+        let retained = emit(&mut tree, 3, NodeRole::Layout);
+        let nested = leaf(&mut tree, 30);
+        end_call(&mut tree, 3);
+        end_call(&mut tree, 2);
+        let following = leaf(&mut tree, 4);
+        tree.pop_node();
+        let root = tree.calls.host(2).unwrap();
 
-        let root = tree.add_node(node_with_role("root", NodeRole::Composition, 1, 1));
-        let layout_a = tree.add_node(node("layout_a", 2, 2));
-        let size = ComputedData {
-            width: Px(31),
-            height: Px(17),
-        };
-        tree.metadatas.entry_or_default(layout_a).computed_data = Some(size);
-        tree.pop_node();
+        let result = replay(&mut tree, 2, |tree| {
+            tree.begin_call(2, 2, "composition");
+            assert!(tree.attach_retained_call(3, 3));
+            end_call(tree, 2);
+        });
 
-        let composition = tree.add_node(node_with_role("wrapper", NodeRole::Composition, 3, 3));
-        let layout_b = tree.add_node(node("layout_b", 4, 4));
-        tree.pop_node();
-        tree.pop_node();
-        tree.pop_node();
-
-        assert_eq!(composition.children(tree.tree()).count(), 1);
         assert_eq!(
-            direct_layout_children(root, tree.tree()).as_ref(),
-            &[layout_a, layout_b]
+            root.children(tree.tree()).collect::<Vec<_>>(),
+            vec![retained, following]
         );
+        assert_eq!(tree.find_node_id_by_instance_key(30), Some(nested));
+        assert!(result.executed_keys().eq([2]));
+        assert!(result.removed_instance_keys.is_empty());
+        assert!(result.removed_instance_logic_ids.is_empty());
+        assert!(tree.removed_frame_nodes.is_empty());
+    }
 
-        let context = tree
-            .begin_replace_subtree_by_instance_key(3)
-            .unwrap_or_else(|_| panic!("wrapper exists"));
-        tree.add_node(node_with_role("replacement", NodeRole::Composition, 9, 9));
-        assert_eq!(tree.attach_retained_subtree(4, 4), Some(layout_b));
+    #[test]
+    fn reordered_calls_inside_a_group_update_layout_adjacency() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let mut tree = built_tree();
+        let outer = emit(&mut tree, 2, NodeRole::Layout);
+        let group = emit(&mut tree, 3, NodeRole::Group);
+        let first = leaf(&mut tree, 4);
+        let second = leaf(&mut tree, 5);
+        end_call(&mut tree, 3);
+        end_call(&mut tree, 2);
         tree.pop_node();
-        let layout_c = tree.add_node(node("layout_c", 10, 10));
-        tree.pop_node();
-        tree.pop_node();
-        assert!(
-            tree.finish_replace_subtree(context, &mut ReplayReplaceResult::default())
-                .is_ok()
-        );
-
-        let context = tree
-            .begin_replace_subtree_by_instance_key(2)
-            .unwrap_or_else(|_| panic!("first layout exists"));
-        let layout_a = tree.add_node(node("replaced_layout_a", 2, 2));
-        tree.pop_node();
-        assert!(
-            tree.finish_replace_subtree(context, &mut ReplayReplaceResult::default())
-                .is_ok()
-        );
         assert_eq!(
-            tree.metadatas.get(&layout_a).unwrap().computed_data,
-            Some(size)
-        );
-        tree.finish_replay_round();
-        assert_eq!(
-            direct_layout_children(root, tree.tree()).as_ref(),
-            &[layout_a, layout_b, layout_c]
+            direct_layout_children(outer, tree.tree()).as_ref(),
+            &[first, second]
         );
 
-        let context = tree
-            .begin_replace_subtree_by_instance_key(9)
-            .unwrap_or_else(|_| panic!("replacement exists"));
-        tree.add_node(node_with_role("reordered", NodeRole::Composition, 9, 9));
-        for (key, id) in [(10, layout_c), (4, layout_b)] {
-            assert_eq!(tree.attach_retained_subtree(key, key), Some(id));
-            tree.pop_node();
+        replay(&mut tree, 3, |tree| {
+            assert_eq!(emit(tree, 3, NodeRole::Group), group);
+            assert!(tree.attach_retained_call(5, 5));
+            assert!(tree.attach_retained_call(4, 4));
+            end_call(tree, 3);
+        });
+
+        let actual = direct_layout_children(outer, tree.tree());
+        assert_eq!(actual.as_ref(), &[second, first]);
+        match (actual, direct_layout_children(group, tree.tree())) {
+            (node::LayoutChildren::Shared(outer), node::LayoutChildren::Shared(group)) => {
+                assert!(Arc::ptr_eq(&outer, &group));
+            }
+            _ => panic!("a single group child shares its wider layout children"),
         }
-        tree.pop_node();
-        assert!(
-            tree.finish_replace_subtree(context, &mut ReplayReplaceResult::default())
-                .is_ok()
-        );
-        tree.finish_replay_round();
-        assert_eq!(
-            direct_layout_children(root, tree.tree()).as_ref(),
-            &[layout_a, layout_c, layout_b]
-        );
     }
 }
 

@@ -37,7 +37,7 @@ impl Default for PlaceholderRaster {
 }
 
 fn placeholder_raster_data() -> Arc<ImageData> {
-    Arc::clone(&tessera_ui::__private::runtime_resource::<PlaceholderRaster>().0)
+    Arc::clone(&tessera_ui::runtime_resource::<PlaceholderRaster>().0)
 }
 
 impl IconBuilder {

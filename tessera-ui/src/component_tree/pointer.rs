@@ -533,7 +533,7 @@ mod tests {
         }
     }
 
-    #[tessera(crate)]
+    #[tessera]
     fn moving_control(probe: PointerProbe) {
         let position = remember(|| PxPosition::new(Px(10), Px(10)));
         let size = remember(|| ComputedData {

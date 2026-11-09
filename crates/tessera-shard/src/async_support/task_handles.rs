@@ -54,10 +54,9 @@ impl TaskHandles {
         Self {
             tasks: Mutex::new(Vec::new()),
             #[cfg(not(target_family = "wasm"))]
-            executor:
-                tessera_ui::__private::runtime_resource::<super::tokio_runtime::TaskExecutor>()
-                    .handle()
-                    .clone(),
+            executor: tessera_ui::runtime_resource::<super::tokio_runtime::TaskExecutor>()
+                .handle()
+                .clone(),
         }
     }
 

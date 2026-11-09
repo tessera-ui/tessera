@@ -92,7 +92,7 @@ impl LayoutModifierNode for RevisionedOverlap {
     }
 }
 
-#[tessera(crate)]
+#[tessera]
 fn edited_leaf(version: u32, probe: ReplayProbe) {
     layout().policy(RevisionedOverlap(version)).modifier(
         Modifier::new()
@@ -104,7 +104,7 @@ fn edited_leaf(version: u32, probe: ReplayProbe) {
     );
 }
 
-#[tessera(crate)]
+#[tessera]
 fn retained_leaf(index: usize, probe: ReplayProbe) {
     let requester = remember(FocusRequester::new).get();
     probe.requesters.with_mut(|requesters| {
@@ -122,7 +122,7 @@ fn retained_leaf(index: usize, probe: ReplayProbe) {
     );
 }
 
-#[tessera(crate)]
+#[tessera]
 fn retained_branch(count: usize, probe: ReplayProbe) {
     layout().policy(Overlap).child(move || {
         let probe = probe.clone();
@@ -135,7 +135,7 @@ fn retained_branch(count: usize, probe: ReplayProbe) {
     });
 }
 
-#[tessera(crate)]
+#[tessera]
 fn replay_fixture(count: usize, probe: ReplayProbe) {
     let version = remember(|| 0_u32);
     probe.version.set(Some(version));
@@ -268,7 +268,7 @@ fn replay_consumer_work_does_not_grow_with_an_unchanged_retained_sibling() {
     );
 }
 
-#[tessera(crate)]
+#[tessera]
 fn independently_dirty_leaf(
     version: State<u32>,
     parent: State<u32>,
@@ -289,7 +289,7 @@ fn independently_dirty_leaf(
     );
 }
 
-#[tessera(crate)]
+#[tessera]
 fn retained_dirty_branch(
     version: State<u32>,
     parent: State<u32>,
@@ -302,7 +302,7 @@ fn retained_dirty_branch(
     });
 }
 
-#[tessera(crate)]
+#[tessera]
 fn nested_dirty_fixture(write_during_replay: bool, backwards_write: bool, probe: ReplayProbe) {
     let parent = remember(|| 0_u32);
     let leaf = remember(|| 0_u32);
@@ -449,7 +449,7 @@ fn a_stale_invalidation_does_not_block_live_replay() {
     assert_eq!(retained_node_ids(&session), retained);
 }
 
-#[tessera(crate)]
+#[tessera]
 fn cyclic_replay_peer(index: usize, own: State<u32>, other: State<u32>, armed: State<bool>) {
     let value = own.get();
     if armed.get() {
@@ -463,7 +463,7 @@ fn cyclic_replay_peer(index: usize, own: State<u32>, other: State<u32>, armed: S
         }));
 }
 
-#[tessera(crate)]
+#[tessera]
 fn cyclic_replay_fixture(probe: ReplayProbe) {
     let left = remember(|| 0_u32);
     let right = remember(|| 0_u32);
@@ -515,7 +515,7 @@ fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
     }
 }
 
-#[tessera(crate)]
+#[tessera]
 fn ordered_branch(index: usize, probe: ReplayProbe) {
     layout().policy(Overlap).child(move || {
         let probe = probe.clone();
@@ -523,7 +523,7 @@ fn ordered_branch(index: usize, probe: ReplayProbe) {
     });
 }
 
-#[tessera(crate)]
+#[tessera]
 fn ordered_fixture(probe: ReplayProbe) {
     let reverse = remember(|| false);
     probe.reverse.set(Some(reverse));
@@ -562,7 +562,7 @@ impl LayoutModifierNode for PlacementOrder {
     }
 }
 
-#[tessera(crate)]
+#[tessera]
 fn placement_order_fixture(probe: ReplayProbe) {
     let reverse = remember(|| false);
     probe.reverse.set(Some(reverse));
@@ -690,7 +690,7 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
     );
 }
 
-#[tessera(crate)]
+#[tessera]
 fn optional_pointer_fixture(probe: ReplayProbe) {
     let armed = remember(|| true);
     probe.armed.set(Some(armed));
@@ -765,24 +765,25 @@ impl SemanticsModifierNode for Hint {
     }
 }
 
-#[tessera(crate)]
+#[tessera]
 fn conditional_description(probe: ReplayProbe) {
     let visible = remember(|| false);
     probe.reverse.set(Some(visible));
-    if visible.get() {
+    let modifier = if visible.get() {
         Modifier::new()
             .push_semantics(Hint("Help text".into()))
             .push_semantics(Tag {
                 key: "conditional-description".into(),
                 label: "Help host".into(),
             })
-            .attach();
-    }
-    layout().policy(Overlap);
+    } else {
+        Modifier::new()
+    };
+    layout().policy(Overlap).modifier(modifier);
 }
 
 #[test]
-fn rebuilding_a_composition_node_publishes_added_and_removed_semantics() {
+fn rebuilding_a_layout_node_publishes_added_and_removed_semantics() {
     let probe = ReplayProbe::default();
     let mut session = start_layout_test_session(layout_test(|| {
         conditional_description(probe.clone());
@@ -822,7 +823,7 @@ fn rebuilding_a_composition_node_publishes_added_and_removed_semantics() {
     assert!(!publishes_host(&session));
 }
 
-#[tessera(crate)]
+#[tessera]
 fn scoped_fixture(probe: ReplayProbe) {
     let changed = remember(|| false);
     probe.reverse.set(Some(changed));
@@ -869,23 +870,18 @@ fn replay_refreshes_retained_descendants_when_semantic_and_focus_ancestry_change
     // Drain the focus host invalidation before changing its ancestor context.
     pump_layout_test_session(&mut session, 8_000_000);
     let scope_nodes = |session: &crate::testing::LayoutTestSession<_>| {
-        let components = session.inspect_components();
-        let host = components
-            .nodes()
-            .iter()
-            .find(|node| node.name() == "scoped_fixture")
-            .expect("Scope host");
-        let layout = components
+        session
+            .inspect_components()
             .nodes()
             .iter()
             .find(|node| {
-                node.name() == "layout"
+                node.name() == "scoped_fixture"
                     && node
                         .semantics()
                         .is_some_and(|semantics| semantics.tooltip.is_some())
             })
-            .expect("Scope layout");
-        (host.node_id(), layout.node_id())
+            .expect("Scope layout")
+            .node_id()
     };
     let scope = scope_nodes(&session);
     let retained = retained_node_ids(&session);

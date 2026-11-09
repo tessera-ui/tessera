@@ -312,7 +312,7 @@ impl crate::LayoutModifierNode for ScaleLayout {
 ///     [150.0, 35.0]
 /// );
 /// ```
-#[crate::tessera(crate)]
+#[crate::tessera]
 pub fn scaled_box(scale: f32, child: Option<crate::RenderSlot>) {
     let transform = LocalToWindow::new(scale, PxPosition::ZERO)
         .expect("Scale must be finite, positive, and invertible");

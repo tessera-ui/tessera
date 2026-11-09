@@ -11,7 +11,7 @@ use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutModifierNode, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition,
     accesskit::Role,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, group, layout},
     remember, remember_with_key, tessera, use_context,
 };
 use unicode_linebreak::linebreaks;
@@ -245,55 +245,56 @@ fn table_row(
     header_background: Color,
     divider_color: Color,
 ) {
-    Modifier::new()
-        .semantics(SemanticsArgs {
+    group()
+        .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Row),
             merge_descendants: true,
             collection_item_info: Some((row, 1, 0, columns, false)),
             ..Default::default()
-        })
-        .attach();
-    for cell in cells {
-        let heading = cell.heading != TextTableHeading::None;
-        let modifier = Modifier::new().semantics(SemanticsArgs {
-            role: Some(match cell.heading {
-                TextTableHeading::None => Role::Cell,
-                TextTableHeading::Column => Role::ColumnHeader,
-                TextTableHeading::Row => Role::RowHeader,
-            }),
-            label: Some(cell.text.clone()),
-            merge_descendants: false,
-            collection_item_info: Some((
-                cell.row,
-                cell.row_span,
-                cell.column,
-                cell.column_span,
-                heading,
-            )),
-            ..Default::default()
+        }))
+        .child(move || {
+            for cell in cells.iter().cloned() {
+                let heading = cell.heading != TextTableHeading::None;
+                let modifier = Modifier::new().semantics(SemanticsArgs {
+                    role: Some(match cell.heading {
+                        TextTableHeading::None => Role::Cell,
+                        TextTableHeading::Column => Role::ColumnHeader,
+                        TextTableHeading::Row => Role::RowHeader,
+                    }),
+                    label: Some(cell.text.clone()),
+                    merge_descendants: false,
+                    collection_item_info: Some((
+                        cell.row,
+                        cell.row_span,
+                        cell.column,
+                        cell.column_span,
+                        heading,
+                    )),
+                    ..Default::default()
+                });
+                let modifier = if heading {
+                    modifier.background(header_background)
+                } else {
+                    modifier
+                };
+                boxed()
+                    .alignment(Alignment::CenterStart)
+                    .modifier(modifier)
+                    .children(move || {
+                        text(cell.text.clone())
+                            .style(if heading { header_style } else { style })
+                            .color(if heading { header_color } else { color })
+                            .modifier(Modifier::new().padding(padding));
+                        spacer().modifier(
+                            Modifier::new()
+                                .fill_max_width()
+                                .height(Dp(1.0))
+                                .background(divider_color)
+                                .align(Alignment::BottomStart),
+                        );
+                    });
+            }
         });
-        let modifier = if heading {
-            modifier.background(header_background)
-        } else {
-            modifier
-        };
-        boxed()
-            .alignment(Alignment::CenterStart)
-            .modifier(modifier)
-            .children(move || {
-                text(cell.text.clone())
-                    .style(if heading { header_style } else { style })
-                    .color(if heading { header_color } else { color })
-                    .modifier(Modifier::new().padding(padding));
-                spacer().modifier(
-                    Modifier::new()
-                        .fill_max_width()
-                        .height(Dp(1.0))
-                        .background(divider_color)
-                        .align(Alignment::BottomStart),
-                );
-            });
-    }
 }
 
 fn validate(cells: &[TextTableCell], columns: usize) -> usize {
