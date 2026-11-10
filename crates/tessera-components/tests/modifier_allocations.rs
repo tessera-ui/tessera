@@ -2,13 +2,15 @@ use std::{
     alloc::{GlobalAlloc, Layout, System},
     cell::Cell,
     hint::black_box,
+    rc::Rc,
 };
 
 use tessera_components::modifier::ModifierExt as _;
 use tessera_ui::{
-    Color, Dp, Modifier,
+    Color, Dp, Modifier, State,
     layout::NoopDrawModifier,
     modifier::{LayoutModifierNode, ModifierCapabilityExt as _},
+    remember,
 };
 
 #[derive(PartialEq)]
@@ -19,6 +21,12 @@ impl LayoutModifierNode for GenericLayout {}
 thread_local! {
     static COUNTING: Cell<bool> = const { Cell::new(false) };
     static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+}
+
+#[tessera_ui::tessera]
+fn remember_allocation_probe(state: Rc<Cell<Option<State<u32>>>>) {
+    let value = remember(|| 0_u32);
+    state.set(Some(value));
 }
 
 struct CountingAllocator;
@@ -100,4 +108,24 @@ fn two_action_construction_allocates_nodes_but_clones_do_not() {
     eprintln!(
         "3,000 generic two-action chains: {generic} allocations; size/background: {allocations}; generic clones: {generic_clones}; size/background clones: 0"
     );
+}
+
+#[test]
+fn remembered_state_mutations_do_not_allocate_after_initialization() {
+    let state = Rc::new(Cell::new(None));
+    let mut session =
+        tessera_ui::testing::start_layout_test_session(tessera_ui::testing::layout_test({
+            let state = state.clone();
+            move || remember_allocation_probe(state.clone())
+        }));
+    tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+    let state = state.get().expect("component initialized remembered state");
+
+    let allocations = count_allocations(|| session.run(|| state.with_mut(|value| *value += 1)));
+    assert_eq!(allocations, 0, "in-place State::with_mut");
+    let allocations = count_allocations(|| session.run(|| assert!(state.set_if_changed(2))));
+    assert_eq!(allocations, 0, "in-place State::set_if_changed");
+    let allocations = count_allocations(|| session.run(|| state.set(3)));
+    assert_eq!(allocations, 0, "in-place State::set");
+    assert_eq!(session.run(|| state.get()), 3);
 }

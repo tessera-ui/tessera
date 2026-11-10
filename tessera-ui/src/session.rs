@@ -114,11 +114,6 @@ impl Default for RuntimeSession {
 }
 
 impl RuntimeSession {
-    /// Creates a reactive state lifetime owned by this UI session.
-    pub fn state_owner(&self) -> crate::StateOwner {
-        self.run(crate::StateOwner::new)
-    }
-
     /// Captures result delivery to this session's UI thread.
     pub fn dispatcher(&self) -> crate::UiDispatcher {
         self.run(crate::dispatcher::current)
@@ -631,7 +626,7 @@ mod tests {
     fn controller_owned_state_replays_readers_and_dispatches_worker_results_on_its_ui_session() {
         let runtime = RuntimeSession::new();
         let _scope = runtime.enter();
-        let owner = crate::StateOwner::new();
+        let owner = crate::Model::new();
         let value = owner.state_with_key("route", || 7usize);
         assert!(
             owner.state_with_key("route", || panic!("existing state was reinitialized")) == value
@@ -660,7 +655,7 @@ mod tests {
         );
         drop(owner);
         assert!(!value.is_alive());
-        let next = crate::StateOwner::new();
+        let next = crate::Model::new();
         let replacement = next.state_with_key("route", || 19usize);
         assert_eq!(replacement.get(), 19);
         assert!(!value.is_alive());
@@ -718,7 +713,7 @@ mod tests {
     fn capability_state_survives_unrelated_modifiers_and_dies_with_its_attachment() {
         let runtime = RuntimeSession::new();
         let _scope = runtime.enter();
-        let owner = crate::StateOwner::new();
+        let owner = crate::Model::new();
         let visible = owner.state_with_key("visible", || true);
         let extra = owner.state_with_key("extra", || false);
         let output = TestProbe::default();
@@ -786,7 +781,7 @@ mod tests {
     fn removing_a_stateful_modifier_unsubscribes_its_clock_before_the_next_frame() {
         let runtime = RuntimeSession::new();
         let _scope = runtime.enter();
-        let owner = crate::StateOwner::new();
+        let owner = crate::Model::new();
         let visible = owner.state_with_key("visible", || true);
         let output = TestProbe::default();
         let mut session = start_layout_test_session(layout_test({
@@ -821,9 +816,9 @@ mod tests {
     fn closing_an_owner_during_state_mutation_drops_its_taken_value_outside_the_slot_borrow() {
         let runtime = RuntimeSession::new();
         runtime.run(|| {
-            let observer = crate::StateOwner::new();
+            let observer = crate::Model::new();
             let observed = observer.state_with_key("drops", || 0usize);
-            let owner = crate::StateOwner::new();
+            let owner = crate::Model::new();
             let value = owner.state_with_key("resource", || DropIntoState(observed));
             value.with_mut(|_| owner.close());
             assert!(!value.is_alive());
@@ -832,10 +827,10 @@ mod tests {
     }
 
     #[test]
-    fn closing_a_state_owner_discards_pending_results_before_they_can_touch_freed_state() {
+    fn closing_a_model_discards_pending_results_before_they_can_touch_freed_state() {
         let runtime = RuntimeSession::new();
         let _scope = runtime.enter();
-        let owner = crate::StateOwner::new();
+        let owner = crate::Model::new();
         let value = owner.state_with_key("route", || 5usize);
         let dispatcher = owner.dispatcher();
         assert!(dispatcher.dispatch(move || value.set(9)));
@@ -844,7 +839,7 @@ mod tests {
         assert!(!dispatcher.dispatch(|| panic!("closed owner accepted a result")));
         crate::dispatcher::flush();
         assert!(!value.is_alive());
-        let next = crate::StateOwner::new();
+        let next = crate::Model::new();
         assert_eq!(next.state_with_key("route", || 13usize).get(), 13);
     }
 
@@ -878,13 +873,13 @@ mod tests {
     }
 
     #[test]
-    fn session_shutdown_rejects_dispatched_work_and_closes_external_state_owners() {
+    fn session_shutdown_rejects_dispatched_work_and_closes_external_models() {
         let runtime = RuntimeSession::new();
-        let owner = runtime.state_owner();
+        let model = runtime.run(crate::Model::new);
         let dispatcher = runtime.dispatcher();
-        let value = runtime.run(|| owner.state_with_key("value", || 7usize));
+        let value = runtime.run(|| model.state_with_key("value", || 7usize));
         drop(runtime);
-        assert!(!owner.is_alive());
+        assert!(!model.is_alive());
         assert!(!dispatcher.is_alive());
         assert!(!dispatcher.dispatch(|| panic!("shutdown work executed")));
         let other = RuntimeSession::new();

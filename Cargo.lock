@@ -2338,6 +2338,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab85b9b05e3978cc9a9cf8fea7f01b494e1a09ed3037e16ba39edc7a29eb61a"
 
 [[package]]
+name = "futures-channel"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4"
+dependencies = [
+ "futures-core",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7442,12 +7451,9 @@ dependencies = [
 name = "tessera-shard"
 version = "0.4.2"
 dependencies = [
- "futures-util",
  "parking_lot 0.13.0",
  "tessera-macros",
  "tessera-ui",
- "tokio",
- "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -7458,9 +7464,12 @@ dependencies = [
  "bumpalo",
  "bytemuck",
  "console_error_panic_hook",
+ "criterion",
  "dirs",
  "downcast-rs 2.0.2",
  "dyn-clone",
+ "futures-channel",
+ "futures-util",
  "hashbrown 0.17.1",
  "im",
  "indextree",
@@ -7486,6 +7495,7 @@ dependencies = [
  "tessera-accesskit-winit",
  "tessera-macros",
  "tessera-winit",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -7765,23 +7775,9 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
- "parking_lot 0.12.5",
  "pin-project-lite",
- "signal-hook-registry",
  "socket2",
- "tokio-macros",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "tokio-macros"
-version = "2.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.9",
 ]
 
 [[package]]

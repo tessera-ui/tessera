@@ -18,6 +18,8 @@ headless = ["serde", "serde_json", "wgpu/counters"]
 
 [dependencies]
 bumpalo.workspace = true
+futures-channel.workspace = true
+futures-util.workspace = true
 accesskit.workspace = true
 accesskit_winit.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
@@ -41,6 +43,7 @@ wgpu.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 parking_lot = { workspace = true, features = ["deadlock_detection"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "net", "io-util"] }
 tracing-subscriber = { workspace = true, features = ["ansi", "env-filter", "fmt", "smallvec", "std", "tracing-log"] }
 
 [target.'cfg(target_family = "unix")'.dependencies]
@@ -89,4 +92,10 @@ objc2.workspace = true
 objc2-ui-kit = { workspace = true, features = ["UIGeometry", "UIView", "UIResponder", "UIKeyboardLayoutGuide", "UILayoutGuide", "UITrackingLayoutGuide", "objc2-core-foundation"] }
 
 [dev-dependencies]
+criterion.workspace = true
 tempfile.workspace = true
+
+[[bench]]
+name = "slot_table"
+harness = false
+required-features = ["testing"]

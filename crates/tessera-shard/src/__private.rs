@@ -24,8 +24,8 @@ where
     let route = scope
         .filter(|scope| scope.controller == controller)
         .map(|scope| scope.route_id);
-    let (owner, marker) = controller.with(|router| router.route_state_context(life_cycle, route));
-    let value = owner.state_with_key(("shard", shard_id), T::default);
+    let (model, marker) = controller.with(|router| router.route_state_context(life_cycle, route));
+    let value = model.state_with_key(("shard", shard_id), T::default);
     f(ShardState::new(value, marker))
 }
 

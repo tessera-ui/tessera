@@ -11,7 +11,7 @@ use std::{
 };
 
 use fluent_bundle::{FluentArgs, FluentResource, concurrent::FluentBundle};
-use tessera_ui::{EntryRegistry, Plugin, State, StateOwner, TesseraPackage, try_with_plugin};
+use tessera_ui::{EntryRegistry, Model, Plugin, State, TesseraPackage, try_with_plugin};
 
 pub use fluent_bundle::FluentValue;
 pub use fluent_templates::{self, LanguageIdentifier, Loader, langid};
@@ -215,7 +215,7 @@ struct Localization {
 }
 
 struct LocalizationPlugin {
-    _owner: StateOwner,
+    _model: Model,
     current: I18n,
 }
 
@@ -223,13 +223,13 @@ impl Plugin for LocalizationPlugin {}
 
 impl TesseraPackage for Catalog {
     fn register(self, registry: &mut EntryRegistry) {
-        let owner = StateOwner::new();
-        let state = owner.state_with_key((), || Localization {
+        let model = Model::new();
+        let state = model.state_with_key((), || Localization {
             locale: self.default_locale.clone(),
             catalog: self,
         });
         registry.register_plugin(LocalizationPlugin {
-            _owner: owner,
+            _model: model,
             current: I18n(state),
         });
     }

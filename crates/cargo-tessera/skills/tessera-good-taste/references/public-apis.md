@@ -7,7 +7,7 @@ gates, and platform support. Use `cargo doc --open` in the application workspace
 | --- | --- |
 | Startup and configuration | `tessera_ui::EntryPoint`, `RuntimeSession`, `WeakRuntimeSession`, `EntryRegistry`, `TesseraPackage`, `renderer::TesseraConfig`; `tessera_components::ComponentsPackage` |
 | Composition and configuration | `tessera_ui::tessera`, generated component handles, `Callback`, `CallbackWith`, `RenderSlot`, `RenderSlotWith`, `Slot`; component module entrypoints |
-| State and inherited visual defaults | `tessera_ui::{State, StateOwner, UiDispatcher, remember, remember_with_key, retain, retain_with_key, key, Context, provide_context, use_context}` |
+| State and inherited visual defaults | `tessera_ui::{State, Model, Dispatcher, dispatch, UiDispatcher, remember, remember_model, remember_model_with_key, remember_with_key, retain, retain_with_key, key, Context, provide_context, use_context}` |
 | Layout and geometry | `tessera_components::{row, column, boxed, flow_row, flow_column, modifier}`; `tessera_ui::{Dp, Px, AxisConstraint, Constraint, geometry}`; `tessera_foundation::{alignment, shape_def}` |
 | Controls and virtualization | Control modules and their controller types in `tessera_components`; `lazy_list`, `lazy_grid`, `lazy_staggered_grid`, `scrollable`, `pager` |
 | Visuals and assets | `tessera_components::{theme, painter, image, image_vector, icon, material_icons, shadow}`; `tessera_ui::{color, asset}`; `tessera_build` asset generation |

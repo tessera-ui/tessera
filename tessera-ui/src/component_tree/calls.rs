@@ -474,6 +474,7 @@ impl ComponentTree {
     pub(crate) fn finish_call(&mut self) -> Option<EmittedNode> {
         let call = self.calls.active.pop().expect("balanced component calls");
         let calls = &mut self.calls;
+        calls.records[call.id].slots.finish_epoch();
         if calls.records[call.id].children != call.previous_children {
             calls.mark = calls.mark.wrapping_add(1);
             let mark = calls.mark;

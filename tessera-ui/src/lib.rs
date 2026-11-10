@@ -19,6 +19,7 @@ pub mod accessibility;
 #[cfg(target_os = "android")]
 pub mod android;
 pub mod asset;
+mod async_dispatch;
 mod build_tree;
 pub mod clip;
 pub mod clipboard;
@@ -28,6 +29,7 @@ mod dispatcher;
 mod graphics;
 mod work;
 
+pub use async_dispatch::{Dispatcher, TaskHandle, dispatch};
 pub use dispatcher::UiDispatcher;
 pub use graphics::{
     FrameBuffer, GraphicsDevice, GraphicsWork, GraphicsWorkDiagnostics, ScratchFit, ScratchTexture,
@@ -51,6 +53,7 @@ pub mod entry_point;
 pub mod entry_registry;
 mod execution_context;
 pub mod focus;
+mod gap_buffer;
 pub mod geometry;
 #[cfg(all(feature = "headless", not(target_family = "wasm")))]
 pub mod headless;
@@ -144,9 +147,9 @@ pub use crate::{
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
     },
     runtime::{
-        FrameClockDiagnostics, FrameNanosControl, State, StateOwner, current_frame_nanos,
-        current_frame_time, frame_delta, key, receive_frame_nanos, remember, remember_with_key,
-        retain, retain_with_key,
+        FrameClockDiagnostics, FrameNanosControl, Model, ModelTaskContext, State, StateAccessError,
+        current_frame_nanos, current_frame_time, frame_delta, key, receive_frame_nanos, remember,
+        remember_model, remember_model_with_key, remember_with_key, retain, retain_with_key,
     },
     scroll::{PlatformScrollConfig, normalize_platform_scroll_delta, platform_scroll_config},
     thread_utils::SendSync,

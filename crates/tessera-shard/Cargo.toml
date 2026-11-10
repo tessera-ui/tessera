@@ -8,16 +8,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-futures-util.workspace = true
 parking_lot.workspace = true
 tessera-macros.workspace = true
 tessera-ui.workspace = true
 
 [dev-dependencies]
 tessera-ui = { workspace = true, features = ["testing"] }
-
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { workspace = true, features = ["full"] }
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-wasm-bindgen-futures.workspace = true

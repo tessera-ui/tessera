@@ -2,7 +2,7 @@
 
 use tessera_components::{lazy_list::LazyListController, scrollable::ScrollableController};
 use tessera_shard::{RouterController, shard};
-use tessera_ui::{CallbackWith, Dp, Px, State, StateOwner, remember};
+use tessera_ui::{CallbackWith, Dp, Model, Px, State, remember};
 
 use crate::app::AppLiveSessions;
 
@@ -13,18 +13,18 @@ struct DirectoryState {
     list: State<LazyListController>,
     width: State<Dp>,
     height: State<Px>,
-    owner: StateOwner,
+    model: Model,
 }
 
 impl Default for DirectoryState {
     fn default() -> Self {
-        let owner = StateOwner::new();
+        let model = Model::new();
         Self {
-            scroll: owner.state_with_key("scroll", ScrollableController::new),
-            list: owner.state_with_key("list", LazyListController::new),
-            width: owner.state_with_key("width", || Dp(900.0)),
-            height: owner.state_with_key("height", || Px(1)),
-            owner,
+            scroll: model.state_with_key("scroll", ScrollableController::new),
+            list: model.state_with_key("list", LazyListController::new),
+            width: model.state_with_key("width", || Dp(900.0)),
+            height: model.state_with_key("height", || Px(1)),
+            model,
         }
     }
 }
@@ -35,7 +35,7 @@ pub fn material_components_page(
     sessions: Option<AppLiveSessions>,
 ) {
     // Navigation can remove the route during input dispatch, before its nodes detach.
-    remember(|| state.with(|state| state.owner.clone()));
+    remember(|| state.with(|state| state.model.clone()));
     let (scroll, list, width, height) =
         state.with(|state| (state.scroll, state.list, state.width, state.height));
     component_directory(

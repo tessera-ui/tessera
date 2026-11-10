@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use crate::{State, StateOwner, local_runtime_resource};
+use crate::{Model, State, local_runtime_resource};
 
 #[cfg(not(target_family = "wasm"))]
 use crate::runtime_resource;
@@ -71,7 +71,7 @@ pub struct Resource<T: Send + Sync + 'static>(Arc<ResourceEntry<T>>);
 
 struct ResourceEntry<T: Send + Sync + 'static> {
     source: Source,
-    owner: StateOwner,
+    model: Model,
     state: State<LoadState<T>>,
 }
 
@@ -105,11 +105,11 @@ impl<T: Clone + Send + Sync + 'static> Resource<T> {
                 return Resource(entry);
             }
             entries.retain(|_, entry| entry.strong_count() > 0);
-            let owner = StateOwner::new();
-            let state = owner.state_with_key((), || LoadState::Loading);
+            let model = Model::new();
+            let state = model.state_with_key((), || LoadState::Loading);
             let entry = Arc::new(ResourceEntry {
                 source: source.clone(),
-                owner,
+                model,
                 state,
             });
             entries.insert(key, Arc::downgrade(&entry));
@@ -126,7 +126,7 @@ impl<T: Clone + Send + Sync + 'static> Resource<T> {
                 }
             });
         };
-        let dispatcher = resource.0.owner.dispatcher();
+        let dispatcher = resource.0.model.dispatcher();
         #[cfg(target_family = "wasm")]
         wasm_bindgen_futures::spawn_local(async move {
             let result = source.read().await;

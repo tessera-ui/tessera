@@ -4,7 +4,10 @@
 //!
 //! Return background results to a live UI owner before its next build.
 
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::{Arc, Mutex as StdMutex, OnceLock, Weak},
+};
 
 use parking_lot::Mutex;
 
@@ -18,6 +21,44 @@ struct QueueState {
 }
 
 struct DispatchQueue(Mutex<QueueState>);
+
+fn queues() -> &'static StdMutex<HashMap<u128, Weak<DispatchQueue>>> {
+    static QUEUES: OnceLock<StdMutex<HashMap<u128, Weak<DispatchQueue>>>> = OnceLock::new();
+    QUEUES.get_or_init(|| StdMutex::new(HashMap::new()))
+}
+
+fn register(session: u128, queue: &Arc<DispatchQueue>) {
+    let mut queues = queues()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    queues.retain(|_, queue| queue.strong_count() > 0);
+    queues.insert(session, Arc::downgrade(queue));
+}
+
+pub(crate) fn ensure_current_session_registered() {
+    let _ = current();
+}
+
+pub(crate) fn dispatch_to_session(session: u128, work: impl FnOnce() + Send + 'static) -> bool {
+    let queue = queues()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&session)
+        .and_then(Weak::upgrade);
+    let Some(queue) = queue else { return false };
+    let wake = {
+        let mut state = queue.0.lock();
+        if !state.open {
+            return false;
+        }
+        state.pending.push_back(Box::new(work));
+        state.wake.clone()
+    };
+    if let Some(wake) = wake {
+        wake();
+    }
+    true
+}
 
 impl Default for DispatchQueue {
     fn default() -> Self {
@@ -85,9 +126,12 @@ impl UiDispatcher {
 pub(crate) fn current() -> UiDispatcher {
     let session =
         crate::RuntimeSession::current().expect("a UI dispatcher requires an active session");
+    let queue = crate::runtime_resource::<DispatchQueue>();
+    let identity = crate::session::current_session_identity().expect("active UI session");
+    register(identity, &queue);
     UiDispatcher {
         owner: session.identity(),
-        queue: crate::runtime_resource::<DispatchQueue>(),
+        queue,
         liveness: None,
     }
 }
@@ -124,6 +168,12 @@ pub(crate) fn flush() {
 
 pub(crate) fn close() {
     let queue = crate::runtime_resource::<DispatchQueue>();
+    if let Some(session) = crate::session::current_session_identity() {
+        queues()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&session);
+    }
     let removed = {
         let mut state = queue.0.lock();
         state.open = false;

@@ -57,6 +57,7 @@ clap = "4.6.7"
 colored = "3.1.1"
 comfy-table = "8.0.1"
 console = "0.16.6"
+criterion = { version = "0.8.2", default-features = false, features = ["plotters", "cargo_bench_support"] }
 console_error_panic_hook = "0.1.7"
 core-foundation = "0.10.1"
 csv = "1.4.0"
@@ -76,6 +77,7 @@ etagere = "0.3.0"
 fluent-bundle = "0.16.0"
 fluent-templates = { version = "0.15.1", default-features = false }
 futures-util = "0.3.34"
+futures-channel = "0.3.34"
 globset = "0.4.21"
 handlebars = "6.4.4"
 hashbrown = { version = "0.17.1", default-features = false }

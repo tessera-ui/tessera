@@ -6,6 +6,7 @@ use std::{
     collections::hash_map::Entry,
     hash::{BuildHasher, Hash, Hasher},
     marker::PhantomData,
+    ptr::NonNull,
     rc::Rc,
     sync::Arc,
     time::Duration,
@@ -14,7 +15,6 @@ use std::{
 use hashbrown::HashTable;
 use rustc_hash::{FxBuildHasher, FxHashMap as HashMap, FxHashSet as HashSet};
 use slotmap::{SlotMap, new_key_type};
-use smallvec::SmallVec;
 
 use crate::{
     NodeId,
@@ -41,9 +41,9 @@ use crate::{
     time::Instant,
 };
 
-mod state_owner;
+mod model;
 
-pub use state_owner::StateOwner;
+pub use model::{Model, ModelTaskContext};
 
 #[derive(Clone, Copy)]
 enum OrderCounterKind {
@@ -52,6 +52,7 @@ enum OrderCounterKind {
     Context,
     FrameReceiver,
     ModifierAttachment,
+    ModelTask,
 }
 
 fn push_order_frame() {
@@ -105,6 +106,11 @@ fn next_order_counter_in(
         OrderCounterKind::FrameReceiver => {
             let counter = frame.frame_receiver;
             frame.frame_receiver = frame.frame_receiver.wrapping_add(1);
+            counter
+        }
+        OrderCounterKind::ModelTask => {
+            let counter = frame.model_task;
+            frame.model_task = frame.model_task.wrapping_add(1);
             counter
         }
     };
@@ -176,7 +182,13 @@ new_key_type! {
 struct SlotEntry {
     key: SlotKey,
     generation: u64,
+    // Functor cells are independently shared while callbacks execute. State
+    // values stay in reclaimable boxes and use the access counters below.
     value: Option<Rc<dyn Any>>,
+    state_value: Option<Box<dyn Any>>,
+    active_reads: usize,
+    active_write: bool,
+    alive: bool,
     last_alive_epoch: u64,
     retained: bool,
 }
@@ -189,6 +201,7 @@ impl SlotEntry {
         init: &mut Option<impl FnOnce() -> T>,
     ) -> (Rc<T>, u64) {
         debug_assert_eq!(self.key.type_id, TypeId::of::<T>());
+        debug_assert!(self.alive);
         self.last_alive_epoch = epoch;
         let value = self.value.get_or_insert_with(|| {
             let value = Rc::new(init.take().expect("functor slot initialized once")());
@@ -202,8 +215,7 @@ impl SlotEntry {
 /// Slot order of one component instance, compared positionally on replay.
 #[derive(Default)]
 pub(crate) struct InstanceSlotCursor {
-    previous_order: SmallVec<[SlotHandle; 1]>,
-    current_order: SmallVec<[SlotHandle; 1]>,
+    order: crate::gap_buffer::GapBuffer<SlotHandle>,
     cursor: usize,
     epoch: u64,
 }
@@ -213,34 +225,36 @@ impl InstanceSlotCursor {
         if self.epoch == epoch {
             return;
         }
-        std::mem::swap(&mut self.previous_order, &mut self.current_order);
-        if self.current_order.capacity() > self.previous_order.len().saturating_mul(2).max(4) {
-            self.current_order = SmallVec::new();
-        } else {
-            self.current_order.clear();
-        }
+        self.order.truncate_right();
+        self.order.move_gap(0);
         self.cursor = 0;
         self.epoch = epoch;
     }
 
     fn fast_candidate(&self) -> Option<SlotHandle> {
-        self.previous_order.get(self.cursor).copied()
+        self.order.get(self.cursor).copied()
     }
 
     fn record_fast_match(&mut self, slot: SlotHandle) {
         self.cursor = self.cursor.saturating_add(1);
-        self.current_order.push(slot);
+        self.order.move_gap(self.cursor);
+        debug_assert_eq!(self.order.get(self.cursor - 1), Some(&slot));
     }
 
     fn record_slow_match(&mut self, slot: SlotHandle) {
-        if self.cursor < self.previous_order.len()
-            && let Some(offset) = self.previous_order[self.cursor..]
-                .iter()
-                .position(|candidate| *candidate == slot)
+        if let Some(index) = self
+            .order
+            .position_from(self.cursor, |candidate| *candidate == slot)
         {
-            self.cursor += offset + 1;
+            self.order.remove(index);
         }
-        self.current_order.push(slot);
+        self.order.move_gap(self.cursor);
+        self.order.insert_at_gap(slot);
+        self.cursor += 1;
+    }
+
+    pub(crate) fn finish_epoch(&mut self) {
+        self.order.truncate_right();
     }
 }
 
@@ -276,30 +290,47 @@ impl SlotTable {
     }
 
     fn remove_slot(&mut self, slot: SlotHandle) -> Option<SlotEntry> {
-        let entry = self.entries.remove(slot)?;
+        let entry = self.entries.get_mut(slot)?;
+        if !entry.alive {
+            return None;
+        }
+        entry.alive = false;
+        let key = entry.key;
+        if entry.active_reads != 0 || entry.active_write {
+            // Keep the slot and its value in place until the access guard exits.
+            // It is already unreachable through keys and State::is_alive.
+            return self.remove_slot_indexes(slot, key, false);
+        }
+        self.remove_slot_indexes(slot, key, true)
+    }
+
+    fn remove_slot_indexes(
+        &mut self,
+        slot: SlotHandle,
+        key: SlotKey,
+        remove_entry: bool,
+    ) -> Option<SlotEntry> {
         if let Ok(indexed) = self
             .slots_by_key
-            .find_entry(FxBuildHasher.hash_one(&entry.key), |&candidate| {
-                candidate == slot
-            })
+            .find_entry(FxBuildHasher.hash_one(&key), |&candidate| candidate == slot)
         {
             indexed.remove();
         }
-        if let Some(owner) = entry.key.owned_owner {
+        if let Some(owner) = key.owned_owner {
             if let Some(slots) = self.owned_slots.get_mut(&owner) {
                 slots.remove(&slot);
                 if slots.is_empty() {
                     self.owned_slots.remove(&owner);
                 }
             }
-            return Some(entry);
+            return remove_entry.then(|| self.entries.remove(slot).expect("live slot entry"));
         }
-        if let Entry::Occupied(mut slots) = self.slots_by_owner.entry(entry.key.instance_logic_id)
+        if let Entry::Occupied(mut slots) = self.slots_by_owner.entry(key.instance_logic_id)
             && slots.get_mut().remove_and_is_empty(&slot)
         {
             slots.remove();
         }
-        Some(entry)
+        remove_entry.then(|| self.entries.remove(slot).expect("live slot entry"))
     }
 
     fn slots_for_instances<'a>(
@@ -317,7 +348,11 @@ impl SlotTable {
     }
 
     fn reset(&mut self) -> Vec<SlotEntry> {
-        let removed = self.entries.drain().map(|(_, entry)| entry).collect();
+        let handles = self.entries.keys().collect::<Vec<_>>();
+        let removed = handles
+            .into_iter()
+            .filter_map(|slot| self.remove_slot(slot))
+            .collect();
         self.slots_by_key.clear();
         self.slots_by_owner.clear();
         self.owned_slots.clear();
@@ -1793,16 +1828,18 @@ pub(crate) fn take_layout_structure_changes() -> StructureReconcileResult {
 
 /// Handle to memoized state created by [`remember`] and [`remember_with_key`].
 ///
-/// `State<T>` is `Copy + Send + Sync` and provides `with`, `with_mut`, `get`,
+/// `State<T>` is `Copy + Send + Sync` even when `T` is UI-thread-local. It provides `with`, `with_mut`, `get`,
 /// `set`, and `cloned` to read or update the stored value. Use [`State::set_many`]
 /// to atomically update several states of the same type.
 ///
 /// Component factories such as [`remember`] run only during a Tessera build.
 /// Remembered state survives recomposition while its slot is used; [`retain`]
-/// also keeps unused slots until the component unmounts. [`StateOwner`] provides
+/// also keeps unused slots until the component unmounts. [`Model`] provides
 /// a controller or route lifetime independent of component mounting.
 ///
 /// Access rejects stale handles and handles owned by another UI session.
+/// Use [`State::update`] to queue a mutation from another thread and
+/// [`State::read`] to request an untracked snapshot from the owning session.
 ///
 /// # Examples
 ///
@@ -1822,6 +1859,15 @@ pub struct State<T> {
     slot: SlotHandle,
     generation: u64,
     _marker: PhantomData<fn() -> T>,
+}
+
+/// Failure to access state through an asynchronous session message.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StateAccessError {
+    /// The owning UI session no longer accepts work or dropped the request.
+    SessionClosed,
+    /// The state slot was removed before the request ran.
+    StateExpired,
 }
 
 impl<T> Copy for State<T> {}
@@ -1852,6 +1898,7 @@ impl<T> Hash for State<T> {
 
 impl<T> State<T> {
     fn new(slot: SlotHandle, generation: u64) -> Self {
+        crate::dispatcher::ensure_current_session_registered();
         Self {
             session: crate::session::current_session_identity().expect("active state session"),
             slot,
@@ -1879,9 +1926,90 @@ where
                 return false;
             };
 
-            entry.generation == self.generation && entry.key.type_id == TypeId::of::<T>()
+            entry.alive
+                && entry.generation == self.generation
+                && entry.key.type_id == TypeId::of::<T>()
         })
         .unwrap_or(false)
+    }
+
+    /// Applies a UI-owned mutation directly in its session or queues it there
+    /// when called from another thread. The closure must be `Send`; the stored
+    /// value does not need to be `Send` or `Sync`. `true` means the session
+    /// accepted the update; a later unmount can still make it a no-op.
+    pub fn update(&self, update: impl FnOnce(&mut T) + Send + 'static) -> bool {
+        if crate::session::current_session_identity() == Some(self.session) {
+            if !self.is_alive() {
+                return false;
+            }
+            self.with_mut(update);
+            return true;
+        }
+
+        let state = *self;
+        crate::dispatcher::dispatch_to_session(self.session, move || {
+            if state.is_alive() {
+                state.with_mut(update);
+            }
+        })
+    }
+
+    /// Reads the latest value on its owning UI session without recording a
+    /// reactive dependency. The read closure and result must be transferable to
+    /// the caller; the stored value itself need not be `Send` or `Sync`.
+    ///
+    /// ```
+    /// use tessera_ui::{Model, RuntimeSession};
+    ///
+    /// let session = RuntimeSession::new();
+    /// session.run(|| {
+    ///     let model = Model::new();
+    ///     let count = model.state_with_key("count", || 0usize);
+    ///     assert!(count.update(|value| *value += 1));
+    ///     let snapshot = pollster::block_on(count.read(|value| *value)).unwrap();
+    ///     assert_eq!(snapshot, 1);
+    /// });
+    /// ```
+    pub async fn read<R>(
+        &self,
+        read: impl FnOnce(&T) -> R + Send + 'static,
+    ) -> Result<R, StateAccessError>
+    where
+        R: Send + 'static,
+    {
+        let state = *self;
+        if crate::session::current_session_identity() == Some(state.session) {
+            if !state.is_alive() {
+                return Err(StateAccessError::StateExpired);
+            }
+            return Ok(state.with_untracked(read));
+        }
+
+        let (sender, receiver) = futures_channel::oneshot::channel();
+        let accepted = crate::dispatcher::dispatch_to_session(state.session, move || {
+            let result = if state.is_alive() {
+                Ok(state.with_untracked(read))
+            } else {
+                Err(StateAccessError::StateExpired)
+            };
+            let _ = sender.send(result);
+        });
+        if !accepted {
+            return Err(StateAccessError::SessionClosed);
+        }
+        receiver
+            .await
+            .unwrap_or(Err(StateAccessError::SessionClosed))
+    }
+
+    fn with_untracked<R>(&self, read: impl FnOnce(&T) -> R) -> R {
+        let (value, guard) = borrow_state::<T>(self, false);
+        // SAFETY: the guard reserves a shared access to this stable value and
+        // defers destruction until the callback exits. This path deliberately
+        // does not register a dependency.
+        let result = unsafe { read(value.as_ref()) };
+        drop(guard);
+        result
     }
 
     /// Execute a closure with a shared reference to the stored value.
@@ -1892,8 +2020,13 @@ where
             "state belongs to a different runtime session"
         );
         track_state_read_dependency(self.slot, self.generation);
-        let value = with_slot_table(|table| state_value::<T>(table, self.slot, self.generation));
-        f(&value)
+        let (value, guard) = borrow_state::<T>(self, false);
+        // SAFETY: the guard holds a shared borrow count on this stable boxed
+        // value. Removal marks the slot dead but defers its destruction until
+        // this guard exits; mutable access is rejected while readers exist.
+        let result = unsafe { f(value.as_ref()) };
+        drop(guard);
+        result
     }
 
     /// Execute a closure with a mutable reference to the stored value.
@@ -1904,26 +2037,14 @@ where
             Some(self.session),
             "state belongs to a different runtime session"
         );
-        // Move the value out for the duration of the closure so user code can
-        // re-enter runtime APIs (`remember`, callback handles) without hitting
-        // the active slot-table borrow. The guard restores it on unwind too.
-        let taken =
-            with_slot_table_mut(|table| take_state_value::<T>(table, self.slot, self.generation));
-        let mut guard = StateValueRestore::<T> {
-            slot: self.slot,
-            generation: self.generation,
-            value: Some(taken),
-        };
-        let result = f(guard.value.as_mut().expect("state value is present"));
-        let value = guard.value.take().expect("state value is present");
-        let slot = self.slot;
-        let generation = self.generation;
-        let removed =
-            with_slot_table_mut(|table| restore_state_value::<T>(table, slot, generation, value));
-        if removed.is_none() {
+        let (mut value, guard) = borrow_state::<T>(self, true);
+        // SAFETY: the guard exclusively reserves this stable value, releases
+        // the table borrow before user code, and defers removal until it exits.
+        let result = unsafe { f(value.as_mut()) };
+        let alive = guard.release();
+        if alive {
             publish_state_write(self.slot, self.generation);
         }
-        drop(removed);
         result
     }
 
@@ -1949,28 +2070,20 @@ where
             Some(self.session),
             "state belongs to a different runtime session"
         );
-        let taken =
-            with_slot_table_mut(|table| take_state_value::<T>(table, self.slot, self.generation));
-        let mut guard = StateValueRestore {
-            slot: self.slot,
-            generation: self.generation,
-            value: Some(taken),
-        };
-        let changed = guard.value.as_ref().expect("state value is present") != &value;
-        let removed = if changed {
-            guard.value.replace(value)
+        let (mut stored, guard) = borrow_state::<T>(self, true);
+        // SAFETY: this guard exclusively reserves the stable value. PartialEq
+        // may re-enter the runtime, so it runs without the table borrow held.
+        let changed = unsafe { stored.as_ref() != &value };
+        let discarded = if changed {
+            Some(unsafe { std::mem::replace(stored.as_mut(), value) })
         } else {
             Some(value)
         };
-        let current = guard.value.take().expect("state value is present");
-        let discarded = with_slot_table_mut(|table| {
-            restore_state_value(table, self.slot, self.generation, current)
-        });
-        if changed && discarded.is_none() {
+        let alive = guard.release();
+        if changed && alive {
             publish_state_write(self.slot, self.generation);
         }
         drop(discarded);
-        drop(removed);
         changed
     }
 
@@ -1982,27 +2095,35 @@ where
             Some(self.session),
             "state belongs to a different runtime session"
         );
-        let discarded = with_slot_table_mut(|table| {
+        let (discarded, alive) = with_slot_table_mut(|table| {
             let entry = table
                 .entries
                 .get_mut(self.slot)
                 .unwrap_or_else(|| panic!("State points to freed slot: {:?}", self.slot));
+            assert!(entry.alive, "State handle is stale");
             assert_eq!(entry.generation, self.generation, "State handle is stale");
             assert_eq!(entry.key.type_id, TypeId::of::<T>(), "State type mismatch");
+            assert_eq!(
+                entry.active_reads, 0,
+                "State slot {:?} is being read",
+                self.slot
+            );
+            assert!(
+                !entry.active_write,
+                "State slot {:?} is being written",
+                self.slot
+            );
             let stored = entry
-                .value
-                .as_mut()
-                .unwrap_or_else(|| panic!("State slot {:?} has been cleared", self.slot));
-            let stored = Rc::get_mut(stored)
-                .unwrap_or_else(|| panic!("State slot {:?} is being read", self.slot));
-            std::mem::replace(
-                stored
-                    .downcast_mut::<T>()
-                    .unwrap_or_else(|| panic!("State slot {:?} downcast failed", self.slot)),
-                value,
-            )
+                .state_value
+                .as_deref_mut()
+                .unwrap_or_else(|| panic!("State slot {:?} has been cleared", self.slot))
+                .downcast_mut::<T>()
+                .unwrap_or_else(|| panic!("State slot {:?} downcast failed", self.slot));
+            (std::mem::replace(stored, value), true)
         });
-        publish_state_write(self.slot, self.generation);
+        if alive {
+            publish_state_write(self.slot, self.generation);
+        }
         drop(discarded);
     }
 
@@ -2032,18 +2153,25 @@ where
                     .entries
                     .get(state.slot)
                     .unwrap_or_else(|| panic!("State points to freed slot: {:?}", state.slot));
+                assert!(entry.alive, "State handle is stale");
                 assert_eq!(entry.generation, state.generation, "State handle is stale");
                 assert_eq!(entry.key.type_id, TypeId::of::<T>(), "State type mismatch");
-                let stored = entry
-                    .value
-                    .as_ref()
-                    .unwrap_or_else(|| panic!("State slot {:?} has been cleared", state.slot));
                 assert_eq!(
-                    Rc::strong_count(stored),
-                    1,
+                    entry.active_reads, 0,
                     "State slot {:?} is being read",
                     state.slot
                 );
+                assert!(
+                    !entry.active_write,
+                    "State slot {:?} is being written",
+                    state.slot
+                );
+                entry
+                    .state_value
+                    .as_ref()
+                    .unwrap_or_else(|| panic!("State slot {:?} has been cleared", state.slot))
+                    .downcast_ref::<T>()
+                    .unwrap_or_else(|| panic!("State slot {:?} downcast failed", state.slot));
                 keys.push(StateReadDependencyKey {
                     slot: state.slot,
                     generation: state.generation,
@@ -2055,8 +2183,10 @@ where
                     .entries
                     .get_mut(state.slot)
                     .expect("state slot was validated");
-                let stored = Rc::get_mut(entry.value.as_mut().expect("state slot was validated"))
-                    .expect("state value was validated as uniquely owned")
+                let stored = entry
+                    .state_value
+                    .as_deref_mut()
+                    .expect("state slot was validated")
                     .downcast_mut::<T>()
                     .expect("state value type was validated");
                 discarded.push(std::mem::replace(stored, value));
@@ -3082,106 +3212,121 @@ fn current_group_path_hash() -> u64 {
     with_execution_context(|context| context.group_path.digest())
 }
 
-fn state_value<T: 'static>(table: &SlotTable, slot: SlotHandle, generation: u64) -> Rc<T> {
-    let entry = table
-        .entries
-        .get(slot)
-        .unwrap_or_else(|| panic!("State points to freed slot: {slot:?}"));
-    if entry.generation != generation {
-        panic!(
-            "State is stale (slot {slot:?}, generation {generation}, current generation {})",
-            entry.generation
-        );
-    }
-    if entry.key.type_id != TypeId::of::<T>() {
-        panic!(
-            "State type mismatch for slot {slot:?}: expected {}, stored {:?}",
-            std::any::type_name::<T>(),
-            entry.key.type_id
-        );
-    }
-    let Some(value) = entry.value.as_ref() else {
-        panic!("State slot {slot:?} has been cleared")
-    };
-    value
-        .clone()
-        .downcast::<T>()
-        .unwrap_or_else(|_| panic!("State slot {slot:?} downcast failed"))
-}
-
-/// Restores a value moved out of the slot table by [`State::with_mut`].
-struct StateValueRestore<T: 'static> {
+struct StateBorrowGuard {
+    session: u128,
     slot: SlotHandle,
     generation: u64,
-    value: Option<T>,
+    mutable: bool,
+    active: bool,
 }
 
-impl<T: 'static> Drop for StateValueRestore<T> {
+impl StateBorrowGuard {
+    fn release(mut self) -> bool {
+        self.active = false;
+        release_state_borrow(self.session, self.slot, self.generation, self.mutable)
+    }
+}
+
+impl Drop for StateBorrowGuard {
     fn drop(&mut self) {
-        if let Some(value) = self.value.take() {
-            let slot = self.slot;
-            let generation = self.generation;
-            let removed = with_slot_table_mut(|table| {
-                restore_state_value::<T>(table, slot, generation, value)
-            });
-            drop(removed);
+        if self.active {
+            let _ = release_state_borrow(self.session, self.slot, self.generation, self.mutable);
         }
     }
 }
 
-fn take_state_value<T: 'static>(table: &mut SlotTable, slot: SlotHandle, generation: u64) -> T {
-    let entry = table
-        .entries
-        .get_mut(slot)
-        .unwrap_or_else(|| panic!("State points to freed slot: {slot:?}"));
-    if entry.generation != generation {
-        panic!(
-            "State is stale (slot {slot:?}, generation {generation}, current generation {})",
-            entry.generation
-        );
-    }
-    if entry.key.type_id != TypeId::of::<T>() {
-        panic!(
-            "State type mismatch for slot {slot:?}: expected {}, stored {:?}",
-            std::any::type_name::<T>(),
-            entry.key.type_id
-        );
-    }
-    let value = entry
-        .value
-        .as_ref()
-        .unwrap_or_else(|| panic!("State slot {slot:?} has been cleared"));
-    assert_eq!(
-        Rc::strong_count(value),
-        1,
-        "State slot {slot:?} is being read"
-    );
-    let value = entry.value.take().expect("state value is present");
-    Rc::try_unwrap(
-        value
-            .downcast::<T>()
-            .unwrap_or_else(|_| panic!("State slot {slot:?} downcast failed")),
+fn borrow_state<T: 'static>(state: &State<T>, mutable: bool) -> (NonNull<T>, StateBorrowGuard) {
+    let pointer = with_slot_table_mut(|table| {
+        let entry = table
+            .entries
+            .get_mut(state.slot)
+            .unwrap_or_else(|| panic!("State points to freed slot: {:?}", state.slot));
+        assert!(entry.alive, "State handle is stale");
+        assert_eq!(entry.generation, state.generation, "State handle is stale");
+        assert_eq!(entry.key.type_id, TypeId::of::<T>(), "State type mismatch");
+        if mutable {
+            assert_eq!(
+                entry.active_reads, 0,
+                "State slot {:?} is being read",
+                state.slot
+            );
+            assert!(
+                !entry.active_write,
+                "State slot {:?} is being written",
+                state.slot
+            );
+        } else {
+            assert!(
+                !entry.active_write,
+                "State slot {:?} is being written",
+                state.slot
+            );
+        }
+        let next_readers = (!mutable).then(|| {
+            entry
+                .active_reads
+                .checked_add(1)
+                .expect("state read borrow count exhausted")
+        });
+        let pointer = if mutable {
+            let value = entry
+                .state_value
+                .as_deref_mut()
+                .unwrap_or_else(|| panic!("State slot {:?} has been cleared", state.slot))
+                .downcast_mut::<T>()
+                .unwrap_or_else(|| panic!("State slot {:?} downcast failed", state.slot));
+            entry.active_write = true;
+            NonNull::from(value)
+        } else {
+            let value = entry
+                .state_value
+                .as_deref()
+                .unwrap_or_else(|| panic!("State slot {:?} has been cleared", state.slot))
+                .downcast_ref::<T>()
+                .unwrap_or_else(|| panic!("State slot {:?} downcast failed", state.slot));
+            entry.active_reads = next_readers.expect("shared borrow count was computed");
+            NonNull::from(value)
+        };
+        pointer
+    });
+    (
+        pointer,
+        StateBorrowGuard {
+            session: state.session,
+            slot: state.slot,
+            generation: state.generation,
+            mutable,
+            active: true,
+        },
     )
-    .unwrap_or_else(|_| unreachable!("state value must be unique"))
 }
 
-fn restore_state_value<T: 'static>(
-    table: &mut SlotTable,
-    slot: SlotHandle,
-    generation: u64,
-    value: T,
-) -> Option<T> {
-    let Some(entry) = table.entries.get_mut(slot) else {
-        return Some(value);
-    };
-    if entry.generation != generation
-        || entry.key.type_id != TypeId::of::<T>()
-        || entry.value.is_some()
-    {
-        return Some(value);
+fn release_state_borrow(session: u128, slot: SlotHandle, generation: u64, mutable: bool) -> bool {
+    if crate::session::current_session_identity() != Some(session) {
+        return false;
     }
-    entry.value = Some(Rc::new(value));
-    None
+    let (alive, removed) = with_slot_table_mut(|table| {
+        let Some(entry) = table.entries.get_mut(slot) else {
+            return (false, None);
+        };
+        assert_eq!(
+            entry.generation, generation,
+            "state borrow generation changed"
+        );
+        if mutable {
+            assert!(entry.active_write, "state write borrow was not active");
+            entry.active_write = false;
+        } else {
+            assert!(entry.active_reads > 0, "state read borrow was not active");
+            entry.active_reads -= 1;
+        }
+        let alive = entry.alive;
+        let remove = !alive && entry.active_reads == 0 && !entry.active_write;
+        let removed = remove.then(|| table.entries.remove(slot).expect("retired state slot"));
+        (alive, removed)
+    });
+    drop(removed);
+    alive
 }
 
 fn clone_slot_value<T: 'static>(value: &Rc<dyn Any>, slot: SlotHandle) -> Rc<T> {
@@ -3208,7 +3353,7 @@ fn resolve_state_key<T: 'static>(
         entry.last_alive_epoch = epoch;
         entry.retained |= retained;
         if key.owned_owner.is_none() {
-            entry.value.as_ref()?;
+            entry.state_value.as_ref()?;
         }
         Some(State::new(slot, entry.generation))
     }) {
@@ -3221,10 +3366,10 @@ fn resolve_state_key<T: 'static>(
             let entry = &mut table.entries[slot];
             entry.last_alive_epoch = epoch;
             entry.retained |= retained;
-            if entry.value.is_some() || key.owned_owner.is_some() {
+            if entry.state_value.is_some() || key.owned_owner.is_some() {
                 return (State::new(slot, entry.generation), Some(value));
             }
-            entry.value = Some(Rc::new(value));
+            entry.state_value = Some(Box::new(value));
             entry.generation = entry
                 .generation
                 .checked_add(1)
@@ -3234,7 +3379,11 @@ fn resolve_state_key<T: 'static>(
         let slot = table.entries.insert(SlotEntry {
             key,
             generation: 1,
-            value: Some(Rc::new(value)),
+            value: None,
+            state_value: Some(Box::new(value)),
+            active_reads: 0,
+            active_write: false,
+            alive: true,
             last_alive_epoch: table.epoch,
             retained,
         });
@@ -3594,6 +3743,10 @@ where
             key: slot_key,
             generation,
             value: Some(value.clone()),
+            state_value: None,
+            active_reads: 0,
+            active_write: false,
+            alive: true,
             last_alive_epoch: epoch,
             retained: false,
         });
@@ -3833,10 +3986,25 @@ where
     remember_with_key((), init)
 }
 
+/// Returns a model scope whose lifetime follows the current component.
+///
+/// Share the model through props or context when children need the same keyed
+/// state and asynchronous lifetime.
+/// Use [`Model::new`] for a route-entry scope or an explicitly owned parent
+/// scope outside the component's own lifetime.
+pub fn remember_model() -> Model {
+    remember(Model::new).with_untracked(Clone::clone)
+}
+
+/// Returns a keyed model scope whose lifetime follows the current component.
+pub fn remember_model_with_key<K: Hash>(key: K) -> Model {
+    remember_with_key(key, Model::new).with_untracked(Clone::clone)
+}
+
 /// Initializes keyed state during a build and keeps it until the component unmounts.
 ///
 /// Unused retained slots survive conditional branches; see [`State`] for access
-/// rules and [`StateOwner`] for independent controller or route lifetimes.
+/// rules and [`Model`] for state scoped to a component, parent, or route.
 pub fn retain_with_key<K, F, T>(key: K, init: F) -> State<T>
 where
     K: Hash,
@@ -3892,6 +4060,7 @@ where
 mod tests {
     use std::{
         cell::Cell,
+        future::Future as _,
         sync::atomic::{AtomicUsize, Ordering},
     };
 
@@ -3904,6 +4073,46 @@ mod tests {
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
     use crate::prop::{CallbackWith, RenderSlot, RenderSlotWith};
     use crate::tessera;
+
+    #[test]
+    fn instance_slot_gap_preserves_keyed_reorders_and_truncates_unused_tail() {
+        let mut allocated = SlotMap::<SlotHandle, ()>::with_key();
+        let first = allocated.insert(());
+        let second = allocated.insert(());
+        let third = allocated.insert(());
+        let mut cursor = InstanceSlotCursor::default();
+
+        cursor.begin_epoch(1);
+        cursor.record_slow_match(first);
+        cursor.record_slow_match(second);
+        cursor.record_slow_match(third);
+        cursor.finish_epoch();
+        assert_eq!(
+            cursor.order.iter().copied().collect::<Vec<_>>(),
+            [first, second, third]
+        );
+
+        cursor.begin_epoch(2);
+        assert_eq!(cursor.fast_candidate(), Some(first));
+        cursor.record_fast_match(first);
+        cursor.record_slow_match(third);
+        assert_eq!(cursor.fast_candidate(), Some(second));
+        cursor.record_fast_match(second);
+        cursor.finish_epoch();
+        assert_eq!(
+            cursor.order.iter().copied().collect::<Vec<_>>(),
+            [first, third, second]
+        );
+
+        cursor.begin_epoch(3);
+        cursor.record_slow_match(third);
+        cursor.record_slow_match(first);
+        cursor.finish_epoch();
+        assert_eq!(
+            cursor.order.iter().copied().collect::<Vec<_>>(),
+            [third, first]
+        );
+    }
 
     #[derive(Clone, Default, PartialEq)]
     struct ConditionalLoopProbe {
@@ -4228,6 +4437,322 @@ mod tests {
     }
 
     #[test]
+    fn state_mutations_keep_the_value_allocation_stable() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        reset_slots();
+        let state = with_test_component_scope(823, || remember(|| 4_u32));
+        let address = || {
+            with_slot_table(|table| {
+                table.entries[state.slot]
+                    .state_value
+                    .as_deref()
+                    .and_then(|value| value.downcast_ref::<u32>())
+                    .expect("remembered value") as *const u32
+            })
+        };
+        let initial = address();
+
+        state.with_mut(|value| *value += 1);
+        assert_eq!(address(), initial);
+        assert!(!state.set_if_changed(5));
+        assert_eq!(address(), initial);
+        assert!(state.set_if_changed(6));
+        assert_eq!(address(), initial);
+        state.set(7);
+        assert_eq!(address(), initial);
+        assert_eq!(state.get(), 7);
+    }
+
+    #[test]
+    fn active_state_read_defers_destruction_until_reentrant_removal_finishes() {
+        struct DropProbe(Rc<Cell<usize>>);
+
+        impl Drop for DropProbe {
+            fn drop(&mut self) {
+                TesseraRuntime::with_mut(|_| {});
+                self.0.set(self.0.get() + 1);
+            }
+        }
+
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        reset_slots();
+        let drops = Rc::new(Cell::new(0));
+        let state = with_test_component_scope(824, || {
+            let drops = drops.clone();
+            remember(move || DropProbe(drops))
+        });
+
+        state.with(|value| {
+            reset_slots();
+            assert!(!state.is_alive());
+            assert_eq!(drops.get(), 0, "an active read keeps the value alive");
+            let _ = &value.0;
+        });
+        assert_eq!(drops.get(), 1, "the last access releases the retired value");
+    }
+
+    #[test]
+    fn active_state_write_defers_destruction_until_reentrant_removal_finishes() {
+        struct DropProbe(Rc<Cell<usize>>);
+
+        impl Drop for DropProbe {
+            fn drop(&mut self) {
+                TesseraRuntime::with_mut(|_| {});
+                self.0.set(self.0.get() + 1);
+            }
+        }
+
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        reset_slots();
+        let drops = Rc::new(Cell::new(0));
+        let state = with_test_component_scope(830, || {
+            let drops = drops.clone();
+            remember(move || DropProbe(drops))
+        });
+
+        state.with_mut(|value| {
+            reset_slots();
+            assert!(!state.is_alive());
+            assert_eq!(drops.get(), 0, "an active write keeps the value alive");
+            let _ = &value.0;
+        });
+        assert_eq!(drops.get(), 1, "the last access releases the retired value");
+    }
+
+    #[test]
+    fn state_borrow_guards_release_after_unwinding() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        reset_slots();
+        let state = with_test_component_scope(825, || remember(|| 1_u32));
+
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            state.with_mut(|value| {
+                *value = 9;
+                panic!("test write unwind");
+            });
+        }));
+        assert!(panic.is_err());
+        assert_eq!(state.get(), 9);
+        state.with_mut(|value| *value += 1);
+        assert_eq!(state.get(), 10);
+    }
+
+    #[test]
+    fn cross_thread_updates_and_untracked_reads_round_trip_through_the_ui_session() {
+        let session = crate::RuntimeSession::new();
+        session.run(|| {
+            let state = with_test_component_scope(826, || remember(|| Rc::new(Cell::new(1_u32))));
+            let worker_state = state;
+            let accepted =
+                std::thread::spawn(move || worker_state.update(|value| value.set(value.get() + 1)))
+                    .join()
+                    .expect("update worker");
+            assert!(accepted);
+            assert_eq!(
+                state.with(|value| value.get()),
+                1,
+                "off-thread writes wait for UI delivery"
+            );
+            crate::dispatcher::flush();
+            assert_eq!(state.with(|value| value.get()), 2);
+
+            let (started_tx, started_rx) = std::sync::mpsc::sync_channel(0);
+            let reader_state = state;
+            let reader = std::thread::spawn(move || {
+                let future = reader_state.read(|value| value.get());
+                let mut started = Some(started_tx);
+                pollster::block_on(async {
+                    let mut future = std::pin::pin!(future);
+                    std::future::poll_fn(|context| {
+                        let result = future.as_mut().poll(context);
+                        if result.is_pending()
+                            && let Some(started) = started.take()
+                        {
+                            started.send(()).expect("test receiver remains connected");
+                        }
+                        result
+                    })
+                    .await
+                })
+            });
+            started_rx.recv().expect("read request was queued");
+            crate::dispatcher::flush();
+            assert_eq!(reader.join().expect("read worker"), Ok(2));
+
+            with_test_component_scope(827, || {
+                let value = pollster::block_on(state.read(|value| value.get()));
+                assert_eq!(value, Ok(2));
+            });
+            let dependency = StateReadDependencyKey {
+                slot: state.slot,
+                generation: state.generation,
+            };
+            assert!(with_state_read_dependency_tracker_mut(|tracker| {
+                tracker.readers(&dependency).is_none()
+            }));
+        });
+    }
+
+    #[test]
+    fn background_dispatcher_work_can_update_ui_owned_state() {
+        let session = crate::RuntimeSession::new();
+        session.run(|| {
+            let state = with_test_component_scope(831, || remember(|| 0usize));
+            let (sender, receiver) = std::sync::mpsc::sync_channel(0);
+            crate::dispatch(crate::Dispatcher::Io, move || {
+                let accepted = state.update(|value| *value = 7);
+                sender
+                    .send(accepted)
+                    .expect("test receiver remains connected");
+            });
+            assert!(receiver.recv().expect("background work ran"));
+            assert_eq!(state.get(), 0, "worker updates wait for session delivery");
+            crate::dispatcher::flush();
+            assert_eq!(state.get(), 7);
+        });
+    }
+
+    #[test]
+    fn queued_async_read_reports_state_removed_before_delivery() {
+        let session = crate::RuntimeSession::new();
+        session.run(|| {
+            let state = with_test_component_scope(828, || remember(|| 4usize));
+            let (started_tx, started_rx) = std::sync::mpsc::sync_channel(0);
+            let reader_state = state;
+            let reader = std::thread::spawn(move || {
+                let future = reader_state.read(|value| *value);
+                let mut started = Some(started_tx);
+                pollster::block_on(async {
+                    let mut future = std::pin::pin!(future);
+                    std::future::poll_fn(|context| {
+                        let result = future.as_mut().poll(context);
+                        if result.is_pending()
+                            && let Some(started) = started.take()
+                        {
+                            started.send(()).expect("test receiver remains connected");
+                        }
+                        result
+                    })
+                    .await
+                })
+            });
+            started_rx.recv().expect("read request was queued");
+            reset_slots();
+            crate::dispatcher::flush();
+            assert_eq!(
+                reader.join().expect("read worker"),
+                Err(StateAccessError::StateExpired)
+            );
+        });
+    }
+
+    #[test]
+    fn queued_async_update_is_dropped_if_state_expires_before_delivery() {
+        let session = crate::RuntimeSession::new();
+        session.run(|| {
+            let state = with_test_component_scope(829, || remember(|| 0usize));
+            let applied = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let worker_state = state;
+            let worker_applied = applied.clone();
+            let accepted = std::thread::spawn(move || {
+                worker_state.update(move |_| {
+                    worker_applied.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                })
+            })
+            .join()
+            .expect("update worker");
+            assert!(accepted);
+
+            reset_slots();
+            crate::dispatcher::flush();
+            assert!(!state.is_alive());
+            assert_eq!(applied.load(std::sync::atomic::Ordering::Relaxed), 0);
+        });
+    }
+
+    #[tessera]
+    fn async_update_dependency_fixture(
+        state_probe: crate::testing::TestProbe<Option<State<usize>>>,
+        builds: crate::testing::TestProbe<Vec<usize>>,
+    ) {
+        let state = remember(|| 0usize);
+        state_probe.set(Some(state));
+        builds.with_mut(|values| values.push(state.get()));
+        crate::layout::layout();
+    }
+
+    #[test]
+    fn off_thread_state_update_publishes_to_component_build_dependencies() {
+        let state_probe = crate::testing::TestProbe::default();
+        let builds = crate::testing::TestProbe::new(Vec::new());
+        let mut session = crate::testing::start_layout_test_session(crate::testing::layout_test({
+            let state_probe = state_probe.clone();
+            let builds = builds.clone();
+            move || async_update_dependency_fixture(state_probe.clone(), builds.clone())
+        }));
+        crate::testing::pump_layout_test_session(&mut session, 0);
+        assert_eq!(builds.get(), [0]);
+        let state = state_probe.get().expect("component remembered its state");
+
+        let accepted = std::thread::spawn(move || state.update(|value| *value = 9))
+            .join()
+            .expect("update worker");
+        assert!(accepted);
+        crate::testing::pump_layout_test_session(&mut session, 16_000_000);
+        assert_eq!(builds.get(), [0, 9]);
+    }
+
+    #[tessera]
+    fn component_model_lifetime_fixture(
+        visible_probe: crate::testing::TestProbe<Option<State<bool>>>,
+        model_probe: crate::testing::TestProbe<Option<crate::UiDispatcher>>,
+        state_probe: crate::testing::TestProbe<Option<State<usize>>>,
+    ) {
+        let visible = remember(|| true);
+        visible_probe.set(Some(visible));
+        if visible.get() {
+            let model = remember_model();
+            model_probe.set(Some(model.dispatcher()));
+            state_probe.set(Some(model.state_with_key("value", || 3usize)));
+        }
+        crate::layout::layout();
+    }
+
+    #[test]
+    fn remembered_model_closes_and_releases_its_state_when_component_unmounts() {
+        let visible_probe = crate::testing::TestProbe::default();
+        let model_probe = crate::testing::TestProbe::default();
+        let state_probe = crate::testing::TestProbe::default();
+        let mut session = crate::testing::start_layout_test_session(crate::testing::layout_test({
+            let visible_probe = visible_probe.clone();
+            let model_probe = model_probe.clone();
+            let state_probe = state_probe.clone();
+            move || {
+                component_model_lifetime_fixture(
+                    visible_probe.clone(),
+                    model_probe.clone(),
+                    state_probe.clone(),
+                )
+            }
+        }));
+        crate::testing::pump_layout_test_session(&mut session, 0);
+        let visible = visible_probe.get().expect("component state");
+        let dispatcher = model_probe.get().expect("component model");
+        let state = state_probe.get().expect("model state");
+        assert!(dispatcher.is_alive());
+        assert!(state.is_alive());
+
+        session.run(|| visible.set(false));
+        crate::testing::pump_layout_test_session(&mut session, 16_000_000);
+        assert!(!dispatcher.is_alive());
+        assert!(!state.is_alive());
+    }
+
+    #[test]
     fn remembered_state_accepts_ui_thread_local_values() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
@@ -4239,7 +4764,7 @@ mod tests {
         state.set(Rc::new(Cell::new(12)));
         assert_eq!(state.with(|value| value.get()), 12);
 
-        let owner = StateOwner::new();
+        let owner = Model::new();
         let owned = owner.state_with_key("local", || Rc::new(Cell::new(3)));
         owned.with(|value| value.set(8));
         assert_eq!(owned.with(|value| value.get()), 8);
@@ -4940,14 +5465,22 @@ mod tests {
         let keep_slot = table.entries.insert(SlotEntry {
             key: keep_key,
             generation: 1,
-            value: Some(Rc::new(10_i32)),
+            value: None,
+            state_value: Some(Box::new(10_i32)),
+            active_reads: 0,
+            active_write: false,
+            alive: true,
             last_alive_epoch: 0,
             retained: true,
         });
         let drop_slot = table.entries.insert(SlotEntry {
             key: drop_key,
             generation: 1,
-            value: Some(Rc::new(20_i32)),
+            value: None,
+            state_value: Some(Box::new(20_i32)),
+            active_reads: 0,
+            active_write: false,
+            alive: true,
             last_alive_epoch: 0,
             retained: false,
         });

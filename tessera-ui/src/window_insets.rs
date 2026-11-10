@@ -3,7 +3,7 @@
 //! Use [`WindowInsets`] with inset layout modifiers. Platform integrations publish
 //! changes through the session's [`WindowInsetsController`].
 
-use crate::{Dp, State, StateOwner};
+use crate::{Dp, Model, State};
 
 pub(crate) mod platform;
 
@@ -157,16 +157,16 @@ impl WindowInsets {
 pub struct WindowInsetsController(State<(Insets, Insets)>);
 
 struct WindowInsetsState {
-    _owner: StateOwner,
+    _model: Model,
     controller: WindowInsetsController,
 }
 
 impl Default for WindowInsetsState {
     fn default() -> Self {
-        let owner = StateOwner::new();
-        let controller = WindowInsetsController(owner.state_with_key((), Default::default));
+        let model = Model::new();
+        let controller = WindowInsetsController(model.state_with_key((), Default::default));
         Self {
-            _owner: owner,
+            _model: model,
             controller,
         }
     }

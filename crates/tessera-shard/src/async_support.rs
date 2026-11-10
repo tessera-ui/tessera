@@ -1,11 +1,7 @@
-//! Async runtime integration for shard-owned background tasks.
+//! Shared asynchronous dispatch APIs for shard applications.
 //!
 //! ## Usage
 //!
-//! Group background jobs in `TaskHandles` and cancel them with shard teardown.
+//! Use model-scoped tasks and return results to UI state through its dispatcher.
 
-/// Task handle types for spawning and canceling shard-scoped jobs.
-pub mod task_handles;
-
-#[cfg(not(target_family = "wasm"))]
-pub(crate) mod tokio_runtime;
+pub use tessera_ui::{Dispatcher, TaskHandle, dispatch};

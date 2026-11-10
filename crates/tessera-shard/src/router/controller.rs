@@ -1,27 +1,27 @@
 use std::sync::Arc;
 
-use tessera_ui::{State, StateOwner};
+use tessera_ui::{Model, State};
 
 use crate::{RouterDestination, ShardState, ShardStateLifeCycle};
 
 struct RouteEntry {
     id: u64,
     destination: Arc<dyn RouterDestination>,
-    owner: StateOwner,
+    model: Model,
 }
 
 /// Owns the destination stack and reactive state for its routes.
 pub struct RouterController {
     route_stack: Vec<RouteEntry>,
     next_route_id: u64,
-    scope: StateOwner,
+    scope: Model,
     marker: State<()>,
 }
 
 impl RouterController {
     /// Creates an empty controller in the active UI session.
     pub fn new() -> Self {
-        let scope = StateOwner::new();
+        let scope = Model::new();
         let marker = scope.state_with_key("controller", || ());
         Self {
             route_stack: Vec::new(),
@@ -53,7 +53,7 @@ impl RouterController {
         self.route_stack.push(RouteEntry {
             id: self.next_route_id,
             destination,
-            owner: StateOwner::new(),
+            model: Model::new(),
         });
         self.next_route_id += 1;
     }
@@ -61,7 +61,7 @@ impl RouterController {
     /// Pops the current destination and releases its route state.
     pub fn pop(&mut self) -> Option<Arc<dyn RouterDestination>> {
         let removed = self.route_stack.pop()?;
-        removed.owner.close();
+        removed.model.close();
         Some(removed.destination)
     }
 
@@ -113,8 +113,8 @@ impl RouterController {
         &self,
         lifecycle: ShardStateLifeCycle,
         route: Option<u64>,
-    ) -> (StateOwner, State<()>) {
-        let owner = match lifecycle {
+    ) -> (Model, State<()>) {
+        let model = match lifecycle {
             ShardStateLifeCycle::Scope => &self.scope,
             ShardStateLifeCycle::Shard => {
                 let entry = match route {
@@ -123,16 +123,16 @@ impl RouterController {
                 };
                 &entry
                     .expect("route-scoped shard state requires a non-empty router stack")
-                    .owner
+                    .model
             }
         };
-        (owner.clone(), self.marker)
+        (model.clone(), self.marker)
     }
 
     /// Gets or initializes state owned by the current route.
     pub fn init_or_get<T, F, R>(&self, id: &str, f: F) -> R
     where
-        T: Default + Send + Sync + 'static,
+        T: Default + 'static,
         F: FnOnce(ShardState<T>) -> R,
     {
         self.init_or_get_with_lifecycle(id, ShardStateLifeCycle::Shard, f)
@@ -146,12 +146,12 @@ impl RouterController {
         f: F,
     ) -> R
     where
-        T: Default + Send + Sync + 'static,
+        T: Default + 'static,
         F: FnOnce(ShardState<T>) -> R,
     {
-        let (owner, marker) = self.route_state_context(lifecycle, None);
+        let (model, marker) = self.route_state_context(lifecycle, None);
         f(ShardState::new(
-            owner.state_with_key(("shard", id), T::default),
+            model.state_with_key(("shard", id), T::default),
             marker,
         ))
     }
@@ -245,6 +245,34 @@ mod tests {
         assert_eq!(
             increment_state(&router, shard_id, ShardStateLifeCycle::Shard),
             1
+        );
+    }
+
+    #[test]
+    fn route_model_is_retained_while_covered_by_a_child_route() {
+        let session = tessera_ui::RuntimeSession::new();
+        let _session = session.enter();
+        let mut router = RouterController::with_root(DummyDestination);
+        let route_state = "route_back_stack";
+
+        assert_eq!(
+            increment_state(&router, route_state, ShardStateLifeCycle::Shard),
+            1
+        );
+        assert_eq!(
+            increment_state(&router, route_state, ShardStateLifeCycle::Shard),
+            2
+        );
+        router.push(DummyDestination);
+        assert_eq!(
+            increment_state(&router, route_state, ShardStateLifeCycle::Shard),
+            1
+        );
+
+        assert!(router.pop().is_some());
+        assert_eq!(
+            increment_state(&router, route_state, ShardStateLifeCycle::Shard),
+            3
         );
     }
 
@@ -371,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn shard_writes_rebuild_consumers_and_route_owners_preserve_only_live_state() {
+    fn shard_writes_rebuild_consumers_and_route_models_preserve_only_live_state() {
         use tessera_ui::testing::{
             TestProbe, layout_test, pump_layout_test_session, start_layout_test_session,
         };

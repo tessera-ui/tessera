@@ -39,7 +39,7 @@ impl<T> Hash for ShardState<T> {
     }
 }
 
-impl<T: Send + Sync + 'static> ShardState<T> {
+impl<T: 'static> ShardState<T> {
     pub(crate) fn new(value: State<T>, controller: State<()>) -> Self {
         Self { value, controller }
     }
