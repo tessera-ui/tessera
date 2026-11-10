@@ -7455,6 +7455,7 @@ name = "tessera-ui"
 version = "2.5.0"
 dependencies = [
  "accesskit",
+ "bumpalo",
  "bytemuck",
  "console_error_panic_hook",
  "dirs",

@@ -27,8 +27,8 @@ use crate::{
     keyboard_state::QueuedInput,
     layout::{LayoutModifierHandle, LayoutResult, RenderInput},
     modifier::{
-        DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier, ModifierChanges,
-        OrderedModifierAction, PointerInputModifierNode,
+        DrawModifierContent, DrawModifierContext, Modifier, ModifierChanges, OrderedModifierAction,
+        PointerInputModifierNode,
     },
     px::{PxPosition, PxSize},
     render_graph::RenderGraph,
@@ -667,7 +667,7 @@ pub(crate) struct NodeInput {
     pub(crate) instance_logic_id: u64,
     pub(crate) instance_key: u64,
     pub(crate) policy: LayoutModifierHandle,
-    pub(crate) draw: Box<dyn DrawModifierNode>,
+    pub(crate) draw: crate::layout::DrawModifierHandle,
 }
 
 impl NodeInput {
@@ -3037,7 +3037,7 @@ fn collect_focus_chain_node_ids(
 #[derive(Clone)]
 struct PointerNodePlan {
     context: NodeInputContext,
-    actions: Vec<OrderedModifierAction>,
+    modifier: Modifier,
 }
 
 struct PointerDispatchPlan {
@@ -3070,7 +3070,7 @@ fn dispatch_pointer_modifiers_for_node_pass(
         return;
     };
     let mut current_abs_pos = plan.context.base_abs_pos;
-    for (index, action) in plan.actions.iter().enumerate() {
+    for (index, action) in plan.modifier.ordered_actions().into_iter().enumerate() {
         if let Some(transform) = plan
             .context
             .input_transforms
@@ -3098,7 +3098,7 @@ fn dispatch_pointer_modifiers_for_node_pass(
                     node_id,
                     pass,
                     current_abs_pos,
-                    modifier.as_ref(),
+                    modifier,
                 );
             }
             OrderedModifierAction::PointerInput(modifier) if pass == PointerEventPass::Main => {
@@ -3107,7 +3107,7 @@ fn dispatch_pointer_modifiers_for_node_pass(
                     node_id,
                     pass,
                     current_abs_pos,
-                    modifier.as_ref(),
+                    modifier,
                 );
             }
             OrderedModifierAction::PointerFinalInput(modifier)
@@ -3118,7 +3118,7 @@ fn dispatch_pointer_modifiers_for_node_pass(
                     node_id,
                     pass,
                     current_abs_pos,
-                    modifier.as_ref(),
+                    modifier,
                 );
             }
             _ => {}
@@ -3744,7 +3744,7 @@ fn record_layout_commands(
 ) {
     struct DrawModifierChainContent<'a> {
         instance: u64,
-        draw_nodes: &'a [(Arc<dyn crate::modifier::DrawModifierNode>, DrawLayoutBounds)],
+        draw_nodes: &'a [(&'a dyn crate::modifier::DrawModifierNode, DrawLayoutBounds)],
         node_draw: &'a dyn crate::modifier::DrawModifierNode,
         node_bounds: Option<DrawLayoutBounds>,
         parent_bounds: DrawLayoutBounds,
@@ -6382,7 +6382,7 @@ mod tests {
             instance_logic_id: key,
             instance_key: key,
             policy: LayoutModifierHandle::default(),
-            draw: Box::new(crate::layout::NoopDrawModifier),
+            draw: crate::layout::DrawModifierHandle::default(),
         });
         tree.emit_call_node(id, previous);
         id

@@ -72,7 +72,8 @@ impl ClipboardInput<'_> {
 }
 
 /// Node-local clipboard handling for focused editors.
-pub trait ClipboardInputModifierNode: Send + Sync + 'static {
+pub trait ClipboardInputModifierNode: std::any::Any {
+    crate::modifier::modifier_lifecycle!();
     /// Handles a clipboard action on the focused path.
     fn on_clipboard_input(&self, input: ClipboardInput<'_>);
 }

@@ -20,11 +20,9 @@ use crate::{
     },
     layout::{
         ChildMeasure, DefaultLayoutNode, LayoutInput, LayoutModifierDyn, LayoutModifierHandle,
-        LayoutResult, NoopDrawModifier, PlacementResult, PlacementScope,
+        LayoutResult, PlacementResult, PlacementScope,
     },
-    modifier::{
-        DrawModifierNode, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier,
-    },
+    modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier},
     prop::CallbackWith,
     px::{PxPosition, PxRect, PxSize},
     render_graph::RenderFragment,
@@ -72,11 +70,12 @@ pub(crate) struct ComponentNode {
     pub(crate) layout_coordinate_space: bool,
     /// Node-local modifier chain attached during build.
     pub(crate) modifier: Modifier,
+    pub(crate) attached_modifiers: crate::modifier::AttachedModifierChain,
     /// Measurement copy of the policy; measurement may mutate its local state.
     pub(crate) layout_node: Box<dyn LayoutModifierDyn>,
     pub(crate) layout_input_policy: LayoutModifierHandle,
     /// Draw modifier node used to record draw and compute commands.
-    pub(crate) draw_node: Box<dyn DrawModifierNode>,
+    pub(crate) draw_node: crate::layout::DrawModifierHandle,
 }
 
 impl ComponentNode {
@@ -95,9 +94,10 @@ impl ComponentNode {
             interaction: None,
             layout_coordinate_space: false,
             modifier: Modifier::default(),
+            attached_modifiers: crate::modifier::AttachedModifierChain::default(),
             layout_node: Box::new(DefaultLayoutNode),
             layout_input_policy: LayoutModifierHandle::default(),
-            draw_node: Box::new(NoopDrawModifier),
+            draw_node: crate::layout::DrawModifierHandle::default(),
         }
     }
 
@@ -1030,7 +1030,7 @@ fn measure_base_layout(
 }
 
 fn measure_with_layout_modifiers(
-    modifiers: &[Arc<dyn LayoutModifierNode>],
+    modifiers: &[&dyn LayoutModifierNode],
     layout_ctx: &MeasureLayoutContext<'_, '_>,
     constraint: &Constraint,
     base: &mut dyn FnMut(&Constraint) -> Result<MeasuredNodeLayout, MeasurementError>,
@@ -1135,7 +1135,7 @@ fn measure_with_layout_modifiers(
 
 fn relayout_base_layout(
     policy: &dyn LayoutModifierDyn,
-    modifiers: &[Arc<dyn LayoutModifierNode>],
+    modifiers: &[&dyn LayoutModifierNode],
     layout_ctx: &MeasureLayoutContext<'_, '_>,
     entry: &LayoutSnapshotEntry,
     parent_constraint: &Constraint,

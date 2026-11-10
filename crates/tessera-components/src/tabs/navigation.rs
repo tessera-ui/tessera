@@ -4,7 +4,7 @@
 //!
 //! Navigate related views with arrows and activate them with Enter or Space.
 
-use std::{any::TypeId, sync::Arc};
+use std::any::TypeId;
 
 use tessera_ui::{
     AccessibilityNode, Callback, FocusManager, FocusRequester, KeyboardInput,
@@ -27,7 +27,7 @@ pub(super) struct TabFocusData {
 
 impl ParentDataModifierNode for TabFocusData {
     fn apply_parent_data(&self, data: &mut ParentDataMap) {
-        data.insert(TypeId::of::<Self>(), Arc::new(*self));
+        data.insert(TypeId::of::<Self>(), Box::new(*self));
     }
 }
 

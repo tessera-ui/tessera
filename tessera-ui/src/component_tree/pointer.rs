@@ -214,7 +214,7 @@ impl PointerIndex {
             } else {
                 Arc::new(PointerNodePlan {
                     context,
-                    actions: node.modifier.ordered_actions(),
+                    modifier: node.modifier.clone(),
                 })
             };
             let context = &plan.context;
@@ -229,7 +229,7 @@ impl PointerIndex {
                     .outward()
             });
             let mut position = context.base_abs_pos;
-            for (index, action) in plan.actions.iter().enumerate() {
+            for (index, action) in plan.modifier.ordered_actions().into_iter().enumerate() {
                 if let Some(transform) = context
                     .input_transforms
                     .as_ref()

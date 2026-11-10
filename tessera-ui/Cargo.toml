@@ -17,6 +17,7 @@ testing = []
 headless = ["serde", "serde_json", "wgpu/counters"]
 
 [dependencies]
+bumpalo.workspace = true
 accesskit.workspace = true
 accesskit_winit.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }

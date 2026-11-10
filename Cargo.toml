@@ -32,6 +32,7 @@ homepage = "https://tessera-ui.github.io"
 # - Declare `default-features = false` here when any member needs it; members
 #   then opt into the features they use.
 [workspace.dependencies]
+bumpalo = "3.20.3"
 tessera-build = { path = "crates/tessera-build", version = "0.1.0" }
 tessera-components = { path = "crates/tessera-components", version = "2.7.0" }
 tessera-foundation = { path = "crates/tessera-foundation", version = "0.1.0" }

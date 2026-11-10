@@ -6,16 +6,41 @@
 //! Build reusable modifier chains that attach behavior directly to the current
 //! component node.
 
+mod attached;
+mod diff;
+mod storage;
+
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
     fmt,
     hash::{Hash, Hasher},
-    sync::Arc,
+    rc::Rc,
 };
 
 use rustc_hash::FxHasher;
 use smallvec::SmallVec;
+
+use self::storage::{Chain as ModifierElement, NodeRef};
+
+pub(crate) use self::attached::{AttachedModifierChain, flush_lifecycle};
+pub use self::attached::{ModifierNodeContext, ModifierNodeId};
+pub(crate) use self::storage::OwnedNode;
+
+macro_rules! modifier_lifecycle {
+    () => {
+        /// Called after this modifier node is attached to its component.
+        fn on_attach(&self, _context: $crate::modifier::ModifierNodeContext) {}
+
+        /// Called when compatible new inputs update this attached node.
+        fn on_update(&self, _context: $crate::modifier::ModifierNodeContext) {}
+
+        /// Called after this node is removed from its component.
+        fn on_detach(&self, _context: $crate::modifier::ModifierNodeContext) {}
+    };
+}
+
+pub(crate) use modifier_lifecycle;
 
 use crate::{
     AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, FocusGroupNode,
@@ -32,7 +57,7 @@ use crate::{
 };
 
 /// Parent-data payloads collected from modifier nodes.
-pub type ParentDataMap = HashMap<TypeId, Arc<dyn Any + Send + Sync>>;
+pub type ParentDataMap = HashMap<TypeId, Box<dyn Any>>;
 
 /// Child measurement entry used by layout modifier nodes.
 pub trait LayoutModifierChild {
@@ -82,7 +107,8 @@ pub struct DrawModifierContext<'a, 'b> {
 /// (wrapping measure). An innermost node may override [`Self::place_children`]
 /// to update placements against cached child sizes. Wrapping modifiers can be
 /// measured again around that cached result to update their content bounds.
-pub trait LayoutModifierNode: Send + Sync + 'static {
+pub trait LayoutModifierNode: Any {
+    modifier_lifecycle!();
     /// Computes layout for this node when it is applied at the innermost layer.
     fn measure(&self, _scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Err(MeasurementError::MeasureFnFailed(
@@ -135,7 +161,8 @@ pub trait LayoutModifierNode: Send + Sync + 'static {
 
 /// A node-local placement modifier that transforms the current node position
 /// without affecting measured size.
-pub trait PlacementModifierNode: Send + Sync + 'static {
+pub trait PlacementModifierNode: Any {
+    modifier_lifecycle!();
     /// Returns the concrete modifier name used by layout inspection.
     fn diagnostic_name(&self) -> &'static str {
         std::any::type_name::<Self>()
@@ -145,7 +172,8 @@ pub trait PlacementModifierNode: Send + Sync + 'static {
 }
 
 /// A node-local draw modifier.
-pub trait DrawModifierNode: Send + Sync + 'static {
+pub trait DrawModifierNode: Any {
+    modifier_lifecycle!();
     /// Returns the concrete modifier name used by paint inspection.
     fn diagnostic_name(&self) -> &'static str {
         std::any::type_name::<Self>()
@@ -160,7 +188,8 @@ pub trait DrawModifierNode: Send + Sync + 'static {
 }
 
 /// A node-local parent-data modifier.
-pub trait ParentDataModifierNode: Any + Send + Sync + 'static {
+pub trait ParentDataModifierNode: Any {
+    modifier_lifecycle!();
     /// Applies parent data visible to the parent layout.
     fn apply_parent_data(&self, data: &mut ParentDataMap);
 
@@ -174,7 +203,8 @@ pub trait ParentDataModifierNode: Any + Send + Sync + 'static {
 }
 
 /// A node-local build modifier.
-pub trait BuildModifierNode: Any + Send + Sync {
+pub trait BuildModifierNode: Any {
+    modifier_lifecycle!();
     /// Applies build-time effects to the current component node.
     fn apply(&self, _runtime: &mut TesseraRuntime) {}
 
@@ -235,7 +265,7 @@ impl ModifierBuildContext {
     /// Registers a callback on this node's frame clock.
     pub fn receive_frame_nanos<F>(&mut self, callback: F)
     where
-        F: FnMut(u64) -> crate::FrameNanosControl + Send + 'static,
+        F: FnMut(u64) -> crate::FrameNanosControl + 'static,
     {
         let callback_type = TypeId::of::<F>();
         let ordinal = next_type_position(&mut self.clock_positions, callback_type);
@@ -258,7 +288,8 @@ impl ModifierBuildContext {
 }
 
 /// A node-local semantics modifier.
-pub trait SemanticsModifierNode: Send + Sync + 'static {
+pub trait SemanticsModifierNode: Any {
+    modifier_lifecycle!();
     /// Applies accessibility metadata and optional action handling.
     fn apply(
         &self,
@@ -268,7 +299,8 @@ pub trait SemanticsModifierNode: Send + Sync + 'static {
 }
 
 /// A node-local pointer input modifier.
-pub trait PointerInputModifierNode: Send + Sync + 'static {
+pub trait PointerInputModifierNode: Any {
+    modifier_lifecycle!();
     /// Handles pointer input for the current node.
     ///
     /// Pointer modifiers should operate on pointer-specific event flow and
@@ -279,20 +311,23 @@ pub trait PointerInputModifierNode: Send + Sync + 'static {
 }
 
 /// A node-local hover cursor modifier.
-pub trait CursorModifierNode: Send + Sync + 'static {
+pub trait CursorModifierNode: Any {
+    modifier_lifecycle!();
     /// Returns the cursor icon that should be used when the pointer hovers this
     /// node.
     fn cursor_icon(&self) -> CursorIcon;
 }
 
 /// A node-local keyboard input modifier.
-pub trait KeyboardInputModifierNode: Send + Sync + 'static {
+pub trait KeyboardInputModifierNode: Any {
+    modifier_lifecycle!();
     /// Handles keyboard input for the current node.
     fn on_keyboard_input(&self, input: KeyboardInput<'_>);
 }
 
 /// A node-local IME input modifier.
-pub trait ImeInputModifierNode: Send + Sync + 'static {
+pub trait ImeInputModifierNode: Any {
+    modifier_lifecycle!();
     /// Handles IME input for the current node.
     fn on_ime_input(&self, input: ImeInput<'_>);
 }
@@ -394,7 +429,7 @@ pub(crate) enum FocusModifierRegistration {
 enum FocusModifierOp {
     Requester(FocusRequester),
     Registration(FocusModifierRegistration),
-    Properties(Arc<FocusProperties>),
+    Properties(Rc<FocusProperties>),
     PreferredTabStop(bool),
     TraversalPolicy(FocusTraversalPolicy),
     ChangedHandler(CallbackWith<FocusState>),
@@ -403,8 +438,8 @@ enum FocusModifierOp {
     RevealHandler(CallbackWith<FocusRevealRequest, bool>),
 }
 
-pub(crate) trait ErasedLayoutModifierNode: Send + Sync + 'static {
-    fn node(self: Arc<Self>) -> Arc<dyn LayoutModifierNode>;
+pub(crate) trait ErasedLayoutModifierNode: 'static {
+    fn node(&self) -> &dyn LayoutModifierNode;
 
     fn eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
 
@@ -417,7 +452,7 @@ pub(crate) trait ErasedLayoutModifierNode: Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
 }
 
-pub(crate) trait ErasedPlacementModifierNode: Send + Sync + 'static {
+pub(crate) trait ErasedPlacementModifierNode: 'static {
     fn node(&self) -> &dyn PlacementModifierNode;
 
     fn eq(&self, other: &dyn ErasedPlacementModifierNode) -> bool;
@@ -438,6 +473,18 @@ impl<N> LayoutModifierNode for ComparableLayoutModifierNode<N>
 where
     N: LayoutModifierNode + PartialEq,
 {
+    fn on_attach(&self, context: ModifierNodeContext) {
+        self.node.on_attach(context);
+    }
+
+    fn on_update(&self, context: ModifierNodeContext) {
+        self.node.on_update(context);
+    }
+
+    fn on_detach(&self, context: ModifierNodeContext) {
+        self.node.on_detach(context);
+    }
+
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         self.node.measure(scope)
     }
@@ -463,7 +510,7 @@ impl<N> ErasedLayoutModifierNode for ComparableLayoutModifierNode<N>
 where
     N: LayoutModifierNode + PartialEq,
 {
-    fn node(self: Arc<Self>) -> Arc<dyn LayoutModifierNode> {
+    fn node(&self) -> &dyn LayoutModifierNode {
         self
     }
 
@@ -536,23 +583,25 @@ where
     }
 }
 
-#[derive(Clone)]
 enum ModifierAction {
-    Layout(Arc<dyn ErasedLayoutModifierNode>),
-    Placement(Arc<dyn ErasedPlacementModifierNode>),
-    Draw(Arc<dyn DrawModifierNode>),
-    ParentData(Arc<dyn ParentDataModifierNode>),
-    Build(Arc<dyn BuildModifierNode>),
-    Semantics(Arc<dyn SemanticsModifierNode>),
-    Cursor(Arc<dyn CursorModifierNode>),
-    PointerPreviewInput(Arc<dyn PointerInputModifierNode>),
-    PointerInput(Arc<dyn PointerInputModifierNode>),
-    PointerFinalInput(Arc<dyn PointerInputModifierNode>),
-    KeyboardPreviewInput(Arc<dyn KeyboardInputModifierNode>),
-    KeyboardInput(Arc<dyn KeyboardInputModifierNode>),
-    ClipboardInput(Arc<dyn ClipboardInputModifierNode>),
-    ImePreviewInput(Arc<dyn ImeInputModifierNode>),
-    ImeInput(Arc<dyn ImeInputModifierNode>),
+    Layout(NodeRef<dyn ErasedLayoutModifierNode>),
+    Placement(NodeRef<dyn ErasedPlacementModifierNode>),
+    Draw(NodeRef<dyn DrawModifierNode>),
+    ParentData(NodeRef<dyn ParentDataModifierNode>),
+    Build(NodeRef<dyn BuildModifierNode>),
+    BuildOwner(Modifier),
+    Semantics(NodeRef<dyn SemanticsModifierNode>),
+    Cursor(NodeRef<dyn CursorModifierNode>),
+    PointerPreviewInput(NodeRef<dyn PointerInputModifierNode>),
+    PointerInput(NodeRef<dyn PointerInputModifierNode>),
+    PointerFinalInput(NodeRef<dyn PointerInputModifierNode>),
+    KeyboardPreviewInput(NodeRef<dyn KeyboardInputModifierNode>),
+    KeyboardInput(NodeRef<dyn KeyboardInputModifierNode>),
+    ClipboardInput(NodeRef<dyn ClipboardInputModifierNode>),
+    ImePreviewInput(NodeRef<dyn ImeInputModifierNode>),
+    ImeInput(NodeRef<dyn ImeInputModifierNode>),
+    Policy(crate::layout::LayoutModifierHandle),
+    TerminalDraw(crate::layout::DrawModifierHandle),
     Focus(FocusModifierOp),
     GloballyPositioned(crate::component_tree::GloballyPositionedHandler),
 }
@@ -577,6 +626,8 @@ impl ModifierAction {
             Self::ClipboardInput(_) => ActionKinds::CLIPBOARD,
             Self::Focus(_) => ActionKinds::FOCUS,
             Self::GloballyPositioned(_) => ActionKinds::POSITIONED,
+            Self::BuildOwner(_) => ActionKinds::LIFECYCLE,
+            Self::Policy(_) | Self::TerminalDraw(_) => ActionKinds::default(),
         }
     }
 }
@@ -598,9 +649,11 @@ impl ActionKinds {
     const CLIPBOARD: Self = Self(1 << 8);
     const FOCUS: Self = Self(1 << 9);
     const POSITIONED: Self = Self(1 << 10);
+    const LIFECYCLE: Self = Self(1 << 11);
     const INPUT_GEOMETRY: Self = Self(Self::POINTER.0 | Self::KEY_INPUT.0);
-    const ATTACH_EFFECTS: Self =
-        Self(Self::BUILD.0 | Self::SEMANTICS.0 | Self::FOCUS.0 | Self::POSITIONED.0);
+    const ATTACH_EFFECTS: Self = Self(
+        Self::BUILD.0 | Self::SEMANTICS.0 | Self::FOCUS.0 | Self::POSITIONED.0 | Self::LIFECYCLE.0,
+    );
     const COMPARED: Self = Self(
         Self::LAYOUT.0 | Self::PLACEMENT.0 | Self::DRAW.0 | Self::PARENT_DATA.0 | Self::POINTER.0,
     );
@@ -614,128 +667,21 @@ impl ActionKinds {
     }
 }
 
-#[derive(Clone)]
-pub(crate) enum OrderedModifierAction {
+#[derive(Clone, Copy)]
+pub(crate) enum OrderedModifierAction<'a> {
     Layout,
-    Placement(Arc<dyn ErasedPlacementModifierNode>),
-    Draw(Arc<dyn DrawModifierNode>),
+    Placement(&'a dyn ErasedPlacementModifierNode),
+    Draw(&'a dyn DrawModifierNode),
     ParentData,
-    Cursor(Arc<dyn CursorModifierNode>),
-    PointerPreviewInput(Arc<dyn PointerInputModifierNode>),
-    PointerInput(Arc<dyn PointerInputModifierNode>),
-    PointerFinalInput(Arc<dyn PointerInputModifierNode>),
-    KeyboardPreviewInput(Arc<dyn KeyboardInputModifierNode>),
-    KeyboardInput(Arc<dyn KeyboardInputModifierNode>),
-    ClipboardInput(Arc<dyn ClipboardInputModifierNode>),
-    ImePreviewInput(Arc<dyn ImeInputModifierNode>),
-    ImeInput(Arc<dyn ImeInputModifierNode>),
-}
-
-/// Compose-style modifier element.
-///
-/// `Combined` keeps the outer chain and the inner chain. `then` does not
-/// flatten or rebuild individual links. Equality and hashing walk the folded
-/// action sequence, so an empty side disappears: `a.then(empty) == a`.
-#[derive(Clone)]
-enum ModifierElement {
-    Empty,
-    Action(ModifierAction),
-    Combined(Arc<ModifierCombination>),
-}
-
-struct ModifierCombination {
-    outer: ModifierElement,
-    inner: ModifierElement,
-    kinds: ActionKinds,
-}
-
-impl Default for ModifierElement {
-    fn default() -> Self {
-        Self::Empty
-    }
-}
-
-impl ModifierElement {
-    fn is_empty(&self) -> bool {
-        matches!(self, Self::Empty)
-    }
-
-    fn is_same(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Empty, Self::Empty) => true,
-            (Self::Combined(lhs), Self::Combined(rhs)) => Arc::ptr_eq(lhs, rhs),
-            _ => false,
-        }
-    }
-
-    fn kinds(&self) -> ActionKinds {
-        match self {
-            Self::Empty => ActionKinds::default(),
-            Self::Action(action) => action.kind(),
-            Self::Combined(combination) => combination.kinds,
-        }
-    }
-
-    fn then(self, inner: Self) -> Self {
-        match (self, inner) {
-            (lhs, Self::Empty) => lhs,
-            (Self::Empty, rhs) => rhs,
-            (outer, inner) => {
-                let kinds = outer.kinds().union(inner.kinds());
-                Self::Combined(Arc::new(ModifierCombination {
-                    outer,
-                    inner,
-                    kinds,
-                }))
-            }
-        }
-    }
-
-    fn fold_actions<'a, F>(&'a self, visit: &mut F)
-    where
-        F: FnMut(&'a ModifierAction),
-    {
-        match self {
-            Self::Empty => {}
-            Self::Action(action) => visit(action),
-            Self::Combined(combination) => {
-                combination.outer.fold_actions(visit);
-                combination.inner.fold_actions(visit);
-            }
-        }
-    }
-
-    fn actions(&self) -> impl Iterator<Item = &ModifierAction> {
-        let mut pending = SmallVec::<[&Self; 8]>::new();
-        pending.push(self);
-        std::iter::from_fn(move || {
-            while let Some(element) = pending.pop() {
-                match element {
-                    Self::Empty => {}
-                    Self::Action(action) => return Some(action),
-                    Self::Combined(combination) => {
-                        pending.push(&combination.inner);
-                        pending.push(&combination.outer);
-                    }
-                }
-            }
-            None
-        })
-    }
-
-    fn for_each_action_outer_first<F>(&self, visit: &mut F)
-    where
-        F: FnMut(ModifierAction),
-    {
-        match self {
-            Self::Empty => {}
-            Self::Action(action) => visit(action.clone()),
-            Self::Combined(combination) => {
-                combination.inner.for_each_action_outer_first(visit);
-                combination.outer.for_each_action_outer_first(visit);
-            }
-        }
-    }
+    Cursor(&'a dyn CursorModifierNode),
+    PointerPreviewInput(&'a dyn PointerInputModifierNode),
+    PointerInput(&'a dyn PointerInputModifierNode),
+    PointerFinalInput(&'a dyn PointerInputModifierNode),
+    KeyboardPreviewInput(&'a dyn KeyboardInputModifierNode),
+    KeyboardInput(&'a dyn KeyboardInputModifierNode),
+    ClipboardInput(&'a dyn ClipboardInputModifierNode),
+    ImePreviewInput(&'a dyn ImeInputModifierNode),
+    ImeInput(&'a dyn ImeInputModifierNode),
 }
 
 /// A persistent handle to a modifier chain.
@@ -832,6 +778,20 @@ pub trait CursorModifierExt {
 }
 
 impl Modifier {
+    fn with_terminal_nodes(
+        mut self,
+        policy: crate::layout::LayoutModifierHandle,
+        draw: crate::layout::DrawModifierHandle,
+    ) -> Self {
+        if policy.has_node() {
+            self = self.push_action(ModifierAction::Policy(policy));
+        }
+        if draw.has_node() {
+            self = self.push_action(ModifierAction::TerminalDraw(draw));
+        }
+        self
+    }
+
     /// Observes measured dimensions in local layout units after initial
     /// placement and size changes. Moving or scaling an ancestor does not
     /// trigger a callback unless the local measured size changes. Hidden
@@ -886,7 +846,18 @@ impl Modifier {
 
     fn push_action(self, action: ModifierAction) -> Self {
         Self {
-            element: self.element.then(ModifierElement::Action(action)),
+            element: self.element.push(action),
+        }
+    }
+
+    fn push_node<N: 'static, T: ?Sized>(
+        self,
+        node: N,
+        erase: fn(&N) -> &T,
+        action: fn(NodeRef<T>) -> ModifierAction,
+    ) -> Self {
+        Self {
+            element: self.element.push_node(node, erase, action),
         }
     }
 
@@ -901,109 +872,165 @@ impl Modifier {
     where
         N: LayoutModifierNode + PartialEq,
     {
-        self.push_action(ModifierAction::Layout(Arc::new(
+        self.push_node(
             ComparableLayoutModifierNode { node },
-        )))
+            |node| node as &dyn ErasedLayoutModifierNode,
+            ModifierAction::Layout,
+        )
     }
 
     pub(crate) fn push_placement<N>(self, node: N) -> Self
     where
         N: PlacementModifierNode + PartialEq,
     {
-        self.push_action(ModifierAction::Placement(Arc::new(
+        self.push_node(
             ComparablePlacementModifierNode { node },
-        )))
+            |node| node as &dyn ErasedPlacementModifierNode,
+            ModifierAction::Placement,
+        )
     }
 
     pub(crate) fn push_draw<N>(self, node: N) -> Self
     where
         N: DrawModifierNode,
     {
-        self.push_action(ModifierAction::Draw(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn DrawModifierNode,
+            ModifierAction::Draw,
+        )
     }
 
     pub(crate) fn push_parent_data<N>(self, node: N) -> Self
     where
         N: ParentDataModifierNode,
     {
-        self.push_action(ModifierAction::ParentData(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn ParentDataModifierNode,
+            ModifierAction::ParentData,
+        )
     }
 
     pub(crate) fn push_build<N>(self, node: N) -> Self
     where
         N: BuildModifierNode,
     {
-        self.push_action(ModifierAction::Build(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn BuildModifierNode,
+            ModifierAction::Build,
+        )
     }
 
     pub(crate) fn push_semantics<N>(self, node: N) -> Self
     where
         N: SemanticsModifierNode,
     {
-        self.push_action(ModifierAction::Semantics(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn SemanticsModifierNode,
+            ModifierAction::Semantics,
+        )
     }
 
     fn push_cursor<N>(self, node: N) -> Self
     where
         N: CursorModifierNode,
     {
-        self.push_action(ModifierAction::Cursor(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn CursorModifierNode,
+            ModifierAction::Cursor,
+        )
     }
 
     pub(crate) fn push_pointer_preview_input<N>(self, node: N) -> Self
     where
         N: PointerInputModifierNode,
     {
-        self.push_action(ModifierAction::PointerPreviewInput(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn PointerInputModifierNode,
+            ModifierAction::PointerPreviewInput,
+        )
     }
 
     pub(crate) fn push_pointer_input<N>(self, node: N) -> Self
     where
         N: PointerInputModifierNode,
     {
-        self.push_action(ModifierAction::PointerInput(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn PointerInputModifierNode,
+            ModifierAction::PointerInput,
+        )
     }
 
     pub(crate) fn push_pointer_final_input<N>(self, node: N) -> Self
     where
         N: PointerInputModifierNode,
     {
-        self.push_action(ModifierAction::PointerFinalInput(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn PointerInputModifierNode,
+            ModifierAction::PointerFinalInput,
+        )
     }
 
     pub(crate) fn push_keyboard_preview_input<N>(self, node: N) -> Self
     where
         N: KeyboardInputModifierNode,
     {
-        self.push_action(ModifierAction::KeyboardPreviewInput(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn KeyboardInputModifierNode,
+            ModifierAction::KeyboardPreviewInput,
+        )
     }
 
     pub(crate) fn push_keyboard_input<N>(self, node: N) -> Self
     where
         N: KeyboardInputModifierNode,
     {
-        self.push_action(ModifierAction::KeyboardInput(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn KeyboardInputModifierNode,
+            ModifierAction::KeyboardInput,
+        )
     }
 
     pub(crate) fn push_clipboard_input<N>(self, node: N) -> Self
     where
         N: ClipboardInputModifierNode,
     {
-        self.push_action(ModifierAction::ClipboardInput(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn ClipboardInputModifierNode,
+            ModifierAction::ClipboardInput,
+        )
     }
 
     pub(crate) fn push_ime_preview_input<N>(self, node: N) -> Self
     where
         N: ImeInputModifierNode,
     {
-        self.push_action(ModifierAction::ImePreviewInput(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn ImeInputModifierNode,
+            ModifierAction::ImePreviewInput,
+        )
     }
 
     pub(crate) fn push_ime_input<N>(self, node: N) -> Self
     where
         N: ImeInputModifierNode,
     {
-        self.push_action(ModifierAction::ImeInput(Arc::new(node)))
+        self.push_node(
+            node,
+            |node| node as &dyn ImeInputModifierNode,
+            ModifierAction::ImeInput,
+        )
     }
 
     fn push_focus_requester(self, requester: FocusRequester) -> Self {
@@ -1057,7 +1084,7 @@ impl Modifier {
     }
 
     fn push_focus_properties(self, properties: FocusProperties) -> Self {
-        self.push_focus_op(FocusModifierOp::Properties(Arc::new(properties)))
+        self.push_focus_op(FocusModifierOp::Properties(Rc::new(properties)))
     }
 
     fn push_focus_traversal_policy(self, policy: FocusTraversalPolicy) -> Self {
@@ -1120,56 +1147,48 @@ impl Modifier {
         if !self.contains(ActionKinds::BUILD) {
             return self;
         }
-        fn expand(
-            element: &ModifierElement,
-            instance: u64,
-            owner: u64,
-            path: &[u64],
-            positions: &mut SmallVec<[(TypeId, usize); 4]>,
-        ) -> Option<ModifierElement> {
-            match element {
-                ModifierElement::Empty => None,
-                ModifierElement::Action(action) => {
-                    let ModifierAction::Build(node) = action else {
-                        return None;
-                    };
-                    let kind = node.as_ref().type_id();
-                    let position = next_type_position(positions, kind);
-                    let mut path = path.to_vec();
-                    path.push(modifier_type_key(kind));
-                    path.push(position as u64);
-                    let mut context = ModifierBuildContext {
-                        instance,
-                        owner,
-                        path: path.clone(),
-                        state_positions: SmallVec::new(),
-                        clock_positions: SmallVec::new(),
-                    };
-                    node.materialize(&mut context)
-                        .map(|modifier| modifier.materialize(instance, owner, &path).element)
-                }
-                ModifierElement::Combined(combination) => {
-                    let ModifierCombination { outer, inner, .. } = combination.as_ref();
-                    let first = expand(outer, instance, owner, path, positions);
-                    let second = expand(inner, instance, owner, path, positions);
-                    if first.is_none() && second.is_none() {
-                        return None;
-                    }
-                    Some(
-                        first
-                            .unwrap_or_else(|| outer.clone())
-                            .then(second.unwrap_or_else(|| inner.clone())),
-                    )
-                }
+        assert!(path.len() < 64, "recursive modifier materialization");
+        let mut positions = SmallVec::new();
+        let mut result = Modifier::new();
+        let mut keep_start = 0;
+        let mut changed = false;
+        for (index, action) in self.element.actions().enumerate() {
+            let ModifierAction::Build(node) = action else {
+                continue;
+            };
+            let kind = node.as_ref().type_id();
+            let position = next_type_position(&mut positions, kind);
+            let mut path = path.to_vec();
+            path.push(modifier_type_key(kind));
+            path.push(position as u64);
+            let mut context = ModifierBuildContext {
+                instance,
+                owner,
+                path: path.clone(),
+                state_positions: SmallVec::new(),
+                clock_positions: SmallVec::new(),
+            };
+            if let Some(modifier) = node.materialize(&mut context) {
+                result = result.then(Modifier {
+                    element: self.element.slice(keep_start, index - keep_start),
+                });
+                result = result.push_action(ModifierAction::BuildOwner(Modifier {
+                    element: self.element.slice(index, 1),
+                }));
+                result = result.then(modifier.materialize(instance, owner, &path));
+                keep_start = index + 1;
+                changed = true;
             }
         }
-        assert!(path.len() < 64, "recursive modifier materialization");
-        match expand(&self.element, instance, owner, path, &mut SmallVec::new()) {
-            Some(element) => Self { element },
-            None => self,
+        if !changed {
+            return self;
         }
+        result.then(Modifier {
+            element: self
+                .element
+                .slice(keep_start, self.element.len() - keep_start),
+        })
     }
-
     /// Attaches this modifier chain to the current component node.
     pub fn attach(self) {
         ensure_build_phase();
@@ -1188,38 +1207,37 @@ impl Modifier {
         });
         let materialized =
             self.materialize(instance, owner, &crate::runtime::modifier_attachment_path());
+        let effects = materialized.clone();
 
         TesseraRuntime::with_mut(|runtime| {
-            runtime.append_current_modifier(materialized.clone());
+            runtime.append_current_modifier(materialized);
         });
         crate::nested_scroll::attachment_changed();
 
         let mut accessibility = AccessibilityNode::new();
         let mut action_handler = None;
         let mut has_semantics = false;
-        if materialized.contains(ActionKinds::ATTACH_EFFECTS) {
-            materialized
-                .element
-                .fold_actions(&mut |action| match action {
-                    ModifierAction::Build(node) => {
-                        TesseraRuntime::with_mut(|runtime| node.apply(runtime));
-                    }
-                    ModifierAction::Semantics(node) => {
-                        has_semantics = true;
-                        node.apply(&mut accessibility, &mut action_handler);
-                    }
-                    ModifierAction::Focus(op) => {
-                        TesseraRuntime::with_mut(|runtime| {
-                            apply_focus_op(runtime::FocusModifierRuntime::new(runtime), op.clone());
-                        });
-                    }
-                    ModifierAction::GloballyPositioned(handler) => {
-                        TesseraRuntime::with_mut(|runtime| {
-                            runtime.push_current_globally_positioned_handler(handler.clone());
-                        });
-                    }
-                    _ => {}
-                });
+        if effects.contains(ActionKinds::ATTACH_EFFECTS) {
+            effects.element.fold_actions(&mut |effect| match effect {
+                ModifierAction::Build(node) => {
+                    TesseraRuntime::with_mut(|runtime| node.apply(runtime));
+                }
+                ModifierAction::Semantics(node) => {
+                    has_semantics = true;
+                    node.apply(&mut accessibility, &mut action_handler);
+                }
+                ModifierAction::Focus(op) => {
+                    TesseraRuntime::with_mut(|runtime| {
+                        apply_focus_op(runtime::FocusModifierRuntime::new(runtime), op.clone());
+                    });
+                }
+                ModifierAction::GloballyPositioned(handler) => {
+                    TesseraRuntime::with_mut(|runtime| {
+                        runtime.push_current_globally_positioned_handler(handler.clone());
+                    });
+                }
+                _ => {}
+            });
         }
 
         TesseraRuntime::with_mut(|runtime| {
@@ -1242,41 +1260,44 @@ impl Modifier {
         self.element.is_empty()
     }
 
-    pub(crate) fn ordered_actions(&self) -> Vec<OrderedModifierAction> {
-        let mut actions = Vec::new();
+    pub(crate) fn ordered_actions(&self) -> SmallVec<[OrderedModifierAction<'_>; 8]> {
+        let mut actions = SmallVec::new();
         self.element.fold_actions(&mut |action| {
             let action = match action {
                 ModifierAction::Layout(_) => OrderedModifierAction::Layout,
-                ModifierAction::Placement(node) => OrderedModifierAction::Placement(node.clone()),
-                ModifierAction::Draw(node) => OrderedModifierAction::Draw(node.clone()),
+                ModifierAction::Placement(node) => OrderedModifierAction::Placement(node.as_ref()),
+                ModifierAction::Draw(node) => OrderedModifierAction::Draw(node.as_ref()),
                 ModifierAction::ParentData(_) => OrderedModifierAction::ParentData,
-                ModifierAction::Cursor(node) => OrderedModifierAction::Cursor(node.clone()),
+                ModifierAction::Cursor(node) => OrderedModifierAction::Cursor(node.as_ref()),
                 ModifierAction::PointerPreviewInput(node) => {
-                    OrderedModifierAction::PointerPreviewInput(node.clone())
+                    OrderedModifierAction::PointerPreviewInput(node.as_ref())
                 }
                 ModifierAction::PointerInput(node) => {
-                    OrderedModifierAction::PointerInput(node.clone())
+                    OrderedModifierAction::PointerInput(node.as_ref())
                 }
                 ModifierAction::PointerFinalInput(node) => {
-                    OrderedModifierAction::PointerFinalInput(node.clone())
+                    OrderedModifierAction::PointerFinalInput(node.as_ref())
                 }
                 ModifierAction::KeyboardPreviewInput(node) => {
-                    OrderedModifierAction::KeyboardPreviewInput(node.clone())
+                    OrderedModifierAction::KeyboardPreviewInput(node.as_ref())
                 }
                 ModifierAction::KeyboardInput(node) => {
-                    OrderedModifierAction::KeyboardInput(node.clone())
+                    OrderedModifierAction::KeyboardInput(node.as_ref())
                 }
                 ModifierAction::ClipboardInput(node) => {
-                    OrderedModifierAction::ClipboardInput(node.clone())
+                    OrderedModifierAction::ClipboardInput(node.as_ref())
                 }
                 ModifierAction::ImePreviewInput(node) => {
-                    OrderedModifierAction::ImePreviewInput(node.clone())
+                    OrderedModifierAction::ImePreviewInput(node.as_ref())
                 }
-                ModifierAction::ImeInput(node) => OrderedModifierAction::ImeInput(node.clone()),
+                ModifierAction::ImeInput(node) => OrderedModifierAction::ImeInput(node.as_ref()),
                 ModifierAction::Build(_)
                 | ModifierAction::Semantics(_)
                 | ModifierAction::Focus(_)
-                | ModifierAction::GloballyPositioned(_) => return,
+                | ModifierAction::GloballyPositioned(_)
+                | ModifierAction::Policy(_)
+                | ModifierAction::BuildOwner(_)
+                | ModifierAction::TerminalDraw(_) => return,
             };
             actions.push(action);
         });
@@ -1348,7 +1369,7 @@ impl Modifier {
             changes.draw = lhs.clone().count() != rhs.clone().count()
                 || lhs.zip(rhs).any(|pair| match pair {
                     (ModifierAction::Draw(lhs), ModifierAction::Draw(rhs)) => {
-                        !Arc::ptr_eq(lhs, rhs)
+                        !NodeRef::ptr_eq(lhs, rhs)
                     }
                     _ => true,
                 });
@@ -1361,7 +1382,7 @@ impl Modifier {
             changes.parent_data = lhs.clone().count() != rhs.clone().count()
                 || lhs.zip(rhs).any(|pair| match pair {
                     (ModifierAction::ParentData(lhs), ModifierAction::ParentData(rhs)) => {
-                        !Arc::ptr_eq(lhs, rhs) && !lhs.equivalent(rhs.as_ref())
+                        !NodeRef::ptr_eq(lhs, rhs) && !lhs.equivalent(rhs.as_ref())
                     }
                     _ => true,
                 });
@@ -1433,17 +1454,17 @@ impl Modifier {
         selected
     }
 
-    pub(crate) fn layout_modifiers(&self) -> SmallVec<[Arc<dyn LayoutModifierNode>; 4]> {
+    pub(crate) fn layout_modifiers(&self) -> SmallVec<[&dyn LayoutModifierNode; 4]> {
         if !self.contains(ActionKinds::LAYOUT) {
             return SmallVec::new();
         }
         self.select_actions(|action| match action {
-            ModifierAction::Layout(node) => Some(node.clone().node()),
+            ModifierAction::Layout(node) => Some(node.node()),
             _ => None,
         })
     }
 
-    pub(crate) fn parent_data<T: Clone + Send + Sync + 'static>(&self) -> Option<T> {
+    pub(crate) fn parent_data<T: Clone + 'static>(&self) -> Option<T> {
         if !self.contains(ActionKinds::PARENT_DATA) {
             return None;
         }
@@ -1702,35 +1723,42 @@ impl fmt::Debug for Modifier {
 
 fn modifier_action_eq(lhs: &ModifierAction, rhs: &ModifierAction) -> bool {
     match (lhs, rhs) {
-        (ModifierAction::Layout(lhs), ModifierAction::Layout(rhs)) => lhs.eq(rhs.as_ref()),
+        (ModifierAction::Policy(lhs), ModifierAction::Policy(rhs)) => lhs == rhs,
+        (ModifierAction::TerminalDraw(lhs), ModifierAction::TerminalDraw(rhs)) => lhs == rhs,
+        (ModifierAction::BuildOwner(lhs), ModifierAction::BuildOwner(rhs)) => lhs == rhs,
+        (ModifierAction::Layout(lhs), ModifierAction::Layout(rhs)) => lhs.as_ref().eq(rhs.as_ref()),
         (ModifierAction::Placement(lhs), ModifierAction::Placement(rhs)) => lhs.eq(rhs.as_ref()),
-        (ModifierAction::Draw(lhs), ModifierAction::Draw(rhs)) => Arc::ptr_eq(lhs, rhs),
-        (ModifierAction::ParentData(lhs), ModifierAction::ParentData(rhs)) => Arc::ptr_eq(lhs, rhs),
-        (ModifierAction::Build(lhs), ModifierAction::Build(rhs)) => Arc::ptr_eq(lhs, rhs),
-        (ModifierAction::Semantics(lhs), ModifierAction::Semantics(rhs)) => Arc::ptr_eq(lhs, rhs),
-        (ModifierAction::Cursor(lhs), ModifierAction::Cursor(rhs)) => Arc::ptr_eq(lhs, rhs),
+        (ModifierAction::Draw(lhs), ModifierAction::Draw(rhs)) => NodeRef::ptr_eq(lhs, rhs),
+        (ModifierAction::ParentData(lhs), ModifierAction::ParentData(rhs)) => {
+            NodeRef::ptr_eq(lhs, rhs)
+        }
+        (ModifierAction::Build(lhs), ModifierAction::Build(rhs)) => NodeRef::ptr_eq(lhs, rhs),
+        (ModifierAction::Semantics(lhs), ModifierAction::Semantics(rhs)) => {
+            NodeRef::ptr_eq(lhs, rhs)
+        }
+        (ModifierAction::Cursor(lhs), ModifierAction::Cursor(rhs)) => NodeRef::ptr_eq(lhs, rhs),
         (ModifierAction::PointerPreviewInput(lhs), ModifierAction::PointerPreviewInput(rhs)) => {
-            Arc::ptr_eq(lhs, rhs)
+            NodeRef::ptr_eq(lhs, rhs)
         }
         (ModifierAction::PointerInput(lhs), ModifierAction::PointerInput(rhs)) => {
-            Arc::ptr_eq(lhs, rhs)
+            NodeRef::ptr_eq(lhs, rhs)
         }
         (ModifierAction::PointerFinalInput(lhs), ModifierAction::PointerFinalInput(rhs)) => {
-            Arc::ptr_eq(lhs, rhs)
+            NodeRef::ptr_eq(lhs, rhs)
         }
         (ModifierAction::KeyboardPreviewInput(lhs), ModifierAction::KeyboardPreviewInput(rhs)) => {
-            Arc::ptr_eq(lhs, rhs)
+            NodeRef::ptr_eq(lhs, rhs)
         }
         (ModifierAction::KeyboardInput(lhs), ModifierAction::KeyboardInput(rhs)) => {
-            Arc::ptr_eq(lhs, rhs)
+            NodeRef::ptr_eq(lhs, rhs)
         }
         (ModifierAction::ClipboardInput(lhs), ModifierAction::ClipboardInput(rhs)) => {
-            Arc::ptr_eq(lhs, rhs)
+            NodeRef::ptr_eq(lhs, rhs)
         }
         (ModifierAction::ImePreviewInput(lhs), ModifierAction::ImePreviewInput(rhs)) => {
-            Arc::ptr_eq(lhs, rhs)
+            NodeRef::ptr_eq(lhs, rhs)
         }
-        (ModifierAction::ImeInput(lhs), ModifierAction::ImeInput(rhs)) => Arc::ptr_eq(lhs, rhs),
+        (ModifierAction::ImeInput(lhs), ModifierAction::ImeInput(rhs)) => NodeRef::ptr_eq(lhs, rhs),
         (ModifierAction::Focus(lhs), ModifierAction::Focus(rhs)) => lhs == rhs,
         (ModifierAction::GloballyPositioned(lhs), ModifierAction::GloballyPositioned(rhs)) => {
             lhs == rhs
@@ -1749,28 +1777,31 @@ impl BuildModifierNode for LayoutCoordinateSpace {
     }
 }
 
-fn hash_arc<T: ?Sized, H: Hasher>(value: &Arc<T>, state: &mut H) {
-    std::ptr::hash(Arc::as_ptr(value), state);
+fn hash_rc<T: ?Sized, H: Hasher>(value: &NodeRef<T>, state: &mut H) {
+    std::ptr::hash(value.as_ptr(), state);
 }
 
 fn hash_modifier_action<H: Hasher>(action: &ModifierAction, state: &mut H) {
     std::mem::discriminant(action).hash(state);
     match action {
-        ModifierAction::Layout(node) => node.hash_node(state),
+        ModifierAction::Policy(node) => node.as_policy().as_any().type_id().hash(state),
+        ModifierAction::TerminalDraw(node) => node.concrete_type_id().hash(state),
+        ModifierAction::BuildOwner(node) => node.hash(state),
+        ModifierAction::Layout(node) => node.as_ref().hash_node(state),
         ModifierAction::Placement(node) => node.hash_node(state),
-        ModifierAction::Draw(node) => hash_arc(node, state),
-        ModifierAction::ParentData(node) => hash_arc(node, state),
-        ModifierAction::Build(node) => hash_arc(node, state),
-        ModifierAction::Semantics(node) => hash_arc(node, state),
-        ModifierAction::Cursor(node) => hash_arc(node, state),
-        ModifierAction::PointerPreviewInput(node) => hash_arc(node, state),
-        ModifierAction::PointerInput(node) => hash_arc(node, state),
-        ModifierAction::PointerFinalInput(node) => hash_arc(node, state),
-        ModifierAction::KeyboardPreviewInput(node) => hash_arc(node, state),
-        ModifierAction::KeyboardInput(node) => hash_arc(node, state),
-        ModifierAction::ClipboardInput(node) => hash_arc(node, state),
-        ModifierAction::ImePreviewInput(node) => hash_arc(node, state),
-        ModifierAction::ImeInput(node) => hash_arc(node, state),
+        ModifierAction::Draw(node) => hash_rc(node, state),
+        ModifierAction::ParentData(node) => hash_rc(node, state),
+        ModifierAction::Build(node) => hash_rc(node, state),
+        ModifierAction::Semantics(node) => hash_rc(node, state),
+        ModifierAction::Cursor(node) => hash_rc(node, state),
+        ModifierAction::PointerPreviewInput(node) => hash_rc(node, state),
+        ModifierAction::PointerInput(node) => hash_rc(node, state),
+        ModifierAction::PointerFinalInput(node) => hash_rc(node, state),
+        ModifierAction::KeyboardPreviewInput(node) => hash_rc(node, state),
+        ModifierAction::KeyboardInput(node) => hash_rc(node, state),
+        ModifierAction::ClipboardInput(node) => hash_rc(node, state),
+        ModifierAction::ImePreviewInput(node) => hash_rc(node, state),
+        ModifierAction::ImeInput(node) => hash_rc(node, state),
         ModifierAction::Focus(op) => hash_focus_op(op, state),
         ModifierAction::GloballyPositioned(handler) => {
             std::ptr::hash(
@@ -1998,11 +2029,18 @@ fn apply_focus_op(runtime: runtime::FocusModifierRuntime<'_>, op: FocusModifierO
 #[cfg(test)]
 mod tests {
     use std::{
+        any::TypeId,
+        cell::Cell,
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
+        rc::Rc,
     };
 
-    use super::{FocusModifierOp, Modifier, ModifierAction};
+    use super::{
+        BuildModifierNode, DrawModifierContent, DrawModifierContext, DrawModifierNode,
+        FocusModifierOp, LayoutModifierNode, Modifier, ModifierAction, ModifierBuildContext,
+        ParentDataMap, ParentDataModifierNode,
+    };
 
     fn flag(value: bool) -> Modifier {
         Modifier::new().push_action(ModifierAction::Focus(FocusModifierOp::PreferredTabStop(
@@ -2036,5 +2074,153 @@ mod tests {
         assert!(changes.draw);
         assert!(!changes.measure);
         assert!(!changes.transform);
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    struct Width(u32);
+
+    impl LayoutModifierNode for Width {}
+
+    #[derive(Clone)]
+    struct LocalLayout(Rc<Cell<u32>>);
+
+    impl PartialEq for LocalLayout {
+        fn eq(&self, other: &Self) -> bool {
+            self.0.get() == other.0.get()
+        }
+    }
+
+    impl LayoutModifierNode for LocalLayout {}
+
+    struct LocalDraw(Rc<Cell<u32>>);
+
+    impl DrawModifierNode for LocalDraw {
+        fn draw(
+            &self,
+            ctx: &mut DrawModifierContext<'_, '_>,
+            content: &mut dyn DrawModifierContent,
+        ) {
+            assert_eq!(self.0.get(), 24);
+            content.draw(ctx.render_input);
+        }
+    }
+
+    #[test]
+    fn session_local_nodes_can_be_shared_and_released_without_send_sync() {
+        let state = Rc::new(Cell::new(24));
+        let modifier = Modifier::new()
+            .push_layout(LocalLayout(state.clone()))
+            .push_draw(LocalDraw(state.clone()));
+        let shared = modifier.clone();
+        assert!(!shared.changes_from(&modifier).measure);
+        assert!(!shared.changes_from(&modifier).draw);
+        assert_eq!(Rc::strong_count(&state), 3);
+        drop(modifier);
+        drop(shared);
+        assert_eq!(Rc::strong_count(&state), 1);
+        let policy = crate::layout::LayoutModifierHandle::from(LocalLayout(state.clone()));
+        let shared_policy = policy.clone();
+        assert!(policy == shared_policy);
+        drop(policy);
+        drop(shared_policy);
+        assert_eq!(Rc::strong_count(&state), 1);
+    }
+
+    #[derive(Clone)]
+    struct LocalParent(Rc<Cell<u32>>);
+
+    impl ParentDataModifierNode for LocalParent {
+        fn apply_parent_data(&self, data: &mut ParentDataMap) {
+            data.insert(TypeId::of::<Self>(), Box::new(self.clone()));
+        }
+    }
+
+    #[test]
+    fn parent_data_accepts_session_local_values() {
+        let state = Rc::new(Cell::new(7));
+        let modifier = Modifier::new().push_parent_data(LocalParent(state.clone()));
+        let payload = modifier
+            .parent_data::<LocalParent>()
+            .expect("local parent data");
+        assert_eq!(payload.0.get(), 7);
+        drop(payload);
+        drop(modifier);
+        assert_eq!(Rc::strong_count(&state), 1);
+    }
+
+    #[test]
+    fn layout_values_are_compared_across_new_chains() {
+        let first = Modifier::new().push_layout(Width(24));
+        let second = Modifier::new().push_layout(Width(24));
+        assert_eq!(first, second);
+        let mut first_hash = DefaultHasher::new();
+        let mut second_hash = DefaultHasher::new();
+        first.hash(&mut first_hash);
+        second.hash(&mut second_hash);
+        assert_eq!(first_hash.finish(), second_hash.finish());
+        assert!(!first.changes_from(&second).measure);
+        assert!(
+            Modifier::new()
+                .push_layout(Width(25))
+                .changes_from(&first)
+                .measure
+        );
+    }
+
+    #[test]
+    fn draw_actions_reuse_identity_only_for_clones_and_keep_order() {
+        let original = Modifier::new()
+            .push_layout(Width(24))
+            .push_draw(crate::layout::NoopDrawModifier);
+        let cloned = original.clone();
+        let recreated = Modifier::new()
+            .push_layout(Width(24))
+            .push_draw(crate::layout::NoopDrawModifier);
+        assert!(!cloned.changes_from(&original).draw);
+        assert!(recreated.changes_from(&original).draw);
+        assert!(!recreated.changes_from(&original).measure);
+        assert_eq!(original.ordered_actions().len(), 2);
+        assert!(matches!(
+            original.ordered_actions()[0],
+            super::OrderedModifierAction::Layout
+        ));
+        assert!(matches!(
+            original.ordered_actions()[1],
+            super::OrderedModifierAction::Draw(_)
+        ));
+        assert_ne!(original, recreated);
+    }
+
+    struct ExpandWidth;
+
+    impl BuildModifierNode for ExpandWidth {
+        fn materialize(&self, _: &mut ModifierBuildContext) -> Option<Modifier> {
+            Some(Modifier::new().push_layout(Width(42)))
+        }
+    }
+
+    #[test]
+    fn two_action_materialization_retains_the_original_order() {
+        let color = Modifier::new().push_draw(crate::layout::NoopDrawModifier);
+        let before = Modifier::new().push_build(ExpandWidth).then(color.clone());
+        let after = color.then(Modifier::new().push_build(ExpandWidth));
+        let before = before.materialize(1, 1, &[]);
+        let after = after.materialize(1, 1, &[]);
+        let before = before.ordered_actions();
+        let after = after.ordered_actions();
+        assert!(matches!(
+            before.as_slice(),
+            [
+                super::OrderedModifierAction::Layout,
+                super::OrderedModifierAction::Draw(_)
+            ]
+        ));
+        assert!(matches!(
+            after.as_slice(),
+            [
+                super::OrderedModifierAction::Draw(_),
+                super::OrderedModifierAction::Layout
+            ]
+        ));
     }
 }

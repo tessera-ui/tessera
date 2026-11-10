@@ -1357,7 +1357,7 @@ pub enum FrameNanosControl {
     Stop,
 }
 
-type FrameNanosReceiverCallback = Box<dyn FnMut(u64) -> FrameNanosControl + Send + 'static>;
+type FrameNanosReceiverCallback = Box<dyn FnMut(u64) -> FrameNanosControl + 'static>;
 
 struct FrameNanosReceiver {
     owner_instance_key: u64,
@@ -1568,7 +1568,7 @@ fn compute_frame_nanos_receiver_key() -> FrameNanosReceiverKey {
 /// [`FrameNanosControl::Stop`].
 pub fn receive_frame_nanos<F>(callback: F)
 where
-    F: FnMut(u64) -> FrameNanosControl + Send + 'static,
+    F: FnMut(u64) -> FrameNanosControl + 'static,
 {
     ensure_frame_receive_phase();
     let frame_nanos_state = remember(current_frame_nanos);
@@ -2230,7 +2230,9 @@ impl TesseraRuntime {
     where
         F: FnOnce(&mut Self) -> R,
     {
-        with_runtime_globals(|globals| globals.with_runtime_mut(f))
+        let result = with_runtime_globals(|globals| globals.with_runtime_mut(f));
+        crate::modifier::flush_lifecycle();
+        result
     }
 
     /// Get the current window size in physical pixels.
@@ -2835,6 +2837,13 @@ impl Drop for ComponentNodeScope {
             let Some(EmittedNode { id, previous }) = tree.finish_call() else {
                 return;
             };
+            let node = tree.get_mut(id).expect("emitted component node");
+            node.attached_modifiers.update(
+                node.instance_logic_id,
+                node.modifier.clone(),
+                node.layout_input_policy.clone(),
+                node.draw_node.clone(),
+            );
             let changes = previous.as_ref().map(|previous| {
                 let node = tree.get(id).expect("emitted component node");
                 let changes = node.modifier.changes_from(&previous.modifier);
@@ -2947,7 +2956,7 @@ pub(crate) fn emit_node(
             instance_logic_id,
             instance_key,
             policy,
-            draw: draw.into_node(),
+            draw,
         });
         tree.emit_call_node(id, previous);
         id
@@ -3296,7 +3305,7 @@ pub(crate) fn modifier_frame_receiver<F>(
     ordinal: usize,
     callback: F,
 ) where
-    F: FnMut(u64) -> FrameNanosControl + Send + 'static,
+    F: FnMut(u64) -> FrameNanosControl + 'static,
 {
     let state = modifier_state(instance, path, ordinal, current_frame_nanos);
     let _ = state.get();
@@ -3739,6 +3748,7 @@ pub(crate) fn shutdown_runtime() {
     clear_redraw_waker();
     let tree = TesseraRuntime::with_mut(|runtime| std::mem::take(&mut runtime.component_tree));
     drop(tree);
+    crate::modifier::flush_lifecycle();
 }
 
 pub(crate) fn reset_component_slots() {

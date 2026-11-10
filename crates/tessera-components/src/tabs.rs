@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! Use to organize related destinations into a horizontal tab strip.
-use std::{any::TypeId, sync::Arc};
+use std::any::TypeId;
 
 use tessera_foundation::gesture::{ScrollRecognizer, ScrollSettings};
 use tessera_ui::{
@@ -411,7 +411,7 @@ struct TabIndicatorPadding(Dp);
 
 impl ParentDataModifierNode for TabIndicatorPadding {
     fn apply_parent_data(&self, data: &mut ParentDataMap) {
-        data.insert(TypeId::of::<Self>(), Arc::new(*self));
+        data.insert(TypeId::of::<Self>(), Box::new(*self));
     }
 }
 

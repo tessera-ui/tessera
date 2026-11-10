@@ -5,7 +5,7 @@
 //! Apply padding, sizing, or minimum touch target adjustments to component
 //! subtrees.
 
-use std::{any::TypeId, sync::Arc};
+use std::any::TypeId;
 
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, Dp, LayoutModifierChild, LayoutModifierInput,
@@ -265,7 +265,7 @@ impl ParentDataModifierNode for WeightParentDataModifierNode {
     fn apply_parent_data(&self, map: &mut ParentDataMap) {
         map.insert(
             TypeId::of::<WeightParentData>(),
-            Arc::new(WeightParentData {
+            Box::new(WeightParentData {
                 weight: self.weight,
             }),
         );
@@ -294,7 +294,7 @@ impl ParentDataModifierNode for AlignmentParentDataModifierNode {
     fn apply_parent_data(&self, map: &mut ParentDataMap) {
         map.insert(
             TypeId::of::<AlignmentParentData>(),
-            Arc::new(AlignmentParentData {
+            Box::new(AlignmentParentData {
                 alignment: self.alignment,
             }),
         );

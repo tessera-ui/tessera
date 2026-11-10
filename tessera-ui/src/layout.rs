@@ -8,7 +8,6 @@ use std::{
     any::Any,
     collections::HashMap,
     hash::{Hash, Hasher},
-    sync::Arc,
 };
 
 use crate::{
@@ -147,7 +146,7 @@ impl LayoutChild {
     /// Reads a typed parent-data payload from this direct child layout node.
     pub fn parent_data<T>(&self, scope: &MeasureScope<'_>) -> Option<T>
     where
-        T: Clone + Send + Sync + 'static,
+        T: Clone + 'static,
     {
         let node = scope.tree.get(self.node_id)?;
         node.get().modifier.parent_data()
@@ -200,7 +199,7 @@ impl<'a> PlacementChild<'a> {
     /// Reads a typed parent-data payload from the child.
     pub fn parent_data<T>(&self) -> Option<T>
     where
-        T: Clone + Send + Sync + 'static,
+        T: Clone + 'static,
     {
         let node = self.tree.get(self.node_id)?;
         node.get().modifier.parent_data()
@@ -835,7 +834,8 @@ impl RenderMetadataMut<'_> {
 
 /// Type-erased layout node used by the runtime.
 #[doc(hidden)]
-pub trait LayoutModifierDyn: Send + Sync {
+pub trait LayoutModifierDyn {
+    crate::modifier::modifier_lifecycle!();
     /// Returns a typed reference for downcasting.
     fn as_any(&self) -> &dyn Any;
     /// Measures layout using a type-erased node.
@@ -860,6 +860,18 @@ impl<T> LayoutModifierDyn for T
 where
     T: LayoutModifierNode + Clone + PartialEq,
 {
+    fn on_attach(&self, context: crate::modifier::ModifierNodeContext) {
+        LayoutModifierNode::on_attach(self, context);
+    }
+
+    fn on_update(&self, context: crate::modifier::ModifierNodeContext) {
+        LayoutModifierNode::on_update(self, context);
+    }
+
+    fn on_detach(&self, context: crate::modifier::ModifierNodeContext) {
+        LayoutModifierNode::on_detach(self, context);
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -921,10 +933,14 @@ impl Clone for Box<dyn LayoutModifierDyn> {
 /// `From<T>` conversion.
 #[derive(Clone, Default)]
 pub struct LayoutModifierHandle {
-    node: Option<Arc<dyn LayoutModifierDyn>>,
+    node: Option<crate::modifier::OwnedNode<dyn LayoutModifierDyn>>,
 }
 
 impl LayoutModifierHandle {
+    pub(crate) fn has_node(&self) -> bool {
+        self.node.is_some()
+    }
+
     pub(crate) fn as_policy(&self) -> &dyn LayoutModifierDyn {
         self.node.as_deref().unwrap_or(&DefaultLayoutNode)
     }
@@ -942,7 +958,9 @@ where
 {
     fn from(node: S) -> Self {
         Self {
-            node: Some(Arc::new(node)),
+            node: Some(crate::modifier::OwnedNode::new(node, |node| {
+                node as &dyn LayoutModifierDyn
+            })),
         }
     }
 }
@@ -952,59 +970,72 @@ where
 /// Most callers do not construct this type directly. Instead, pass any
 /// [`DrawModifierNode`] to the `draw(...)` builder method and rely on the
 /// `From<T>` conversion.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct DrawModifierHandle {
-    node: Box<dyn ErasedDrawModifierNode>,
+    node: Option<crate::modifier::OwnedNode<dyn ErasedDrawModifierNode>>,
 }
 
 impl DrawModifierHandle {
-    pub(crate) fn into_node(self) -> Box<dyn DrawModifierNode> {
-        self.node.into_node()
+    pub(crate) fn has_node(&self) -> bool {
+        self.node.is_some()
+    }
+
+    pub(crate) fn concrete_type_id(&self) -> std::any::TypeId {
+        self.node
+            .as_ref()
+            .map_or(std::any::TypeId::of::<NoopDrawModifier>(), |node| {
+                node.as_any().type_id()
+            })
     }
 }
 
-impl Default for DrawModifierHandle {
-    fn default() -> Self {
-        Self {
-            node: Box::new(NoopDrawModifier),
-        }
+impl AsRef<dyn DrawModifierNode> for DrawModifierHandle {
+    fn as_ref(&self) -> &dyn DrawModifierNode {
+        self.node
+            .as_ref()
+            .map_or(&NoopDrawModifier, |node| node.node())
     }
 }
 
 impl PartialEq for DrawModifierHandle {
     fn eq(&self, other: &Self) -> bool {
-        self.node.dyn_eq(other.node.as_ref())
+        match (&self.node, &other.node) {
+            (None, None) => true,
+            (Some(lhs), Some(rhs)) => lhs.dyn_eq(rhs.as_ref()),
+            (Some(node), None) | (None, Some(node)) => node.as_any().is::<NoopDrawModifier>(),
+        }
     }
 }
 
 impl<N> From<N> for DrawModifierHandle
 where
-    N: DrawModifierNode + Clone + PartialEq,
+    N: DrawModifierNode + PartialEq,
 {
     fn from(node: N) -> Self {
         Self {
-            node: Box::new(node),
+            node: Some(crate::modifier::OwnedNode::new(node, |node| {
+                node as &dyn ErasedDrawModifierNode
+            })),
         }
     }
 }
 
 /// Type-erased draw modifier node used by [`DrawModifierHandle`].
-trait ErasedDrawModifierNode: Send + Sync {
+trait ErasedDrawModifierNode {
     fn as_any(&self) -> &dyn Any;
-    fn into_node(self: Box<Self>) -> Box<dyn DrawModifierNode>;
+    fn node(&self) -> &dyn DrawModifierNode;
     fn dyn_eq(&self, other: &dyn ErasedDrawModifierNode) -> bool;
-    fn clone_box(&self) -> Box<dyn ErasedDrawModifierNode>;
 }
 
 impl<N> ErasedDrawModifierNode for N
 where
-    N: DrawModifierNode + Clone + PartialEq,
+    N: DrawModifierNode + PartialEq,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn into_node(self: Box<Self>) -> Box<dyn DrawModifierNode> {
+    fn node(&self) -> &dyn DrawModifierNode {
         self
     }
 
@@ -1013,16 +1044,6 @@ where
             .as_any()
             .downcast_ref::<N>()
             .is_some_and(|other| self == other)
-    }
-
-    fn clone_box(&self) -> Box<dyn ErasedDrawModifierNode> {
-        Box::new(self.clone())
-    }
-}
-
-impl Clone for Box<dyn ErasedDrawModifierNode> {
-    fn clone(&self) -> Self {
-        self.clone_box()
     }
 }
 

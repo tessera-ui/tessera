@@ -4,7 +4,7 @@
 //!
 //! Expand an activated button while preserving the group's total width.
 
-use std::{any::TypeId, sync::Arc};
+use std::any::TypeId;
 
 use tessera_ui::{
     ParentDataModifierNode, PointerEventPass, PointerInput, PointerInputModifierNode, Px, State,
@@ -116,7 +116,7 @@ impl ParentDataModifierNode for WidthData {
     }
 
     fn apply_parent_data(&self, data: &mut ParentDataMap) {
-        data.insert(TypeId::of::<Self>(), Arc::new(*self));
+        data.insert(TypeId::of::<Self>(), Box::new(*self));
     }
 }
 
