@@ -131,11 +131,7 @@ pub use crate::{
         StatefulLayoutPolicy,
     },
     pipeline_context::PipelineContext,
-    plugin::{
-        DesktopPlatformContext, DesktopWindowAction, Plugin, PluginContext, PluginResult,
-        register_plugin, register_plugin_boxed, try_with_plugin, try_with_plugin_mut, with_plugin,
-        with_plugin_mut,
-    },
+    plugin::{DesktopPlatformContext, Plugin, PluginContext, PluginResult, with_plugin},
     prop::{Callback, CallbackWith, RenderSlot, RenderSlotWith, Slot},
     px::{Px, PxPosition, PxRect, PxSize},
     render_graph::{DrawGeometry, RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp},

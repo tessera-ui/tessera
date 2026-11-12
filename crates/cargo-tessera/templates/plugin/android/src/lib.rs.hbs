@@ -1,9 +1,9 @@
-use tessera_ui::{EntryRegistry, Plugin, PluginContext, PluginResult, TesseraPackage};
+use tessera_ui::{Plugin, with_plugin};
 
 #[cfg(target_os = "android")]
 use tessera_ui::{
+    PluginContext,
     android::{activity, ActivityRef},
-    winit::platform::android::activity::AndroidApp,
 };
 
 #[cfg(target_os = "android")]
@@ -15,38 +15,12 @@ tessera_ui::android::jni_bind! {
 
 pub struct HelloPlugin {
     message: String,
-    #[cfg(target_os = "android")]
-    android_app: Option<AndroidApp>,
 }
 
 impl HelloPlugin {
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
-            #[cfg(target_os = "android")]
-            android_app: None,
-        }
-    }
-
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-
-    #[cfg(target_os = "android")]
-    pub fn android_app(&self) -> Option<AndroidApp> {
-        self.android_app.clone()
-    }
-
-    #[cfg(target_os = "android")]
-    pub fn hello_from_kotlin(&self) -> Option<String> {
-        let android_app = self.android_app()?;
-        let activity = activity(&android_app);
-        match HelloPluginJni::hello(&android_app, activity) {
-            Ok(value) => Some(value),
-            Err(err) => {
-                eprintln!("JNI call failed: {err}");
-                None
-            }
         }
     }
 }
@@ -57,49 +31,23 @@ impl Default for HelloPlugin {
     }
 }
 
-impl Plugin for HelloPlugin {
-    fn on_resumed(&mut self, _ctx: &PluginContext) -> PluginResult {
-        #[cfg(target_os = "android")]
-        {
-            self.android_app = Some(_ctx.android_app().clone());
-        }
-        Ok(())
-    }
+impl Plugin for HelloPlugin {}
 
-    fn on_suspended(&mut self, _ctx: &PluginContext) -> PluginResult {
-        #[cfg(target_os = "android")]
-        {
-            self.android_app = None;
-        }
-        Ok(())
-    }
+/// Returns the registered plugin's message.
+pub fn message() -> Option<String> {
+    with_plugin(|plugin: &mut HelloPlugin| plugin.message.clone())
 }
 
-#[derive(Clone, Debug)]
-pub struct HelloPackage {
-    message: String,
-}
-
-impl HelloPackage {
-    pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
+/// Calls the Kotlin side of the plugin while the app is resumed.
+#[cfg(target_os = "android")]
+pub fn hello_from_kotlin() -> Option<String> {
+    let context = PluginContext::current()?;
+    let android_app = context.android_app();
+    match HelloPluginJni::hello(android_app, activity(android_app)) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            eprintln!("JNI call failed: {err}");
+            None
         }
     }
-}
-
-impl Default for HelloPackage {
-    fn default() -> Self {
-        Self::new(format!("Hello from {{project_name}}"))
-    }
-}
-
-impl TesseraPackage for HelloPackage {
-    fn register(self, registry: &mut EntryRegistry) {
-        registry.register_plugin(HelloPlugin::new(self.message));
-    }
-}
-
-pub fn with_plugin<R>(f: impl FnOnce(&HelloPlugin) -> R) -> R {
-    tessera_ui::with_plugin::<HelloPlugin, R>(f)
 }

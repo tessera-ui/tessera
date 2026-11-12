@@ -11,6 +11,7 @@ mod macos_titlebar;
 
 use std::{
     cell::Cell,
+    rc::Rc,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -21,7 +22,6 @@ pub use core::{RenderCore, RenderResources};
 
 use accesskit::{self, TreeUpdate};
 use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
-use parking_lot::RwLock;
 use tracing::{debug, error, instrument, warn};
 use winit::{
     application::ApplicationHandler,
@@ -46,7 +46,7 @@ use crate::{
     focus::{FocusDirection, flush_pending_focus_callbacks},
     keyboard_state::KeyboardState,
     pipeline_context::PipelineContext,
-    plugin::{DesktopPlatformContext, DesktopWindowAction, PluginContext, PluginHost},
+    plugin::{DesktopPlatformContext, DesktopWindowAction, PluginContext},
     px::PxSize,
     render_graph::RenderGraph,
     render_module::RenderModule,
@@ -92,7 +92,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 #[cfg(target_family = "wasm")]
-use std::{cell::RefCell, rc::Rc};
+use std::cell::RefCell;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_futures::spawn_local;
 #[cfg(target_family = "wasm")]
@@ -344,14 +344,13 @@ pub struct Renderer<F> {
     ime_state: ImeState,
     ime_bridge_state: RendererImeBridgeState,
     modules: Vec<Box<dyn RenderModule>>,
-    plugins: PluginHost,
     config: TesseraConfig,
     accessibility_adapter: Option<AccessKitAdapter>,
     accessibility_active: bool,
     event_loop_proxy: Option<winit::event_loop::EventLoopProxy<RendererUserEvent>>,
     #[cfg(target_os = "android")]
     android_back: Option<crate::android::system_back::BackBridge>,
-    pending_desktop_window_action: Arc<RwLock<Option<DesktopWindowAction>>>,
+    pending_desktop_window_action: Rc<Cell<Option<DesktopWindowAction>>>,
     #[cfg(target_os = "macos")]
     macos_titlebar: macos_titlebar::TitleBarInput,
     frame_index: u64,
@@ -419,14 +418,13 @@ where
             cursor_state,
             keyboard_state,
             modules,
-            plugins: PluginHost::new(),
             ime_state,
             ime_bridge_state,
             config,
             accessibility_adapter: None,
             accessibility_active: false,
             event_loop_proxy: Some(event_loop_proxy),
-            pending_desktop_window_action: Arc::new(RwLock::new(None)),
+            pending_desktop_window_action: Rc::default(),
             #[cfg(target_os = "macos")]
             macos_titlebar: macos_titlebar::TitleBarInput::default(),
             frame_index: 0,
@@ -488,14 +486,13 @@ where
             cursor_state,
             keyboard_state,
             modules,
-            plugins: PluginHost::new(),
             ime_state,
             ime_bridge_state,
             config,
             accessibility_adapter: None,
             accessibility_active: false,
             event_loop_proxy: Some(event_loop_proxy),
-            pending_desktop_window_action: Arc::new(RwLock::new(None)),
+            pending_desktop_window_action: Rc::default(),
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
@@ -561,7 +558,6 @@ where
             cursor_state,
             keyboard_state,
             modules,
-            plugins: PluginHost::new(),
             ime_state,
             ime_bridge_state,
             config,
@@ -569,7 +565,7 @@ where
             accessibility_active: false,
             event_loop_proxy: Some(event_loop_proxy),
             android_back,
-            pending_desktop_window_action: Arc::new(RwLock::new(None)),
+            pending_desktop_window_action: Rc::default(),
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
@@ -1341,7 +1337,7 @@ where
         let app = self.app.as_ref()?;
         let redraw_pending = self.redraw_request_pending.clone();
         let window = app.window_arc();
-        let wake_handler = Arc::new(move || {
+        let wake_handler = Rc::new(move || {
             Self::try_request_redraw(window.as_ref(), redraw_pending.as_ref());
         });
         Some(DesktopPlatformContext::new(
@@ -1353,7 +1349,7 @@ where
 
     fn take_pending_desktop_window_action(&self) -> Option<DesktopWindowAction> {
         let _session = self.session.enter();
-        self.pending_desktop_window_action.write().take()
+        self.pending_desktop_window_action.take()
     }
 
     #[cfg(target_os = "android")]
@@ -1455,7 +1451,8 @@ where
         self.request_redraw_now();
 
         if let Some(context) = self.plugin_context(event_loop) {
-            self.plugins.resumed(&context);
+            let _session = self.session.enter();
+            crate::plugin::plugins_resumed(context);
         }
         true
     }
@@ -1492,7 +1489,7 @@ where
     fn handle_close_requested(&mut self, event_loop: &ActiveEventLoop) {
         let _session = self.session.enter();
         if let Some(context) = self.plugin_context(event_loop) {
-            self.plugins.shutdown(&context);
+            crate::plugin::plugins_shutdown(&context);
         }
         if let Some(ref app) = self.app
             && let Err(e) = app.save_pipeline_cache()
@@ -2137,7 +2134,8 @@ where
             self.request_redraw_now();
 
             if let Some(context) = self.plugin_context(event_loop) {
-                self.plugins.resumed(&context);
+                let _session = self.session.enter();
+                crate::plugin::plugins_resumed(context);
             }
         }
     }
@@ -2156,7 +2154,7 @@ where
         });
 
         if let Some(context) = self.plugin_context(event_loop) {
-            self.plugins.suspended(&context);
+            crate::plugin::plugins_suspended(&context);
         }
 
         self.app = None;

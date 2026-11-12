@@ -11,18 +11,7 @@ Add the plugin to your Tessera app:
 {{project_name}} = { path = "{{project_name}}" }
 ```
 
-Register it in your entrypoint (recommended):
-
-```rust
-use tessera_ui::EntryPoint;
-
-#[tessera_ui::entry]
-pub fn run() -> EntryPoint {
-    EntryPoint::new(app).package({{project_name_snake}}::HelloPackage::default())
-}
-```
-
-You can also register the plugin directly:
+Register it in your entrypoint:
 
 ```rust
 use tessera_ui::EntryPoint;
@@ -36,9 +25,9 @@ pub fn run() -> EntryPoint {
 Use it from components or app code:
 
 ```rust
-{{project_name_snake}}::with_plugin(|plugin| {
-    println!("{}", plugin.message());
-});
+if let Some(message) = {{project_name_snake}}::message() {
+    println!("{message}");
+}
 ```
 
 ## Build

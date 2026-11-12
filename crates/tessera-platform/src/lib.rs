@@ -2,7 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Register platform plugins like clipboard and window access at app startup.
+//! Register platform services like the clipboard at app startup.
 #![deny(
     missing_docs,
     clippy::unwrap_used,
@@ -17,7 +17,6 @@ pub mod window;
 use tessera_ui::{EntryRegistry, TesseraPackage};
 
 pub use clipboard::{Clipboard, ClipboardPlugin};
-pub use window::WindowPlugin;
 
 /// Package that registers platform plugins.
 #[derive(Clone, Debug, Default)]
@@ -33,6 +32,5 @@ impl PlatformPackage {
 impl TesseraPackage for PlatformPackage {
     fn register(self, registry: &mut EntryRegistry) {
         registry.register_plugin(ClipboardPlugin::new());
-        registry.register_plugin(WindowPlugin::new());
     }
 }

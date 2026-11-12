@@ -4,51 +4,11 @@
 //!
 //! Control desktop window state from app actions and custom title bars.
 
-use tessera_ui::{DesktopPlatformContext, Plugin, PluginContext, PluginResult, try_with_plugin};
-
-/// Window plugin that wires desktop platform window services.
-#[derive(Clone, Default)]
-pub struct WindowPlugin {
-    desktop: Option<DesktopPlatformContext>,
-}
-
-impl std::fmt::Debug for WindowPlugin {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("WindowPlugin")
-            .field("available", &self.desktop.is_some())
-            .finish()
-    }
-}
-
-impl WindowPlugin {
-    /// Creates a window plugin.
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl Plugin for WindowPlugin {
-    fn on_resumed(&mut self, context: &PluginContext) -> PluginResult {
-        self.desktop = Some(context.desktop().clone());
-        Ok(())
-    }
-
-    fn on_suspended(&mut self, _context: &PluginContext) -> PluginResult {
-        self.desktop = None;
-        Ok(())
-    }
-
-    fn on_shutdown(&mut self, _context: &PluginContext) -> PluginResult {
-        self.desktop = None;
-        Ok(())
-    }
-}
+use tessera_ui::{DesktopPlatformContext, PluginContext};
 
 /// Runs a closure with desktop platform access when available.
 pub fn with_desktop<R>(f: impl FnOnce(&DesktopPlatformContext) -> R) -> Option<R> {
-    let desktop = try_with_plugin::<WindowPlugin, _>(|plugin| plugin.desktop.clone()).flatten()?;
-    Some(f(&desktop))
+    PluginContext::current().map(|context| f(context.desktop()))
 }
 
 /// Minimizes the current application window when desktop services are

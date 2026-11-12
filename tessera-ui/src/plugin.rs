@@ -2,12 +2,12 @@
 
 use std::{
     any::{Any, TypeId},
-    collections::HashMap,
+    cell::{Cell, RefCell},
     error::Error,
+    rc::Rc,
     sync::Arc,
 };
 
-use parking_lot::RwLock;
 use tracing::{error, warn};
 use winit::window::Window;
 
@@ -17,18 +17,11 @@ use winit::platform::android::activity::AndroidApp;
 /// The result type used by plugin lifecycle hooks.
 pub type PluginResult = Result<(), Box<dyn Error + Send + Sync>>;
 
-type DesktopWakeHandler = Arc<dyn Fn() + Send + Sync>;
-
-/// Host-managed desktop window actions exposed to UI and platform plugins.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DesktopWindowAction {
-    /// Minimizes the active window.
+pub(crate) enum DesktopWindowAction {
     Minimize,
-    /// Maximizes the active window.
     Maximize,
-    /// Toggles the active window maximized state.
     ToggleMaximize,
-    /// Requests application shutdown through the renderer host.
     Close,
 }
 
@@ -45,8 +38,8 @@ impl DesktopWindowAction {
 #[derive(Clone)]
 pub struct DesktopPlatformContext {
     window: Arc<Window>,
-    pending_action: Arc<RwLock<Option<DesktopWindowAction>>>,
-    wake_handler: DesktopWakeHandler,
+    pending_action: Rc<Cell<Option<DesktopWindowAction>>>,
+    wake: Rc<dyn Fn()>,
 }
 
 impl DesktopPlatformContext {
@@ -81,37 +74,32 @@ impl DesktopPlatformContext {
     }
 
     fn request_action(&self, action: DesktopWindowAction) {
-        let mut pending_action = self.pending_action.write();
-        let next_action = DesktopWindowAction::merge_pending(*pending_action, action);
-        let changed = *pending_action != Some(next_action);
-        *pending_action = Some(next_action);
-        drop(pending_action);
-
-        if changed {
-            (self.wake_handler)();
+        let current = self.pending_action.get();
+        let next = DesktopWindowAction::merge_pending(current, action);
+        self.pending_action.set(Some(next));
+        if current != Some(next) {
+            (self.wake)();
         }
     }
 
     pub(crate) fn new(
         window: Arc<Window>,
-        pending_action: Arc<RwLock<Option<DesktopWindowAction>>>,
-        wake_handler: DesktopWakeHandler,
+        pending_action: Rc<Cell<Option<DesktopWindowAction>>>,
+        wake: Rc<dyn Fn()>,
     ) -> Self {
         Self {
             window,
             pending_action,
-            wake_handler,
+            wake,
         }
     }
 }
 
 /// Lifecycle hooks for platform plugins.
-pub trait Plugin: Send + Sync + 'static {
-    /// Returns the plugin name for logging and diagnostics.
-    fn name(&self) -> &'static str {
-        std::any::type_name::<Self>()
-    }
-
+///
+/// Plugins live in their UI session; hooks and [`with_plugin`] run on the UI
+/// thread.
+pub trait Plugin: 'static {
     /// Called when the renderer creates or resumes its platform resources.
     fn on_resumed(&mut self, _context: &PluginContext) -> PluginResult {
         Ok(())
@@ -128,42 +116,37 @@ pub trait Plugin: Send + Sync + 'static {
     }
 }
 
-trait PluginEntry: Send + Sync {
+trait PluginEntry {
     fn name(&self) -> &'static str;
     fn resumed(&self, context: &PluginContext) -> PluginResult;
     fn suspended(&self, context: &PluginContext) -> PluginResult;
     fn shutdown(&self, context: &PluginContext) -> PluginResult;
+    fn as_any(&self) -> &dyn Any;
 }
 
-struct PluginSlot<P: Plugin> {
-    inner: Arc<RwLock<P>>,
-}
-
-impl<P: Plugin> PluginSlot<P> {
-    fn new(inner: Arc<RwLock<P>>) -> Self {
-        Self { inner }
-    }
-}
-
-impl<P: Plugin> PluginEntry for PluginSlot<P> {
+impl<P: Plugin> PluginEntry for RefCell<P> {
     fn name(&self) -> &'static str {
-        self.inner.read().name()
+        std::any::type_name::<P>()
     }
 
     fn resumed(&self, context: &PluginContext) -> PluginResult {
-        self.inner.write().on_resumed(context)
+        self.borrow_mut().on_resumed(context)
     }
 
     fn suspended(&self, context: &PluginContext) -> PluginResult {
-        self.inner.write().on_suspended(context)
+        self.borrow_mut().on_suspended(context)
     }
 
     fn shutdown(&self, context: &PluginContext) -> PluginResult {
-        self.inner.write().on_shutdown(context)
+        self.borrow_mut().on_shutdown(context)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
-/// Platform context shared with plugins during lifecycle events.
+/// Platform context shared with plugins while the renderer is resumed.
 #[derive(Clone)]
 pub struct PluginContext {
     desktop: DesktopPlatformContext,
@@ -172,6 +155,16 @@ pub struct PluginContext {
 }
 
 impl PluginContext {
+    /// Returns the context of the active session while its renderer is
+    /// resumed.
+    pub fn current() -> Option<Self> {
+        crate::RuntimeSession::current()?;
+        crate::local_runtime_resource::<Plugins>()
+            .context
+            .borrow()
+            .clone()
+    }
+
     /// Returns desktop platform services associated with the renderer.
     pub fn desktop(&self) -> &DesktopPlatformContext {
         &self.desktop
@@ -220,153 +213,103 @@ impl PluginContext {
     }
 }
 
-/// Registers a plugin instance for the active UI session.
-pub fn register_plugin<P: Plugin>(plugin: P) {
-    register_plugin_arc(Arc::new(RwLock::new(plugin)));
+#[derive(Default)]
+struct Plugins {
+    entries: RefCell<Vec<(TypeId, Rc<dyn PluginEntry>)>>,
+    context: RefCell<Option<PluginContext>>,
+    shut_down: Cell<bool>,
 }
 
-/// Registers a plugin instance wrapped in an `Arc<RwLock<_>>`.
-pub fn register_plugin_boxed<P: Plugin>(plugin: Arc<RwLock<P>>) {
-    register_plugin_arc(plugin);
-}
-
-/// Provides access to the registered plugin instance.
-///
-/// # Panics
-///
-/// Panics if the plugin type was not registered.
-pub fn with_plugin<T, R>(f: impl FnOnce(&T) -> R) -> R
-where
-    T: Plugin + 'static,
-{
-    let plugin = plugin_instance::<T>();
-    let guard = plugin.read();
-    f(&*guard)
-}
-
-/// Provides mutable access to the registered plugin instance.
-///
-/// # Panics
-///
-/// Panics if the plugin type was not registered.
-pub fn with_plugin_mut<T, R>(f: impl FnOnce(&mut T) -> R) -> R
-where
-    T: Plugin + 'static,
-{
-    let plugin = plugin_instance::<T>();
-    let mut guard = plugin.write();
-    f(&mut *guard)
-}
-
-pub(crate) struct PluginHost {
-    plugins: Vec<Arc<dyn PluginEntry>>,
-    shutdown_called: bool,
-}
-
-impl PluginHost {
-    pub(crate) fn new() -> Self {
-        Self {
-            plugins: registered_plugins(),
-            shutdown_called: false,
-        }
+impl Plugins {
+    fn entries(&self) -> Vec<Rc<dyn PluginEntry>> {
+        self.entries
+            .borrow()
+            .iter()
+            .map(|(_, entry)| entry.clone())
+            .collect()
     }
 
-    pub(crate) fn resumed(&self, context: &PluginContext) {
-        self.dispatch("resumed", context, |plugin, ctx| plugin.resumed(ctx));
-    }
-
-    pub(crate) fn suspended(&self, context: &PluginContext) {
-        self.dispatch("suspended", context, |plugin, ctx| plugin.suspended(ctx));
-    }
-
-    pub(crate) fn shutdown(&mut self, context: &PluginContext) {
-        if self.shutdown_called {
-            return;
-        }
-        self.shutdown_called = true;
-        self.dispatch("shutdown", context, |plugin, ctx| plugin.shutdown(ctx));
-    }
-
-    fn dispatch<F>(&self, stage: &'static str, context: &PluginContext, mut handler: F)
-    where
-        F: FnMut(&dyn PluginEntry, &PluginContext) -> PluginResult,
-    {
-        for plugin in &self.plugins {
-            if let Err(err) = handler(plugin.as_ref(), context) {
+    fn dispatch(
+        &self,
+        stage: &'static str,
+        context: &PluginContext,
+        hook: impl Fn(&dyn PluginEntry, &PluginContext) -> PluginResult,
+    ) {
+        for plugin in self.entries() {
+            if let Err(err) = hook(plugin.as_ref(), context) {
                 error!("Plugin '{}' {} hook failed: {}", plugin.name(), stage, err);
             }
         }
     }
 }
 
-fn plugin_registry() -> Arc<RwLock<Vec<Arc<dyn PluginEntry>>>> {
-    crate::runtime_resource::<RwLock<Vec<Arc<dyn PluginEntry>>>>()
-}
-
-fn registered_plugins() -> Vec<Arc<dyn PluginEntry>> {
-    plugin_registry().read().clone()
-}
-
-fn register_plugin_arc<P: Plugin>(plugin: Arc<RwLock<P>>) {
+pub(crate) fn register_plugin<P: Plugin>(plugin: P) {
     assert!(
         crate::RuntimeSession::current().is_some(),
-        "register plugins through an EntryPoint or RuntimeSession"
+        "register plugins through an EntryPoint"
     );
-    let plugin_entry = Arc::new(PluginSlot::new(plugin.clone())) as Arc<dyn PluginEntry>;
-    let instance_registry = plugin_instance_registry();
-    let mut instances = instance_registry.write();
+    let plugins = crate::local_runtime_resource::<Plugins>();
+    let mut entries = plugins.entries.borrow_mut();
     let type_id = TypeId::of::<P>();
-    if instances.contains_key(&type_id) {
+    if entries.iter().any(|(registered, _)| *registered == type_id) {
         warn!(
             "Plugin '{}' was registered more than once; keeping the first instance",
             std::any::type_name::<P>()
         );
         return;
     }
-    instances.insert(type_id, plugin as Arc<dyn Any + Send + Sync>);
-    drop(instances);
-
-    let plugins = plugin_registry();
-    let mut registry = plugins.write();
-    registry.push(plugin_entry);
+    entries.push((type_id, Rc::new(RefCell::new(plugin))));
 }
 
-fn plugin_instance_registry() -> Arc<RwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>> {
-    crate::runtime_resource::<RwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>>()
+pub(crate) fn plugins_resumed(context: PluginContext) {
+    let plugins = crate::local_runtime_resource::<Plugins>();
+    plugins.context.replace(Some(context.clone()));
+    plugins.dispatch("resumed", &context, |plugin, context| {
+        plugin.resumed(context)
+    });
 }
 
-/// Reads a plugin when it is available in the active session.
-pub fn try_with_plugin<T: Plugin, R>(read: impl FnOnce(&T) -> R) -> Option<R> {
-    let _session = crate::RuntimeSession::current()?;
-    let registry = plugin_instance_registry();
-    let plugin = registry.read().get(&TypeId::of::<T>()).cloned()?;
-    let plugin = Arc::downcast::<RwLock<T>>(plugin).ok()?;
-    Some(read(&plugin.read()))
+pub(crate) fn plugins_suspended(context: &PluginContext) {
+    let plugins = crate::local_runtime_resource::<Plugins>();
+    plugins.dispatch("suspended", context, |plugin, context| {
+        plugin.suspended(context)
+    });
+    plugins.context.replace(None);
 }
 
-/// Updates a plugin when it is available in the active session.
-pub fn try_with_plugin_mut<T: Plugin, R>(update: impl FnOnce(&mut T) -> R) -> Option<R> {
-    let _session = crate::RuntimeSession::current()?;
-    let registry = plugin_instance_registry();
-    let plugin = registry.read().get(&TypeId::of::<T>()).cloned()?;
-    let plugin = Arc::downcast::<RwLock<T>>(plugin).ok()?;
-    Some(update(&mut plugin.write()))
-}
-
-fn plugin_instance<T: Plugin>() -> Arc<RwLock<T>> {
-    let instances = plugin_instance_registry();
-    let registry = instances.read();
-    let type_id = TypeId::of::<T>();
-    let Some(plugin) = registry.get(&type_id) else {
-        panic!("Plugin '{}' is not registered", std::any::type_name::<T>());
-    };
-    let plugin = plugin.clone();
-    drop(registry);
-    match Arc::downcast::<RwLock<T>>(plugin) {
-        Ok(plugin) => plugin,
-        Err(_) => panic!(
-            "Plugin '{}' has a mismatched type",
-            std::any::type_name::<T>()
-        ),
+pub(crate) fn plugins_shutdown(context: &PluginContext) {
+    let plugins = crate::local_runtime_resource::<Plugins>();
+    if plugins.shut_down.replace(true) {
+        return;
     }
+    plugins.dispatch("shutdown", context, |plugin, context| {
+        plugin.shutdown(context)
+    });
+    plugins.context.replace(None);
+}
+
+/// Runs `access` with the registered plugin of type `P` in the active session.
+///
+/// Returns `None` when no such plugin is registered.
+///
+/// # Panics
+///
+/// Panics when called again for the same plugin from inside `access` or one of
+/// its hooks.
+pub fn with_plugin<P: Plugin, R>(access: impl FnOnce(&mut P) -> R) -> Option<R> {
+    crate::RuntimeSession::current()?;
+    let plugin = crate::local_runtime_resource::<Plugins>()
+        .entries
+        .borrow()
+        .iter()
+        .find(|(type_id, _)| *type_id == TypeId::of::<P>())
+        .map(|(_, entry)| entry.clone())?;
+    let plugin = plugin
+        .as_any()
+        .downcast_ref::<RefCell<P>>()
+        .expect("plugin entries are keyed by their type");
+    let mut plugin = plugin
+        .try_borrow_mut()
+        .unwrap_or_else(|_| panic!("plugin '{}' is already in use", std::any::type_name::<P>()));
+    Some(access(&mut plugin))
 }

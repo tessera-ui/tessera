@@ -6,10 +6,6 @@
 //! Configure app startup with packages and plugins before launching the
 //! renderer.
 
-use std::sync::Arc;
-
-use parking_lot::RwLock;
-
 use crate::{
     entry_registry::{EntryRegistry, TesseraPackage},
     plugin::Plugin,
@@ -58,13 +54,6 @@ impl EntryPoint {
     pub fn plugin(mut self, plugin: impl Plugin) -> Self {
         let _session = self.session.enter();
         self.registry.register_plugin(plugin);
-        self
-    }
-
-    /// Registers a boxed plugin instance with this application session.
-    pub fn plugin_boxed<P: Plugin>(mut self, plugin: Arc<RwLock<P>>) -> Self {
-        let _session = self.session.enter();
-        self.registry.register_plugin_boxed(plugin);
         self
     }
 

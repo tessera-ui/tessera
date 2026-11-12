@@ -1,4 +1,4 @@
-use tessera_ui::{EntryRegistry, Plugin, TesseraPackage};
+use tessera_ui::{Plugin, with_plugin};
 
 pub struct HelloPlugin {
     message: String,
@@ -10,10 +10,6 @@ impl HelloPlugin {
             message: message.into(),
         }
     }
-
-    pub fn message(&self) -> &str {
-        &self.message
-    }
 }
 
 impl Default for HelloPlugin {
@@ -24,31 +20,7 @@ impl Default for HelloPlugin {
 
 impl Plugin for HelloPlugin {}
 
-#[derive(Clone, Debug)]
-pub struct HelloPackage {
-    message: String,
-}
-
-impl HelloPackage {
-    pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
-impl Default for HelloPackage {
-    fn default() -> Self {
-        Self::new(format!("Hello from {{project_name}}"))
-    }
-}
-
-impl TesseraPackage for HelloPackage {
-    fn register(self, registry: &mut EntryRegistry) {
-        registry.register_plugin(HelloPlugin::new(self.message));
-    }
-}
-
-pub fn with_plugin<R>(f: impl FnOnce(&HelloPlugin) -> R) -> R {
-    tessera_ui::with_plugin::<HelloPlugin, R>(f)
+/// Returns the registered plugin's message.
+pub fn message() -> Option<String> {
+    with_plugin(|plugin: &mut HelloPlugin| plugin.message.clone())
 }

@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! Enable copy and paste in text inputs and editors.
-use tessera_ui::{Plugin, PluginContext, PluginResult, try_with_plugin_mut};
+use tessera_ui::{Plugin, PluginContext, PluginResult, with_plugin};
 
 #[cfg(target_family = "wasm")]
 mod web;
@@ -207,7 +207,7 @@ impl Clipboard {
 
 /// Runs a closure with mutable clipboard access when available.
 pub fn with_clipboard_mut<R>(f: impl FnOnce(&mut Clipboard) -> R) -> Option<R> {
-    try_with_plugin_mut::<ClipboardPlugin, _>(|plugin| plugin.clipboard.as_mut().map(f)).flatten()
+    with_plugin::<ClipboardPlugin, _>(|plugin| plugin.clipboard.as_mut().map(f)).flatten()
 }
 
 /// Sets the clipboard text when clipboard access is available.

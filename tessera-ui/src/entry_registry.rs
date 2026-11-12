@@ -1,10 +1,6 @@
 //! Entry package registry for renderer startup.
-use std::sync::Arc;
-
-use parking_lot::RwLock;
-
 use crate::{
-    plugin::{Plugin, register_plugin, register_plugin_boxed},
+    plugin::{Plugin, register_plugin},
     render_module::RenderModule,
 };
 
@@ -34,11 +30,6 @@ impl EntryRegistry {
     /// Registers a plugin instance with the application session.
     pub fn register_plugin<P: Plugin>(&mut self, plugin: P) {
         register_plugin(plugin);
-    }
-
-    /// Registers a boxed plugin instance with the application session.
-    pub fn register_plugin_boxed<P: Plugin>(&mut self, plugin: Arc<RwLock<P>>) {
-        register_plugin_boxed(plugin);
     }
 
     /// Registers a package into the entry registry.
