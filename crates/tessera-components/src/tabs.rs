@@ -492,7 +492,7 @@ impl TabBuilder {
 ///
 /// ## Usage
 ///
-/// Use inside a `tabs().content(...)` slot to declare one tab-strip item.
+/// Use inside a `tabs(selected).content(...)` slot to declare one tab-strip item.
 ///
 /// ## Parameters
 ///
@@ -521,7 +521,7 @@ impl TabBuilder {
 /// #         .theme(|| MaterialTheme::default())
 /// #         .child(|| {
 ///     let selected = remember(|| 0usize);
-///     tabs().selected(selected).content(move |row| {
+///     tabs(selected).content(move |row| {
 ///         tab(row)
 ///             .label("Home")
 ///             .selected(selected.get() == 0)
@@ -1204,9 +1204,7 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 /// - `variant` — visual variant of the tab row.
 /// - `activation_mode` — manual activation by default, or selection with
 ///   arrows.
-/// - `selected` — caller-owned state holding the active tab index. When
-///   omitted, the row keeps an internal selection slot and drive is not
-///   observable to the caller.
+/// - `selected` — caller-owned state holding the active tab index.
 /// - `indicator_color` — optional override for the active indicator color.
 /// - `container_color` — optional override for the tab row background color.
 /// - `active_content_color` — optional override for active tab content color.
@@ -1246,7 +1244,7 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 ///     let selected = remember(|| 1usize);
 ///     let active_tab = selected.get();
 ///
-///     tabs().selected(selected).content(move |row| {
+///     tabs(selected).content(move |row| {
 ///         tab(row)
 ///             .label("Flights")
 ///             .selected(selected.get() == 0)
@@ -1267,9 +1265,9 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 /// ```
 #[tessera]
 pub fn tabs(
+    selected: State<usize>,
     modifier: Option<Modifier>,
     variant: Option<TabsVariant>,
-    selected: Option<State<usize>>,
     activation_mode: Option<TabActivationMode>,
     indicator_color: Option<Color>,
     container_color: Option<Color>,
@@ -1288,11 +1286,6 @@ pub fn tabs(
     min_scrollable_tab_width: Option<Dp>,
     content: Option<RenderSlotWith<TabRow>>,
 ) {
-    let selected = if let Some(selected) = selected {
-        selected
-    } else {
-        remember(|| 0usize)
-    };
     let modifier = modifier.unwrap_or_default();
     let variant = variant.unwrap_or_default();
     let scrollable = scrollable.unwrap_or(false);
@@ -1330,8 +1323,7 @@ pub fn tabs(
             .unwrap_or(TabsDefaults::SCROLLABLE_MIN_TAB_WIDTH),
     };
     // The selected index is owned by the caller; the tab row only mirrors it to
-    // drive the indicator and scroll animation. Callers that do not care about
-    // reading the selection get an internal slot so the API stays zero-config.
+    // drive the indicator and scroll animation.
     let controller = remember(|| TabsController::new(0));
     let density = tessera_ui::dp::scale_factor();
     if controller.with(|controller| controller.density != density) {
@@ -1755,7 +1747,7 @@ mod tests {
     fn tabs_row() {
         let selected = remember(|| 0usize);
         column().children(move || {
-            tabs().selected(selected).content(move |row| {
+            tabs(selected).content(move |row| {
                 tab(row)
                     .label("Flights")
                     .selected(selected.get() == 0)
@@ -1883,8 +1875,7 @@ mod custom_title_tests {
         observed.with_mut(|handles| handles.scrollable = Some(scrollable));
         material_theme().child(move || {
             let observed = observed.clone();
-            tabs()
-                .selected(selected)
+            tabs(selected)
                 .scrollable(scrollable.get())
                 .modifier(Modifier::new().width(Dp(300.0)))
                 .content(move |row| {
@@ -1967,8 +1958,7 @@ mod small_custom_title_tests {
             })
             .child(move || {
                 let observed = observed.clone();
-                tabs()
-                    .selected(selected)
+                tabs(selected)
                     .scrollable(scrollable.get())
                     .min_scrollable_tab_width(Dp::ZERO)
                     .edge_padding(Dp::ZERO)

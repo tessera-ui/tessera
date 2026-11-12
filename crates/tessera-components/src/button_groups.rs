@@ -244,11 +244,11 @@ impl SemanticsModifierNode for ButtonGroupsSemantics {
 /// Item indices follow visual order. Single-selection groups retain the first
 /// selected item when multiple selections are supplied.
 #[derive(PartialEq, Default)]
-pub struct ButtonGroupsState {
+pub struct ButtonGroupsController {
     item_states: HashMap<usize, ButtonItemState>,
 }
 
-impl ButtonGroupsState {
+impl ButtonGroupsController {
     /// Creates an empty selection.
     pub fn new() -> Self {
         Self::default()
@@ -309,7 +309,7 @@ impl ButtonGroupsState {
 /// - `selection_mode` — single or multiple selection; switching to single
 ///   selection retains the first selected item in visual order.
 /// - `modifier` — group sizing, placement, and semantics.
-/// - `state` — optional external selection; omitted groups remember their own.
+/// - `controller` — optional external selection; omitted groups remember their own.
 /// - `enabled` — whether the group accepts input.
 /// - `disabled_indices` — items that retain selection but cannot be activated.
 /// - `selection_required` — prevents removing the final selection; an empty
@@ -322,11 +322,11 @@ impl ButtonGroupsState {
 ///
 /// ```
 /// use tessera_components::{
-///     button_groups::{ButtonGroupsState, button_groups},
+///     button_groups::{ButtonGroupsController, button_groups},
 ///     text::text,
 /// };
 ///
-/// let mut selection = ButtonGroupsState::new();
+/// let mut selection = ButtonGroupsController::new();
 /// selection.set_selected(0, true);
 /// assert!(selection.is_selected(0));
 /// selection.clear();
@@ -353,7 +353,7 @@ pub fn button_groups(
     expanded_ratio: Option<f32>,
     selection_mode: Option<ButtonGroupsSelectionMode>,
     modifier: Option<Modifier>,
-    state: Option<State<ButtonGroupsState>>,
+    controller: Option<State<ButtonGroupsController>>,
     enabled: Option<bool>,
     disabled_indices: Option<Vec<usize>>,
     selection_required: Option<bool>,
@@ -378,10 +378,10 @@ pub fn button_groups(
     let selection_required = selection_required.unwrap_or(false);
     let child_closures = child_closures.unwrap_or_default();
     let on_click_closures = on_click_closures.unwrap_or_default();
-    let state = if let Some(state) = state {
+    let state = if let Some(state) = controller {
         state
     } else {
-        remember(ButtonGroupsState::default)
+        remember(ButtonGroupsController::default)
     };
     let metrics = ButtonGroupsLayout::new(size, style, shape_style);
     let child_len = child_closures.len();

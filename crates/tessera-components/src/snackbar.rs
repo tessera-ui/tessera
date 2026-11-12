@@ -139,12 +139,12 @@ pub struct SnackbarData {
     action_label: Option<String>,
     with_dismiss_action: bool,
     duration: SnackbarDuration,
-    host_state: State<SnackbarHostState>,
+    host_state: State<SnackbarHostController>,
     id: u64,
 }
 
 impl SnackbarData {
-    fn new(record: SnackbarRecord, host_state: State<SnackbarHostState>) -> Self {
+    fn new(record: SnackbarRecord, host_state: State<SnackbarHostController>) -> Self {
         let SnackbarRecord { id, resolved } = record;
         let ResolvedSnackbar {
             message,
@@ -204,7 +204,7 @@ struct SnackbarRecord {
 }
 
 /// State container for managing snackbar queues.
-pub struct SnackbarHostState {
+pub struct SnackbarHostController {
     queue: VecDeque<SnackbarRecord>,
     current: Option<SnackbarRecord>,
     current_started_frame_nanos: Option<u64>,
@@ -212,7 +212,7 @@ pub struct SnackbarHostState {
     last_result: Option<SnackbarResult>,
 }
 
-impl SnackbarHostState {
+impl SnackbarHostController {
     /// Creates a new empty snackbar host state.
     pub fn new() -> Self {
         Self {
@@ -343,7 +343,7 @@ impl SnackbarHostState {
     }
 }
 
-impl Default for SnackbarHostState {
+impl Default for SnackbarHostController {
     fn default() -> Self {
         Self::new()
     }
@@ -607,7 +607,7 @@ fn dismiss_key(
 
 /// # snackbar_host
 ///
-/// Display queued snackbars driven by a [`SnackbarHostState`].
+/// Display queued snackbars driven by a [`SnackbarHostController`].
 ///
 /// ## Usage
 ///
@@ -617,7 +617,7 @@ fn dismiss_key(
 /// ## Parameters
 ///
 /// - `modifier` — modifier chain applied to the host container.
-/// - `state` — state that provides snackbar queue data.
+/// - `controller` — state that provides snackbar queue data.
 /// - `snackbar` — optional custom snackbar slot for rendering.
 ///
 /// Appearance preserves the current focus. When the final notification closes
@@ -628,7 +628,7 @@ fn dismiss_key(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::snackbar::{SnackbarHostState, snackbar_host};
+/// use tessera_components::snackbar::{SnackbarHostController, snackbar_host};
 /// use tessera_components::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
@@ -637,11 +637,11 @@ fn dismiss_key(
 ///     material_theme()
 ///         .theme(|| MaterialTheme::default())
 ///         .child(|| {
-///             let host_state = remember(SnackbarHostState::new);
+///             let host_state = remember(SnackbarHostController::new);
 ///             host_state.with_mut(|state| {
 ///                 state.show_snackbar("Saved");
 ///             });
-///             snackbar_host().state(host_state);
+///             snackbar_host().controller(host_state);
 ///             assert!(host_state.with(|state| state.is_showing()));
 ///         });
 /// }
@@ -651,13 +651,13 @@ fn dismiss_key(
 #[tessera]
 pub fn snackbar_host(
     modifier: Option<Modifier>,
-    state: Option<State<SnackbarHostState>>,
+    controller: Option<State<SnackbarHostController>>,
     snackbar: Option<RenderSlotWith<SnackbarData>>,
 ) {
     let modifier = modifier.unwrap_or_default();
-    let state = match state {
+    let state = match controller {
         Some(value) => value,
-        None => remember(SnackbarHostState::default),
+        None => remember(SnackbarHostController::default),
     };
     let snackbar_slot = snackbar;
     let frame_nanos = current_frame_nanos();

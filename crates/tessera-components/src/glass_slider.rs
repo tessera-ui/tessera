@@ -215,8 +215,7 @@ fn process_pointer_gestures(
 ///     let slider_value = remember(|| 0.5f32);
 ///     let slider_controller = remember(GlassSliderController::new);
 ///
-///     glass_slider()
-///         .value(slider_value.get())
+///     glass_slider(slider_value.get())
 ///         .on_change(move |new_value| {
 ///             slider_value.set(new_value);
 ///         })
@@ -229,7 +228,7 @@ fn process_pointer_gestures(
 /// ```
 #[tessera]
 pub fn glass_slider(
-    value: Option<f32>,
+    value: f32,
     modifier: Option<Modifier>,
     on_change: Option<CallbackWith<f32>>,
     track_height: Option<Dp>,
@@ -247,7 +246,7 @@ pub fn glass_slider(
         None => remember(GlassSliderController::new),
     };
     let slider_args = GlassSliderConfig {
-        value: value.unwrap_or(0.0),
+        value,
         modifier: modifier.unwrap_or_else(|| Modifier::new().width(Dp(200.0))),
         on_change: on_change.unwrap_or_else(CallbackWith::default_value),
         track_height: track_height.unwrap_or(Dp(12.0)),

@@ -409,8 +409,7 @@ fn label_layer(
 ///     let value = remember(|| 0.5_f32);
 ///     material_theme().child(move || {
 ///         slider_value_indicator_provider().child(move |host| {
-///             slider().value_indicator_host(host)
-///                 .value(value.get())
+///             slider(value.get()).value_indicator_host(host)
 ///                 .on_change(move |next| value.set(next))
 ///                 .value_indicator(SliderValueIndicatorVisibility::OnInteraction);
 ///         });

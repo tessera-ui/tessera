@@ -25,7 +25,7 @@ use crate::{
     theme::{ContentColor, MaterialColorScheme, MaterialTheme},
 };
 
-pub use scroll::{AppBarScrollBehavior, AppBarScrollState, app_bar_scroll_provider};
+pub use scroll::{AppBarScrollBehavior, AppBarScrollController, app_bar_scroll_provider};
 
 mod scroll;
 
@@ -301,7 +301,7 @@ fn window_control(control: WindowControl) {
 /// - `variant` — small, medium flexible, or large flexible layout.
 /// - `subtitle` — optional secondary text below the title.
 /// - `title_alignment` — leading or globally centered title placement.
-/// - `scroll_state` — shared height and overlap state also passed to the scroll
+/// - `scroll_controller` — shared height and overlap state also passed to the scroll
 ///   provider.
 /// - `scrolled_container_color` — optional container color when content scrolls
 ///   under the bar.
@@ -360,7 +360,7 @@ pub fn top_app_bar(
     variant: Option<TopAppBarVariant>,
     #[prop(into)] subtitle: Option<String>,
     title_alignment: Option<AppBarTitleAlignment>,
-    scroll_state: Option<State<AppBarScrollState>>,
+    scroll_controller: Option<State<AppBarScrollController>>,
     scrolled_container_color: Option<Color>,
 ) {
     let theme = use_context::<MaterialTheme>()
@@ -406,7 +406,7 @@ pub fn top_app_bar(
         ),
     };
     let policy = TopAppBarLayout {
-        scroll_state,
+        scroll_controller,
         variant,
         alignment,
         has_navigation,
@@ -423,11 +423,11 @@ pub fn top_app_bar(
     };
     let actions_spacing = actions_spacing.unwrap_or(AppBarDefaults::ACTIONS_SPACING);
     let elevation = elevation.unwrap_or(AppBarDefaults::TOP_APP_BAR_ELEVATION);
-    let fraction = scroll_state
-        .map(|state| state.with(AppBarScrollState::collapsed_fraction))
+    let fraction = scroll_controller
+        .map(|state| state.with(AppBarScrollController::collapsed_fraction))
         .unwrap_or(0.0);
-    let color_fraction = scroll_state
-        .map(|state| state.with(AppBarScrollState::color_fraction))
+    let color_fraction = scroll_controller
+        .map(|state| state.with(AppBarScrollController::color_fraction))
         .unwrap_or(0.0);
     let container = container_color
         .unwrap_or_else(|| AppBarDefaults::container_color(&scheme))
@@ -436,13 +436,13 @@ pub fn top_app_bar(
             color_fraction,
         );
     let modifier = modifier.unwrap_or_default();
-    let modifier = if let Some(state) = scroll_state {
+    let modifier = if let Some(state) = scroll_controller {
         let active = remember(|| state);
         if active.get() != state {
             active.set(state);
         }
         modifier.draggable_with(DraggableArgs {
-            enabled: state.with(AppBarScrollState::drag_enabled),
+            enabled: state.with(AppBarScrollController::drag_enabled),
             axis: Some(DragAxis::Vertical),
             on_drag_delta: CallbackWith::new(move |delta: crate::modifier::DragDelta| {
                 active
@@ -450,7 +450,7 @@ pub fn top_app_bar(
                     .with_mut(|value| value.drag_by(delta.y.to_f32()))
             }),
             on_drag_stopped: Some(Callback::new(move || {
-                active.get().with_mut(AppBarScrollState::end_drag)
+                active.get().with_mut(AppBarScrollController::end_drag)
             })),
             ..Default::default()
         })
@@ -593,7 +593,7 @@ fn title_layer_modifier(modifier: Modifier, alpha: f32, semantics: bool) -> Modi
 
 #[derive(Clone, PartialEq)]
 struct TopAppBarLayout {
-    scroll_state: Option<State<AppBarScrollState>>,
+    scroll_controller: Option<State<AppBarScrollController>>,
     variant: TopAppBarVariant,
     alignment: AppBarTitleAlignment,
     has_navigation: bool,
@@ -690,25 +690,25 @@ impl tessera_ui::LayoutPolicy for TopAppBarLayout {
             .map(|title| preferred.max(toolbar_height + title.height + title_bottom_padding))
             .unwrap_or(preferred);
         let compact_height = if !expanded
-            && self.scroll_state.is_some_and(|state| {
-                state.with(AppBarScrollState::behavior) == AppBarScrollBehavior::EnterAlways
+            && self.scroll_controller.is_some_and(|state| {
+                state.with(AppBarScrollController::behavior) == AppBarScrollBehavior::EnterAlways
             }) {
             Px::ZERO
         } else {
             toolbar_height
         };
-        let offset = if let Some(state) = self.scroll_state {
-            let range = if state.with(AppBarScrollState::behavior) == AppBarScrollBehavior::Pinned {
+        let offset = if let Some(state) = self.scroll_controller {
+            let range = if state.with(AppBarScrollController::behavior) == AppBarScrollBehavior::Pinned {
                 Dp::ZERO
             } else {
                 Dp::from(content_height - compact_height)
             };
-            if state.with(AppBarScrollState::height_range) != range {
+            if state.with(AppBarScrollController::height_range) != range {
                 state.with_mut(|value| {
                     value.configure_height(Dp::from(content_height), Dp::from(compact_height))
                 });
             }
-            state.with(AppBarScrollState::height_offset).to_px()
+            state.with(AppBarScrollController::height_offset).to_px()
         } else {
             Px::ZERO
         };
@@ -737,8 +737,8 @@ impl tessera_ui::LayoutPolicy for TopAppBarLayout {
         };
         let title_y = top + (toolbar_height - title.height) / 2;
         let fraction = self
-            .scroll_state
-            .map(|state| state.with(AppBarScrollState::collapsed_fraction))
+            .scroll_controller
+            .map(|state| state.with(AppBarScrollController::collapsed_fraction))
             .unwrap_or(0.0);
         if toolbar_visible
             && title_width > Px::ZERO

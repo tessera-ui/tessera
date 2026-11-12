@@ -15,18 +15,15 @@ use super::*;
 
 #[derive(Clone, Copy, Default)]
 struct FixtureHandles {
-    refreshing: Option<State<bool>>,
     requests: Option<State<usize>>,
     controller: Option<State<PullRefreshController>>,
 }
 
 #[tessera]
 fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
-    let refreshing = remember(|| false);
     let requests = remember(|| 0_usize);
     let controller = remember(PullRefreshController::new);
     let scroll = remember(ScrollableController::new);
-    observed.with_mut(|handles| handles.refreshing = Some(refreshing));
     observed.with_mut(|handles| handles.requests = Some(requests));
     observed.with_mut(|handles| handles.controller = Some(controller));
     material_theme().child(move || {
@@ -37,11 +34,10 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                 pull_refresh()
                     .modifier(Modifier::new().size(Dp(300.0), Dp(300.0)))
                     .controller(controller)
-                    .refreshing(refreshing.get())
                     .indicator_size(Dp(48.0))
                     .on_refresh(move || {
                         requests.with_mut(|requests| *requests += 1);
-                        refreshing.set(true);
+                        controller.with_mut(|controller| controller.set_refreshing(true));
                     })
                     .indicator(|| {
                         text("Custom refresh indicator");
@@ -93,7 +89,6 @@ fn native_pull_refresh_uses_scroll_threshold_and_reversal_with_custom_indicator(
     .unwrap();
     renderer.render_frames(8);
     let requests = observed.get().requests.unwrap();
-    let refreshing = observed.get().refreshing.unwrap();
     let controller = observed.get().controller.unwrap();
     renderer.touch_start(2, PxPosition::from_f32_xy(150.0, 30.0));
     renderer.step_frame();
@@ -124,7 +119,6 @@ fn native_pull_refresh_uses_scroll_threshold_and_reversal_with_custom_indicator(
         1,
         "releasing beyond the threshold refreshes once"
     );
-    assert!(refreshing.get());
     assert!(controller.with(PullRefreshController::refreshing));
     let tree = renderer.accessibility_snapshot().unwrap();
     let indicator = tree
@@ -139,7 +133,7 @@ fn native_pull_refresh_uses_scroll_threshold_and_reversal_with_custom_indicator(
     );
     drag(&mut renderer, &[60.0, 270.0]);
     assert_eq!(requests.get(), 1, "a running refresh rejects another pull");
-    refreshing.set(false);
+    controller.with_mut(|controller| controller.set_refreshing(false));
     renderer.render_frames(48);
     assert!(!controller.with(PullRefreshController::refreshing));
     assert_eq!(controller.with(PullRefreshController::position), Px(0));

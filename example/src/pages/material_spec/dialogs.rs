@@ -6,7 +6,7 @@ use tessera_components::{
     button::button,
     checkbox::checkbox,
     column::column,
-    dialog::{DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
+    dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
     icon::icon,
     image::image,
     material_icons::filled,
@@ -84,25 +84,25 @@ impl EventDraft {
 }
 
 fn request_dialog_close(
-    open: State<bool>,
+    open: State<DialogController>,
     full: State<bool>,
-    discard: State<bool>,
+    discard: State<DialogController>,
     draft: State<EventDraft>,
 ) {
     if full.get() && draft.with(EventDraft::is_dirty) {
-        discard.set(true);
+        discard.with_mut(DialogController::open);
     } else {
-        open.set(false);
+        open.with_mut(DialogController::close);
     }
 }
 
 #[tessera]
 pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
-    let open = remember(|| false);
+    let open = remember(|| DialogController::new(false));
     let full = remember(|| false);
     let saved = remember(|| false);
     let draft = remember(EventDraft::default);
-    let discard = remember(|| false);
+    let discard = remember(|| DialogController::new(false));
     let close = Callback::new(move || request_dialog_close(open, full, discard, draft));
     dialog_provider()
         .role(if full.get() {
@@ -110,7 +110,7 @@ pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::A
         } else {
             DialogRole::AlertDialog
         })
-        .is_open(open.get())
+        .controller(open)
         .full_screen(full.get())
         .accessibility_label(I18N.text(if full.get() {
             "ui-new-event"
@@ -217,14 +217,14 @@ pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::A
                         I18N.text("ui-this-will-reset-your-app-preferences-back-to-their-default-settings-the-following-accounts"),
                     )
                     .dismiss_button(move || {
-                        action("ui-cancel".into(), Callback::new(move || open.set(false)));
+                        action("ui-cancel".into(), Callback::new(move || open.with_mut(DialogController::close)));
                     })
                     .confirm_button(move || {
                         action(
                             "ui-accept".into(),
                             Callback::new(move || {
                                 saved.set(true);
-                                open.set(false);
+                                open.with_mut(DialogController::close);
                             }),
                         );
                     });
@@ -1002,7 +1002,7 @@ fn guideline_hero() {
 }
 
 #[tessera]
-fn overview_intro(open: State<bool>, full: State<bool>, saved: State<bool>) {
+fn overview_intro(open: State<DialogController>, full: State<bool>, saved: State<bool>) {
     prose("ui-use-dialogs-to-make-sure-users-act-on-information");
     gap(Dp(16.0));
     bullets(vec![
@@ -1446,7 +1446,7 @@ fn adaptive_section() {
 }
 
 #[tessera]
-fn behavior_section(open: State<bool>, full: State<bool>, saved: State<bool>) {
+fn behavior_section(open: State<DialogController>, full: State<bool>, saved: State<bool>) {
     subheading("ui-appearing".into());
     gap(Dp(12.0));
     prose(
@@ -1469,7 +1469,7 @@ fn behavior_section(open: State<bool>, full: State<bool>, saved: State<bool>) {
 }
 
 #[tessera]
-fn use_cases(open: State<bool>, full: State<bool>, saved: State<bool>) {
+fn use_cases(open: State<DialogController>, full: State<bool>, saved: State<bool>) {
     prose("ui-people-should-be-able-to-use-assistive-technology-to");
     gap(Dp(12.0));
     bullets(vec![
@@ -1560,17 +1560,17 @@ fn labeling_section() {
 #[tessera]
 fn event_dialog(
     draft: State<EventDraft>,
-    open: State<bool>,
+    open: State<DialogController>,
     saved: State<bool>,
-    discard: State<bool>,
+    discard: State<DialogController>,
     close: Callback,
     dialog: Option<tessera_components::dialog::DialogScope>,
 ) {
     dialog_provider()
         .role(DialogRole::AlertDialog)
-        .is_open(discard.get())
+        .controller(discard)
         .accessibility_label(I18N.text("ui-discard-changes"))
-        .on_close_request(move || discard.set(false))
+        .on_close_request(move || discard.with_mut(DialogController::close))
         .main_content(move || {
             full_screen_dialog(close)
                 .dialog_optional(dialog)
@@ -1578,8 +1578,8 @@ fn event_dialog(
                 .on_confirm(move || {
                     draft.set(EventDraft::default());
                     saved.set(true);
-                    discard.set(false);
-                    open.set(false);
+                    discard.with_mut(DialogController::close);
+                    open.with_mut(DialogController::close);
                 })
                 .content(move || {
                     event_form(draft);
@@ -1593,7 +1593,7 @@ fn event_dialog(
                 .dismiss_button(move || {
                     action(
                         "ui-keep-editing".into(),
-                        Callback::new(move || discard.set(false)),
+                        Callback::new(move || discard.with_mut(DialogController::close)),
                     );
                 })
                 .confirm_button(move || {
@@ -1601,8 +1601,8 @@ fn event_dialog(
                         "ui-discard".into(),
                         Callback::new(move || {
                             draft.set(EventDraft::default());
-                            discard.set(false);
-                            open.set(false);
+                            discard.with_mut(DialogController::close);
+                            open.with_mut(DialogController::close);
                         }),
                     );
                 });
@@ -1617,7 +1617,7 @@ fn prose(#[prop(into)] value: String) {
 }
 
 #[tessera]
-fn launch(open: State<bool>, full: State<bool>, saved: State<bool>) {
+fn launch(open: State<DialogController>, full: State<bool>, saved: State<bool>) {
     column().children(move || {
         button()
             .outlined()
@@ -1625,7 +1625,7 @@ fn launch(open: State<bool>, full: State<bool>, saved: State<bool>) {
             .on_click(move || {
                 full.set(false);
                 saved.set(false);
-                open.set(true);
+                open.with_mut(DialogController::open);
             })
             .child(move || {
                 text(I18N.text("ui-open-basic-dialog"));
@@ -1637,7 +1637,7 @@ fn launch(open: State<bool>, full: State<bool>, saved: State<bool>) {
             .on_click(move || {
                 full.set(true);
                 saved.set(false);
-                open.set(true);
+                open.with_mut(DialogController::open);
             })
             .child(move || {
                 text(I18N.text("ui-open-full-screen-dialog"));
@@ -2805,7 +2805,7 @@ fn full_spec_figure(mode: usize) {
                                         }
                                     }
                                     if mode == 2 {
-                                        checkbox().checked(all_day.get()).size(Dp(18.0 * scale))
+                                        checkbox(all_day.get()).size(Dp(18.0 * scale))
                                             .on_toggle(move |next| all_day.set(next)).accessibility_label(I18N.text("ui-measurement-all-day"))
                                             .modifier(Modifier::new().offset(Dp(28.0 * scale), Dp(513.0 * scale)).size(Dp(48.0 * scale), Dp(48.0 * scale)));
                                         text(I18N.text("ui-all-day")).style(dialog_type_style(16.0, 24.0, scale)).color(scheme.on_surface_variant)
@@ -3201,7 +3201,7 @@ fn full_specs() {
 
 #[tessera]
 fn full_figure() {
-    let visible = remember(|| true);
+    let visible = remember(|| DialogController::new(true));
     let saved = remember(|| false);
     let draft = remember(EventDraft::default);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -3218,7 +3218,7 @@ fn full_figure() {
                 ),
         )
         .children(move || {
-            if visible.get() {
+            if visible.with(DialogController::is_open) {
                 boxed()
                     .modifier(
                         Modifier::new()
@@ -3232,11 +3232,11 @@ fn full_figure() {
                             }),
                     )
                     .children(move || {
-                        full_screen_dialog(Callback::new(move || visible.set(false)))
+                        full_screen_dialog(Callback::new(move || visible.with_mut(DialogController::close)))
                             .title(I18N.text("ui-new-event"))
                             .on_confirm(move || {
                                 saved.set(true);
-                                visible.set(false);
+                                visible.with_mut(DialogController::close);
                             })
                             .content(move || {
                                 event_form(draft);
@@ -3254,7 +3254,7 @@ fn full_figure() {
                         .outlined()
                         .on_click(move || {
                             saved.set(false);
-                            visible.set(true);
+                            visible.with_mut(DialogController::open);
                         })
                         .child(move || {
                             text(I18N.text("ui-show-full-screen-dialog"));
@@ -3302,8 +3302,7 @@ fn event_form(draft: State<EventDraft>) {
             row()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    checkbox()
-                        .checked(draft.with(|value| value.all_day))
+                    checkbox(draft.with(|value| value.all_day))
                         .on_toggle(move |next| draft.with_mut(|value| value.all_day = next))
                         .accessibility_label(I18N.text("ui-all-day-7091"));
                     text(I18N.text("ui-all-day-7091"));

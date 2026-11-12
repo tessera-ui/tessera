@@ -581,7 +581,6 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 /// - `close_on_background` — whether outside clicks dismiss the menu
 /// - `close_on_escape` — whether Escape dismisses the menu
 /// - `on_dismiss` — optional callback before dismissal
-/// - `is_open` — whether the menu is currently visible
 /// - `controller` — optional external controller for open state and anchor
 /// - `focus_restorer_fallback` — optional fallback focus target on dismiss
 /// - `main_content` — optional content rendered behind the menu
@@ -640,14 +639,11 @@ pub fn menu_provider(
     close_on_background: Option<bool>,
     close_on_escape: Option<bool>,
     on_dismiss: Option<Callback>,
-    is_open: Option<bool>,
     controller: Option<State<MenuController>>,
     focus_restorer_fallback: Option<FocusRequester>,
     main_content: Option<RenderSlot>,
     menu_content: Option<RenderSlotWith<MenuScope>>,
 ) {
-    let controlled_is_open = is_open;
-    let is_open = is_open.unwrap_or(false);
     let grouped = grouped.unwrap_or(false);
     let inherited_style = use_context::<MenuColorStyle>().map(|style| style.get());
     let color_style = color_style.or(inherited_style).unwrap_or_default();
@@ -682,7 +678,6 @@ pub fn menu_provider(
         close_on_background: close_on_background.unwrap_or(true),
         close_on_escape: close_on_escape.unwrap_or(true),
         on_dismiss,
-        is_open,
         controller,
         focus_restorer_fallback,
         main_content,
@@ -693,21 +688,6 @@ pub fn menu_provider(
     } else {
         remember(MenuController::new)
     };
-
-    // Only a controlled `is_open` prop drives the controller. When the caller
-    // manages visibility through the `controller` (the common case), leave the
-    // controller untouched so `open_at`/`open`/`close` are not overwritten.
-    if let Some(target) = controlled_is_open
-        && controller.with(|c| c.is_open()) != target
-    {
-        controller.with_mut(|c| {
-            if target {
-                c.open();
-            } else {
-                c.close();
-            }
-        });
-    }
 
     provider_args.controller = Some(controller);
     menu_host().provider(provider_args);
@@ -1179,16 +1159,21 @@ impl Default for MenuItemConfig {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
-///     menus::{menu_item, menu_provider},
+///     menus::{MenuController, menu_item, menu_provider},
 ///     text::text,
 /// };
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// use tessera_ui::remember;
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// menu_provider()
-///     .is_open(true)
+///     .controller(remember(|| {
+///         let mut controller = MenuController::new();
+///         controller.open();
+///         controller
+///     }))
 ///     .menu_content(|menu| {
 ///         menu_item().menu(menu).label("Open");
 ///     })
@@ -1984,7 +1969,11 @@ mod tests {
                         menu_provider()
                             .window_anchor(anchor)
                             .anchor(MenuAnchor::at(PxPosition::new(Px(999), Px(999))))
-                            .is_open(true)
+                            .controller(remember(|| {
+                                let mut controller = MenuController::new();
+                                controller.open();
+                                controller
+                            }))
                             .placement(super::MenuPlacement::BelowStart)
                             .offset([Dp::ZERO; 2])
                             .modifier(Modifier::new().width(Dp(80.0)).semantics(SemanticsArgs {

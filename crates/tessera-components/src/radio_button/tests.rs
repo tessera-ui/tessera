@@ -23,7 +23,7 @@ use crate::{
     theme::{MaterialTheme, material_theme},
 };
 
-use super::{RadioButtonController, RadioGroupOrientation, radio_button, radio_group};
+use super::{RadioGroupOrientation, radio_button, radio_group};
 
 #[derive(Clone, Copy, Default)]
 struct FixtureHandles {
@@ -35,46 +35,54 @@ struct FixtureHandles {
     skip_alpha: Option<State<bool>>,
     show_managed: Option<State<bool>>,
     managed_calls: Option<State<[u32; 3]>>,
-    preset: Option<State<RadioButtonController>>,
+    managed_selection: Option<State<Option<usize>>>,
 }
 
 #[tessera]
 fn managed_fixture(observed: TestProbe<FixtureHandles>) {
     let show = remember(|| true);
     let calls = remember(|| [0u32; 3]);
-    let preset = remember(|| RadioButtonController::new(true));
+    let selected = remember(|| Some(2usize));
+    let other = remember(|| None::<usize>);
     observed.with_mut(|handles| handles.show_managed = Some(show));
     observed.with_mut(|handles| handles.managed_calls = Some(calls));
-    observed.with_mut(|handles| handles.preset = Some(preset));
+    observed.with_mut(|handles| handles.managed_selection = Some(selected));
     material_theme().child(move || {
         column().children(move || {
             radio_group()
                 .accessibility_label("Managed choices")
                 .content(move |group| {
                     column().children(move || {
-                        radio_button()
+                        let select = move |index: usize| {
+                            selected.set(Some(index));
+                            calls.with_mut(|calls| calls[index] += 1);
+                        };
+                        radio_button(selected.get() == Some(0))
                             .group(group)
                             .accessibility_label("One")
-                            .on_select(move |_| calls.with_mut(|calls| calls[0] += 1));
+                            .on_select(move |_| select(0));
                         if show.get() {
-                            radio_button()
+                            radio_button(selected.get() == Some(1))
                                 .group(group)
                                 .accessibility_label("Two")
-                                .on_select(move |_| calls.with_mut(|calls| calls[1] += 1));
+                                .on_select(move |_| select(1));
                         }
-                        radio_button()
+                        radio_button(selected.get() == Some(2))
                             .group(group)
                             .accessibility_label("Preset")
-                            .controller(preset)
-                            .on_select(move |_| calls.with_mut(|calls| calls[2] += 1));
+                            .on_select(move |_| select(2));
                     });
                 });
             radio_group()
                 .accessibility_label("Independent choices")
-                .content(|group| {
+                .content(move |group| {
                     column().children(move || {
-                        radio_button().group(group).accessibility_label("Other");
-                        radio_button().group(group).accessibility_label("Another");
+                        for (index, label) in ["Other", "Another"].into_iter().enumerate() {
+                            radio_button(other.get() == Some(index))
+                                .group(group)
+                                .accessibility_label(label)
+                                .on_select(move |_| other.set(Some(index)));
+                        }
                     });
                 });
         });
@@ -152,11 +160,8 @@ fn check_managed_group(samples: u32) {
     assert_eq!(observed.get().managed_calls.unwrap().get(), [2, 1, 1]);
     assert!(action_by_label(&mut renderer, "Two", Action::Click));
     renderer.render_frames(30);
-    observed
-        .get()
-        .preset
-        .unwrap()
-        .with_mut(|controller| controller.set_selected(true));
+    assert_checked(&renderer, &["Two", "Other"]);
+    observed.get().managed_selection.unwrap().set(Some(2));
     renderer.render_frames(30);
     assert_checked(&renderer, &["Preset", "Other"]);
     assert_eq!(observed.get().managed_calls.unwrap().get(), [2, 2, 1]);
@@ -164,18 +169,18 @@ fn check_managed_group(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn native_radio_uncontrolled_groups_are_exclusive_and_release_removed_choices_msaa1() {
+fn native_radio_groups_follow_caller_selection_and_release_removed_choices_msaa1() {
     crate::test_utils::run_isolated_test(
-        "radio_button::tests::native_radio_uncontrolled_groups_are_exclusive_and_release_removed_choices_msaa1",
+        "radio_button::tests::native_radio_groups_follow_caller_selection_and_release_removed_choices_msaa1",
         || check_managed_group(1),
     );
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn native_radio_uncontrolled_groups_are_exclusive_and_release_removed_choices_msaa4() {
+fn native_radio_groups_follow_caller_selection_and_release_removed_choices_msaa4() {
     crate::test_utils::run_isolated_test(
-        "radio_button::tests::native_radio_uncontrolled_groups_are_exclusive_and_release_removed_choices_msaa4",
+        "radio_button::tests::native_radio_groups_follow_caller_selection_and_release_removed_choices_msaa4",
         || check_managed_group(4),
     );
 }
@@ -211,7 +216,7 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                         .padding_all(Dp(16.0)),
                 )
                 .children(move || {
-                    radio_button().selected(false).accessibility_label("Before");
+                    radio_button(false).accessibility_label("Before");
                     radio_group()
                         .orientation(orientation.get())
                         .accessibility_label("Choices")
@@ -221,7 +226,7 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                                 for (index, label) in
                                     ["Alpha", "Beta", "Gamma"].into_iter().enumerate()
                                 {
-                                    radio_button()
+                                    radio_button(selected.get() == index)
                                         .group(group)
                                         .modifier(if index == 0 && skip_alpha.get() {
                                             Modifier::new().focusable().focus_properties(
@@ -230,7 +235,6 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                                         } else {
                                             Modifier::new()
                                         })
-                                        .selected(selected.get() == index)
                                         .enabled(index != 1 || enabled.get())
                                         .accessibility_label(label)
                                         .accessibility_description("Option description")
@@ -241,8 +245,7 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                                 }
                             });
                         });
-                    radio_button()
-                        .selected(false)
+                    radio_button(false)
                         .unselected_color_optional(ink.get())
                         .accessibility_label("Standalone");
                 });

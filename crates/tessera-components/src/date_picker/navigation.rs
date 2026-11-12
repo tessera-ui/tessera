@@ -13,21 +13,21 @@ use tessera_ui::{
 use crate::modifier::with_keyboard_input;
 
 use super::{
-    CalendarDate, DatePickerState, DateRangePickerState, Weekday, YearMonth, civil_from_days,
+    CalendarDate, DatePickerController, DateRangePickerController, Weekday, YearMonth, civil_from_days,
     days_from_civil, days_in_month, is_date_selectable, weekday_for_date,
 };
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum CalendarOwner {
-    Single(State<DatePickerState>),
-    Range(State<DateRangePickerState>),
+    Single(State<DatePickerController>),
+    Range(State<DateRangePickerController>),
 }
 
 impl CalendarOwner {
     fn month(self) -> YearMonth {
         match self {
-            Self::Single(state) => state.with(DatePickerState::displayed_month),
-            Self::Range(state) => state.with(DateRangePickerState::displayed_month),
+            Self::Single(state) => state.with(DatePickerController::displayed_month),
+            Self::Range(state) => state.with(DateRangePickerController::displayed_month),
         }
     }
 
@@ -40,7 +40,7 @@ impl CalendarOwner {
 
     fn selected(self) -> Option<CalendarDate> {
         match self {
-            Self::Single(state) => state.with(DatePickerState::selected_date),
+            Self::Single(state) => state.with(DatePickerController::selected_date),
             Self::Range(state) => {
                 state.with(|state| state.selected_end_date().or(state.selected_start_date()))
             }

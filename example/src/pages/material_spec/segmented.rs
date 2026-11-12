@@ -173,10 +173,9 @@ fn segments(
 ) {
     for (index, name) in LABELS.into_iter().enumerate() {
         let painter = show_icons.then(|| segment_icon(index));
-        segmented_button()
+        segmented_button(selected.get() & (1 << index) != 0)
             .selection_mode(selection_mode)
             .label(I18N.text(name))
-            .selected(selected.get() & (1 << index) != 0)
             .enabled(enabled)
             .show_selected_icon(show_checks)
             .icon_optional(painter)

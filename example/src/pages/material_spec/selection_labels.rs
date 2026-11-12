@@ -171,9 +171,8 @@ fn extra(index: usize) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let label = ["ui-pickles", "ui-tomato", "ui-lettuce", "ui-cheese"][index];
     let top = Dp(112.0 + index as f64 * 56.0);
-    checkbox()
+    checkbox(checked.get())
         .modifier(Modifier::new().offset(Dp(4.0), top))
-        .checked(checked.get())
         .focus_requester(focus)
         .accessibility_label(I18N.text(label))
         .on_toggle(move |value| checked.set(value));
@@ -209,9 +208,8 @@ fn setting(index: usize) {
         None,
     ][index];
     let top = Dp([104.0, 176.0, 240.0][index]);
-    switch()
+    switch(checked.get())
         .modifier(Modifier::new().offset(Dp(344.0), top))
-        .checked(checked.get())
         .focus_requester(focus)
         .accessibility_label(I18N.text(label))
         .on_toggle(move |value| checked.set(value))

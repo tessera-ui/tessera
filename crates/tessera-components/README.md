@@ -93,7 +93,7 @@ without an icon stays expanded. `MaterialShapes::large_increased` supplies the
 
 `floating_action_button_menu` hosts persistent page content and a bottom-aligned
 creation menu. Supply `FloatingActionButtonMenuItem` actions and optionally share
-`FloatingActionButtonMenuState`. Actions expand in a staggered sequence; outside
+`FloatingActionButtonMenuController`. Actions expand in a staggered sequence; outside
 clicks, Escape, or an action close the menu. Primary, secondary, and tertiary
 colors are available. The list scrolls in short viewports while the toggle stays
 fixed. `SemanticsArgs::expanded` and `has_popup` expose disclosure controls;

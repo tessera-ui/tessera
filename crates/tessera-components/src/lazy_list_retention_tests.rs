@@ -35,8 +35,7 @@ fn retained_option(index: usize) {
                 .height(Dp([80.0, 240.0, 56.0, 360.0][index % 4])),
         )
         .children(move || {
-            checkbox()
-                .checked(checked.get())
+            checkbox(checked.get())
                 .accessibility_label(format!("Retained option {index}"))
                 .on_toggle(move |value| checked.set(value));
         });

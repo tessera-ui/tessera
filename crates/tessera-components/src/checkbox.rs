@@ -92,39 +92,27 @@ impl CheckboxDefaults {
     }
 }
 
-/// Controller for [`checkbox`] state.
 #[derive(Clone, PartialEq, Default)]
-pub struct CheckboxController {
+struct CheckboxMotion {
     checkmark: CheckmarkState,
 }
 
-impl CheckboxController {
-    /// Creates a new controller with the provided initial checked state.
-    pub fn new(initial_state: bool) -> CheckboxController {
+impl CheckboxMotion {
+    fn new(initial_state: bool) -> CheckboxMotion {
         Self {
             checkmark: CheckmarkState::new(initial_state),
         }
     }
 
-    /// Returns whether the checkbox is currently checked.
-    pub fn is_checked(&self) -> bool {
+    fn is_checked(&self) -> bool {
         self.checkmark.checked && !self.checkmark.indeterminate
     }
 
-    /// Returns whether only part of the represented selection is checked.
-    pub fn is_indeterminate(&self) -> bool {
+    fn is_indeterminate(&self) -> bool {
         self.checkmark.indeterminate
     }
 
-    /// Sets the checked state directly and resets animation progress.
-    pub fn set_checked(&mut self, checked: bool) {
-        self.set_value(checked, false);
-    }
-
-    /// Sets partial selection without animation. Clearing a partial selection
-    /// leaves the checkbox unchecked; an already checked checkbox stays
-    /// checked.
-    pub fn set_indeterminate(&mut self, indeterminate: bool) {
+    fn set_indeterminate(&mut self, indeterminate: bool) {
         self.set_value(self.is_checked(), indeterminate);
     }
 
@@ -138,22 +126,14 @@ impl CheckboxController {
         }
     }
 
-    /// Toggles the checked state and starts the animation timeline.
-    pub fn toggle(&mut self) {
-        self.checkmark.toggle();
-    }
-
-    /// Advances the checkmark animation progress based on elapsed time.
     fn update_progress(&mut self, frame_nanos: u64) {
         self.checkmark.update_progress(frame_nanos);
     }
 
-    /// Returns current animation progress (0.0..1.0).
     fn progress(&self) -> f32 {
         self.checkmark.progress()
     }
 
-    /// Returns whether the checkmark animation is currently running.
     fn is_animating(&self) -> bool {
         self.checkmark.progress.is_animating() || self.checkmark.morph.is_animating()
     }
@@ -191,14 +171,6 @@ impl CheckmarkState {
         self.progress.snap(if active { 1.0 } else { 0.0 });
         self.morph.snap(if indeterminate { 1.0 } else { 0.0 });
         self.snap_revision = self.snap_revision.wrapping_add(1);
-    }
-
-    fn toggle(&mut self) {
-        self.animate_to(
-            !self.checked || self.indeterminate,
-            false,
-            current_frame_nanos(),
-        );
     }
 
     fn animate_to(&mut self, checked: bool, indeterminate: bool, frame_nanos: u64) {
@@ -244,8 +216,7 @@ impl CheckmarkState {
 /// - `focus_requester` — optional handle targeting the checkbox for focus
 ///   requests.
 /// - `on_toggle` — toggle callback invoked with the new checked state.
-/// - `checked` — externally controlled checked state; omit to use the
-///   controller.
+/// - `checked` — whether the checkbox is checked.
 /// - `indeterminate` — partial selection, taking precedence over `checked`;
 ///   activation clears this state and requests `true` through `on_toggle`.
 /// - `presentation_state` — optional visual interaction; live input and
@@ -265,32 +236,21 @@ impl CheckmarkState {
 /// - `disabled_checkmark_color` — optional disabled checkmark color.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
-/// - `controller` — optional external checkbox controller.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::checkbox::{CheckboxController, checkbox};
+/// use tessera_components::checkbox::checkbox;
 /// use tessera_ui::{State, remember, tessera};
 ///
 /// #[tessera]
 /// fn checkbox_demo() {
-///     let controller = remember(|| {
-///         let mut controller = CheckboxController::new(false);
-///         controller.set_indeterminate(true);
-///         assert!(controller.is_indeterminate());
-///         controller.toggle();
-///         assert!(controller.is_checked());
-///         assert!(!controller.is_indeterminate());
-///         controller
-///     });
-///     checkbox().controller(controller);
 ///     let first_choice = remember(|| true);
 ///     let second_choice = remember(|| false);
+///     assert!(first_choice.get() && !second_choice.get());
 ///     let all = first_choice.get() && second_choice.get();
 ///     let some = first_choice.get() || second_choice.get();
-///     checkbox()
-///         .checked(all)
+///     checkbox(all)
 ///         .indeterminate(some && !all)
 ///         .is_error(!some)
 ///         .accessibility_description("Choose at least one option")
@@ -306,10 +266,10 @@ impl CheckmarkState {
 /// ```
 #[tessera]
 pub fn checkbox(
+    checked: bool,
     modifier: Option<Modifier>,
     focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
-    checked: Option<bool>,
     indeterminate: Option<bool>,
     is_error: Option<bool>,
     presentation_state: Option<InteractionVisualState>,
@@ -324,7 +284,6 @@ pub fn checkbox(
     disabled_checkmark_color: Option<Color>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
-    controller: Option<State<CheckboxController>>,
 ) {
     let focus_requester = if let Some(focus_requester) = focus_requester {
         focus_requester
@@ -368,32 +327,24 @@ pub fn checkbox(
             .with_alpha(MaterialAlpha::DISABLED_CONTENT),
     );
     let disabled_checkmark_color = disabled_checkmark_color.unwrap_or(scheme.surface);
-    let controller = if let Some(controller) = controller {
-        controller
-    } else {
-        remember(|| {
-            let mut controller = CheckboxController::new(checked.unwrap_or(false));
-            controller.set_indeterminate(indeterminate.unwrap_or(false));
+    let indeterminate = indeterminate.unwrap_or(false);
+    let controller = remember(|| {
+        let mut motion = CheckboxMotion::new(checked);
+        motion.set_indeterminate(indeterminate);
+        motion
+    });
+    if controller.with(|controller| {
+        controller.checkmark.checked != (checked || indeterminate)
+            || controller.is_indeterminate() != indeterminate
+    }) {
+        controller.with_mut(|controller| {
             controller
-        })
-    };
-    if checked.is_some() || indeterminate.is_some() {
-        let checked =
-            checked.unwrap_or_else(|| controller.with(|controller| controller.is_checked()));
-        let indeterminate = indeterminate.unwrap_or(false);
-        if controller.with(|controller| {
-            controller.checkmark.checked != (checked || indeterminate)
-                || controller.is_indeterminate() != indeterminate
-        }) {
-            controller.with_mut(|controller| {
-                controller
-                    .checkmark
-                    .animate_to(checked, indeterminate, current_frame_nanos())
-            });
-        }
+                .checkmark
+                .animate_to(checked, indeterminate, current_frame_nanos())
+        });
     }
 
-    checkbox_inner()
+    checkbox_inner(checked, indeterminate)
         .focus_requester(focus_requester)
         .modifier(modifier)
         .size(size)
@@ -416,6 +367,8 @@ pub fn checkbox(
 
 #[tessera]
 fn checkbox_inner(
+    checked: bool,
+    indeterminate: bool,
     modifier: Option<Modifier>,
     focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
@@ -433,7 +386,7 @@ fn checkbox_inner(
     disabled_checkmark_color: Option<Color>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
-    controller: Option<State<CheckboxController>>,
+    controller: Option<State<CheckboxMotion>>,
 ) {
     let modifier = modifier.unwrap_or_default();
     let size = size.unwrap_or(CheckboxDefaults::GLYPH_SIZE);
@@ -448,8 +401,8 @@ fn checkbox_inner(
     let disabled_color = disabled_color.unwrap_or(Color::TRANSPARENT);
     let disabled_checkmark_color = disabled_checkmark_color.unwrap_or(Color::TRANSPARENT);
     let controller = controller.expect("checkbox_inner requires controller to be set");
-    let is_checked = controller.with(|c| c.is_checked());
-    let is_indeterminate = controller.with(|controller| controller.is_indeterminate());
+    let is_indeterminate = indeterminate;
+    let is_checked = checked && !is_indeterminate;
     let is_active = is_checked || is_indeterminate;
     let enabled = !disabled;
     let interaction_state = if enabled {
@@ -468,17 +421,7 @@ fn checkbox_inner(
         None
     };
 
-    let on_value_change = {
-        let on_toggle = on_toggle.unwrap_or_else(CallbackWith::default_value);
-        CallbackWith::new(move |next_checked| {
-            controller.with_mut(|controller| {
-                controller
-                    .checkmark
-                    .animate_to(next_checked, false, current_frame_nanos())
-            });
-            on_toggle.call(next_checked);
-        })
-    };
+    let on_value_change = on_toggle.unwrap_or_else(CallbackWith::default_value);
 
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -522,7 +465,7 @@ fn checkbox_inner(
     if colors.with(|colors| colors.target != target) {
         colors.with_mut(|colors| colors.retarget(target, frame));
     }
-    if controller.with(CheckboxController::is_animating) || colors.with(ColorsMotion::is_animating)
+    if controller.with(CheckboxMotion::is_animating) || colors.with(ColorsMotion::is_animating)
     {
         // Rebuilds this component on every animated frame.
         let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
@@ -708,11 +651,11 @@ fn checkbox_inner(
 
 #[cfg(test)]
 mod tests {
-    use super::CheckboxController;
+    use super::CheckboxMotion;
 
     #[test]
     fn checkbox_controller_animates_to_checked_state() {
-        let mut controller = CheckboxController::new(false);
+        let mut controller = CheckboxMotion::new(false);
 
         controller.checkmark.animate_to(true, false, 1_000_000_000);
 
@@ -723,15 +666,11 @@ mod tests {
         controller.update_progress(1_100_000_000);
         assert!((controller.progress() - 0.65983105).abs() < 0.00001);
         assert!(controller.is_animating());
-
-        controller.set_checked(true);
-        assert_eq!(controller.progress(), 1.0);
-        assert!(!controller.is_animating());
     }
 
     #[test]
     fn checkbox_controller_animates_to_unchecked_state() {
-        let mut controller = CheckboxController::new(true);
+        let mut controller = CheckboxMotion::new(true);
 
         controller.checkmark.animate_to(false, false, 1_000_000_000);
 
@@ -749,15 +688,15 @@ mod tests {
     }
 
     #[test]
-    fn mixed_activation_selects_and_morph_retargeting_preserves_the_stroke() {
+    fn mixed_to_checked_morph_retargeting_preserves_the_stroke() {
         let runtime = tessera_ui::RuntimeSession::new();
         let _scope = runtime.enter();
-        let mut controller = CheckboxController::new(false);
+        let mut controller = CheckboxMotion::new(false);
         controller.set_indeterminate(true);
         assert!(controller.is_indeterminate());
         assert!(!controller.is_checked());
         let start = tessera_ui::current_frame_nanos();
-        controller.toggle();
+        controller.checkmark.animate_to(true, false, start);
         assert!(controller.is_checked());
         assert!(!controller.is_indeterminate());
         controller.update_progress(start + 100_000_000);

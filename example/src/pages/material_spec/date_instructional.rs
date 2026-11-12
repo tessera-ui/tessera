@@ -2,9 +2,10 @@ use tessera_components::{
     boxed::boxed,
     button::button,
     date_picker::{
-        CalendarDate, DatePickerDisplayMode, DatePickerState, DockedDatePickerView, Weekday,
+        CalendarDate, DatePickerController, DatePickerDisplayMode, DockedDatePickerView, Weekday,
         YearMonth, date_picker_day, date_picker_dialog, docked_date_picker,
     },
+    dialog::DialogController,
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
@@ -83,8 +84,8 @@ pub(super) fn illustration(
     }
 }
 
-fn initial_state(year: i32) -> DatePickerState {
-    DatePickerState::new(
+fn initial_state(year: i32) -> DatePickerController {
+    DatePickerController::new(
         Some(CalendarDate::new(year, 8, 17).unwrap()),
         YearMonth::new(year, 8),
         2020..=2030,
@@ -210,7 +211,7 @@ fn indication(x: f64, y: f64, width: f64, height: f64, radius: f64) {
 #[tessera]
 fn date_field(
     controller: State<TextInputController>,
-    open: State<bool>,
+    open: State<DialogController>,
     geometry: State<PreciseGeometry>,
     geometry_key: FieldGeometry,
     label: String,
@@ -278,7 +279,13 @@ fn date_field(
                     .presentation_state(InteractionVisualState::Hover)
                     .accessibility_label(I18N.text(&(icon_name)))
                     .on_click(move || {
-                        open.set(!open.get());
+                        open.with_mut(|open| {
+                            if open.is_open() {
+                                open.close();
+                            } else {
+                                open.open();
+                            }
+                        });
                         focus::defer_keyboard_until_layout();
                     });
             }
@@ -299,8 +306,8 @@ fn date_field(
 
 #[tessera]
 fn calendar_dialog(
-    open: State<bool>,
-    state: State<DatePickerState>,
+    open: State<DialogController>,
+    state: State<DatePickerController>,
     on_confirm: Callback,
     content: RenderSlot,
 
@@ -311,19 +318,19 @@ fn calendar_dialog(
     hosted_dialog(open)
         .modal_controller_optional(modal_controller)
         .accessibility_label(I18N.text("ui-optional-date-selection"))
-        .on_close_request(move || open.set(false))
+        .on_close_request(move || open.with_mut(DialogController::close))
         .main_content_shared(content)
         .dialog_content(move |dialog_scope| {
             date_picker_dialog()
                 .dialog(dialog_scope)
-                .state(state)
+                .controller(state)
                 .picker_today(CalendarDate::new(2023, 8, 1).unwrap())
                 .picker_first_day_of_week(Weekday::Sunday)
                 .dismiss_button(move || {
                     button()
                         .text()
                         .accessibility_label(I18N.text("ui-cancel-optional-date-selection"))
-                        .on_click(move || open.set(false))
+                        .on_click(move || open.with_mut(DialogController::close))
                         .child(move || {
                             text(I18N.text("ui-cancel"));
                         });
@@ -334,7 +341,7 @@ fn calendar_dialog(
                         .accessibility_label(I18N.text("ui-confirm-optional-date-selection"))
                         .on_click(move || {
                             on_confirm.call();
-                            open.set(false);
+                            open.with_mut(DialogController::close);
                         })
                         .child(move || {
                             text(I18N.text("ui-ok"));
@@ -353,13 +360,13 @@ fn entry_methods(
     let draft = remember(|| "08/17/2023".to_owned());
     let error = remember(String::new);
     let state = remember(|| initial_state(2023));
-    let open = remember(|| false);
+    let open = remember(|| DialogController::new(false));
     let geometry = remember(PreciseGeometry::new);
     calendar_dialog(
         open,
         state,
         Callback::new(move || {
-            if let Some(date) = state.with(DatePickerState::selected_date) {
+            if let Some(date) = state.with(DatePickerController::selected_date) {
                 let value = format_date(date, false);
                 error.set(String::new());
                 draft.set(value.clone());
@@ -425,7 +432,7 @@ fn formatting(
     let raw_error = remember(String::new);
     let formatted_error = remember(String::new);
     let state = remember(|| initial_state(2023));
-    let open = remember(|| false);
+    let open = remember(|| DialogController::new(false));
     let geometry = remember(PreciseGeometry::new);
     let submit = Callback::new(move || {
         if let Some(date) = super::parse_form_date(&raw_draft.get()) {
@@ -445,7 +452,7 @@ fn formatting(
         open,
         state,
         Callback::new(move || {
-            if let Some(date) = state.with(DatePickerState::selected_date) {
+            if let Some(date) = state.with(DatePickerController::selected_date) {
                 raw_error.set(String::new());
                 formatted_error.set(String::new());
                 let value = format_date(date, false);
@@ -579,7 +586,7 @@ fn optional_clear() {
                                     ))
                                     .on_click(move || match caption {
                                         "ui-clear" => {
-                                            state.with_mut(DatePickerState::clear_selected_date)
+                                            state.with_mut(DatePickerController::clear_selected_date)
                                         }
                                         "ui-cancel" => {
                                             if let Some(date) = committed.get() {
@@ -588,11 +595,11 @@ fn optional_clear() {
                                                 });
                                             } else {
                                                 state
-                                                    .with_mut(DatePickerState::clear_selected_date);
+                                                    .with_mut(DatePickerController::clear_selected_date);
                                             }
                                         }
                                         _ => committed
-                                            .set(state.with(DatePickerState::selected_date)),
+                                            .set(state.with(DatePickerController::selected_date)),
                                     })
                                     .child(move || {
                                         text(I18N.text(caption));
@@ -634,15 +641,15 @@ fn field_labels(
     };
     let state = remember(|| initial);
     let geometry = remember(PreciseGeometry::new);
-    let chooser = remember(|| false);
+    let chooser = remember(DialogController::default);
     let view = remember(|| DockedDatePickerView::Month);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     hosted_dialog(chooser).modal_controller_optional(modal_controller)
         .accessibility_label(I18N.text("ui-labeled-date-calendar-chooser"))
-        .on_close_request(move || chooser.set(false))
+        .on_close_request(move || chooser.with_mut(DialogController::close))
         .dialog_content(move |_| {
             docked_date_picker()
-                .state(state)
+                .controller(state)
                 .view(view)
                 .today(CalendarDate::new(2025, 8, 1).unwrap())
                 .first_day_of_week(Weekday::Sunday)
@@ -652,8 +659,8 @@ fn field_labels(
                     draft.set(value.clone());
                     controller.with_mut(|c| c.set_text(&value));
                 })
-                .on_cancel(move || chooser.set(false))
-                .on_confirm(move || chooser.set(false));
+                .on_cancel(move || chooser.with_mut(DialogController::close))
+                .on_confirm(move || chooser.with_mut(DialogController::close));
         })
         .main_content(move || {
             canvas(
@@ -707,7 +714,7 @@ fn field_labels(
                                 .offset(Dp(395.0), Dp(70.0))
                                 .size(Dp(342.0), Dp(56.0))
                                 .semantics(SemanticsArgs {
-                                    expanded: Some(chooser.get()),
+                                    expanded: Some(chooser.with(DialogController::is_open)),
                                     has_popup: Some(HasPopup::Dialog),
                                     merge_descendants: true,
                                     ..Default::default()
@@ -717,7 +724,7 @@ fn field_labels(
                                     label: Some(I18N.text("ui-event-date-yyyy-mm-dd")),
                                     on_click: Callback::new(move || {
                                         view.set(DockedDatePickerView::Calendar);
-                                        chooser.set(true);
+                                        chooser.with_mut(DialogController::open);
                                         focus::defer_keyboard_until_layout();
                                     }),
                                     ..Default::default()
@@ -766,12 +773,12 @@ fn field_labels(
 
 #[tessera]
 fn visible_calendar_header(
-    state: State<DatePickerState>,
-    chooser: State<bool>,
+    state: State<DatePickerController>,
+    chooser: State<DialogController>,
     view: State<DockedDatePickerView>,
 ) {
     let theme = use_context::<MaterialTheme>().unwrap().get();
-    let month = state.with(DatePickerState::displayed_month);
+    let month = state.with(DatePickerController::displayed_month);
     let months = [
         "ui-jan", "ui-feb", "ui-mar", "ui-apr", "ui-may", "ui-jun", "ui-jul", "ui-aug", "ui-sep",
         "ui-oct", "ui-nov", "ui-dec",
@@ -811,7 +818,7 @@ fn visible_calendar_header(
                                 );
                             });
                         } else {
-                            state.with_mut(DatePickerState::previous_month);
+                            state.with_mut(DatePickerController::previous_month);
                         }
                     });
             }
@@ -821,7 +828,7 @@ fn visible_calendar_header(
                 .modifier(Modifier::new().offset(Dp(112.0), Dp(8.0)))
                 .accessibility_label(I18N.text("ui-next-labeled-month"))
                 .enabled(month.year() < 2030 || month.month() < 12)
-                .on_click(move || state.with_mut(DatePickerState::next_month));
+                .on_click(move || state.with_mut(DatePickerController::next_month));
             for (x, width, label, target) in [
                 (
                     48.0,
@@ -852,7 +859,7 @@ fn visible_calendar_header(
                     }))
                     .on_click(move || {
                         view.set(target);
-                        chooser.set(true);
+                        chooser.with_mut(DialogController::open);
                         focus::defer_keyboard_until_layout();
                     })
                     .child(move || {

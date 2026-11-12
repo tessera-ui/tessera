@@ -7,6 +7,7 @@ use tessera_components::{
     button::button,
     carousel::{CarouselController, CarouselFlingBehavior, CarouselVariant, carousel},
     column::column,
+    dialog::DialogController,
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
@@ -387,7 +388,7 @@ fn collection(
     >,
 ) {
     let controller = remember(|| CarouselController::new(initial_item(variant)));
-    let all = remember(|| false);
+    let all = remember(DialogController::default);
     let selected = remember(|| 0_usize);
     let title = header
         .clone()
@@ -396,7 +397,7 @@ fn collection(
         .modal_controller_optional(modal_controller)
         .full_screen(true)
         .accessibility_label(I18N.text("ui-all-carousel-collections"))
-        .on_close_request(move || all.set(false))
+        .on_close_request(move || all.with_mut(DialogController::close))
         .main_content(move || {
             let header = header.clone();
             column()
@@ -419,7 +420,7 @@ fn collection(
                                         "ui-show-all-value",
                                         [("v0", I18N.text(&header).into())],
                                     ))
-                                    .on_click(move || all.set(true));
+                                    .on_click(move || all.with_mut(DialogController::open));
                             });
                     }
                     carousel_content(variant, controller, selected);
@@ -428,7 +429,7 @@ fn collection(
                         button()
                             .text()
                             .accessibility_label(I18N.text("ui-show-all-carousel-items"))
-                            .on_click(move || all.set(true))
+                            .on_click(move || all.with_mut(DialogController::open))
                             .child(move || {
                                 text(I18N.text("ui-show-all"));
                             });
@@ -449,7 +450,7 @@ fn collection(
 }
 
 #[tessera]
-fn all_items_page(open: State<bool>, selected: State<usize>, title: String) {
+fn all_items_page(open: State<DialogController>, selected: State<usize>, title: String) {
     let scroll = remember(ScrollableController::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     surface()
@@ -467,7 +468,7 @@ fn all_items_page(open: State<bool>, selected: State<usize>, title: String) {
                             icon_button()
                                 .icon(filled::ARROW_BACK_SVG)
                                 .accessibility_label(I18N.text("ui-back-to-carousel"))
-                                .on_click(move || open.set(false));
+                                .on_click(move || open.with_mut(DialogController::close));
                         });
                     boxed()
                         .modifier(

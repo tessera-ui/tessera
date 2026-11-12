@@ -32,7 +32,7 @@ use crate::{
 
 use super::{
     CalendarDate, DATE_CELL_SIZE, DATE_COLUMNS, DATE_PICKER_MAX_WIDTH, DateGridLayout,
-    DatePickerDefaults, DatePickerDisplayMode, DatePickerState, Weekday, YearMonth,
+    DatePickerDefaults, DatePickerDisplayMode, DatePickerController, Weekday, YearMonth,
     build_month_grid, calendar_day, format_date_input, format_month_short_name, format_month_year,
     navigation::{CalendarFocus, CalendarKeyboard, CalendarOwner},
     parse_date_input, weekday_narrow_label, weekday_sequence,
@@ -49,14 +49,14 @@ mod tests;
 ///
 /// A range includes both endpoints. Date restrictions apply to its endpoints;
 /// unavailable dates between them do not split the selected range.
-pub struct DateRangePickerState {
-    calendar: DatePickerState,
+pub struct DateRangePickerController {
+    calendar: DatePickerController,
     end: Option<CalendarDate>,
     selection_revision: u64,
     displayed_revision: u64,
 }
 
-impl DateRangePickerState {
+impl DateRangePickerController {
     /// Creates a range picker. Invalid initial endpoints are discarded.
     pub fn new(
         start: Option<CalendarDate>,
@@ -67,7 +67,7 @@ impl DateRangePickerState {
         is_selectable_year: Option<CallbackWith<i32, bool>>,
         display_mode: DatePickerDisplayMode,
     ) -> Self {
-        let calendar = DatePickerState::new(
+        let calendar = DatePickerController::new(
             start,
             displayed_month,
             year_range,
@@ -227,7 +227,7 @@ impl DateRangePickerState {
     }
 }
 
-impl Default for DateRangePickerState {
+impl Default for DateRangePickerController {
     fn default() -> Self {
         Self::new(
             None,
@@ -255,7 +255,7 @@ fn date_key(date: CalendarDate) -> (i32, u8, u8) {
 ///
 /// ## Parameters
 ///
-/// - `state` — optional external selection, restrictions, visible month, and
+/// - `controller` — optional external selection, restrictions, visible month, and
 ///   mode.
 /// - `modifier` — sizing and layout of the picker body.
 /// - `first_day_of_week` — weekday at the start of each calendar row.
@@ -269,19 +269,19 @@ fn date_key(date: CalendarDate) -> (i32, u8, u8) {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::date_picker::{CalendarDate, DateRangePickerState, date_range_picker};
+/// use tessera_components::date_picker::{CalendarDate, DateRangePickerController, date_range_picker};
 /// use tessera_components::theme::material_theme;
 /// use tessera_ui::{remember, tessera};
 /// #[tessera]
 /// fn demo() {
-///     let state = remember(DateRangePickerState::default);
+///     let state = remember(DateRangePickerController::default);
 ///     material_theme().child(move || {
 ///         date_range_picker()
-///             .state(state)
+///             .controller(state)
 ///             .today(CalendarDate::new(2026, 7, 16).unwrap());
 ///     });
 /// }
-/// let mut state = DateRangePickerState::default();
+/// let mut state = DateRangePickerController::default();
 /// let day = CalendarDate::new(2026, 10, 17).unwrap();
 /// assert!(state.select_date(day));
 /// assert!(!state.is_complete());
@@ -291,7 +291,7 @@ fn date_key(date: CalendarDate) -> (i32, u8, u8) {
 /// ```
 #[tessera]
 pub fn date_range_picker(
-    state: Option<State<DateRangePickerState>>,
+    controller: Option<State<DateRangePickerController>>,
     modifier: Option<Modifier>,
     first_day_of_week: Option<Weekday>,
     today: Option<CalendarDate>,
@@ -302,11 +302,11 @@ pub fn date_range_picker(
     #[prop(into)] headline: Option<String>,
 ) {
     let today = today.unwrap_or_else(CalendarDate::today);
-    let state = if let Some(state) = state {
+    let state = if let Some(state) = controller {
         state
     } else {
         remember(|| {
-            DateRangePickerState::new(
+            DateRangePickerController::new(
                 None,
                 None,
                 Some(super::fallback_displayed_month_at(
@@ -419,7 +419,7 @@ pub fn date_range_picker(
                                         )
                                         .on_click(move || {
                                             state
-                                                .with_mut(DateRangePickerState::toggle_display_mode)
+                                                .with_mut(DateRangePickerController::toggle_display_mode)
                                         });
                                 }
                             });
@@ -461,7 +461,7 @@ pub fn date_range_picker(
                                     I18N.text("md3-switch-to-date-range-input")
                                 })
                                 .on_click(move || {
-                                    state.with_mut(DateRangePickerState::toggle_display_mode)
+                                    state.with_mut(DateRangePickerController::toggle_display_mode)
                                 });
                         }
                     });
@@ -483,7 +483,7 @@ pub fn date_range_picker(
 
 #[tessera]
 fn range_calendar(
-    state: State<DateRangePickerState>,
+    state: State<DateRangePickerController>,
     first_day: Weekday,
     height: Dp,
     today: CalendarDate,
@@ -508,7 +508,7 @@ fn range_calendar(
     let first_year = state.with(|state| *state.year_range().start());
     let months = state
         .with(|state| ((*state.year_range().end() as i64 - first_year as i64 + 1) * 12) as usize);
-    let displayed = state.with(DateRangePickerState::displayed_month);
+    let displayed = state.with(DateRangePickerController::displayed_month);
     let revision = state.with(|state| state.displayed_revision);
     let month_height = MONTH_HEIGHT.to_px();
     let previous = remember(|| None);
@@ -589,7 +589,7 @@ fn range_calendar(
 
 #[tessera]
 fn range_month(
-    state: State<DateRangePickerState>,
+    state: State<DateRangePickerController>,
     month: YearMonth,
     first_day: Weekday,
     keyboard: CalendarKeyboard,
@@ -600,8 +600,8 @@ fn range_month(
         build_month_grid(month, first_day)
             .try_into()
             .expect("six calendar rows");
-    let start = state.with(DateRangePickerState::selected_start_date);
-    let end = state.with(DateRangePickerState::selected_end_date);
+    let start = state.with(DateRangePickerController::selected_start_date);
+    let end = state.with(DateRangePickerController::selected_end_date);
     let on_select = CallbackWith::new(move |date| {
         state.with_mut(|state| state.select_date(date));
     });
@@ -668,7 +668,7 @@ fn range_month(
 }
 
 #[tessera]
-fn range_input(state: State<DateRangePickerState>) {
+fn range_input(state: State<DateRangePickerController>) {
     let selected = selection(state);
     let controllers = [
         remember(|| input_controller(selected.1)),
@@ -713,7 +713,7 @@ fn range_input(state: State<DateRangePickerState>) {
 }
 
 fn selection(
-    state: State<DateRangePickerState>,
+    state: State<DateRangePickerController>,
 ) -> (u64, Option<CalendarDate>, Option<CalendarDate>) {
     state.with(|state| {
         (
@@ -730,7 +730,7 @@ fn input_controller(date: Option<CalendarDate>) -> TextInputController {
     controller
 }
 
-fn apply_draft(state: &mut DateRangePickerState, values: &[String; 2]) {
+fn apply_draft(state: &mut DateRangePickerController, values: &[String; 2]) {
     let start = parse_date_input(&values[0]).filter(|date| state.is_date_selectable(*date));
     let end = parse_date_input(&values[1]).filter(|date| {
         state.is_date_selectable(*date)
@@ -741,7 +741,7 @@ fn apply_draft(state: &mut DateRangePickerState, values: &[String; 2]) {
 
 #[tessera]
 fn range_input_field(
-    state: State<DateRangePickerState>,
+    state: State<DateRangePickerController>,
     start: bool,
     controller: State<TextInputController>,
     draft: State<[String; 2]>,
@@ -785,7 +785,7 @@ fn range_input_field(
     }
 }
 
-fn input_error(value: &str, start: bool, state: &DateRangePickerState) -> Option<String> {
+fn input_error(value: &str, start: bool, state: &DateRangePickerController) -> Option<String> {
     if value.is_empty() {
         return None;
     }

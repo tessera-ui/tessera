@@ -62,8 +62,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
                 .child(move || {
                     column().children(move || {
                         let value = settings.get();
-                        checkbox()
-                            .checked(value.checked)
+                        checkbox(value.checked)
                             .indeterminate(value.mixed)
                             .is_error(value.error)
                             .presentation_state_optional(value.presentation)

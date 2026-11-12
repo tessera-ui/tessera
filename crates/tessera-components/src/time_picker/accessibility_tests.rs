@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::{
-    DayPeriod, TimePickerDisplayMode, TimePickerLayout, TimePickerSelection, TimePickerState,
+    DayPeriod, TimePickerDisplayMode, TimePickerLayout, TimePickerSelection, TimePickerController,
     time_picker_dialog,
 };
 
@@ -26,13 +26,13 @@ use super::{
 fn fixture(
     output: tessera_ui::testing::TestProbe<
         Option<(
-            State<TimePickerState>,
+            State<TimePickerController>,
             State<(u8, u8)>,
             State<TimePickerLayout>,
         )>,
     >,
 ) {
-    let state = remember(|| TimePickerState::new(14, 8, false, TimePickerDisplayMode::Picker));
+    let state = remember(|| TimePickerController::new(14, 8, false, TimePickerDisplayMode::Picker));
     let steps = remember(|| (1, 1));
     let arrangement = remember(TimePickerLayout::default);
     output.set(Some((state, steps, arrangement)));
@@ -42,7 +42,7 @@ fn fixture(
                 .modifier(Modifier::new().padding(Padding::all(tessera_ui::Dp(24.0))))
                 .child(move || {
                     time_picker_dialog()
-                        .state(state)
+                        .controller(state)
                         .picker_modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             label: Some("Meeting time".to_owned()),
@@ -197,13 +197,13 @@ fn check_accessibility(samples: u32) {
         renderer.render_frames(8);
         assert!(text_matches(focused_label(&renderer).as_deref(), label));
     }
-    assert_eq!(state.with(TimePickerState::hour), 14);
+    assert_eq!(state.with(TimePickerController::hour), 14);
     focus::clear_focus(true);
     renderer.render_frames(8);
 
     let third = control(&renderer, "Hour 3 of 12", Role::Button).0;
     action(&mut renderer, third, Action::Focus);
-    assert_eq!(state.with(TimePickerState::hour), 14);
+    assert_eq!(state.with(TimePickerController::hour), 14);
     assert!(text_matches(
         focused_label(&renderer).as_deref(),
         "Hour 3 of 12"
@@ -226,9 +226,9 @@ fn check_accessibility(samples: u32) {
     assert!(renderer.read_pixels().expect("restored focus pixels") == initial);
 
     action(&mut renderer, third, Action::Click);
-    assert_eq!(state.with(TimePickerState::hour), 15);
+    assert_eq!(state.with(TimePickerController::hour), 15);
     assert_eq!(
-        state.with(TimePickerState::selection),
+        state.with(TimePickerController::selection),
         TimePickerSelection::Hour
     );
     assert_eq!(control(&renderer, "Hour 3 of 12", Role::Button).0, third);
@@ -248,7 +248,7 @@ fn check_accessibility(samples: u32) {
     renderer.render_frames(8);
     action(&mut renderer, third, Action::Click);
     assert_eq!(
-        state.with(TimePickerState::hour),
+        state.with(TimePickerController::hour),
         15,
         "explicit value actions select their label independently of pointer snapping"
     );
@@ -268,7 +268,7 @@ fn check_accessibility(samples: u32) {
     assert_eq!(slots, 24);
     let last = control(&renderer, "Hour 23 of 24", Role::Button).0;
     action(&mut renderer, last, Action::Click);
-    assert_eq!(state.with(TimePickerState::hour), 23);
+    assert_eq!(state.with(TimePickerController::hour), 23);
     state.with_mut(|state| state.set_is_24_hour(false));
     renderer.render_frames(8);
     assert!(text_matches(
@@ -297,20 +297,20 @@ fn check_accessibility(samples: u32) {
     renderer.render_frames(8);
     let midnight = control(&renderer, "Hour 0 of 24", Role::Button).0;
     action(&mut renderer, midnight, Action::Click);
-    assert_eq!(state.with(TimePickerState::hour), 0);
+    assert_eq!(state.with(TimePickerController::hour), 0);
     save(&mut renderer, "24-hour", samples);
 
     let minute = control(&renderer, "Minute", Role::Button).0;
     action(&mut renderer, minute, Action::Click);
     assert_eq!(
-        state.with(TimePickerState::selection),
+        state.with(TimePickerController::selection),
         TimePickerSelection::Minute
     );
     let quarter = control(&renderer, "Minute 15 of 60", Role::Button).0;
     action(&mut renderer, quarter, Action::Focus);
-    assert_eq!(state.with(TimePickerState::minute), 8);
+    assert_eq!(state.with(TimePickerController::minute), 8);
     action(&mut renderer, quarter, Action::Click);
-    assert_eq!(state.with(TimePickerState::minute), 15);
+    assert_eq!(state.with(TimePickerController::minute), 15);
     assert_eq!(
         control(&renderer, "Minute", Role::Button).1.value(),
         Some("15")
@@ -322,11 +322,11 @@ fn check_accessibility(samples: u32) {
     renderer.render_frames(8);
     let am = control(&renderer, "AM", Role::RadioButton).0;
     action(&mut renderer, am, Action::Click);
-    assert_eq!(state.with(TimePickerState::period), DayPeriod::Am);
-    assert_eq!(state.with(TimePickerState::hour), 2);
+    assert_eq!(state.with(TimePickerController::period), DayPeriod::Am);
+    assert_eq!(state.with(TimePickerController::hour), 2);
     let pm = control(&renderer, "PM", Role::RadioButton).0;
     action(&mut renderer, pm, Action::Click);
-    assert_eq!(state.with(TimePickerState::hour), 14);
+    assert_eq!(state.with(TimePickerController::hour), 14);
     state.with_mut(|state| {
         state.set_hour(16);
         state.set_minute(8);
@@ -343,13 +343,13 @@ fn check_accessibility(samples: u32) {
         ((clock.y0 + clock.y1) / 2.0) as f32,
     );
     tap(&mut renderer, point);
-    assert_eq!(state.with(TimePickerState::hour), 14);
+    assert_eq!(state.with(TimePickerController::hour), 14);
     assert_eq!(
-        state.with(TimePickerState::selection),
+        state.with(TimePickerController::selection),
         TimePickerSelection::Minute
     );
     assert_eq!(
-        state.with(TimePickerState::minute),
+        state.with(TimePickerController::minute),
         8,
         "hour release must not also activate a minute slot"
     );
@@ -358,28 +358,28 @@ fn check_accessibility(samples: u32) {
         "Minute 10 of 60"
     ));
     tap(&mut renderer, point);
-    assert_eq!(state.with(TimePickerState::minute), 14);
+    assert_eq!(state.with(TimePickerController::minute), 14);
     assert_eq!(
         control(&renderer, "Minute 15 of 60", Role::Button).0,
         quarter
     );
     action(&mut renderer, quarter, Action::Click);
-    assert_eq!(state.with(TimePickerState::minute), 15);
+    assert_eq!(state.with(TimePickerController::minute), 15);
     steps.set((1, 1));
     renderer.render_frames(8);
     let hour = control(&renderer, "Hour", Role::Button).0;
     action(&mut renderer, hour, Action::Click);
     tap(&mut renderer, point);
     assert_eq!(
-        state.with(TimePickerState::hour),
+        state.with(TimePickerController::hour),
         15,
         "pointer snapping reads updated props"
     );
     assert_eq!(
-        state.with(TimePickerState::selection),
+        state.with(TimePickerController::selection),
         TimePickerSelection::Minute
     );
-    assert_eq!(state.with(TimePickerState::minute), 15);
+    assert_eq!(state.with(TimePickerController::minute), 15);
 
     let toggle = control(&renderer, "Switch to time input", Role::Button).0;
     action(&mut renderer, toggle, Action::Click);
@@ -387,17 +387,17 @@ fn check_accessibility(samples: u32) {
     control(&renderer, "Minute", Role::TextInput);
     action(&mut renderer, hour, Action::Focus);
     assert_eq!(
-        state.with(TimePickerState::selection),
+        state.with(TimePickerController::selection),
         TimePickerSelection::Hour
     );
     renderer.inject_ime_event(Ime::Commit("7".to_owned()));
     renderer.render_frames(8);
-    assert_eq!(state.with(TimePickerState::hour), 19);
+    assert_eq!(state.with(TimePickerController::hour), 19);
     let minute = control(&renderer, "Minute", Role::TextInput).0;
     action(&mut renderer, minute, Action::Focus);
     renderer.inject_ime_event(Ime::Commit("56".to_owned()));
     renderer.render_frames(8);
-    assert_eq!(state.with(TimePickerState::minute), 56);
+    assert_eq!(state.with(TimePickerController::minute), 56);
     save(&mut renderer, "input", samples);
     let toggle = control(&renderer, "Switch to clock", Role::Button).0;
     action(&mut renderer, toggle, Action::Click);
@@ -440,7 +440,7 @@ fn check_accessibility(samples: u32) {
         ),
     );
     assert_eq!(
-        state.with(TimePickerState::hour),
+        state.with(TimePickerController::hour),
         2,
         "the hit target extends above the visual group"
     );
@@ -452,7 +452,7 @@ fn check_accessibility(samples: u32) {
         ),
     );
     assert_eq!(
-        state.with(TimePickerState::hour),
+        state.with(TimePickerController::hour),
         14,
         "the hit target extends below the visual group"
     );
@@ -466,8 +466,8 @@ fn check_accessibility(samples: u32) {
         .bounds()
         .expect("PM bounds");
     assert_eq!((bounds.x1 - bounds.x0, bounds.y1 - bounds.y0), (78.0, 72.0));
-    assert_eq!(state.with(TimePickerState::hour), 14);
-    assert_eq!(state.with(TimePickerState::minute), 56);
+    assert_eq!(state.with(TimePickerController::hour), 14);
+    assert_eq!(state.with(TimePickerController::minute), 56);
     renderer.resize(1000, 1000);
     renderer.render_frames(8);
     state.with_mut(|state| state.set_is_24_hour(true));
@@ -481,7 +481,7 @@ fn check_accessibility(samples: u32) {
     action(&mut renderer, hour, Action::Click);
     let seven = control(&renderer, "Hour 19 of 24", Role::Button).0;
     action(&mut renderer, seven, Action::Click);
-    assert_eq!(state.with(TimePickerState::hour), 19);
+    assert_eq!(state.with(TimePickerController::hour), 19);
     save(&mut renderer, "horizontal-24-hour", samples);
 }
 

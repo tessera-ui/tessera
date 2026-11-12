@@ -1,4 +1,4 @@
-use tessera_components::theme::material_theme;
+use tessera_components::{side_sheet::SideSheetController, theme::material_theme};
 use tessera_ui::{
     CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition,
     accesskit::{Node, Rect as AccessibleRect},
@@ -18,7 +18,7 @@ fn fixture(
     >,
 ) {
     let selected = remember(|| 0usize);
-    let open = remember(|| true);
+    let open = remember(|| SideSheetController::new(true));
     let scroll = remember(ScrollableController::new);
     output.set(Some((selected, open, scroll)));
     material_theme().child(move || {
@@ -41,8 +41,8 @@ fn fixture(
                             .position(SideSheetPosition::Start)
                             .max_width(Dp(360.0))
                             .content_padding(Dp::ZERO)
-                            .is_open(open.get())
-                            .on_close_request(move || open.set(false))
+                            .controller(open)
+                            .on_close_request(move || open.with_mut(SideSheetController::close))
                             .main_content(|| {
                                 boxed().modifier(Modifier::new().fill_max_size());
                             })

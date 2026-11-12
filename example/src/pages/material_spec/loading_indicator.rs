@@ -173,13 +173,11 @@ fn configurations() {
     gap(Dp(16.0));
     flow_row().item_spacing(Dp(16.0)).children(move || {
         text(I18N.text("ui-contained-loading")).style(type_style(14.0, 20.0));
-        switch()
-            .checked(contained.get())
+        switch(contained.get())
             .accessibility_label(I18N.text("ui-contained-loading"))
             .on_toggle(move |value| contained.set(value));
         text(I18N.text("ui-pause-animation")).style(type_style(14.0, 20.0));
-        switch()
-            .checked(paused.get())
+        switch(paused.get())
             .accessibility_label(I18N.text("ui-pause-loading-animation"))
             .on_toggle(move |value| paused.set(value));
     });

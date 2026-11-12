@@ -29,7 +29,7 @@ use crate::{
 };
 
 use super::{
-    ButtonGroupsSelectionMode, ButtonGroupsSize, ButtonGroupsState, ButtonGroupsStyle,
+    ButtonGroupsSelectionMode, ButtonGroupsSize, ButtonGroupsController, ButtonGroupsStyle,
     button_groups,
 };
 
@@ -62,7 +62,7 @@ struct Settings {
 #[derive(Clone, Copy, Default, PartialEq)]
 struct FixtureHandles {
     settings: Option<State<Settings>>,
-    groups: [Option<State<ButtonGroupsState>>; 5],
+    groups: [Option<State<ButtonGroupsController>>; 5],
 }
 
 #[tessera]
@@ -97,7 +97,7 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
                     let probe = probe.clone();
                     move || {
                         for (index, size) in SIZES.into_iter().enumerate() {
-                            let controller = remember(ButtonGroupsState::new);
+                            let controller = remember(ButtonGroupsController::new);
                             probe.with_mut(|handles| handles.groups[index] = Some(controller));
                             let size = if settings.get().reverse_sizes {
                                 SIZES[4 - index]
@@ -105,7 +105,7 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
                                 size
                             };
                             let group = button_groups()
-                                .state(controller)
+                                .controller(controller)
                                 .style(if settings.get().connected {
                                     ButtonGroupsStyle::Connected
                                 } else {
@@ -428,7 +428,7 @@ fn check_group_metrics(samples: u32) {
         renderer.render_frames(45);
         assert_eq!(button(&renderer, "G1 1").1.toggled(), Some(Toggled::True));
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::False));
-        controller.with_mut(ButtonGroupsState::clear);
+        controller.with_mut(ButtonGroupsController::clear);
         renderer.render_frames(45);
         assert_eq!(button(&renderer, "G1 1").1.toggled(), Some(Toggled::False));
         assert_eq!(
@@ -528,7 +528,7 @@ fn check_group_metrics(samples: u32) {
             button(&renderer, "G1 2").0
         );
         settings.with_mut(|value| value.required = true);
-        controller.with_mut(ButtonGroupsState::clear);
+        controller.with_mut(ButtonGroupsController::clear);
         renderer.render_frames(45);
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::True));
         click(&mut renderer, "G1 0");
@@ -580,7 +580,7 @@ fn check_group_metrics(samples: u32) {
             value.square = true;
         });
         for controller in observed.get().groups.into_iter().flatten() {
-            controller.with_mut(ButtonGroupsState::clear);
+            controller.with_mut(ButtonGroupsController::clear);
         }
         renderer.render_frames(45);
         for (index, before) in before.iter().enumerate() {
@@ -632,7 +632,7 @@ fn check_group_metrics(samples: u32) {
             assert_eq!(selected.1.toggled(), Some(Toggled::True));
         }
         for controller in observed.get().groups.into_iter().flatten() {
-            controller.with_mut(ButtonGroupsState::clear);
+            controller.with_mut(ButtonGroupsController::clear);
         }
         settings.with_mut(|value| value.square = true);
         renderer.render_frames(45);
@@ -674,7 +674,7 @@ fn check_group_metrics(samples: u32) {
         renderer.step_frame();
         let focus_before = renderer.accessibility_snapshot().unwrap().focus;
         for controller in observed.get().groups.into_iter().flatten() {
-            controller.with_mut(ButtonGroupsState::clear);
+            controller.with_mut(ButtonGroupsController::clear);
         }
         settings.with_mut(|value| value.connected = false);
         renderer.render_frames(45);

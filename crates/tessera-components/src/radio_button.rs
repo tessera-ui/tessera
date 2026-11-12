@@ -77,26 +77,9 @@ impl SemanticsModifierNode for RadioSemantics {
     }
 }
 
-/// Selection coordination shared explicitly by the choices of a radio group.
+/// Marks the choices of a radio group for its keyboard navigation.
 #[derive(Clone, Copy, PartialEq)]
-pub struct RadioGroupSelection {
-    selected: State<Option<State<RadioButtonController>>>,
-}
-
-fn claim_group_selection(
-    group: State<Option<State<RadioButtonController>>>,
-    controller: State<RadioButtonController>,
-) {
-    if group.with(|selected| *selected == Some(controller)) {
-        return;
-    }
-    let previous = group.with_mut(|selected| selected.replace(controller));
-    if let Some(previous) = previous
-        && previous.is_alive()
-    {
-        previous.with_mut(|controller| controller.set_selected(false));
-    }
-}
+pub struct RadioGroupScope(());
 
 /// Physical orientation announced for [`radio_group`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -116,25 +99,16 @@ impl RadioButtonDefaults {
     pub const STATE_LAYER_SIZE: Dp = Dp(40.0);
 }
 
-/// Shared state for the `radio_button` component, including selection
-/// animation.
 #[derive(Clone, PartialEq)]
-pub struct RadioButtonController {
+struct RadioButtonMotion {
     selected: bool,
     progress: f32,
     start_progress: f32,
     last_change_frame_nanos: Option<u64>,
 }
 
-impl Default for RadioButtonController {
-    fn default() -> Self {
-        Self::new(false)
-    }
-}
-
-impl RadioButtonController {
-    /// Creates a new radio button state with the given initial selection.
-    pub fn new(selected: bool) -> Self {
+impl RadioButtonMotion {
+    fn new(selected: bool) -> Self {
         let progress = if selected { 1.0 } else { 0.0 };
         Self {
             selected,
@@ -144,28 +118,16 @@ impl RadioButtonController {
         }
     }
 
-    /// Returns whether the radio button is currently selected.
-    pub fn is_selected(&self) -> bool {
+    fn is_selected(&self) -> bool {
         self.selected
     }
 
-    /// Sets the selection state, starting an animation when the value changes.
-    pub fn set_selected(&mut self, selected: bool) {
+    fn set_selected(&mut self, selected: bool) {
         if self.selected != selected {
             self.selected = selected;
             self.start_progress = self.progress;
             self.last_change_frame_nanos = Some(current_frame_nanos());
         }
-    }
-
-    /// Marks the radio button as selected, returning `true` if this triggered a
-    /// state change.
-    pub fn select(&mut self) -> bool {
-        if self.selected {
-            return false;
-        }
-        self.set_selected(true);
-        true
     }
 
     fn update_animation(&mut self, frame_nanos: u64) {
@@ -213,8 +175,8 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 /// group while pointer selection waits for a completed click. Tab enters at the
 /// selected enabled choice, or the first available choice, and then leaves the
 /// whole group.
-/// Omit `selected` on every choice for automatic mutual exclusion, or control
-/// every choice from the same application selection value.
+/// The caller owns the selection: derive every choice's `selected` value from
+/// the same application state and update it from `on_select`.
 ///
 /// ## Parameters
 ///
@@ -224,7 +186,7 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 /// - `wrap` — whether arrow traversal wraps at either end; defaults to `true`.
 /// - `accessibility_label` — optional name for the related choices.
 /// - `accessibility_description` — optional additional group instructions.
-/// - `content` — content receiving the selection handle for its choices.
+/// - `content` — content receiving the group scope for its choices.
 ///
 /// ## Examples
 ///
@@ -236,14 +198,12 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 /// fn radio_group_demo() {
 ///     let selected = remember(|| 0usize);
 ///     radio_group().content(move |group| {
-///         radio_button()
+///         radio_button(selected.get() == 0)
 ///             .group(group)
-///             .selected(selected.get() == 0)
-///             .on_select({ move |_| selected.set(0) });
-///         radio_button()
+///             .on_select(move |_| selected.set(0));
+///         radio_button(selected.get() == 1)
 ///             .group(group)
-///             .selected(selected.get() == 1)
-///             .on_select({ move |_| selected.set(1) });
+///             .on_select(move |_| selected.set(1));
 ///     });
 /// }
 /// ```
@@ -254,11 +214,10 @@ pub fn radio_group(
     wrap: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
-    content: Option<RenderSlotWith<RadioGroupSelection>>,
+    content: Option<RenderSlotWith<RadioGroupScope>>,
 ) {
     let modifier = modifier.unwrap_or_default();
     let wrap = wrap.unwrap_or(true);
-    let selected = remember(|| None::<State<RadioButtonController>>);
     let orientation = match orientation.unwrap_or_default() {
         RadioGroupOrientation::Horizontal => Orientation::Horizontal,
         RadioGroupOrientation::Vertical => Orientation::Vertical,
@@ -277,7 +236,7 @@ pub fn radio_group(
     });
     layout(Stack).modifier(modifier).child(move || {
         if let Some(content) = content {
-            content.render(RadioGroupSelection { selected });
+            content.render(RadioGroupScope(()));
         }
     });
 }
@@ -298,9 +257,8 @@ pub fn radio_group(
 ///   requests.
 /// - `on_select` — optional callback invoked when the radio transitions to the
 ///   selected state.
-/// - `group` — selection handle received from the enclosing radio group.
-/// - `selected` — externally controlled selection; omit on every choice to let
-///   its radio group coordinate the controllers.
+/// - `selected` — whether this choice is selected.
+/// - `group` — scope received from the enclosing radio group.
 /// - `size` — optional visual diameter of the radio glyph.
 /// - `touch_target_size` — optional minimum interactive touch target.
 /// - `stroke_width` — optional stroke width applied to the outer ring.
@@ -315,8 +273,6 @@ pub fn radio_group(
 /// - `enabled` — whether the control is interactive.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
-/// - `controller` — optional external controller for selection state and
-///   animation.
 ///
 /// ## Examples
 ///
@@ -326,16 +282,16 @@ pub fn radio_group(
 ///
 /// #[tessera]
 /// fn radio_demo() {
-///     radio_button().selected(true);
+///     radio_button(true);
 /// }
 /// ```
 #[tessera]
 pub fn radio_button(
+    selected: bool,
     modifier: Option<Modifier>,
     focus_requester: Option<FocusRequester>,
     on_select: Option<CallbackWith<bool, ()>>,
-    selected: Option<bool>,
-    group: Option<RadioGroupSelection>,
+    group: Option<RadioGroupScope>,
     size: Option<Dp>,
     touch_target_size: Option<Dp>,
     stroke_width: Option<Dp>,
@@ -347,7 +303,6 @@ pub fn radio_button(
     enabled: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
-    controller: Option<State<RadioButtonController>>,
 ) {
     let modifier = modifier.unwrap_or_default();
     let enabled = enabled.unwrap_or(true);
@@ -374,15 +329,8 @@ pub fn radio_button(
     );
     let on_select = on_select.unwrap_or_else(CallbackWith::default_value);
 
-    let controller = if let Some(controller) = controller {
-        controller
-    } else {
-        remember(|| RadioButtonController::new(selected.unwrap_or(false)))
-    };
-
-    if let Some(selected) = selected
-        && controller.with(|c| c.is_selected()) != selected
-    {
+    let controller = remember(|| RadioButtonMotion::new(selected));
+    if controller.with(|c| c.is_selected()) != selected {
         controller.with_mut(|c| c.set_selected(selected));
     }
 
@@ -390,7 +338,6 @@ pub fn radio_button(
         .focus_requester_optional(focus_requester)
         .modifier(modifier)
         .on_select_shared(on_select)
-        .selected_optional(selected)
         .group_optional(group)
         .size(size)
         .touch_target_size(touch_target_size)
@@ -412,8 +359,7 @@ fn radio_button_inner(
     modifier: Option<Modifier>,
     focus_requester: Option<FocusRequester>,
     on_select: Option<CallbackWith<bool, ()>>,
-    selected: Option<bool>,
-    group: Option<RadioGroupSelection>,
+    group: Option<RadioGroupScope>,
     size: Option<Dp>,
     touch_target_size: Option<Dp>,
     stroke_width: Option<Dp>,
@@ -426,7 +372,7 @@ fn radio_button_inner(
     enabled: Option<bool>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
-    controller: Option<State<RadioButtonController>>,
+    controller: Option<State<RadioButtonMotion>>,
 ) {
     let modifier = modifier.unwrap_or_default();
     let size = size.unwrap_or(Dp(20.0));
@@ -441,16 +387,6 @@ fn radio_button_inner(
     let enabled = enabled.unwrap_or(true);
     let radio_group = group;
     let controller = controller.expect("radio_button_inner requires controller to be set");
-    let group_selection = if selected.is_none() {
-        radio_group.map(|group| group.selected)
-    } else {
-        None
-    };
-    if let Some(group_selection) = group_selection
-        && controller.with(|controller| controller.is_selected())
-    {
-        claim_group_selection(group_selection, controller);
-    }
     let interaction_state = if enabled {
         Some(remember(InteractionState::new))
     } else {
@@ -520,10 +456,7 @@ fn radio_button_inner(
     let active_dot_color = interpolate_color(Color::TRANSPARENT, target_dot_color, eased_progress);
 
     let on_click = Callback::new(move || {
-        if let Some(group_selection) = group_selection {
-            claim_group_selection(group_selection, controller);
-        }
-        if controller.with_mut(|c| c.select()) {
+        if !is_selected {
             on_select.call(true);
         }
     });

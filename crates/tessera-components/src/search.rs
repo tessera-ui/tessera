@@ -88,7 +88,6 @@ struct SearchBarProps {
     modifier: Modifier,
     enabled: bool,
     read_only: bool,
-    is_active: Option<bool>,
     placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
     trailing_icon: Option<RenderSlot>,
@@ -114,7 +113,6 @@ impl Default for SearchBarProps {
             modifier: Modifier::new(),
             enabled: true,
             read_only: false,
-            is_active: None,
             placeholder: None,
             leading_icon: None,
             trailing_icon: None,
@@ -209,7 +207,6 @@ enum SearchBarLayoutKind {
 /// - `modifier` - modifier chain applied to the search bar container.
 /// - `enabled` - whether the input is enabled.
 /// - `read_only` - whether the input is read-only.
-/// - `is_active` - whether the search bar is currently expanded.
 /// - `placeholder` - input hint and accessible name for the search field.
 /// - `leading_icon` - optional leading icon slot.
 /// - `trailing_icon` - optional trailing icon slot.
@@ -237,11 +234,14 @@ enum SearchBarLayoutKind {
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::search::search_bar;
+/// use tessera_components::search::{SearchBarController, search_bar};
+/// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
-///         search_bar().is_active(true).content(|| {});
+///         search_bar()
+///             .controller(remember(|| SearchBarController::new(true)))
+///             .content(|| {});
 ///     });
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();
@@ -251,7 +251,6 @@ pub fn search_bar(
     modifier: Option<Modifier>,
     enabled: Option<bool>,
     read_only: Option<bool>,
-    is_active: Option<bool>,
     #[prop(into)] placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
     trailing_icon: Option<RenderSlot>,
@@ -278,7 +277,6 @@ pub fn search_bar(
         modifier,
         enabled,
         read_only,
-        is_active,
         placeholder,
         leading_icon,
         trailing_icon,
@@ -305,7 +303,6 @@ fn resolve_search_bar(
     modifier: Option<Modifier>,
     enabled: Option<bool>,
     read_only: Option<bool>,
-    is_active: Option<bool>,
     placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
     trailing_icon: Option<RenderSlot>,
@@ -344,7 +341,6 @@ fn resolve_search_bar(
         modifier,
         enabled,
         read_only,
-        is_active,
         placeholder,
         leading_icon,
         trailing_icon,
@@ -385,11 +381,14 @@ fn resolve_search_bar(
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::search::docked_search_bar;
+/// use tessera_components::search::{SearchBarController, docked_search_bar};
+/// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
-///         docked_search_bar().is_active(true).content(|| {});
+///         docked_search_bar()
+///             .controller(remember(|| SearchBarController::new(true)))
+///             .content(|| {});
 ///     });
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();
@@ -399,7 +398,6 @@ pub fn docked_search_bar(
     modifier: Option<Modifier>,
     enabled: Option<bool>,
     read_only: Option<bool>,
-    is_active: Option<bool>,
     #[prop(into)] placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
     trailing_icon: Option<RenderSlot>,
@@ -426,7 +424,6 @@ pub fn docked_search_bar(
         modifier,
         enabled,
         read_only,
-        is_active,
         placeholder,
         leading_icon,
         trailing_icon,
@@ -455,7 +452,7 @@ fn mount_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
     let controller = if let Some(controller) = args.controller {
         controller
     } else {
-        remember(|| SearchBarController::new(args.is_active.unwrap_or(false)))
+        remember(SearchBarController::default)
     };
     args.controller = Some(controller);
     let render_args = build_search_bar_props(args, kind);
@@ -490,15 +487,6 @@ fn build_search_bar_props(args: SearchBarProps, kind: SearchBarLayoutKind) -> Se
     let controller = args
         .controller
         .expect("build_search_bar_props requires controller to be set");
-    if let Some(is_active) = args.is_active
-        && is_active != controller.with(|c| c.is_active())
-    {
-        if is_active {
-            controller.with_mut(|c| c.open());
-        } else {
-            controller.with_mut(|c| c.close());
-        }
-    }
 
     SearchBarRenderArgs {
         kind,
@@ -919,14 +907,13 @@ mod tests {
         show_divider: Option<bool>,
         probe: Option<TestProbe<Option<State<SearchBarController>>>>,
     ) {
-        let controller = remember(SearchBarController::default);
+        let controller = remember(|| SearchBarController::new(active.unwrap_or(false)));
         if let Some(probe) = probe {
             probe.set(Some(controller));
         }
         material_theme().child(move || {
             docked_search_bar()
                 .controller(controller)
-                .is_active_optional(active)
                 .show_divider_optional(show_divider)
                 .content(|| {
                     spacer().modifier(
@@ -996,8 +983,8 @@ mod tests {
     }
 
     #[test]
-    fn clicking_search_field_opens_uncontrolled_results_and_preserves_controlled_state() {
-        for (active, expected) in [(None, true), (Some(false), false), (Some(true), true)] {
+    fn clicking_search_field_opens_results_through_the_controller() {
+        for (active, expected) in [(None, true), (Some(false), true), (Some(true), true)] {
             let probe = TestProbe::default();
             let mut session = start_layout_test_session(
                 layout_test(|| {

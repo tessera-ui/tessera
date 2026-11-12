@@ -503,7 +503,7 @@ pub fn glass_components_page() {
                                 .fill_max_height(),
                         )
                         .children(move || {
-                            scrollbar_v().state(scroll);
+                            scrollbar_v().controller(scroll);
                         });
                 });
         });
@@ -703,9 +703,8 @@ fn number_control(settings: State<LensSettings>, parameter: Number, enabled: Opt
                         text(formatted.clone());
                     }
                 });
-            let slider = slider()
+            let slider = slider((value - min) / (max - min))
                 .modifier(Modifier::new().fill_max_width())
-                .value((value - min) / (max - min))
                 .disabled(!enabled)
                 .value_label(formatted.clone())
                 .accessibility_label(label.clone())
@@ -727,8 +726,7 @@ fn toggle(#[prop(into)] label: String, checked: bool, on_toggle: Option<Callback
         .children(move || {
             text(I18N.text(&label)).modifier(Modifier::new().weight(1.0));
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            switch()
-                .checked(checked)
+            switch(checked)
                 .accessibility_label(I18N.text(&label))
                 .on_toggle_optional(on_toggle);
         });

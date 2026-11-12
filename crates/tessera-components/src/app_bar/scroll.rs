@@ -32,7 +32,7 @@ pub enum AppBarScrollBehavior {
 }
 
 /// Retained height, overlap, and settling motion for a scrolling top app bar.
-pub struct AppBarScrollState {
+pub struct AppBarScrollController {
     behavior: AppBarScrollBehavior,
     enabled: bool,
     snap: bool,
@@ -46,7 +46,7 @@ pub struct AppBarScrollState {
     pending_snap: bool,
 }
 
-impl Default for AppBarScrollState {
+impl Default for AppBarScrollController {
     fn default() -> Self {
         Self {
             behavior: AppBarScrollBehavior::default(),
@@ -64,7 +64,7 @@ impl Default for AppBarScrollState {
     }
 }
 
-impl AppBarScrollState {
+impl AppBarScrollController {
     /// Returns zero when expanded and one when fully collapsed.
     pub fn collapsed_fraction(&self) -> f32 {
         self.collapse.value().clamp(0.0, 1.0)
@@ -257,7 +257,7 @@ impl AppBarScrollState {
 ///
 /// ## Parameters
 ///
-/// - `state` — optional external height and overlap state.
+/// - `controller` — optional external height and overlap state.
 /// - `behavior` — pinned, immediately expanding, or expand-at-start behavior.
 /// - `enabled` — whether scroll input updates the bar.
 /// - `snap` — settle an intermediate height after scrolling ends; defaults to
@@ -270,7 +270,7 @@ impl AppBarScrollState {
 ///
 /// ```
 /// use tessera_components::{
-///     app_bar::{AppBarScrollState, TopAppBarVariant, app_bar_scroll_provider, top_app_bar},
+///     app_bar::{AppBarScrollController, TopAppBarVariant, app_bar_scroll_provider, top_app_bar},
 ///     column::column,
 ///     modifier::ModifierExt as _,
 ///     scaffold::scaffold,
@@ -280,16 +280,16 @@ impl AppBarScrollState {
 /// use tessera_ui::{Modifier, remember, tessera};
 /// #[tessera]
 /// fn screen() {
-///     let state = remember(AppBarScrollState::default);
+///     let state = remember(AppBarScrollController::default);
 ///     let scroll = remember(ScrollableController::new);
 ///     app_bar_scroll_provider()
-///         .state(state)
+///         .controller(state)
 ///         .scroll_controller(scroll)
 ///         .child(move || {
 ///             scaffold()
 ///                 .top_bar(move || {
 ///                     top_app_bar()
-///                         .scroll_state(state)
+///                         .scroll_controller(state)
 ///                         .variant(TopAppBarVariant::MediumFlexible)
 ///                         .title("Inbox");
 ///                 })
@@ -301,7 +301,7 @@ impl AppBarScrollState {
 ///                         });
 ///                 });
 ///         });
-///     assert_eq!(state.with(AppBarScrollState::collapsed_fraction), 0.0);
+///     assert_eq!(state.with(AppBarScrollController::collapsed_fraction), 0.0);
 /// }
 /// # #[tessera]
 /// # fn app() {
@@ -311,17 +311,17 @@ impl AppBarScrollState {
 /// ```
 #[tessera]
 pub fn app_bar_scroll_provider(
-    state: Option<State<AppBarScrollState>>,
+    controller: Option<State<AppBarScrollController>>,
     behavior: Option<AppBarScrollBehavior>,
     enabled: Option<bool>,
     snap: Option<bool>,
     scroll_controller: Option<State<ScrollableController>>,
     child: Option<RenderSlot>,
 ) {
-    let state = if let Some(state) = state {
+    let state = if let Some(state) = controller {
         state
     } else {
-        remember(AppBarScrollState::default)
+        remember(AppBarScrollController::default)
     };
     let active = remember(|| state);
     if active.get() != state {
@@ -365,7 +365,7 @@ pub fn app_bar_scroll_provider(
             });
         }
     }
-    if state.with(AppBarScrollState::is_animating) {
+    if state.with(AppBarScrollController::is_animating) {
         // Rebuilds this component on every animated frame.
         let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
         let _ = frame_clock.get();
@@ -373,7 +373,7 @@ pub fn app_bar_scroll_provider(
             let step = move |frame: u64| {
                 let state = active.get();
                 state.with_mut(|value| value.tick(frame));
-                if state.with(AppBarScrollState::is_animating) {
+                if state.with(AppBarScrollController::is_animating) {
                     true
                 } else {
                     false

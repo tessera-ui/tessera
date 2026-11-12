@@ -22,7 +22,7 @@ fn renderer(
                             Some(selection) => {
                                 let selected = remember(|| 0usize);
                                 selection.set(Some(selected));
-                                swipe_tabs().selected(selected);
+                                swipe_tabs(selected);
                             }
                             None => {
                                 native_tabs_figure(true, true, false, 0, 3);

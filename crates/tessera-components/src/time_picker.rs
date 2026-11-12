@@ -89,7 +89,7 @@ pub enum DayPeriod {
 }
 
 /// Holds the current selection for a time picker.
-pub struct TimePickerState {
+pub struct TimePickerController {
     hour: u8,
     minute: u8,
     is_24_hour: bool,
@@ -97,7 +97,7 @@ pub struct TimePickerState {
     selection: TimePickerSelection,
 }
 
-impl TimePickerState {
+impl TimePickerController {
     /// Creates a time picker state with the provided initial values.
     pub fn new(
         initial_hour: u8,
@@ -236,10 +236,10 @@ impl TimePickerState {
     }
 }
 
-impl Default for TimePickerState {
+impl Default for TimePickerController {
     fn default() -> Self {
         let (hour, minute) = current_time_utc();
-        TimePickerState::new(hour, minute, false, TimePickerDisplayMode::Picker)
+        TimePickerController::new(hour, minute, false, TimePickerDisplayMode::Picker)
     }
 }
 
@@ -269,7 +269,7 @@ struct TimePickerSnapshot {
 /// - `display_mode` — initial display mode for the internal state.
 /// - `hour_step` — pointer snapping interval for hour changes.
 /// - `minute_step` — pointer snapping interval for minute changes.
-/// - `state` — optional external state for selected time and display mode.
+/// - `controller` — optional external state for selected time and display mode.
 /// - `layout` — preferred dial arrangement; defaults to vertical.
 ///
 /// Labeled clock values and manual entry select their exact value. Pointer
@@ -301,7 +301,7 @@ pub fn time_picker(
     display_mode: Option<TimePickerDisplayMode>,
     hour_step: Option<u8>,
     minute_step: Option<u8>,
-    state: Option<State<TimePickerState>>,
+    controller: Option<State<TimePickerController>>,
     layout: Option<TimePickerLayout>,
 ) {
     let modifier = modifier.unwrap_or_default();
@@ -311,10 +311,10 @@ pub fn time_picker(
     let display_mode = display_mode.unwrap_or_default();
     let hour_step = hour_step.unwrap_or(1);
     let minute_step = minute_step.unwrap_or(1);
-    let state = if let Some(state) = state {
+    let state = if let Some(state) = controller {
         state
     } else {
-        remember(|| TimePickerState::new(initial_hour, initial_minute, is_24_hour, display_mode))
+        remember(|| TimePickerController::new(initial_hour, initial_minute, is_24_hour, display_mode))
     };
     time_picker_content(
         state,
@@ -327,13 +327,13 @@ pub fn time_picker(
 
 #[tessera]
 fn time_picker_content(
-    state: State<TimePickerState>,
+    state: State<TimePickerController>,
     modifier: Modifier,
     hour_step: u8,
     minute_step: u8,
     arrangement: TimePickerLayout,
 ) {
-    let snapshot = state.with(TimePickerState::snapshot);
+    let snapshot = state.with(TimePickerController::snapshot);
     let input = snapshot.display_mode == TimePickerDisplayMode::Input;
     #[cfg(test)]
     let modifier = modifier.push_semantics(TimePickerTag("time-picker"));
@@ -501,8 +501,8 @@ impl tessera_ui::LayoutPolicy for TimePickerMeasure {
 }
 
 #[tessera]
-fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input: bool) {
-    let snapshot = state.with(TimePickerState::snapshot);
+fn time_number(state: State<TimePickerController>, field: TimePickerSelection, input: bool) {
+    let snapshot = state.with(TimePickerController::snapshot);
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let scheme = theme.color_scheme;
     let selected = snapshot.selection == field;
@@ -584,7 +584,7 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
                         return previous.get();
                     }
                     if let Ok(number) = text.parse::<u8>() {
-                        let is_24_hour = state.with(TimePickerState::is_24_hour);
+                        let is_24_hour = state.with(TimePickerController::is_24_hour);
                         let valid = match field {
                             TimePickerSelection::Hour => {
                                 if is_24_hour {
@@ -643,12 +643,12 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
 }
 
 #[tessera]
-fn time_period_selector(state: State<TimePickerState>, input: bool) {
+fn time_period_selector(state: State<TimePickerController>, input: bool) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
     let scheme = theme.color_scheme;
-    let period = state.with(TimePickerState::period);
+    let period = state.with(TimePickerController::period);
     let requesters = remember(|| [FocusRequester::new(), FocusRequester::new()]).get();
     let interactions = [
         remember(InteractionState::new),
@@ -862,7 +862,7 @@ impl tessera_ui::LayoutPolicy for PeriodVisualMeasure {
 
 #[derive(Clone, Copy)]
 struct PeriodNavigation {
-    state: State<TimePickerState>,
+    state: State<TimePickerController>,
     requesters: [FocusRequester; 2],
     index: usize,
 }
@@ -1003,7 +1003,7 @@ impl tessera_ui::LayoutPolicy for ClockLayout {
 
 #[derive(Clone, Copy)]
 struct ClockInput {
-    state: State<TimePickerState>,
+    state: State<TimePickerController>,
     dragging: State<bool>,
     hour_step: u8,
     minute_step: u8,
@@ -1133,7 +1133,7 @@ fn clock_value_number(field: TimePickerSelection, index: usize) -> u8 {
     }
 }
 
-fn select_clock_slot(state: State<TimePickerState>, index: usize) {
+fn select_clock_slot(state: State<TimePickerController>, index: usize) {
     state.with_mut(|state| {
         let number = clock_value_number(state.selection, index);
         match state.selection {
@@ -1201,8 +1201,8 @@ impl KeyboardInputModifierNode for ClockNavigation {
 }
 
 #[tessera]
-fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
-    let snapshot = state.with(TimePickerState::snapshot);
+fn time_clock(state: State<TimePickerController>, hour_step: u8, minute_step: u8) {
+    let snapshot = state.with(TimePickerController::snapshot);
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let scheme = theme.color_scheme;
     let dragging = remember(|| false);
@@ -1301,12 +1301,12 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
 
 #[tessera]
 fn clock_value(
-    state: State<TimePickerState>,
+    state: State<TimePickerController>,
     focus: State<ClockFocus>,
     index: usize,
     count: usize,
 ) {
-    let snapshot = state.with(TimePickerState::snapshot);
+    let snapshot = state.with(TimePickerController::snapshot);
     let theme = use_context::<MaterialTheme>().expect("theme").get();
     let number = clock_value_number(snapshot.selection, index);
     let selected = index == selected_clock_slot(&snapshot);
@@ -1383,7 +1383,7 @@ fn clock_value(
 /// ## Parameters
 ///
 /// - `dialog` — registration scope received from the provider content slot.
-/// - `state` — state handle used by the embedded time picker.
+/// - `controller` — state handle used by the embedded time picker.
 /// - `title` — optional override for the dialog title.
 /// - `confirm_button` — optional confirm button content.
 /// - `dismiss_button` — optional dismiss button content.
@@ -1405,14 +1405,14 @@ fn clock_value(
 /// # fn component() {
 /// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_components::time_picker::{TimePickerLayout, TimePickerState, time_picker_dialog};
+/// use tessera_components::time_picker::{TimePickerLayout, TimePickerController, time_picker_dialog};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
-/// let state = remember(TimePickerState::default);
+/// let state = remember(TimePickerController::default);
 /// time_picker_dialog()
-///     .state(state)
+///     .controller(state)
 ///     .picker_layout(TimePickerLayout::Horizontal);
 /// # });
 /// # }
@@ -1421,7 +1421,7 @@ fn clock_value(
 #[tessera]
 pub fn time_picker_dialog(
     dialog: Option<crate::dialog::DialogScope>,
-    state: Option<State<TimePickerState>>,
+    controller: Option<State<TimePickerController>>,
     #[prop(into)] title: Option<String>,
     confirm_button: Option<RenderSlot>,
     dismiss_button: Option<RenderSlot>,
@@ -1450,11 +1450,11 @@ pub fn time_picker_dialog(
     let picker_display_mode = picker_display_mode.unwrap_or_default();
     let picker_hour_step = picker_hour_step.unwrap_or(1);
     let picker_minute_step = picker_minute_step.unwrap_or(1);
-    let state = if let Some(state) = state {
+    let state = if let Some(state) = controller {
         state
     } else {
         remember(|| {
-            TimePickerState::new(
+            TimePickerController::new(
                 picker_initial_hour,
                 picker_initial_minute,
                 picker_is_24_hour,
@@ -1481,7 +1481,7 @@ pub fn time_picker_dialog(
         .color(theme.color_scheme.on_surface_variant);
         time_picker()
             .modifier(picker_modifier.clone())
-            .state(state)
+            .controller(state)
             .hour_step(picker_hour_step)
             .minute_step(picker_minute_step)
             .layout(picker_layout.unwrap_or_default());
@@ -1597,7 +1597,7 @@ impl tessera_ui::LayoutPolicy for TimeDialogMeasure {
 }
 
 #[tessera]
-fn time_display_mode_toggle(state: State<TimePickerState>) {
+fn time_display_mode_toggle(state: State<TimePickerController>) {
     let input = state.with(|s| s.display_mode == TimePickerDisplayMode::Input);
     icon_button()
         .standard()
@@ -1612,7 +1612,7 @@ fn time_display_mode_toggle(state: State<TimePickerState>) {
             I18N.text("md3-switch-to-time-input")
         })
         .on_click(move || {
-            state.with_mut(TimePickerState::toggle_display_mode);
+            state.with_mut(TimePickerController::toggle_display_mode);
             focus::defer_keyboard_until_layout();
         });
 }
@@ -1667,18 +1667,18 @@ mod tests {
     use crate::{modifier::ModifierExt as _, theme::material_theme};
 
     use super::{
-        TimePickerLayout, TimePickerSelection, TimePickerState, time_picker, time_picker_dialog,
+        TimePickerLayout, TimePickerSelection, TimePickerController, time_picker, time_picker_dialog,
     };
 
     #[tessera]
     fn clock_fixture(
         is_24_hour: bool,
-        output: tessera_ui::testing::TestProbe<Option<State<TimePickerState>>>,
+        output: tessera_ui::testing::TestProbe<Option<State<TimePickerController>>>,
     ) {
-        let state = remember(|| TimePickerState::new(10, 8, is_24_hour, Default::default()));
+        let state = remember(|| TimePickerController::new(10, 8, is_24_hour, Default::default()));
         output.set(Some(state));
         material_theme().child(move || {
-            time_picker().state(state);
+            time_picker().controller(state);
         });
     }
 
@@ -1843,7 +1843,7 @@ mod tests {
                 );
             }
             let state = output.get().unwrap();
-            assert_eq!(state.with(TimePickerState::hour), expected_hour);
+            assert_eq!(state.with(TimePickerController::hour), expected_hour);
             assert_eq!(state.with(|s| s.selection), TimePickerSelection::Minute);
             for (index, content) in [
                 CursorEventContent::Pressed(PressKeyEventType::Left),
@@ -1864,20 +1864,20 @@ mod tests {
                     cursor,
                 );
             }
-            assert_eq!(state.with(TimePickerState::minute), 15);
+            assert_eq!(state.with(TimePickerController::minute), 15);
         }
     }
     #[tessera]
-    fn time_input_fixture(output: tessera_ui::testing::TestProbe<Option<State<TimePickerState>>>) {
+    fn time_input_fixture(output: tessera_ui::testing::TestProbe<Option<State<TimePickerController>>>) {
         let state = remember(|| {
-            let mut state = TimePickerState::new(10, 8, false, super::TimePickerDisplayMode::Input);
+            let mut state = TimePickerController::new(10, 8, false, super::TimePickerDisplayMode::Input);
             state.selection = TimePickerSelection::Minute;
             state
         });
         output.set(Some(state));
         material_theme().child(move || {
             crate::column::column().children(move || {
-                time_picker().state(state);
+                time_picker().controller(state);
             });
         });
     }

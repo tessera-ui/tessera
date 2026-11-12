@@ -15,12 +15,16 @@ use tessera_ui::{
 };
 
 use crate::{
-    bottom_sheet::bottom_sheet_provider,
+    bottom_sheet::{BottomSheetController, bottom_sheet_provider},
     button::button,
     column::column,
-    dialog::{DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
+    dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
     modifier::ModifierExt as _,
-    side_sheet::{SideSheetPosition, modal_side_sheet_provider, standard_side_sheet_provider},
+    side_sheet::{
+        SideSheetController, SideSheetPosition, modal_side_sheet_provider,
+        standard_side_sheet_provider,
+    },
+    test_utils::OverlayController,
     text::text,
     theme::material_theme,
 };
@@ -39,7 +43,7 @@ enum Kind {
 struct Settings {
     label: String,
     role: DialogRole,
-    open: bool,
+    open: OverlayController,
     show_origin: bool,
     origin_enabled: bool,
     background_actions: usize,
@@ -49,14 +53,17 @@ struct Settings {
 }
 
 #[tessera]
-fn long_dialog_fixture(output: tessera_ui::testing::TestProbe<Option<State<(bool, usize)>>>) {
-    let state = remember(|| (true, 0_usize));
-    output.set(Some(state));
+fn long_dialog_fixture(
+    output: tessera_ui::testing::TestProbe<Option<(State<DialogController>, State<usize>)>>,
+) {
+    let dialog = remember(|| DialogController::new(true));
+    let confirmed = remember(|| 0_usize);
+    output.set(Some((dialog, confirmed)));
     material_theme().child(move || {
         dialog_provider()
             .accessibility_label("Long message")
-            .is_open(state.get().0)
-            .on_close_request(move || state.with_mut(|state| state.0 = false))
+            .controller(dialog)
+            .on_close_request(move || dialog.with_mut(DialogController::close))
             .dialog_content(move |scope| {
                 basic_dialog()
                     .dialog(scope)
@@ -72,7 +79,7 @@ fn long_dialog_fixture(output: tessera_ui::testing::TestProbe<Option<State<(bool
                         button()
                             .text()
                             .accessibility_label("Keep editing")
-                            .on_click(move || state.with_mut(|state| state.0 = false))
+                            .on_click(move || dialog.with_mut(DialogController::close))
                             .child(|| {
                                 text("Keep editing");
                             });
@@ -82,10 +89,8 @@ fn long_dialog_fixture(output: tessera_ui::testing::TestProbe<Option<State<(bool
                             .text()
                             .accessibility_label("Confirm message")
                             .on_click(move || {
-                                state.with_mut(|state| {
-                                    state.0 = false;
-                                    state.1 += 1;
-                                })
+                                dialog.with_mut(DialogController::close);
+                                confirmed.with_mut(|confirmed| *confirmed += 1);
                             })
                             .child(|| {
                                 text("Confirm");
@@ -194,7 +199,9 @@ fn basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible() {
             );
             assert_eq!(node(&renderer, "Confirm message").1.bounds(), Some(confirm));
             action(&mut renderer, "Confirm message", Action::Click);
-            assert_eq!(output.get().unwrap().get(), (false, 1));
+            let (dialog, confirmed) = output.get().unwrap();
+            assert!(!dialog.with(DialogController::is_open));
+            assert_eq!(confirmed.get(), 1);
         },
     );
 }
@@ -208,7 +215,7 @@ fn main_content(settings: State<Settings>) {
                 button()
                     .accessibility_label("Open modal")
                     .enabled(settings.get().origin_enabled)
-                    .on_click(move || settings.with_mut(|s| s.open = true))
+                    .on_click(move || settings.with(|s| s.open).set(true))
                     .child(|| {
                         text("Open");
                     });
@@ -233,13 +240,13 @@ fn modal_content(settings: State<Settings>) {
             }
             button()
                 .accessibility_label("First action")
-                .on_click(move || settings.with_mut(|s| s.open = false))
+                .on_click(move || settings.with(|s| s.open).set(false))
                 .child(|| {
                     text("Accept");
                 });
             button()
                 .accessibility_label("Second action")
-                .on_click(move || settings.with_mut(|s| s.open = false))
+                .on_click(move || settings.with(|s| s.open).set(false))
                 .child(|| {
                     text("Cancel");
                 });
@@ -248,10 +255,19 @@ fn modal_content(settings: State<Settings>) {
 
 #[tessera]
 fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
+    let open = match kind {
+        Kind::Dialog | Kind::BasicDialog | Kind::FullScreenDialog => {
+            OverlayController::Dialog(remember(DialogController::default))
+        }
+        Kind::BottomSheet => OverlayController::Bottom(remember(BottomSheetController::default)),
+        Kind::SideSheet | Kind::StandardSheet => {
+            OverlayController::Side(remember(SideSheetController::default))
+        }
+    };
     let settings = remember(|| Settings {
         label: "Example modal".to_string(),
         role: DialogRole::Dialog,
-        open: false,
+        open,
         show_origin: true,
         origin_enabled: true,
         background_actions: 0,
@@ -260,13 +276,13 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
         long_content: false,
     });
     output.set(Some(settings));
-    material_theme().child(move || match kind {
-        Kind::Dialog => {
+    material_theme().child(move || match (kind, open) {
+        (Kind::Dialog, OverlayController::Dialog(controller)) => {
             dialog_provider()
                 .accessibility_label(settings.get().label)
                 .role(settings.get().role)
-                .is_open(settings.get().open)
-                .on_close_request(move || settings.with_mut(|s| s.open = false))
+                .controller(controller)
+                .on_close_request(move || settings.with(|s| s.open).set(false))
                 .main_content(move || {
                     main_content(settings);
                 })
@@ -274,10 +290,10 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
                     modal_content(settings);
                 });
         }
-        Kind::BasicDialog => {
+        (Kind::BasicDialog, OverlayController::Dialog(controller)) => {
             dialog_provider()
                 .accessibility_label("Basic dialog")
-                .is_open(settings.get().open)
+                .controller(controller)
                 .main_content(move || {
                     main_content(settings);
                 })
@@ -293,18 +309,18 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
                         });
                 });
         }
-        Kind::FullScreenDialog => {
+        (Kind::FullScreenDialog, OverlayController::Dialog(controller)) => {
             dialog_provider()
                 .full_screen(true)
                 .accessibility_label(settings.get().label)
-                .is_open(settings.get().open)
-                .on_close_request(move || settings.with_mut(|s| s.open = false))
+                .controller(controller)
+                .on_close_request(move || settings.with(|s| s.open).set(false))
                 .main_content(move || {
                     main_content(settings);
                 })
                 .dialog_content(move |scope| {
                     let dialog = full_screen_dialog(tessera_ui::Callback::new(move || {
-                        settings.with_mut(|s| s.open = false)
+                        settings.with(|s| s.open).set(false)
                     }))
                     .dialog(scope)
                     .title("New event")
@@ -313,19 +329,17 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
                     });
                     if settings.get().actions {
                         dialog.on_confirm(move || {
-                            settings.with_mut(|s| {
-                                s.confirmed += 1;
-                                s.open = false;
-                            })
+                            settings.with_mut(|s| s.confirmed += 1);
+                            settings.with(|s| s.open).set(false);
                         });
                     }
                 });
         }
-        Kind::BottomSheet => {
+        (Kind::BottomSheet, OverlayController::Bottom(controller)) => {
             bottom_sheet_provider()
                 .accessibility_label(settings.get().label)
-                .is_open(settings.get().open)
-                .on_close_request(move || settings.with_mut(|s| s.open = false))
+                .controller(controller)
+                .on_close_request(move || settings.with(|s| s.open).set(false))
                 .main_content(move || {
                     main_content(settings);
                 })
@@ -333,12 +347,12 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
                     modal_content(settings);
                 });
         }
-        Kind::SideSheet => {
+        (Kind::SideSheet, OverlayController::Side(controller)) => {
             modal_side_sheet_provider()
                 .accessibility_label(settings.get().label)
                 .position(SideSheetPosition::End)
-                .is_open(settings.get().open)
-                .on_close_request(move || settings.with_mut(|s| s.open = false))
+                .controller(controller)
+                .on_close_request(move || settings.with(|s| s.open).set(false))
                 .main_content(move || {
                     main_content(settings);
                 })
@@ -346,12 +360,12 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
                     modal_content(settings);
                 });
         }
-        Kind::StandardSheet => {
+        (Kind::StandardSheet, OverlayController::Side(controller)) => {
             standard_side_sheet_provider()
                 .accessibility_label(settings.get().label)
                 .position(SideSheetPosition::End)
-                .is_open(settings.get().open)
-                .on_close_request(move || settings.with_mut(|s| s.open = false))
+                .controller(controller)
+                .on_close_request(move || settings.with(|s| s.open).set(false))
                 .main_content(move || {
                     main_content(settings);
                 })
@@ -359,6 +373,7 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
                     modal_content(settings);
                 });
         }
+        _ => unreachable!("fixture controllers match their kind"),
     });
 }
 
@@ -404,7 +419,7 @@ fn open(renderer: &mut HeadlessRenderer, kind: Kind, settings: State<Settings>) 
             ((bounds.y0 + bounds.y1) * 0.5) as f32,
         ),
     );
-    assert!(settings.get().open);
+    assert!(settings.get().open.get());
     if settings.get().actions {
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
@@ -550,9 +565,9 @@ fn check(samples: u32) {
                     ),
                 );
                 assert_eq!(settings.get().background_actions, 1);
-                assert!(settings.get().open);
+                assert!(settings.get().open.get());
                 let other = node(&renderer, "Other task").0;
-                settings.with_mut(|settings| settings.open = false);
+                renderer.run(|| settings.with(|s| s.open).set(false));
                 renderer.render_frames(24);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, other);
                 continue;
@@ -594,7 +609,7 @@ fn check(samples: u32) {
                     ((other_bounds.y0 + other_bounds.y1) * 0.5) as f32,
                 ),
             );
-            assert!(!settings.get().open);
+            assert!(!settings.get().open.get());
             assert_eq!(settings.get().background_actions, 0);
             assert_eq!(
                 renderer.accessibility_snapshot().unwrap().focus,
@@ -620,14 +635,14 @@ fn check(samples: u32) {
                 renderer.accessibility_snapshot().unwrap().focus,
                 node(&renderer, "First action").0
             );
-            settings.with_mut(|s| s.open = false);
+            renderer.run(|| settings.with(|s| s.open).set(false));
             renderer.render_frames(24);
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
             let other = node(&renderer, "Other task").0;
             for remove in [false, true] {
                 open(&mut renderer, kind, output.get().unwrap());
+                renderer.run(|| settings.with(|s| s.open).set(false));
                 settings.with_mut(|s| {
-                    s.open = false;
                     s.origin_enabled = false;
                     s.show_origin = !remove;
                 });
@@ -709,7 +724,7 @@ fn check_full_screen(samples: u32) {
                 PxPosition::from_f32_xy((dialog.x1 - 16.0 * scale) as f32, 620.0),
             );
             assert!(
-                settings.get().open,
+                settings.get().open.get(),
                 "blank full-screen content must not dismiss the modal"
             );
             action(&mut renderer, "Save", Action::Click);
@@ -719,7 +734,7 @@ fn check_full_screen(samples: u32) {
             open(&mut renderer, kind, output.get().unwrap());
             action(&mut renderer, "Close dialog", Action::Click);
             renderer.render_frames(24);
-            assert!(!settings.get().open);
+            assert!(!settings.get().open.get());
             assert_eq!(settings.get().confirmed, 1);
             assert_eq!(settings.get().background_actions, 0);
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
@@ -761,7 +776,7 @@ fn check_full_screen(samples: u32) {
     .unwrap();
     renderer.render_frames(4);
     let settings = output.get().unwrap();
-    settings.with_mut(|settings| settings.open = true);
+    renderer.run(|| settings.with(|s| s.open).set(true));
     renderer.render_frames(24);
     assert_eq!(
         labeled_node(&renderer, "Basic dialog", Role::Dialog)
@@ -824,7 +839,7 @@ fn explicit_alert_dialog_role_preserves_modal_controls_and_focus_restoration() {
                 id
             );
             action(&mut renderer, "First action", Action::Click);
-            assert!(!state.get().open);
+            assert!(!state.get().open.get());
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
         },
     );

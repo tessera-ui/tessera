@@ -725,7 +725,6 @@ fn bottom_sheet_content_wrapper(
 /// - `accessibility_label` — accessible name describing the dialog or sheet.
 /// - `on_close_request` — optional callback invoked when the sheet requests
 ///   closing.
-/// - `is_open` — declarative open state.
 /// - `controller` — optional external controller for programmatic open/close.
 /// - `partial_height` — optional partial height, including the drag handle;
 ///   defaults to the content's natural height. It is limited to the available
@@ -739,8 +738,9 @@ fn bottom_sheet_content_wrapper(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::bottom_sheet::bottom_sheet_provider;
+/// use tessera_components::bottom_sheet::{BottomSheetController, bottom_sheet_provider};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// use tessera_ui::remember;
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
@@ -748,7 +748,7 @@ fn bottom_sheet_content_wrapper(
 /// bottom_sheet_provider()
 ///     .accessibility_label("Additional options")
 ///     .on_close_request(|| {})
-///     .is_open(true)
+///     .controller(remember(|| BottomSheetController::new(true)))
 ///     .partial_height(tessera_ui::Dp(240.0))
 ///     .main_content(|| { /* main content */ })
 ///     .bottom_sheet_content(|| { /* bottom sheet content */ });
@@ -760,21 +760,18 @@ fn bottom_sheet_content_wrapper(
 pub fn bottom_sheet_provider(
     #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
-    is_open: Option<bool>,
     controller: Option<State<BottomSheetController>>,
     partial_height: Option<Dp>,
     main_content: Option<RenderSlot>,
     bottom_sheet_content: Option<RenderSlot>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
-    let is_open = is_open.unwrap_or(false);
     let partial_height = partial_height.filter(|height| height.0.is_finite());
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let bottom_sheet_content = bottom_sheet_content.unwrap_or_else(RenderSlot::empty);
-    let external_controller = controller;
-    let controller = match external_controller {
+    let controller = match controller {
         Some(value) => value,
-        None => remember(|| BottomSheetController::new(is_open)),
+        None => remember(|| BottomSheetController::new(false)),
     };
     let parent_nested_scroll = NestedScrollConnection::nearest();
     let coordinate_scale = remember(|| 1.0_f32);
@@ -784,19 +781,6 @@ pub fn bottom_sheet_provider(
         parent_nested_scroll,
     )
     .with_coordinate_scale(coordinate_scale);
-
-    // In controlled mode (external controller provided), do not override
-    // controller state from `is_open`.
-    if external_controller.is_none() {
-        let current_open = controller.with(|c| c.is_open());
-        if is_open != current_open {
-            if is_open {
-                controller.with_mut(|c| c.open());
-            } else {
-                controller.with_mut(|c| c.close());
-            }
-        }
-    }
 
     // Snapshot state to minimize locking overhead.
     let (is_open, visibility, drag_offset, resize_fraction) = controller.with(|c| c.snapshot());

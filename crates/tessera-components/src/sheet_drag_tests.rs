@@ -16,11 +16,15 @@ use tessera_ui::{
 };
 
 use crate::{
-    bottom_sheet::bottom_sheet_provider,
+    bottom_sheet::{BottomSheetController, bottom_sheet_provider},
     modifier::ModifierExt as _,
     nested_scroll::{NestedScrollConnection, ScrollDelta, ScrollVelocity},
-    side_sheet::{SideSheetPosition, modal_side_sheet_provider, standard_side_sheet_provider},
+    side_sheet::{
+        SideSheetController, SideSheetPosition, modal_side_sheet_provider,
+        standard_side_sheet_provider,
+    },
     surface::surface,
+    test_utils::OverlayController,
     theme::material_theme,
 };
 
@@ -35,7 +39,7 @@ enum Kind {
 
 #[derive(Clone, Default)]
 struct FixtureHandles {
-    open: Option<State<bool>>,
+    open: Option<OverlayController>,
     edge: Option<State<SideSheetPosition>>,
     accept_close: Option<State<bool>>,
     closes: usize,
@@ -43,7 +47,7 @@ struct FixtureHandles {
 }
 
 fn request_close(
-    open: State<bool>,
+    open: OverlayController,
     accept_close: State<bool>,
     observed: tessera_ui::testing::TestProbe<FixtureHandles>,
 ) {
@@ -76,7 +80,10 @@ fn content(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
 fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let accept_close = remember(|| true);
     observed.with_mut(|handles| handles.accept_close = Some(accept_close));
-    let open = remember(|| true);
+    let open = match kind {
+        Kind::Bottom => OverlayController::Bottom(remember(|| BottomSheetController::new(true))),
+        _ => OverlayController::Side(remember(|| SideSheetController::new(true))),
+    };
     let edge = remember(|| {
         if matches!(kind, Kind::Start | Kind::StandardStart) {
             SideSheetPosition::Start
@@ -86,10 +93,10 @@ fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>)
     });
     observed.with_mut(|handles| handles.open = Some(open));
     observed.with_mut(|handles| handles.edge = Some(edge));
-    material_theme().child(move || match kind {
-        Kind::Bottom => {
+    material_theme().child(move || match open {
+        OverlayController::Bottom(controller) => {
             bottom_sheet_provider()
-                .is_open(open.get())
+                .controller(controller)
                 .on_close_request({
                     let observed = observed.clone();
                     move || request_close(open, accept_close, observed.clone())
@@ -104,12 +111,12 @@ fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>)
                     }
                 });
         }
-        kind => {
+        OverlayController::Side(controller) => {
             let position = edge.get();
             if matches!(kind, Kind::StandardStart | Kind::StandardEnd) {
                 standard_side_sheet_provider()
                     .position(position)
-                    .is_open(open.get())
+                    .controller(controller)
                     .on_close_request({
                         let observed = observed.clone();
                         move || request_close(open, accept_close, observed.clone())
@@ -126,7 +133,7 @@ fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>)
             } else {
                 modal_side_sheet_provider()
                     .position(position)
-                    .is_open(open.get())
+                    .controller(controller)
                     .on_close_request({
                         let observed = observed.clone();
                         move || request_close(open, accept_close, observed.clone())
@@ -142,6 +149,7 @@ fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>)
                     });
             }
         }
+        OverlayController::Dialog(_) => unreachable!(),
     });
 }
 

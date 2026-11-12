@@ -22,14 +22,14 @@ use crate::{
     text_field::text_field,
     text_input::TextInputController,
     theme::material_theme,
-    time_picker::{TimePickerDisplayMode, TimePickerState, time_picker},
+    time_picker::{TimePickerDisplayMode, TimePickerController, time_picker},
 };
 
 #[derive(Clone, Copy, Default)]
 struct FixtureHandles {
     editor: Option<State<TextInputController>>,
     clipped: Option<State<bool>>,
-    time: Option<State<TimePickerState>>,
+    time: Option<State<TimePickerController>>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -96,7 +96,7 @@ fn field_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
 
 #[tessera]
 fn time_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
-    let time = remember(|| TimePickerState::new(10, 8, false, TimePickerDisplayMode::Picker));
+    let time = remember(|| TimePickerController::new(10, 8, false, TimePickerDisplayMode::Picker));
     observed.with_mut(|handles| handles.time = Some(time));
     material_theme().child(move || {
         boxed()
@@ -112,7 +112,7 @@ fn time_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                     .modifier(Modifier::new().push_placement(FractionalOrigin))
                     .children(move || {
                         scaled_box(0.625).child(move || {
-                            time_picker().state(time);
+                            time_picker().controller(time);
                         });
                     });
             });
@@ -340,7 +340,7 @@ fn scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state(
                 }));
                 renderer.render_frames(3);
                 assert_eq!(
-                    observed.get().time.unwrap().with(TimePickerState::hour),
+                    observed.get().time.unwrap().with(TimePickerController::hour),
                     10,
                     "accessibility focus must not activate a clock digit"
                 );
@@ -351,9 +351,9 @@ fn scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state(
                         ((bounds.y0 + bounds.y1) * 0.5) as f32,
                     ),
                 );
-                assert_eq!(observed.get().time.unwrap().with(TimePickerState::hour), 3);
+                assert_eq!(observed.get().time.unwrap().with(TimePickerController::hour), 3);
                 assert_eq!(
-                    observed.get().time.unwrap().with(TimePickerState::minute),
+                    observed.get().time.unwrap().with(TimePickerController::minute),
                     8
                 );
                 let after = renderer.read_pixels().unwrap();

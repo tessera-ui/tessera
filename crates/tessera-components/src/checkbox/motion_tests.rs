@@ -18,7 +18,7 @@ use crate::{
     theme::{MaterialTheme, material_theme},
 };
 
-use super::{CheckboxController, checkbox};
+use super::checkbox;
 
 #[derive(Clone, Copy, Default, PartialEq)]
 struct Settings {
@@ -31,16 +31,13 @@ struct Settings {
 #[derive(Clone, Default)]
 struct FixtureHandles {
     settings: Option<State<Settings>>,
-    controller: Option<State<CheckboxController>>,
 }
 
 #[tessera]
 fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(Settings::default);
-    let controller = remember(|| CheckboxController::new(false));
     probe.set(FixtureHandles {
         settings: Some(settings),
-        controller: Some(controller),
     });
     material_theme()
         .theme(|| {
@@ -54,9 +51,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
         .child(move || {
             column().children(move || {
                 let value = settings.get();
-                checkbox()
-                    .controller(controller)
-                    .checked(value.checked)
+                checkbox(value.checked)
                     .indeterminate(value.mixed)
                     .disabled(value.disabled)
                     .accessibility_label("Animated checkbox")
@@ -111,22 +106,16 @@ fn check_motion(samples: u32) {
     .expect("renderer");
     renderer.render_frames(30);
     let settings = probe.get().settings.unwrap();
-    let controller = probe.get().controller.unwrap();
     settings.with_mut(|value| value.checked = true);
     renderer.step_frame();
-    assert_eq!(controller.with(CheckboxController::progress), 0.0);
     assert_eq!(selection(&renderer).1.toggled(), Some(Toggled::True));
     renderer.render_frames(5);
     assert!(renderer.frame_clock_diagnostics().resumed_tasks > 0);
-    assert!((controller.with(CheckboxController::progress) - 0.28017744).abs() < 0.00001);
     let alpha = fill(&renderer)[3];
     assert!((145..=158).contains(&alpha), "50ms fill alpha: {alpha}");
     renderer.render_frames(5);
-    assert!((controller.with(CheckboxController::progress) - 0.65983105).abs() < 0.00001);
     assert!((225..=240).contains(&fill(&renderer)[3]));
-    controller.with_mut(|controller| controller.set_checked(true));
-    renderer.step_frame();
-    assert_eq!(controller.with(CheckboxController::progress), 1.0);
+    renderer.render_frames(100);
     assert_eq!(fill(&renderer), [255, 0, 0, 255]);
     renderer.render_frames(3);
     for _ in 0..30 {
@@ -147,22 +136,15 @@ fn check_motion(samples: u32) {
     }));
     renderer.render_frames(8);
     assert_eq!(settings.get().activations, 1);
-    assert_eq!(controller.with(CheckboxController::progress), 1.0);
     assert_eq!(selection(&renderer).1.toggled(), Some(Toggled::False));
     assert!(
         fill(&renderer)[3] < 100,
         "removal uses the faster color effect"
     );
     renderer.render_frames(2);
-    assert_eq!(controller.with(CheckboxController::progress), 0.0);
     renderer.render_frames(30);
     settings.with_mut(|value| value.mixed = true);
     renderer.step_frame();
-    assert_eq!(
-        controller.with(|controller| controller.checkmark.morph.value),
-        1.0,
-        "partial selection enters as a dash"
-    );
     renderer.render_frames(40);
     let dash_pixels = renderer.read_pixels().unwrap();
     settings.with_mut(|value| {
@@ -171,8 +153,6 @@ fn check_motion(samples: u32) {
     });
     renderer.step_frame();
     renderer.render_frames(5);
-    let morph = controller.with(|controller| controller.checkmark.morph.value);
-    assert!((morph - 0.71982256).abs() < 0.00001);
     assert_ne!(
         renderer.read_pixels().unwrap(),
         dash_pixels,
@@ -183,13 +163,7 @@ fn check_motion(samples: u32) {
         value.checked = false;
     });
     renderer.step_frame();
-    assert!(controller.with(|controller| controller.checkmark.morph.value) < morph);
-    assert!(controller.with(|controller| controller.checkmark.morph.velocity) < 0.0);
     renderer.render_frames(40);
-    assert_eq!(
-        controller.with(|controller| controller.checkmark.morph.value),
-        1.0
-    );
     assert_eq!(
         renderer.read_pixels().unwrap(),
         dash_pixels,

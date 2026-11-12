@@ -18,7 +18,7 @@ use tessera_components::{
     navigation_rail::{navigation_rail, navigation_rail_item},
     row::row,
     shape_def::Shape,
-    side_sheet::{SideSheetPosition, modal_side_sheet_provider},
+    side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
     spacer::spacer,
     text::text,
     theme::{MaterialTheme, material_theme},
@@ -1685,14 +1685,14 @@ fn placement(rail: bool) {
 
 #[tessera]
 fn modal_rail() {
-    let open = remember(|| false);
+    let open = remember(|| SideSheetController::new(false));
     let selected = remember(|| 0usize);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     modal_side_sheet_provider()
         .position(SideSheetPosition::Start)
-        .is_open(open.get())
+        .controller(open)
         .accessibility_label(I18N.text("ui-expanded-navigation-rail"))
-        .on_close_request(move || open.set(false))
+        .on_close_request(move || open.with_mut(SideSheetController::close))
         .main_content(move || {
             column()
                 .modifier(
@@ -1707,7 +1707,7 @@ fn modal_rail() {
                         .standard()
                         .icon(filled::MENU_SVG)
                         .accessibility_label(I18N.text("ui-open-modal-expanded-rail"))
-                        .on_click(move || open.set(true));
+                        .on_click(move || open.with_mut(SideSheetController::open));
                     gap(Dp(24.0));
                     text(I18N.text(NAMES[selected.get()])).style(type_style(24.0, 32.0));
                     text(I18N.text("ui-select-the-menu-to-reveal-navigation-over-this-page"))
@@ -1722,7 +1722,7 @@ fn modal_rail() {
                         .standard()
                         .icon(filled::MENU_OPEN_SVG)
                         .accessibility_label(I18N.text("ui-close-modal-expanded-rail"))
-                        .on_click(move || open.set(false));
+                        .on_click(move || open.with_mut(SideSheetController::close));
                 })
                 .content(move |rail_scope| {
                     for (index, name) in NAMES.into_iter().enumerate() {
@@ -1731,7 +1731,7 @@ fn modal_rail() {
                             .selected(selected.get() == index)
                             .on_click(move || {
                                 selected.set(index);
-                                open.set(false);
+                                open.with_mut(SideSheetController::close);
                             })
                             .icon(move || {
                                 destination_icon(index, selected.get() == index);

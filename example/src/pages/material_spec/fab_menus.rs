@@ -2,7 +2,7 @@ use tessera_components::{
     column::column,
     floating_action_button_menu::{
         FloatingActionButtonMenuAlignment, FloatingActionButtonMenuColor,
-        FloatingActionButtonMenuItem, FloatingActionButtonMenuState, floating_action_button_menu,
+        FloatingActionButtonMenuItem, FloatingActionButtonMenuController, floating_action_button_menu,
     },
     material_icons::filled,
     modifier::{ModifierExt as _, Padding, SemanticsArgs},
@@ -134,7 +134,7 @@ fn menu_demo(
     expanded: bool,
 ) {
     let state = remember(move || {
-        let mut state = FloatingActionButtonMenuState::new();
+        let mut state = FloatingActionButtonMenuController::new();
         if expanded {
             state.open();
         }
@@ -155,7 +155,7 @@ fn menu_demo(
         }))
         .children(move || {
             floating_action_button_menu()
-                .state(state)
+                .controller(state)
                 .color(color)
                 .alignment(if mirrored {
                     FloatingActionButtonMenuAlignment::Start
@@ -383,7 +383,7 @@ fn anatomy() {
 #[tessera]
 fn six_items() {
     let state = remember(|| {
-        let mut state = FloatingActionButtonMenuState::new();
+        let mut state = FloatingActionButtonMenuController::new();
         state.open();
         state
     });
@@ -393,7 +393,7 @@ fn six_items() {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             floating_action_button_menu()
-                .state(state)
+                .controller(state)
                 .color(FloatingActionButtonMenuColor::Primary)
                 .open_label(I18N.text("ui-open-six-action-menu"))
                 .close_label(I18N.text("ui-close-six-action-menu"))

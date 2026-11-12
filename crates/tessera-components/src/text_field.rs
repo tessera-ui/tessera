@@ -526,8 +526,8 @@ fn field_click_pointer_position(
         .inverse_point(outer.local_to_window.map_point(cursor_pos));
     let (horizontal, vertical) = controller.with(|controller| {
         (
-            controller.scroll_state().horizontal(),
-            controller.scroll_state().vertical(),
+            controller.scroll_controller().horizontal(),
+            controller.scroll_controller().vertical(),
         )
     });
     Some(PxPosition::from_f32_xy(
@@ -2084,7 +2084,7 @@ mod native_field_regressions {
             });
             editor.with(|editor| *editor.focus_handler()).unfocus();
             renderer.render_frames(4);
-            assert!(editor.with(|editor| editor.scroll_state().horizontal()) > 0.0);
+            assert!(editor.with(|editor| editor.scroll_controller().horizontal()) > 0.0);
             let end_pixels = renderer.read_pixels().unwrap();
             let input = renderer
                 .accessibility_snapshot()
@@ -2104,7 +2104,7 @@ mod native_field_regressions {
             });
             renderer.render_frames(4);
             assert_eq!(
-                editor.with(|editor| editor.scroll_state().horizontal()),
+                editor.with(|editor| editor.scroll_controller().horizontal()),
                 0.0
             );
             assert_eq!(editor.with(|editor| editor.text()), long);

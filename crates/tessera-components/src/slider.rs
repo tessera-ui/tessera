@@ -25,7 +25,7 @@ use crate::{
 
 use axis::{SliderAxis, SliderMeasureScope};
 use interaction::{
-    RangeSliderHandleWidths, SliderKeyboardModel, SliderKeyboardModifierNode,
+    RangeSliderHandleWidths, RangeSliderInteraction, SliderKeyboardModel, SliderKeyboardModifierNode,
     apply_range_slider_semantics, apply_slider_semantics, handle_range_slider_state,
     handle_slider_state, snap_fraction,
 };
@@ -40,7 +40,6 @@ use render::{
 pub use indicator::{
     SliderValueIndicatorHost, SliderValueIndicatorVisibility, slider_value_indicator_provider,
 };
-pub use interaction::RangeSliderController;
 
 mod axis;
 mod indicator;
@@ -362,7 +361,7 @@ fn apply_slider_pointer_modifier(
 }
 
 struct RangeSliderPointerModifierNode {
-    state: State<RangeSliderController>,
+    state: State<RangeSliderInteraction>,
     args: RangeSliderConfig,
     tap_recognizer: State<TapRecognizer>,
     drag_recognizer: State<DragRecognizer>,
@@ -430,7 +429,7 @@ impl SemanticsModifierNode for RangeSliderSemanticsModifierNode {
 
 fn apply_range_slider_pointer_modifier(
     base: Modifier,
-    state: State<RangeSliderController>,
+    state: State<RangeSliderInteraction>,
     args: RangeSliderConfig,
     tap_recognizer: State<TapRecognizer>,
     drag_recognizer: State<DragRecognizer>,
@@ -793,11 +792,6 @@ struct RangeSliderConfig {
     /// When set to a value greater than 0, the slider values snap to
     /// `steps + 2` evenly spaced tick positions (including both ends).
     pub steps: usize,
-    /// Optional external range slider controller.
-    ///
-    /// When this is `None`, `range_slider` creates and owns an internal
-    /// controller.
-    pub controller: Option<State<RangeSliderController>>,
     /// Accessible name for the lower handle.
     pub start_accessibility_label: Option<String>,
     /// Accessible name for the upper handle.
@@ -827,7 +821,6 @@ impl Default for RangeSliderConfig {
             accessibility_description: None,
             show_stop_indicator: true,
             steps: 0,
-            controller: None,
             start_accessibility_label: None,
             end_accessibility_label: None,
         }
@@ -934,7 +927,6 @@ struct RangeSliderParams {
     accessibility_description: Option<String>,
     show_stop_indicator: Option<bool>,
     steps: usize,
-    controller: Option<State<RangeSliderController>>,
     start_accessibility_label: Option<String>,
     end_accessibility_label: Option<String>,
 }
@@ -969,7 +961,6 @@ fn range_slider_config_from_params(
             .show_stop_indicator
             .unwrap_or(defaults.show_stop_indicator),
         steps: params.steps,
-        controller: params.controller,
         start_accessibility_label: params.start_accessibility_label,
         end_accessibility_label: params.end_accessibility_label,
     }
@@ -1262,9 +1253,8 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
-/// slider()
+/// slider(0.5)
 ///     .modifier(Modifier::new().width(Dp(200.0)))
-///     .value(0.5)
 ///     .on_change(|new_value| {
 ///         assert!((0.0..=1.0).contains(&new_value));
 ///     });
@@ -1274,9 +1264,9 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 /// ```
 #[tessera]
 pub fn slider(
+    value: f32,
     presentation_state: Option<InteractionVisualState>,
     modifier: Option<Modifier>,
-    value: Option<f32>,
     on_change: Option<CallbackWith<f32>>,
     size: Option<SliderSize>,
     orientation: Option<SliderOrientation>,
@@ -1302,7 +1292,6 @@ pub fn slider(
         .map(|theme| theme.get().color_scheme)
         .unwrap_or_else(|| MaterialTheme::default().color_scheme);
     let defaults = SliderConfig::default();
-    let value = value.unwrap_or(defaults.value);
     let size = size.unwrap_or(defaults.size);
     let disabled = disabled.unwrap_or(defaults.disabled);
     let steps = steps.unwrap_or(defaults.steps);
@@ -1750,9 +1739,8 @@ fn measure_centered_slider(
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(move || {
-/// centered_slider()
+/// centered_slider(current_value.get())
 ///     .modifier(Modifier::new().width(Dp(200.0)))
-///     .value(current_value.get())
 ///     .on_change(move |new_value| {
 ///         current_value.set(new_value);
 ///     });
@@ -1765,9 +1753,9 @@ fn measure_centered_slider(
 /// ```
 #[tessera]
 pub fn centered_slider(
+    value: f32,
     presentation_state: Option<InteractionVisualState>,
     modifier: Option<Modifier>,
-    value: Option<f32>,
     on_change: Option<CallbackWith<f32>>,
     size: Option<SliderSize>,
     orientation: Option<SliderOrientation>,
@@ -1793,7 +1781,6 @@ pub fn centered_slider(
         .map(|theme| theme.get().color_scheme)
         .unwrap_or_else(|| MaterialTheme::default().color_scheme);
     let defaults = SliderConfig::default();
-    let value = value.unwrap_or(defaults.value);
     let size = size.unwrap_or(defaults.size);
     let disabled = disabled.unwrap_or(defaults.disabled);
     let steps = steps.unwrap_or(defaults.steps);
@@ -2227,11 +2214,10 @@ fn measure_range_slider(
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(move || {
-/// range_slider()
+/// range_slider(range_value.get())
 ///     .modifier(Modifier::new().height(Dp(200.0)))
 ///     .orientation(SliderOrientation::Vertical)
 ///     .reverse_direction(true)
-///     .value(range_value.get())
 ///     .on_change(move |(start, end)| {
 ///         range_value.set((start, end));
 ///     });
@@ -2242,8 +2228,8 @@ fn measure_range_slider(
 /// ```
 #[tessera]
 pub fn range_slider(
+    value: (f32, f32),
     modifier: Option<Modifier>,
-    value: Option<(f32, f32)>,
     on_change: Option<CallbackWith<(f32, f32)>>,
     size: Option<SliderSize>,
     orientation: Option<SliderOrientation>,
@@ -2263,7 +2249,6 @@ pub fn range_slider(
     value_indicator_host: Option<SliderValueIndicatorHost>,
     #[prop(into)] start_value_label: Option<String>,
     #[prop(into)] end_value_label: Option<String>,
-    controller: Option<State<RangeSliderController>>,
     #[prop(into)] start_accessibility_label: Option<String>,
     #[prop(into)] end_accessibility_label: Option<String>,
 ) {
@@ -2271,7 +2256,6 @@ pub fn range_slider(
         .map(|theme| theme.get().color_scheme)
         .unwrap_or_else(|| MaterialTheme::default().color_scheme);
     let defaults = RangeSliderConfig::default();
-    let value = value.unwrap_or(defaults.value);
     let size = size.unwrap_or(defaults.size);
     let disabled = disabled.unwrap_or(defaults.disabled);
     let steps = steps.unwrap_or(defaults.steps);
@@ -2300,29 +2284,23 @@ pub fn range_slider(
             value_indicator_host,
             start_value_label,
             end_value_label,
-            controller,
             start_accessibility_label,
             end_accessibility_label,
         },
         slider_theme_colors(&scheme),
     );
-    let state = if let Some(controller) = args.controller {
-        controller
-    } else {
-        remember(RangeSliderController::new)
-    };
+    let state = remember(RangeSliderInteraction::new);
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
-    let mut resolved_args = args;
-    resolved_args.controller = Some(state);
-    range_slider_content()
-        .args(resolved_args)
+    range_slider_content(state)
+        .args(args)
         .tap_recognizer(tap_recognizer)
         .drag_recognizer(drag_recognizer);
 }
 
 #[tessera]
 fn range_slider_content(
+    state: State<RangeSliderInteraction>,
     args: Option<RangeSliderConfig>,
     tap_recognizer: Option<State<TapRecognizer>>,
     drag_recognizer: Option<State<DragRecognizer>>,
@@ -2332,9 +2310,6 @@ fn range_slider_content(
         tap_recognizer.expect("range_slider_content requires tap recognizer to be set");
     let drag_recognizer =
         drag_recognizer.expect("range_slider_content requires drag recognizer to be set");
-    let state = args
-        .controller
-        .expect("range_slider_content requires controller to be set");
     let dummy_slider_args = SliderConfig {
         axis: args.axis,
         size: args.size,
@@ -2455,7 +2430,6 @@ fn range_slider_content(
             end_handle_width,
             indicator_anchors,
         ) = render_data.get();
-        let state = args.controller.expect("range slider controller");
         let scheme = use_context::<MaterialTheme>()
             .map(|theme| theme.get().color_scheme)
             .unwrap_or_else(|| MaterialTheme::default().color_scheme);
@@ -2608,35 +2582,32 @@ mod tests {
         observed.with_mut(|handles| handles.range = Some(range));
         material_theme().child(move || {
             column().children(move || {
-                slider()
+                slider(single.get())
                     .modifier(
                         Modifier::new()
                             .width(Dp(settings.with(|settings| settings.width.unwrap_or(280.0))))
                             .push_semantics(SliderTestTag("slider")),
                     )
-                    .value(single.get())
                     .on_change(move |value| single.set(value))
                     .steps(settings.with(|settings| settings.steps))
                     .disabled(settings.with(|settings| settings.disabled))
                     .accessibility_label("Volume");
-                centered_slider()
+                centered_slider(centered.get())
                     .modifier(
                         Modifier::new()
                             .width(Dp(settings.with(|settings| settings.width.unwrap_or(280.0))))
                             .push_semantics(SliderTestTag("centered_slider")),
                     )
-                    .value(centered.get())
                     .on_change(move |value| centered.set(value))
                     .steps(settings.with(|settings| settings.steps))
                     .disabled(settings.with(|settings| settings.disabled))
                     .accessibility_label("Balance");
-                range_slider()
+                range_slider(range.get())
                     .modifier(
                         Modifier::new()
                             .width(Dp(settings.with(|settings| settings.width.unwrap_or(280.0))))
                             .push_semantics(SliderTestTag("range_slider")),
                     )
-                    .value(range.get())
                     .on_change(move |value| range.set(value))
                     .steps(settings.with(|settings| settings.steps))
                     .disabled(settings.with(|settings| settings.disabled))

@@ -97,7 +97,8 @@ impl PullRefreshController {
         self.distance_pulled > 0.0
     }
 
-    fn set_refreshing(&mut self, refreshing: bool) {
+    /// Starts or finishes the refresh and updates the indicator's resting position.
+    pub fn set_refreshing(&mut self, refreshing: bool) {
         if self.refreshing == refreshing {
             return;
         }
@@ -336,7 +337,6 @@ pub fn pull_refresh_indicator(
 /// - `modifier` — optional modifier chain applied to the pull-refresh
 ///   container.
 /// - `on_refresh` — optional callback invoked when a refresh is triggered.
-/// - `refreshing` — whether a refresh is currently in progress.
 /// - `enabled` — whether pull-to-refresh interactions are enabled.
 /// - `refresh_threshold` — optional pull distance required to trigger a
 ///   refresh.
@@ -378,7 +378,6 @@ pub fn pull_refresh_indicator(
 ///             let scroll = remember(ScrollableController::new);
 ///             pull_refresh()
 ///                 .on_refresh(|| {})
-///                 .refreshing(false)
 ///                 .controller(refresh_controller)
 ///                 .child(move || {
 ///                     layout(Stack)
@@ -398,7 +397,6 @@ pub fn pull_refresh_indicator(
 pub fn pull_refresh(
     modifier: Option<Modifier>,
     on_refresh: Option<Callback>,
-    refreshing: Option<bool>,
     enabled: Option<bool>,
     refresh_threshold: Option<Dp>,
     refreshing_offset: Option<Dp>,
@@ -412,7 +410,6 @@ pub fn pull_refresh(
     indicator: Option<RenderSlot>,
     child: Option<RenderSlot>,
 ) {
-    let refreshing = refreshing.unwrap_or(false);
     let enabled = enabled.unwrap_or(true);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -442,7 +439,6 @@ pub fn pull_refresh(
                 .unwrap_or(PullRefreshDefaults::REFRESHING_OFFSET)
                 .to_pixels_f32(),
         );
-        state.set_refreshing(refreshing);
     });
     let frame_nanos = current_frame_nanos();
     controller.with_mut(|s| {

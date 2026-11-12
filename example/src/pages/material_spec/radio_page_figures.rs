@@ -124,8 +124,7 @@ pub(super) fn anatomy(labels: bool) {
                             .size(Dp(48.0), Dp(48.0)),
                     )
                     .children(move || {
-                        radio_button()
-                            .selected(true)
+                        radio_button(true)
                             .accessibility_label(I18N.text("ui-radio-button-icon-anatomy"));
                     });
                 spacer().modifier(
@@ -367,10 +366,9 @@ pub(super) fn options(
                     row()
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children(move || {
-                            radio_button()
+                            radio_button(selected.get() == Some(index))
                                 .group(group)
                                 .focus_requester(focus)
-                                .selected(selected.get() == Some(index))
                                 .enabled(enabled)
                                 .accessibility_label(I18N.text(&(value)))
                                 .on_select(move |_| selected.set(Some(index)));
@@ -542,8 +540,7 @@ fn check_option(value: String) {
     row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
-            checkbox()
-                .checked(checked.get())
+            checkbox(checked.get())
                 .focus_requester(focus)
                 .accessibility_label(I18N.text(&(value)))
                 .on_toggle(move |value| checked.set(value));
@@ -584,8 +581,7 @@ fn choice_card(kind: usize) {
             } else {
                 let checked = remember(|| true);
                 super::prose("ui-allow-notifications");
-                switch()
-                    .checked(checked.get())
+                switch(checked.get())
                     .accessibility_label(I18N.text("ui-allow-notifications-independently"))
                     .on_toggle(move |value| checked.set(value));
             }
@@ -669,7 +665,7 @@ pub(super) fn colors() {
                                         .size(Dp(48.0), Dp(48.0)),
                                 )
                                 .children(move || {
-                                    radio_button().selected(selected).accessibility_label(
+                                    radio_button(selected).accessibility_label(
                                         I18N.format(
                                             "ui-value-value-color-role",
                                             [
@@ -802,8 +798,7 @@ fn state_item(initial: bool, state: usize, dark: bool, x: f64, y: f64) {
                     Shape::Ellipse,
                 ));
             }
-            radio_button()
-                .selected(selected.get())
+            radio_button(selected.get())
                 .enabled(state != 4)
                 .accessibility_label(
                     I18N.format(
@@ -871,7 +866,7 @@ pub(super) fn measurements() {
                                     Shape::Ellipse,
                                 ),
                         );
-                        radio_button().selected(selected).accessibility_label(
+                        radio_button(selected).accessibility_label(
                             I18N.format(
                                 "ui-value-radio-dimensions",
                                 [(

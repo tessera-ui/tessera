@@ -363,7 +363,11 @@ fn disclosure_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) 
     observed.with_mut(|handles| handles.trailing = Some(trailing));
     material_theme().child(move || {
         menu_provider()
-            .is_open(true)
+            .controller(remember(|| {
+                let mut controller = MenuController::new();
+                controller.open();
+                controller
+            }))
             .modifier(Modifier::new().width(Dp(240.0)))
             .menu_content(move |menu| {
                 let item = menu_item()

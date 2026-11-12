@@ -153,8 +153,7 @@ fn cell(dark: bool, column: usize, row: usize) {
         InteractionVisualState::Focus,
         InteractionVisualState::Pressed,
     ][column];
-    checkbox()
-        .checked(checked.get())
+    checkbox(checked.get())
         .indeterminate(mixed.get())
         .is_error(row >= 3)
         .disabled(column == 1)

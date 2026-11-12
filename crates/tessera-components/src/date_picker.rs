@@ -40,7 +40,7 @@ use navigation::{CalendarFocus, CalendarKeyboard, CalendarOwner};
 
 pub use cell::{CalendarRangePosition, date_picker_day, date_picker_year};
 pub use docked::{DockedDatePickerView, docked_date_picker};
-pub use range::{DateRangePickerState, date_range_picker};
+pub use range::{DateRangePickerController, date_range_picker};
 
 mod cell;
 mod docked;
@@ -234,7 +234,7 @@ impl DatePickerDefaults {
 /// setters have to be called from inside a `#[tessera]` component. Closures
 /// passed to [`date_picker`] are turned into callbacks at that component
 /// boundary.
-pub struct DatePickerState {
+pub struct DatePickerController {
     selected_date: Option<CalendarDate>,
     displayed_month: YearMonth,
     year_range: RangeInclusive<i32>,
@@ -243,7 +243,7 @@ pub struct DatePickerState {
     display_mode: DatePickerDisplayMode,
 }
 
-impl DatePickerState {
+impl DatePickerController {
     /// Creates a date picker state.
     ///
     /// `is_selectable_date` and `is_selectable_year` are optional. `None`
@@ -427,9 +427,9 @@ impl DatePickerState {
     }
 }
 
-impl Default for DatePickerState {
+impl Default for DatePickerController {
     fn default() -> Self {
-        DatePickerState::new(
+        DatePickerController::new(
             None,
             None,
             DatePickerDefaults::YEAR_RANGE,
@@ -459,7 +459,7 @@ struct DatePickerConfig {
     show_mode_toggle: bool,
     title: Option<String>,
     headline: Option<String>,
-    state: Option<State<DatePickerState>>,
+    controller: Option<State<DatePickerController>>,
     view: Option<State<DatePickerView>>,
     focus_requester: Option<tessera_ui::FocusRequester>,
 }
@@ -492,7 +492,7 @@ struct DatePickerConfig {
 /// - `show_mode_toggle` — whether the display mode toggle is shown.
 /// - `title` — optional override for the title text.
 /// - `headline` — optional override for the headline text.
-/// - `state` — optional external state for selection, month navigation, and
+/// - `controller` — optional external state for selection, month navigation, and
 ///   mode.
 /// - `view` — optional shared calendar or year selection view.
 /// - `focus_requester` — requests focus on the calendar's current keyboard date.
@@ -503,7 +503,7 @@ struct DatePickerConfig {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::date_picker::{CalendarDate, DatePickerState, date_picker};
+/// use tessera_components::date_picker::{CalendarDate, DatePickerController, date_picker};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
@@ -511,7 +511,7 @@ struct DatePickerConfig {
 /// #     .child(|| {
 /// date_picker().today(CalendarDate::new(2026, 7, 16).unwrap());
 ///
-/// let mut state = DatePickerState::default();
+/// let mut state = DatePickerController::default();
 /// assert!(state.selected_date().is_none());
 /// #     });
 /// # }
@@ -532,7 +532,7 @@ pub fn date_picker(
     show_mode_toggle: Option<bool>,
     #[prop(into)] title: Option<String>,
     #[prop(into)] headline: Option<String>,
-    state: Option<State<DatePickerState>>,
+    controller: Option<State<DatePickerController>>,
     view: Option<State<DatePickerView>>,
     focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
@@ -543,12 +543,12 @@ pub fn date_picker(
     let show_weekday_labels = show_weekday_labels.unwrap_or(true);
     let show_mode_toggle = show_mode_toggle.unwrap_or(true);
     let year_range = year_range.unwrap_or(DatePickerDefaults::YEAR_RANGE);
-    let state = if let Some(state) = state {
+    let state = if let Some(state) = controller {
         state
     } else {
         // Resolve predicates before remember borrows the slot table for
         // initialization.
-        let initial = DatePickerState::new(
+        let initial = DatePickerController::new(
             initial_selected_date,
             initial_displayed_month.or_else(|| {
                 initial_selected_date
@@ -570,7 +570,7 @@ pub fn date_picker(
         show_mode_toggle,
         title,
         headline,
-        state: Some(state),
+        controller: Some(state),
         view,
         focus_requester,
     });
@@ -578,8 +578,8 @@ pub fn date_picker(
 
 #[tessera]
 fn date_picker_content(args: DatePickerConfig) {
-    let state = args.state.expect("date_picker_content requires state");
-    let snapshot = state.with(DatePickerState::snapshot);
+    let state = args.controller.expect("date_picker_content requires state");
+    let snapshot = state.with(DatePickerController::snapshot);
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let scheme = theme.color_scheme;
     let title = args
@@ -674,7 +674,7 @@ fn date_picker_content(args: DatePickerConfig) {
 /// ## Parameters
 ///
 /// - `dialog` — registration scope received from the provider content slot.
-/// - `state` — state handle used by the embedded date picker.
+/// - `controller` — state handle used by the embedded date picker.
 /// - `title` — optional override for the dialog title.
 /// - `confirm_button` — optional confirm button content.
 /// - `dismiss_button` — optional dismiss button content.
@@ -695,16 +695,16 @@ fn date_picker_content(args: DatePickerConfig) {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::date_picker::{CalendarDate, DatePickerState, date_picker_dialog};
+/// use tessera_components::date_picker::{CalendarDate, DatePickerController, date_picker_dialog};
 /// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
-/// let state = remember(DatePickerState::default);
+/// let state = remember(DatePickerController::default);
 /// date_picker_dialog()
-///     .state(state)
+///     .controller(state)
 ///     .picker_today(CalendarDate::new(2026, 7, 16).unwrap());
 /// #     });
 /// # }
@@ -713,7 +713,7 @@ fn date_picker_content(args: DatePickerConfig) {
 #[tessera]
 pub fn date_picker_dialog(
     dialog: Option<crate::dialog::DialogScope>,
-    state: Option<State<DatePickerState>>,
+    controller: Option<State<DatePickerController>>,
     #[prop(into)] title: Option<String>,
     confirm_button: Option<RenderSlot>,
     dismiss_button: Option<RenderSlot>,
@@ -728,11 +728,11 @@ pub fn date_picker_dialog(
     picker_focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
     let today = picker_today.unwrap_or_else(CalendarDate::today);
-    let state = if let Some(state) = state {
+    let state = if let Some(state) = controller {
         state
     } else {
         remember(|| {
-            DatePickerState::new(
+            DatePickerController::new(
                 None,
                 Some(fallback_displayed_month_at(
                     &DatePickerDefaults::YEAR_RANGE,
@@ -765,7 +765,7 @@ pub fn date_picker_dialog(
                 show_mode_toggle: picker_show_mode_toggle.unwrap_or(true),
                 title: title.clone(),
                 headline: picker_headline.clone(),
-                state: Some(state),
+                controller: Some(state),
                 view: picker_view,
                 focus_requester: picker_focus_requester,
             });
@@ -803,14 +803,14 @@ pub fn date_picker_dialog(
 
 #[tessera]
 fn calendar_view(
-    state: State<DatePickerState>,
+    state: State<DatePickerController>,
     first_day_of_week: Weekday,
     show_weekday_labels: bool,
     today: CalendarDate,
     view: Option<State<DatePickerView>>,
     focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
-    let snapshot = state.with(DatePickerState::snapshot);
+    let snapshot = state.with(DatePickerController::snapshot);
     let view = if let Some(view) = view {
         view
     } else {
@@ -880,7 +880,7 @@ fn calendar_view(
                                         .enabled(can_prev)
                                         .accessibility_label(I18N.text("md3-previous-month"))
                                         .on_click(move || {
-                                            state.with_mut(DatePickerState::previous_month)
+                                            state.with_mut(DatePickerController::previous_month)
                                         });
                                 });
                             boxed()
@@ -893,7 +893,7 @@ fn calendar_view(
                                         .enabled(can_next)
                                         .accessibility_label(I18N.text("md3-next-month"))
                                         .on_click(move || {
-                                            state.with_mut(DatePickerState::next_month)
+                                            state.with_mut(DatePickerController::next_month)
                                         });
                                 });
                         });
@@ -931,12 +931,12 @@ fn calendar_view(
 
 #[tessera]
 fn date_grid(
-    state: State<DatePickerState>,
+    state: State<DatePickerController>,
     first_day_of_week: Weekday,
     today: CalendarDate,
     focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
-    let snapshot = state.with(DatePickerState::snapshot);
+    let snapshot = state.with(DatePickerController::snapshot);
     let owner = CalendarOwner::Single(state);
     let initial = owner.initial_date(today);
     let focus = remember(move || CalendarFocus::new(initial, focus_requester));
@@ -1063,8 +1063,8 @@ struct CalendarRangeBand {
 }
 
 #[tessera]
-fn date_year_grid(state: State<DatePickerState>, view: State<DatePickerView>, today: CalendarDate) {
-    let snapshot = state.with(DatePickerState::snapshot);
+fn date_year_grid(state: State<DatePickerController>, view: State<DatePickerView>, today: CalendarDate) {
+    let snapshot = state.with(DatePickerController::snapshot);
     let first = *snapshot.year_range.start();
     let count = (*snapshot.year_range.end() as i64 - first as i64 + 1) as usize;
     let rows = count.div_ceil(3);
@@ -1139,8 +1139,8 @@ fn date_year_grid(state: State<DatePickerState>, view: State<DatePickerView>, to
 }
 
 #[tessera]
-fn date_input_view(state: State<DatePickerState>) {
-    let snapshot = state.with(DatePickerState::snapshot);
+fn date_input_view(state: State<DatePickerController>) {
+    let snapshot = state.with(DatePickerController::snapshot);
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
@@ -1208,7 +1208,7 @@ fn date_input_view(state: State<DatePickerState>) {
                             s.set_selected_date(date);
                         }
                     });
-                    last_selected.set(state.with(DatePickerState::selected_date));
+                    last_selected.set(state.with(DatePickerController::selected_date));
                     previous.set(value.clone());
                     value
                 });
@@ -1221,7 +1221,7 @@ fn date_input_view(state: State<DatePickerState>) {
 }
 
 #[tessera]
-fn date_mode_toggle(state: State<DatePickerState>) {
+fn date_mode_toggle(state: State<DatePickerController>) {
     let input = state.with(|s| s.display_mode == DatePickerDisplayMode::Input);
     icon_button()
         .standard()
@@ -1235,7 +1235,7 @@ fn date_mode_toggle(state: State<DatePickerState>) {
         } else {
             I18N.text("md3-switch-to-date-input")
         })
-        .on_click(move || state.with_mut(DatePickerState::toggle_display_mode));
+        .on_click(move || state.with_mut(DatePickerController::toggle_display_mode));
 }
 
 fn format_date_input(date: CalendarDate) -> String {
@@ -1503,16 +1503,16 @@ mod tests {
     use crate::{button::button, column::column, text::text, theme::material_theme};
 
     use super::{
-        CalendarDate, DatePickerState, DatePickerView, Weekday, YearMonth, date_picker,
+        CalendarDate, DatePickerController, DatePickerView, Weekday, YearMonth, date_picker,
         date_picker_dialog, format_date_input, parse_date_input,
     };
 
     #[derive(Clone, Default, PartialEq)]
     struct Probe {
-        state: tessera_ui::testing::TestProbe<Option<State<DatePickerState>>>,
+        state: tessera_ui::testing::TestProbe<Option<State<DatePickerController>>>,
         view: tessera_ui::testing::TestProbe<Option<State<DatePickerView>>>,
         today: tessera_ui::testing::TestProbe<Option<State<CalendarDate>>>,
-        range: tessera_ui::testing::TestProbe<Option<State<super::DateRangePickerState>>>,
+        range: tessera_ui::testing::TestProbe<Option<State<super::DateRangePickerController>>>,
         action: tessera_ui::testing::TestProbe<u8>,
         focus: tessera_ui::testing::TestProbe<Option<tessera_ui::FocusRequester>>,
     }
@@ -1521,7 +1521,7 @@ mod tests {
     fn today_fixture(range: bool, dialog: bool, probe: Probe) {
         let today = remember(|| CalendarDate::new(2026, 7, 16).unwrap());
         let state = remember(|| {
-            DatePickerState::new(
+            DatePickerController::new(
                 None,
                 YearMonth::new(2026, 7),
                 2025..=2028,
@@ -1531,7 +1531,7 @@ mod tests {
             )
         });
         let range_state = remember(|| {
-            super::DateRangePickerState::new(
+            super::DateRangePickerController::new(
                 None,
                 None,
                 YearMonth::new(2026, 7),
@@ -1557,20 +1557,20 @@ mod tests {
             .child(move || {
                 if range {
                     super::date_range_picker()
-                        .state(range_state)
+                        .controller(range_state)
                         .focus_requester(focus)
                         .today(today.get())
                         .first_day_of_week(Weekday::Sunday);
                 } else if dialog {
                     date_picker_dialog()
-                        .state(state)
+                        .controller(state)
                         .picker_focus_requester(focus)
                         .picker_today(today.get())
                         .picker_view(view)
                         .picker_first_day_of_week(Weekday::Sunday);
                 } else {
                     date_picker()
-                        .state(state)
+                        .controller(state)
                         .focus_requester(focus)
                         .today(today.get())
                         .view(view)
@@ -1740,7 +1740,7 @@ mod tests {
     #[tessera]
     fn external_year_fixture(probe: Probe) {
         let state = remember(|| {
-            DatePickerState::new(
+            DatePickerController::new(
                 CalendarDate::new(2025, 8, 17),
                 YearMonth::new(2025, 8),
                 2021..=2100,
@@ -1755,7 +1755,7 @@ mod tests {
         let on_action = tessera_ui::CallbackWith::new(move |value| probe.action.set(value));
         material_theme().child(move || {
             date_picker_dialog()
-                .state(state)
+                .controller(state)
                 .picker_view(view)
                 .confirm_button(move || {
                     button()
@@ -1892,7 +1892,7 @@ mod tests {
         assert!(text_matches(focused.1.label(), "2039"));
         let revealed = focused.1.bounds().unwrap();
         assert!(revealed.y0 >= viewport.y0 && revealed.y1 <= viewport.y1);
-        assert_eq!(state.with(DatePickerState::selected_date), selected);
+        assert_eq!(state.with(DatePickerController::selected_date), selected);
         activate(&mut renderer, "Choose year");
         assert_eq!(view.get(), DatePickerView::Calendar);
         assert!(
@@ -1908,15 +1908,15 @@ mod tests {
         activate(&mut renderer, "2027");
         assert_eq!(view.get(), DatePickerView::Calendar);
         assert_eq!(
-            state.with(DatePickerState::displayed_month),
+            state.with(DatePickerController::displayed_month),
             YearMonth::new(2027, 8).unwrap()
         );
-        assert_eq!(state.with(DatePickerState::selected_date), selected);
+        assert_eq!(state.with(DatePickerController::selected_date), selected);
         activate(&mut renderer, "Confirm external view");
         assert_eq!(observed.action.get(), 1);
         activate(&mut renderer, "Cancel external view");
         assert_eq!(observed.action.get(), 2);
-        assert_eq!(state.with(DatePickerState::selected_date), selected);
+        assert_eq!(state.with(DatePickerController::selected_date), selected);
     }
 
     #[test]
@@ -1940,7 +1940,7 @@ mod tests {
     #[tessera]
     fn calendar_fixture(probe: Probe, today: Option<CalendarDate>) {
         let state = remember(|| {
-            DatePickerState::new(
+            DatePickerController::new(
                 None,
                 YearMonth::new(2026, 7),
                 2020..=2030,
@@ -1955,7 +1955,7 @@ mod tests {
         material_theme().child(move || {
             column().children(move || {
                 date_picker()
-                    .state(state)
+                    .controller(state)
                     .today(today.unwrap_or_else(|| CalendarDate::new(2026, 7, 1).unwrap()))
                     .focus_requester(focus)
                     .first_day_of_week(Weekday::Sunday);
@@ -2033,7 +2033,7 @@ mod tests {
             "After single calendar"
         ));
         let state = observed.state.get().expect("single state");
-        assert_eq!(state.with(DatePickerState::selected_date), None);
+        assert_eq!(state.with(DatePickerController::selected_date), None);
         for label in ["Choose year", "2027"] {
             let accessibility = renderer.accessibility_snapshot().expect("tree");
             let bounds = accessibility
@@ -2055,10 +2055,10 @@ mod tests {
             renderer.render_frames(8);
         }
         assert_eq!(
-            state.with(DatePickerState::displayed_month),
+            state.with(DatePickerController::displayed_month),
             YearMonth::new(2027, 7).unwrap()
         );
-        assert_eq!(state.with(DatePickerState::selected_date), None);
+        assert_eq!(state.with(DatePickerController::selected_date), None);
         assert!(
             renderer
                 .accessibility_snapshot()
@@ -2199,7 +2199,7 @@ mod tests {
                 .state
                 .get()
                 .unwrap()
-                .with(DatePickerState::selected_date),
+                .with(DatePickerController::selected_date),
             CalendarDate::new(2026, 7, 16)
         );
     }
@@ -2244,10 +2244,10 @@ mod tests {
         }
         let state = observed.state.get().unwrap();
         assert_eq!(
-            state.with(DatePickerState::displayed_month),
+            state.with(DatePickerController::displayed_month),
             YearMonth::new(2023, 7).unwrap()
         );
-        assert_eq!(state.with(DatePickerState::selected_date), None);
+        assert_eq!(state.with(DatePickerController::selected_date), None);
     }
     #[test]
     fn narrow_calendars_preserve_seven_columns() {
@@ -2313,7 +2313,7 @@ mod tests {
                 .state
                 .get()
                 .unwrap()
-                .with(DatePickerState::selected_date),
+                .with(DatePickerController::selected_date),
             CalendarDate::new(2026, 7, 16)
         );
     }
@@ -2356,7 +2356,7 @@ mod tests {
                 .state
                 .get()
                 .unwrap()
-                .with(DatePickerState::display_mode),
+                .with(DatePickerController::display_mode),
             super::DatePickerDisplayMode::Input
         );
     }

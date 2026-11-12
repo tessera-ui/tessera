@@ -1,5 +1,42 @@
 use std::{env, process::Command};
 
+use tessera_ui::State;
+
+use crate::{
+    bottom_sheet::BottomSheetController, dialog::DialogController, side_sheet::SideSheetController,
+};
+
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum OverlayController {
+    Dialog(State<DialogController>),
+    Bottom(State<BottomSheetController>),
+    Side(State<SideSheetController>),
+}
+
+impl OverlayController {
+    pub(crate) fn get(self) -> bool {
+        match self {
+            Self::Dialog(controller) => controller.with(DialogController::is_open),
+            Self::Bottom(controller) => controller.with(BottomSheetController::is_open),
+            Self::Side(controller) => controller.with(SideSheetController::is_open),
+        }
+    }
+
+    pub(crate) fn set(self, open: bool) {
+        match self {
+            Self::Dialog(controller) => controller.with_mut(|controller| {
+                if open { controller.open() } else { controller.close() }
+            }),
+            Self::Bottom(controller) => controller.with_mut(|controller| {
+                if open { controller.open() } else { controller.close() }
+            }),
+            Self::Side(controller) => controller.with_mut(|controller| {
+                if open { controller.open() } else { controller.close() }
+            }),
+        }
+    }
+}
+
 pub(crate) fn pixel_near(before: &[u8], after: &[u8]) -> bool {
     use material_color_utilities::utils::color::linearized;
 

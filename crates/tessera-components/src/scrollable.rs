@@ -33,7 +33,7 @@ use crate::{
 };
 
 pub use crate::scrollable::scrollbar::{
-    ScrollBarState, ScrollbarDefaults, scrollbar_h, scrollbar_v,
+    ScrollBarController, ScrollbarDefaults, scrollbar_h, scrollbar_v,
 };
 
 const SCROLL_INERTIA_DECAY_CONSTANT: f32 = 5.0;
@@ -121,9 +121,9 @@ pub struct ScrollableController {
     /// Last frame time for delta time calculation
     last_frame_nanos: Option<u64>,
     /// The state for vertical scrollbar
-    scrollbar_state_v: scrollbar::ScrollBarStateInner,
+    scrollbar_state_v: scrollbar::ScrollBarInteractionState,
     /// The state for horizontal scrollbar
-    scrollbar_state_h: scrollbar::ScrollBarStateInner,
+    scrollbar_state_h: scrollbar::ScrollBarInteractionState,
     /// Velocity tracking for touch-driven inertia.
     velocity_tracker: Option<FoundationVelocityTracker>,
     /// Active inertia state after a touch release.
@@ -160,8 +160,8 @@ impl ScrollableController {
             visible_size: ComputedData::ZERO,
             override_child_size: None,
             last_frame_nanos: None,
-            scrollbar_state_v: scrollbar::ScrollBarStateInner::default(),
-            scrollbar_state_h: scrollbar::ScrollBarStateInner::default(),
+            scrollbar_state_v: scrollbar::ScrollBarInteractionState::default(),
+            scrollbar_state_h: scrollbar::ScrollBarInteractionState::default(),
             velocity_tracker: None,
             active_inertia: None,
             inertia_last_tick: None,
@@ -690,8 +690,8 @@ impl BuildModifierNode for ScrollBuild {
         } = *self;
         synchronize_scroll_density(controller);
 
-        let scrollbar_state_v = ScrollBarState::viewport(controller, true);
-        let scrollbar_state_h = ScrollBarState::viewport(controller, false);
+        let scrollbar_state_v = ScrollBarController::viewport(controller, true);
+        let scrollbar_state_h = ScrollBarController::viewport(controller, false);
         let tap_recognizer = context.state(TapRecognizer::default);
         let scroll_recognizer = context.state(ScrollRecognizer::default);
         if controller.with(|c| c.has_pending_animation_frame()) {
@@ -825,7 +825,7 @@ fn scrollbar_v_bound(
     track_color: Option<Color>,
     thumb_color: Option<Color>,
     thumb_hover_color: Option<Color>,
-    scrollbar_state: Option<ScrollBarState>,
+    scrollbar_controller: Option<ScrollBarController>,
 ) {
     let controller = controller.expect("scrollbar_v_bound requires controller");
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
@@ -834,13 +834,13 @@ fn scrollbar_v_bound(
         .visible(controller.with(|c| c.visible_size().height))
         .offset(controller.with(|c| c.child_position().y_px()))
         .thickness_optional(thickness)
-        .state(controller)
+        .controller(controller)
         .scrollbar_behavior(scrollbar_behavior)
         .track_color_optional(track_color)
         .thumb_color_optional(thumb_color)
         .thumb_hover_color_optional(thumb_hover_color)
-        .scrollbar_state(
-            scrollbar_state.unwrap_or_else(|| ScrollBarState::viewport(controller, true)),
+        .scrollbar_controller(
+            scrollbar_controller.unwrap_or_else(|| ScrollBarController::viewport(controller, true)),
         );
 }
 
@@ -852,7 +852,7 @@ fn scrollbar_h_bound(
     track_color: Option<Color>,
     thumb_color: Option<Color>,
     thumb_hover_color: Option<Color>,
-    scrollbar_state: Option<ScrollBarState>,
+    scrollbar_controller: Option<ScrollBarController>,
 ) {
     let controller = controller.expect("scrollbar_h_bound requires controller");
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
@@ -861,13 +861,13 @@ fn scrollbar_h_bound(
         .visible(controller.with(|c| c.visible_size().width))
         .offset(controller.with(|c| c.child_position().x_px()))
         .thickness_optional(thickness)
-        .state(controller)
+        .controller(controller)
         .scrollbar_behavior(scrollbar_behavior)
         .track_color_optional(track_color)
         .thumb_color_optional(thumb_color)
         .thumb_hover_color_optional(thumb_hover_color)
-        .scrollbar_state(
-            scrollbar_state.unwrap_or_else(|| ScrollBarState::viewport(controller, false)),
+        .scrollbar_controller(
+            scrollbar_controller.unwrap_or_else(|| ScrollBarController::viewport(controller, false)),
         );
 }
 
@@ -891,8 +891,8 @@ fn scrollable_with_alongside_scrollbar(
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let controller = controller.expect("scrollable_with_alongside_scrollbar requires controller");
     let child = child.unwrap_or_else(RenderSlot::empty);
-    let scrollbar_v_state = ScrollBarState::viewport(controller, true);
-    let scrollbar_h_state = ScrollBarState::viewport(controller, false);
+    let scrollbar_v_state = ScrollBarController::viewport(controller, true);
+    let scrollbar_h_state = ScrollBarController::viewport(controller, false);
 
     tessera_ui::layout::layout(ScrollableAlongsideLayout {
         vertical,
@@ -918,7 +918,7 @@ fn scrollable_with_alongside_scrollbar(
                 .track_color_optional(scrollbar_track_color)
                 .thumb_color_optional(scrollbar_thumb_color)
                 .thumb_hover_color_optional(scrollbar_thumb_hover_color)
-                .scrollbar_state(scrollbar_v_state);
+                .scrollbar_controller(scrollbar_v_state);
         }
 
         if horizontal {
@@ -929,7 +929,7 @@ fn scrollable_with_alongside_scrollbar(
                 .track_color_optional(scrollbar_track_color)
                 .thumb_color_optional(scrollbar_thumb_color)
                 .thumb_hover_color_optional(scrollbar_thumb_hover_color)
-                .scrollbar_state(scrollbar_h_state);
+                .scrollbar_controller(scrollbar_h_state);
         }
     });
 }
@@ -961,8 +961,8 @@ fn scrollable_with_overlay_scrollbar(
         .children(move || {
             {
                 let child = child;
-                let scrollbar_v_state = ScrollBarState::viewport(controller, true);
-                let scrollbar_h_state = ScrollBarState::viewport(controller, false);
+                let scrollbar_v_state = ScrollBarController::viewport(controller, true);
+                let scrollbar_h_state = ScrollBarController::viewport(controller, false);
                 let scrollbar_behavior = scrollbar_behavior.clone();
                 scrollable_viewport()
                     .vertical(vertical)
@@ -976,7 +976,7 @@ fn scrollable_with_overlay_scrollbar(
                     .child_shared(child);
             };
             {
-                let scrollbar_v_state = ScrollBarState::viewport(controller, true);
+                let scrollbar_v_state = ScrollBarController::viewport(controller, true);
                 let scrollbar_behavior = scrollbar_behavior.clone();
                 if vertical {
                     scrollbar_v_bound()
@@ -986,11 +986,11 @@ fn scrollable_with_overlay_scrollbar(
                         .track_color_optional(scrollbar_track_color)
                         .thumb_color_optional(scrollbar_thumb_color)
                         .thumb_hover_color_optional(scrollbar_thumb_hover_color)
-                        .scrollbar_state(scrollbar_v_state);
+                        .scrollbar_controller(scrollbar_v_state);
                 }
             };
             {
-                let scrollbar_h_state = ScrollBarState::viewport(controller, false);
+                let scrollbar_h_state = ScrollBarController::viewport(controller, false);
                 let scrollbar_behavior = scrollbar_behavior.clone();
                 if horizontal {
                     scrollbar_h_bound()
@@ -1000,7 +1000,7 @@ fn scrollable_with_overlay_scrollbar(
                         .track_color_optional(scrollbar_track_color)
                         .thumb_color_optional(scrollbar_thumb_color)
                         .thumb_hover_color_optional(scrollbar_thumb_hover_color)
-                        .scrollbar_state(scrollbar_h_state);
+                        .scrollbar_controller(scrollbar_h_state);
                 }
             };
         });
@@ -1063,7 +1063,7 @@ struct ScrollbarWheelModifierNode {
     controller: State<ScrollableController>,
     recognizer: State<ScrollRecognizer>,
     connection: Option<NestedScrollConnection>,
-    scrollbar_state: ScrollBarState,
+    scrollbar_controller: ScrollBarController,
     behavior: ScrollBarBehavior,
 }
 
@@ -1109,7 +1109,7 @@ impl PointerInputModifierNode for ScrollbarWheelModifierNode {
                     event.delta_y /= to_viewport;
                     if !consumption.child.is_zero() && self.behavior == ScrollBarBehavior::AutoHide
                     {
-                        self.scrollbar_state.with_mut(|state| {
+                        self.scrollbar_controller.with_mut(|state| {
                             state.last_scroll_activity_frame_nanos = Some(current_frame_nanos());
                             state.should_be_visible = true;
                         });
@@ -1125,8 +1125,8 @@ struct ScrollableViewportPointerModifierNode {
     vertical: bool,
     horizontal: bool,
     scrollbar_behavior: ScrollBarBehavior,
-    scrollbar_state_v: ScrollBarState,
-    scrollbar_state_h: ScrollBarState,
+    scrollbar_state_v: ScrollBarController,
+    scrollbar_state_h: ScrollBarController,
     tap_recognizer: State<TapRecognizer>,
     scroll_recognizer: State<ScrollRecognizer>,
     nested_scroll_connection: Option<NestedScrollConnection>,
@@ -1138,8 +1138,8 @@ struct ScrollableViewportInputArgs {
     vertical: bool,
     horizontal: bool,
     scrollbar_behavior: ScrollBarBehavior,
-    scrollbar_state_v: ScrollBarState,
-    scrollbar_state_h: ScrollBarState,
+    scrollbar_state_v: ScrollBarController,
+    scrollbar_state_h: ScrollBarController,
     tap_recognizer: State<TapRecognizer>,
     scroll_recognizer: State<ScrollRecognizer>,
     nested_scroll_connection: Option<NestedScrollConnection>,
@@ -1334,17 +1334,17 @@ impl ScrollableViewportPointerModifierNode {
                             && !child_consumed.is_zero()
                         {
                             if self.vertical {
-                                self.scrollbar_state_v.with_mut(|scrollbar_state| {
-                                    scrollbar_state.last_scroll_activity_frame_nanos =
+                                self.scrollbar_state_v.with_mut(|scrollbar_controller| {
+                                    scrollbar_controller.last_scroll_activity_frame_nanos =
                                         Some(frame_nanos);
-                                    scrollbar_state.should_be_visible = true;
+                                    scrollbar_controller.should_be_visible = true;
                                 });
                             }
                             if self.horizontal {
-                                self.scrollbar_state_h.with_mut(|scrollbar_state| {
-                                    scrollbar_state.last_scroll_activity_frame_nanos =
+                                self.scrollbar_state_h.with_mut(|scrollbar_controller| {
+                                    scrollbar_controller.last_scroll_activity_frame_nanos =
                                         Some(frame_nanos);
-                                    scrollbar_state.should_be_visible = true;
+                                    scrollbar_controller.should_be_visible = true;
                                 });
                             }
                         }
@@ -1416,8 +1416,8 @@ fn scrollable_viewport(
     apply_child_offset: Option<bool>,
     scrollbar_behavior: Option<ScrollBarBehavior>,
     controller: Option<State<ScrollableController>>,
-    scrollbar_state_v: Option<ScrollBarState>,
-    scrollbar_state_h: Option<ScrollBarState>,
+    scrollbar_state_v: Option<ScrollBarController>,
+    scrollbar_state_h: Option<ScrollBarController>,
     child: Option<RenderSlot>,
 ) {
     let vertical = vertical.unwrap_or(false);
@@ -1428,9 +1428,9 @@ fn scrollable_viewport(
     let controller = controller.expect("scrollable_viewport requires controller");
     synchronize_scroll_density(controller);
     let scrollbar_state_v =
-        scrollbar_state_v.unwrap_or_else(|| ScrollBarState::viewport(controller, true));
+        scrollbar_state_v.unwrap_or_else(|| ScrollBarController::viewport(controller, true));
     let scrollbar_state_h =
-        scrollbar_state_h.unwrap_or_else(|| ScrollBarState::viewport(controller, false));
+        scrollbar_state_h.unwrap_or_else(|| ScrollBarController::viewport(controller, false));
     let child = child.unwrap_or_else(RenderSlot::empty);
     let tap_recognizer = remember(TapRecognizer::default);
     let scroll_recognizer = remember(ScrollRecognizer::default);

@@ -82,7 +82,7 @@ fn fixture(observed: TestProbe<Option<State<Settings>>>) {
                     )
                     .content(move |mode| {
                         for (index, label) in ["Day", "Week", "Month"].into_iter().enumerate() {
-                            segmented_button()
+                            segmented_button(settings.get().selected == index)
                                 .selection_mode(mode)
                                 .label(label)
                                 .min_height(Dp(settings.get().height))
@@ -91,7 +91,6 @@ fn fixture(observed: TestProbe<Option<State<Settings>>>) {
                                     Dp(((settings.get().height - 20.0) * 0.5).clamp(0.0, 8.0)),
                                 ))
                                 .accessibility_label(format!("Single {label}"))
-                                .selected(settings.get().selected == index)
                                 .enabled(index != 1 || !settings.get().disabled)
                                 .shape(SegmentedButtonDefaults::item_shape(
                                     index,
@@ -108,11 +107,10 @@ fn fixture(observed: TestProbe<Option<State<Settings>>>) {
                     });
                 multi_choice_segmented_button_row().content(move |mode| {
                     for (index, label) in ["Bold", "Italic"].into_iter().enumerate() {
-                        segmented_button()
+                        segmented_button(settings.get().checked[index])
                             .selection_mode(mode)
                             .label(label)
                             .accessibility_label(format!("Multi {label}"))
-                            .selected(settings.get().checked[index])
                             .enabled(index != 1 || !settings.get().disabled)
                             .on_click(move || {
                                 settings.with_mut(|value| {
@@ -122,9 +120,8 @@ fn fixture(observed: TestProbe<Option<State<Settings>>>) {
                             });
                     }
                 });
-                segmented_button()
+                segmented_button(settings.get().selected == 1)
                     .accessibility_label("Indicator")
-                    .selected(settings.get().selected == 1)
                     .on_click(|| {});
                 button()
                     .accessibility_label("After")

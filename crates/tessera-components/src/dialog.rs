@@ -357,7 +357,6 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// - `padding` — padding applied inside the dialog surface.
 /// - `full_screen` — fill the available height without outer margins or rounded
 ///   corners; width remains limited to 560dp.
-/// - `is_open` — declarative open state.
 /// - `controller` — optional external controller.
 /// - `main_content` — optional main content rendered behind the dialog.
 /// - `dialog_content` — modal content receiving its explicit dialog scope.
@@ -368,8 +367,9 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::dialog::{basic_dialog, dialog_provider};
+/// use tessera_components::dialog::{DialogController, basic_dialog, dialog_provider};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// use tessera_ui::remember;
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
@@ -377,7 +377,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// dialog_provider()
 ///     .accessibility_label("Dialog Title")
 ///     .on_close_request(|| {})
-///     .is_open(true)
+///     .controller(remember(|| DialogController::new(true)))
 ///     .main_content(|| { /* main content */ })
 ///     .dialog_content(|dialog| {
 ///         basic_dialog().dialog(dialog)
@@ -396,34 +396,18 @@ pub fn dialog_provider(
     on_close_request: Option<Callback>,
     padding: Option<Dp>,
     full_screen: Option<bool>,
-    is_open: Option<bool>,
-    #[prop(skip_setter)] controller: Option<State<DialogController>>,
+    controller: Option<State<DialogController>>,
     main_content: Option<RenderSlot>,
     dialog_content: Option<RenderSlotWith<DialogScope>>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
     let full_screen = full_screen.unwrap_or(false);
     let padding = padding.unwrap_or(if full_screen { Dp::ZERO } else { Dp(24.0) });
-    let is_open = is_open.unwrap_or(false);
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
-    let external_controller = controller;
-    let controller = match external_controller {
+    let controller = match controller {
         Some(value) => value,
-        None => remember(|| DialogController::new(is_open)),
+        None => remember(|| DialogController::new(false)),
     };
-
-    // In controlled mode (external controller provided), do not override
-    // controller state from `is_open`.
-    if external_controller.is_none() {
-        let current_open = controller.with(|c| c.is_open());
-        if is_open != current_open {
-            if is_open {
-                controller.with_mut(|c| c.open());
-            } else {
-                controller.with_mut(|c| c.close());
-            }
-        }
-    }
     dialog_provider_render()
         .accessibility_label_optional(accessibility_label)
         .accessibility_description_optional(accessibility_description)
@@ -561,7 +545,7 @@ fn dialog_provider_render(
 ///
 /// ```
 /// use tessera_components::{
-///     dialog::{dialog_provider, full_screen_dialog},
+///     dialog::{DialogController, dialog_provider, full_screen_dialog},
 ///     text::text,
 ///     theme::material_theme,
 /// };
@@ -569,10 +553,10 @@ fn dialog_provider_render(
 /// #[tessera]
 /// fn example() {
 ///     material_theme().child(|| {
-///         let open = remember(|| true);
-///         let close = Callback::new(move || open.set(false));
+///         let open = remember(|| DialogController::new(true));
+///         let close = Callback::new(move || open.with_mut(DialogController::close));
 ///         dialog_provider()
-///             .is_open(open.get())
+///             .controller(open)
 ///             .full_screen(true)
 ///             .on_close_request_shared(close)
 ///             .main_content(|| {
@@ -584,7 +568,7 @@ fn dialog_provider_render(
 ///                 });
 ///             });
 ///         close.call();
-///         assert!(!open.get());
+///         assert!(!open.with(DialogController::is_open));
 ///     });
 /// }
 /// # tessera_ui::testing::layout_test(example).run();

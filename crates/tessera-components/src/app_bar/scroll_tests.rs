@@ -29,7 +29,7 @@ struct Settings {
 #[derive(Clone, Copy, Default)]
 struct FixtureHandles {
     settings: Option<State<Settings>>,
-    bar: Option<State<AppBarScrollState>>,
+    bar: Option<State<AppBarScrollController>>,
     content: Option<State<ScrollableController>>,
 }
 
@@ -41,7 +41,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         snap: true,
         variant: TopAppBarVariant::LargeFlexible,
     });
-    let state = remember(AppBarScrollState::default);
+    let state = remember(AppBarScrollController::default);
     let content = remember(ScrollableController::new);
     observed.with_mut(|handles| handles.settings = Some(settings));
     observed.with_mut(|handles| handles.bar = Some(state));
@@ -55,7 +55,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         })
         .child(move || {
             app_bar_scroll_provider()
-                .state(state)
+                .controller(state)
                 .behavior(settings.get().behavior)
                 .enabled(settings.get().enabled)
                 .snap(settings.get().snap)
@@ -65,7 +65,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                         .modifier(Modifier::new().fill_max_size())
                         .top_bar(move || {
                             top_app_bar()
-                                .scroll_state(state)
+                                .scroll_controller(state)
                                 .title("Library")
                                 .subtitle("Saved items")
                                 .variant(settings.get().variant)
@@ -174,7 +174,7 @@ fn reset(
         .get()
         .bar
         .expect("bar")
-        .with_mut(AppBarScrollState::reset);
+        .with_mut(AppBarScrollController::reset);
     observed
         .get()
         .content
@@ -221,7 +221,7 @@ fn check_scrolling(samples: u32) {
     assert_eq!(labels(&renderer), 1);
     renderer.render_frames(90);
     assert_eq!(height(&renderer), 228.0);
-    assert!(!bar.with(AppBarScrollState::is_animating));
+    assert!(!bar.with(AppBarScrollController::is_animating));
     assert!(
         renderer.read_pixels().expect("restored") == baseline,
         "a short wheel gesture snaps back to the original pixels"
@@ -271,7 +271,7 @@ fn check_scrolling(samples: u32) {
     content.with_mut(|controller| controller.set_scroll_position(PxPosition::ZERO));
     renderer.render_frames(90);
     background(&renderer, [255, 255, 255]);
-    assert!(!bar.with(AppBarScrollState::is_animating));
+    assert!(!bar.with(AppBarScrollController::is_animating));
 
     reset(
         &mut renderer,
@@ -371,7 +371,7 @@ fn check_scrolling(samples: u32) {
             GestureState::Dragged,
         );
     }
-    let before_release = bar.with(AppBarScrollState::collapsed_fraction);
+    let before_release = bar.with(AppBarScrollController::collapsed_fraction);
     assert!(before_release > 0.0 && before_release < 1.0);
     assert_eq!(content.with(ScrollableController::target_position).y, 0.0);
     touch(
@@ -381,7 +381,7 @@ fn check_scrolling(samples: u32) {
     );
     renderer.render_frames(8);
     assert_eq!(
-        bar.with(AppBarScrollState::collapsed_fraction),
+        bar.with(AppBarScrollController::collapsed_fraction),
         1.0,
         "touch velocity consumed by the header continues through nested inertia"
     );
@@ -396,7 +396,7 @@ fn check_scrolling(samples: u32) {
         "fractional inertia steps continue after header collapse"
     );
     renderer.render_frames(180);
-    assert!(!bar.with(AppBarScrollState::is_animating));
+    assert!(!bar.with(AppBarScrollController::is_animating));
 
     reset(
         &mut renderer,

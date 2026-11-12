@@ -34,11 +34,11 @@ use crate::{
 
 /// Shared visibility state for a floating action menu.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct FloatingActionButtonMenuState {
+pub struct FloatingActionButtonMenuController {
     expanded: bool,
 }
 
-impl FloatingActionButtonMenuState {
+impl FloatingActionButtonMenuController {
     /// Creates a closed menu.
     pub fn new() -> Self {
         Self::default()
@@ -386,8 +386,8 @@ struct MenuData {
     scrim_color: Color,
 }
 
-fn dismiss(state: State<FloatingActionButtonMenuState>, trigger: FocusRequester) {
-    state.with_mut(FloatingActionButtonMenuState::close);
+fn dismiss(state: State<FloatingActionButtonMenuController>, trigger: FocusRequester) {
+    state.with_mut(FloatingActionButtonMenuController::close);
     trigger.request_focus();
 }
 
@@ -435,7 +435,7 @@ fn focus_properties(data: &MenuData, index: usize) -> FocusProperties {
 ///
 /// ## Parameters
 ///
-/// - `state` — optional shared visibility state; otherwise stored internally.
+/// - `controller` — optional shared visibility state; otherwise stored internally.
 /// - `items` — action labels, optional icons, and callbacks; missing callbacks
 ///   disable actions.
 /// - `main_content` — page content beneath the menu, preserved across
@@ -451,11 +451,11 @@ fn focus_properties(data: &MenuData, index: usize) -> FocusProperties {
 ///
 /// ```
 /// use tessera_components::floating_action_button_menu::{
-///     FloatingActionButtonMenuState, floating_action_button_menu,
+///     FloatingActionButtonMenuController, floating_action_button_menu,
 /// };
 /// use tessera_ui::{remember, tessera};
 ///
-/// let mut visibility = FloatingActionButtonMenuState::new();
+/// let mut visibility = FloatingActionButtonMenuController::new();
 /// assert!(!visibility.is_expanded());
 /// visibility.open();
 /// assert!(visibility.is_expanded());
@@ -464,13 +464,13 @@ fn focus_properties(data: &MenuData, index: usize) -> FocusProperties {
 ///
 /// #[tessera]
 /// fn creation_actions() {
-///     let state = remember(FloatingActionButtonMenuState::new);
-///     floating_action_button_menu().state(state);
+///     let state = remember(FloatingActionButtonMenuController::new);
+///     floating_action_button_menu().controller(state);
 /// }
 /// ```
 #[tessera]
 pub fn floating_action_button_menu(
-    state: Option<State<FloatingActionButtonMenuState>>,
+    controller: Option<State<FloatingActionButtonMenuController>>,
     items: Option<Vec<FloatingActionButtonMenuItem>>,
     main_content: Option<RenderSlot>,
     modifier: Option<Modifier>,
@@ -481,16 +481,16 @@ pub fn floating_action_button_menu(
     #[prop(into)] open_label: Option<String>,
     #[prop(into)] close_label: Option<String>,
 ) {
-    let state = if let Some(state) = state {
+    let state = if let Some(state) = controller {
         state
     } else {
-        remember(FloatingActionButtonMenuState::new)
+        remember(FloatingActionButtonMenuController::new)
     };
     let enabled = enabled.unwrap_or(true);
-    if !enabled && state.with(FloatingActionButtonMenuState::is_expanded) {
-        state.with_mut(FloatingActionButtonMenuState::close);
+    if !enabled && state.with(FloatingActionButtonMenuController::is_expanded) {
+        state.with_mut(FloatingActionButtonMenuController::close);
     }
-    let expanded = state.with(FloatingActionButtonMenuState::is_expanded);
+    let expanded = state.with(FloatingActionButtonMenuController::is_expanded);
     let items = items.unwrap_or_default();
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -599,7 +599,7 @@ pub fn floating_action_button_menu(
 #[tessera]
 fn fab_menu_scrim(
     data: State<MenuData>,
-    state: State<FloatingActionButtonMenuState>,
+    state: State<FloatingActionButtonMenuController>,
     motion: State<MenuMotion>,
     bounds: Option<State<PanelBounds>>,
 ) {
@@ -637,7 +637,7 @@ fn fab_menu_scrim(
 #[tessera]
 fn fab_menu_panel(
     data: State<MenuData>,
-    state: State<FloatingActionButtonMenuState>,
+    state: State<FloatingActionButtonMenuController>,
     motion: State<MenuMotion>,
     pending_focus: State<bool>,
 ) {
@@ -756,7 +756,7 @@ fn fab_menu_panel(
             .focus_requester(snapshot.trigger)
             .focus_properties(focus_properties(&snapshot, snapshot.items.len()))
             .on_click(move || {
-                state.with_mut(FloatingActionButtonMenuState::toggle);
+                state.with_mut(FloatingActionButtonMenuController::toggle);
             })
             .child(move || {
                 icon()
@@ -777,7 +777,7 @@ fn fab_menu_panel(
 fn fab_menu_action(
     index: usize,
     data: State<MenuData>,
-    state: State<FloatingActionButtonMenuState>,
+    state: State<FloatingActionButtonMenuController>,
     motion: State<MenuMotion>,
     gap: bool,
 ) {
@@ -873,7 +873,7 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct FixtureHandles {
-        state: Option<State<FloatingActionButtonMenuState>>,
+        state: Option<State<FloatingActionButtonMenuController>>,
         background: Option<State<usize>>,
         action: Option<State<usize>>,
     }
@@ -912,7 +912,7 @@ mod tests {
         count: usize,
         probe: Option<tessera_ui::testing::TestProbe<FixtureHandles>>,
     ) {
-        let state = remember(|| FloatingActionButtonMenuState { expanded });
+        let state = remember(|| FloatingActionButtonMenuController { expanded });
         let action = remember(|| 0usize);
         if let Some(probe) = &probe {
             probe.with_mut(|handles| handles.state = Some(state));
@@ -934,7 +934,7 @@ mod tests {
                 })
                 .collect();
             floating_action_button_menu()
-                .state(state)
+                .controller(state)
                 .alignment(alignment)
                 .items(items)
                 .main_content(move || {
@@ -1034,7 +1034,7 @@ mod tests {
                 .get()
                 .state
                 .unwrap()
-                .with(FloatingActionButtonMenuState::is_expanded)
+                .with(FloatingActionButtonMenuController::is_expanded)
         );
         for _ in 0..100 {
             frame += 1;
@@ -1047,7 +1047,7 @@ mod tests {
                 .get()
                 .state
                 .unwrap()
-                .with(FloatingActionButtonMenuState::is_expanded),
+                .with(FloatingActionButtonMenuController::is_expanded),
             "disabled action must not dismiss"
         );
         let bounds = snapshot.node("fab-menu-item-2").bounds();
@@ -1063,13 +1063,13 @@ mod tests {
                 .get()
                 .state
                 .unwrap()
-                .with(FloatingActionButtonMenuState::is_expanded)
+                .with(FloatingActionButtonMenuController::is_expanded)
         );
         probe
             .get()
             .state
             .unwrap()
-            .with_mut(FloatingActionButtonMenuState::open);
+            .with_mut(FloatingActionButtonMenuController::open);
         frame += 1;
         pump_layout_test_session(&mut session, frame * 16_666_667);
         click(&mut session, &mut frame, 60.0, 24.0);
@@ -1078,7 +1078,7 @@ mod tests {
                 .get()
                 .state
                 .unwrap()
-                .with(FloatingActionButtonMenuState::is_expanded)
+                .with(FloatingActionButtonMenuController::is_expanded)
         );
         assert_eq!(
             probe.get().background.unwrap().get(),
@@ -1151,7 +1151,7 @@ mod tests {
             .get()
             .state
             .unwrap()
-            .with_mut(FloatingActionButtonMenuState::close);
+            .with_mut(FloatingActionButtonMenuController::close);
         renderer.render_frames(120);
         assert_ne!(expanded, renderer.read_pixels().unwrap());
         assert_eq!(disclosure_states(&renderer), vec![false]);
@@ -1159,7 +1159,7 @@ mod tests {
             .get()
             .state
             .unwrap()
-            .with_mut(FloatingActionButtonMenuState::open);
+            .with_mut(FloatingActionButtonMenuController::open);
         renderer.render_frames(120);
         let reopened = renderer.read_pixels().unwrap();
         crate::test_utils::assert_pixels_near(&expanded, &reopened, 400);

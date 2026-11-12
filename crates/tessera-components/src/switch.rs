@@ -288,16 +288,14 @@ impl tessera_ui::LayoutPolicy for SwitchThumbLayout {
     }
 }
 
-/// Controller for the `switch` component.
-pub struct SwitchController {
+struct SwitchMotion {
     checked: bool,
     progress: Scalar,
     snap_revision: u64,
 }
 
-impl SwitchController {
-    /// Creates a new controller with the given initial value.
-    pub fn new(initial_state: bool) -> Self {
+impl SwitchMotion {
+    fn new(initial_state: bool) -> Self {
         Self {
             checked: initial_state,
             progress: Scalar::new(if initial_state { 1.0 } else { 0.0 }),
@@ -305,20 +303,11 @@ impl SwitchController {
         }
     }
 
-    /// Returns whether the switch is currently checked.
-    pub fn is_checked(&self) -> bool {
+    fn is_checked(&self) -> bool {
         self.checked
     }
 
-    /// Sets the checked state immediately, finishing any ongoing transition.
-    pub fn set_checked(&mut self, checked: bool) {
-        self.checked = checked;
-        self.progress.snap(if checked { 1.0 } else { 0.0 });
-        self.snap_revision = self.snap_revision.wrapping_add(1);
-    }
-
-    /// Toggles the switch with an interruptible transition.
-    pub fn toggle(&mut self) {
+    fn toggle(&mut self) {
         self.toggle_at(current_frame_nanos());
     }
 
@@ -331,24 +320,16 @@ impl SwitchController {
         );
     }
 
-    /// Returns the current selection progress, clamped to 0.0..1.0.
-    pub fn animation_progress(&self) -> f32 {
+    fn animation_progress(&self) -> f32 {
         self.progress.value.clamp(0.0, 1.0) as f32
     }
 
-    /// Returns whether the selection transition is still settling.
-    pub fn is_animating(&self) -> bool {
+    fn is_animating(&self) -> bool {
         self.progress.is_animating()
     }
 
     fn update_progress(&mut self, frame_nanos: u64) {
         self.progress.advance(frame_nanos);
-    }
-}
-
-impl Default for SwitchController {
-    fn default() -> Self {
-        Self::new(false)
     }
 }
 
@@ -370,8 +351,7 @@ impl Default for SwitchController {
 /// - `enabled` — optional enabled state; defaults to `true`.
 /// - `presentation_state` — optional visual interaction state; live input and
 ///   disabled state take precedence.
-/// - `checked` — externally controlled checked state; omit to use the
-///   controller.
+/// - `checked` — whether the switch is on.
 /// - `width` — optional track width override.
 /// - `height` — optional track height override.
 /// - `track_color` — optional track color when unchecked.
@@ -384,7 +364,6 @@ impl Default for SwitchController {
 /// - `thumb_icon_color` — optional icon color when unchecked.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
-/// - `controller` — optional external controller.
 /// - `child` — optional content rendered at the thumb center; icons default to
 ///   16dp and inherit the current thumb icon color.
 ///
@@ -394,31 +373,27 @@ impl Default for SwitchController {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::switch::{SwitchController, switch};
+/// use tessera_components::switch::switch;
 /// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
-///         let controller = remember(|| {
-///             let mut controller = SwitchController::new(false);
-///             controller.toggle();
-///             assert!(controller.is_checked());
-///             controller
-///         });
-///         switch().controller(controller).on_toggle(|_| {});
+///         let checked = remember(|| false);
+///         assert!(!checked.get());
+///         switch(checked.get()).on_toggle(move |value| checked.set(value));
 ///     });
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn switch(
+    checked: bool,
     modifier: Option<Modifier>,
     focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     enabled: Option<bool>,
     presentation_state: Option<InteractionVisualState>,
-    checked: Option<bool>,
     width: Option<Dp>,
     height: Option<Dp>,
     track_color: Option<Color>,
@@ -431,17 +406,10 @@ pub fn switch(
     thumb_icon_color: Option<Color>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
-    controller: Option<State<SwitchController>>,
     child: Option<RenderSlot>,
 ) {
-    let controller = if let Some(controller) = controller {
-        controller
-    } else {
-        remember(|| SwitchController::new(checked.unwrap_or(false)))
-    };
-    if let Some(checked) = checked
-        && controller.with(|controller| controller.is_checked()) != checked
-    {
+    let controller = remember(|| SwitchMotion::new(checked));
+    if controller.with(|controller| controller.is_checked()) != checked {
         controller.with_mut(|controller| controller.toggle());
     }
     let focus_requester = if let Some(focus_requester) = focus_requester {
@@ -489,7 +457,7 @@ pub fn switch(
         });
     }
 
-    switch_content()
+    switch_content(checked)
         .focus_requester(focus_requester)
         .modifier_optional(modifier)
         .on_toggle_optional(on_toggle)
@@ -517,6 +485,7 @@ pub fn switch(
 #[tessera]
 #[allow(clippy::too_many_arguments)]
 fn switch_content(
+    checked: bool,
     modifier: Option<Modifier>,
     focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
@@ -534,7 +503,7 @@ fn switch_content(
     thumb_icon_color: Option<Color>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
-    controller: Option<State<SwitchController>>,
+    controller: Option<State<SwitchMotion>>,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
     tap_recognizer: Option<State<TapRecognizer>>,
@@ -572,7 +541,6 @@ fn switch_content(
     let mut modifier = modifier.unwrap_or_default();
 
     let interactive = on_toggle.is_some();
-    let checked = controller.with(|c| c.is_checked());
     if interactive {
         modifier = modifier.minimum_interactive_component_size();
         let ripple_spec = RippleSpec {
@@ -595,9 +563,7 @@ fn switch_content(
         let toggle_args = ToggleableArgs {
             focus_requester,
             value: checked,
-            on_value_change: CallbackWith::new(move |_| {
-                controller.with_mut(|c| c.toggle());
-                let checked = controller.with(|c| c.is_checked());
+            on_value_change: CallbackWith::new(move |checked| {
                 if let Some(on_toggle) = on_toggle.as_ref() {
                     on_toggle.call(checked);
                 }
@@ -811,12 +777,12 @@ mod motion_tests;
 
 #[cfg(test)]
 mod tests {
-    use super::SwitchController;
+    use super::SwitchMotion;
 
     #[test]
     fn selection_spring_matches_reference_samples_and_settles_both_values() {
         for checked in [false, true] {
-            let mut controller = SwitchController::new(checked);
+            let mut controller = SwitchMotion::new(checked);
             controller.toggle_at(0);
             controller.update_progress(50_000_000);
             let expected = if checked {
@@ -843,7 +809,7 @@ mod tests {
 
     #[test]
     fn retarget_samples_the_incoming_position_and_preserves_velocity() {
-        let mut controller = SwitchController::new(false);
+        let mut controller = SwitchMotion::new(false);
         controller.toggle_at(0);
         controller.update_progress(50_000_000);
         controller.toggle_at(75_000_000);
@@ -852,19 +818,6 @@ mod tests {
         controller.update_progress(76_000_000);
         assert!(controller.progress.value > 0.8269005484);
         controller.update_progress(2_000_000_000);
-        assert_eq!(controller.animation_progress(), 0.0);
-        assert!(!controller.is_animating());
-    }
-
-    #[test]
-    fn setting_the_current_target_finishes_an_active_transition() {
-        let mut controller = SwitchController::new(false);
-        controller.toggle_at(0);
-        controller.update_progress(50_000_000);
-        controller.set_checked(true);
-        assert_eq!(controller.animation_progress(), 1.0);
-        assert!(!controller.is_animating());
-        controller.set_checked(false);
         assert_eq!(controller.animation_progress(), 0.0);
         assert!(!controller.is_animating());
     }

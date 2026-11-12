@@ -20,7 +20,7 @@ use crate::{
 };
 
 use super::{
-    CalendarDate, DatePickerDisplayMode, DateRangePickerState, Weekday, YearMonth,
+    CalendarDate, DatePickerDisplayMode, DateRangePickerController, Weekday, YearMonth,
     date_range_picker,
 };
 
@@ -30,7 +30,7 @@ fn date(month: u8, day: u8) -> CalendarDate {
 
 #[test]
 fn range_selection_is_atomic_inclusive_and_restarts_after_completion() {
-    let mut state = DateRangePickerState::default();
+    let mut state = DateRangePickerController::default();
     assert!(!state.set_selection(None, Some(date(8, 3))));
     assert!(state.select_date(date(7, 29)));
     assert!(!state.is_complete());
@@ -54,7 +54,7 @@ fn range_selection_is_atomic_inclusive_and_restarts_after_completion() {
 
 #[test]
 fn range_input_resolves_both_endpoints_and_preserves_invalid_drafts() {
-    let mut state = DateRangePickerState::default();
+    let mut state = DateRangePickerController::default();
     let mut values = [String::new(), "08/03/2026".to_owned()];
     super::apply_draft(&mut state, &values);
     assert!(!state.is_complete());
@@ -87,11 +87,11 @@ fn range_input_resolves_both_endpoints_and_preserves_invalid_drafts() {
 #[tessera]
 fn nested_fixture(
     output: tessera_ui::testing::TestProbe<
-        Option<(State<DateRangePickerState>, State<LazyListController>)>,
+        Option<(State<DateRangePickerController>, State<LazyListController>)>,
     >,
 ) {
     let state = remember(|| {
-        DateRangePickerState::new(
+        DateRangePickerController::new(
             None,
             None,
             YearMonth::new(2026, 7),
@@ -123,7 +123,7 @@ fn nested_fixture(
             })
             .item(move || {
                 date_range_picker()
-                    .state(state)
+                    .controller(state)
                     .first_day_of_week(Weekday::Sunday);
             })
             .item(|| {
@@ -163,7 +163,7 @@ fn check_nested_scroll(samples: u32) {
     click(&mut renderer, "July 29, 2026");
     let state = output.get().unwrap().0;
     assert_eq!(
-        state.with(DateRangePickerState::selected_start_date),
+        state.with(DateRangePickerController::selected_start_date),
         Some(date(7, 29))
     );
     let accessibility = renderer.accessibility_snapshot().expect("tree");
@@ -200,7 +200,7 @@ fn check_nested_scroll(samples: u32) {
         "virtualizing a focused month restores focus to the stable calendar viewport"
     );
     assert_ne!(
-        state.with(DateRangePickerState::displayed_month),
+        state.with(DateRangePickerController::displayed_month),
         YearMonth::new(2026, 7).unwrap(),
         "the calendar must actually advance beyond the selected month"
     );
@@ -234,10 +234,10 @@ fn check_nested_scroll(samples: u32) {
         "navigation from the viewport enters its calendar dates without moving the page"
     );
     assert_eq!(
-        state.with(DateRangePickerState::selected_start_date),
+        state.with(DateRangePickerController::selected_start_date),
         Some(date(7, 29))
     );
-    assert_eq!(state.with(DateRangePickerState::selected_end_date), None);
+    assert_eq!(state.with(DateRangePickerController::selected_end_date), None);
     assert!(focus::request_move_focus(FocusDirection::Next));
     renderer.render_frames(12);
     let accessibility = renderer.accessibility_snapshot().expect("tree");
@@ -255,10 +255,10 @@ fn check_nested_scroll(samples: u32) {
 }
 
 #[tessera]
-fn fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerState>>>) {
+fn fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerController>>>) {
     let blocked = CallbackWith::new(|date: CalendarDate| date != self::date(7, 13));
     let state = remember(|| {
-        DateRangePickerState::new(
+        DateRangePickerController::new(
             None,
             None,
             YearMonth::new(2026, 7),
@@ -285,7 +285,7 @@ fn fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerSt
                 .modifier(Modifier::new().fill_max_size())
                 .child(move || {
                     date_range_picker()
-                        .state(state)
+                        .controller(state)
                         .modifier(Modifier::new().offset(Dp(20.0), Dp(20.0)))
                         .first_day_of_week(Weekday::Sunday);
                 });
@@ -463,13 +463,13 @@ fn check_range(samples: u32) {
         .unwrap_or_else(|| {
             panic!(
                 "missing July date; displayed {:?}; labels {labels:?}",
-                state.with(DateRangePickerState::displayed_month)
+                state.with(DateRangePickerController::displayed_month)
             )
         })
         .1;
     assert!(blocked.is_disabled());
     click(&mut renderer, "July 13, 2026");
-    assert_eq!(state.with(DateRangePickerState::selected_start_date), None);
+    assert_eq!(state.with(DateRangePickerController::selected_start_date), None);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(590.0, 940.0));
     renderer.render_frames(3);
     let blocked = bounds(&renderer, "July 13, 2026");
@@ -506,7 +506,7 @@ fn check_range(samples: u32) {
             .any(|channel| *channel < 250),
         "an unavailable date still shows a visible keyboard focus indicator"
     );
-    assert_eq!(state.with(DateRangePickerState::selected_start_date), None);
+    assert_eq!(state.with(DateRangePickerController::selected_start_date), None);
     focus::clear_focus(true);
     renderer.render_frames(3);
     assert_color(&renderer, focus_x, focus_y, [255, 255, 255]);
@@ -519,17 +519,17 @@ fn check_range(samples: u32) {
     );
     click_bounds(&mut renderer, corner);
     assert_eq!(
-        state.with(DateRangePickerState::selected_start_date),
+        state.with(DateRangePickerController::selected_start_date),
         Some(date(7, 29)),
         "the 48dp target includes the area outside the 40dp visual circle"
     );
     click(&mut renderer, "July 31, 2026");
     assert_eq!(
-        state.with(DateRangePickerState::selected_start_date),
+        state.with(DateRangePickerController::selected_start_date),
         Some(date(7, 29))
     );
     assert_eq!(
-        state.with(DateRangePickerState::selected_end_date),
+        state.with(DateRangePickerController::selected_end_date),
         Some(date(7, 31))
     );
     focus::clear_focus(true);
@@ -578,22 +578,22 @@ fn check_range(samples: u32) {
     });
     renderer.render_frames(8);
 
-    state.with_mut(DateRangePickerState::clear_selection);
+    state.with_mut(DateRangePickerController::clear_selection);
     click(&mut renderer, "July 29, 2026");
     let point = PxPosition::from_f32_xy(middle.x0 as f32 + 8.0, y as f32);
     renderer.pointer_scroll(MOUSE_POINTER_ID, point, 0.0, -504.0);
     renderer.render_frames(90);
     click(&mut renderer, "August 3, 2026");
     assert_eq!(
-        state.with(DateRangePickerState::selected_start_date),
+        state.with(DateRangePickerController::selected_start_date),
         Some(date(7, 29))
     );
     assert_eq!(
-        state.with(DateRangePickerState::selected_end_date),
+        state.with(DateRangePickerController::selected_end_date),
         Some(date(8, 3))
     );
     assert_eq!(
-        state.with(DateRangePickerState::displayed_month),
+        state.with(DateRangePickerController::displayed_month),
         YearMonth::new(2026, 8).unwrap()
     );
     let august = bounds(&renderer, "August 3, 2026");
@@ -617,29 +617,29 @@ fn check_range(samples: u32) {
     click_bounds(&mut renderer, inputs[1]);
     renderer.inject_text("08/03/2026");
     renderer.render_frames(4);
-    assert!(!state.with(DateRangePickerState::is_complete));
+    assert!(!state.with(DateRangePickerController::is_complete));
     click_bounds(&mut renderer, inputs[0]);
     renderer.inject_text("07/29/2026");
     renderer.render_frames(4);
-    assert!(state.with(DateRangePickerState::is_complete));
+    assert!(state.with(DateRangePickerController::is_complete));
     assert_eq!(
-        state.with(DateRangePickerState::selected_end_date),
+        state.with(DateRangePickerController::selected_end_date),
         Some(date(8, 3))
     );
-    state.with_mut(DateRangePickerState::clear_selection);
+    state.with_mut(DateRangePickerController::clear_selection);
     renderer.render_frames(4);
     click_bounds(&mut renderer, inputs[0]);
     renderer.inject_text("07/13/2026");
     renderer.render_frames(4);
-    assert_eq!(state.with(DateRangePickerState::selected_start_date), None);
-    state.with_mut(DateRangePickerState::clear_selection);
+    assert_eq!(state.with(DateRangePickerController::selected_start_date), None);
+    state.with_mut(DateRangePickerController::clear_selection);
     renderer.render_frames(4);
     let start_input = input_bounds(&renderer)[0];
     click_bounds(&mut renderer, start_input);
     renderer.inject_text("07/29/2026");
     renderer.render_frames(4);
     assert_eq!(
-        state.with(DateRangePickerState::selected_start_date),
+        state.with(DateRangePickerController::selected_start_date),
         Some(date(7, 29)),
         "clearing invalid drafts resets both editors"
     );
@@ -676,9 +676,9 @@ fn gpu_date_range_selection_scrolling_input_and_resize_msaa() {
 }
 
 #[tessera]
-fn header_fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerState>>>) {
+fn header_fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerController>>>) {
     let state = remember(|| {
-        DateRangePickerState::new(
+        DateRangePickerController::new(
             None,
             None,
             YearMonth::new(2026, 7),
@@ -690,7 +690,7 @@ fn header_fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangeP
     });
     output.set(Some(state));
     material_theme().child(move || {
-        date_range_picker().state(state);
+        date_range_picker().controller(state);
     });
 }
 

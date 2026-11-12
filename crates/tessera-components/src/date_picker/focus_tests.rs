@@ -11,10 +11,10 @@ use super::*;
 #[tessera]
 fn fixture(
     year: bool,
-    output: tessera_ui::testing::TestProbe<Option<(State<DatePickerState>, State<DatePickerView>)>>,
+    output: tessera_ui::testing::TestProbe<Option<(State<DatePickerController>, State<DatePickerView>)>>,
 ) {
     let state = remember(|| {
-        DatePickerState::new(
+        DatePickerController::new(
             CalendarDate::new(2025, 8, 17),
             YearMonth::new(2025, 8),
             2021..=2100,
@@ -34,7 +34,7 @@ fn fixture(
     material_theme().child(move || {
         column().children(move || {
             date_picker()
-                .state(state)
+                .controller(state)
                 .view(view)
                 .today(CalendarDate::new(2025, 8, 5).unwrap());
         });
@@ -120,11 +120,11 @@ fn check_focus(year: bool) {
         "the fixture must start without focus on the target choice"
     );
     let before = renderer.read_pixels().unwrap();
-    let selected = output.get().unwrap().0.with(DatePickerState::selected_date);
+    let selected = output.get().unwrap().0.with(DatePickerController::selected_date);
     action(&mut renderer, id, Action::Focus);
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
     assert_eq!(
-        output.get().unwrap().0.with(DatePickerState::selected_date),
+        output.get().unwrap().0.with(DatePickerController::selected_date),
         selected
     );
     assert_eq!(
@@ -155,12 +155,12 @@ fn check_focus(year: bool) {
         );
         assert_eq!(output.get().unwrap().1.get(), DatePickerView::Calendar);
         assert_eq!(
-            output.get().unwrap().0.with(DatePickerState::selected_date),
+            output.get().unwrap().0.with(DatePickerController::selected_date),
             selected
         );
     } else {
         assert_eq!(
-            output.get().unwrap().0.with(DatePickerState::selected_date),
+            output.get().unwrap().0.with(DatePickerController::selected_date),
             CalendarDate::new(2025, 8, 19)
         );
     }

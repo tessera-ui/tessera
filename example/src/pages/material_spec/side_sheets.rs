@@ -60,7 +60,7 @@ impl FilterLabels {
 /// mounted or remounted.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct LiveSideSheetSession {
-    open: State<bool>,
+    open: State<SideSheetController>,
     filters: State<[bool; 5]>,
     notice: State<String>,
     directory: State<SideSheetController>,
@@ -87,14 +87,14 @@ pub(crate) fn live_side_sheet_host(
     main_content: tessera_ui::RenderSlotWith<LiveSideSheetSession>,
 ) {
     let session = LiveSideSheetSession {
-        open: remember(|| false),
+        open: remember(|| SideSheetController::new(false)),
         filters: remember(FilterLabels::defaults),
         notice: remember(|| String::from("ui-no-action-selected")),
         directory,
         router,
     };
-    if !session.route_active() && session.open.get() {
-        session.open.set(false);
+    if !session.route_active() && session.open.with(SideSheetController::is_open) {
+        session.open.with_mut(SideSheetController::close);
     }
     let modal = RenderSlot::new(move || {
         live_modal(
@@ -111,7 +111,7 @@ pub(crate) fn live_side_sheet_host(
 
 #[tessera]
 fn live_modal(
-    open: State<bool>,
+    open: State<SideSheetController>,
     filters: State<[bool; 5]>,
     notice: State<String>,
     main_content: RenderSlot,
@@ -120,8 +120,8 @@ fn live_modal(
         .position(SideSheetPosition::End)
         .content_padding(Dp::ZERO)
         .accessibility_label(I18N.text("ui-filters"))
-        .is_open(open.get())
-        .on_close_request(move || open.set(false))
+        .controller(open)
+        .on_close_request(move || open.with_mut(SideSheetController::close))
         .main_content_shared(main_content)
         .side_sheet_content(move || {
             sheet_content(open, filters, notice);
@@ -134,10 +134,10 @@ pub(super) fn side_sheets_spec(
     session: Option<LiveSideSheetSession>,
 ) {
     let root = session;
-    let local_open = remember(|| false);
+    let local_open = remember(|| SideSheetController::new(false));
     let local_filters = remember(FilterLabels::defaults);
     let local_notice = remember(|| String::from("ui-no-action-selected"));
-    let standard_open = remember(|| false);
+    let standard_open = remember(|| SideSheetController::new(false));
     let (open, filters, notice) = if let Some(session) = root {
         (session.open, session.filters, session.notice)
     } else {
@@ -157,8 +157,8 @@ pub(super) fn side_sheets_spec(
 
 #[tessera]
 fn sheet_article(
-    modal_open: State<bool>,
-    standard_open: State<bool>,
+    modal_open: State<SideSheetController>,
+    standard_open: State<SideSheetController>,
     notice: State<String>,
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 
@@ -288,7 +288,7 @@ fn variants_legend() {
 }
 
 #[tessera]
-fn launch(open: State<bool>, session: Option<LiveSideSheetSession>) {
+fn launch(open: State<SideSheetController>, session: Option<LiveSideSheetSession>) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
@@ -297,7 +297,7 @@ fn launch(open: State<bool>, session: Option<LiveSideSheetSession>) {
                 .accessibility_label(I18N.text("ui-open-modal-side-sheet"))
                 .on_click(move || {
                     if session.is_none_or(LiveSideSheetSession::can_open) {
-                        open.set(true);
+                        open.with_mut(SideSheetController::open);
                     }
                 })
                 .child(move || {
@@ -311,7 +311,7 @@ fn launch(open: State<bool>, session: Option<LiveSideSheetSession>) {
 }
 
 #[tessera]
-fn overview_intro(open: State<bool>, session: Option<LiveSideSheetSession>) {
+fn overview_intro(open: State<SideSheetController>, session: Option<LiveSideSheetSession>) {
     bullets(vec![
         "ui-use-side-sheets-to-provide-optional-content-and-actions-without-interrupting-the-main-cont"
             .into(),
@@ -784,7 +784,7 @@ fn measurements(modal: bool) {
 }
 
 #[tessera]
-fn usage(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
+fn usage(modal_open: State<SideSheetController>, session: Option<LiveSideSheetSession>) {
     split()
         .start(|| {
             prose(
@@ -940,7 +940,7 @@ fn anatomy_guidance() {
 }
 
 #[tessera]
-fn adaptive_design(standard_open: State<bool>) {
+fn adaptive_design(standard_open: State<SideSheetController>) {
     prose(
         "ui-side-sheets-have-a-default-width-but-can-be-resized-depending-on-the-needs-of-the-layout",
     );
@@ -971,7 +971,7 @@ fn adaptive_design(standard_open: State<bool>) {
 }
 
 #[tessera]
-fn standard_demo(open: State<bool>) {
+fn standard_demo(open: State<SideSheetController>) {
     boxed()
         .modifier(
             Modifier::new()
@@ -983,8 +983,8 @@ fn standard_demo(open: State<bool>) {
             standard_side_sheet_provider()
                 .position(SideSheetPosition::End)
                 .accessibility_label(I18N.text("ui-information"))
-                .is_open(open.get())
-                .on_close_request(move || open.set(false))
+                .controller(open)
+                .on_close_request(move || open.with_mut(SideSheetController::close))
                 .main_content(move || {
                     standard_body(open);
                 })
@@ -995,7 +995,7 @@ fn standard_demo(open: State<bool>) {
 }
 
 #[tessera]
-fn standard_body(open: State<bool>) {
+fn standard_body(open: State<SideSheetController>) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()
         .modifier(Modifier::new().fill_max_size().background(scheme.surface))
@@ -1010,7 +1010,7 @@ fn standard_body(open: State<bool>) {
                     button()
                         .outlined()
                         .accessibility_label(I18N.text("ui-open-standard-side-sheet"))
-                        .on_click(move || open.set(true))
+                        .on_click(move || open.with_mut(SideSheetController::open))
                         .child(move || {
                             text(I18N.text("ui-open-standard-side-sheet"));
                         });
@@ -1022,7 +1022,7 @@ fn standard_body(open: State<bool>) {
 fn sheet_header(
     #[prop(into)] title: String,
     #[prop(into)] close_label: String,
-    on_close: State<bool>,
+    on_close: State<SideSheetController>,
     announce_open: Option<bool>,
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -1033,10 +1033,10 @@ fn sheet_header(
     if announce_open {
         // The headline receives focus once per opening so assistive technology
         // announces the sheet, while Tab traversal still starts at Close.
-        if on_close.get() && !announced.get() {
+        if on_close.with(SideSheetController::is_open) && !announced.get() {
             announced.set(true);
             headline.request_focus();
-        } else if !on_close.get() && announced.get() {
+        } else if !on_close.with(SideSheetController::is_open) && announced.get() {
             announced.set(false);
         }
     }
@@ -1091,12 +1091,12 @@ fn sheet_header(
                 .standard()
                 .icon(filled::CLOSE_SVG)
                 .accessibility_label(I18N.text(&(close_label)))
-                .on_click(move || on_close.set(false));
+                .on_click(move || on_close.with_mut(SideSheetController::close));
         });
 }
 
 #[tessera]
-fn standard_content(open: State<bool>) {
+fn standard_content(open: State<SideSheetController>) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
         .modifier(Modifier::new().fill_max_size().background(scheme.surface))
@@ -1126,7 +1126,7 @@ fn standard_content(open: State<bool>) {
 }
 
 #[tessera]
-fn behavior(modal_open: State<bool>, notice: State<String>, session: Option<LiveSideSheetSession>) {
+fn behavior(modal_open: State<SideSheetController>, notice: State<String>, session: Option<LiveSideSheetSession>) {
     prose("ui-side-sheets-can-vertically-scroll-independent-of-the-rest-of-the-ui");
     gap(Dp(12.0));
     prose(
@@ -1182,7 +1182,7 @@ fn behavior(modal_open: State<bool>, notice: State<String>, session: Option<Live
 }
 
 #[tessera]
-fn use_cases(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
+fn use_cases(modal_open: State<SideSheetController>, session: Option<LiveSideSheetSession>) {
     prose("ui-people-should-be-able-to-dismiss-the-side-sheet-using-assistive-technology");
     gap(Dp(24.0));
     launch(modal_open).session_optional(session);
@@ -1214,7 +1214,7 @@ fn interaction_style() {
 }
 
 #[tessera]
-fn initial_focus(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
+fn initial_focus(modal_open: State<SideSheetController>, session: Option<LiveSideSheetSession>) {
     prose(
         "ui-actions-within-a-side-sheet-can-be-focused-by-tab-order-using-a-keyboard-or-switch-control",
     );
@@ -1264,7 +1264,7 @@ fn labeling() {
 }
 
 #[tessera]
-fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: State<String>) {
+fn sheet_content(modal_open: State<SideSheetController>, filters: State<[bool; 5]>, notice: State<String>) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
         .modifier(
@@ -1296,8 +1296,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .modifier(Modifier::new().fill_max_width().height(Dp(48.0)))
                             .children(move || {
-                                checkbox()
-                                    .checked(filters.get()[index])
+                                checkbox(filters.get()[index])
                                     .on_toggle(move |next| {
                                         filters.with_mut(|values| values[index] = next);
                                     })
@@ -1328,7 +1327,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                         .accessibility_label(I18N.text("ui-save-filters"))
                         .on_click(move || {
                             notice.set(String::from("ui-filters-applied"));
-                            modal_open.set(false);
+                            modal_open.with_mut(SideSheetController::close);
                         })
                         .child(move || {
                             text(I18N.text("ui-save"));
@@ -1338,7 +1337,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                         .outlined()
                         .size(ButtonSize::ExtraSmall)
                         .accessibility_label(I18N.text("ui-cancel-filters"))
-                        .on_click(move || modal_open.set(false))
+                        .on_click(move || modal_open.with_mut(SideSheetController::close))
                         .child(move || {
                             text(I18N.text("ui-cancel"));
                         });

@@ -9,7 +9,7 @@ use tessera_components::{
     boxed::boxed,
     button::{ButtonShape, ButtonVariant, button},
     button_groups::{
-        ButtonGroupsSelectionMode, ButtonGroupsSize, ButtonGroupsState, ButtonGroupsStyle,
+        ButtonGroupsSelectionMode, ButtonGroupsSize, ButtonGroupsController, ButtonGroupsStyle,
         button_groups,
     },
     column::column,
@@ -310,7 +310,7 @@ fn group(
 ) {
     let initial = selected.unwrap_or_default();
     let state = remember(move || {
-        let mut state = ButtonGroupsState::new();
+        let mut state = ButtonGroupsController::new();
         for index in initial {
             state.set_selected(index, true);
         }
@@ -329,7 +329,7 @@ fn group(
         .selection_required(required.unwrap_or(false))
         .enabled(enabled.unwrap_or(true))
         .presentation_states(presentation.unwrap_or_default())
-        .state(state);
+        .controller(state);
     for item in items {
         builder.child_shared(
             RenderSlot::new(move || {
@@ -569,7 +569,7 @@ fn playground() {
     let required = remember(|| false);
     let enabled = remember(|| true);
     let icons = remember(|| true);
-    let state = remember(ButtonGroupsState::new);
+    let state = remember(ButtonGroupsController::new);
     panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
@@ -663,7 +663,7 @@ fn playground() {
                     })
                     .selection_required(required.get())
                     .enabled(enabled.get())
-                    .state(state)
+                    .controller(state)
                     .child_shared(
                         RenderSlot::new(move || {
                             if icons.get() {

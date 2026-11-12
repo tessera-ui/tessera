@@ -20,7 +20,7 @@ use crate::{
     theme::material_theme,
 };
 
-use super::{CheckboxController, checkbox};
+use super::checkbox;
 
 #[derive(Clone, Default)]
 struct FixtureHandles {
@@ -46,11 +46,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
     })
     .get();
     probe.with_mut(|handles| handles.requesters = Some(requesters));
-    let internal = remember(|| {
-        let mut controller = CheckboxController::new(false);
-        controller.set_indeterminate(true);
-        controller
-    });
+    let internal = remember(|| (false, true));
     probe.with_mut(|handles| handles.enabled = Some(enabled));
     probe.with_mut(|handles| handles.checked = Some(checked));
     probe.with_mut(|handles| handles.calls = Some(calls));
@@ -59,12 +55,11 @@ fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
         column()
             .modifier(Modifier::new().padding_all(Dp(16.0)))
             .children(move || {
-                radio_button()
+                radio_button(false)
                     .focus_requester(requesters[2])
                     .accessibility_label("Before");
-                checkbox()
+                checkbox(checked.get())
                     .focus_requester(requesters[0])
-                    .checked(checked.get())
                     .indeterminate(mixed.get())
                     .disabled(!enabled.get())
                     .accessibility_label("Checkbox")
@@ -74,9 +69,8 @@ fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
                         checked.set(value);
                         calls.with_mut(|calls| calls[0] += 1);
                     });
-                switch()
+                switch(checked.get())
                     .focus_requester(requesters[1])
-                    .checked(checked.get())
                     .enabled(enabled.get())
                     .accessibility_label("Switch")
                     .accessibility_description("Switch description")
@@ -84,9 +78,10 @@ fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
                         checked.set(value);
                         calls.with_mut(|calls| calls[1] += 1);
                     });
-                radio_button().accessibility_label("After");
-                checkbox()
-                    .controller(internal)
+                radio_button(false).accessibility_label("After");
+                checkbox(internal.get().0)
+                    .indeterminate(internal.get().1)
+                    .on_toggle(move |checked| internal.set((checked, false)))
                     .checkmark_color(Color::RED)
                     .accessibility_label("Internal mixed");
             });

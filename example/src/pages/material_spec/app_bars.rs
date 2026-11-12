@@ -1,13 +1,13 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     app_bar::{
-        AppBarScrollBehavior, AppBarScrollState, AppBarTitleAlignment, TopAppBarVariant, app_bar,
+        AppBarScrollBehavior, AppBarScrollController, AppBarTitleAlignment, TopAppBarVariant, app_bar,
         app_bar_scroll_provider, top_app_bar,
     },
     boxed::boxed,
     button::button,
     column::column,
-    dialog::dialog_provider,
+    dialog::{DialogController, dialog_provider},
     flow_row::flow_row,
     icon::icon,
     icon_button::{IconButtonColorStyle, icon_button},
@@ -1305,7 +1305,7 @@ fn sample(
     let filled_action = remember(|| false);
     let logo = remember(|| logo.unwrap_or(false));
     let status = remember(|| "ui-no-action".to_owned());
-    let scroll = remember(AppBarScrollState::default);
+    let scroll = remember(AppBarScrollController::default);
     let content = remember(ScrollableController::new);
     column()
         .modifier(Modifier::new().fill_max_width())
@@ -1332,7 +1332,7 @@ fn sample(
                                 ))
                                 .on_click(move || {
                                     variant.set(value);
-                                    scroll.with_mut(AppBarScrollState::reset);
+                                    scroll.with_mut(AppBarScrollController::reset);
                                 })
                                 .child(move || {
                                     text(I18N.text(title));
@@ -1391,7 +1391,7 @@ fn sample(
                                 [("v0", I18N.text(&label.get()).into())],
                             ))
                             .on_click(move || {
-                                scroll.with_mut(AppBarScrollState::reset);
+                                scroll.with_mut(AppBarScrollController::reset);
                                 content.with_mut(|content| {
                                     content.set_scroll_position(tessera_ui::PxPosition::ZERO)
                                 });
@@ -1403,7 +1403,7 @@ fn sample(
                 gap(Dp(24.0));
             }
             app_bar_scroll_provider()
-                .state(scroll)
+                .controller(scroll)
                 .behavior(behavior.unwrap_or(AppBarScrollBehavior::ExitUntilCollapsed))
                 .scroll_controller(content)
                 .child(move || {
@@ -1421,7 +1421,7 @@ fn sample(
                             .children(move || {
                                 let logo_slot = RenderSlot::new(brand);
                                 top_app_bar()
-                                    .scroll_state(scroll)
+                                    .scroll_controller(scroll)
                                     .variant(variant.get())
                                     .title(I18N.text("ui-library"))
                                     .subtitle_optional(
@@ -1600,7 +1600,7 @@ fn search_sample(
 ) {
     let controller = remember(|| SearchBarController::new(false));
     let query = remember(String::new);
-    let opened = remember(|| false);
+    let opened = remember(DialogController::default);
     let width = remember(|| Dp(600.0));
     let status = remember(String::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -1637,8 +1637,8 @@ fn search_sample(
     dialog_provider()
         .accessibility_label(I18N.text("ui-search-library-view"))
         .full_screen(true)
-        .is_open(opened.get())
-        .on_close_request(move || opened.set(false))
+        .controller(opened)
+        .on_close_request(move || opened.with_mut(DialogController::close))
         .main_content(move || {
             let hint = hint.clone();
             let centered = centered.unwrap_or(false);
@@ -1733,7 +1733,6 @@ fn search_sample(
                                         )
                                         .controller(controller)
                                         .read_only(true)
-                                        .is_active(false)
                                         .colors(SearchBarColors {
                                             container_color: field_color,
                                             divider_color: divider,
@@ -1741,7 +1740,7 @@ fn search_sample(
                                         .placeholder(I18N.text(&(hint)))
                                         .on_active_change(move |active| {
                                             if active {
-                                                opened.set(true);
+                                                opened.with_mut(DialogController::open);
                                             }
                                         })
                                         .leading_icon_optional(
@@ -1823,15 +1822,22 @@ fn search_sample(
                 .children(move || {
                     search_bar()
                         .controller(view)
-                        .is_active(true)
-                        .on_active_change(move |active| opened.set(active))
+                        .on_active_change(move |active| {
+                            opened.with_mut(|opened| {
+                                if active {
+                                    opened.open();
+                                } else {
+                                    opened.close();
+                                }
+                            })
+                        })
                         .placeholder(I18N.text("ui-search-library"))
                         .leading_icon(move || {
                             icon_button()
                                 .standard()
                                 .icon(filled::ARROW_BACK_SVG)
                                 .accessibility_label(I18N.text("ui-close-app-bar-search"))
-                                .on_click(move || opened.set(false));
+                                .on_click(move || opened.with_mut(DialogController::close));
                         })
                         .on_query_change(move |value: String| {
                             query.set(value.clone());

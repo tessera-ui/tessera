@@ -3,7 +3,7 @@ use tessera_components::{
     boxed::boxed,
     button::button,
     column::column,
-    dialog::dialog_provider,
+    dialog::{DialogController, dialog_provider},
     flow_row::flow_row,
     icon_button::icon_button,
     material_icons::filled,
@@ -15,7 +15,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
     time_picker::{
-        TimePickerDisplayMode, TimePickerLayout, TimePickerSelection, TimePickerState, time_picker,
+        TimePickerDisplayMode, TimePickerLayout, TimePickerSelection, TimePickerController, time_picker,
         time_picker_dialog,
     },
 };
@@ -36,30 +36,30 @@ use super::{
 
 #[derive(Clone, Copy, PartialEq)]
 struct Sample {
-    state: State<TimePickerState>,
+    state: State<TimePickerController>,
     layout: State<TimePickerLayout>,
     status: State<String>,
 }
 
 #[tessera]
 pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
-    let modal = remember(|| false);
+    let modal = remember(|| DialogController::new(false));
     let sample = Sample {
-        state: remember(|| TimePickerState::new(9, 41, false, TimePickerDisplayMode::Picker)),
+        state: remember(|| TimePickerController::new(9, 41, false, TimePickerDisplayMode::Picker)),
         layout: remember(TimePickerLayout::default),
         status: remember(|| "ui-ready".to_owned()),
     };
     let committed = remember(|| (9_u8, 41_u8));
     let draft = Sample {
-        state: remember(|| TimePickerState::new(9, 41, false, TimePickerDisplayMode::Picker)),
+        state: remember(|| TimePickerController::new(9, 41, false, TimePickerDisplayMode::Picker)),
         layout: remember(TimePickerLayout::default),
         status: sample.status,
     };
     dialog_provider()
-        .is_open(modal.get())
+        .controller(modal)
         .padding(Dp::ZERO)
         .accessibility_label(I18N.text("ui-time-picker-dialog"))
-        .on_close_request(move || modal.set(false))
+        .on_close_request(move || modal.with_mut(DialogController::close))
         .main_content(move || {
             article(
                 "ui-time-pickers",
@@ -210,15 +210,15 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
         });
 }
 
-fn open_picker(modal: State<bool>, draft: Sample, committed: State<(u8, u8)>) {
+fn open_picker(modal: State<DialogController>, draft: Sample, committed: State<(u8, u8)>) {
     let (hour, minute) = committed.get();
-    draft.state.set(TimePickerState::new(
+    draft.state.set(TimePickerController::new(
         hour,
         minute,
         false,
         TimePickerDisplayMode::Picker,
     ));
-    modal.set(true);
+    modal.with_mut(DialogController::open);
 }
 
 #[tessera]
@@ -244,7 +244,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
             let label = label.clone();
             button()
                 .tonal()
-                .selected(sample.state.with(TimePickerState::is_24_hour))
+                .selected(sample.state.with(TimePickerController::is_24_hour))
                 .accessibility_label(I18N.format(
                     "ui-value-24-hour-format",
                     [("v0", I18N.text(&label).into())],
@@ -257,7 +257,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                 })
                 .child(move || {
                     text(
-                        I18N.text(if sample.state.with(TimePickerState::is_24_hour) {
+                        I18N.text(if sample.state.with(TimePickerController::is_24_hour) {
                             "ui-24-hours"
                         } else {
                             "ui-12-hours"
@@ -302,7 +302,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                     [("v0", I18N.text(&label).into())],
                 ))
                 .on_click(move || {
-                    sample.state.with_mut(TimePickerState::toggle_display_mode);
+                    sample.state.with_mut(TimePickerController::toggle_display_mode);
                     focus::defer_keyboard_until_layout();
                 })
                 .child(move || {
@@ -323,7 +323,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
 }
 
 #[tessera]
-fn visual(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>>) {
+fn visual(sample: Sample, #[prop(into)] label: String, modal: Option<State<DialogController>>) {
     let caption = label.clone();
     boxed()
         .alignment(Alignment::Center)
@@ -353,7 +353,7 @@ fn visual(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>
 fn picker_surface(
     sample: Sample,
     #[prop(into)] label: String,
-    modal: Option<State<bool>>,
+    modal: Option<State<DialogController>>,
     committed: Option<State<(u8, u8)>>,
     dialog: Option<tessera_components::dialog::DialogScope>,
 ) {
@@ -390,13 +390,13 @@ fn picker_contents(
     sample: Sample,
     #[prop(into)] confirm_label: String,
     #[prop(into)] cancel_label: String,
-    modal: Option<State<bool>>,
+    modal: Option<State<DialogController>>,
     committed: Option<State<(u8, u8)>>,
     dialog: Option<tessera_components::dialog::DialogScope>,
 ) {
     time_picker_dialog()
         .dialog_optional(dialog)
-        .state(sample.state)
+        .controller(sample.state)
         .title(I18N.text(sample.state.with(|state| {
             if state.display_mode() == TimePickerDisplayMode::Input {
                 "ui-enter-time"
@@ -422,7 +422,7 @@ fn picker_contents(
                         ],
                     ));
                     if let Some(modal) = modal {
-                        modal.set(false);
+                        modal.with_mut(DialogController::close);
                     }
                 })
                 .child(move || {
@@ -436,7 +436,7 @@ fn picker_contents(
                 .on_click(move || {
                     sample.status.set("ui-cancelled".into());
                     if let Some(modal) = modal {
-                        modal.set(false);
+                        modal.with_mut(DialogController::close);
                     }
                 })
                 .child(move || {
@@ -449,7 +449,7 @@ fn picker_contents(
 fn example(#[prop(into)] label: String, input: bool) {
     let sample = Sample {
         state: remember(|| {
-            TimePickerState::new(
+            TimePickerController::new(
                 9,
                 41,
                 false,
@@ -802,7 +802,7 @@ fn time_configuration_pair(input: bool, twenty_four: bool) {
 fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, label: String) {
     let sample = Sample {
         state: remember(|| {
-            TimePickerState::new(
+            TimePickerController::new(
                 if twenty_four { 20 } else { 7 },
                 0,
                 twenty_four,
@@ -822,7 +822,7 @@ fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, lab
         }),
         status: remember(String::new),
     };
-    let open = remember(|| true);
+    let open = remember(|| DialogController::new(true));
     column()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .modifier(
@@ -845,7 +845,7 @@ fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, lab
                 }),
         )
         .children(move || {
-            if open.get() {
+            if open.with(DialogController::is_open) {
                 picker_surface(sample, label.clone()).modal(open);
             } else {
                 text(I18N.text(sample.status.get())).style(type_style(16.0, 24.0));
@@ -854,7 +854,7 @@ fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, lab
                     .accessibility_label(
                         I18N.format("ui-reopen-value", [("v0", I18N.text(&label).into())]),
                     )
-                    .on_click(move || open.set(true))
+                    .on_click(move || open.with_mut(DialogController::open))
                     .child(move || {
                         text(I18N.text("ui-open-time-picker"));
                     });
@@ -1008,7 +1008,7 @@ fn time_figure(
 ) {
     let sample = Sample {
         state: remember(move || {
-            TimePickerState::new(
+            TimePickerController::new(
                 if twenty_four { 20 } else { 7 },
                 0,
                 twenty_four,
@@ -1216,7 +1216,7 @@ fn time_figure_contents(
         .with(|value| value.display_mode() == TimePickerDisplayMode::Input);
     let body_width = if horizontal {
         524.0
-    } else if sample.state.with(TimePickerState::is_24_hour) {
+    } else if sample.state.with(TimePickerController::is_24_hour) {
         256.0
     } else {
         280.0
@@ -1243,7 +1243,7 @@ fn time_figure_contents(
                 gap(Dp(20.0));
             }
             time_picker()
-                .state(sample.state)
+                .controller(sample.state)
                 .layout(if horizontal {
                     TimePickerLayout::Horizontal
                 } else {
@@ -1288,7 +1288,7 @@ fn time_figure_contents(
                             ),
                         )
                         .on_click(move || {
-                            sample.state.with_mut(TimePickerState::toggle_display_mode);
+                            sample.state.with_mut(TimePickerController::toggle_display_mode);
                             focus::defer_keyboard_until_layout();
                         });
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -1330,7 +1330,7 @@ fn time_figure_contents(
         });
 }
 
-fn clock_annotation(state: &TimePickerState) -> (f64, f64) {
+fn clock_annotation(state: &TimePickerController) -> (f64, f64) {
     let hour = state.selection() == TimePickerSelection::Hour;
     let fraction = if hour {
         (state.hour() % 12) as f64 / 12.0
@@ -1465,7 +1465,7 @@ fn time_annotation_content(
     let input = sample
         .state
         .with(|value| value.display_mode() == TimePickerDisplayMode::Input);
-    let twenty_four = sample.state.with(TimePickerState::is_24_hour);
+    let twenty_four = sample.state.with(TimePickerController::is_24_hour);
     let [hour, separator, minute, period, clock] =
         picker_regions(picker, input, horizontal, twenty_four);
     let hour_text = Rect {
@@ -1980,7 +1980,7 @@ fn time_adaptive() {
 }
 
 #[tessera]
-fn time_behavior(sample: Sample, modal: State<bool>, draft: Sample, committed: State<(u8, u8)>) {
+fn time_behavior(sample: Sample, modal: State<DialogController>, draft: Sample, committed: State<(u8, u8)>) {
     prose(
         "ui-select-a-field-and-adjust-the-corresponding-dial-or-type-directly-using-keyboard-input-rel",
     );
@@ -2012,7 +2012,7 @@ fn time_behavior(sample: Sample, modal: State<bool>, draft: Sample, committed: S
 
 #[tessera]
 fn dial_target_figure() {
-    let state = remember(|| TimePickerState::new(7, 0, false, TimePickerDisplayMode::Picker));
+    let state = remember(|| TimePickerController::new(7, 0, false, TimePickerDisplayMode::Picker));
     let geometry = remember(PreciseGeometry::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let available_width = remember(|| Dp(676.0));
@@ -2047,7 +2047,7 @@ fn dial_target_figure() {
                             )
                             .children(move || {
                                 time_picker()
-                                    .state(state)
+                                    .controller(state)
                                     .layout(TimePickerLayout::Vertical)
                                     .modifier(
                                         Modifier::new()
@@ -2066,7 +2066,7 @@ fn dial_target_figure() {
 }
 
 #[tessera]
-fn dial_target_annotations(geometry: State<PreciseGeometry>, state: State<TimePickerState>) {
+fn dial_target_annotations(geometry: State<PreciseGeometry>, state: State<TimePickerController>) {
     let values = geometry.with(annotations::relative_precise_geometry);
     let (Some(root), Some(clock)) = (values.get("figure"), values.get("clock").copied()) else {
         return;

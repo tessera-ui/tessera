@@ -5,7 +5,7 @@ use tessera_components::{
     modifier::{ModifierExt as _, SemanticsArgs},
     navigation_rail::{navigation_rail, navigation_rail_item},
     shape_def::Shape,
-    side_sheet::{SideSheetPosition, modal_side_sheet_provider},
+    side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
     spacer::spacer,
     surface::surface,
     theme::{MaterialTheme, material_theme},
@@ -14,7 +14,7 @@ use tessera_ui::{
     Color, Dp, Insets, Modifier, WindowInsetsController,
     accesskit::{Node, NodeId, Rect, Role},
     headless::{HeadlessConfig, HeadlessRenderer},
-    tessera, use_context,
+    remember, tessera, use_context,
     wgpu::TextureFormat,
 };
 
@@ -104,7 +104,7 @@ fn white_scrim_fixture() {
             .position(SideSheetPosition::Start)
             .max_width(Dp(240.0))
             .content_padding(Dp::ZERO)
-            .is_open(true)
+            .controller(remember(|| SideSheetController::new(true)))
             .main_content(|| {
                 boxed()
                     .modifier(Modifier::new().fill_max_size().background(Color::WHITE))

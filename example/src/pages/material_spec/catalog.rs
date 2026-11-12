@@ -6,6 +6,7 @@ use tessera_components::{
     modifier::{ModifierExt as _, SemanticsArgs},
     scrollable::{ScrollBarBehavior, ScrollableController},
     shape_def::Shape,
+    side_sheet::SideSheetController,
     surface::surface,
     text::text,
 };
@@ -596,7 +597,7 @@ mod tests {
                 router
             });
             let drawer =
-                remember(|| tessera_components::side_sheet::SideSheetController::new(false));
+                remember(|| SideSheetController::new(false));
             column()
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {

@@ -112,7 +112,7 @@ fn scrollbar_fixture(
                 });
                 if horizontal {
                     let bar = scrollbar_h()
-                        .state(controller)
+                        .controller(controller)
                         .track_color(Color::BLACK)
                         .thumb_color(Color::WHITE)
                         .thumb_hover_color(Color::WHITE);
@@ -121,7 +121,7 @@ fn scrollbar_fixture(
                     }
                 } else {
                     let bar = scrollbar_v()
-                        .state(controller)
+                        .controller(controller)
                         .track_color(Color::BLACK)
                         .thumb_color(Color::WHITE)
                         .thumb_hover_color(Color::WHITE);
@@ -159,7 +159,7 @@ fn unbound_scrollbar_fixture(observed: tessera_ui::testing::TestProbe<FixtureHan
     });
     observed.with_mut(|handles| handles.controller = Some(controller));
     scrollbar_v()
-        .state(controller)
+        .controller(controller)
         .total(Px(1000))
         .visible(Px(200));
 }

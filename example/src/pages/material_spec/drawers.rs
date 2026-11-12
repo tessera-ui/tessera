@@ -185,7 +185,7 @@ pub(crate) fn diagnostic_drawer_observations(observations: &DrawerObservations) 
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct LiveDrawerSession {
-    open: State<bool>,
+    open: State<SideSheetController>,
     selected: State<usize>,
     scroll: State<ScrollableController>,
     directory: State<SideSheetController>,
@@ -211,7 +211,7 @@ pub(crate) fn live_drawer_host(
     router: State<RouterController>,
     main_content: tessera_ui::RenderSlotWith<LiveDrawerSession>,
 ) {
-    let open = remember(|| false);
+    let open = remember(|| SideSheetController::new(false));
     let selected = remember(|| 0usize);
     let scroll = remember(ScrollableController::new);
     let session = LiveDrawerSession {
@@ -221,17 +221,17 @@ pub(crate) fn live_drawer_host(
         directory,
         router,
     };
-    if !session.route_active() && open.get() {
-        open.set(false);
+    if !session.route_active() && open.with(SideSheetController::is_open) {
+        open.with_mut(SideSheetController::close);
     }
     let modal = RenderSlot::new(move || {
         modal_side_sheet_provider()
             .max_width(Dp(360.0))
             .content_padding(Dp::ZERO)
             .position(SideSheetPosition::Start)
-            .is_open(open.get())
+            .controller(open)
             .accessibility_label(I18N.text("ui-mail-navigation"))
-            .on_close_request(move || open.set(false))
+            .on_close_request(move || open.with_mut(SideSheetController::close))
             .main_content(move || {
                 main_content.render(session);
             })
@@ -250,7 +250,7 @@ pub(super) fn drawers_spec(
     session: Option<LiveDrawerSession>,
 ) {
     let root = session;
-    let local_open = remember(|| false);
+    let local_open = remember(|| SideSheetController::new(false));
     let local_selected = remember(|| 0usize);
     let local_scroll = remember(ScrollableController::new);
     let (open, selected, scroll) = if let Some(session) = root {
@@ -409,9 +409,9 @@ pub(super) fn drawers_spec(
             .max_width(Dp(360.0))
             .content_padding(Dp::ZERO)
             .position(SideSheetPosition::Start)
-            .is_open(open.get())
+            .controller(open)
             .accessibility_label(I18N.text("ui-mail-navigation"))
-            .on_close_request(move || open.set(false))
+            .on_close_request(move || open.with_mut(SideSheetController::close))
             .main_content_shared(content)
             .side_sheet_content(move || {
                 live_drawer(selected, open, scroll);
@@ -724,14 +724,14 @@ fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Call
 }
 
 #[tessera]
-fn launch(open: State<bool>, selected: State<usize>, session: Option<LiveDrawerSession>) {
+fn launch(open: State<SideSheetController>, selected: State<usize>, session: Option<LiveDrawerSession>) {
     column().children(move || {
         button()
             .outlined()
             .accessibility_label(I18N.text("ui-open-modal-navigation-drawer"))
             .on_click(move || {
                 if session.is_none_or(LiveDrawerSession::can_open) {
-                    open.set(true);
+                    open.with_mut(SideSheetController::open);
                 }
             })
             .child(move || {
@@ -778,7 +778,7 @@ fn drawer_content(
 }
 
 #[tessera]
-fn live_drawer(selected: State<usize>, open: State<bool>, scroll: State<ScrollableController>) {
+fn live_drawer(selected: State<usize>, open: State<SideSheetController>, scroll: State<ScrollableController>) {
     column()
         .modifier(
             Modifier::new()
@@ -802,7 +802,7 @@ fn live_drawer(selected: State<usize>, open: State<bool>, scroll: State<Scrollab
 #[tessera]
 fn drawer_destinations(
     selected: State<usize>,
-    open: Option<State<bool>>,
+    open: Option<State<SideSheetController>>,
     geometry: Option<State<Geometry>>,
     interactive: Option<bool>,
     folders: Option<bool>,
@@ -857,7 +857,7 @@ fn drawer_destinations(
             .on_click(move || {
                 if let Some(open) = open {
                     selected.set(index);
-                    open.set(false);
+                    open.with_mut(SideSheetController::close);
                 } else if interactive {
                     selected.set(index);
                 }
@@ -960,7 +960,7 @@ fn drawer_destinations(
         .on_click(move || {
             if let Some(open) = open {
                 selected.set(4);
-                open.set(false);
+                open.with_mut(SideSheetController::close);
             } else if interactive {
                 selected.set(4);
             }

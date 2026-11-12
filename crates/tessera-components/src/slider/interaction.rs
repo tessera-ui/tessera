@@ -385,8 +385,7 @@ pub(super) fn apply_slider_semantics(
     accessibility.actions.push(Action::Decrement);
 }
 
-/// Controller for the `range_slider` component.
-pub struct RangeSliderController {
+pub(super) struct RangeSliderInteraction {
     pub(crate) is_hovered: bool,
     pub(crate) is_dragging_start: bool,
     pub(crate) is_dragging_end: bool,
@@ -395,15 +394,14 @@ pub struct RangeSliderController {
     pub(crate) focus_end: FocusRequester,
 }
 
-impl Default for RangeSliderController {
+impl Default for RangeSliderInteraction {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RangeSliderController {
-    /// Creates a new range slider controller.
-    pub fn new() -> Self {
+impl RangeSliderInteraction {
+    pub(super) fn new() -> Self {
         Self {
             is_hovered: false,
             is_dragging_start: false,
@@ -425,7 +423,7 @@ pub(super) fn handle_range_slider_state(
     input: &mut PointerInput,
     tap_recognizer: State<TapRecognizer>,
     drag_recognizer: State<DragRecognizer>,
-    state: &State<RangeSliderController>,
+    state: &State<RangeSliderInteraction>,
     args: &super::RangeSliderArgs,
     layout: &SliderLayout,
     handle_widths: RangeSliderHandleWidths,

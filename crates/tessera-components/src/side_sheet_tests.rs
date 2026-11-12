@@ -26,11 +26,14 @@ use crate::{
     theme::material_theme,
 };
 
-use super::{SideSheetPosition, modal_side_sheet_provider, standard_side_sheet_provider};
+use super::{
+    SideSheetController, SideSheetPosition, modal_side_sheet_provider,
+    standard_side_sheet_provider,
+};
 
 #[derive(Clone, Default)]
 struct FixtureOutput {
-    open: Option<State<bool>>,
+    open: Option<State<SideSheetController>>,
     dimensions: Option<State<(Dp, Dp)>>,
 }
 
@@ -48,7 +51,7 @@ fn fixture(
     output: tessera_ui::testing::TestProbe<FixtureOutput>,
 ) {
     let (modal, position, width) = case;
-    let open = remember(|| true);
+    let open = remember(|| SideSheetController::new(true));
     output.with_mut(|output| output.open = Some(open));
     material_theme().child(move || {
         column()
@@ -75,16 +78,16 @@ fn fixture(
                 });
                 if modal {
                     modal_side_sheet_provider()
-                        .is_open(open.get())
+                        .controller(open)
                         .position(position)
-                        .on_close_request(move || open.set(false))
+                        .on_close_request(move || open.with_mut(SideSheetController::close))
                         .main_content_shared(main)
                         .side_sheet_content_shared(sheet);
                 } else {
                     standard_side_sheet_provider()
-                        .is_open(open.get())
+                        .controller(open)
                         .position(position)
-                        .on_close_request(move || open.set(false))
+                        .on_close_request(move || open.with_mut(SideSheetController::close))
                         .main_content_shared(main)
                         .side_sheet_content_shared(sheet);
                 }
@@ -166,7 +169,11 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
                                 );
                             }
                             assert!(
-                                !output.get().open.expect("mounted sheet visibility").get(),
+                                !output
+                                    .get()
+                                    .open
+                                    .expect("mounted sheet visibility")
+                                    .with(SideSheetController::is_open),
                                 "the full measured host must have a dismissible scrim"
                             );
                         }
@@ -198,7 +205,7 @@ fn modal_sheet_previews_back_without_closing_until_commit() {
         .bounds();
     assert!(preview.x < initial.x);
     assert_eq!(preview.width, initial.width);
-    assert!(session.run(|| open.get()));
+    assert!(session.run(|| open.with(SideSheetController::is_open)));
 
     session.dispatch_system_back(SystemBackEvent::Cancelled);
     let restored = pump_layout_test_session(&mut session, 1_000_000_000)
@@ -206,7 +213,7 @@ fn modal_sheet_previews_back_without_closing_until_commit() {
         .bounds();
     assert_eq!(restored, initial);
     session.dispatch_system_back(SystemBackEvent::Committed);
-    assert!(!session.run(|| open.get()));
+    assert!(!session.run(|| open.with(SideSheetController::is_open)));
 }
 
 #[tessera]
@@ -215,7 +222,7 @@ fn configured_fixture(
     output: tessera_ui::testing::TestProbe<FixtureOutput>,
 ) {
     let (_, _, width) = case;
-    let open = remember(|| true);
+    let open = remember(|| SideSheetController::new(true));
     let dimensions = remember(|| (Dp(360.0), Dp::ZERO));
     output.with_mut(|output| output.open = Some(open));
     output.with_mut(|output| output.dimensions = Some(dimensions));
@@ -227,11 +234,11 @@ fn configured_fixture(
                     .modifier(tag("configured-host").size(Dp(f64::from(width)), Dp(480.0)))
                     .children(move || {
                         modal_side_sheet_provider()
-                            .is_open(open.get())
+                            .controller(open)
                             .position(SideSheetPosition::Start)
                             .max_width(dimensions.with(|value| value.0))
                             .content_padding(dimensions.with(|value| value.1))
-                            .on_close_request(move || open.set(false))
+                            .on_close_request(move || open.with_mut(SideSheetController::close))
                             .main_content(|| {
                                 boxed().modifier(Modifier::new().fill_max_size());
                             })
@@ -335,7 +342,11 @@ fn configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_sc
                         &mut frame,
                     );
                     assert!(
-                        output.get().open.expect("mounted sheet visibility").get(),
+                        output
+                            .get()
+                            .open
+                            .expect("mounted sheet visibility")
+                            .with(SideSheetController::is_open),
                         "the sheet's blank ending inset must still block scrim activation"
                     );
                     tap_configured(
@@ -344,7 +355,11 @@ fn configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_sc
                         &mut frame,
                     );
                     assert!(
-                        !output.get().open.expect("mounted sheet visibility").get(),
+                        !output
+                            .get()
+                            .open
+                            .expect("mounted sheet visibility")
+                            .with(SideSheetController::is_open),
                         "the old 360–400dp sheet band must now belong to the scrim"
                     );
                 }

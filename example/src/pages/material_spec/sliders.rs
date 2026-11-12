@@ -98,10 +98,9 @@ fn immediate_example() {
         .children(move || {
             text(I18N.text("ui-volume")).style(type_style(16.0, 24.0));
             gap(Dp(16.0));
-            slider()
+            slider(value.get())
                 .size(SliderSize::Medium)
                 .modifier(Modifier::new().fill_max_width())
-                .value(value.get())
                 .on_change(move |v| value.set(v))
                 .inset_icon(if value.get() == 0.0 {
                     filled::VOLUME_OFF_SVG
@@ -136,9 +135,8 @@ fn value_example(editor: Option<State<TextInputController>>) {
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            slider()
+            slider(value.get())
                 .modifier(Modifier::new().weight(1.0))
-                .value(value.get())
                 .on_change(move |next| {
                     value.set(next);
                     let formatted = format!("{:.2}", next * 100.0);
@@ -193,18 +191,16 @@ fn orientation_examples() {
         .item_spacing(Dp(64.0))
         .line_spacing(Dp(24.0))
         .children(move || {
-            slider()
+            slider(standard.get())
                 .orientation(SliderOrientation::Vertical)
                 .reverse_direction(true)
                 .modifier(Modifier::new().height(Dp(240.0)))
-                .value(standard.get())
                 .on_change(move |v| standard.set(v))
                 .accessibility_label(I18N.text("ui-vertical-standard-value"));
-            centered_slider()
+            centered_slider(centered.get())
                 .orientation(SliderOrientation::Vertical)
                 .reverse_direction(true)
                 .modifier(Modifier::new().height(Dp(240.0)))
-                .value(centered.get())
                 .on_change(move |v| centered.set(v))
                 .accessibility_label(I18N.text("ui-vertical-centered-value"));
         });
@@ -213,10 +209,9 @@ fn orientation_examples() {
 #[tessera]
 fn inset_examples() {
     let value = remember(|| 0.5_f32);
-    slider()
+    slider(value.get())
         .modifier(Modifier::new().fill_max_width())
         .size(SliderSize::Medium)
-        .value(value.get())
         .on_change(move |v| value.set(v))
         .inset_icon(if value.get() == 0.0 {
             filled::VOLUME_OFF_SVG
@@ -262,30 +257,27 @@ fn sample(
             }
             match kind {
                 1 => {
-                    centered_slider()
+                    centered_slider(value.get())
                         .modifier(Modifier::new().fill_max_width())
                         .size(size)
-                        .value(value.get())
                         .on_change(move |v| value.set(v))
                         .disabled(disabled)
                         .steps(steps)
                         .accessibility_label(I18N.text(&(label)));
                 }
                 2 => {
-                    range_slider()
+                    range_slider(range.get())
                         .modifier(Modifier::new().fill_max_width())
                         .size(size)
-                        .value(range.get())
                         .on_change(move |v| range.set(v))
                         .disabled(disabled)
                         .steps(steps)
                         .accessibility_label(I18N.text(&(label)));
                 }
                 _ => {
-                    slider()
+                    slider(value.get())
                         .modifier(Modifier::new().fill_max_width())
                         .size(size)
-                        .value(value.get())
                         .on_change(move |v| value.set(v))
                         .disabled(disabled)
                         .steps(steps)
@@ -435,26 +427,23 @@ fn variant_specimen(index: usize, x: Dp, y: Dp, width: Dp) {
         .modifier(Modifier::new().offset(x, y).width(width))
         .children(move || match index {
             1 => {
-                centered_slider()
+                centered_slider(value.get())
                     .modifier(Modifier::new().fill_max_width())
                     .size(SliderSize::ExtraSmall)
-                    .value(value.get())
                     .on_change(move |next| value.set(next))
                     .accessibility_label(I18N.text("ui-centered-slider-variant"));
             }
             2 => {
-                range_slider()
+                range_slider(range.get())
                     .modifier(Modifier::new().fill_max_width())
                     .size(SliderSize::ExtraSmall)
-                    .value(range.get())
                     .on_change(move |next| range.set(next))
                     .accessibility_label(I18N.text("ui-range-slider-variant"));
             }
             _ => {
-                slider()
+                slider(value.get())
                     .modifier(Modifier::new().fill_max_width())
                     .size(SliderSize::ExtraSmall)
-                    .value(value.get())
                     .on_change(move |next| value.set(next))
                     .accessibility_label(I18N.text("ui-standard-slider-variant"));
             }
@@ -704,7 +693,7 @@ fn configuration_slider(
     boxed()
         .modifier(Modifier::new().offset(x, y).width(width).height(height))
         .children(move || {
-            let control = slider()
+            let control = slider(value.get())
                 .value_indicator_host_optional(value_indicator_host)
                 .modifier(Modifier::new().fill_max_size())
                 .size(size)
@@ -714,7 +703,6 @@ fn configuration_slider(
                     SliderOrientation::Horizontal
                 })
                 .reverse_direction(vertical)
-                .value(value.get())
                 .on_change(move |next| value.set(next))
                 .steps(steps)
                 .show_stop_indicator(end_stop)
@@ -842,11 +830,10 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                                     .width(Dp(200.0 * scale)),
                             )
                             .children(move || {
-                                slider()
+                                slider(value.get())
                                     .value_indicator_host(value_indicator_host)
                                     .modifier(watch_precise(geometry, "standard").fill_max_width())
                                     .size(SliderSize::ExtraSmall)
-                                    .value(value.get())
                                     .on_change(move |next| value.set(next))
                                     .controller(controller)
                                     .steps(9)
@@ -866,11 +853,10 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                                         .width(Dp(185.0 * scale)),
                                 )
                                 .children(move || {
-                                    slider()
+                                    slider(state.get())
                                         .value_indicator_host(value_indicator_host)
                                         .modifier(watch_precise(geometry, name).fill_max_width())
                                         .size(SliderSize::Medium)
-                                        .value(state.get())
                                         .on_change(move |next| state.set(next))
                                         .inset_icon(filled::VOLUME_UP_SVG)
                                         .accessibility_label(
@@ -1096,11 +1082,10 @@ fn state_specimen(
                 .width(Dp(200.0 * scale)),
         )
         .children(move || {
-            slider()
+            slider(value.get())
                 .value_indicator_host_optional(value_indicator_host)
                 .modifier(Modifier::new().fill_max_width())
                 .size(SliderSize::ExtraSmall)
-                .value(value.get())
                 .on_change(move |next| value.set(next))
                 .disabled(index == 1)
                 .presentation_state(state)
@@ -1251,7 +1236,7 @@ fn slider_figure(measurements: bool) {
                                             .width(Dp(208.0)),
                                     )
                                     .children(move || {
-                                        slider()
+                                        slider(value.get())
                                             .value_indicator_host(value_indicator_host)
                                             .modifier(
                                                 watch_precise(geometry, "standard")
@@ -1259,7 +1244,6 @@ fn slider_figure(measurements: bool) {
                                             )
                                             .controller(controller)
                                             .size(SliderSize::ExtraSmall)
-                                            .value(value.get())
                                             .on_change(move |v| value.set(v))
                                             .steps(9)
                                             .value_indicator(SliderValueIndicatorVisibility::Always)
@@ -1273,13 +1257,12 @@ fn slider_figure(measurements: bool) {
                                             .width(Dp(192.0)),
                                     )
                                     .children(move || {
-                                        slider()
+                                        slider(inset.get())
                                             .value_indicator_host(value_indicator_host)
                                             .modifier(
                                                 watch_precise(geometry, "inset").fill_max_width(),
                                             )
                                             .size(SliderSize::Medium)
-                                            .value(inset.get())
                                             .on_change(move |v| inset.set(v))
                                             .inset_icon(filled::VOLUME_UP_SVG)
                                             .accessibility_label(
@@ -1446,12 +1429,11 @@ fn slider_measurement_figure() {
                                             Dp(height * 0.5533 - 24.0),
                                         ))
                                         .children(move || {
-                                            slider()
+                                            slider(state.get())
                                                 .value_indicator_host(value_indicator_host)
                                                 .modifier(
                                                     watch_precise(geometry, name).fill_max_width(),
                                                 )
-                                                .value(state.get())
                                                 .controller(controller)
                                                 .on_change(move |v| state.set(v))
                                                 .size(SliderSize::ExtraSmall)
@@ -1651,10 +1633,9 @@ fn size_specimen(
                     Dp(center_y.0 - component_height * 0.5),
                 ))
                 .children(move || {
-                    let specimen = slider()
+                    let specimen = slider(value.get())
                         .modifier(watch_precise(geometry, name).fill_max_width())
                         .size(SIZES[index])
-                        .value(value.get())
                         .controller(controller)
                         .on_change(move |next| value.set(next))
                         .accessibility_label(

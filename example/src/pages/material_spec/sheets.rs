@@ -1370,8 +1370,7 @@ fn filter_context() {
                                                 .into_iter()
                                                 .enumerate()
                                                 {
-                                                    checkbox()
-                                                        .checked(labels.get()[index])
+                                                    checkbox(labels.get()[index])
                                                         .accessibility_label(I18N.text(label))
                                                         .modifier(Modifier::new().offset(
                                                             Dp(18.0 * scale),

@@ -36,7 +36,7 @@ pub(super) fn spec_scroll_viewport(
                 .modifier(Modifier::new().width(TRACK_WIDTH).fill_max_height())
                 .children(move || {
                     scrollbar_v()
-                        .state(controller)
+                        .controller(controller)
                         .thickness(TRACK_WIDTH)
                         .scrollbar_behavior(ScrollBarBehavior::AlwaysVisible);
                 });

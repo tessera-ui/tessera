@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, State,
+    MeasurementError, Modifier, Px, PxPosition,
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, PlacementResult, PlacementScope},
@@ -23,17 +23,15 @@ use crate::{
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 
-/// Controller for the `glass_switch` component.
 #[derive(Clone, PartialEq)]
-pub struct GlassSwitchController {
+struct GlassSwitchMotion {
     checked: bool,
     progress: f32,
     last_toggle_frame_nanos: Option<u64>,
 }
 
-impl GlassSwitchController {
-    /// Creates a new controller with the given initial value.
-    pub fn new(initial_state: bool) -> Self {
+impl GlassSwitchMotion {
+    fn new(initial_state: bool) -> Self {
         Self {
             checked: initial_state,
             progress: if initial_state { 1.0 } else { 0.0 },
@@ -41,28 +39,16 @@ impl GlassSwitchController {
         }
     }
 
-    /// Returns whether the switch is currently checked.
-    pub fn is_checked(&self) -> bool {
+    fn is_checked(&self) -> bool {
         self.checked
     }
 
-    /// Sets the checked state directly, resetting animation progress.
-    pub fn set_checked(&mut self, checked: bool) {
-        if self.checked != checked {
-            self.checked = checked;
-            self.progress = if checked { 1.0 } else { 0.0 };
-            self.last_toggle_frame_nanos = None;
-        }
-    }
-
-    /// Toggles the switch and starts the animation timeline.
-    pub fn toggle(&mut self) {
+    fn toggle(&mut self) {
         self.checked = !self.checked;
         self.last_toggle_frame_nanos = Some(current_frame_nanos());
     }
 
-    /// Advances the animation timeline based on elapsed time.
-    pub fn update_progress(&mut self, frame_nanos: u64) {
+    fn update_progress(&mut self, frame_nanos: u64) {
         if let Some(start_frame_nanos) = self.last_toggle_frame_nanos {
             let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
             let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
@@ -80,20 +66,12 @@ impl GlassSwitchController {
         }
     }
 
-    /// Returns the current animation progress (0.0..1.0).
-    pub fn animation_progress(&self) -> f32 {
+    fn animation_progress(&self) -> f32 {
         self.progress
     }
 
-    /// Returns whether the toggle animation is currently running.
-    pub fn is_animating(&self) -> bool {
+    fn is_animating(&self) -> bool {
         self.last_toggle_frame_nanos.is_some()
-    }
-}
-
-impl Default for GlassSwitchController {
-    fn default() -> Self {
-        Self::new(false)
     }
 }
 
@@ -118,7 +96,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 ///
 /// - `modifier` — optional modifier chain applied to the switch subtree.
 /// - `on_toggle` — optional callback invoked when the switch toggles.
-/// - `checked` — initial checked state.
+/// - `checked` — whether the switch is on.
 /// - `width` — optional track width override.
 /// - `height` — optional track height override.
 /// - `track_on_color` — optional track tint when checked.
@@ -130,37 +108,34 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 /// - `thumb_padding` — optional thumb padding.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
-/// - `controller` — optional external controller.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::glass_switch::{GlassSwitchController, glass_switch};
+/// use tessera_components::glass_switch::glass_switch;
 /// use tessera_components::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::{LayoutResult, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
-///     let controller = remember(|| GlassSwitchController::new(false));
-///     assert!(!controller.with(|c| c.is_checked()));
+///     let checked = remember(|| false);
+///     assert!(!checked.get());
 ///
 ///     material_theme()
 ///         .theme(|| MaterialTheme::default())
 ///         .child(move || {
-///             glass_switch().checked(controller.with(|c| c.is_checked()));
+///             glass_switch(checked.get()).on_toggle(move |value| checked.set(value));
 ///         });
 ///
-///     controller.with_mut(|c| c.toggle());
-///     assert!(controller.with(|c| c.is_checked()));
 /// }
 ///
 /// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn glass_switch(
+    checked: bool,
     modifier: Option<Modifier>,
     on_toggle: Option<CallbackWith<bool, ()>>,
-    checked: Option<bool>,
     width: Option<Dp>,
     height: Option<Dp>,
     track_on_color: Option<Color>,
@@ -172,9 +147,7 @@ pub fn glass_switch(
     thumb_padding: Option<Dp>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
-    #[prop(skip_setter)] controller: Option<State<GlassSwitchController>>,
 ) {
-    let checked = checked.unwrap_or(false);
     let width = width.unwrap_or(Dp(52.0));
     let height = height.unwrap_or(Dp(32.0));
     let track_on_color = track_on_color.unwrap_or(Color::new(0.2, 0.7, 1.0, 0.5));
@@ -182,12 +155,9 @@ pub fn glass_switch(
     let thumb_on_alpha = thumb_on_alpha.unwrap_or(0.5);
     let thumb_off_alpha = thumb_off_alpha.unwrap_or(1.0);
     let thumb_padding = thumb_padding.unwrap_or(Dp(3.0));
-    let controller = match controller {
-        Some(value) => value,
-        None => remember(|| GlassSwitchController::new(checked)),
-    };
+    let controller = remember(|| GlassSwitchMotion::new(checked));
     if controller.with(|c| c.is_checked()) != checked {
-        controller.with_mut(|c| c.set_checked(checked));
+        controller.with_mut(|c| c.toggle());
     }
     let mut modifier = modifier.unwrap_or_default();
 
@@ -197,14 +167,11 @@ pub fn glass_switch(
     } else {
         None
     };
-    let checked = controller.with(|c| c.is_checked());
     if enabled {
         modifier = modifier.minimum_interactive_component_size();
         let toggle_args = ToggleableArgs {
             value: checked,
-            on_value_change: CallbackWith::new(move |_| {
-                controller.with_mut(|c| c.toggle());
-                let checked = controller.with(|c| c.is_checked());
+            on_value_change: CallbackWith::new(move |checked| {
                 if let Some(on_toggle) = on_toggle.as_ref() {
                     on_toggle.call(checked);
                 }

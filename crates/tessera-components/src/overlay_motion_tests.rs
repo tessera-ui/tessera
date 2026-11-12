@@ -14,11 +14,15 @@ use tessera_ui::{
 };
 
 use crate::{
-    bottom_sheet::bottom_sheet_provider,
-    dialog::dialog_provider,
+    bottom_sheet::{BottomSheetController, bottom_sheet_provider},
+    dialog::{DialogController, dialog_provider},
     modifier::ModifierExt as _,
-    side_sheet::{SideSheetPosition, modal_side_sheet_provider, standard_side_sheet_provider},
+    side_sheet::{
+        SideSheetController, SideSheetPosition, modal_side_sheet_provider,
+        standard_side_sheet_provider,
+    },
     surface::surface,
+    test_utils::OverlayController,
     theme::material_theme,
 };
 
@@ -51,13 +55,17 @@ fn marker_content() {
 }
 
 #[tessera]
-fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<bool>>>) {
-    let open = remember(|| false);
+fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<OverlayController>>) {
+    let open = match kind {
+        Kind::Dialog => OverlayController::Dialog(remember(|| DialogController::new(false))),
+        Kind::Bottom => OverlayController::Bottom(remember(|| BottomSheetController::new(false))),
+        _ => OverlayController::Side(remember(|| SideSheetController::new(false))),
+    };
     output.set(Some(open));
-    material_theme().child(move || match kind {
-        Kind::Dialog => {
+    material_theme().child(move || match open {
+        OverlayController::Dialog(controller) => {
             dialog_provider()
-                .is_open(open.get())
+                .controller(controller)
                 .main_content(|| {
                     main_content();
                 })
@@ -65,9 +73,9 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<bool>
                     marker_content();
                 });
         }
-        Kind::Bottom => {
+        OverlayController::Bottom(controller) => {
             bottom_sheet_provider()
-                .is_open(open.get())
+                .controller(controller)
                 .main_content(|| {
                     main_content();
                 })
@@ -75,7 +83,7 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<bool>
                     marker_content();
                 });
         }
-        kind => {
+        OverlayController::Side(controller) => {
             let position = if matches!(kind, Kind::Start | Kind::StandardStart) {
                 SideSheetPosition::Start
             } else {
@@ -83,7 +91,7 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<bool>
             };
             if matches!(kind, Kind::StandardStart | Kind::StandardEnd) {
                 standard_side_sheet_provider()
-                    .is_open(open.get())
+                    .controller(controller)
                     .position(position)
                     .main_content(|| {
                         main_content();
@@ -94,7 +102,7 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<bool>
                 return;
             }
             modal_side_sheet_provider()
-                .is_open(open.get())
+                .controller(controller)
                 .position(position)
                 .main_content(|| {
                     main_content();
@@ -154,7 +162,7 @@ fn check(samples: u32) {
             renderer.render_frames(4);
             let baseline = renderer.read_pixels().unwrap();
             let open = output.get().unwrap();
-            open.set(true);
+            renderer.run(|| open.set(true));
             renderer.render_frames(8);
             let entering = marker(&renderer).unwrap();
             let entering_bounds = entering.bounds().unwrap();
@@ -164,7 +172,7 @@ fn check(samples: u32) {
                 let before = marker(&renderer).unwrap();
                 let rect = before.bounds().unwrap();
                 let opacity = matches!(kind, Kind::Dialog).then(|| green(&renderer, &before));
-                open.set(target);
+                renderer.run(|| open.set(target));
                 renderer.step_frame();
                 let after = marker(&renderer).unwrap();
                 let next = after.bounds().unwrap();
@@ -212,15 +220,15 @@ fn check(samples: u32) {
                         > 8.0 * scale
                 );
             }
-            open.set(false);
+            renderer.run(|| open.set(false));
             renderer.render_frames(5);
-            open.set(true);
+            renderer.run(|| open.set(true));
             renderer.render_frames(80);
             assert!(
                 renderer.read_pixels().unwrap() == full,
                 "{kind:?}: reopened pixels differ"
             );
-            open.set(false);
+            renderer.run(|| open.set(false));
             renderer.render_frames(80);
             assert!(marker(&renderer).is_none());
             assert!(
@@ -230,7 +238,7 @@ fn check(samples: u32) {
             if is_sheet {
                 renderer.resize(320, 600);
                 renderer.render_frames(4);
-                open.set(true);
+                renderer.run(|| open.set(true));
                 renderer.render_frames(80);
                 let bounds = marker(&renderer).unwrap().bounds().unwrap();
                 assert!(

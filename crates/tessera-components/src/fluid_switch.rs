@@ -93,14 +93,6 @@ impl FluidSwitchState {
         self.checked
     }
 
-    fn snap_to_checked(&mut self, checked: bool) {
-        self.checked = checked;
-        self.travel_progress = if checked { 1.0 } else { 0.0 };
-        self.expansion_progress = 0.0;
-        self.travel_transition = None;
-        self.expansion_transition = None;
-    }
-
     fn travel_progress(&self) -> f32 {
         self.travel_progress
     }
@@ -292,8 +284,7 @@ fn update_state_for_frame(state: State<FluidSwitchState>, frame_nanos: u64) -> b
 /// - `modifier` - optional modifier chain applied to the switch subtree.
 /// - `on_toggle` - optional callback invoked when the switch toggles.
 /// - `enabled` - optional enabled state; defaults to `true`.
-/// - `checked` - optional external checked state. When omitted, the switch
-///   manages its own state internally.
+/// - `checked` - whether the switch is on.
 /// - `accent_color` - optional checked-state tint blended into the surface
 ///   substrate; defaults to a pale green.
 /// - `accessibility_label` - optional accessibility label.
@@ -318,8 +309,7 @@ fn update_state_for_frame(state: State<FluidSwitchState>, frame_nanos: u64) -> b
 ///     .theme(|| MaterialTheme::default())
 ///     .child(move || {
 ///         surface().child(move || {
-///             fluid_switch()
-///                 .checked(checked.get())
+///             fluid_switch(checked.get())
 ///                 .on_toggle(move |next_checked| checked.set(next_checked));
 ///         });
 ///     });
@@ -328,25 +318,22 @@ fn update_state_for_frame(state: State<FluidSwitchState>, frame_nanos: u64) -> b
 /// ```
 #[tessera]
 pub fn fluid_switch(
+    checked: bool,
     modifier: Option<Modifier>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     enabled: Option<bool>,
-    checked: Option<bool>,
     accent_color: Option<Color>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
     let enabled = enabled.unwrap_or(true);
-    let checked_prop = checked;
-    let initial_checked = checked_prop.unwrap_or(false);
     let accent_color = accent_color.unwrap_or(FluidSwitchDefaults::CHECKED_TINT_COLOR);
-    let state = remember(|| FluidSwitchState::new(initial_checked));
+    let state = remember(|| FluidSwitchState::new(checked));
 
-    fluid_switch_content()
+    fluid_switch_content(checked)
         .modifier_optional(modifier)
         .on_toggle_optional(on_toggle)
         .enabled(enabled)
-        .checked_optional(checked_prop)
         .accent_color(accent_color)
         .accessibility_label_optional(accessibility_label)
         .accessibility_description_optional(accessibility_description)
@@ -356,42 +343,31 @@ pub fn fluid_switch(
 #[tessera]
 #[allow(clippy::too_many_arguments)]
 fn fluid_switch_content(
+    checked: bool,
     modifier: Option<Modifier>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     enabled: Option<bool>,
-    checked: Option<bool>,
     accent_color: Option<Color>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
     state: Option<State<FluidSwitchState>>,
 ) {
     let enabled = enabled.unwrap_or(true);
-    let checked_prop = checked;
     let accent_color = accent_color.unwrap_or(FluidSwitchDefaults::CHECKED_TINT_COLOR);
     let state = state.expect("fluid_switch_content requires state to be set");
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let last_checked_prop = remember(|| Option::<bool>::None);
-
-    let previous_checked_prop = last_checked_prop.get();
-    if let Some(checked) = checked_prop {
-        if previous_checked_prop.is_none() {
-            state.with_mut(|state| state.snap_to_checked(checked));
-        } else if previous_checked_prop != checked_prop {
-            state.with_mut(|state| state.animate_to_checked(checked));
-        } else if state.with(|state| !state.is_animating() && state.is_checked() != checked) {
-            state.with_mut(|state| state.animate_to_checked(checked));
-        }
-    }
-    if previous_checked_prop != checked_prop {
-        last_checked_prop.set(checked_prop);
+    let last_checked = remember(|| checked);
+    if last_checked.get() != checked {
+        last_checked.set(checked);
+        state.with_mut(|state| state.animate_to_checked(checked));
+    } else if state.with(|state| !state.is_animating() && state.is_checked() != checked) {
+        state.with_mut(|state| state.animate_to_checked(checked));
     }
 
     let mut modifier = modifier.unwrap_or_default();
-    let visual_checked = state.with(|state| state.is_checked());
-    let source_checked = checked_prop.unwrap_or(visual_checked);
     let travel_progress = state.with(|state| state.travel_progress());
     let eased_progress = animation::easing(travel_progress);
     let expansion_progress = state.with(|state| state.expansion_progress());
@@ -411,7 +387,7 @@ fn fluid_switch_content(
             state.with_mut(|state| state.release());
         };
         let toggle_args = ToggleableArgs {
-            value: source_checked,
+            value: checked,
             on_value_change: CallbackWith::new(move |next_checked| {
                 state.with_mut(|state| state.animate_to_checked(next_checked));
                 if let Some(on_toggle) = on_toggle.as_ref() {
@@ -434,7 +410,7 @@ fn fluid_switch_content(
             role: Some(Role::Switch),
             label: accessibility_label.clone(),
             description: accessibility_description.clone(),
-            toggled: Some(if source_checked {
+            toggled: Some(if checked {
                 Toggled::True
             } else {
                 Toggled::False
@@ -631,7 +607,7 @@ mod tests {
         material_theme()
             .theme(MaterialTheme::default)
             .child(move || {
-                fluid_switch_content()
+                fluid_switch_content(true)
                     .on_toggle(|_| {})
                     .enabled(true)
                     .accent_color(FluidSwitchDefaults::CHECKED_TINT_COLOR)

@@ -229,7 +229,7 @@ pub(super) fn viewport(
                 .modifier(Modifier::new().width(Dp(15.0)).fill_max_height())
                 .children(move || {
                     scrollbar_v()
-                        .state(scroll)
+                        .controller(scroll)
                         .thickness(Dp(15.0))
                         .scrollbar_behavior(ScrollBarBehavior::AlwaysVisible);
                 });

@@ -16,11 +16,11 @@ use tessera_ui::{
 
 use crate::{column::column, icon::icon, material_icons::filled, theme::material_theme};
 
-use super::{SwitchController, THUMB_TEST_TAG, switch};
+use super::{THUMB_TEST_TAG, switch};
 
 #[derive(Clone, Copy, Default, PartialEq)]
 struct Settings {
-    checked: Option<bool>,
+    checked: bool,
     icons: bool,
     activations: usize,
 }
@@ -28,24 +28,24 @@ struct Settings {
 #[derive(Clone, Copy, Default, PartialEq)]
 struct FixtureHandles {
     settings: Option<State<Settings>>,
-    controller: Option<State<SwitchController>>,
 }
 
 #[tessera]
 fn fixture(probe: TestProbe<FixtureHandles>) {
     let settings = remember(Settings::default);
-    let controller = remember(|| SwitchController::new(false));
     probe.set(FixtureHandles {
         settings: Some(settings),
-        controller: Some(controller),
     });
     material_theme().child(move || {
         column().children(move || {
-            switch()
-                .controller(controller)
-                .checked_optional(settings.get().checked)
+            switch(settings.get().checked)
                 .accessibility_label("Animated switch")
-                .on_toggle(move |_| settings.with_mut(|value| value.activations += 1))
+                .on_toggle(move |checked| {
+                    settings.with_mut(|value| {
+                        value.checked = checked;
+                        value.activations += 1;
+                    })
+                })
                 .child_optional(if settings.get().icons {
                     Some(tessera_ui::RenderSlot::new(|| {
                         icon().painter(filled::CHECK_SVG);
@@ -92,11 +92,10 @@ fn check_motion(samples: u32) {
     .unwrap();
     renderer.render_frames(30);
     let settings = observed.get().settings.unwrap();
-    let controller = observed.get().controller.unwrap();
     let initial = thumb(&renderer);
     assert_eq!((initial[0], initial[2], initial[3]), (16, 32, 32));
     let initial_pixels = renderer.read_pixels().unwrap();
-    settings.with_mut(|value| value.checked = Some(true));
+    settings.with_mut(|value| value.checked = true);
     renderer.step_frame();
     assert_eq!(
         thumb(&renderer),
@@ -107,7 +106,7 @@ fn check_motion(samples: u32) {
     let halfway = thumb(&renderer);
     assert_eq!((halfway[0], halfway[2]), (32, 40));
     assert_ne!(renderer.read_pixels().unwrap(), initial_pixels);
-    settings.with_mut(|value| value.checked = Some(false));
+    settings.with_mut(|value| value.checked = false);
     renderer.step_frame();
     assert!(
         thumb(&renderer)[0] >= halfway[0],
@@ -148,12 +147,11 @@ fn check_motion(samples: u32) {
         40,
         "content changes animate thumb size"
     );
-    controller.with_mut(|controller| controller.set_checked(false));
-    renderer.step_frame();
+    renderer.render_frames(100);
     assert_eq!((thumb(&renderer)[0], thumb(&renderer)[2]), (8, 48));
     settings.with_mut(|value| {
         value.icons = false;
-        value.checked = None;
+        value.checked = false;
     });
     renderer.render_frames(100);
     let target = renderer
@@ -177,7 +175,6 @@ fn check_motion(samples: u32) {
     renderer.render_frames(100);
     assert_eq!((thumb(&renderer)[0], thumb(&renderer)[2]), (48, 48));
     assert_eq!(settings.get().activations, 1);
-    assert!(!controller.with(SwitchController::is_animating));
     for _ in 0..100 {
         renderer.step_frame();
         let clock = renderer.frame_clock_diagnostics();

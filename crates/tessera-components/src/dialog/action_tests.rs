@@ -16,7 +16,7 @@ use tessera_ui::{
 
 use crate::{
     button::button,
-    dialog::{DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
+    dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
     modifier::{ModifierExt as _, SemanticsArgs},
     text::text,
     theme::material_theme,
@@ -27,7 +27,7 @@ fn dialog_action_fixture() {
     material_theme().child(|| {
         dialog_provider()
             .accessibility_label("Confirmation")
-            .is_open(true)
+            .controller(remember(|| DialogController::new(true)))
             .dialog_content(|dialog| {
                 basic_dialog()
                     .dialog(dialog)
@@ -92,7 +92,7 @@ fn dialog_accessibility_fixture(observed: TestProbe<Option<State<(u8, bool)>>>) 
     observed.set(Some(settings));
     material_theme().child(move || {
         let provider = dialog_provider()
-            .is_open(true)
+            .controller(remember(|| DialogController::new(true)))
             .role(DialogRole::AlertDialog)
             .dialog_content(move |dialog| match settings.get().0 {
                 0 | 1 => {

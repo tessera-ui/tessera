@@ -53,8 +53,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
                         .checkbox_geometry(true);
                     return;
                 }
-                checkbox()
-                    .checked(value.checked)
+                checkbox(value.checked)
                     .indeterminate(value.mixed)
                     .disabled(value.disabled)
                     .color_optional(value.custom.then_some(Color::GREEN))

@@ -4,18 +4,18 @@
 //!
 //! Keep interactive figure dialogs above the complete article viewport.
 
-use tessera_components::dialog::dialog_provider;
+use tessera_components::dialog::{DialogController, DialogScope, dialog_provider};
 use tessera_ui::{Callback, Dp, RenderSlot, State, tessera};
 
 use crate::res::I18N;
 
 #[derive(Clone, PartialEq)]
 struct Request {
-    open: State<bool>,
+    open: State<DialogController>,
     full_screen: bool,
     accessibility_label: String,
     on_close_request: Callback,
-    content: tessera_ui::RenderSlotWith<tessera_components::dialog::DialogScope>,
+    content: tessera_ui::RenderSlotWith<DialogScope>,
 }
 
 #[derive(Clone, Default, PartialEq)]
@@ -26,13 +26,18 @@ pub(crate) struct ArticleModalState {
 pub(crate) type ArticleModalController = State<ArticleModalState>;
 
 #[tessera]
-pub(crate) fn article_modal_host(active: ArticleModalController, content: RenderSlot) {
+pub(crate) fn article_modal_host(
+    active: ArticleModalController,
+    idle: State<DialogController>,
+    content: RenderSlot,
+) {
     let request = active.get().request;
-    let open = request
+    let controller = request
         .as_ref()
-        .is_some_and(|request| request.open.is_alive() && request.open.get());
+        .filter(|request| request.open.is_alive())
+        .map_or(idle, |request| request.open);
     dialog_provider()
-        .is_open(open)
+        .controller(controller)
         .full_screen(request.as_ref().is_some_and(|request| request.full_screen))
         .padding(Dp::ZERO)
         .accessibility_label(
@@ -61,12 +66,12 @@ pub(crate) fn article_modal_host(active: ArticleModalController, content: Render
 
 #[tessera]
 pub(crate) fn hosted_dialog(
-    open: State<bool>,
+    open: State<DialogController>,
     full_screen: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     main_content: Option<RenderSlot>,
-    dialog_content: Option<tessera_ui::RenderSlotWith<tessera_components::dialog::DialogScope>>,
+    dialog_content: Option<tessera_ui::RenderSlotWith<DialogScope>>,
     modal_controller: Option<ArticleModalController>,
 ) {
     let full_screen = full_screen.unwrap_or(false);
@@ -79,12 +84,14 @@ pub(crate) fn hosted_dialog(
         tessera_ui::RenderSlotWith::new(|_| {})
     };
     if let Some(active) = modal_controller {
-        if open.get()
+        if open.with(DialogController::is_open)
             && active.with(|active| {
                 active
                     .request
                     .as_ref()
-                    .is_none_or(|request| !request.open.is_alive() || !request.open.get())
+                    .is_none_or(|request| {
+                        !request.open.is_alive() || !request.open.with(DialogController::is_open)
+                    })
             })
         {
             active.set(ArticleModalState {
@@ -100,7 +107,7 @@ pub(crate) fn hosted_dialog(
         main_content.render();
     } else {
         dialog_provider()
-            .is_open(open.get())
+            .controller(open)
             .full_screen(full_screen)
             .padding(Dp::ZERO)
             .accessibility_label(I18N.text(accessibility_label))

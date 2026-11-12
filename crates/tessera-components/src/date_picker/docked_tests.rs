@@ -11,14 +11,14 @@ use tessera_ui::{
 use crate::{modifier::ModifierExt as _, theme::material_theme};
 
 use super::{
-    CalendarDate, DatePickerState, DockedDatePickerView, Weekday, YearMonth, docked_date_picker,
+    CalendarDate, DatePickerController, DockedDatePickerView, Weekday, YearMonth, docked_date_picker,
 };
 
 #[tessera]
 fn fixture(
     output: tessera_ui::testing::TestProbe<
         Option<(
-            State<DatePickerState>,
+            State<DatePickerController>,
             State<u32>,
             State<DockedDatePickerView>,
             State<tessera_ui::Dp>,
@@ -27,7 +27,7 @@ fn fixture(
 ) {
     material_theme().child(move || {
         let selectable = tessera_ui::CallbackWith::new(|date: CalendarDate| date.day() != 18);
-        let initial = DatePickerState::new(
+        let initial = DatePickerController::new(
             CalendarDate::new(2025, 8, 17),
             YearMonth::new(2025, 8),
             2024..=2026,
@@ -44,7 +44,7 @@ fn fixture(
             .modifier(tessera_ui::Modifier::new().offset(tessera_ui::Dp::ZERO, offset.get()))
             .children(move || {
                 docked_date_picker()
-                    .state(state)
+                    .controller(state)
                     .view(view)
                     .today(CalendarDate::new(2025, 8, 17).unwrap())
                     .first_day_of_week(Weekday::Monday)
@@ -231,7 +231,7 @@ fn check_calendar() {
     assert_eq!(view.get(), DockedDatePickerView::Calendar);
     activate(&mut renderer, "July 31, 2025");
     assert_eq!(
-        state.with(DatePickerState::selected_date),
+        state.with(DatePickerController::selected_date),
         CalendarDate::new(2025, 7, 31)
     );
     assert_eq!(changes.get(), 1);
@@ -239,7 +239,7 @@ fn check_calendar() {
     activate(&mut renderer, "Previous year");
     activate(&mut renderer, "Previous year");
     assert_eq!(
-        state.with(DatePickerState::displayed_month),
+        state.with(DatePickerController::displayed_month),
         YearMonth::new(2024, 7).unwrap()
     );
     assert!(node(&renderer, "Previous year").1.is_disabled());
@@ -248,7 +248,7 @@ fn check_calendar() {
     activate(&mut renderer, "June");
     assert_eq!(view.get(), DockedDatePickerView::Calendar);
     assert_eq!(
-        state.with(DatePickerState::displayed_month),
+        state.with(DatePickerController::displayed_month),
         YearMonth::new(2024, 6).unwrap()
     );
     activate(&mut renderer, "Choose year");
@@ -256,7 +256,7 @@ fn check_calendar() {
     activate(&mut renderer, "2026");
     assert_eq!(view.get(), DockedDatePickerView::Calendar);
     assert_eq!(
-        state.with(DatePickerState::displayed_month),
+        state.with(DatePickerController::displayed_month),
         YearMonth::new(2026, 6).unwrap()
     );
     assert_eq!(changes.get(), 1, "navigation must not commit a date");

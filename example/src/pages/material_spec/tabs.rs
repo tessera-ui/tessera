@@ -6,7 +6,7 @@
 
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
-    app_bar::{AppBarScrollBehavior, AppBarScrollState, app_bar_scroll_provider},
+    app_bar::{AppBarScrollBehavior, AppBarScrollController, app_bar_scroll_provider},
     badge::{badge, badge_with_content, badged_box},
     boxed::boxed,
     button::button,
@@ -533,7 +533,7 @@ fn behavior() {
             .into(),
     );
     gap(Dp(24.0));
-    swipe_tabs();
+    swipe_tabs(remember(|| 0usize));
     gap(Dp(8.0));
     caption("ui-users-can-swipe-between-fixed-tabs-to-see-related-content-quickly");
     gap(Dp(16.0));
@@ -825,13 +825,12 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                     });
                 gap(Dp(24.0));
             }
-            tabs()
+            tabs(selected)
                 .variant(if primary {
                     TabsVariant::Primary
                 } else {
                     TabsVariant::Secondary
                 })
-                .selected(selected)
                 .scrollable(scrollable.get())
                 .activation_mode(if automatic.get() {
                     TabActivationMode::Automatic
@@ -1480,12 +1479,7 @@ fn badge_legend() {
 }
 
 #[tessera]
-fn swipe_tabs(selected: Option<State<usize>>) {
-    let selected = if let Some(selected) = selected {
-        selected
-    } else {
-        remember(|| 0usize)
-    };
+fn swipe_tabs(selected: State<usize>) {
     let travel = remember(|| 0.0f32);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let (container, hint) = (scheme.surface, scheme.on_surface_variant);
@@ -1497,8 +1491,7 @@ fn swipe_tabs(selected: Option<State<usize>>) {
                 .clip_shape(Shape::rounded_rectangle(Dp(24.0))),
         )
         .children(move || {
-            tabs()
-                .selected(selected)
+            tabs(selected)
                 .modifier(Modifier::new().fill_max_width())
                 .content(move |tab_row| {
                     for (name, _) in SWIPE_PAGES {
@@ -1648,13 +1641,12 @@ fn native_tabs_figure(
                             boxed()
                                 .modifier(watch(geometry, "container").width(Dp(360.0 * scale)))
                                 .children(move || {
-                                    tabs()
+                                    tabs(selected)
                                         .variant(if primary {
                                             TabsVariant::Primary
                                         } else {
                                             TabsVariant::Secondary
                                         })
-                                        .selected(selected)
                                         .scrollable(scrollable)
                                         .edge_padding(Dp(52.0 * scale))
                                         .tab_padding(Dp(16.0 * scale))
@@ -1965,17 +1957,15 @@ fn nested_tabs() {
     let primary = remember(|| 0usize);
     let secondary = remember(|| 0usize);
     panel(RenderSlot::new(move || {
-        tabs()
-            .selected(primary)
+        tabs(primary)
             .modifier(Modifier::new().fill_max_width())
             .content(move |tab_row| {
                 tab(tab_row).label(I18N.text("ui-travel"));
                 tab(tab_row).label(I18N.text("ui-saved"));
             });
         gap(Dp(24.0));
-        tabs()
+        tabs(secondary)
             .variant(TabsVariant::Secondary)
-            .selected(secondary)
             .modifier(Modifier::new().fill_max_width())
             .content(move |tab_row| {
                 tab(tab_row).label(I18N.text("ui-upcoming"));
@@ -2029,8 +2019,7 @@ fn tab_placement() {
         )
         .children(move || {
             tessera_components::app_bar::top_app_bar().title(I18N.text("ui-travel"));
-            tabs()
-                .selected(selected)
+            tabs(selected)
                 .modifier(Modifier::new().fill_max_width())
                 .content(move |tab_row| {
                     tab(tab_row).label(I18N.text("ui-flights"));
@@ -2122,8 +2111,7 @@ fn mock_label_tabs(labels: Vec<String>, scrollable: Option<bool>, width: Option<
                 )
                 .children(move || {
                     let labels = labels.clone();
-                    tabs()
-                        .selected(selected)
+                    tabs(selected)
                         .scrollable(scrollable.unwrap_or(false))
                         .edge_padding(Dp(52.0))
                         .modifier(Modifier::new().fill_max_width())
@@ -2150,8 +2138,7 @@ fn mock_icon_tabs(labelled: Vec<bool>) {
                 .modifier(Modifier::new().width(Dp(300.0)).background(surface_color))
                 .children(move || {
                     let labelled = labelled.clone();
-                    tabs()
-                        .selected(selected)
+                    tabs(selected)
                         .min_tab_height(Dp(64.0))
                         .modifier(Modifier::new().fill_max_width())
                         .content(move |tab_row| {
@@ -2258,8 +2245,7 @@ fn mock_scrolled_screen(behind_bar: bool) {
                         boxed()
                             .modifier(Modifier::new().fill_max_width().offset(Dp(0.0), Dp(36.0)))
                             .children(move || {
-                                tabs()
-                                    .selected(selected)
+                                tabs(selected)
                                     .modifier(Modifier::new().fill_max_width())
                                     .content(move |tab_row| {
                                         tab(tab_row).label(I18N.text("ui-flights"));
@@ -2358,9 +2344,8 @@ fn secondary_measure_figure(inline_icons: bool) {
                             boxed()
                                 .modifier(watch(geometry, "container").width(Dp(420.0 * scale)))
                                 .children(move || {
-                                    tabs()
+                                    tabs(selected)
                                         .variant(TabsVariant::Secondary)
-                                        .selected(selected)
                                         .indicator_height(Dp(2.0 * scale))
                                         .min_tab_height(Dp(48.0 * scale))
                                         .tab_padding(Dp(16.0 * scale))
@@ -2500,7 +2485,7 @@ fn secondary_measure_annotations(inline_icons: bool, geometry: State<Geometry>) 
 
 #[tessera]
 fn scrolling_tabs() {
-    let bar = remember(AppBarScrollState::default);
+    let bar = remember(AppBarScrollController::default);
     let content = remember(ScrollableController::new);
     let selected = remember(|| 0usize);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -2513,7 +2498,7 @@ fn scrolling_tabs() {
                     .text()
                     .accessibility_label(I18N.text("ui-reset-scrolling-tabs"))
                     .on_click(move || {
-                        bar.with_mut(AppBarScrollState::reset);
+                        bar.with_mut(AppBarScrollController::reset);
                         content.with_mut(|content| {
                             content.set_scroll_position(tessera_ui::PxPosition::ZERO)
                         });
@@ -2533,7 +2518,7 @@ fn scrolling_tabs() {
                 )
                 .children(move || {
                     app_bar_scroll_provider()
-                        .state(bar)
+                        .controller(bar)
                         .behavior(AppBarScrollBehavior::EnterAlways)
                         .scroll_controller(content)
                         .child(move || {
@@ -2541,7 +2526,7 @@ fn scrolling_tabs() {
                                 .modifier(Modifier::new().fill_max_size())
                                 .top_bar(move || {
                                     let visible =
-                                        1.0 - bar.with(AppBarScrollState::collapsed_fraction);
+                                        1.0 - bar.with(AppBarScrollController::collapsed_fraction);
                                     column()
                                         .modifier(Modifier::new().fill_max_width().semantics(
                                             SemanticsArgs {
@@ -2553,7 +2538,7 @@ fn scrolling_tabs() {
                                         .children(move || {
                                             tessera_components::app_bar::top_app_bar()
                                                 .title(I18N.text("ui-travel"))
-                                                .scroll_state(bar);
+                                                .scroll_controller(bar);
                                             boxed()
                                                 .alignment(Alignment::BottomCenter)
                                                 .modifier(
@@ -2563,8 +2548,7 @@ fn scrolling_tabs() {
                                                         .clip_to_bounds(),
                                                 )
                                                 .children(move || {
-                                                    tabs()
-                                                        .selected(selected)
+                                                    tabs(selected)
                                                         .modifier(Modifier::new().fill_max_width())
                                                         .content(move |tab_row| {
                                                             tab(tab_row)

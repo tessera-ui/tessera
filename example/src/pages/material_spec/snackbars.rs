@@ -16,7 +16,7 @@ use tessera_components::{
     row::row,
     shape_def::{RoundedCorner, Shape},
     snackbar::{
-        SnackbarData, SnackbarDuration, SnackbarHostState, SnackbarRequest, snackbar, snackbar_host,
+        SnackbarData, SnackbarDuration, SnackbarHostController, SnackbarRequest, snackbar, snackbar_host,
     },
     spacer::spacer,
     surface::surface,
@@ -1901,7 +1901,7 @@ fn request(two_lines: bool, action: bool, dismiss: bool) -> SnackbarRequest {
 #[tessera]
 fn queued() {
     let state = remember(|| {
-        let mut state = SnackbarHostState::new();
+        let mut state = SnackbarHostController::new();
         state.show_snackbar(request(false, true, true));
         state
     });
@@ -1968,7 +1968,7 @@ fn queued() {
                 });
             gap(Dp(24.0));
             snackbar_host()
-                .state(state)
+                .controller(state)
                 .snackbar(move |data: SnackbarData| {
                     boxed()
                         .modifier(Modifier::new().width(Dp(360.0)).semantics(SemanticsArgs {
@@ -2014,7 +2014,7 @@ fn queued() {
                     "ui-snackbar-visible-value",
                     [(
                         "v0",
-                        (state.with(SnackbarHostState::is_showing))
+                        (state.with(SnackbarHostController::is_showing))
                             .to_string()
                             .into(),
                     )],
@@ -2509,7 +2509,7 @@ fn behavior() {
 
 #[tessera]
 fn timing_demo() {
-    let host = remember(SnackbarHostState::new);
+    let host = remember(SnackbarHostController::new);
     column()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
@@ -2556,7 +2556,7 @@ fn timing_demo() {
                 .modifier(Modifier::new().size(Dp(380.0), Dp(80.0)))
                 .children(move || {
                     snackbar_host()
-                        .state(host)
+                        .controller(host)
                         .modifier(Modifier::new().width(Dp(360.0)));
                 });
         });
@@ -2636,7 +2636,7 @@ fn web_requirements() {
 #[tessera]
 fn inline_feedback() {
     let saved = remember(|| false);
-    let host = remember(SnackbarHostState::new);
+    let host = remember(SnackbarHostController::new);
     column()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
@@ -2675,7 +2675,7 @@ fn inline_feedback() {
                 .modifier(Modifier::new().size(Dp(380.0), Dp(80.0)))
                 .children(move || {
                     snackbar_host()
-                        .state(host)
+                        .controller(host)
                         .modifier(Modifier::new().width(Dp(360.0)));
                 });
         });
@@ -2684,7 +2684,7 @@ fn inline_feedback() {
 #[tessera]
 fn actionable_demo() {
     let kept = remember(|| true);
-    let host = remember(SnackbarHostState::new);
+    let host = remember(SnackbarHostController::new);
     column()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
@@ -2720,7 +2720,7 @@ fn actionable_demo() {
                 .modifier(Modifier::new().size(Dp(380.0), Dp(80.0)))
                 .children(move || {
                     snackbar_host()
-                        .state(host)
+                        .controller(host)
                         .modifier(Modifier::new().width(Dp(360.0)))
                         .snackbar(move |data: SnackbarData| {
                             let dismiss = data.clone();

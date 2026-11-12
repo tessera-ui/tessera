@@ -920,8 +920,8 @@ fn drag_selection_pointer_position(
 ) -> DragSelectionPointerPosition {
     let (horizontal_scroll, vertical_scroll) = controller.with(|s| {
         (
-            Px(s.scroll_state().horizontal().round() as i32),
-            Px(s.scroll_state().vertical().round() as i32),
+            Px(s.scroll_controller().horizontal().round() as i32),
+            Px(s.scroll_controller().vertical().round() as i32),
         )
     });
     let text_origin = text_content_origin(args);

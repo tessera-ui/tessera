@@ -66,7 +66,7 @@ page demonstrates all five sizes with working menus and four styles.
 自定义形状字面量应通过 `..Default::default()` 继承新增的形状角色。
 
 `floating_action_button_menu` 在页面内容上方提供底部对齐的创建菜单。
-通过 `FloatingActionButtonMenuItem` 设置操作，可用 `FloatingActionButtonMenuState`
+通过 `FloatingActionButtonMenuItem` 设置操作，可用 `FloatingActionButtonMenuController`
 控制开关。操作项依次展开；点击外部、按 Escape 或选择操作会关闭菜单。
 支持主色、次色和第三色，短窗口中列表可滚动且关闭按钮保持固定。
 `SemanticsArgs::expanded` 和 `has_popup` 提供展开状态与弹出类型语义；

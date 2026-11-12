@@ -157,9 +157,8 @@ fn control(configuration: bool, row: usize, selected: bool) {
             ),
         )
     };
-    switch()
+    switch(checked.get())
         .modifier(Modifier::new().offset(Dp(left), Dp(top)))
-        .checked(checked.get())
         .accessibility_label(I18N.text(label))
         .on_toggle(move |value| checked.set(value))
         .child_optional(if icon_mode == 2 || (icon_mode == 1 && checked.get()) {

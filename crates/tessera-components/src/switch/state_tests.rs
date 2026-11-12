@@ -82,8 +82,7 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
                 .content_color(Color::GREEN)
                 .child(move || {
                     let value = settings.get();
-                    switch()
-                        .checked(value.checked)
+                    switch(value.checked)
                         .enabled(!value.disabled)
                         .presentation_state_optional(value.presentation)
                         .thumb_color_optional(value.custom.then_some(Color::GREEN))

@@ -255,18 +255,16 @@ impl SegmentedButtonDefaults {
 ///         .child(|| {
 ///             let selected = remember(|| 0usize);
 ///             single_choice_segmented_button_row().content(move |mode| {
-///                 segmented_button().selection_mode(mode)
+///                 segmented_button(selected.get() == 0).selection_mode(mode)
 ///                     .label("List")
-///                     .selected(selected.get() == 0)
 ///                     .shape(SegmentedButtonDefaults::item_shape(
 ///                         0,
 ///                         2,
 ///                         SegmentedButtonDefaults::shape(),
 ///                     ))
 ///                     .on_click(|| {});
-///                 segmented_button().selection_mode(mode)
+///                 segmented_button(selected.get() == 1).selection_mode(mode)
 ///                     .label("Grid")
-///                     .selected(selected.get() == 1)
 ///                     .shape(SegmentedButtonDefaults::item_shape(
 ///                         1,
 ///                         2,
@@ -281,8 +279,8 @@ impl SegmentedButtonDefaults {
 /// ```
 #[tessera]
 pub fn segmented_button(
+    selected: bool,
     selection_mode: Option<SegmentedButtonSelectionMode>,
-    selected: Option<bool>,
     enabled: Option<bool>,
     #[prop(into)] label: Option<String>,
     #[prop(into)] icon: Option<Painter>,
@@ -298,7 +296,6 @@ pub fn segmented_button(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
-    let selected = selected.unwrap_or(false);
     let label = label.unwrap_or_default();
     let enabled = enabled.unwrap_or(true);
     let modifier = modifier.unwrap_or_default();
@@ -474,18 +471,16 @@ pub fn segmented_button(
 ///         .child(|| {
 ///             let selected = remember(|| 0usize);
 ///             single_choice_segmented_button_row().content(move |mode| {
-///                 segmented_button().selection_mode(mode)
+///                 segmented_button(selected.get() == 0).selection_mode(mode)
 ///                     .label("Day")
-///                     .selected(selected.get() == 0)
 ///                     .shape(SegmentedButtonDefaults::item_shape(
 ///                         0,
 ///                         2,
 ///                         SegmentedButtonDefaults::shape(),
 ///                     ))
 ///                     .on_click(|| {});
-///                 segmented_button().selection_mode(mode)
+///                 segmented_button(selected.get() == 1).selection_mode(mode)
 ///                     .label("Week")
-///                     .selected(selected.get() == 1)
 ///                     .shape(SegmentedButtonDefaults::item_shape(
 ///                         1,
 ///                         2,
@@ -566,18 +561,16 @@ pub fn single_choice_segmented_button_row(
 ///         .child(|| {
 ///             let selected = remember(|| [true, false]);
 ///             multi_choice_segmented_button_row().content(move |mode| {
-///                 segmented_button().selection_mode(mode)
+///                 segmented_button(selected.get()[0]).selection_mode(mode)
 ///                     .label("Email")
-///                     .selected(selected.get()[0])
 ///                     .shape(SegmentedButtonDefaults::item_shape(
 ///                         0,
 ///                         2,
 ///                         SegmentedButtonDefaults::shape(),
 ///                     ))
 ///                     .on_click(|| {});
-///                 segmented_button().selection_mode(mode)
+///                 segmented_button(selected.get()[1]).selection_mode(mode)
 ///                     .label("Push")
-///                     .selected(selected.get()[1])
 ///                     .shape(SegmentedButtonDefaults::item_shape(
 ///                         1,
 ///                         2,

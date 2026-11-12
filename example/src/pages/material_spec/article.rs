@@ -4,6 +4,7 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
+    dialog::DialogController,
     icon::icon,
     icon_button::icon_button,
     interaction_state::InteractionState,
@@ -148,7 +149,8 @@ pub(super) fn article(
             });
     });
     if let Some(controller) = modal_controller {
-        modal_host::article_modal_host(controller, content);
+        let idle = remember(DialogController::default);
+        modal_host::article_modal_host(controller, idle, content);
     } else {
         content.render();
     }

@@ -146,9 +146,8 @@ pub(super) fn selection_control(
     let mixed = remember(|| indeterminate);
     if is_switch {
         let show_icon = icons == 2 || (icons == 1 && checked.get());
-        switch()
+        switch(checked.get())
             .focus_requester_optional(focus_requester)
-            .checked(checked.get())
             .enabled(enabled)
             .accessibility_label(I18N.text(label))
             .on_toggle(move |value| checked.set(value))
@@ -164,9 +163,8 @@ pub(super) fn selection_control(
                 None
             });
     } else {
-        checkbox()
+        checkbox(checked.get())
             .focus_requester_optional(focus_requester)
-            .checked(checked.get())
             .indeterminate(mixed.get())
             .disabled(!enabled)
             .accessibility_label(I18N.text(label))
@@ -304,8 +302,7 @@ fn checkbox_group_row(items: State<[bool; 3]>, index: Option<usize>, label: Stri
     row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
-            checkbox()
-                .checked(checked)
+            checkbox(checked)
                 .indeterminate(mixed)
                 .accessibility_label(I18N.text(&(label)))
                 .focus_requester(focus)

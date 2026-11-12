@@ -174,12 +174,12 @@ struct ScrollBarConfig {
     track_color: Color,
     thumb_color: Color,
     thumb_hover_color: Color,
-    scrollbar_state: Option<ScrollBarState>,
+    scrollbar_controller: Option<ScrollBarController>,
 }
 
 #[derive(Clone, Copy, PartialEq, Default)]
 /// Mutable state shared by a scrollbar and its viewport.
-pub struct ScrollBarStateInner {
+pub struct ScrollBarInteractionState {
     /// Whether the scrollbar's thumb is currently being dragged.
     pub is_dragging: bool,
     /// Whether the active pointer press started on the thumb.
@@ -197,22 +197,22 @@ pub struct ScrollBarStateInner {
 
 /// An explicit owner of the interaction state shared by a scrollbar and viewport.
 #[derive(Clone, Copy, PartialEq)]
-pub struct ScrollBarState {
+pub struct ScrollBarController {
     owner: ScrollBarOwner,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum ScrollBarOwner {
-    External(State<ScrollBarStateInner>),
+    External(State<ScrollBarInteractionState>),
     Viewport {
         controller: State<ScrollableController>,
         vertical: bool,
     },
 }
 
-impl ScrollBarState {
+impl ScrollBarController {
     /// Shares a component-owned scrollbar interaction state.
-    pub fn new(state: State<ScrollBarStateInner>) -> Self {
+    pub fn new(state: State<ScrollBarInteractionState>) -> Self {
         Self {
             owner: ScrollBarOwner::External(state),
         }
@@ -228,7 +228,7 @@ impl ScrollBarState {
     }
 
     /// Reads the current interaction state.
-    pub fn read(&self) -> ScrollBarStateInner {
+    pub fn read(&self) -> ScrollBarInteractionState {
         match self.owner {
             ScrollBarOwner::External(state) => state.get(),
             ScrollBarOwner::Viewport {
@@ -245,7 +245,7 @@ impl ScrollBarState {
     }
 
     /// Updates the owning state and invalidates its readers.
-    pub fn with_mut<R>(&self, update: impl FnOnce(&mut ScrollBarStateInner) -> R) -> R {
+    pub fn with_mut<R>(&self, update: impl FnOnce(&mut ScrollBarInteractionState) -> R) -> R {
         match self.owner {
             ScrollBarOwner::External(state) => state.with_mut(update),
             ScrollBarOwner::Viewport {
@@ -291,7 +291,7 @@ fn calculate_target_pos(
 }
 
 fn compute_thumb_color(
-    state: &ScrollBarStateInner,
+    state: &ScrollBarInteractionState,
     thumb_color: Color,
     thumb_hover_color: Color,
     frame_nanos: u64,
@@ -310,7 +310,7 @@ fn compute_thumb_color(
         thumb_hover_color.lerp(&thumb_color, progress)
     }
 }
-fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarState) -> bool {
+fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarController) -> bool {
     match args.scrollbar_behavior {
         ScrollBarBehavior::AlwaysVisible => true,
         ScrollBarBehavior::Hidden => false,
@@ -321,7 +321,7 @@ fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarState) -> bool
     }
 }
 
-fn handle_autohide_if_needed(args: &ScrollBarConfig, state: &ScrollBarState, frame_nanos: u64) {
+fn handle_autohide_if_needed(args: &ScrollBarConfig, state: &ScrollBarController, frame_nanos: u64) {
     if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
         let current = state.read();
         if current.should_be_visible
@@ -338,7 +338,7 @@ fn handle_autohide_if_needed(args: &ScrollBarConfig, state: &ScrollBarState, fra
 
 fn needs_scrollbar_frame_tick(
     args: &ScrollBarConfig,
-    state: &ScrollBarState,
+    state: &ScrollBarController,
     frame_nanos: u64,
 ) -> bool {
     let state_guard = state.read();
@@ -368,7 +368,7 @@ fn needs_scrollbar_frame_tick(
         )
 }
 
-fn mark_scroll_activity(state: &ScrollBarState, behavior: &ScrollBarBehavior, frame_nanos: u64) {
+fn mark_scroll_activity(state: &ScrollBarController, behavior: &ScrollBarBehavior, frame_nanos: u64) {
     if matches!(*behavior, ScrollBarBehavior::AutoHide) {
         state.with_mut(|state_guard| {
             state_guard.last_scroll_activity_frame_nanos = Some(frame_nanos);
@@ -417,7 +417,7 @@ fn apply_scrollbar_semantics(
     accessibility: &mut AccessibilityNode,
     action_handler: &mut Option<AccessibilityActionHandler>,
     args: &ScrollBarConfig,
-    state: &ScrollBarState,
+    state: &ScrollBarController,
     orientation: ScrollOrientation,
 ) {
     accessibility.role = Some(Role::ScrollBar);
@@ -453,7 +453,7 @@ fn apply_scrollbar_semantics(
 
 struct ScrollbarSemanticsModifierNode {
     args: ScrollBarConfig,
-    state: ScrollBarState,
+    state: ScrollBarController,
     orientation: ScrollOrientation,
 }
 
@@ -475,7 +475,7 @@ impl SemanticsModifierNode for ScrollbarSemanticsModifierNode {
 
 fn scroll_accessibility_step(
     args: &ScrollBarConfig,
-    state: &ScrollBarState,
+    state: &ScrollBarController,
     orientation: ScrollOrientation,
     increment: bool,
 ) {
@@ -506,7 +506,7 @@ fn update_drag(
     input: &tessera_ui::PointerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarConfig,
-    state: &ScrollBarState,
+    state: &ScrollBarController,
     frame_nanos: u64,
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
@@ -522,7 +522,7 @@ fn update_drag(
     }
 }
 
-fn update_hover_state(is_on_thumb: bool, state: &ScrollBarState, frame_nanos: u64) {
+fn update_hover_state(is_on_thumb: bool, state: &ScrollBarController, frame_nanos: u64) {
     if is_on_thumb && !state.read().is_hovered {
         state.with_mut(|state_guard| {
             state_guard.is_hovered = true;
@@ -545,7 +545,7 @@ struct ScrollBarTrackMetrics {
 fn handle_state(
     orientation: ScrollOrientation,
     args: &ScrollBarConfig,
-    state: &ScrollBarState,
+    state: &ScrollBarController,
     metrics: ScrollBarTrackMetrics,
     tap_recognizer: State<TapRecognizer>,
     drag_recognizer: State<DragRecognizer>,
@@ -656,10 +656,10 @@ fn handle_state(
 ///   viewport.
 /// - `offset` — current scroll offset; defaults to the controller position.
 /// - `thickness` — thickness of the scrollbar track.
-/// - `state` — scroll controller the scrollbar reads and drives.
+/// - `controller` — scroll controller the scrollbar reads and drives.
 /// - `scrollbar_behavior` — visibility behavior (always, auto-hide, hidden).
 /// - `track_color`, `thumb_color`, `thumb_hover_color` — themed colors.
-/// - `scrollbar_state` — shared interaction state; created internally when
+/// - `scrollbar_controller` — shared interaction state; created internally when
 ///   absent.
 ///
 /// Wheel input follows the attached viewport. A custom track without a viewport
@@ -683,7 +683,7 @@ fn handle_state(
 ///             offset
 ///         );
 ///         scrollbar_v()
-///             .state(controller)
+///             .controller(controller)
 ///             .total(Px(600))
 ///             .visible(Px(200));
 ///     });
@@ -696,16 +696,16 @@ pub fn scrollbar_v(
     visible: Option<Px>,
     offset: Option<Px>,
     thickness: Option<Dp>,
-    state: Option<State<ScrollableController>>,
+    controller: Option<State<ScrollableController>>,
     scrollbar_behavior: Option<ScrollBarBehavior>,
     track_color: Option<Color>,
     thumb_color: Option<Color>,
     thumb_hover_color: Option<Color>,
-    scrollbar_state: Option<ScrollBarState>,
+    scrollbar_controller: Option<ScrollBarController>,
 ) {
     scrollbar(
         ScrollOrientation::Vertical,
-        state.expect("scrollbar_v requires state"),
+        controller.expect("scrollbar_v requires controller"),
     )
     .total_optional(total)
     .visible_optional(visible)
@@ -715,7 +715,7 @@ pub fn scrollbar_v(
     .track_color_optional(track_color)
     .thumb_color_optional(thumb_color)
     .thumb_hover_color_optional(thumb_hover_color)
-    .scrollbar_state_optional(scrollbar_state);
+    .scrollbar_controller_optional(scrollbar_controller);
 }
 
 /// # scrollbar_h
@@ -734,10 +734,10 @@ pub fn scrollbar_v(
 ///   viewport.
 /// - `offset` — current scroll offset; defaults to the controller position.
 /// - `thickness` — thickness of the scrollbar track.
-/// - `state` — scroll controller the scrollbar reads and drives.
+/// - `controller` — scroll controller the scrollbar reads and drives.
 /// - `scrollbar_behavior` — visibility behavior (always, auto-hide, hidden).
 /// - `track_color`, `thumb_color`, `thumb_hover_color` — themed colors.
-/// - `scrollbar_state` — shared interaction state; created internally when
+/// - `scrollbar_controller` — shared interaction state; created internally when
 ///   absent.
 ///
 /// Wheel input follows the attached viewport. A custom track without a viewport
@@ -761,7 +761,7 @@ pub fn scrollbar_v(
 ///             offset
 ///         );
 ///         scrollbar_h()
-///             .state(controller)
+///             .controller(controller)
 ///             .total(Px(600))
 ///             .visible(Px(200));
 ///     });
@@ -774,16 +774,16 @@ pub fn scrollbar_h(
     visible: Option<Px>,
     offset: Option<Px>,
     thickness: Option<Dp>,
-    state: Option<State<ScrollableController>>,
+    controller: Option<State<ScrollableController>>,
     scrollbar_behavior: Option<ScrollBarBehavior>,
     track_color: Option<Color>,
     thumb_color: Option<Color>,
     thumb_hover_color: Option<Color>,
-    scrollbar_state: Option<ScrollBarState>,
+    scrollbar_controller: Option<ScrollBarController>,
 ) {
     scrollbar(
         ScrollOrientation::Horizontal,
-        state.expect("scrollbar_h requires state"),
+        controller.expect("scrollbar_h requires controller"),
     )
     .total_optional(total)
     .visible_optional(visible)
@@ -793,7 +793,7 @@ pub fn scrollbar_h(
     .track_color_optional(track_color)
     .thumb_color_optional(thumb_color)
     .thumb_hover_color_optional(thumb_hover_color)
-    .scrollbar_state_optional(scrollbar_state);
+    .scrollbar_controller_optional(scrollbar_controller);
 }
 
 #[tessera]
@@ -808,7 +808,7 @@ fn scrollbar(
     track_color: Option<Color>,
     thumb_color: Option<Color>,
     thumb_hover_color: Option<Color>,
-    scrollbar_state: Option<ScrollBarState>,
+    scrollbar_controller: Option<ScrollBarController>,
 ) {
     let total = total
         .unwrap_or_else(|| state.with(|controller| orientation.extent(controller.child_size())));
@@ -836,12 +836,12 @@ fn scrollbar(
         track_color,
         thumb_color,
         thumb_hover_color,
-        scrollbar_state,
+        scrollbar_controller,
     };
-    let state = if let Some(state) = args.scrollbar_state {
+    let state = if let Some(state) = args.scrollbar_controller {
         state
     } else {
-        ScrollBarState::new(remember(ScrollBarStateInner::default))
+        ScrollBarController::new(remember(ScrollBarInteractionState::default))
     };
     let frame_time = remember(current_frame_nanos);
     let _ = frame_time.get();
@@ -921,7 +921,7 @@ fn scrollbar(
         controller: args.state,
         recognizer: scroll_recognizer,
         connection: nested_scroll_connection,
-        scrollbar_state: state,
+        scrollbar_controller: state,
         behavior: args.scrollbar_behavior.clone(),
     })
     .push_semantics(ScrollbarSemanticsModifierNode {
@@ -966,13 +966,13 @@ fn scrollbar(
 mod tests {
     use tessera_ui::Color;
 
-    use super::{HOVER_FADE_DURATION_SECS, ScrollBarStateInner, compute_thumb_color};
+    use super::{HOVER_FADE_DURATION_SECS, ScrollBarInteractionState, compute_thumb_color};
 
     #[test]
     fn thumb_color_interpolates_towards_the_hover_color() {
         let thumb = Color::new(1.0, 0.0, 0.0, 0.4);
         let hovered = Color::new(1.0, 0.0, 0.0, 0.6);
-        let mut state = ScrollBarStateInner::default();
+        let mut state = ScrollBarInteractionState::default();
 
         assert_eq!(compute_thumb_color(&state, thumb, hovered, 0), thumb);
 

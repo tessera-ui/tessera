@@ -18,7 +18,7 @@ use crate::{
     button::button, column::column, modifier::ModifierExt as _, text::text, theme::material_theme,
 };
 
-use super::{SnackbarDuration, SnackbarHostState, SnackbarRequest, SnackbarResult, snackbar_host};
+use super::{SnackbarDuration, SnackbarHostController, SnackbarRequest, SnackbarResult, snackbar_host};
 
 #[derive(Clone, PartialEq)]
 struct Settings {
@@ -29,7 +29,7 @@ struct Settings {
 #[derive(Clone, Copy, Default)]
 struct FixtureHandles {
     settings: Option<State<Settings>>,
-    host: Option<State<SnackbarHostState>>,
+    host: Option<State<SnackbarHostController>>,
 }
 
 #[tessera]
@@ -38,7 +38,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         show_origin: true,
         origin_enabled: true,
     });
-    let host = remember(SnackbarHostState::new);
+    let host = remember(SnackbarHostController::new);
     observed.with_mut(|handles| handles.settings = Some(settings));
     observed.with_mut(|handles| handles.host = Some(host));
     material_theme().child(move || {
@@ -60,7 +60,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                     .child(|| {
                         text("Continue elsewhere");
                     });
-                snackbar_host().state(host);
+                snackbar_host().controller(host);
             });
     });
 }
@@ -87,7 +87,7 @@ fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) {
 
 fn show(
     renderer: &mut HeadlessRenderer,
-    host: State<SnackbarHostState>,
+    host: State<SnackbarHostController>,
     action_label: Option<&str>,
     duration: SnackbarDuration,
 ) {
@@ -135,9 +135,9 @@ fn check(samples: u32) {
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
         action(&mut renderer, "Undo", Action::Focus);
         action(&mut renderer, "Undo", Action::Click);
-        assert!(!host.with(SnackbarHostState::is_showing));
+        assert!(!host.with(SnackbarHostController::is_showing));
         assert_eq!(
-            host.with_mut(SnackbarHostState::take_last_result),
+            host.with_mut(SnackbarHostController::take_last_result),
             Some(SnackbarResult::ActionPerformed)
         );
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
@@ -153,13 +153,13 @@ fn check(samples: u32) {
         renderer.render_frames(1);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.render_frames(4);
-        assert!(!host.with(SnackbarHostState::is_showing));
+        assert!(!host.with(SnackbarHostController::is_showing));
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
 
         show(&mut renderer, host, None, SnackbarDuration::Indefinite);
         action(&mut renderer, "Dismiss", Action::Focus);
         action(&mut renderer, "Other task", Action::Focus);
-        host.with_mut(SnackbarHostState::dismiss_current);
+        host.with_mut(SnackbarHostController::dismiss_current);
         renderer.render_frames(3);
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, other);
 
@@ -178,16 +178,16 @@ fn check(samples: u32) {
         );
         action(&mut renderer, "First", Action::Focus);
         action(&mut renderer, "First", Action::Click);
-        assert!(host.with(SnackbarHostState::is_showing));
+        assert!(host.with(SnackbarHostController::is_showing));
         action(&mut renderer, "Second", Action::Focus);
         action(&mut renderer, "Second", Action::Click);
-        assert!(!host.with(SnackbarHostState::is_showing));
+        assert!(!host.with(SnackbarHostController::is_showing));
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
 
         show(&mut renderer, host, None, SnackbarDuration::Short);
         action(&mut renderer, "Dismiss", Action::Focus);
         renderer.render_frames(45);
-        assert!(!host.with(SnackbarHostState::is_showing));
+        assert!(!host.with(SnackbarHostController::is_showing));
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
 
         for remove in [false, true] {
@@ -198,7 +198,7 @@ fn check(samples: u32) {
                 s.show_origin = !remove;
                 s.origin_enabled = false;
             });
-            host.with_mut(SnackbarHostState::dismiss_current);
+            host.with_mut(SnackbarHostController::dismiss_current);
             renderer.render_frames(4);
             assert_ne!(renderer.accessibility_snapshot().unwrap().focus, origin);
             action(&mut renderer, "Other task", Action::Focus);
@@ -232,11 +232,11 @@ fn host_actions_queue_timeout_and_unavailable_origins_restore_focus_msaa4() {
 
 #[tessera]
 fn custom_slot_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
-    let host = remember(SnackbarHostState::new);
+    let host = remember(SnackbarHostController::new);
     observed.with_mut(|handles| handles.host = Some(host));
     material_theme().child(move || {
         snackbar_host()
-            .state(host)
+            .controller(host)
             .snackbar(|data: super::SnackbarData| {
                 text(data.message().to_owned())
                     .accessibility_label(format!("Custom notification: {}", data.message()));
@@ -283,7 +283,7 @@ fn custom_host_slot_renders_current_queued_message() {
                         .iter()
                         .any(|(_, node)| node.label() == Some(label.as_str()))
                 );
-                host.with_mut(SnackbarHostState::dismiss_current);
+                host.with_mut(SnackbarHostController::dismiss_current);
                 renderer.render_frames(3);
                 assert!(
                     !renderer

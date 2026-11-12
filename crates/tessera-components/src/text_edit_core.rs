@@ -1817,7 +1817,7 @@ pub struct TextEditorController {
     focus_handler: FocusRequester,
     edit_state: TextEditState,
     selection_state: TextSelectionState,
-    scroll_state: TextScrollControllerState,
+    scroll_controller: TextScrollControllerState,
     ime_state: TextImeState,
     layout_state: TextLayoutState,
     intrinsic_size_cache: Option<(TextLayoutCacheKey, ComputedData)>,
@@ -1966,11 +1966,11 @@ impl TextEditorController {
 
     fn sync_layout_snapshot_scroll(&mut self) {
         self.layout_state
-            .sync_snapshot_scroll(self.scroll_state.as_scroll());
+            .sync_snapshot_scroll(self.scroll_controller.as_scroll());
     }
 
     fn sync_scroll_state_from_editor(&mut self) {
-        self.scroll_state.sync_from_edit_state(&self.edit_state);
+        self.scroll_controller.sync_from_edit_state(&self.edit_state);
     }
 
     #[cfg(test)]
@@ -2012,7 +2012,7 @@ impl TextEditorController {
             glyphon::Metrics::new(size.to_pixels_f32(), line_height_px.to_f32()),
         );
         buffer.set_wrap(glyphon::Wrap::Glyph);
-        let scroll_state = TextScrollControllerState::new(buffer.scroll());
+        let scroll_controller = TextScrollControllerState::new(buffer.scroll());
         let editor = glyphon::Editor::new(buffer);
         let text_color = Color::BLACK;
         let cursor_color = Color::BLACK;
@@ -2045,7 +2045,7 @@ impl TextEditorController {
                 drag_selection_mode: DragSelectionMode::Character,
                 drag_origin_selection: None,
             },
-            scroll_state,
+            scroll_controller,
             ime_state: TextImeState { composition: None },
             layout_state: TextLayoutState::new(),
             intrinsic_size_cache: None,
@@ -2090,7 +2090,7 @@ impl TextEditorController {
     ) -> TextData {
         if let Some(text_data) = self
             .layout_state
-            .cached_text_data_for_constraint(&constraint, self.scroll_state.as_scroll())
+            .cached_text_data_for_constraint(&constraint, self.scroll_controller.as_scroll())
         {
             return text_data;
         }
@@ -2267,8 +2267,8 @@ impl TextEditorController {
         let wrap = self.wrap_mode();
         self.edit_state.set_wrap(wrap);
         if single_line {
-            self.scroll_state.reset_vertical();
-            self.edit_state.set_scroll(self.scroll_state.as_scroll());
+            self.scroll_controller.reset_vertical();
+            self.edit_state.set_scroll(self.scroll_controller.as_scroll());
         }
         if !single_line {
             self.sync_scroll_state_from_editor();
@@ -2279,11 +2279,11 @@ impl TextEditorController {
 
     #[cfg(test)]
     pub(crate) fn scroll(&self) -> glyphon::cosmic_text::Scroll {
-        self.scroll_state.as_scroll()
+        self.scroll_controller.as_scroll()
     }
 
-    pub(crate) fn scroll_state(&self) -> TextScrollState {
-        self.scroll_state.state()
+    pub(crate) fn scroll_controller(&self) -> TextScrollState {
+        self.scroll_controller.state()
     }
 
     pub(crate) fn scroll_horizontal_by(&mut self, delta: f32) {
@@ -2296,10 +2296,10 @@ impl TextEditorController {
     }
 
     pub(crate) fn scroll_vertical_by(&mut self, delta: f32) {
-        let scroll_before = self.scroll_state.as_scroll();
+        let scroll_before = self.scroll_controller.as_scroll();
         self.edit_state.scroll_vertical_by(delta);
         self.sync_scroll_state_from_editor();
-        if self.scroll_state.as_scroll() != scroll_before {
+        if self.scroll_controller.as_scroll() != scroll_before {
             self.sync_layout_snapshot_scroll();
             self.invalidate_layout_geometry();
         }
@@ -2310,9 +2310,9 @@ impl TextEditorController {
     /// The returned value is the actual change applied in scroll space, so
     /// callers can hand the remainder to an ancestor scroll container.
     pub(crate) fn scroll_horizontal_consumed(&mut self, delta: f32) -> f32 {
-        let before = self.scroll_state().horizontal();
+        let before = self.scroll_controller().horizontal();
         self.scroll_horizontal_by(delta);
-        self.scroll_state().horizontal() - before
+        self.scroll_controller().horizontal() - before
     }
 
     /// Scrolls vertically by `delta` and returns the consumed amount.
@@ -2320,9 +2320,9 @@ impl TextEditorController {
     /// The returned value is the actual change applied in scroll space; the
     /// editor engine clamps vertical scrolling to the content extent.
     pub(crate) fn scroll_vertical_consumed(&mut self, delta: f32) -> f32 {
-        let before = self.scroll_state().vertical();
+        let before = self.scroll_controller().vertical();
         self.scroll_vertical_by(delta);
-        self.scroll_state().vertical() - before
+        self.scroll_controller().vertical() - before
     }
 
     /// Returns whether the editor content overflows horizontally.
@@ -2401,7 +2401,7 @@ impl TextEditorController {
             scroll_after.vertical = 0.0;
             self.edit_state.set_scroll(scroll_after);
         }
-        if self.scroll_state.sync_from_scroll(scroll_after) {
+        if self.scroll_controller.sync_from_scroll(scroll_after) {
             self.sync_layout_snapshot_scroll();
         }
     }
@@ -2414,7 +2414,7 @@ impl TextEditorController {
     fn current_layout_geometry(&self) -> Option<DerivedLayoutGeometry> {
         self.layout_state.derived_geometry(
             DerivedGeometryInput {
-                scroll_horizontal: Px(self.scroll_state.horizontal().round() as i32),
+                scroll_horizontal: Px(self.scroll_controller.horizontal().round() as i32),
                 cursor_offset: self.cursor_offset(),
                 selection: self.has_selection().then(|| self.selection()),
                 composition_range: self.ime_state.composition_range(),
@@ -4167,7 +4167,7 @@ mod tests {
             scroll.vertical, 0.0,
             "a complete single line must remain visible after its font and viewport grow together"
         );
-        assert_eq!(controller.scroll_state().vertical(), 0.0);
+        assert_eq!(controller.scroll_controller().vertical(), 0.0);
     }
 
     #[test]
@@ -4341,9 +4341,9 @@ mod tests {
         );
         controller.set_text_and_selection(text, TextSelection::collapsed(text.len()));
 
-        assert!(controller.scroll_state().horizontal() > 0.0);
+        assert!(controller.scroll_controller().horizontal() > 0.0);
         assert_eq!(
-            controller.scroll_state().as_scroll(),
+            controller.scroll_controller().as_scroll(),
             controller.editor().with_buffer(|buffer| buffer.scroll())
         );
     }
@@ -4365,14 +4365,14 @@ mod tests {
 
         controller.scroll_vertical_by(20.0);
 
-        assert!(controller.scroll_state().vertical() > 0.0);
+        assert!(controller.scroll_controller().vertical() > 0.0);
         assert_eq!(controller.text_layout_version(), text_layout_version);
         assert!(matches!(
             controller.text_cache_key(),
             Some(key) if key == text_cache_key
         ));
         assert_eq!(
-            controller.scroll_state().as_scroll(),
+            controller.scroll_controller().as_scroll(),
             controller.editor().with_buffer(|buffer| buffer.scroll())
         );
     }

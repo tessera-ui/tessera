@@ -148,12 +148,11 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                         if !settings.removed {
                             match settings.kind {
                                 Kind::Single => {
-                                    slider()
+                                    slider(value.get())
                                         .value_indicator_host(host)
                                         .controller(controller)
                                         .presentation_state_optional(settings.presentation_state)
                                         .modifier(modifier)
-                                        .value(value.get())
                                         .on_change(move |next| value.set(next))
                                         .size(settings.size)
                                         .inset_icon_optional(settings.inset_icon.then(|| {
@@ -188,12 +187,11 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                                         .accessibility_label("Value");
                                 }
                                 Kind::Centered => {
-                                    centered_slider()
+                                    centered_slider(value.get())
                                         .value_indicator_host(host)
                                         .controller(controller)
                                         .presentation_state_optional(settings.presentation_state)
                                         .modifier(modifier)
-                                        .value(value.get())
                                         .on_change(move |next| value.set(next))
                                         .size(settings.size)
                                         .orientation(settings.orientation)
@@ -225,10 +223,9 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                                         .accessibility_label("Value");
                                 }
                                 Kind::Range => {
-                                    range_slider()
+                                    range_slider(range.get())
                                         .value_indicator_host(host)
                                         .modifier(modifier)
-                                        .value(range.get())
                                         .on_change(move |next| range.set(next))
                                         .size(settings.size)
                                         .orientation(settings.orientation)

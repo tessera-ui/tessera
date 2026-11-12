@@ -105,9 +105,8 @@ pub fn custom_shader_page() {
                         .color(theme.with(|t| t.color_scheme.on_surface_variant));
                     });
                     spacer().modifier(Modifier::new().height(Dp(8.0)));
-                    slider()
+                    slider(time_scale_slider.get())
                         .modifier(Modifier::new().fill_max_width())
-                        .value(time_scale_slider.get())
                         .accessibility_label(I18N.text("ui-animation-speed"))
                         .on_change(move |value| time_scale_slider.set(value.clamp(0.0, 1.0)));
                 });

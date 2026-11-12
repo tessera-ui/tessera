@@ -391,7 +391,6 @@ fn place_side_sheet_if_present(
 /// - `accessibility_label` — accessible name describing the dialog or sheet.
 /// - `on_close_request` — optional close-request callback.
 /// - `position` — side sheet edge position.
-/// - `is_open` — declarative open state.
 /// - `max_width` — maximum surface width, constrained by the host; defaults to
 ///   400dp.
 /// - `content_padding` — inset inside the surface; defaults to 24dp. Negative
@@ -407,14 +406,15 @@ fn place_side_sheet_if_present(
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::side_sheet::modal_side_sheet_provider;
+/// use tessera_components::side_sheet::{SideSheetController, modal_side_sheet_provider};
+/// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         modal_side_sheet_provider()
 ///             .accessibility_label("Filters")
 ///             .on_close_request(|| {})
-///             .is_open(true)
+///             .controller(remember(|| SideSheetController::new(true)))
 ///             .max_width(tessera_ui::Dp(360.0))
 ///             .content_padding(tessera_ui::Dp::ZERO)
 ///             .main_content(|| { /* main content */ })
@@ -428,7 +428,6 @@ pub fn modal_side_sheet_provider(
     #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
-    is_open: Option<bool>,
     max_width: Option<Dp>,
     content_padding: Option<Dp>,
     controller: Option<State<SideSheetController>>,
@@ -436,13 +435,11 @@ pub fn modal_side_sheet_provider(
     side_sheet_content: Option<RenderSlot>,
 ) {
     let position = position.unwrap_or_default();
-    let is_open = is_open.unwrap_or(false);
     side_sheet_provider_inner()
         .accessibility_label_optional(accessibility_label)
         .sheet_type(SideSheetType::Modal)
         .on_close_request_optional(on_close_request)
         .position(position)
-        .is_open(is_open)
         .max_width_optional(max_width)
         .content_padding_optional(content_padding)
         .main_content_shared(main_content.unwrap_or_else(RenderSlot::empty))
@@ -464,7 +461,6 @@ pub fn modal_side_sheet_provider(
 /// - `accessibility_label` — accessible name describing the dialog or sheet.
 /// - `on_close_request` — optional close-request callback.
 /// - `position` — side sheet edge position.
-/// - `is_open` — declarative open state.
 /// - `controller` — optional external controller.
 /// - `main_content` — optional main content rendered behind the sheet.
 /// - `side_sheet_content` — optional side sheet content.
@@ -476,14 +472,15 @@ pub fn modal_side_sheet_provider(
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::side_sheet::standard_side_sheet_provider;
+/// use tessera_components::side_sheet::{SideSheetController, standard_side_sheet_provider};
+/// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         standard_side_sheet_provider()
 ///             .accessibility_label("Details")
 ///             .on_close_request(|| {})
-///             .is_open(true)
+///             .controller(remember(|| SideSheetController::new(true)))
 ///             .main_content(|| { /* main content */ })
 ///             .side_sheet_content(|| { /* side sheet content */ });
 ///     });
@@ -495,19 +492,16 @@ pub fn standard_side_sheet_provider(
     #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
-    is_open: Option<bool>,
     controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
     let position = position.unwrap_or_default();
-    let is_open = is_open.unwrap_or(false);
     side_sheet_provider_inner()
         .accessibility_label_optional(accessibility_label)
         .sheet_type(SideSheetType::Standard)
         .on_close_request_shared(on_close_request.unwrap_or_default())
         .position(position)
-        .is_open(is_open)
         .main_content_shared(main_content.unwrap_or_else(RenderSlot::empty))
         .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty))
         .controller_optional(controller);
@@ -521,7 +515,6 @@ fn side_sheet_provider_inner(
     sheet_type: Option<SideSheetType>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
-    is_open: Option<bool>,
     controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
@@ -530,13 +523,12 @@ fn side_sheet_provider_inner(
     let content_padding = side_sheet_dimension(content_padding, Dp(24.0));
     let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
     let position = position.unwrap_or_default();
-    let is_open = is_open.unwrap_or(false);
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let side_sheet_content = side_sheet_content.unwrap_or_else(RenderSlot::empty);
     let external_controller = controller;
     let controller = match external_controller {
         Some(value) => value,
-        None => remember(|| SideSheetController::new(is_open)),
+        None => remember(|| SideSheetController::new(false)),
     };
     let on_close_request = if let Some(on_close_request) = on_close_request {
         on_close_request
@@ -545,16 +537,6 @@ fn side_sheet_provider_inner(
     } else {
         Callback::default()
     };
-
-    // In controlled mode (external controller provided), do not override
-    // controller state from `is_open`.
-    if external_controller.is_none() && is_open != controller.with(|c| c.is_open()) {
-        if is_open {
-            controller.with_mut(|c| c.open());
-        } else {
-            controller.with_mut(|c| c.close());
-        }
-    }
 
     side_sheet_provider_render()
         .accessibility_label_optional(accessibility_label)

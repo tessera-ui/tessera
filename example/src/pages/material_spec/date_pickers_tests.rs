@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use tessera_components::{
-    boxed::boxed, column::column, modifier::ModifierExt as _, theme::material_theme,
+    boxed::boxed, column::column, dialog::DialogController, modifier::ModifierExt as _,
+    theme::material_theme,
 };
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType, PxPosition, State,
@@ -36,14 +37,14 @@ fn modal_example_fixture(
         dark: remember(|| false),
         status: remember(String::new),
     };
-    let open = remember(|| false);
+    let open = remember(|| DialogController::new(false));
     let input = remember(|| true);
     output.set(Some((source, open)));
     material_theme().child(move || {
         tessera_components::dialog::dialog_provider()
-            .is_open(open.get())
+            .controller(open)
             .padding(Dp::ZERO)
-            .on_close_request(move || open.set(false))
+            .on_close_request(move || open.with_mut(DialogController::close))
             .main_content(move || {
                 column().children(move || {
                     super::example(source, "Input", open, input, true, draft);
@@ -74,9 +75,9 @@ fn date_dialog_example_commits_only_confirmed_selection() {
     activate(&mut renderer, "Open Input date dialog");
     choose_modal_day(&mut renderer, "July 20, 2026");
     activate(&mut renderer, "Modal cancel date");
-    assert!(!open.get());
+    assert!(!open.with(DialogController::is_open));
     assert_eq!(
-        source.single.with(super::DatePickerState::selected_date),
+        source.single.with(super::DatePickerController::selected_date),
         Some(super::date(18))
     );
 
@@ -96,9 +97,9 @@ fn date_dialog_example_commits_only_confirmed_selection() {
     renderer.pointer_press(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
     renderer.render_frames(4);
-    assert!(!open.get());
+    assert!(!open.with(DialogController::is_open));
     assert_eq!(
-        source.single.with(super::DatePickerState::selected_date),
+        source.single.with(super::DatePickerController::selected_date),
         Some(super::date(18))
     );
 
@@ -114,9 +115,9 @@ fn date_dialog_example_commits_only_confirmed_selection() {
     activate(&mut renderer, "Open Input date dialog");
     choose_modal_day(&mut renderer, "July 22, 2026");
     activate(&mut renderer, "Modal confirm date");
-    assert!(!open.get());
+    assert!(!open.with(DialogController::is_open));
     assert_eq!(
-        source.single.with(super::DatePickerState::selected_date),
+        source.single.with(super::DatePickerController::selected_date),
         Some(super::date(22))
     );
     assert_eq!(

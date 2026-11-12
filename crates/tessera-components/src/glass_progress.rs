@@ -190,11 +190,10 @@ mod tests {
     #[tessera]
     fn controls(value: f32) {
         column().children(move || {
-            glass_slider()
+            glass_slider(value)
                 .modifier(Modifier::new().width(Dp(200.0)))
                 .track_height(Dp(20.0))
-                .track_border_width(Dp::ZERO)
-                .value(value);
+                .track_border_width(Dp::ZERO);
             glass_progress()
                 .modifier(Modifier::new().width(Dp(200.0)))
                 .height(Dp(20.0))

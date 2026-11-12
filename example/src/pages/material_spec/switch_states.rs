@@ -180,8 +180,7 @@ fn cell(dark: bool, selected: bool, column: usize) {
             ),
         ],
     );
-    switch()
-        .checked(checked.get())
+    switch(checked.get())
         .enabled(column != 4)
         .presentation_state(presentation)
         .accessibility_label(I18N.text(label))

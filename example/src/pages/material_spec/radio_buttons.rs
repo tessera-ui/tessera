@@ -170,9 +170,8 @@ fn overview() {
                                         Modifier::new().width(Dp((88.0 * scale - 48.0).max(0.0))),
                                     );
                                 }
-                                radio_button()
+                                radio_button(selected.get() == index)
                                     .group(group)
-                                    .selected(selected.get() == index)
                                     .size(Dp(20.0 * scale))
                                     .stroke_width(Dp(2.0 * scale))
                                     .dot_size(Dp(10.0 * scale))
@@ -297,10 +296,9 @@ fn ringtone() {
                                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                                 .modifier(Modifier::new().height(Dp(56.0 * scale)))
                                                 .children(move || {
-                                                    radio_button()
+                                                    radio_button(selected.get() == index)
                                                         .group(group)
                                                         .focus_requester(focus)
-                                                        .selected(selected.get() == index)
                                                         .size(Dp(20.0 * scale))
                                                         .stroke_width(Dp(2.0 * scale))
                                                         .dot_size(Dp(10.0 * scale))
