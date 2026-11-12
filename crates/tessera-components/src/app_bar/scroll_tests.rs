@@ -11,6 +11,7 @@ use tessera_ui::{
 
 use crate::{
     button::button,
+    modifier::ModifierExt as _,
     scaffold::scaffold,
     scrollable::ScrollableController,
     theme::{MaterialTheme, material_theme},

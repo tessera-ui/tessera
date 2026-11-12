@@ -4,6 +4,7 @@
 //!
 //! Present rows of content in settings, inboxes, or selection lists.
 
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _, Padding};
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State, current_frame_nanos,
     modifier::ModifierCapabilityExt as _, provide_context, remember, tessera, use_context,
@@ -14,7 +15,6 @@ use crate::{
     animation::shape_motion::ShapeMotion,
     boxed::boxed,
     icon::IconSize,
-    modifier::{InteractionState, ModifierExt as _, Padding},
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::{SurfaceStyle, surface},

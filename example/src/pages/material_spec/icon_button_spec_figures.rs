@@ -6,13 +6,14 @@ use tessera_components::{
         IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
     },
     material_icons::{filled, outlined},
-    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, RenderSlot, accesskit::Role,
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,

@@ -9,12 +9,13 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     lazy_list::{LazyListController, lazy_column},
-    modifier::{ClickableArgs, ModifierExt as _},
+    modifier::ModifierExt as _,
     row::row,
     scrollable::{ScrollBarBehavior, ScrollableController, scrollbar_v},
     spacer::spacer,
     text::text,
 };
+use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _};
 use tessera_ui::{
     Callback, Dp, LayoutCoordinates, Modifier, Px, RenderSlotWith, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, remember_with_key, tessera,
@@ -265,7 +266,7 @@ fn contents(data: State<ArticleData>, width: State<Dp>, bindings: State<ChapterB
                                     Modifier::new()
                                         .height(Dp(40.0))
                                         .padding_symmetric(Dp::ZERO, Dp(8.0))
-                                        .clickable_with(ClickableArgs {
+                                        .clickable(ClickableArgs {
                                             role: Some(Role::Link),
                                             on_click: Callback::new(move || {
                                                 if !data.is_alive() || !bindings.is_alive() {

@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
@@ -16,12 +17,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    button::button,
-    column::column,
-    modifier::{InteractionState, ModifierExt as _},
-    ripple_state::RippleState,
-    surface::surface,
-    text::text,
+    button::button, column::column, ripple_state::RippleState, surface::surface, text::text,
     theme::material_theme,
 };
 

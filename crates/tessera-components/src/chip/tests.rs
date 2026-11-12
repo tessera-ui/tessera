@@ -4,6 +4,7 @@
 //!
 //! Preserve compact control geometry and behavior as chip state changes.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
@@ -14,7 +15,6 @@ use tessera_ui::{
 use crate::{
     column::column,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
     theme::{MaterialTheme, material_theme},
 };
 

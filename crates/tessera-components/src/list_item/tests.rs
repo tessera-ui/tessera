@@ -4,16 +4,11 @@
 //!
 //! Keep list content consistent across layout and state changes.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Dp, Modifier, tessera, testing::layout_test};
 
 use crate::{
-    boxed::boxed,
-    column::column,
-    icon::icon,
-    material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
-    spacer::spacer,
-    text::text,
+    boxed::boxed, column::column, icon::icon, material_icons::filled, spacer::spacer, text::text,
     theme::material_theme,
 };
 

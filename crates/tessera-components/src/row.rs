@@ -132,7 +132,8 @@ impl tessera_ui::LayoutPolicy for RowLayout {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{modifier::ModifierExt as _, row::row, spacer::spacer, text::text};
+/// use tessera_components::{row::row, spacer::spacer, text::text};
+/// use tessera_foundation::modifier::ModifierExt as _;
 /// use tessera_ui::Modifier;
 ///
 /// # use tessera_ui::tessera;
@@ -358,7 +359,7 @@ fn collect_child_weights(input: &MeasureScope<'_>, children: &[LayoutChild]) -> 
         .iter()
         .map(|child_id| {
             child_id
-                .parent_data::<crate::modifier::WeightParentData>(input)
+                .parent_data::<tessera_foundation::modifier::WeightParentData>(input)
                 .map(|data| data.weight)
                 .unwrap_or(0.0)
         })
@@ -396,6 +397,7 @@ fn place_children_with_alignment<T: LayoutPlacementTarget>(
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
         Px,
@@ -403,10 +405,7 @@ mod tests {
         tessera,
     };
 
-    use crate::{
-        alignment::{CrossAxisAlignment, MainAxisAlignment},
-        modifier::{ModifierExt as _, SemanticsArgs},
-    };
+    use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 
     use super::row;
 

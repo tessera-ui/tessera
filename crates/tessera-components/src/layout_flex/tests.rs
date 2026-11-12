@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
     RenderSlot, State,
@@ -10,7 +11,7 @@ use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
 };
 

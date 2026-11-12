@@ -8,11 +8,12 @@ use tessera_components::{
     icon_button::icon_button,
     list_item::{ListItemPosition, ListItemSelectionMode, list_item},
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     text::text,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };

@@ -10,12 +10,13 @@ use tessera_components::{
     column::column,
     icon::icon,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     switch::switch,
     text::text,
     theme::{MaterialTheme, TextStyle, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, LayoutCoordinates, Modifier, RenderSlot, accesskit::Role, modifier::FocusModifierExt as _,
     remember, scaled_box, tessera, use_context,

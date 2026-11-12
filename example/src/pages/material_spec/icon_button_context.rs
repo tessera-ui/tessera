@@ -8,7 +8,7 @@ use tessera_components::{
     icon_button::{IconButtonWidth, icon_button},
     image::image,
     material_icons::{Asset, filled, outlined},
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -16,6 +16,7 @@ use tessera_components::{
     theme::MaterialTheme,
     toolbar::floating_toolbar,
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,

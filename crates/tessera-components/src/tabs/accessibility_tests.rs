@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, FocusDirection, Modifier, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
@@ -19,7 +20,6 @@ use crate::{
     button::button,
     column::column,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
     text::text,
     theme::{MaterialTheme, material_theme},
 };
@@ -86,7 +86,12 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                         text("Before tabs");
                     });
                 let observed = observed.clone();
-                tabs(selected.get()).on_select(move |index| selected.set(index))
+                tabs(selected.get())
+                    .on_select(move |index| {
+                        if !config.get().controlled {
+                            selected.set(index);
+                        }
+                    })
                     .modifier(Modifier::new().width(Dp(301.0)).semantics(SemanticsArgs {
                         label: Some("Transport views".to_owned()),
                         ..Default::default()
@@ -103,11 +108,6 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                         {
                             let item = tab(row)
                                 .label(label)
-                                .selected_optional(if config.get().controlled {
-                                    Some(selected.get() == index)
-                                } else {
-                                    None
-                                })
                                 .enabled(index != 1 || config.get().middle_enabled)
                                 .on_click(move || calls.with_mut(|calls| *calls += 1));
                             if config.get().icons {

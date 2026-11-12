@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier, State,
     accesskit::{Rect, Role},
@@ -7,8 +8,8 @@ use tessera_ui::{
 };
 
 use crate::{
-    boxed::boxed, icon::icon, material_icons::filled, modifier::ModifierExt as _, spacer::spacer,
-    text::text, theme::material_theme,
+    boxed::boxed, icon::icon, material_icons::filled, spacer::spacer, text::text,
+    theme::material_theme,
 };
 
 use super::{

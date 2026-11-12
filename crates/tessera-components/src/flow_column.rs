@@ -33,7 +33,9 @@ use crate::{
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{boxed::boxed, flow_column::flow_column, modifier::{ModifierExt as _, SemanticsArgs}};
+/// use tessera_components::boxed::boxed;
+/// use tessera_components::flow_column::flow_column;
+/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Dp, Modifier, tessera, testing::layout_test};
 ///
 /// #[tessera]
@@ -88,6 +90,7 @@ pub fn flow_column(
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
         NoopDrawModifier, Px,
@@ -95,10 +98,7 @@ mod tests {
         tessera,
     };
 
-    use crate::{
-        alignment::{CrossAxisAlignment, MainAxisAlignment},
-        modifier::{ModifierExt as _, SemanticsArgs},
-    };
+    use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 
     use super::flow_column;
 

@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
@@ -13,11 +14,7 @@ use tessera_ui::{
     remember, tessera,
 };
 
-use crate::{
-    material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
-    theme::material_theme,
-};
+use crate::{material_icons::filled, theme::material_theme};
 
 use super::chip;
 

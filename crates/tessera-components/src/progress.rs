@@ -3,6 +3,7 @@
 //! ## Usage
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
     ParentConstraint, Px, PxPosition, State,
@@ -13,7 +14,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::{ModifierExt as _, SemanticsArgs},
     pipelines::progress_arc::command::{ProgressArcCap, ProgressArcCommand},
     shape_def::Shape,
     surface::surface,

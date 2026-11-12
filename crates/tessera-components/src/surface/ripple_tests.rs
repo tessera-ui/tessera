@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier,
     PressKeyEventType, Px, PxPosition,
@@ -14,7 +15,7 @@ use tessera_ui::{
     tessera,
 };
 
-use crate::{button::button, modifier::ModifierExt as _, theme::material_theme};
+use crate::{button::button, theme::material_theme};
 
 #[derive(Clone, PartialEq)]
 struct ContentMeasure;

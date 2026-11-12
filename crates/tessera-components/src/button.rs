@@ -3,6 +3,9 @@
 //! ## Usage
 //!
 //! Trigger actions, submit forms, or navigate.
+use tessera_foundation::modifier::{
+    InteractionState, InteractionVisualState, ModifierExt as _, Padding,
+};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
     Modifier, Px, PxPosition, RenderSlot, State,
@@ -18,7 +21,6 @@ use crate::{
     animation::Animatable,
     boxed::boxed,
     icon::IconSize,
-    modifier::{InteractionState, InteractionVisualState, ModifierExt, Padding},
     shape_def::{RoundedCorner, Shape},
     surface::{RipplePresentation, SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle, content_color_for},
@@ -895,6 +897,7 @@ impl ButtonBuilder {
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::SemanticsArgs;
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State,
         headless::{HeadlessConfig, HeadlessRenderer},
@@ -906,7 +909,7 @@ mod tests {
         column::column,
         icon::icon,
         material_icons::filled,
-        modifier::SemanticsArgs,
+        modifier::ModifierExt as _,
         spacer::spacer,
         text::text,
         theme::{ContentColor, material_theme},

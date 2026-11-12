@@ -6,15 +6,13 @@
 
 use std::any::TypeId;
 
+use tessera_foundation::modifier::InteractionState;
 use tessera_ui::{
     ParentDataModifierNode, PointerEventPass, PointerInput, PointerInputModifierNode, Px, State,
     current_frame_nanos, modifier::ParentDataMap,
 };
 
-use crate::{
-    animation::material_motion::{Scalar, Spec},
-    modifier::InteractionState,
-};
+use crate::animation::material_motion::{Scalar, Spec};
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct PressWidthMotion {

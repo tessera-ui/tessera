@@ -2,7 +2,7 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     scrollable::ScrollableController,
     shape_def::Shape,
@@ -10,6 +10,7 @@ use tessera_components::{
     text::text,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, accesskit::Role, modifier::FocusModifierExt as _,
     remember, tessera, use_context,

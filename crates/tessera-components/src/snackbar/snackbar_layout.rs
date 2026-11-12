@@ -9,7 +9,7 @@ use tessera_ui::{
     PxPosition, layout::MeasureScope,
 };
 
-use crate::modifier::Padding;
+use tessera_foundation::modifier::Padding;
 
 use super::SnackbarDefaults;
 

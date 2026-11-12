@@ -12,7 +12,7 @@ use tessera_components::{
     flow_row::flow_row,
     icon::icon,
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::{RoundedCorner, Shape},
     snackbar::{
@@ -23,6 +23,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, TextStyle, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };

@@ -3,6 +3,7 @@
 //! ## Usage
 //!
 //! Present anchored overflow or context actions as surfaced menus.
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, CursorEventContent, Dp, DrawModifierContent,
     DrawModifierContext, DrawModifierNode, FocusDirection, FocusRequester, FocusScopeNode,
@@ -219,7 +220,6 @@ struct MenuProviderConfig {
     pub close_on_background: bool,
     pub close_on_escape: bool,
     pub on_dismiss: Option<Callback>,
-    pub is_open: bool,
     pub controller: Option<State<MenuController>>,
     pub focus_restorer_fallback: Option<FocusRequester>,
     pub main_content: Option<RenderSlot>,
@@ -249,7 +249,6 @@ impl Default for MenuProviderConfig {
             close_on_background: true,
             close_on_escape: true,
             on_dismiss: None,
-            is_open: false,
             controller: None,
             focus_restorer_fallback: None,
             main_content: None,
@@ -830,7 +829,7 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
     .modifier(modifier)
     .child(move || {
         layout(Stack)
-            .modifier(Modifier::new().focus_scope_with(main_focus_scope))
+            .modifier(Modifier::new().focus_scope(Some(main_focus_scope)))
             .child_shared(main_content);
         if is_open {
             let bounds = bounds;
@@ -935,7 +934,7 @@ fn menu_panel(
     let mut modifier = with_keyboard_input(
         Modifier::new()
             .layout_coordinate_space()
-            .focus_scope_with(focus_scope)
+            .focus_scope(Some(focus_scope))
             .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true)),
         move |mut input| {
             if input.key_modifiers.control_key()
@@ -1664,23 +1663,19 @@ fn menu_item_inner(args: Option<MenuItemConfig>) {
 
 #[cfg(test)]
 mod tests {
-    use tessera_ui::testing::{
-        layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-        start_layout_test_session,
-    };
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         CursorEventContent, Dp, GestureState, LayoutCoordinates, Modifier, PointerChange,
-        PressKeyEventType, Px, PxPosition, State, modifier::FocusModifierExt as _, remember,
-        scaled_box, tessera, testing::LayoutSnapshot,
+        PressKeyEventType, Px, PxPosition, State,
+        modifier::FocusModifierExt as _,
+        remember, scaled_box, tessera,
+        testing::{
+            LayoutSnapshot, layout_test, pump_layout_test_session,
+            pump_layout_test_session_with_input, start_layout_test_session,
+        },
     };
 
-    use crate::{
-        button::button,
-        column::column,
-        modifier::{ModifierExt as _, SemanticsArgs},
-        spacer::spacer,
-        theme::material_theme,
-    };
+    use crate::{button::button, column::column, spacer::spacer, theme::material_theme};
 
     use super::{MenuAnchor, MenuController, menu_item, menu_provider};
 

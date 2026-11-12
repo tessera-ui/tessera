@@ -4,6 +4,7 @@
 //!
 //! Preserve complete selection and validation states across theme changes.
 
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Invalid, Node, NodeId, Role, Toggled, TreeId},
@@ -14,7 +15,6 @@ use tessera_ui::{
 
 use crate::{
     column::column,
-    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     theme::{MaterialTheme, material_theme},

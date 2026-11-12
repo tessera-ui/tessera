@@ -14,7 +14,7 @@ use tessera_components::{
     flow_row::flow_row,
     icon::icon,
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     scaffold::scaffold,
     scrollable::ScrollableController,
@@ -25,6 +25,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
@@ -1504,9 +1505,9 @@ fn swipe_tabs(selected: State<usize>) {
                     Modifier::new()
                         .fill_max_width()
                         .height(Dp(200.0))
-                        .draggable_with(tessera_components::modifier::DraggableArgs {
+                        .draggable(tessera_foundation::modifier::DraggableArgs {
                             on_drag_delta: tessera_ui::CallbackWith::new(
-                                move |delta: tessera_components::modifier::DragDelta| {
+                                move |delta: tessera_foundation::modifier::DragDelta| {
                                     travel.set(travel.get() + delta.x.to_f32());
                                 },
                             ),

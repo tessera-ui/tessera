@@ -4,6 +4,7 @@ use tessera_components::{
     alignment::Alignment, boxed::boxed, column::column, modifier::ModifierExt as _,
     scrollable::ScrollableController, spacer::spacer, theme::material_theme,
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},

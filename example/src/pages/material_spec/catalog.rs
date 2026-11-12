@@ -3,13 +3,12 @@ use tessera_components::{
     column::column,
     flow_row::flow_row,
     lazy_list::{LazyListController, lazy_column},
-    modifier::{ModifierExt as _, SemanticsArgs},
     scrollable::{ScrollBarBehavior, ScrollableController},
     shape_def::Shape,
-    side_sheet::SideSheetController,
     surface::surface,
     text::text,
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_shard::RouterController;
 use tessera_ui::{
     Callback, CallbackWith, Dp, Modifier, Px, State, modifier::FocusModifierExt as _, tessera,
@@ -569,7 +568,7 @@ fn component_card(component: Component, index: usize, on_open: CallbackWith<usiz
 mod tests {
     use std::time::Duration;
 
-    use tessera_components::theme::material_theme;
+    use tessera_components::{side_sheet::SideSheetController, theme::material_theme};
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
         accesskit::{Action, ActionRequest, Node, Rect, Role, Toggled, TreeId},

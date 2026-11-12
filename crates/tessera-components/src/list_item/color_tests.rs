@@ -4,6 +4,7 @@
 //!
 //! Preserve transitions and state precedence without pointer or shape updates.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, State,
     headless::{HeadlessConfig, HeadlessRenderer},
@@ -13,7 +14,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     spacer::spacer,
     theme::{ContentColor, MaterialTheme, material_theme},

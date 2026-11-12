@@ -12,11 +12,12 @@ use tessera_components::{
     column::column,
     icon::icon,
     material_icons::filled,
-    modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     switch::switch,
     text::text,
     theme::{MaterialTheme, TextStyle},
 };
+use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, Dp, FocusRequester, LayoutCoordinates, Modifier, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
@@ -151,7 +152,7 @@ fn canvas(is_switch: bool) {
 
 fn label_modifier(modifier: Modifier, checked: State<bool>, focus: FocusRequester) -> Modifier {
     modifier
-        .clickable_with(ClickableArgs {
+        .clickable(ClickableArgs {
             on_click: Callback::new(move || {
                 checked.with_mut(|value| *value = !*value);
                 focus.request_focus();

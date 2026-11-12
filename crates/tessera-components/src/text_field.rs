@@ -4,7 +4,10 @@
 //!
 //! Collect short-form inputs like names, passwords, or search queries.
 use glyphon::Action as GlyphonAction;
-use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer, TapSettings};
+use tessera_foundation::{
+    gesture::{ScrollRecognizer, TapRecognizer, TapSettings},
+    modifier::{InteractionVisualState, ModifierExt as _, Padding},
+};
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, PxSize, RenderSlot,
@@ -21,7 +24,7 @@ use crate::{
     boxed::boxed,
     divider::horizontal_divider,
     menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
-    modifier::{InteractionVisualState, ModifierExt as _, Padding, with_pointer_input},
+    modifier::with_pointer_input,
     pos_misc::is_position_inside_bounds,
     res::I18N,
     row::row,
@@ -1781,7 +1784,7 @@ mod native_field_regressions {
                                 .leading_icon(|| {
                                     boxed()
                                         .modifier(Modifier::new().semantics(
-                                            crate::modifier::SemanticsArgs {
+                                            tessera_foundation::modifier::SemanticsArgs {
                                                 role: Some(Role::Image),
                                                 label: Some("Leading search decoration".into()),
                                                 ..Default::default()
@@ -2082,7 +2085,7 @@ mod native_field_regressions {
                     crate::text_edit_core::TextSelection::collapsed(long.len()),
                 );
             });
-            editor.with(|editor| *editor.focus_handler()).unfocus();
+            editor.with(|editor| *editor.focus_handler()).clear_focus();
             renderer.render_frames(4);
             assert!(editor.with(|editor| editor.scroll_controller().horizontal()) > 0.0);
             let end_pixels = renderer.read_pixels().unwrap();

@@ -4,6 +4,7 @@
 //!
 //! Offer compact actions and toggles in toolbars, navigation, and media
 //! controls.
+use tessera_foundation::modifier::{InteractionState, InteractionVisualState, ModifierExt as _};
 use tessera_ui::{
     Callback, Color, Dp, Modifier, State,
     accesskit::{Role, Toggled},
@@ -14,7 +15,6 @@ use crate::{
     alignment::Alignment,
     animation::Animatable,
     boxed::boxed,
-    modifier::{InteractionState, InteractionVisualState, ModifierExt as _},
     painter::Painter,
     shape_def::{RoundedCorner, Shape},
     surface::{RipplePresentation, SurfaceStyle, surface},

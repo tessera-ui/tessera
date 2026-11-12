@@ -6,6 +6,9 @@
 
 use std::collections::HashMap;
 
+use tessera_foundation::modifier::{
+    InteractionState, InteractionVisualState, ModifierExt as _, Padding,
+};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, CallbackWith, ComputedData,
     Constraint, Dp, FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
@@ -21,7 +24,6 @@ use crate::{
     animation::shape_motion::ShapeMotion,
     button::{ButtonShape, ButtonSize, ButtonVariant, button},
     icon::IconSize,
-    modifier::{InteractionState, InteractionVisualState, ModifierExt, Padding},
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -432,7 +434,7 @@ pub fn button_groups(
     .modifier(
         modifier
             .unwrap_or_default()
-            .focus_group()
+            .focus_group(None)
             .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true))
             .push_semantics(ButtonGroupsSemantics)
             .size_in(

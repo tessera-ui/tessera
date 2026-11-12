@@ -3,6 +3,7 @@ use tessera_components::{
     modifier::ModifierExt as _,
     shape_def::Shape,
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Asset, Color, Dp, Modifier};
 
 use super::srgb;

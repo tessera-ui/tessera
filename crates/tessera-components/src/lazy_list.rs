@@ -1315,7 +1315,7 @@ fn retained_lazy_item(
         }
         binding.set((index, local_index, builder, controller, retain_focus));
     }
-    let modifier = Modifier::new().focus_scope_with(scope);
+    let modifier = Modifier::new().focus_scope(Some(scope));
     let modifier = if retain_focus {
         modifier.on_focus_changed(move |focus: tessera_ui::FocusState| {
             if !binding.is_alive() {
@@ -1718,6 +1718,7 @@ fn saturating_sub_px(lhs: Px, rhs: Px) -> Px {
 #[cfg(test)]
 mod tests {
 
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
         NoopDrawModifier, Px, PxPosition, RenderSlotWith, State, layout::MeasureScope, remember,
@@ -1726,7 +1727,6 @@ mod tests {
 
     use crate::{
         alignment::CrossAxisAlignment,
-        modifier::{ModifierExt as _, SemanticsArgs},
         text::text,
         theme::{MaterialTheme, material_theme},
     };

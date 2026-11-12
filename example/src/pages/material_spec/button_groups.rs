@@ -16,12 +16,15 @@ use tessera_components::{
     flow_row::flow_row,
     icon::icon,
     material_icons::{Asset, filled},
-    modifier::{InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
     text::text,
     theme::MaterialTheme,
+};
+use tessera_foundation::modifier::{
+    InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs,
 };
 use tessera_ui::{CallbackWith, Color, Dp, Modifier, RenderSlot, remember, tessera, use_context};
 

@@ -3,7 +3,10 @@
 //! ## Usage
 //!
 //! Show screen titles, navigation, and primary actions above page content.
-use tessera_foundation::gesture::DragAxis;
+use tessera_foundation::{
+    gesture::DragAxis,
+    modifier::{DraggableArgs, ModifierExt as _, Padding, SemanticsArgs},
+};
 use tessera_ui::{
     Asset, AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
@@ -15,7 +18,6 @@ use crate::{
     column::column,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{DraggableArgs, ModifierExt as _, Padding, SemanticsArgs},
     progress::cubic_bezier_easing,
     res::I18N,
     row::row,
@@ -441,14 +443,16 @@ pub fn top_app_bar(
         if active.get() != state {
             active.set(state);
         }
-        modifier.draggable_with(DraggableArgs {
+        modifier.draggable(DraggableArgs {
             enabled: state.with(AppBarScrollController::drag_enabled),
             axis: Some(DragAxis::Vertical),
-            on_drag_delta: CallbackWith::new(move |delta: crate::modifier::DragDelta| {
-                active
-                    .get()
-                    .with_mut(|value| value.drag_by(delta.y.to_f32()))
-            }),
+            on_drag_delta: CallbackWith::new(
+                move |delta: tessera_foundation::modifier::DragDelta| {
+                    active
+                        .get()
+                        .with_mut(|value| value.drag_by(delta.y.to_f32()))
+                },
+            ),
             on_drag_stopped: Some(Callback::new(move || {
                 active.get().with_mut(AppBarScrollController::end_drag)
             })),

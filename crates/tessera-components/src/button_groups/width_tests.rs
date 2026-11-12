@@ -5,12 +5,12 @@
 //! Keep press feedback local while preserving neighboring content and row
 //! width.
 
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
     headless::{HeadlessConfig, HeadlessRenderer},
-    layout::Stack,
-    layout::layout,
+    layout::{Stack, layout},
     remember, tessera,
     testing::TestProbe,
 };
@@ -18,7 +18,6 @@ use tessera_ui::{
 use crate::{
     button_groups::{ButtonGroupsSize, ButtonGroupsStyle, button_groups},
     column::column,
-    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
     theme::material_theme,
 };
 

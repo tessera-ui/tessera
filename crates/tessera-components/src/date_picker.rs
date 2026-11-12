@@ -5,6 +5,7 @@
 //! Choose calendar dates or booking intervals in scheduling and form flows.
 use std::ops::RangeInclusive;
 
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, key,
@@ -23,7 +24,6 @@ use crate::{
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     res::I18N,
     row::row,
     scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
@@ -956,7 +956,7 @@ fn date_grid(
     })
     .modifier(
         Modifier::new()
-            .focus_restorer(Some(keyboard.focus_requester()))
+            .focus_restorer(None, Some(keyboard.focus_requester()))
             .semantics(SemanticsArgs {
                 role: Some(tessera_ui::accesskit::Role::Group),
                 label: Some(format_month_year(snapshot.displayed_month)),

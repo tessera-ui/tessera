@@ -4,7 +4,10 @@
 //!
 //! Collect short-form input when the full text field decoration is not needed.
 use glyphon::Action as GlyphonAction;
-use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer};
+use tessera_foundation::{
+    gesture::{ScrollRecognizer, TapRecognizer},
+    modifier::{InteractionState, InteractionVisualState, ModifierExt as _},
+};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, ComputedData,
     CursorEventContent, Dp, ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput,
@@ -12,8 +15,7 @@ use tessera_ui::{
     PxSize, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     clipboard::{ClipboardAction, ClipboardInput, ClipboardInputModifierNode},
-    layout::Stack,
-    layout::layout,
+    layout::{Stack, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context, winit,
 };
@@ -21,7 +23,6 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     boxed::boxed,
-    modifier::{InteractionState, InteractionVisualState, ModifierExt as _},
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
@@ -544,7 +545,7 @@ pub fn text_input(
     editor_args.controller = Some(controller);
 
     if !editor_args.enabled {
-        controller.with(|c| *c.focus_handler()).unfocus();
+        controller.with(|c| *c.focus_handler()).clear_focus();
     }
     sync_text_input_controller(&controller, &editor_args);
     let focus = controller.with(|c| *c.focus_handler());
@@ -594,7 +595,7 @@ fn text_input_editor(props: TextInputProps) {
     let editor_args: TextInputProps = props.clone();
 
     if !editor_args.enabled {
-        controller.with(|c| *c.focus_handler()).unfocus();
+        controller.with(|c| *c.focus_handler()).clear_focus();
     }
     sync_text_input_controller(&controller, &editor_args);
     let focus = controller.with(|c| *c.focus_handler());
@@ -2546,6 +2547,7 @@ mod tests {
 
     mod scroll_propagation {
 
+        use tessera_foundation::modifier::ModifierExt as _;
         use tessera_ui::{
             CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
             PxPosition, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource, State,

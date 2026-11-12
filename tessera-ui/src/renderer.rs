@@ -2473,7 +2473,7 @@ mod tests {
         layout(Stack)
             .modifier(
                 Modifier::new()
-                    .focus_restorer(Some(fallback))
+                    .focus_restorer(None, Some(fallback))
                     .focus_reveal_handler(move |request: crate::focus::FocusRevealRequest| {
                         reveals.with_mut(|rects| rects.push(request.target_rect));
                         false

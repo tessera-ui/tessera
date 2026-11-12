@@ -6,6 +6,7 @@
 
 mod input;
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
@@ -21,7 +22,7 @@ use crate::{
         visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
     },
     modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
+    modifier::with_keyboard_input,
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,
@@ -750,7 +751,7 @@ fn side_sheet_content_wrapper(
     let modifier = dialog_semantics(
         with_keyboard_input(
             Modifier::new()
-                .focus_scope_with(focus_scope)
+                .focus_scope(Some(focus_scope))
                 .focus_properties(FocusProperties::new().skip_traversal(true))
                 .focus_traversal_policy(
                     FocusTraversalPolicy::linear()

@@ -1,8 +1,8 @@
-//! Modifier extensions for basic components.
+//! Material modifier extensions for basic components.
 //!
 //! ## Usage
 //!
-//! Attach layout and drawing behavior like padding and opacity to any subtree.
+//! Attach backgrounds, borders, shadows, scrolling, and ripple interactions to any subtree.
 
 #[cfg(test)]
 mod insets_tests;
@@ -10,30 +10,13 @@ mod interaction;
 mod shadow;
 mod visual;
 
-use tessera_foundation::modifier::ModifierExt as FoundationModifierExt;
-use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, Dp, Modifier, State,
-    modifier::ModifierCapabilityExt as _,
-};
+use tessera_foundation::modifier::{ClickableArgs, SelectableArgs, ToggleableArgs};
+use tessera_ui::{Color, Dp, Modifier, State, modifier::ModifierCapabilityExt as _};
 
-pub use tessera_foundation::modifier::{
-    ClickableArgs, DragDelta, DraggableArgs, InteractionState, InteractionVisualState,
-    MinimumInteractiveComponentEnforcement, Padding, PointerEventContext, SelectableArgs,
-    SemanticsArgs, ToggleableArgs,
-};
+use crate::{scrollable::ScrollableController, shape_def::Shape, theme::MaterialColorScheme};
 
-pub(crate) use tessera_foundation::modifier::{AlignmentParentData, WeightParentData};
-
-use crate::{
-    alignment::Alignment, scrollable::ScrollableController, shape_def::Shape,
-    theme::MaterialColorScheme,
-};
-
-use interaction::{
-    apply_block_touch_propagation_modifier, apply_clickable_modifier, apply_selectable_modifier,
-    apply_toggleable_modifier, apply_window_drag_region_modifier,
-};
-use visual::{AlphaModifierNode, BackgroundModifierNode, BorderModifierNode, ClipModifierNode};
+use interaction::{apply_clickable_modifier, apply_selectable_modifier, apply_toggleable_modifier};
+use visual::{BackgroundModifierNode, BorderModifierNode};
 
 pub use shadow::ShadowArgs;
 
@@ -42,48 +25,9 @@ pub(crate) use interaction::{
     with_pointer_input,
 };
 
-/// Extensions for composing reusable wrapper behavior around component
-/// subtrees.
+/// Material extensions for composing drawing, scrolling, and ripple
+/// interaction behavior around component subtrees.
 pub trait ModifierExt {
-    /// Pads and consumes the space not already occupied by enclosing inset modifiers.
-    fn window_insets_padding(self, insets: tessera_ui::WindowInsets) -> Modifier;
-
-    /// Marks inset space as occupied for nested padding and size modifiers.
-    fn consume_window_insets(self, insets: tessera_ui::WindowInsets) -> Modifier;
-
-    /// Sets width to the remaining left window inset.
-    fn window_insets_left_width(self, insets: tessera_ui::WindowInsets) -> Modifier;
-
-    /// Sets height to the remaining top window inset.
-    fn window_insets_top_height(self, insets: tessera_ui::WindowInsets) -> Modifier;
-
-    /// Sets width to the remaining right window inset.
-    fn window_insets_right_width(self, insets: tessera_ui::WindowInsets) -> Modifier;
-
-    /// Sets height to the remaining bottom window inset.
-    fn window_insets_bottom_height(self, insets: tessera_ui::WindowInsets) -> Modifier;
-
-    /// Adds padding around the content.
-    fn padding(self, padding: Padding) -> Modifier;
-
-    /// Adds symmetric padding on all edges.
-    fn padding_all(self, padding: Dp) -> Modifier;
-
-    /// Adds symmetric padding for horizontal and vertical edges.
-    fn padding_symmetric(self, horizontal: Dp, vertical: Dp) -> Modifier;
-
-    /// Offsets the content without affecting layout size.
-    fn offset(self, x: Dp, y: Dp) -> Modifier;
-
-    /// Multiplies the opacity of the subtree by `alpha`.
-    fn alpha(self, alpha: f32) -> Modifier;
-
-    /// Clips descendants to this modifier's bounds.
-    fn clip_to_bounds(self) -> Modifier;
-
-    /// Clips this node and its descendants to a shape without resizing content.
-    fn clip_shape(self, shape: Shape) -> Modifier;
-
     /// Makes this node a vertical scroll viewport driven by `controller`.
     fn vertical_scroll(self, controller: State<ScrollableController>) -> Modifier;
 
@@ -120,159 +64,18 @@ pub trait ModifierExt {
     /// Adds a shadow with advanced configuration options.
     fn shadow(self, scheme: &MaterialColorScheme, args: &ShadowArgs) -> Modifier;
 
-    /// Constrains the content to an exact size when possible.
-    fn size(self, width: Dp, height: Dp) -> Modifier;
-
-    /// Pins the content to an exact size regardless of incoming constraints.
-    fn required_size(self, width: Dp, height: Dp) -> Modifier;
-
-    /// Pins the content width regardless of incoming constraints.
-    fn required_width(self, width: Dp) -> Modifier;
-
-    /// Pins the content height regardless of incoming constraints.
-    fn required_height(self, height: Dp) -> Modifier;
-
-    /// Applies a default minimum size only when the incoming axis leaves the
-    /// minimum open, so an explicit outer size always wins.
-    fn default_min_size(self, min_width: Dp, min_height: Dp) -> Modifier;
-
-    /// Constrains the content to an exact width when possible.
-    fn width(self, width: Dp) -> Modifier;
-
-    /// Constrains the content to an exact height when possible.
-    fn height(self, height: Dp) -> Modifier;
-
-    /// Constrains the content size within optional min/max bounds.
-    fn size_in(
-        self,
-        min_width: Option<Dp>,
-        max_width: Option<Dp>,
-        min_height: Option<Dp>,
-        max_height: Option<Dp>,
-    ) -> Modifier;
-
-    /// Applies explicit width/height interval constraints.
-    fn constrain(self, width: Option<AxisConstraint>, height: Option<AxisConstraint>) -> Modifier;
-
-    /// Fills the available width within parent bounds.
-    fn fill_max_width(self) -> Modifier;
-
-    /// Fills the available height within parent bounds.
-    fn fill_max_height(self) -> Modifier;
-
-    /// Fills the available size within parent bounds.
-    fn fill_max_size(self) -> Modifier;
-
-    /// Enforces a minimum interactive size by expanding and centering content.
-    fn minimum_interactive_component_size(self) -> Modifier;
-
-    /// Provides weighted parent data for row and column layouts.
-    fn weight(self, weight: f32) -> Modifier;
-
-    /// Provides alignment parent data for layered boxed layouts.
-    fn align(self, alignment: Alignment) -> Modifier;
-
-    /// Emits drag deltas for free-form dragging.
-    fn draggable<C>(self, on_drag_delta: C) -> Modifier
-    where
-        C: Into<CallbackWith<DragDelta, ()>>;
-
-    /// Emits drag deltas with custom drag configuration.
-    fn draggable_with(self, args: DraggableArgs) -> Modifier;
-
-    /// Prevents cursor events from propagating to components behind this
-    /// subtree.
-    fn block_touch_propagation(self) -> Modifier;
-
-    /// Attaches accessibility semantics metadata to this subtree.
-    fn semantics(self, args: SemanticsArgs) -> Modifier;
-
-    /// Clears descendant semantics and applies the provided metadata.
-    fn clear_and_set_semantics(self, args: SemanticsArgs) -> Modifier;
-
     /// Makes the subtree clickable with optional ripple feedback and an
     /// accessibility click action.
-    fn clickable<C>(self, on_click: C) -> Modifier
-    where
-        C: Into<Callback>;
-
-    /// Makes the subtree clickable with advanced configuration options.
-    fn clickable_with(self, args: ClickableArgs) -> Modifier;
+    fn clickable(self, args: ClickableArgs) -> Modifier;
 
     /// Makes the subtree toggleable with optional ripple/state-layer feedback.
-    fn toggleable<C>(self, value: bool, on_value_change: C) -> Modifier
-    where
-        C: Into<CallbackWith<bool, ()>>;
-
-    /// Makes the subtree toggleable with advanced configuration options.
-    fn toggleable_with(self, args: ToggleableArgs) -> Modifier;
+    fn toggleable(self, args: ToggleableArgs) -> Modifier;
 
     /// Makes the subtree selectable with optional ripple/state-layer feedback.
-    fn selectable<C>(self, selected: bool, on_click: C) -> Modifier
-    where
-        C: Into<Callback>;
-
-    /// Makes the subtree selectable with advanced configuration options.
-    fn selectable_with(self, args: SelectableArgs) -> Modifier;
-
-    /// Marks this subtree as a draggable window region. On macOS, double-clicking
-    /// the region follows the system title bar preference.
-    fn window_drag_region(self) -> Modifier;
+    fn selectable(self, args: SelectableArgs) -> Modifier;
 }
 
 impl ModifierExt for Modifier {
-    fn window_insets_padding(self, insets: tessera_ui::WindowInsets) -> Modifier {
-        FoundationModifierExt::window_insets_padding(self, insets)
-    }
-    fn consume_window_insets(self, insets: tessera_ui::WindowInsets) -> Modifier {
-        FoundationModifierExt::consume_window_insets(self, insets)
-    }
-    fn window_insets_left_width(self, insets: tessera_ui::WindowInsets) -> Modifier {
-        FoundationModifierExt::window_insets_left_width(self, insets)
-    }
-    fn window_insets_top_height(self, insets: tessera_ui::WindowInsets) -> Modifier {
-        FoundationModifierExt::window_insets_top_height(self, insets)
-    }
-    fn window_insets_right_width(self, insets: tessera_ui::WindowInsets) -> Modifier {
-        FoundationModifierExt::window_insets_right_width(self, insets)
-    }
-    fn window_insets_bottom_height(self, insets: tessera_ui::WindowInsets) -> Modifier {
-        FoundationModifierExt::window_insets_bottom_height(self, insets)
-    }
-
-    fn padding(self, padding: Padding) -> Modifier {
-        FoundationModifierExt::padding(self, padding)
-    }
-
-    fn padding_all(self, padding: Dp) -> Modifier {
-        FoundationModifierExt::padding(self, Padding::all(padding))
-    }
-
-    fn padding_symmetric(self, horizontal: Dp, vertical: Dp) -> Modifier {
-        FoundationModifierExt::padding(self, Padding::symmetric(horizontal, vertical))
-    }
-
-    fn offset(self, x: Dp, y: Dp) -> Modifier {
-        FoundationModifierExt::offset(self, x, y)
-    }
-
-    fn alpha(self, alpha: f32) -> Modifier {
-        let alpha = alpha.clamp(0.0, 1.0);
-        if (alpha - 1.0).abs() <= f32::EPSILON {
-            return self;
-        }
-
-        self.push_draw(AlphaModifierNode { alpha })
-    }
-
-    fn clip_to_bounds(self) -> Modifier {
-        self.push_draw(ClipModifierNode)
-    }
-
-    fn clip_shape(self, shape: Shape) -> Modifier {
-        self.push_draw(visual::ShapeClipModifierNode { shape })
-    }
-
     fn vertical_scroll(self, controller: State<ScrollableController>) -> Modifier {
         crate::scrollable::apply_scroll_modifier(self, controller, true, false)
     }
@@ -336,144 +139,15 @@ impl ModifierExt for Modifier {
         shadow::apply_shadow_modifier(self, scheme, args.clone())
     }
 
-    fn default_min_size(self, min_width: Dp, min_height: Dp) -> Modifier {
-        FoundationModifierExt::default_min_size(self, min_width, min_height)
-    }
-
-    fn size(self, width: Dp, height: Dp) -> Modifier {
-        FoundationModifierExt::size(self, width, height)
-    }
-
-    fn required_size(self, width: Dp, height: Dp) -> Modifier {
-        FoundationModifierExt::required_size(self, width, height)
-    }
-
-    fn required_width(self, width: Dp) -> Modifier {
-        FoundationModifierExt::required_width(self, width)
-    }
-
-    fn required_height(self, height: Dp) -> Modifier {
-        FoundationModifierExt::required_height(self, height)
-    }
-    fn width(self, width: Dp) -> Modifier {
-        FoundationModifierExt::width(self, width)
-    }
-
-    fn height(self, height: Dp) -> Modifier {
-        FoundationModifierExt::height(self, height)
-    }
-
-    fn size_in(
-        self,
-        min_width: Option<Dp>,
-        max_width: Option<Dp>,
-        min_height: Option<Dp>,
-        max_height: Option<Dp>,
-    ) -> Modifier {
-        FoundationModifierExt::size_in(self, min_width, max_width, min_height, max_height)
-    }
-
-    fn constrain(self, width: Option<AxisConstraint>, height: Option<AxisConstraint>) -> Modifier {
-        FoundationModifierExt::constrain(self, width, height)
-    }
-
-    fn fill_max_width(self) -> Modifier {
-        FoundationModifierExt::fill_max_width(self)
-    }
-
-    fn fill_max_height(self) -> Modifier {
-        FoundationModifierExt::fill_max_height(self)
-    }
-
-    fn fill_max_size(self) -> Modifier {
-        FoundationModifierExt::fill_max_size(self)
-    }
-
-    fn minimum_interactive_component_size(self) -> Modifier {
-        if !MinimumInteractiveComponentEnforcement::default().enabled {
-            return self;
-        }
-
-        FoundationModifierExt::minimum_interactive_component_size(self)
-    }
-
-    fn weight(self, weight: f32) -> Modifier {
-        FoundationModifierExt::weight(self, weight)
-    }
-
-    fn align(self, alignment: Alignment) -> Modifier {
-        FoundationModifierExt::align(self, alignment)
-    }
-
-    fn draggable<C>(self, on_drag_delta: C) -> Modifier
-    where
-        C: Into<CallbackWith<DragDelta, ()>>,
-    {
-        FoundationModifierExt::draggable(self, on_drag_delta)
-    }
-
-    fn draggable_with(self, args: DraggableArgs) -> Modifier {
-        FoundationModifierExt::draggable_with(self, args)
-    }
-
-    fn block_touch_propagation(self) -> Modifier {
-        apply_block_touch_propagation_modifier(self)
-    }
-
-    fn semantics(self, args: SemanticsArgs) -> Modifier {
-        FoundationModifierExt::semantics(self, args)
-    }
-
-    fn clear_and_set_semantics(self, mut args: SemanticsArgs) -> Modifier {
-        args.merge_descendants = false;
-        FoundationModifierExt::semantics(self, args)
-    }
-
-    fn clickable<C>(self, on_click: C) -> Modifier
-    where
-        C: Into<Callback>,
-    {
-        self.clickable_with(ClickableArgs {
-            on_click: on_click.into(),
-            ..Default::default()
-        })
-    }
-
-    fn clickable_with(self, args: ClickableArgs) -> Modifier {
+    fn clickable(self, args: ClickableArgs) -> Modifier {
         apply_clickable_modifier(self, args)
     }
 
-    fn toggleable<C>(self, value: bool, on_value_change: C) -> Modifier
-    where
-        C: Into<CallbackWith<bool, ()>>,
-    {
-        self.toggleable_with(ToggleableArgs {
-            value,
-            on_value_change: on_value_change.into(),
-            ..Default::default()
-        })
-    }
-
-    fn toggleable_with(self, args: ToggleableArgs) -> Modifier {
+    fn toggleable(self, args: ToggleableArgs) -> Modifier {
         apply_toggleable_modifier(self, args)
     }
 
-    fn selectable<C>(self, selected: bool, on_click: C) -> Modifier
-    where
-        C: Into<Callback>,
-    {
-        self.selectable_with(SelectableArgs {
-            selected,
-            on_click: on_click.into(),
-            ..Default::default()
-        })
-    }
-
-    fn selectable_with(self, args: SelectableArgs) -> Modifier {
+    fn selectable(self, args: SelectableArgs) -> Modifier {
         apply_selectable_modifier(self, args)
-    }
-
-    fn window_drag_region(self) -> Modifier {
-        apply_window_drag_region_modifier(self)
     }
 }

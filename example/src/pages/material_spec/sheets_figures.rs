@@ -5,13 +5,14 @@ use tessera_components::{
     icon::icon,
     image::image,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _,
     remember, tessera, use_context,

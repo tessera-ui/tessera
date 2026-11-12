@@ -7,13 +7,14 @@ use tessera_components::{
         IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
     },
     material_icons::{filled, outlined},
-    modifier::{InteractionVisualState, ModifierExt as _},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     surface::RipplePresentation,
     text::text,
     theme::{MaterialTheme, material_theme},
     tooltip::{TooltipController, TooltipPlacement, tooltip_anchor, tooltip_provider},
 };
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _};
 use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
 use crate::res::I18N;

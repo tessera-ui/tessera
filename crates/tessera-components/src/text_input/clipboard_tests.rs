@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier, State,
     clipboard::{ClipboardAction, ClipboardResponse, ClipboardWrite, request_clipboard_action},
@@ -7,7 +8,6 @@ use tessera_ui::{
 
 use crate::{
     column::column,
-    modifier::ModifierExt as _,
     text_edit_core::TextSelection,
     text_input::{TextInputController, text_input},
     theme::material_theme,

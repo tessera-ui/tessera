@@ -13,6 +13,7 @@ use tessera_components::{
     text::text,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier, Px, PxPosition, PxSize,
     accesskit::{HasPopup, Role},

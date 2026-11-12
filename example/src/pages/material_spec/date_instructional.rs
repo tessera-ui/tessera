@@ -9,7 +9,7 @@ use tessera_components::{
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ClickableArgs, InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::{RoundedCorner, Shape},
     surface::surface,
@@ -17,6 +17,9 @@ use tessera_components::{
     text_field::text_field,
     text_input::TextInputController,
     theme::MaterialTheme,
+};
+use tessera_foundation::modifier::{
+    ClickableArgs, InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs,
 };
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State,
@@ -259,7 +262,7 @@ fn date_field(
                 })
                 .offset(Dp(x), Dp(y))
                 .size(Dp(342.0), Dp(56.0))
-                .focus_group()
+                .focus_group(None)
                 .on_focus_changed(move |focus: tessera_ui::FocusState| {
                     let focused = focus.has_focus();
                     let previously_focused = had_focus.get();
@@ -719,7 +722,7 @@ fn field_labels(
                                     merge_descendants: true,
                                     ..Default::default()
                                 })
-                                .clickable_with(ClickableArgs {
+                                .clickable(ClickableArgs {
                                     role: Some(Role::ComboBox),
                                     label: Some(I18N.text("ui-event-date-yyyy-mm-dd")),
                                     on_click: Callback::new(move || {

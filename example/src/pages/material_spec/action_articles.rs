@@ -5,13 +5,10 @@
 //! Explore action hierarchy, selection, menu behavior and keyboard access.
 
 use tessera_components::{
-    button::button,
-    column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
-    shape_def::Shape,
-    text::text,
+    button::button, column::column, modifier::ModifierExt as _, shape_def::Shape, text::text,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Callback, Dp, Modifier, RenderSlot, accesskit::Role, tessera, use_context};
 
 use crate::res::I18N;

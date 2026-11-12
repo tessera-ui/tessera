@@ -10,11 +10,11 @@ use tessera_components::{
     button::button,
     column::column,
     flow_row::flow_row,
-    modifier::ModifierExt as _,
     progress::{circular_progress_indicator, linear_progress_indicator},
     text::text,
     wavy_progress::{circular_wavy_progress_indicator, linear_wavy_progress_indicator},
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, RenderSlot, current_frame_nanos, remember, tessera};
 
 use crate::res::I18N;

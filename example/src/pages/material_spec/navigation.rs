@@ -13,7 +13,7 @@ use tessera_components::{
     icon::icon,
     icon_button::icon_button,
     material_icons::{filled, outlined},
-    modifier::{InteractionState, ModifierExt as _, Padding, SelectableArgs, SemanticsArgs},
+    modifier::ModifierExt as _,
     navigation_bar::{NavigationBarIconPosition, navigation_bar, navigation_bar_item},
     navigation_rail::{navigation_rail, navigation_rail_item},
     row::row,
@@ -22,6 +22,9 @@ use tessera_components::{
     spacer::spacer,
     text::text,
     theme::{MaterialTheme, material_theme},
+};
+use tessera_foundation::modifier::{
+    InteractionState, ModifierExt as _, Padding, SelectableArgs, SemanticsArgs,
 };
 use tessera_ui::{
     Callback, Color, Dp, FocusTraversalPolicy, Modifier, RenderSlot, State, accesskit::Role,
@@ -939,7 +942,7 @@ fn baseline_figure(
                             })),
                             ..Default::default()
                         })
-                        .focus_group()
+                        .focus_group(None)
                         .focus_traversal_policy(if rail {
                             FocusTraversalPolicy::vertical().wrap(true)
                         } else {
@@ -1028,7 +1031,7 @@ fn baseline_destination(
                     Dp(if rail { 80.0 } else { 412.0 / count as f64 }),
                     Dp(if rail { 56.0 } else { 80.0 }),
                 )
-                .selectable_with(SelectableArgs {
+                .selectable(SelectableArgs {
                     selected: active,
                     on_click: Callback::new(move || selected.set(index)),
                     role: Some(Role::Tab),

@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, Modifier, State,
     headless::{HeadlessConfig, HeadlessRenderer},

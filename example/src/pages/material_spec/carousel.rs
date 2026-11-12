@@ -11,7 +11,7 @@ use tessera_components::{
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{InteractionState, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     scrollable::ScrollableController,
     shape_def::Shape,
@@ -20,6 +20,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };

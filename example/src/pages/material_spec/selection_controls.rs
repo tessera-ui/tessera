@@ -12,7 +12,6 @@ use tessera_components::{
     flow_row::flow_row,
     icon::icon,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
     spacer::spacer,
     surface::{SurfaceStyle, surface},
@@ -20,6 +19,7 @@ use tessera_components::{
     text::text,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, Dp, FocusRequester, Modifier, RenderSlot, State, remember, tessera, use_context,
 };

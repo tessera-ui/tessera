@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, State,
     accesskit::{Action, HasPopup, Node, NodeId, Rect, Role, TreeUpdate},
@@ -7,13 +8,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    boxed::boxed,
-    column::column,
-    icon::icon,
-    material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
-    spacer::spacer,
-    text::text,
+    boxed::boxed, column::column, icon::icon, material_icons::filled, spacer::spacer, text::text,
     theme::material_theme,
 };
 

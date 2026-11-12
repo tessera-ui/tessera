@@ -4,6 +4,7 @@
 //!
 //! Keep notification markers stable when content and themes change.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::Role,
@@ -14,7 +15,6 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,

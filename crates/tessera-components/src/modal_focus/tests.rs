@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
@@ -19,7 +20,6 @@ use crate::{
     button::button,
     column::column,
     dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
-    modifier::ModifierExt as _,
     side_sheet::{
         SideSheetController, SideSheetPosition, modal_side_sheet_provider,
         standard_side_sheet_provider,

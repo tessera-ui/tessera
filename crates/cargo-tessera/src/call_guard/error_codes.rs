@@ -58,15 +58,21 @@ impl FromStr for ErrorCode {
 pub enum Lint {
     RedundantRenderSlot,
     RememberedStateInModel,
+    NamedModifierExtImport,
 }
 
 impl Lint {
-    const ALL: [Self; 2] = [Self::RedundantRenderSlot, Self::RememberedStateInModel];
+    const ALL: [Self; 3] = [
+        Self::RedundantRenderSlot,
+        Self::RememberedStateInModel,
+        Self::NamedModifierExtImport,
+    ];
 
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::RedundantRenderSlot => "tessera::redundant_render_slot",
             Self::RememberedStateInModel => "tessera::remembered_state_in_model",
+            Self::NamedModifierExtImport => "tessera::named_modifier_ext_import",
         }
     }
 

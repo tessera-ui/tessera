@@ -1,10 +1,9 @@
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, layout::MeasureScope, tessera,
     testing::layout_test,
 };
-
-use crate::modifier::{ModifierExt as _, SemanticsArgs};
 
 use super::{horizontal_divider, vertical_divider};
 

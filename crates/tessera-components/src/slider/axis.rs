@@ -6,16 +6,14 @@
 
 use std::collections::HashMap;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
     PxPosition,
     layout::{LayoutChild, LayoutPlacementTarget, MeasureScope},
 };
 
-use crate::{
-    modifier::ModifierExt as _,
-    shape_def::{RoundedCorner, Shape},
-};
+use crate::shape_def::{RoundedCorner, Shape};
 
 use super::SliderOrientation;
 

@@ -3,16 +3,13 @@
 //! ## Usage
 //!
 //! Layer top/bottom bars, floating buttons, and snackbars above app content.
+use tessera_foundation::modifier::{ModifierExt as _, Padding};
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     RenderSlot, WindowInsets, layout::MeasureScope, tessera, use_context,
 };
 
-use crate::{
-    alignment::Alignment,
-    modifier::{ModifierExt as _, Padding},
-    theme::MaterialTheme,
-};
+use crate::{alignment::Alignment, modifier::ModifierExt as _, theme::MaterialTheme};
 
 fn center_axis(container: Px, child: Px) -> Px {
     (container - child) / 2
@@ -349,12 +346,11 @@ pub fn scaffold(
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         ComputedData, Dp, Insets, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px,
         WindowInsets, layout::MeasureScope, tessera,
     };
-
-    use crate::modifier::{ModifierExt as _, SemanticsArgs};
 
     use super::scaffold;
 

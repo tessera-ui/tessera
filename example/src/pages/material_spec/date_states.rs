@@ -11,12 +11,13 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     date_picker::{CalendarDate, CalendarRangePosition, date_picker_day, date_picker_year},
-    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Dp, Modifier, RenderSlot, accesskit::Role, remember, tessera, use_context};
 
 use crate::res::I18N;

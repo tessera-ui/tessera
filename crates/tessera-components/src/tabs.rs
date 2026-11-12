@@ -5,7 +5,10 @@
 //! Use to organize related destinations into a horizontal tab strip.
 use std::any::TypeId;
 
-use tessera_foundation::gesture::{ScrollRecognizer, ScrollSettings};
+use tessera_foundation::{
+    gesture::{ScrollRecognizer, ScrollSettings},
+    modifier::{ModifierExt as _, SemanticsArgs},
+};
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties,
     FocusRequester, FocusState, LayoutResult, MeasurementError, Modifier, ParentDataMap,
@@ -24,7 +27,7 @@ use crate::{
     column::column,
     icon::icon as icon_component,
     interaction_state::InteractionState,
-    modifier::{ModifierExt, SemanticsArgs, with_pointer_input},
+    modifier::with_pointer_input,
     painter::Painter,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -1398,7 +1401,7 @@ fn tabs_content(
         args.modifier
             .clone()
             .push_semantics(TabListSemantics)
-            .focus_group()
+            .focus_group(None)
             .on_focus_changed(move |state: FocusState| {
                 if !state.has_focus()
                     && controller.with(|controller| controller.focused_requester.is_some())
@@ -1574,7 +1577,7 @@ fn tab_trigger(args: Option<TabTriggerArgs>) {
             ..Default::default()
         })
         .constrain(None, Some(AxisConstraint::exact(args.tab_height.into())))
-        .focus_group()
+        .focus_group(None)
         .focus_properties(
             FocusProperties::new()
                 .skip_traversal(!tab_stop)
@@ -1653,6 +1656,7 @@ fn tab_title_content(title: Option<TabTitle>, tab_padding: Option<Dp>) {
 #[cfg(test)]
 mod tests {
 
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
         PxPosition, remember, tessera,
@@ -1661,7 +1665,6 @@ mod tests {
     use crate::{
         column::column,
         lazy_list::lazy_column,
-        modifier::{ModifierExt as _, SemanticsArgs},
         spacer::spacer,
         theme::{MaterialTheme, material_theme},
     };
@@ -1843,9 +1846,10 @@ mod tests {
 #[cfg(test)]
 mod custom_title_tests {
 
+    use tessera_foundation::modifier::ModifierExt as _;
     use tessera_ui::{Dp, Modifier, Px, State, remember, tessera};
 
-    use crate::{modifier::ModifierExt as _, spacer::spacer, theme::material_theme};
+    use crate::{spacer::spacer, theme::material_theme};
 
     use super::{TabsController, tab, tabs};
 
@@ -1910,6 +1914,7 @@ mod custom_title_tests {
 mod small_custom_title_tests {
     use std::time::Duration;
 
+    use tessera_foundation::modifier::ModifierExt as _;
     use tessera_ui::{
         Color, Dp, Modifier, Px, State,
         accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},

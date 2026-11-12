@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _};
 use tessera_ui::{
     Color, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType, PxPosition, State,
     accesskit::{Orientation, Rect, Role},
@@ -10,7 +11,7 @@ use tessera_ui::{
 
 use crate::{
     boxed::boxed,
-    modifier::{InteractionVisualState, ModifierExt as _},
+    modifier::ModifierExt as _,
     test_utils::{assert_pixels_near, pixel_near},
     theme::{MaterialTheme, material_theme},
 };

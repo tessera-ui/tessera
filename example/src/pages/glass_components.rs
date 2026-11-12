@@ -7,7 +7,7 @@ use tessera_components::{
     flow_row::flow_row,
     fluid_glass::{GlassAppearance, GlassBorder, GlassMaterial, fluid_glass},
     lazy_list::lazy_column,
-    modifier::{DragDelta, ModifierExt},
+    modifier::ModifierExt as _,
     row::row,
     scrollable::{ScrollBarBehavior, ScrollableController, ScrollbarDefaults, scrollbar_v},
     shape_def::Shape,
@@ -20,6 +20,7 @@ use tessera_components::{
     text_input::TextInputController,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{DragDelta, DraggableArgs, ModifierExt as _};
 use tessera_shard::shard;
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, LayoutCoordinates, Modifier, Px, RenderSlotWith, State,
@@ -573,15 +574,18 @@ fn glass_lens(
                 .size(width, height)
                 .offset(x, y)
                 .alpha(values.value(Number::Opacity))
-                .draggable(move |delta: DragDelta| {
-                    let width = stage_width.get();
-                    let size = settings.get().lens_size(width);
-                    let [x, y] = bounded_position(position.get(), size, width);
-                    position.set(bounded_position(
-                        [Dp(x.0 + delta.x.to_dp().0), Dp(y.0 + delta.y.to_dp().0)],
-                        size,
-                        width,
-                    ));
+                .draggable(DraggableArgs {
+                    on_drag_delta: CallbackWith::new(move |delta: DragDelta| {
+                        let width = stage_width.get();
+                        let size = settings.get().lens_size(width);
+                        let [x, y] = bounded_position(position.get(), size, width);
+                        position.set(bounded_position(
+                            [Dp(x.0 + delta.x.to_dp().0), Dp(y.0 + delta.y.to_dp().0)],
+                            size,
+                            width,
+                        ));
+                    }),
+                    ..Default::default()
                 }),
         )
         .material(MATERIALS[values.material].1)

@@ -34,7 +34,8 @@ impl tessera_ui::LayoutPolicy for SpacerLayout {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{modifier::ModifierExt as _, row::row, spacer::spacer, text::text};
+/// use tessera_components::{row::row, spacer::spacer, text::text};
+/// use tessera_foundation::modifier::ModifierExt as _;
 /// use tessera_ui::Modifier;
 ///
 /// # use tessera_ui::tessera;

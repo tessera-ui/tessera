@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Dp, LayoutResult, MeasurementError, Modifier,
     PxPosition, RenderSlot, SemanticsModifierNode, State,
@@ -12,7 +13,6 @@ use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     animation::Animatable,
     icon::{IconRotation, IconSize},
-    modifier::{InteractionState, ModifierExt as _},
     row::row,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},

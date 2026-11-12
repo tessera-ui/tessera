@@ -613,67 +613,6 @@ impl SemanticsModifierNode for SelectableSemanticsModifierNode {
     }
 }
 
-#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
-struct WindowDragRegionPointerModifierNode {
-    tap_recognizer: State<TapRecognizer>,
-}
-
-#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
-impl PointerInputModifierNode for WindowDragRegionPointerModifierNode {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let within_bounds = input
-            .cursor_position_rel
-            .map(|pos| {
-                is_position_in_rect(
-                    pos,
-                    PxPosition::ZERO,
-                    input.computed_data.width,
-                    input.computed_data.height,
-                )
-            })
-            .unwrap_or(false);
-
-        if !within_bounds {
-            return;
-        }
-
-        let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                within_bounds,
-            )
-        });
-
-        if tap_result.pressed {
-            input.drag_window();
-        }
-        input.block_all();
-    }
-}
-
-struct BlockTouchPropagationPointerModifierNode;
-
-impl PointerInputModifierNode for BlockTouchPropagationPointerModifierNode {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let within_bounds = input
-            .cursor_position_rel
-            .map(|pos| {
-                is_position_in_rect(
-                    pos,
-                    PxPosition::ZERO,
-                    input.computed_data.width,
-                    input.computed_data.height,
-                )
-            })
-            .unwrap_or(false);
-
-        if within_bounds {
-            input.block_cursor();
-        }
-    }
-}
-
 pub(crate) fn apply_clickable_modifier(base: Modifier, args: ClickableArgs) -> Modifier {
     apply_combined_clickable_modifier(base, args, None, true)
 }
@@ -876,20 +815,6 @@ fn apply_selectable_resolved(base: Modifier, args: SelectableArgs) -> Modifier {
         })
 }
 
-#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
-pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
-    base.push_build(WindowDragBuild)
-}
-
-#[cfg(any(target_family = "wasm", target_os = "android", target_os = "ios"))]
-pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
-    base
-}
-
-pub(crate) fn apply_block_touch_propagation_modifier(base: Modifier) -> Modifier {
-    base.push_pointer_input(BlockTouchPropagationPointerModifierNode)
-}
-
 struct ClickableBuild {
     args: ClickableArgs,
     on_long_click: Option<Callback>,
@@ -969,18 +894,4 @@ impl BuildModifierNode for SelectableBuild {
 
 pub(crate) fn apply_selectable_modifier(base: Modifier, args: SelectableArgs) -> Modifier {
     base.push_build(SelectableBuild(args))
-}
-
-#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
-struct WindowDragBuild;
-
-#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
-impl BuildModifierNode for WindowDragBuild {
-    fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
-        let tap_recognizer = context.state(TapRecognizer::default);
-        Some(
-            Modifier::new()
-                .push_pointer_input(WindowDragRegionPointerModifierNode { tap_recognizer }),
-        )
-    }
 }

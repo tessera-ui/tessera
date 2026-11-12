@@ -1,8 +1,8 @@
 use tessera_components::{
-    modifier::ModifierExt as _,
     surface::surface,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Modifier, tessera};
 
 #[tessera]

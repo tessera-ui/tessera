@@ -4,11 +4,13 @@
 //!
 //! Use to collect search queries and show suggestions or results as the user
 //! types.
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     CallbackWith, Color, CursorEventContent, Dp, KeyboardInput, KeyboardInputModifierNode,
     Modifier, PointerInput, PointerInputModifierNode, PressKeyEventType, RenderSlot, State,
-    layout::Stack, layout::layout, modifier::ModifierCapabilityExt as _, remember, tessera,
-    use_context, winit,
+    layout::{Stack, layout},
+    modifier::ModifierCapabilityExt as _,
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -16,7 +18,6 @@ use crate::{
     boxed::boxed,
     column::column,
     divider::horizontal_divider,
-    modifier::ModifierExt as _,
     pos_misc::is_position_inside_bounds,
     row::row,
     shape_def::Shape,
@@ -888,6 +889,7 @@ fn sync_query(
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::ModifierExt as _;
     use tessera_ui::{
         CursorEventContent, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
         PxPosition, State, remember, tessera,
@@ -897,7 +899,7 @@ mod tests {
         },
     };
 
-    use crate::{modifier::ModifierExt as _, spacer::spacer, theme::material_theme};
+    use crate::{spacer::spacer, theme::material_theme};
 
     use super::{SearchBarController, docked_search_bar};
 
@@ -920,7 +922,7 @@ mod tests {
                         Modifier::new()
                             .fill_max_width()
                             .height(tessera_ui::Dp(40.0))
-                            .semantics(crate::modifier::SemanticsArgs {
+                            .semantics(tessera_foundation::modifier::SemanticsArgs {
                                 test_tag: Some("search-results".into()),
                                 ..Default::default()
                             }),
@@ -940,7 +942,7 @@ mod tests {
                             spacer().modifier(
                                 Modifier::new()
                                     .size(tessera_ui::Dp(48.0), tessera_ui::Dp(48.0))
-                                    .semantics(crate::modifier::SemanticsArgs {
+                                    .semantics(tessera_foundation::modifier::SemanticsArgs {
                                         test_tag: Some(tag.into()),
                                         ..Default::default()
                                     }),

@@ -11,12 +11,13 @@ use tessera_components::{
     boxed::boxed,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, Modifier, PlacementModifierNode, PxPosition, State, accesskit::Role,
     modifier::ModifierCapabilityExt as _, remember, tessera, use_context,

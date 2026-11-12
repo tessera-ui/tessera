@@ -5,13 +5,14 @@ use tessera_components::{
     divider::{horizontal_divider, vertical_divider},
     icon::icon,
     material_icons::filled,
-    modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     text::text,
     theme::{MaterialTheme, TextStyle, material_theme},
 };
+use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Callback, Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, tessera, use_context,
@@ -99,7 +100,7 @@ fn external_link(#[prop(into)] label: String, #[prop(into)] url: String) {
     text(I18N.text(&(label)))
         .style(type_style(16.0, 24.0))
         .color(scheme.primary)
-        .modifier(Modifier::new().clickable_with(ClickableArgs {
+        .modifier(Modifier::new().clickable(ClickableArgs {
             role: Some(Role::Link),
             label: Some(I18N.text(&(label))),
             on_click: Callback::new(move || open_external(&url)),

@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use tessera_components::{column::column, modifier::ModifierExt as _, theme::material_theme};
+use tessera_components::{column::column, theme::material_theme};
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, TreeId},

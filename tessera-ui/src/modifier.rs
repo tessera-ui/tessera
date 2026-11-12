@@ -23,9 +23,11 @@ use smallvec::SmallVec;
 
 use self::storage::{Chain as ModifierElement, NodeRef};
 
-pub(crate) use self::attached::{AttachedModifierChain, flush_lifecycle};
 pub use self::attached::{ModifierNodeContext, ModifierNodeId};
-pub(crate) use self::storage::OwnedNode;
+pub(crate) use self::{
+    attached::{AttachedModifierChain, flush_lifecycle},
+    storage::OwnedNode,
+};
 
 macro_rules! modifier_lifecycle {
     () => {
@@ -719,21 +721,23 @@ pub trait FocusModifierExt {
     fn preferred_tab_stop(self, preferred: bool) -> Modifier;
 
     /// Registers a traversal-only focus group for this subtree.
-    fn focus_group(self) -> Modifier;
+    ///
+    /// Pass `None` to use a group owned by the current component.
+    fn focus_group(self, group: Option<FocusGroupNode>) -> Modifier;
 
-    /// Registers an explicit focus scope handle for this subtree.
-    fn focus_scope_with(self, scope: FocusScopeNode) -> Modifier;
-
-    /// Registers an explicit focus group handle for this subtree.
-    fn focus_group_with(self, group: FocusGroupNode) -> Modifier;
+    /// Registers a focus scope for this subtree.
+    ///
+    /// Pass `None` to use a scope owned by the current component.
+    fn focus_scope(self, scope: Option<FocusScopeNode>) -> Modifier;
 
     /// Registers a focus scope with restore behavior for this subtree.
-    fn focus_restorer(self, fallback: Option<FocusRequester>) -> Modifier;
-
-    /// Registers an explicit focus restorer scope for this subtree.
-    fn focus_restorer_with(
+    ///
+    /// Pass `None` as `scope` to use a scope owned by the current component.
+    /// `fallback` optionally names the target to restore when no saved target
+    /// is available.
+    fn focus_restorer(
         self,
-        scope: FocusScopeNode,
+        scope: Option<FocusScopeNode>,
         fallback: Option<FocusRequester>,
     ) -> Modifier;
 
@@ -1046,46 +1050,6 @@ impl Modifier {
     fn push_focus_target(self) -> Self {
         self.push_focus_op(FocusModifierOp::Registration(
             FocusModifierRegistration::Target(None),
-        ))
-    }
-
-    fn push_focus_scope_with(self, scope: FocusScopeNode) -> Self {
-        self.push_focus_op(FocusModifierOp::Registration(
-            FocusModifierRegistration::Scope(Some(scope)),
-        ))
-    }
-
-    fn push_focus_group(self) -> Self {
-        self.push_focus_op(FocusModifierOp::Registration(
-            FocusModifierRegistration::Group(None),
-        ))
-    }
-
-    fn push_focus_group_with(self, group: FocusGroupNode) -> Self {
-        self.push_focus_op(FocusModifierOp::Registration(
-            FocusModifierRegistration::Group(Some(group)),
-        ))
-    }
-
-    fn push_focus_restorer(self, fallback: Option<FocusRequester>) -> Self {
-        self.push_focus_op(FocusModifierOp::Registration(
-            FocusModifierRegistration::Restorer {
-                scope: None,
-                fallback,
-            },
-        ))
-    }
-
-    fn push_focus_restorer_with(
-        self,
-        scope: FocusScopeNode,
-        fallback: Option<FocusRequester>,
-    ) -> Self {
-        self.push_focus_op(FocusModifierOp::Registration(
-            FocusModifierRegistration::Restorer {
-                scope: Some(scope),
-                fallback,
-            },
         ))
     }
 
@@ -1625,28 +1589,26 @@ impl FocusModifierExt for Modifier {
         self.push_focus_op(FocusModifierOp::PreferredTabStop(preferred))
     }
 
-    fn focus_group(self) -> Modifier {
-        self.push_focus_group()
+    fn focus_group(self, group: Option<FocusGroupNode>) -> Modifier {
+        self.push_focus_op(FocusModifierOp::Registration(
+            FocusModifierRegistration::Group(group),
+        ))
     }
 
-    fn focus_scope_with(self, scope: FocusScopeNode) -> Modifier {
-        self.push_focus_scope_with(scope)
+    fn focus_scope(self, scope: Option<FocusScopeNode>) -> Modifier {
+        self.push_focus_op(FocusModifierOp::Registration(
+            FocusModifierRegistration::Scope(scope),
+        ))
     }
 
-    fn focus_group_with(self, group: FocusGroupNode) -> Modifier {
-        self.push_focus_group_with(group)
-    }
-
-    fn focus_restorer(self, fallback: Option<FocusRequester>) -> Modifier {
-        self.push_focus_restorer(fallback)
-    }
-
-    fn focus_restorer_with(
+    fn focus_restorer(
         self,
-        scope: FocusScopeNode,
+        scope: Option<FocusScopeNode>,
         fallback: Option<FocusRequester>,
     ) -> Modifier {
-        self.push_focus_restorer_with(scope, fallback)
+        self.push_focus_op(FocusModifierOp::Registration(
+            FocusModifierRegistration::Restorer { scope, fallback },
+        ))
     }
 
     fn focus_traversal_policy(self, policy: FocusTraversalPolicy) -> Modifier {

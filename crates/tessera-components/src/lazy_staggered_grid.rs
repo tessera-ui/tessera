@@ -108,7 +108,7 @@ impl LazyStaggeredGridContent {
 ///     text::text,
 ///     theme::material_theme,
 /// };
-/// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
+/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
 /// fn demo() {
@@ -301,7 +301,7 @@ fn lazy_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs, axis: LazyAxis) {
 ///     text::text,
 ///     theme::material_theme,
 /// };
-/// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
+/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
 /// fn demo() {
@@ -1161,6 +1161,7 @@ fn compute_staggered_layout_positions(
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
         Px, PxPosition, RenderSlotWith, layout::MeasureScope, remember, tessera,
@@ -1169,7 +1170,6 @@ mod tests {
     use crate::{
         alignment::{CrossAxisAlignment, MainAxisAlignment},
         lazy_shared::LazyAxis,
-        modifier::{ModifierExt as _, SemanticsArgs},
         scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
         theme::{MaterialTheme, material_theme},
     };

@@ -4,6 +4,7 @@
 //!
 //! Preserve caller semantics while text and explicit labels change.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Modifier, State,
     accesskit::{Node, NodeId, Role},
@@ -12,11 +13,7 @@ use tessera_ui::{
     testing::TestProbe,
 };
 
-use crate::{
-    column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
-    text::text,
-};
+use crate::{column::column, text::text};
 
 struct PlainLabel(&'static str);
 

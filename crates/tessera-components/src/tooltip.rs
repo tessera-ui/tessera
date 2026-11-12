@@ -4,6 +4,7 @@
 //!
 //! Explain controls on hover, keyboard focus, or touch long press.
 
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Callback, ComputedData, CursorEventContent, Dp, FocusDirection, FocusGroupNode,
     FocusRequester, FocusState, GestureState, KeyboardInput, KeyboardInputModifierNode,
@@ -22,12 +23,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    button::button,
-    column::column,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
-    shape_def::Shape,
-    surface::surface,
-    text::text,
+    button::button, column::column, shape_def::Shape, surface::surface, text::text,
     theme::MaterialTheme,
 };
 
@@ -947,7 +943,7 @@ pub fn tooltip_anchor(
             tooltip: Some(controller.with(|controller| controller.description.clone())),
             ..Default::default()
         })
-        .focus_group()
+        .focus_group(None)
         .focus_requester(focus)
         .on_focus_changed(move |_: FocusState| sync_tooltip_focus(controller, false))
         .on_globally_positioned_precise(move |rect| {
@@ -1005,7 +1001,7 @@ fn tooltip_panel(
     let modifier = modifier
         .unwrap_or_default()
         .size_in(Some(Dp(40.0)), Some(max_width), Some(Dp(24.0)), None)
-        .focus_group_with(controller.with(|controller| controller.popup_group))
+        .focus_group(Some(controller.with(|controller| controller.popup_group)))
         .focus_requester(controller.with(|controller| controller.popup_focus))
         .on_focus_changed(move |_: FocusState| sync_tooltip_focus(controller, true))
         .push_keyboard_input(TooltipRestoreInput { controller })

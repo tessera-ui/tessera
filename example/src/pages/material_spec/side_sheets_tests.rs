@@ -149,7 +149,7 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
     navigation.directory.with_mut(|directory| directory.close());
     pump(&mut session, 40);
     assert!(live.can_open());
-    live.open.set(true);
+    live.open.with_mut(SideSheetController::open);
     let snapshot = pump(&mut session, 40);
     let sheet = snapshot.node("side-sheet-live-content").bounds();
     assert_eq!(sheet.y.0, 0, "the live modal must start above the app bar");
@@ -161,7 +161,7 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
         .with_mut(tessera_shard::RouterController::pop);
     pump(&mut session, 2);
     assert!(
-        !live.open.get(),
+        !live.open.with(SideSheetController::is_open),
         "leaving the article must close the root modal"
     );
     assert!(!live.can_open());

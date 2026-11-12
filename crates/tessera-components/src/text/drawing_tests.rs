@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{ModifierExt as _, Padding};
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, DrawModifierContent, DrawModifierContext,
     DrawModifierNode, LayoutModifier, LayoutModifierChild, LayoutModifierInput, LayoutPolicy,
@@ -10,10 +11,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    boxed::boxed,
-    modifier::{ModifierExt as _, Padding},
-    pipelines::shape::command::ShapeCommand,
-    text::text,
+    boxed::boxed, modifier::ModifierExt as _, pipelines::shape::command::ShapeCommand, text::text,
     theme::material_theme,
 };
 

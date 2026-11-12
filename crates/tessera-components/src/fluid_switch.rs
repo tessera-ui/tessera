@@ -5,7 +5,12 @@
 //! Toggle boolean state over visible surface-backed content.
 use std::time::Duration;
 
-use tessera_foundation::gesture::TapRecognizer;
+use tessera_foundation::{
+    gesture::TapRecognizer,
+    modifier::{
+        InteractionState, ModifierExt as _, PointerEventContext, SemanticsArgs, ToggleableArgs,
+    },
+};
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
     Px, PxPosition, State,
@@ -18,9 +23,7 @@ use tessera_ui::{
 use crate::{
     animation,
     fluid_glass::fluid_glass,
-    modifier::{
-        InteractionState, ModifierExt as _, PointerEventContext, SemanticsArgs, ToggleableArgs,
-    },
+    modifier::ModifierExt as _,
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
@@ -404,7 +407,7 @@ fn fluid_switch_content(
             tap_recognizer: Some(tap_recognizer),
             ..Default::default()
         };
-        modifier = modifier.toggleable_with(toggle_args);
+        modifier = modifier.toggleable(toggle_args);
     } else {
         modifier = modifier.semantics(SemanticsArgs {
             role: Some(Role::Switch),

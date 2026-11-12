@@ -6,6 +6,7 @@ use std::{
 };
 
 use tessera_components::modifier::ModifierExt as _;
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, Modifier, State, layout::NoopDrawModifier, modifier::ModifierCapabilityExt as _,
     remember,

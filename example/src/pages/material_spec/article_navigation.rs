@@ -1,7 +1,5 @@
-use tessera_components::{
-    interaction_state::InteractionState,
-    modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs},
-};
+use tessera_components::{interaction_state::InteractionState, modifier::ModifierExt as _};
+use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, FocusProperties, FocusRequester, FocusState, KeyboardInput,
     KeyboardInputModifierNode, Modifier, State,
@@ -68,7 +66,7 @@ pub(super) fn article_tablist_modifier(
     navigation: State<ArticleNavigationState>,
 ) -> Modifier {
     modifier
-        .focus_group()
+        .focus_group(None)
         .on_focus_changed(move |focus: FocusState| {
             if !focus.has_focus() && navigation.with(|value| value.focused.is_some()) {
                 navigation.with_mut(|value| value.focused = None);
@@ -125,7 +123,7 @@ pub(super) fn article_tab_modifier(
                 focus::defer_keyboard_until_layout();
             }
         })
-        .clickable_with(ClickableArgs {
+        .clickable(ClickableArgs {
             role: Some(Role::Tab),
             label: Some(I18N.text(ARTICLE_TAB_TITLES[index])),
             enabled: available,
@@ -429,7 +427,7 @@ mod tests {
             .children(move || {
                 column().children(move || {
                     boxed()
-                        .modifier(Modifier::new().size(Dp(100.0), Dp(48.0)).clickable_with(
+                        .modifier(Modifier::new().size(Dp(100.0), Dp(48.0)).clickable(
                             ClickableArgs {
                                 label: Some("Before sections".into()),
                                 role: Some(Role::Button),
@@ -468,7 +466,7 @@ mod tests {
                             }
                         });
                     boxed()
-                        .modifier(Modifier::new().size(Dp(100.0), Dp(48.0)).clickable_with(
+                        .modifier(Modifier::new().size(Dp(100.0), Dp(48.0)).clickable(
                             ClickableArgs {
                                 label: Some("After sections".into()),
                                 role: Some(Role::Button),

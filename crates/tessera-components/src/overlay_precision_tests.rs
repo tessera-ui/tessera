@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier, PlacementModifierNode,
     PointerChange, PressKeyEventType, PxPosition, State,
@@ -21,7 +22,6 @@ use crate::{
     alignment::Alignment,
     boxed::boxed,
     menus::{MenuAnchor, MenuController, menu_item, menu_provider},
-    modifier::ModifierExt as _,
     spacer::spacer,
     surface::surface,
     text_field::text_field,

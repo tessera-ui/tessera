@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use tessera_foundation::{
     gesture::{DragRecognizer, TapRecognizer},
+    modifier::{ClickableArgs, InteractionState, ModifierExt as _, SemanticsArgs},
     scroll_physics::ScrollVelocityTracker,
 };
 use tessera_ui::{
@@ -30,10 +31,7 @@ use crate::{
     },
     column::column,
     modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::{
-        ClickableArgs, InteractionState, ModifierExt, SemanticsArgs, with_keyboard_input,
-        with_pointer_input,
-    },
+    modifier::{ModifierExt as _, with_keyboard_input, with_pointer_input},
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,
@@ -507,7 +505,7 @@ fn bottom_sheet_drag_handle(
     let tap_recognizer = remember(TapRecognizer::default);
     let interaction = remember(InteractionState::new);
     let modifier = with_pointer_input(
-        Modifier::new().clickable_with(ClickableArgs {
+        Modifier::new().clickable(ClickableArgs {
             enabled: controller.with(|controller| controller.can_resize),
             label: Some(I18N.text("md3-drag-handle")),
             block_input: false,
@@ -647,7 +645,7 @@ fn bottom_sheet_content_wrapper(
     let modifier = dialog_semantics(
         with_keyboard_input(
             Modifier::new()
-                .focus_scope_with(focus_scope)
+                .focus_scope(Some(focus_scope))
                 .focus_properties(FocusProperties::new().skip_traversal(true))
                 .focus_traversal_policy(
                     FocusTraversalPolicy::linear()

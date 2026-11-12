@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition,
@@ -19,7 +20,7 @@ use unicode_linebreak::linebreaks;
 use crate::{
     alignment::Alignment,
     boxed::boxed,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     pipelines::text::{command::TextConstraint, pipeline::TextData},
     spacer::spacer,
     text::text,

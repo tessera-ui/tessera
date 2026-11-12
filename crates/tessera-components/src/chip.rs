@@ -3,6 +3,7 @@
 //! ## Usage
 //!
 //! Present compact actions, filters, or input tokens in dense UIs.
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _, Padding};
 use tessera_ui::{
     Callback, Color, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     accesskit::{Role, Toggled},
@@ -18,7 +19,6 @@ use crate::{
     icon::icon,
     image::image,
     material_icons::filled,
-    modifier::{InteractionState, ModifierExt as _, Padding},
     painter::Painter,
     row::row,
     shape_def::{RoundedCorner, Shape},

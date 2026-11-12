@@ -4,6 +4,7 @@
 //!
 //! Preserve interactive item state while navigating unequal-height lists.
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, Role, Toggled, TreeId},
@@ -12,7 +13,7 @@ use tessera_ui::{
     remember, tessera,
 };
 
-use crate::{boxed::boxed, checkbox::checkbox, modifier::ModifierExt as _, theme::material_theme};
+use crate::{boxed::boxed, checkbox::checkbox, theme::material_theme};
 
 use super::*;
 

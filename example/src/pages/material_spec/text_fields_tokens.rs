@@ -6,9 +6,9 @@
 //! states.
 
 use tessera_components::{
-    alignment::CrossAxisAlignment, button::button, flow_row::flow_row, modifier::ModifierExt as _,
-    row::row, text::text,
+    alignment::CrossAxisAlignment, button::button, flow_row::flow_row, row::row, text::text,
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, remember, tessera};
 
 use crate::res::I18N;

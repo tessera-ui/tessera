@@ -3,7 +3,10 @@
 //! ## Usage
 //!
 //! Use for bottom navigation between a small set of top-level destinations.
-use tessera_foundation::gesture::TapRecognizer;
+use tessera_foundation::{
+    gesture::TapRecognizer,
+    modifier::{InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs},
+};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusRequester,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
@@ -17,7 +20,7 @@ use tessera_ui::{
 
 use crate::{
     animation::SelectionAnimation,
-    modifier::{InteractionState, ModifierExt, PointerEventContext, SelectableArgs},
+    modifier::ModifierExt as _,
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
@@ -447,7 +450,7 @@ fn navigation_bar_item_view(
         ..Default::default()
     };
 
-    let modifier = Modifier::new().selectable_with(selectable_args);
+    let modifier = Modifier::new().selectable(selectable_args);
     layout(Stack).modifier(modifier).child({
         let item = item.clone();
         move || {
@@ -636,7 +639,7 @@ pub fn navigation_bar(
                 wide.set(value);
             }
         })
-        .focus_group()
+        .focus_group(None)
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
     layout(Stack).modifier(modifier).child({
         move || {
@@ -718,6 +721,7 @@ impl tessera_ui::LayoutPolicy for NavigationBarLayout {
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
         PxPosition, remember, tessera,
@@ -726,7 +730,6 @@ mod tests {
     use crate::{
         column::column,
         lazy_list::lazy_column,
-        modifier::{ModifierExt as _, SemanticsArgs},
         spacer::spacer,
         theme::{MaterialTheme, material_theme},
     };

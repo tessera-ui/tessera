@@ -409,7 +409,7 @@ impl tessera_ui::LayoutPolicy for LazyGridLayout {
 ///     text::text,
 ///     theme::material_theme,
 /// };
-/// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
+/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
 /// fn demo() {
@@ -602,7 +602,7 @@ fn lazy_grid_slots(args: LazyGridSlotsArgs, axis: LazyAxis) {
 ///     text::text,
 ///     theme::material_theme,
 /// };
-/// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
+/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
 /// fn demo() {
@@ -1253,6 +1253,7 @@ fn ensure_positive_px(px: Px) -> Px {
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::RenderSlotWith;
 
     use tessera_ui::{
@@ -1263,7 +1264,6 @@ mod tests {
     use crate::{
         alignment::{CrossAxisAlignment, MainAxisAlignment},
         lazy_shared::LazyAxis,
-        modifier::{ModifierExt as _, SemanticsArgs},
         scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
         text::text,
         theme::{MaterialTheme, material_theme},

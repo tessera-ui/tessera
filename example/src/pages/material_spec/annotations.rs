@@ -1,14 +1,10 @@
 use std::collections::BTreeMap;
 
 use tessera_components::{
-    alignment::Alignment,
-    boxed::boxed,
-    image::image,
-    modifier::{ModifierExt as _, SemanticsArgs},
-    painter::Painter,
-    shape_def::Shape,
-    text::text,
+    alignment::Alignment, boxed::boxed, image::image, modifier::ModifierExt as _, painter::Painter,
+    shape_def::Shape, text::text,
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, LayoutCoordinates, Modifier, PxRect, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember_with_key, tessera,

@@ -4,6 +4,7 @@
 //!
 //! Offer related creation actions above a persistent floating action button.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
     FocusScopeNode, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
@@ -21,7 +22,7 @@ use crate::{
     column::column,
     icon::icon,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs, with_keyboard_input, with_pointer_input},
+    modifier::{ModifierExt as _, with_keyboard_input, with_pointer_input},
     painter::Painter,
     pos_misc::is_position_in_rect,
     res::I18N,
@@ -646,7 +647,7 @@ fn fab_menu_panel(
     let scroll = remember(ScrollableController::new);
     let modifier = with_keyboard_input(
         Modifier::new()
-            .focus_scope_with(scope)
+            .focus_scope(Some(scope))
             .semantics(SemanticsArgs {
                 test_tag: cfg!(test).then(|| "fab-menu-panel".into()),
                 merge_descendants: true,

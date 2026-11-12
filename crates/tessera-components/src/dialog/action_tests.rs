@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, Dp, Modifier, State,
     accesskit::{Node, Role},
@@ -17,7 +18,6 @@ use tessera_ui::{
 use crate::{
     button::button,
     dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
-    modifier::{ModifierExt as _, SemanticsArgs},
     text::text,
     theme::material_theme,
 };

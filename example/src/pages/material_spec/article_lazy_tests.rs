@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     FocusDirection, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
@@ -767,11 +768,8 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
 
 #[tessera_ui::tessera]
 fn responsive_article_fixture() {
-    use tessera_components::{
-        boxed::boxed,
-        modifier::{ModifierExt as _, SemanticsArgs},
-        theme::material_theme,
-    };
+    use tessera_components::{boxed::boxed, theme::material_theme};
+    use tessera_foundation::modifier::SemanticsArgs;
     use tessera_ui::{Dp, Modifier, RenderSlot};
 
     material_theme().child(|| {

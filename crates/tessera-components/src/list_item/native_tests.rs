@@ -4,6 +4,7 @@
 //!
 //! Keep list content consistent across layout and state changes.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, RenderSlot, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
@@ -17,7 +18,7 @@ use tessera_ui::{
 use crate::{
     alignment::CrossAxisAlignment,
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     spacer::spacer,
     text::text,

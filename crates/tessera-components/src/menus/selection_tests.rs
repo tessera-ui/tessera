@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Modifier,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
@@ -5,7 +6,7 @@ use tessera_ui::{
     remember, tessera,
 };
 
-use crate::{modifier::ModifierExt as _, surface::surface, theme::material_theme};
+use crate::{surface::surface, theme::material_theme};
 
 use super::{MenuController, MenuItemSelectionMode, menu_group, menu_item, menu_provider};
 

@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FocusDirection, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
@@ -15,10 +16,7 @@ use tessera_ui::{
     remember, tessera,
 };
 
-use crate::{
-    column::column, modifier::ModifierExt as _, radio_button::radio_button, switch::switch,
-    theme::material_theme,
-};
+use crate::{column::column, radio_button::radio_button, switch::switch, theme::material_theme};
 
 use super::checkbox;
 

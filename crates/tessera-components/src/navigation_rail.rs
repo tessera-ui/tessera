@@ -5,7 +5,13 @@
 //! Use for primary destinations on wide layouts with a collapsible side rail.
 use std::time::Duration;
 
-use tessera_foundation::gesture::TapRecognizer;
+use tessera_foundation::{
+    gesture::TapRecognizer,
+    modifier::{
+        InteractionState, ModifierExt as _, Padding, PointerEventContext, SelectableArgs,
+        SemanticsArgs,
+    },
+};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
     FocusScopeNode, FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
@@ -26,10 +32,7 @@ use crate::{
     badge::BadgeDefaults,
     column::column,
     modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::{
-        InteractionState, ModifierExt, Padding, PointerEventContext, SelectableArgs, SemanticsArgs,
-        with_keyboard_input,
-    },
+    modifier::{ModifierExt as _, with_keyboard_input},
     navigation_bar::interpolate_color,
     overlay_semantics::{dialog_semantics, overlay_background},
     ripple_state::{RippleSpec, RippleState},
@@ -606,7 +609,7 @@ fn navigation_rail_item_view(
     };
 
     let modifier = Modifier::new()
-        .selectable_with(selectable_args)
+        .selectable(selectable_args)
         .on_layout_coordinates(move |bounds: tessera_ui::LayoutCoordinates| {
             if indicator_geometry.with(|geometry| geometry.target) != Some(bounds) {
                 indicator_geometry.with_mut(|geometry| geometry.target = Some(bounds));
@@ -844,7 +847,7 @@ pub fn navigation_rail(
     };
 
     let modifier = Modifier::new()
-        .focus_group()
+        .focus_group(None)
         .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true));
     layout(Stack).modifier(modifier).child({
         let composition = composition;
@@ -1040,7 +1043,7 @@ pub fn modal_navigation_rail(
                 let modifier = dialog_semantics(
                     with_keyboard_input(
                         Modifier::new()
-                            .focus_scope_with(scope)
+                            .focus_scope(Some(scope))
                             .focus_properties(FocusProperties::new().skip_traversal(true))
                             .focus_traversal_policy(
                                 FocusTraversalPolicy::linear()
@@ -1187,6 +1190,7 @@ impl NavigationRailExpansion {
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
         PxPosition, remember, tessera,
@@ -1195,7 +1199,6 @@ mod tests {
     use crate::{
         column::column,
         lazy_list::lazy_column,
-        modifier::{ModifierExt as _, SemanticsArgs},
         spacer::spacer,
         theme::{MaterialTheme, material_theme},
     };

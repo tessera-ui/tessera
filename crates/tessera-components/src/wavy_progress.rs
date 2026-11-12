@@ -11,13 +11,13 @@ mod shapes;
 #[cfg(test)]
 mod tests;
 
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, accesskit::Role,
     current_frame_nanos, layout::MeasureScope, remember, tessera, use_context,
 };
 
 use crate::{
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     progress::{ProgressStrokeCap, cubic_bezier_easing},
     theme::MaterialTheme,
 };

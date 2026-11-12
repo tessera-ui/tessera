@@ -3,7 +3,13 @@
 //! ## Usage
 //!
 //! Use in forms, settings, or lists to enable boolean selections.
-use tessera_foundation::gesture::TapRecognizer;
+use tessera_foundation::{
+    gesture::TapRecognizer,
+    modifier::{
+        InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext,
+        ToggleableArgs,
+    },
+};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, CallbackWith, Color, Dp, FocusRequester,
     Modifier, PxSize, RenderSlot, SemanticsModifierNode, State,
@@ -17,10 +23,7 @@ use crate::{
     alignment::Alignment,
     boxed::boxed,
     checkmark::checkmark,
-    modifier::{
-        DisabledToggleSemantics, InteractionState, InteractionVisualState, ModifierExt,
-        PointerEventContext, ToggleableArgs,
-    },
+    modifier::{DisabledToggleSemantics, ModifierExt as _},
     ripple_state::{RippleSpec, RippleState},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
@@ -621,7 +624,7 @@ fn checkbox_inner(
             tap_recognizer,
             ..Default::default()
         };
-        modifier = modifier.toggleable_with(toggle_args);
+        modifier = modifier.toggleable(toggle_args);
     } else {
         modifier = modifier.push_semantics(DisabledToggleSemantics {
             role: Role::CheckBox,

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     CursorEventContent, Dp, FocusDirection, GestureState, MOUSE_POINTER_ID, Modifier,
     PointerChange, PressKeyEventType, PxPosition, State,
@@ -9,7 +10,7 @@ use tessera_ui::{
     remember, tessera,
 };
 
-use crate::{modifier::ModifierExt as _, spacer::spacer, surface::surface, theme::material_theme};
+use crate::{spacer::spacer, surface::surface, theme::material_theme};
 
 use super::{BottomSheetController, BottomSheetExpansion, bottom_sheet_provider};
 

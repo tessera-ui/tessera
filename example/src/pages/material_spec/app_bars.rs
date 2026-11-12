@@ -12,7 +12,7 @@ use tessera_components::{
     icon::icon,
     icon_button::{IconButtonColorStyle, icon_button},
     material_icons::{Asset, filled},
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     scaffold::scaffold,
     scrollable::ScrollableController,
@@ -22,6 +22,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, tessera, use_context,

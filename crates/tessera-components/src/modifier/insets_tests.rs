@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, Insets, Modifier, State, WindowInsets, WindowInsetsController, remember, tessera,
     testing::{
@@ -5,10 +6,7 @@ use tessera_ui::{
     },
 };
 
-use crate::{
-    boxed::boxed,
-    modifier::{ModifierExt as _, SemanticsArgs},
-};
+use crate::boxed::boxed;
 
 #[derive(Clone, Copy)]
 struct Handles {

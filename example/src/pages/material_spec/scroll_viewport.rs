@@ -6,6 +6,7 @@ use tessera_components::{
     row::row,
     scrollable::{ScrollBarBehavior, ScrollableController, scrollbar_v},
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, RenderSlot, State, tessera};
 
 const TRACK_WIDTH: Dp = Dp(15.0);

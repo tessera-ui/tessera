@@ -3,7 +3,13 @@
 //! ## Usage
 //!
 //! Use as a base for buttons, cards, or any styled and interactive region.
-use tessera_foundation::gesture::{LongPressRecognizer, LongPressSettings, TapRecognizer};
+use tessera_foundation::{
+    gesture::{LongPressRecognizer, LongPressSettings, TapRecognizer},
+    modifier::{
+        ClickableArgs, InteractionState, InteractionVisualState, ModifierExt as _,
+        PointerEventContext,
+    },
+};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint, Dp,
     FocusProperties, FocusRequester, LayoutResult, MeasurementError, Modifier, PointerInput,
@@ -18,10 +24,7 @@ use tessera_ui::{
 use crate::{
     RippleProps,
     alignment::Alignment,
-    modifier::{
-        ClickableArgs, InteractionState, InteractionVisualState, ModifierExt, PointerEventContext,
-        ShadowArgs, apply_combined_clickable_modifier,
-    },
+    modifier::{ModifierExt as _, ShadowArgs, apply_combined_clickable_modifier},
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_inside_bounds,
     ripple_state::{RippleSpec, RippleState},
@@ -113,12 +116,8 @@ impl From<Color> for SurfaceStyle {
 /// surface, or start a ripple animation.
 ///
 /// ```rust
-/// use tessera_components::{
-///     button::button,
-///     modifier::{InteractionState, InteractionVisualState},
-///     surface::RipplePresentation,
-///     theme::material_theme,
-/// };
+/// use tessera_components::{button::button, surface::RipplePresentation, theme::material_theme};
+/// use tessera_foundation::modifier::{InteractionState, InteractionVisualState};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
@@ -1109,11 +1108,8 @@ fn surface_content(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::{
-///     modifier::{ModifierExt, Padding},
-///     surface::surface,
-///     text::text,
-/// };
+/// use tessera_components::{surface::surface, text::text};
+/// use tessera_foundation::modifier::{ModifierExt as _, Padding};
 /// use tessera_ui::{Dp, LayoutResult, Modifier};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
@@ -1442,13 +1438,14 @@ impl SemanticsModifierNode for SurfaceToggleSemantics {
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
     use tessera_ui::{Color, Dp, Modifier, State, remember, tessera, use_context};
 
     use crate::{
         boxed::boxed,
         button::button,
         column::column,
-        modifier::{InteractionState, ModifierExt as _},
+        modifier::ModifierExt as _,
         row::row,
         spacer::spacer,
         theme::{ContentColor, MaterialColorScheme, material_theme},

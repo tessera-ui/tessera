@@ -14,6 +14,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
 use crate::res::I18N;

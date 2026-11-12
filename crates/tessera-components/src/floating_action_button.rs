@@ -3,6 +3,7 @@
 //! ## Usage
 //!
 //! Emphasize a primary action with a prominent floating button.
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
 use tessera_ui::{
     Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, current_frame_nanos,
     provide_context, remember, tessera, use_context,
@@ -11,7 +12,6 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     animation::Animatable,
-    modifier::{InteractionState, ModifierExt as _},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
     theme::{

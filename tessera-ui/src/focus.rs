@@ -541,11 +541,6 @@ impl FocusRequester {
         with_focus_owner_mut(|owner| owner.clear_focus_by_requester(self.id));
     }
 
-    /// Alias for [`Self::clear_focus`].
-    pub fn unfocus(&self) {
-        self.clear_focus();
-    }
-
     /// Captures focus on this node, preventing focus from moving elsewhere
     /// until released, force-cleared, hidden by layout, or removed.
     pub fn capture_focus(&self) {

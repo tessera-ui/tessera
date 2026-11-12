@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::Role,
@@ -8,7 +9,6 @@ use tessera_ui::{
 use crate::{
     column::column,
     lazy_list::{LazyListController, lazy_column},
-    modifier::ModifierExt as _,
     surface::surface,
     theme::material_theme,
 };

@@ -231,6 +231,8 @@ impl<'db> CallAnalyzer<'db> {
             self.analyze_item(item);
         }
         self.check_private_api_uses(tree.syntax());
+        let imports = self.named_modifier_ext_imports(tree.syntax());
+        self.diagnostics.extend(imports);
         Ok(())
     }
 
@@ -2614,6 +2616,119 @@ pub fn screen(model: Model<Search>) {
         );
     }
 
+    #[test]
+    fn named_modifier_ext_imports_are_reported_with_an_anonymous_import_fix() {
+        with_analyzer(
+            r#"
+use tessera_ui::{
+    Modifier,
+    modifier::{CursorModifierExt as _, FocusModifierExt},
+};
+
+pub fn focus(modifier: Modifier) -> Modifier {
+    modifier.focus_group(None)
+}
+"#,
+            |analyzer| {
+                use ra_ap_base_db::SourceDatabase;
+
+                let messages = analyzer
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.message.as_str())
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    messages,
+                    ["modifier extension trait `FocusModifierExt` imported by name"]
+                );
+                let diagnostic = &analyzer.diagnostics[0];
+                assert_eq!(
+                    diagnostic.code,
+                    super::super::error_codes::DiagnosticCode::Lint(
+                        super::super::error_codes::Lint::NamedModifierExtImport,
+                    )
+                );
+                let [suggestion] = diagnostic.suggestions.as_slice() else {
+                    panic!("expected one suggestion");
+                };
+                assert_eq!(
+                    suggestion.applicability,
+                    super::super::types::Applicability::MachineApplicable
+                );
+                let mut text = analyzer
+                    .db
+                    .file_text(diagnostic.file_id)
+                    .text(analyzer.db)
+                    .to_string();
+                for edit in suggestion.edits.iter().rev() {
+                    text.replace_range(
+                        usize::from(edit.range.start())..usize::from(edit.range.end()),
+                        &edit.replacement,
+                    );
+                }
+                assert!(
+                    text.contains("modifier::{CursorModifierExt as _, FocusModifierExt as _}"),
+                    "{text}"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn modifier_ext_imports_named_elsewhere_are_not_reported() {
+        let diagnostics = diagnostics_for(
+            r#"
+use tessera_ui::{
+    Modifier,
+    modifier::{CursorModifierExt, FocusModifierExt},
+};
+
+pub fn focus(modifier: Modifier) -> Modifier {
+    FocusModifierExt::focus_group(modifier, None)
+}
+
+pub fn bounded<T: CursorModifierExt>(modifier: T) -> T {
+    modifier
+}
+"#,
+        );
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn modifier_ext_imports_named_by_child_module_files_are_not_reported() {
+        let diagnostics = diagnostics_for(
+            r#"
+use tessera_ui::modifier::FocusModifierExt;
+
+mod child;
+//- src/child.rs
+pub fn focus(modifier: tessera_ui::Modifier) -> tessera_ui::Modifier {
+    super::FocusModifierExt::focus_group(modifier, None)
+}
+"#,
+        );
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn reexported_and_foreign_modifier_ext_imports_are_not_reported() {
+        let diagnostics = diagnostics_for(
+            r#"
+pub use tessera_ui::modifier::FocusModifierExt;
+
+mod plain;
+
+mod user {
+    use crate::plain::ModifierExt;
+}
+//- src/plain.rs
+pub trait ModifierExt {}
+"#,
+        );
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
     fn diagnostics_for(source: &str) -> Vec<String> {
         with_analyzer(source, |analyzer| {
             analyzer
@@ -2749,7 +2864,13 @@ pub fn screen(model: Model<Search>) {
                 ),
             )
             .expect("fixture manifest should be written");
-            fs::write(root.join("src/lib.rs"), source).expect("fixture source should be written");
+            let mut files = source.split("\n//- ");
+            fs::write(root.join("src/lib.rs"), files.next().unwrap_or_default())
+                .expect("fixture source should be written");
+            for file in files {
+                let (path, text) = file.split_once('\n').expect("fixture file header");
+                fs::write(root.join(path), text).expect("fixture module should be written");
+            }
             fs::write(root.join("src/main.rs"), "fn main() {}")
                 .expect("fixture binary source should be written");
 

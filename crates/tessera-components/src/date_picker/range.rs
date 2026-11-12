@@ -6,6 +6,7 @@
 
 use std::ops::RangeInclusive;
 
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, CallbackWith, Dp, FocusProperties, FocusRequester, FocusScopeNode, Modifier,
     RenderSlotWith, State, modifier::FocusModifierExt as _, remember, tessera, use_context,
@@ -18,7 +19,6 @@ use crate::{
     icon_button::icon_button,
     lazy_list::{LazyListController, lazy_column},
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     res::I18N,
     row::row,
     scrollable::ScrollBarBehavior,
@@ -533,7 +533,7 @@ fn range_calendar(
     let modifier = Modifier::new()
         .fill_max_width()
         .padding_symmetric(Dp(12.0), Dp::ZERO)
-        .focus_restorer_with(focus_scope, Some(viewport_focus));
+        .focus_restorer(Some(focus_scope), Some(viewport_focus));
     column().modifier(modifier).children(move || {
         tessera_ui::layout::layout(DateGridLayout {
             columns: DATE_COLUMNS,

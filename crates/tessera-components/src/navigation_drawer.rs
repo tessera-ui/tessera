@@ -4,6 +4,7 @@
 //!
 //! Organize primary destinations and account sections in spacious layouts.
 
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _, Padding, SelectableArgs};
 use tessera_ui::{
     Callback, Dp, FocusRequester, Modifier, RenderSlot, accesskit::Role,
     modifier::FocusModifierExt as _, provide_context, remember, tessera, use_context,
@@ -12,7 +13,7 @@ use tessera_ui::{
 use crate::{
     alignment::CrossAxisAlignment,
     column::column,
-    modifier::{InteractionState, ModifierExt, Padding, SelectableArgs},
+    modifier::ModifierExt as _,
     ripple_state::{RippleSpec, RippleState},
     row::row,
     shape_def::{RoundedCorner, Shape},
@@ -79,7 +80,12 @@ pub fn navigation_drawer(
     let round = RoundedCorner::manual(Dp(16.0), 2.0);
     let square = RoundedCorner::manual(Dp(0.0), 2.0);
     surface()
-        .modifier(modifier.unwrap_or_default().width(Dp(360.0)).focus_group())
+        .modifier(
+            modifier
+                .unwrap_or_default()
+                .width(Dp(360.0))
+                .focus_group(None),
+        )
         .style(
             (if modal {
                 scheme.surface_container_low
@@ -176,7 +182,7 @@ pub fn navigation_drawer_item(
         .unwrap_or_default()
         .fill_max_width()
         .height(Dp(56.0))
-        .selectable_with(SelectableArgs {
+        .selectable(SelectableArgs {
             selected,
             enabled,
             on_click: on_click.unwrap_or_default(),
@@ -185,7 +191,7 @@ pub fn navigation_drawer_item(
             interaction_state: Some(interaction),
             focus_requester: Some(focus),
             on_press: Some(
-                (move |ctx: crate::modifier::PointerEventContext| {
+                (move |ctx: tessera_foundation::modifier::PointerEventContext| {
                     ripple.with_mut(|state| {
                         state.start_animation_with_spec(
                             ctx.normalized_pos,
@@ -258,6 +264,7 @@ pub fn navigation_drawer_item(
 #[cfg(test)]
 mod tests {
 
+    use tessera_foundation::modifier::SemanticsArgs;
     use tessera_ui::{
         CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition, State,
         testing::{
@@ -266,7 +273,7 @@ mod tests {
         },
     };
 
-    use crate::{modifier::SemanticsArgs, theme::material_theme};
+    use crate::theme::material_theme;
 
     use super::*;
 

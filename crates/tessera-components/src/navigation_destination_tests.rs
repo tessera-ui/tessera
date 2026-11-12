@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, Modifier, State, remember, tessera,
     testing::{layout_test, pump_layout_test_session, start_layout_test_session},
@@ -7,7 +8,6 @@ use crate::{
     badge::badge_with_content,
     boxed::boxed,
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
     navigation_bar::{NavigationBarIconPosition, navigation_bar, navigation_bar_item},
     navigation_rail::{navigation_rail, navigation_rail_item},
     spacer::spacer,

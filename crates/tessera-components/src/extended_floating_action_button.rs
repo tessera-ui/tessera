@@ -4,6 +4,7 @@
 //!
 //! Emphasize a primary action with an icon and a descriptive label.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
     Modifier, Px, PxPosition, current_frame_nanos, layout::MeasureScope, remember, tessera,
@@ -15,7 +16,6 @@ use crate::{
     floating_action_button::{
         FloatingActionButtonElevation, FloatingActionButtonSize, floating_action_button,
     },
-    modifier::{ModifierExt, SemanticsArgs},
     painter::Painter,
     shape_def::Shape,
     text::text,

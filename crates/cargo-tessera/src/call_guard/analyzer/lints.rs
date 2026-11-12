@@ -1,8 +1,8 @@
 use ra_ap_base_db::SourceDatabase;
-use ra_ap_hir::{Local, PathResolution};
+use ra_ap_hir::{EditionedFileId, Local, ModuleDef, PathResolution};
 use ra_ap_syntax::{
-    AstNode, SyntaxNode,
-    ast::{self, HasArgList},
+    AstNode, SyntaxKind, SyntaxNode,
+    ast::{self, HasArgList, HasVisibility},
 };
 
 use super::{
@@ -270,6 +270,92 @@ impl<'db> CallAnalyzer<'db> {
             .collect()
     }
 
+    /// Reports private imports that bind a Tessera modifier extension trait to
+    /// a name that nothing else can mention. Only the trait's methods are
+    /// needed, so `as _` keeps the module namespace free.
+    pub(super) fn named_modifier_ext_imports(&self, file: &SyntaxNode) -> Vec<Diagnostic> {
+        file.descendants()
+            .filter_map(ast::Use::cast)
+            .filter(|item| item.visibility().is_none() && !self.is_inactive(item.syntax()))
+            .flat_map(|item| item.syntax().descendants().filter_map(ast::UseTree::cast))
+            .filter_map(|tree| self.named_modifier_ext_import(file, &tree))
+            .collect()
+    }
+
+    fn named_modifier_ext_import(
+        &self,
+        file: &SyntaxNode,
+        tree: &ast::UseTree,
+    ) -> Option<Diagnostic> {
+        if tree.use_tree_list().is_some() || tree.star_token().is_some() || tree.rename().is_some()
+        {
+            return None;
+        }
+        let path = tree.path()?;
+        let name = path.segment()?.name_ref()?.text().to_string();
+        if !name.ends_with("ModifierExt") {
+            return None;
+        }
+        let Some(PathResolution::Def(ModuleDef::Trait(definition))) = self.sema.resolve_path(&path)
+        else {
+            return None;
+        };
+        if definition.name(self.db).as_str() != name
+            || !self.is_tessera_crate(definition.module(self.db).krate(self.db).into())
+        {
+            return None;
+        }
+        let source = self.sema.original_range(tree.syntax());
+        let file_id = source.file_id.file_id(self.db);
+        if !self.local_files.contains(&file_id)
+            || mentions_name(file, &name, Some(tree.syntax().text_range()))
+        {
+            return None;
+        }
+        // A private import is visible to descendant modules, which may live in
+        // other files and name it through `super::`.
+        let module = self.sema.scope(tree.syntax())?.module();
+        let mut pending = module.children(self.db).collect::<Vec<_>>();
+        while let Some(child) = pending.pop() {
+            pending.extend(child.children(self.db));
+            let Some(child_file) = child.definition_source_file_id(self.db).file_id() else {
+                return None;
+            };
+            let child_file = child_file.file_id(self.db);
+            if child_file != file_id
+                && mentions_name(
+                    self.sema
+                        .parse(EditionedFileId::current_edition(self.db, child_file))
+                        .syntax(),
+                    &name,
+                    None,
+                )
+            {
+                return None;
+            }
+        }
+        Some(Diagnostic {
+            code: DiagnosticCode::Lint(Lint::NamedModifierExtImport),
+            severity: cargo_metadata::diagnostic::DiagnosticLevel::Warning,
+            file_id,
+            range: source.range,
+            message: format!("modifier extension trait `{name}` imported by name"),
+            label: "only the trait's methods are used".into(),
+            help: String::new(),
+            notes: Vec::new(),
+            suggestions: vec![Suggestion {
+                message: "import the trait anonymously".into(),
+                applicability: Applicability::MachineApplicable,
+                edits: vec![Edit {
+                    file_id,
+                    range: ra_ap_span::TextRange::empty(source.range.end()),
+                    replacement: " as _".into(),
+                }],
+            }],
+            boundary: None,
+        })
+    }
+
     pub(super) fn call_function(&self, call: &ast::CallExpr) -> Option<ra_ap_hir::Function> {
         let callee = call.expr()?;
         std::iter::once(callee.clone())
@@ -364,6 +450,21 @@ impl<'db> CallAnalyzer<'db> {
                 _ => None,
             })
     }
+}
+
+fn mentions_name(file: &SyntaxNode, name: &str, excluded: Option<ra_ap_span::TextRange>) -> bool {
+    file.descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| excluded.is_none_or(|range| !range.contains_range(token.text_range())))
+        .any(|token| match token.kind() {
+            SyntaxKind::IDENT => token.text() == name,
+            // Intra-doc links resolve through imported names.
+            SyntaxKind::COMMENT => token
+                .text()
+                .split(|c: char| !c.is_alphanumeric() && c != '_')
+                .any(|word| word == name),
+            _ => false,
+        })
 }
 
 fn sole_expression(expression: ast::Expr) -> Option<ast::Expr> {

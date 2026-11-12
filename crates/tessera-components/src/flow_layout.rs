@@ -76,7 +76,7 @@ impl tessera_ui::LayoutPolicy for FlowLayout {
             .iter()
             .map(|child| {
                 child
-                    .parent_data::<crate::modifier::WeightParentData>(input)
+                    .parent_data::<tessera_foundation::modifier::WeightParentData>(input)
                     .map(|data| data.weight)
             })
             .collect();

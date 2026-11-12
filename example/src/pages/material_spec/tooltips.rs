@@ -8,7 +8,7 @@ use tessera_components::{
     flow_row::flow_row,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -19,6 +19,7 @@ use tessera_components::{
         TooltipController, TooltipPlacement, TooltipVariant, tooltip_anchor, tooltip_provider,
     },
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, Dp, LayoutModifierChild, LayoutModifierInput,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,

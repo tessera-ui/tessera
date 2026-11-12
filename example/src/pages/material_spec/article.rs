@@ -9,7 +9,7 @@ use tessera_components::{
     icon_button::icon_button,
     interaction_state::InteractionState,
     material_icons::filled,
-    modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs, ShadowArgs},
+    modifier::{ModifierExt as _, ShadowArgs},
     row::row,
     scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
@@ -18,6 +18,7 @@ use tessera_components::{
     text::text,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Callback, Dp, LayoutCoordinates, Modifier, Px, PxPosition, RenderSlot, State, accesskit::Role,
     current_frame_nanos, focus, modifier::FocusModifierExt as _, remember, tessera, use_context,
@@ -344,7 +345,7 @@ fn article_footer_link(
                         bottom_right: corner,
                     },
                 )
-                .clickable_with(ClickableArgs {
+                .clickable(ClickableArgs {
                     role: Some(Role::Link),
                     label: Some(I18N.format(
                         "ui-value-value-format-2",

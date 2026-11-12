@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use tessera_foundation::{
     gesture::{ScrollRecognizer, TapRecognizer},
+    modifier::ModifierExt as _,
     scroll_physics::{ExponentialInertia, ScrollVelocityTracker as FoundationVelocityTracker},
 };
 use tessera_ui::{
@@ -27,7 +28,6 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     boxed::boxed,
-    modifier::ModifierExt,
     nested_scroll::{NestedScrollConnection, ScrollDelta, ScrollVelocity},
     pos_misc::is_position_inside_bounds,
 };
@@ -2028,6 +2028,7 @@ mod scroll_tests {
 
     mod scroll_modifier_api {
 
+        use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
         use tessera_ui::{
             Dp, Modifier, Px, PxPosition, State,
             layout::layout,
@@ -2035,11 +2036,7 @@ mod scroll_tests {
             testing::{layout_test, pump_layout_test_session, start_layout_test_session},
         };
 
-        use crate::{
-            column::column,
-            modifier::{ModifierExt as _, SemanticsArgs},
-            spacer::spacer,
-        };
+        use crate::{column::column, modifier::ModifierExt as _, spacer::spacer};
 
         use super::ScrollableController;
 

@@ -6,8 +6,9 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
-    Color, Dp, Modifier, State,
+    Color, Dp, Modifier,
     accesskit::{Node, Role},
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
@@ -16,7 +17,6 @@ use tessera_ui::{
 use crate::{
     bottom_sheet::{BottomSheetController, bottom_sheet_provider},
     dialog::{DialogController, dialog_provider},
-    modifier::ModifierExt as _,
     side_sheet::{
         SideSheetController, SideSheetPosition, modal_side_sheet_provider,
         standard_side_sheet_provider,

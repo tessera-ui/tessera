@@ -855,7 +855,7 @@ fn scoped_fixture(probe: ReplayProbe) {
     crate::layout::layout(Overlap)
         .modifier(
             Modifier::new()
-                .focus_scope_with(if changed { scopes.1 } else { scopes.0 })
+                .focus_scope(Some(if changed { scopes.1 } else { scopes.0 }))
                 .push_semantics(Hint(
                     if changed {
                         "Updated hint"

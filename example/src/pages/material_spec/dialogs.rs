@@ -11,7 +11,7 @@ use tessera_components::{
     image::image,
     material_icons::filled,
     menus::{MenuAnchor, MenuController, menu_item, menu_provider},
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -20,6 +20,7 @@ use tessera_components::{
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Callback, Color, Dp, LayoutCoordinates, Modifier, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role, modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,

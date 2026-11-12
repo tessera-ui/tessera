@@ -3,6 +3,9 @@
 //! ## Usage
 //!
 //! Use as a background for buttons, panels, or other UI elements.
+use tessera_foundation::modifier::{
+    ClickableArgs, InteractionState, ModifierExt as _, PointerEventContext, SemanticsArgs,
+};
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, CursorEventContent, Dp, FocusRequester,
     LayoutResult, MeasurementError, Modifier, PointerEventPass, PointerId, PointerInput,
@@ -15,7 +18,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::{ClickableArgs, InteractionState, ModifierExt, PointerEventContext, SemanticsArgs},
+    modifier::ModifierExt as _,
     padding_utils::remove_padding_from_constraint,
     pipelines::{
         blur::command::DualBlurCommand,
@@ -346,7 +349,7 @@ pub fn fluid_glass(
             ..Default::default()
         };
 
-        modifier = modifier.clickable_with(clickable_args);
+        modifier = modifier.clickable(clickable_args);
     } else {
         if block_input {
             modifier = modifier.block_touch_propagation();

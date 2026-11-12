@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera_foundation::gesture::TapRecognizer;
+use tessera_foundation::{gesture::TapRecognizer, modifier::SemanticsArgs};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint, Dp,
     FocusRequester, LayoutResult, MeasurementError, Modifier, PointerInput,
@@ -24,7 +24,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::{ModifierExt as _, SemanticsArgs, with_keyboard_input},
+    modifier::{ModifierExt as _, with_keyboard_input},
     pipelines::{
         shape::command::ShapeCommand,
         text::{

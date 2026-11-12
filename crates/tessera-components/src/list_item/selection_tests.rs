@@ -4,6 +4,7 @@
 //!
 //! Keep selection requests, roles, focus, and disabled activation consistent.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
@@ -13,11 +14,7 @@ use tessera_ui::{
     testing::TestProbe,
 };
 
-use crate::{
-    column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
-    theme::material_theme,
-};
+use crate::{column::column, theme::material_theme};
 
 use super::{ListItemSelectionMode, list_item};
 

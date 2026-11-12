@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     CursorEventContent, Dp, GestureState, LayoutCoordinates, MOUSE_POINTER_ID, Modifier,
     PointerChange, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource, State,
@@ -60,7 +61,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                                 Modifier::new()
                                     .width(Dp(800.0))
                                     .height(Dp(300.0))
-                                    .semantics(crate::modifier::SemanticsArgs {
+                                    .semantics(tessera_foundation::modifier::SemanticsArgs {
                                         test_tag: Some("scroll-native-scene".into()),
                                         merge_descendants: true,
                                         ..Default::default()

@@ -4,6 +4,7 @@
 //!
 //! Help users select exact values while adjusting settings.
 
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
     PxPosition, RenderSlotWith, State, current_frame_nanos, key,
@@ -15,7 +16,6 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     boxed::boxed,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     progress::cubic_bezier_easing,
     shape_def::Shape,
     surface::surface,

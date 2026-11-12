@@ -9,7 +9,7 @@ use tessera_components::{
     alignment::CrossAxisAlignment,
     boxed::boxed,
     column::column,
-    modifier::{InteractionVisualState, ModifierExt as _, Padding},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -17,6 +17,7 @@ use tessera_components::{
     text_field::{TextFieldLineLimit, text_field},
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, Padding};
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera, use_context};
 
 use crate::res::I18N;

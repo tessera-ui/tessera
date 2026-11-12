@@ -10,7 +10,6 @@ use tessera_components::{
     column::column,
     flow_row::flow_row,
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     painter::Painter,
     segmented_buttons::{
         SegmentedButtonDefaults, multi_choice_segmented_button_row, segmented_button,
@@ -18,6 +17,7 @@ use tessera_components::{
     },
     text::text,
 };
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{Callback, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera};
 
 use crate::res::I18N;

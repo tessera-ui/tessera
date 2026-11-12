@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
@@ -18,7 +19,6 @@ use tessera_ui::{
 
 use crate::{
     icon::icon,
-    modifier::{InteractionVisualState, ModifierExt as _},
     pipelines::image_vector::command::{ImageVectorData, ImageVectorVertex},
     surface::{SurfaceStyle, surface},
     theme::{ContentColor, MaterialTheme, material_theme},

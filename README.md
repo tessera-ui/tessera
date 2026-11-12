@@ -59,6 +59,7 @@ use tessera_components::{
     surface::surface,
     text::text,
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Modifier, remember, tessera};
 
 #[tessera]

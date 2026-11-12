@@ -6,12 +6,12 @@
 
 use std::{collections::VecDeque, time::Duration};
 
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Callback, Color, Dp, FocusRestorationTarget, FocusScopeNode, Modifier, RenderSlotWith, State,
     accesskit::{Live, Role},
     current_frame_nanos, focus,
-    layout::Stack,
-    layout::layout,
+    layout::{Stack, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context,
 };
@@ -21,7 +21,7 @@ use crate::{
     button::button,
     icon_button::{IconButtonVariant, icon_button},
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs, with_keyboard_input},
+    modifier::with_keyboard_input,
     res::I18N,
     shape_def::Shape,
     surface::surface,
@@ -709,7 +709,7 @@ pub fn snackbar_host(
         }
         showing.set(visible);
     }
-    let mut modifier = modifier.focus_scope_with(scope);
+    let mut modifier = modifier.focus_scope(Some(scope));
     if pending_restore.get().is_some() {
         modifier = modifier.on_globally_positioned(move |_| {
             if let Some(target) = pending_restore.with_mut(Option::take) {

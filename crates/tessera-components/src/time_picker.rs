@@ -6,6 +6,7 @@
 
 use std::{f32::consts::TAU, sync::Arc};
 
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, CursorEventContent, Dp, FocusProperties,
     FocusRequester, KeyboardInput, KeyboardInputModifierNode, LayoutResult, MeasurementError,
@@ -27,7 +28,6 @@ use crate::{
     icon_button::icon_button,
     image_vector::{ImageVectorData, TintMode},
     material_icons::filled,
-    modifier::{InteractionState, ModifierExt as _, SemanticsArgs},
     pipelines::image_vector::command::ImageVectorVertex,
     res::I18N,
     row::row,
@@ -1256,7 +1256,10 @@ fn time_clock(state: State<TimePickerController>, hour_step: u8, minute_step: u8
                     merge_descendants: true,
                     ..Default::default()
                 })
-                .focus_restorer(Some(focus.with(|focus| focus.requesters[focus.anchor])))
+                .focus_restorer(
+                    None,
+                    Some(focus.with(|focus| focus.requesters[focus.anchor])),
+                )
                 .push_pointer_preview_input(interaction),
         )
         .child(move || {
@@ -1655,6 +1658,7 @@ fn current_time_utc() -> (u8, u8) {
 #[cfg(test)]
 mod tests {
 
+    use tessera_foundation::modifier::ModifierExt as _;
     use tessera_ui::{
         CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType,
         PxPosition, State, remember, tessera,
@@ -1664,7 +1668,7 @@ mod tests {
         },
     };
 
-    use crate::{modifier::ModifierExt as _, theme::material_theme};
+    use crate::theme::material_theme;
 
     use super::{
         TimePickerLayout, TimePickerSelection, TimePickerController, time_picker, time_picker_dialog,

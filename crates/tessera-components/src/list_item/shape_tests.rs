@@ -4,6 +4,7 @@
 //!
 //! Keep grouped rows responsive and restore their resting appearance.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, TreeId},
@@ -16,7 +17,7 @@ use tessera_ui::{
 
 use crate::{
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::{SurfaceStyle, surface},

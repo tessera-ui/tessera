@@ -3,6 +3,7 @@
 //! ## Usage
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     layout::MeasureScope, tessera,
@@ -10,7 +11,6 @@ use tessera_ui::{
 
 use crate::{
     fluid_glass::{GlassBorder, fluid_glass},
-    modifier::ModifierExt as _,
     shape_def::{RoundedCorner, Shape},
 };
 

@@ -8,12 +8,11 @@ mod insets;
 mod interaction;
 mod layout;
 mod semantics;
+mod visual;
 
-use tessera_ui::{
-    AxisConstraint, CallbackWith, Dp, Modifier, Px, modifier::ModifierCapabilityExt as _,
-};
+use tessera_ui::{AxisConstraint, Dp, Modifier, Px, modifier::ModifierCapabilityExt as _};
 
-use crate::alignment::Alignment;
+use crate::{alignment::Alignment, shape_def::Shape};
 
 use layout::{
     AlignmentParentDataModifierNode, ConstraintModifierNode, DefaultMinSizeModifierNode,
@@ -29,6 +28,8 @@ pub use layout::{
     AlignmentParentData, MinimumInteractiveComponentEnforcement, Padding, WeightParentData,
 };
 pub use semantics::SemanticsArgs;
+
+use visual::{AlphaModifierNode, ClipModifierNode, ShapeClipModifierNode};
 
 /// Shared modifier extensions that are not tied to a specific design system.
 pub trait ModifierExt {
@@ -61,6 +62,15 @@ pub trait ModifierExt {
 
     /// Offsets the content without affecting layout size.
     fn offset(self, x: Dp, y: Dp) -> Modifier;
+
+    /// Multiplies the opacity of the subtree by `alpha`.
+    fn alpha(self, alpha: f32) -> Modifier;
+
+    /// Clips descendants to this modifier's bounds.
+    fn clip_to_bounds(self) -> Modifier;
+
+    /// Clips this node and its descendants to a shape without resizing content.
+    fn clip_shape(self, shape: Shape) -> Modifier;
 
     /// Constrains the content to an exact size when possible.
     fn size(self, width: Dp, height: Dp) -> Modifier;
@@ -115,12 +125,15 @@ pub trait ModifierExt {
     fn align(self, alignment: Alignment) -> Modifier;
 
     /// Emits drag deltas for free-form dragging.
-    fn draggable<C>(self, on_drag_delta: C) -> Modifier
-    where
-        C: Into<CallbackWith<DragDelta, ()>>;
+    fn draggable(self, args: DraggableArgs) -> Modifier;
 
-    /// Emits drag deltas with custom drag configuration.
-    fn draggable_with(self, args: DraggableArgs) -> Modifier;
+    /// Prevents cursor events from propagating to components behind this
+    /// subtree.
+    fn block_touch_propagation(self) -> Modifier;
+
+    /// Marks this subtree as a draggable window region. On macOS, double-clicking
+    /// the region follows the system title bar preference.
+    fn window_drag_region(self) -> Modifier;
 
     /// Attaches accessibility semantics metadata to this subtree.
     fn semantics(self, args: SemanticsArgs) -> Modifier;
@@ -169,6 +182,23 @@ impl ModifierExt for Modifier {
 
     fn offset(self, x: Dp, y: Dp) -> Modifier {
         self.push_placement(OffsetModifierNode { x, y })
+    }
+
+    fn alpha(self, alpha: f32) -> Modifier {
+        let alpha = alpha.clamp(0.0, 1.0);
+        if (alpha - 1.0).abs() <= f32::EPSILON {
+            return self;
+        }
+
+        self.push_draw(AlphaModifierNode { alpha })
+    }
+
+    fn clip_to_bounds(self) -> Modifier {
+        self.push_draw(ClipModifierNode)
+    }
+
+    fn clip_shape(self, shape: Shape) -> Modifier {
+        self.push_draw(ShapeClipModifierNode { shape })
     }
 
     fn default_min_size(self, min_width: Dp, min_height: Dp) -> Modifier {
@@ -312,18 +342,16 @@ impl ModifierExt for Modifier {
         self.push_parent_data(AlignmentParentDataModifierNode { alignment })
     }
 
-    fn draggable<C>(self, on_drag_delta: C) -> Modifier
-    where
-        C: Into<CallbackWith<DragDelta, ()>>,
-    {
-        self.draggable_with(DraggableArgs {
-            on_drag_delta: on_drag_delta.into(),
-            ..Default::default()
-        })
+    fn draggable(self, args: DraggableArgs) -> Modifier {
+        interaction::apply_draggable_modifier(self, args)
     }
 
-    fn draggable_with(self, args: DraggableArgs) -> Modifier {
-        interaction::apply_draggable_modifier(self, args)
+    fn block_touch_propagation(self) -> Modifier {
+        interaction::apply_block_touch_propagation_modifier(self)
+    }
+
+    fn window_drag_region(self) -> Modifier {
+        interaction::apply_window_drag_region_modifier(self)
     }
 
     fn semantics(self, args: SemanticsArgs) -> Modifier {

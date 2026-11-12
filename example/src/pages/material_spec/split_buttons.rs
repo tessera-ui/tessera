@@ -12,7 +12,6 @@ use tessera_components::{
     icon::icon,
     material_icons::filled,
     menus::{MenuController, menu_item, menu_provider},
-    modifier::ModifierExt as _,
     spacer::spacer,
     split_buttons::{
         SplitButtonDefaults, SplitButtonSize, SplitButtonVariant, split_button_layout,
@@ -21,6 +20,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, LayoutCoordinates, Modifier, RenderSlot, State, modifier::FocusModifierExt as _, remember,
     tessera, use_context,

@@ -7,7 +7,7 @@ use tessera_components::{
     floating_action_button::FloatingActionButtonElevation,
     icon::icon,
     material_icons::{Asset, filled, outlined},
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     navigation_rail::{navigation_rail, navigation_rail_item},
     row::row,
     shape_def::Shape,
@@ -16,6 +16,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, tessera, use_context,

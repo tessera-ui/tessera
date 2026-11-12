@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FocusDirection, Modifier, State,
     accesskit::{Action, ActionRequest, Rect, Role, TreeId},
@@ -16,7 +17,6 @@ use tessera_ui::{
 
 use crate::{
     column::column,
-    modifier::ModifierExt as _,
     navigation_bar::{NavigationBarIconPosition, navigation_bar, navigation_bar_item},
     navigation_drawer::{navigation_drawer, navigation_drawer_item},
     navigation_rail::{navigation_rail, navigation_rail_item},

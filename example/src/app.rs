@@ -7,7 +7,6 @@ use tessera_components::{
     icon::icon,
     icon_button::icon_button,
     material_icons::{filled, outlined},
-    modifier::ModifierExt as _,
     navigation_drawer::navigation_drawer_item,
     row::row,
     scaffold::scaffold,
@@ -17,6 +16,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_i18n::{I18n, langid};
 use tessera_shard::{RouterController, RouterDestination, shard_home};
 use tessera_ui::{

@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _};
 use tessera_ui::{
     Callback, Color, Dp, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType,
     PxPosition, State,
@@ -16,10 +17,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    alignment::Alignment,
-    boxed::boxed,
-    modifier::{ClickableArgs, ModifierExt as _},
-    shape_def::Shape,
+    alignment::Alignment, boxed::boxed, modifier::ModifierExt as _, shape_def::Shape,
     theme::material_theme,
 };
 
@@ -82,7 +80,7 @@ fn fixture(scale: [f32; 2], outer: f32, clipped: bool, probe: TestProbe<FixtureH
                                         .modifier(
                                             background
                                                 .required_size(Dp(200.0), Dp(80.0))
-                                                .clickable_with(ClickableArgs {
+                                                .clickable(ClickableArgs {
                                                     role: Some(tessera_ui::accesskit::Role::Button),
                                                     label: Some("Scaled background target".into()),
                                                     on_click: Callback::new(move || {

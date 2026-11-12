@@ -35,7 +35,9 @@ use self::flow_layout::{FlowAxis, FlowLayout};
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{boxed::boxed, flow_row::flow_row, modifier::{ModifierExt as _, SemanticsArgs}};
+/// use tessera_components::boxed::boxed;
+/// use tessera_components::flow_row::flow_row;
+/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 /// use tessera_ui::{Dp, Modifier, tessera, testing::layout_test};
 ///
 /// #[tessera]
@@ -90,6 +92,7 @@ pub fn flow_row(
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
         NoopDrawModifier, Px,
@@ -97,10 +100,7 @@ mod tests {
         tessera,
     };
 
-    use crate::{
-        alignment::{CrossAxisAlignment, MainAxisAlignment},
-        modifier::{ModifierExt as _, SemanticsArgs},
-    };
+    use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 
     use super::flow_row;
 

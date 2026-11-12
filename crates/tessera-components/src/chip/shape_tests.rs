@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     headless::{HeadlessConfig, HeadlessRenderer},
@@ -14,7 +15,7 @@ use tessera_ui::{
 
 use crate::{
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     theme::{MaterialTheme, material_theme},
 };

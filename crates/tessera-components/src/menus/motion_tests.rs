@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Rect, Role},
@@ -7,7 +8,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::ModifierExt as _,
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
     theme::{MaterialTheme, material_theme},

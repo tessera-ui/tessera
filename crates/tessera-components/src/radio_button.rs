@@ -6,15 +6,17 @@
 
 use std::time::Duration;
 
-use tessera_foundation::gesture::TapRecognizer;
+use tessera_foundation::{
+    gesture::TapRecognizer,
+    modifier::{InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs},
+};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
     Dp, FocusDirection, FocusRequester, FocusState, FocusTraversalPolicy, Modifier, Px, PxSize,
     RenderSlotWith, SemanticsModifierNode, State,
     accesskit::{Orientation, Role, Toggled},
     current_frame_nanos, focus,
-    layout::Stack,
-    layout::layout,
+    layout::{Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
 };
@@ -23,7 +25,7 @@ use crate::{
     alignment::Alignment,
     animation,
     boxed::boxed,
-    modifier::{InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs},
+    modifier::ModifierExt as _,
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
@@ -222,7 +224,7 @@ pub fn radio_group(
         RadioGroupOrientation::Horizontal => Orientation::Horizontal,
         RadioGroupOrientation::Vertical => Orientation::Vertical,
     };
-    let modifier = modifier.focus_group().focus_traversal_policy(
+    let modifier = modifier.focus_group(None).focus_traversal_policy(
         FocusTraversalPolicy::linear()
             .wrap(wrap)
             .single_tab_stop(true),
@@ -494,7 +496,7 @@ fn radio_button_inner(
             tap_recognizer,
             ..Default::default()
         };
-        modifier = modifier.selectable_with(selectable_args);
+        modifier = modifier.selectable(selectable_args);
         if radio_group.is_some() {
             modifier = modifier.preferred_tab_stop(is_selected).on_focus_changed(
                 move |focus_state: FocusState| {

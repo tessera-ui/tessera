@@ -4,7 +4,10 @@
 //!
 //! Show and drag scroll thumbs beside overflowing content.
 
-use tessera_foundation::gesture::{DragRecognizer, ScrollRecognizer, TapRecognizer};
+use tessera_foundation::{
+    gesture::{DragRecognizer, ScrollRecognizer, TapRecognizer},
+    modifier::ModifierExt as _,
+};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
     Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
@@ -16,7 +19,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::{ModifierExt as _, with_pointer_input},
+    modifier::with_pointer_input,
     nested_scroll::NestedScrollConnection,
     scrollable::{ScrollBarBehavior, ScrollableController, ScrollbarWheelModifierNode},
     shape_def::Shape,

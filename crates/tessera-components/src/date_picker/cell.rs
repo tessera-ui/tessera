@@ -4,6 +4,9 @@
 //!
 //! Compose selectable calendar cells in scheduling and date-entry controls.
 
+use tessera_foundation::modifier::{
+    InteractionState, InteractionVisualState, ModifierExt as _, SelectableArgs, SemanticsArgs,
+};
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, Dp, FocusRequester, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, PxSize, State,
@@ -13,9 +16,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::{
-        InteractionState, InteractionVisualState, ModifierExt as _, SelectableArgs, SemanticsArgs,
-    },
+    modifier::ModifierExt as _,
     pipelines::shape::command::ShapeCommand,
     res::I18N,
     shape_def::{ResolvedShape, Shape},
@@ -166,7 +167,7 @@ pub fn date_picker_day(
         modifier
             .unwrap_or_default()
             .size(DATE_CELL_SIZE, DATE_CELL_SIZE)
-            .selectable_with(SelectableArgs {
+            .selectable(SelectableArgs {
                 selected,
                 on_click: tessera_ui::Callback::new(move || on_select.call(date)),
                 enabled,
@@ -312,7 +313,7 @@ pub fn date_picker_year(
             modifier
                 .unwrap_or_default()
                 .size(Dp(112.0), Dp(52.0))
-                .selectable_with(SelectableArgs {
+                .selectable(SelectableArgs {
                     selected,
                     on_click: tessera_ui::Callback::new(move || on_select.call(year)),
                     enabled,

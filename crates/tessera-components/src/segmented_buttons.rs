@@ -4,6 +4,7 @@
 //!
 //! Switch between views or filters with a connected control.
 
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _, Padding};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, Color, ComputedData,
     Constraint, Dp, FocusDirection, FocusState, FocusTraversalPolicy, LayoutResult,
@@ -20,7 +21,6 @@ use crate::{
     icon::icon as icon_component,
     layout_flex::cross_axis_child_constraint,
     material_icons::filled,
-    modifier::{InteractionState, ModifierExt as _, Padding},
     painter::Painter,
     row::row,
     shape_def::{RoundedCorner, Shape},
@@ -509,7 +509,7 @@ pub fn single_choice_segmented_button_row(
         content,
     );
     let modifier = modifier
-        .focus_group()
+        .focus_group(None)
         .push_semantics(SegmentedGroupSemantics {
             single_choice: true,
         })
@@ -599,7 +599,7 @@ pub fn multi_choice_segmented_button_row(
         content,
     );
     let modifier = modifier
-        .focus_group()
+        .focus_group(None)
         .push_semantics(SegmentedGroupSemantics {
             single_choice: false,
         })

@@ -14,7 +14,7 @@ use super::*;
 fn fixture(
     host: (i32, i32),
     output: tessera_ui::testing::TestProbe<
-        Option<(State<usize>, State<bool>, State<ScrollableController>)>,
+        Option<(State<usize>, State<SideSheetController>, State<ScrollableController>)>,
     >,
 ) {
     let selected = remember(|| 0usize);
@@ -103,7 +103,7 @@ fn live_drawer_fills_available_height_and_scrolls_to_an_activatable_last_destina
         }
         pump_layout_test_session(&mut session, 1_100_000_000);
         assert_eq!(output.get().unwrap().0.get(), 4);
-        assert!(!output.get().unwrap().1.get());
+        assert!(!output.get().unwrap().1.with(SideSheetController::is_open));
     }
 }
 
@@ -162,7 +162,7 @@ enum Scene {
     Live(
         (i32, i32),
         tessera_ui::testing::TestProbe<
-            Option<(State<usize>, State<bool>, State<ScrollableController>)>,
+            Option<(State<usize>, State<SideSheetController>, State<ScrollableController>)>,
         >,
     ),
 }
@@ -632,7 +632,7 @@ fn modal_drawer_initial_focus_targets_the_first_actual_destination() {
         "opening modal navigation must focus Inbox, not a wrapper or later item"
     );
     assert_eq!(output.get().unwrap().0.get(), 0);
-    assert!(output.get().unwrap().1.get());
+    assert!(output.get().unwrap().1.with(SideSheetController::is_open));
 }
 
 #[tessera]

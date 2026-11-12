@@ -5,17 +5,15 @@
 //! Indicate brief loading tasks with animated shapes or a known completion
 //! value.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, accesskit::Role,
     current_frame_nanos, layout::MeasureScope, remember, tessera, use_context,
 };
 
 use crate::{
-    modifier::{ModifierExt as _, SemanticsArgs},
-    pipelines::loading_shape::command::LoadingShapeCommand,
-    res::I18N,
-    shape_def::Shape,
-    theme::MaterialTheme,
+    modifier::ModifierExt as _, pipelines::loading_shape::command::LoadingShapeCommand, res::I18N,
+    shape_def::Shape, theme::MaterialTheme,
 };
 
 const MORPH_INTERVAL_NANOS: u64 = 650_000_000;

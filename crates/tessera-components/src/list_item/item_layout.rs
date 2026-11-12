@@ -9,7 +9,7 @@ use tessera_ui::{
     layout::MeasureScope,
 };
 
-use crate::modifier::Padding;
+use tessera_foundation::modifier::Padding;
 
 use super::{ListItemDefaults, ListItemVerticalAlignment};
 

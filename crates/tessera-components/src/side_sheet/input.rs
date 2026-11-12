@@ -8,18 +8,21 @@ use std::time::Duration;
 
 use tessera_foundation::{
     gesture::{DragAxis, DragRecognizer, DragSettings},
+    modifier::ModifierExt as _,
     scroll_physics::ScrollVelocityTracker,
 };
 use tessera_ui::{
     Callback, CursorEventContent, Dp, Modifier, PointerEventPass, PointerInput,
     PointerInputModifierNode, PressKeyEventType, PxPosition, RenderSlot, State,
-    current_frame_nanos, current_frame_time, layout::Stack, layout::layout,
-    modifier::ModifierCapabilityExt as _, remember, tessera, time::Instant,
+    current_frame_nanos, current_frame_time,
+    layout::{Stack, layout},
+    modifier::ModifierCapabilityExt as _,
+    remember, tessera,
+    time::Instant,
 };
 
 use crate::{
-    boxed::boxed, modifier::ModifierExt as _, nested_scroll::NestedScrollConnection,
-    pos_misc::is_position_inside_bounds,
+    boxed::boxed, nested_scroll::NestedScrollConnection, pos_misc::is_position_inside_bounds,
 };
 
 use super::{SideSheetController, SideSheetPosition, side_sheet_dimension};

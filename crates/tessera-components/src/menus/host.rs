@@ -4,6 +4,7 @@
 //!
 //! Keep nested action menus above scrolling and clipped menu content.
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Callback, ComputedData, CursorEventContent, FocusRequester, FocusScopeNode, LayoutResult,
     MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PxPosition, RenderSlot,
@@ -13,7 +14,7 @@ use tessera_ui::{
     remember, tessera, use_context,
 };
 
-use crate::{modifier::ModifierExt as _, spacer::spacer};
+use crate::spacer::spacer;
 
 use super::{
     MenuBounds, MenuBoundsHandle, MenuColorStyle, MenuController, MenuPlacement,

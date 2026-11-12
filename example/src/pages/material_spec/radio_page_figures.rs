@@ -16,6 +16,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Callback, Dp, FocusRequester, LayoutCoordinates, Modifier, RenderSlot, State,
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,

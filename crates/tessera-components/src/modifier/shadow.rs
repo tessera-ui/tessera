@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier, Px,
     PxPosition, PxSize, modifier::ModifierCapabilityExt as _,
@@ -9,8 +10,6 @@ use crate::{
     shape_def::{ResolvedShape, Shape},
     theme::MaterialColorScheme,
 };
-
-use super::ModifierExt;
 
 /// Arguments for the `shadow` modifier.
 #[derive(Clone, Debug)]

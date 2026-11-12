@@ -1,16 +1,10 @@
 use tessera_components::{
-    alignment::Alignment,
-    boxed::boxed,
-    button::button,
-    icon::icon,
-    image::image,
-    material_icons::filled,
-    modifier::{InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs},
-    row::row,
-    shape_def::Shape,
-    spacer::spacer,
-    text::text,
-    theme::MaterialTheme,
+    alignment::Alignment, boxed::boxed, button::button, icon::icon, image::image,
+    material_icons::filled, modifier::ModifierExt as _, row::row, shape_def::Shape, spacer::spacer,
+    text::text, theme::MaterialTheme,
+};
+use tessera_foundation::modifier::{
+    InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs,
 };
 use tessera_ui::{
     Callback, Dp, FocusRequester, Modifier, RenderSlotWith, accesskit::Role,

@@ -3,7 +3,10 @@
 //! ## Usage
 //!
 //! Use to select a value from a continuous range.
-use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
+use tessera_foundation::{
+    gesture::{DragRecognizer, TapRecognizer},
+    modifier::{ModifierExt as _, SemanticsArgs},
+};
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
     LayoutResult, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px,
@@ -18,7 +21,6 @@ use tessera_ui::{
 use crate::{
     fluid_glass::{GlassBorder, fluid_glass},
     glass_progress::glass_progress_fill,
-    modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::Shape,
 };
 
@@ -88,7 +90,7 @@ impl GlassSliderController {
 
     /// Clears focus from this slider.
     pub fn clear_focus(&mut self) {
-        self.focus.unfocus();
+        self.focus.clear_focus();
     }
 
     /// Returns `true` if the slider currently has focus.

@@ -45,6 +45,17 @@ levels on an item or inline module tree with
 `allow`, `warn`, `deny`, and `forbid`; nested settings override ordinary CLI and
 outer settings unless forbidden.
 
+`tessera::remembered_state_in_model` warns when a `ModelStore::model`
+initializer captures a state created by `remember` or `retain`; that handle keeps
+its component-slot lifetime. Create model-owned state with `State::new` instead.
+
+`tessera::named_modifier_ext_import` warns when a private `use` binds a Tessera
+modifier extension trait (`ModifierExt`, `FocusModifierExt`, `CursorModifierExt`)
+to a name that the file and its child module files never mention. Method calls
+need only the trait in scope, so import it as `use ...::ModifierExt as _;`.
+`cargo tessera fix` applies the `as _` rewrite. Re-exports and imports whose name
+is used, such as trait bounds or fully qualified calls, are not reported.
+
 `cargo tessera check` accepts `-A LINT`, `-W LINT`, `-D LINT`, and
 `--forbid LINT`. Use `warnings` for warning-level lints or `tessera::all` for all
 Tessera lints.

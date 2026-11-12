@@ -9,11 +9,11 @@ use tessera_components::{
     button::button,
     column::column,
     flow_row::flow_row,
-    modifier::{ModifierExt as _, SemanticsArgs},
     navigation_bar::{NavigationBarLabelBehavior, navigation_bar, navigation_bar_item},
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Dp, Modifier, RenderSlot, accesskit::Role, remember, tessera, use_context};
 
 use crate::res::I18N;

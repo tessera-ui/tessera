@@ -9,7 +9,7 @@ use tessera_components::{
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     side_sheet::{
@@ -20,6 +20,7 @@ use tessera_components::{
     text::text,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_shard::RouterController;
 use tessera_ui::{
     Color, Dp, FocusProperties, FocusRequester, FocusState, Modifier, RenderSlot, State,

@@ -4,6 +4,7 @@
 //!
 //! Publish transient status without taking focus from the user's current task.
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier, State,
     accesskit::{Action, ActionRequest, Live, Node, NodeId, Role, TreeId},
@@ -11,9 +12,7 @@ use tessera_ui::{
     remember, tessera,
 };
 
-use crate::{
-    button::button, column::column, modifier::ModifierExt as _, text::text, theme::material_theme,
-};
+use crate::{button::button, column::column, text::text, theme::material_theme};
 
 use super::snackbar;
 
@@ -160,8 +159,7 @@ mod escape {
         },
     };
 
-    use super::super::dismiss_key;
-    use super::*;
+    use super::{super::dismiss_key, *};
 
     #[derive(Clone, Copy, Default)]
     struct EscapeHandles {

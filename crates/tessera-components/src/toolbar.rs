@@ -4,13 +4,14 @@
 //!
 //! Keep editing, formatting, and contextual actions close to the current task.
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
     Px, PxPosition, RenderSlot, accesskit::Role, layout::MeasureScope,
     modifier::FocusModifierExt as _, tessera, use_context,
 };
 
-use crate::{modifier::ModifierExt, shape_def::Shape, surface::surface, theme::MaterialTheme};
+use crate::{shape_def::Shape, surface::surface, theme::MaterialTheme};
 
 /// Direction in which toolbar actions are arranged.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -177,7 +178,7 @@ pub fn floating_toolbar(
     let orientation = orientation.unwrap_or_default();
     let expanded = expanded.unwrap_or(true);
     surface()
-        .modifier(modifier.unwrap_or_default().focus_group())
+        .modifier(modifier.unwrap_or_default().focus_group(None))
         .style(background.into())
         .content_color(foreground)
         .shape(Shape::CAPSULE)
@@ -297,7 +298,12 @@ pub fn docked_toolbar(
         .color_scheme;
     let vibrant = color_style.unwrap_or_default() == ToolbarColorStyle::Vibrant;
     surface()
-        .modifier(modifier.unwrap_or_default().fill_max_width().focus_group())
+        .modifier(
+            modifier
+                .unwrap_or_default()
+                .fill_max_width()
+                .focus_group(None),
+        )
         .style(
             container_color
                 .unwrap_or(if vibrant {
@@ -349,10 +355,12 @@ mod tests {
         material_theme().child(move || {
             crate::column::column().children(move || {
                 crate::boxed::boxed()
-                    .modifier(Modifier::new().semantics(crate::modifier::SemanticsArgs {
-                        test_tag: Some("toolbar".into()),
-                        ..Default::default()
-                    }))
+                    .modifier(Modifier::new().semantics(
+                        tessera_foundation::modifier::SemanticsArgs {
+                            test_tag: Some("toolbar".into()),
+                            ..Default::default()
+                        },
+                    ))
                     .children(move || {
                         floating_toolbar()
                             .orientation(orientation)
@@ -360,7 +368,7 @@ mod tests {
                             .leading(|| {
                                 spacer().modifier(
                                     Modifier::new().size(Dp(48.0), Dp(48.0)).semantics(
-                                        crate::modifier::SemanticsArgs {
+                                        tessera_foundation::modifier::SemanticsArgs {
                                             test_tag: Some("leading-action".into()),
                                             ..Default::default()
                                         },
@@ -372,7 +380,7 @@ mod tests {
                                 observe_content.call(size);
                                 spacer().modifier(
                                     Modifier::new().size(size.get(), size.get()).semantics(
-                                        crate::modifier::SemanticsArgs {
+                                        tessera_foundation::modifier::SemanticsArgs {
                                             test_tag: Some("content-action".into()),
                                             ..Default::default()
                                         },
@@ -382,7 +390,7 @@ mod tests {
                             .trailing(|| {
                                 spacer().modifier(
                                     Modifier::new().size(Dp(48.0), Dp(48.0)).semantics(
-                                        crate::modifier::SemanticsArgs {
+                                        tessera_foundation::modifier::SemanticsArgs {
                                             test_tag: Some("trailing-action".into()),
                                             ..Default::default()
                                         },
@@ -606,20 +614,22 @@ mod tests {
         material_theme().child(|| {
             crate::column::column().children(|| {
                 crate::boxed::boxed()
-                    .modifier(Modifier::new().semantics(crate::modifier::SemanticsArgs {
-                        test_tag: Some("docked".into()),
-                        ..Default::default()
-                    }))
+                    .modifier(Modifier::new().semantics(
+                        tessera_foundation::modifier::SemanticsArgs {
+                            test_tag: Some("docked".into()),
+                            ..Default::default()
+                        },
+                    ))
                     .children(|| {
                         docked_toolbar().content(|| {
                             spacer().modifier(Modifier::new().size(Dp(48.0), Dp(48.0)).semantics(
-                                crate::modifier::SemanticsArgs {
+                                tessera_foundation::modifier::SemanticsArgs {
                                     test_tag: Some("first-action".into()),
                                     ..Default::default()
                                 },
                             ));
                             spacer().modifier(Modifier::new().size(Dp(48.0), Dp(48.0)).semantics(
-                                crate::modifier::SemanticsArgs {
+                                tessera_foundation::modifier::SemanticsArgs {
                                     test_tag: Some("second-action".into()),
                                     ..Default::default()
                                 },

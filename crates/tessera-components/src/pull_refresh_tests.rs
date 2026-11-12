@@ -9,7 +9,9 @@ use tessera_ui::{
     headless::{HeadlessConfig, HeadlessRenderer},
 };
 
-use crate::{scrollable::ScrollableController, text::text, theme::material_theme};
+use crate::{
+    modifier::ModifierExt as _, scrollable::ScrollableController, text::text, theme::material_theme,
+};
 
 use super::*;
 

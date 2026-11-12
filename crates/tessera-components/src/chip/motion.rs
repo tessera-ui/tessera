@@ -4,9 +4,10 @@
 //!
 //! Keep chip silhouettes and shadows continuous during state changes.
 
+use tessera_foundation::modifier::InteractionState;
 use tessera_ui::Dp;
 
-use crate::{modifier::InteractionState, progress::cubic_bezier_easing};
+use crate::progress::cubic_bezier_easing;
 
 #[derive(Clone, Copy, Default, PartialEq)]
 pub(super) enum Interaction {

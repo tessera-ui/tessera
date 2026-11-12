@@ -438,6 +438,78 @@ pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> M
     })
 }
 
+fn cursor_within_inclusive_bounds(position: Option<PxPosition>, size: PxSize) -> bool {
+    position.is_some_and(|position| {
+        position.x >= 0.0
+            && position.y >= 0.0
+            && position.x <= size.width.0 as f32
+            && position.y <= size.height.0 as f32
+    })
+}
+
+struct BlockTouchPropagationPointerModifierNode;
+
+impl PointerInputModifierNode for BlockTouchPropagationPointerModifierNode {
+    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
+        let size = PxSize::new(input.computed_data.width, input.computed_data.height);
+        if cursor_within_inclusive_bounds(input.cursor_position_rel, size) {
+            input.block_cursor();
+        }
+    }
+}
+
+pub(crate) fn apply_block_touch_propagation_modifier(base: Modifier) -> Modifier {
+    base.push_pointer_input(BlockTouchPropagationPointerModifierNode)
+}
+
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
+struct WindowDragRegionPointerModifierNode {
+    tap_recognizer: State<TapRecognizer>,
+}
+
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
+impl PointerInputModifierNode for WindowDragRegionPointerModifierNode {
+    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
+        let size = PxSize::new(input.computed_data.width, input.computed_data.height);
+        if !cursor_within_inclusive_bounds(input.cursor_position_rel, size) {
+            return;
+        }
+
+        let tap_result = self.tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(input.pass, input.pointer_changes.as_mut_slice(), true)
+        });
+
+        if tap_result.pressed {
+            input.drag_window();
+        }
+        input.block_all();
+    }
+}
+
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
+struct WindowDragBuild;
+
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
+impl BuildModifierNode for WindowDragBuild {
+    fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
+        let tap_recognizer = context.state(TapRecognizer::default);
+        Some(
+            Modifier::new()
+                .push_pointer_input(WindowDragRegionPointerModifierNode { tap_recognizer }),
+        )
+    }
+}
+
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
+pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
+    base.push_build(WindowDragBuild)
+}
+
+#[cfg(any(target_family = "wasm", target_os = "android", target_os = "ios"))]
+pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
+    base
+}
+
 struct DraggableBuild {
     settings: DragSettings,
     drag_recognizer: Option<State<DragRecognizer>>,

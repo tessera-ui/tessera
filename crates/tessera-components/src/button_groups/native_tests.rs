@@ -4,13 +4,13 @@
 //!
 //! Keep connected choices consistent across size presets and viewport changes.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
     focus,
     headless::{HeadlessConfig, HeadlessRenderer},
-    layout::Stack,
-    layout::layout,
+    layout::{Stack, layout},
     remember, tessera,
     testing::TestProbe,
 };
@@ -21,7 +21,7 @@ use crate::{
     column::column,
     icon::icon,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     spacer::spacer,
     text::text,

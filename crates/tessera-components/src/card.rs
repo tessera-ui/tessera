@@ -4,6 +4,7 @@
 //!
 //! Group related content into a single, elevated or outlined container.
 
+use tessera_foundation::modifier::InteractionState;
 use tessera_ui::{
     Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera,
     use_context,
@@ -11,7 +12,6 @@ use tessera_ui::{
 
 use crate::{
     animation::Animatable,
-    modifier::InteractionState,
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
     theme::{ContentColor, MaterialAlpha, MaterialTheme, content_color_for},

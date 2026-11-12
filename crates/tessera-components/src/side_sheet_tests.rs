@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier, PointerChange,
     PressKeyEventType, PxPosition, RenderSlot, State, remember,
@@ -20,7 +21,6 @@ use tessera_ui::{
 use crate::{
     boxed::boxed,
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
     navigation_drawer::navigation_drawer_item,
     navigation_rail::{navigation_rail, navigation_rail_item},
     theme::material_theme,

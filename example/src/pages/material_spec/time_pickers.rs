@@ -7,7 +7,7 @@ use tessera_components::{
     flow_row::flow_row,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -19,6 +19,7 @@ use tessera_components::{
         time_picker_dialog,
     },
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role, focus,
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
@@ -1233,7 +1234,7 @@ fn time_figure_contents(
             .style(theme.typography.label_medium)
             .color(theme.color_scheme.on_surface_variant)
             .modifier(watch_precise(geometry, "headline").semantics(
-                tessera_components::modifier::SemanticsArgs {
+                tessera_foundation::modifier::SemanticsArgs {
                     test_tag: Some("time-spec-headline".into()),
                     merge_descendants: true,
                     ..Default::default()

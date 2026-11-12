@@ -5,7 +5,7 @@ use tessera_components::{
     image::image,
     material_icons::filled,
     menus::{MenuAnchor, MenuController, menu_item, menu_provider},
-    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     spacer::spacer,
     text::text,
@@ -13,6 +13,7 @@ use tessera_components::{
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, PxPosition, PxSize, RenderSlot, accesskit::Role, remember, tessera,
     use_context,

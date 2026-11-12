@@ -4,6 +4,7 @@
 //!
 //! Place a calendar below a date field in an anchored popup or form.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, CallbackWith, Dp, Modifier, Px, PxPosition, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, tessera, use_context,
@@ -18,7 +19,7 @@ use crate::{
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     res::I18N,
     row::row,
     scrollable::ScrollableController,
@@ -450,7 +451,7 @@ fn calendar(
             })
             .modifier(
                 Modifier::new()
-                    .focus_restorer(Some(keyboard.focus_requester()))
+                    .focus_restorer(None, Some(keyboard.focus_requester()))
                     .semantics(SemanticsArgs {
                         role: Some(Role::Group),
                         label: Some(super::format_month_year(snapshot.displayed_month)),

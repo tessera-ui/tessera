@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, TreeId},
@@ -18,7 +19,7 @@ use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     spacer::spacer,
     surface::{SurfaceStyle, surface},

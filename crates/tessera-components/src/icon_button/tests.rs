@@ -6,7 +6,10 @@ use tessera_ui::{
     provide_context,
 };
 
-use crate::{column::column, painter::Painter, row::row, spacer::spacer, theme::material_theme};
+use crate::{
+    column::column, modifier::ModifierExt as _, painter::Painter, row::row, spacer::spacer,
+    theme::material_theme,
+};
 
 use super::*;
 

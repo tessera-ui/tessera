@@ -5,7 +5,7 @@ use tessera_components::{
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     navigation_rail::{modal_navigation_rail, navigation_rail, navigation_rail_item},
     row::row,
     scrollable::ScrollableController,
@@ -15,6 +15,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_shard::RouterController;
 use tessera_ui::{
     Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,

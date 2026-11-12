@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use tessera_components::{
-    alignment::Alignment, boxed::boxed, column::column, modifier::ModifierExt as _,
-    theme::material_theme,
+    alignment::Alignment, boxed::boxed, column::column, theme::material_theme,
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},

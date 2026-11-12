@@ -4,6 +4,7 @@
 //!
 //! Keep expanded list rows clickable at their visible scrolled positions.
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, RenderSlot, State,
     accesskit::Node,

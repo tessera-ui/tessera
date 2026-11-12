@@ -72,4 +72,5 @@ libc.workspace = true
 
 [dev-dependencies]
 tessera-components.workspace = true
+tessera-foundation.workspace = true
 tessera-ui.workspace = true

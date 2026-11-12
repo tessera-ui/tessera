@@ -5,10 +5,11 @@
 //! Compare indeterminate morphs, determinate progress and contained styles.
 
 use tessera_components::{
-    column::column, flow_row::flow_row, loading_indicator::loading_indicator,
-    modifier::ModifierExt as _, row::row, shape_def::Shape, spacer::spacer, surface::surface,
-    switch::switch, text::text, theme::MaterialTheme,
+    column::column, flow_row::flow_row, loading_indicator::loading_indicator, row::row,
+    shape_def::Shape, spacer::spacer, surface::surface, switch::switch, text::text,
+    theme::MaterialTheme,
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
 use crate::res::I18N;

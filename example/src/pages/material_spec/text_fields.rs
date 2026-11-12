@@ -10,7 +10,7 @@ use tessera_components::{
     icon_button::{IconButtonColorStyle, icon_button},
     material_icons::filled,
     menus::{MenuAnchor, MenuController, menu_item, menu_provider},
-    modifier::{InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -19,6 +19,9 @@ use tessera_components::{
     text_field::{TextFieldContextMenu, TextFieldLineLimit, text_field},
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
+};
+use tessera_foundation::modifier::{
+    InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs,
 };
 use tessera_ui::{
     Color, Dp, FocusState, LayoutCoordinates, Modifier, PxPosition, PxSize, RenderSlot, State,
@@ -3048,7 +3051,7 @@ fn field_measurement_item(
                                 },
                             )
                             .fill_max_width()
-                            .focus_group()
+                            .focus_group(None)
                             .on_focus_changed(
                                 move |focus: FocusState| {
                                     if focused.is_alive() {

@@ -3,7 +3,13 @@
 //! ## Usage
 //!
 //! Use to control a boolean on/off state.
-use tessera_foundation::gesture::TapRecognizer;
+use tessera_foundation::{
+    gesture::TapRecognizer,
+    modifier::{
+        InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext,
+        SemanticsArgs, ToggleableArgs,
+    },
+};
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusRequester,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
@@ -19,10 +25,7 @@ use crate::{
     animation::material_motion::{Scalar, Spec},
     boxed::boxed,
     icon::IconSize,
-    modifier::{
-        DisabledToggleSemantics, InteractionState, InteractionVisualState, ModifierExt,
-        PointerEventContext, SemanticsArgs, ToggleableArgs,
-    },
+    modifier::{DisabledToggleSemantics, ModifierExt as _},
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
@@ -320,6 +323,7 @@ impl SwitchMotion {
         );
     }
 
+    #[cfg(test)]
     fn animation_progress(&self) -> f32 {
         self.progress.value.clamp(0.0, 1.0) as f32
     }
@@ -579,7 +583,7 @@ fn switch_content(
             ..Default::default()
         };
         modifier = if enabled {
-            modifier.toggleable_with(toggle_args)
+            modifier.toggleable(toggle_args)
         } else {
             modifier.push_semantics(DisabledToggleSemantics {
                 role: Role::Switch,
@@ -739,7 +743,7 @@ fn switch_content(
         .modifier({
             let modifier = Modifier::new();
             #[cfg(test)]
-            let modifier = modifier.semantics(crate::modifier::SemanticsArgs {
+            let modifier = modifier.semantics(tessera_foundation::modifier::SemanticsArgs {
                 test_tag: Some(THUMB_TEST_TAG.to_string()),
                 ..Default::default()
             });

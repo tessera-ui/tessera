@@ -5,7 +5,7 @@ use tessera_components::{
     flow_row::flow_row,
     icon::icon,
     material_icons::filled,
-    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     painter::Painter,
     row::row,
     shape_def::Shape,
@@ -19,6 +19,7 @@ use tessera_components::{
     text_input::TextInputController,
     theme::{MaterialColorScheme, MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, modifier::FocusModifierExt as _,
     remember, scaled_box, tessera, use_context,

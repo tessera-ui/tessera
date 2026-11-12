@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     AxisConstraint, Color, Constraint, Dp, DrawModifierContent, DrawModifierContext,
     DrawModifierNode, Modifier, Px, PxPosition, PxSize, State,
@@ -6,7 +7,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::ModifierExt,
     pipelines::shape::command::ShapeCommand,
     shape_def::{RoundedCorner, Shape},
     surface::surface,

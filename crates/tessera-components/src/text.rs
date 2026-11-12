@@ -298,6 +298,7 @@ impl tessera_ui::DrawModifierNode for TextDraw {
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         State, provide_context,
         testing::{
@@ -305,13 +306,7 @@ mod tests {
         },
     };
 
-    use crate::{
-        boxed::boxed,
-        column::column,
-        modifier::{ModifierExt as _, SemanticsArgs},
-        row::row,
-        theme::material_theme,
-    };
+    use crate::{boxed::boxed, column::column, row::row, theme::material_theme};
 
     use super::*;
 

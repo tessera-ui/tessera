@@ -66,9 +66,8 @@ fn compute_child_offset(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{
-///     alignment::Alignment, boxed::boxed, modifier::ModifierExt as _, text::text,
-/// };
+/// use tessera_components::{alignment::Alignment, boxed::boxed, text::text};
+/// use tessera_foundation::modifier::ModifierExt as _;
 /// use tessera_ui::Modifier;
 ///
 /// # use tessera_ui::tessera;
@@ -110,7 +109,7 @@ impl tessera_ui::LayoutPolicy for BoxedLayout {
         let mut result = LayoutResult::new(size);
         for child in scope.children() {
             let alignment = child
-                .parent_data::<crate::modifier::AlignmentParentData>()
+                .parent_data::<tessera_foundation::modifier::AlignmentParentData>()
                 .map_or(self.alignment, |data| data.alignment);
             let child_size = child.size();
             let (x, y) = compute_child_offset(
@@ -183,7 +182,7 @@ fn collect_child_alignments(
         .iter()
         .map(|child| {
             child
-                .parent_data::<crate::modifier::AlignmentParentData>(scope)
+                .parent_data::<tessera_foundation::modifier::AlignmentParentData>(scope)
                 .map(|data| data.alignment)
         })
         .collect()
@@ -191,6 +190,7 @@ fn collect_child_alignments(
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
         Px,
@@ -198,10 +198,7 @@ mod tests {
         tessera,
     };
 
-    use crate::{
-        alignment::Alignment,
-        modifier::{ModifierExt as _, SemanticsArgs},
-    };
+    use crate::alignment::Alignment;
 
     use super::boxed;
 

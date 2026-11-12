@@ -6,7 +6,10 @@
 
 use std::{fmt, sync::Arc};
 
-use tessera_foundation::gesture::{DragAxis, DragRecognizer, DragSettings};
+use tessera_foundation::{
+    gesture::{DragAxis, DragRecognizer, DragSettings},
+    modifier::{ModifierExt as _, SemanticsArgs},
+};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint, Dp,
     DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusProperties, FocusRequester,
@@ -26,7 +29,6 @@ use tessera_ui::{
 
 use crate::{
     animation::Animatable,
-    modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::{ResolvedShape, RoundedCorner, Shape},
 };
 
@@ -919,7 +921,7 @@ fn carousel_item(
     layout(Stack)
         .modifier(
             Modifier::new()
-                .focus_scope_with(scope)
+                .focus_scope(Some(scope))
                 .focus_properties(FocusProperties::new().skip_traversal(true))
                 .on_layout_coordinates(move |_| {
                     navigation.finish(controller.with(|state| !state.needs_frame()));
@@ -1389,6 +1391,7 @@ mod tests {
         flow_row::flow_row,
         image::{ImageData, image},
         lazy_list::lazy_column,
+        modifier::ModifierExt as _,
         scaffold::scaffold,
         spacer::spacer,
         text::text,

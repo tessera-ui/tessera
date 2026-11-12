@@ -3,15 +3,17 @@
 //! ## Usage
 //!
 //! Trigger data reloads when users pull down at the top of a scrollable view.
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, Modifier, Px, RenderSlot, State, current_frame_nanos,
-    layout::Stack, layout::layout, modifier::FocusModifierExt as _, remember, tessera, use_context,
+    layout::{Stack, layout},
+    modifier::FocusModifierExt as _,
+    remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
     boxed::boxed,
-    modifier::ModifierExt,
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,

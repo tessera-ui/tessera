@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
 use tessera_ui::{
     Callback, Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
     State,
@@ -19,7 +20,7 @@ use crate::{
     boxed::boxed,
     button::button,
     column::column,
-    modifier::{InteractionState, ModifierExt as _},
+    modifier::ModifierExt as _,
     surface::surface,
     text::text,
     theme::{MaterialColorScheme, MaterialTheme, material_theme},

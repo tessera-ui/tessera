@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     CallbackWith, Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
@@ -12,7 +13,6 @@ use crate::{
     button::button,
     column::column,
     lazy_list::{LazyListController, lazy_column},
-    modifier::ModifierExt as _,
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,

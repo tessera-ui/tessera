@@ -4,6 +4,7 @@
 //!
 //! Keep notification text and actions aligned at compact and constrained sizes.
 
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Dp, Modifier, State,
     accesskit::{Node, Role},
@@ -11,11 +12,7 @@ use tessera_ui::{
     remember, tessera,
 };
 
-use crate::{
-    column::column,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
-    theme::material_theme,
-};
+use crate::{column::column, theme::material_theme};
 
 use super::snackbar;
 

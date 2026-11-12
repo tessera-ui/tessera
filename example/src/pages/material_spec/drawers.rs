@@ -8,7 +8,7 @@ use tessera_components::{
     divider::horizontal_divider,
     icon::icon,
     material_icons::{filled, outlined},
-    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     navigation_drawer::{NavigationDrawerStyle, navigation_drawer, navigation_drawer_item},
     row::row,
     scrollable::ScrollableController,
@@ -19,6 +19,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_shard::RouterController;
 use tessera_ui::{
     Callback, Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _,
@@ -783,7 +784,7 @@ fn live_drawer(selected: State<usize>, open: State<SideSheetController>, scroll:
         .modifier(
             Modifier::new()
                 .fill_max_size()
-                .focus_group()
+                .focus_group(None)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Navigation),
                     label: Some(I18N.text("ui-mail-destinations")),

@@ -12,13 +12,14 @@ use tessera_components::{
         MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition, menu_group, menu_item,
         menu_provider,
     },
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     split_buttons::{SplitButtonDefaults, SplitButtonSize},
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _, remember,
     tessera, use_context,

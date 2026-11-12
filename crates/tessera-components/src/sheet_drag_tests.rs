@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier, PointerChange,
     PressKeyEventType, PxPosition, ScrollEventSource, State,
@@ -17,7 +18,6 @@ use tessera_ui::{
 
 use crate::{
     bottom_sheet::{BottomSheetController, bottom_sheet_provider},
-    modifier::ModifierExt as _,
     nested_scroll::{NestedScrollConnection, ScrollDelta, ScrollVelocity},
     side_sheet::{
         SideSheetController, SideSheetPosition, modal_side_sheet_provider,

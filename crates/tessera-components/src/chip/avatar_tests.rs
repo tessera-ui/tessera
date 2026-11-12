@@ -4,6 +4,7 @@
 //!
 //! Preserve contact artwork when input chips change state or density.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, State,
     headless::{HeadlessConfig, HeadlessRenderer},
@@ -14,7 +15,7 @@ use crate::{
     column::column,
     image::ImageData,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     painter::Painter,
     theme::{MaterialTheme, material_theme},
 };

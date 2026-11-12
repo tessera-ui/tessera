@@ -5,11 +5,11 @@ use tessera_components::{
         FloatingActionButtonMenuItem, FloatingActionButtonMenuController, floating_action_button_menu,
     },
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Callback, Dp, Modifier, RenderSlot, accesskit::Role, remember, tessera, use_context,
 };

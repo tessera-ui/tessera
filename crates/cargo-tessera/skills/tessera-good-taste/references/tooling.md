@@ -23,6 +23,8 @@ suggestions, runs `cargo fix`, and rechecks the result. Review `MaybeIncorrect`
 suggestions manually. Cargo's `--allow-dirty`, `--allow-staged`, and `--allow-no-vcs`
 flags remain available.
 Select individual lints by name, such as `-A tessera::redundant_render_slot`.
+The `tessera::named_modifier_ext_import` lint suggests `use ...::ModifierExt as _;`
+for modifier extension traits imported only for their methods.
 Use `#[tessera_ui::lint(allow(tessera::redundant_render_slot))]` on an item or
 inline module tree for source overrides. Use `allow`, `warn`, `deny`, or `forbid`;
 nested settings override inherited levels unless forbidden.

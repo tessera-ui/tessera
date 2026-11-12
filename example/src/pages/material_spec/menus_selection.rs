@@ -7,11 +7,12 @@ use tessera_components::{
     icon::icon,
     material_icons::filled,
     menus::{MenuItemSelectionMode, menu_group, menu_item},
-    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     text_field::text_field,
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, accesskit::Role, modifier::FocusModifierExt as _,
     remember, scaled_box, tessera, use_context,

@@ -22,6 +22,7 @@ md3-diagnostics = []
 
 [dependencies]
 tessera-components.workspace = true
+tessera-foundation.workspace = true
 tessera-i18n.workspace = true
 tessera-platform.workspace = true
 tessera-shard.workspace = true

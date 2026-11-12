@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use tessera_components::{
-    boxed::boxed, column::column, dialog::DialogController, modifier::ModifierExt as _,
-    theme::material_theme,
+    boxed::boxed, column::column, dialog::DialogController, theme::material_theme,
 };
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, Role, TreeId},
@@ -21,7 +21,7 @@ fn fixture() {
 
 #[tessera]
 fn modal_example_fixture(
-    output: tessera_ui::testing::TestProbe<Option<(super::Sample, State<bool>)>>,
+    output: tessera_ui::testing::TestProbe<Option<(super::Sample, State<DialogController>)>>,
 ) {
     let source = super::Sample {
         single: remember(|| super::single(super::DatePickerDisplayMode::Input)),
@@ -799,7 +799,7 @@ fn date_reference_guidelines_and_color_pairs_mount_native_views() {
 
 #[derive(Clone)]
 enum Scene {
-    Modal(tessera_ui::testing::TestProbe<Option<(super::Sample, State<bool>)>>),
+    Modal(tessera_ui::testing::TestProbe<Option<(super::Sample, State<DialogController>)>>),
     Guideline(bool),
     Color(super::Figure, bool, bool),
 }

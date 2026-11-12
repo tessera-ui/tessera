@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     CallbackWith, Color, CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier,
     PointerChange, PressKeyEventType, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent,

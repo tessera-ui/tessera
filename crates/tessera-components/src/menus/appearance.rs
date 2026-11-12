@@ -4,12 +4,12 @@
 //!
 //! Organize contextual actions into distinct groups with optional selection.
 
+use tessera_foundation::modifier::{ModifierExt as _, Padding};
 use tessera_ui::{
     Color, Dp, FocusScopeNode, Modifier, RenderSlot,
     accesskit::Role,
     current_frame_nanos,
-    layout::Stack,
-    layout::layout,
+    layout::{Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera, use_context,
 };
@@ -17,7 +17,6 @@ use tessera_ui::{
 use crate::{
     alignment::CrossAxisAlignment,
     column::column,
-    modifier::{ModifierExt as _, Padding},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
     theme::{MaterialColorScheme, MaterialTheme},
@@ -217,7 +216,7 @@ pub fn menu_group(
             }
         });
     }
-    let mut modifier = modifier.focus_scope_with(focus_scope);
+    let mut modifier = modifier.focus_scope(Some(focus_scope));
     if shape.is_none() {
         modifier = modifier.push_pointer_preview_input(MenuShapeHover {
             motion,

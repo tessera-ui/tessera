@@ -7,7 +7,7 @@ use tessera_components::{
     icon_button::icon_button,
     list_item::list_item,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     search::{SearchBarColors, SearchBarController, docked_search_bar, search_bar},
     shape_def::{RoundedCorner, Shape},
@@ -15,6 +15,7 @@ use tessera_components::{
     text::text,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };

@@ -5,16 +5,18 @@ use tessera_components::{
     divider::horizontal_divider,
     icon::icon,
     material_icons::{filled, outlined},
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     navigation_bar::{navigation_bar, navigation_bar_item},
     navigation_drawer::{NavigationDrawerStyle, navigation_drawer, navigation_drawer_item},
     row::row,
     scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
+    side_sheet::SideSheetController,
     spacer::spacer,
     text::text,
     theme::{MaterialTheme, TextStyle},
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _, remember,
     tessera, use_context,
@@ -1089,7 +1091,7 @@ fn labeling_figure(photos: bool) {
 }
 
 #[tessera]
-pub(super) fn usage(open: State<bool>, selected: State<usize>) {
+pub(super) fn usage(open: State<SideSheetController>, selected: State<usize>) {
     guide_split()
         .start(|| {
             prose("ui-navigation-drawers-provide-access-to-destinations-and-app-functionality-such-as-switching");
@@ -1351,7 +1353,7 @@ pub(super) fn responsive_layout() {
 }
 
 #[tessera]
-pub(super) fn behavior(open: State<bool>, selected: State<usize>) {
+pub(super) fn behavior(open: State<SideSheetController>, selected: State<usize>) {
     guide_split()
         .start(|| {
             minor_heading("ui-scrolling");
@@ -1394,7 +1396,7 @@ pub(super) fn behavior(open: State<bool>, selected: State<usize>) {
 }
 
 #[tessera]
-pub(super) fn use_cases(open: State<bool>, selected: State<usize>) {
+pub(super) fn use_cases(open: State<SideSheetController>, selected: State<usize>) {
     prose("ui-users-should-be-able-to");
     gap(Dp(12.0));
     bullets(vec![
@@ -1440,7 +1442,7 @@ pub(super) fn interaction() {
 }
 
 #[tessera]
-pub(super) fn initial_focus(open: State<bool>, selected: State<usize>) {
+pub(super) fn initial_focus(open: State<SideSheetController>, selected: State<usize>) {
     guide_split()
         .start(|| {
             prose("ui-initial-focus-lands-directly-on-the-first-navigation-item-since-that-is-the-first-interact");
@@ -1453,7 +1455,7 @@ pub(super) fn initial_focus(open: State<bool>, selected: State<usize>) {
 }
 
 #[tessera]
-pub(super) fn closing(open: State<bool>, selected: State<usize>) {
+pub(super) fn closing(open: State<SideSheetController>, selected: State<usize>) {
     guide_split()
         .start(|| {
             prose("ui-the-modal-navigation-drawer-can-be-dismissed-by-selecting-the-scrim-that-covers-the-rest-o");

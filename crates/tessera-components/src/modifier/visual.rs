@@ -1,8 +1,8 @@
-//! Visual modifiers for opacity, clipping, backgrounds, and borders.
+//! Visual modifiers for backgrounds and borders.
 //!
 //! ## Usage
 //!
-//! Apply basic visual effects like alpha, clipping, and shape borders.
+//! Apply shape backgrounds and borders.
 
 use tessera_ui::{Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, PxSize};
 
@@ -41,57 +41,6 @@ fn shape_border_command(color: Color, width: Dp, shape: Shape, size: PxSize) -> 
             color,
             border_width,
         },
-    }
-}
-
-#[derive(Clone, Copy)]
-pub(crate) struct AlphaModifierNode {
-    pub alpha: f32,
-}
-
-impl DrawModifierNode for AlphaModifierNode {
-    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
-        {
-            let mut metadata = ctx.render_input.metadata_mut();
-            metadata.multiply_opacity(self.alpha);
-        }
-        content.draw(ctx.render_input);
-    }
-}
-
-#[derive(Clone, Copy, Default)]
-pub(crate) struct ClipModifierNode;
-
-#[derive(Clone, Copy)]
-pub(crate) struct ShapeClipModifierNode {
-    pub shape: Shape,
-}
-
-impl DrawModifierNode for ShapeClipModifierNode {
-    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
-        let mut metadata = ctx.render_input.metadata_mut();
-        let size = metadata
-            .computed_data()
-            .expect("shape clip must have a measured size");
-        let shape = match self.shape.resolve_for_size(size.into()) {
-            ResolvedShape::Rounded {
-                corner_radii,
-                corner_g2,
-            } => tessera_ui::render::ClipShape::RoundedRectangle {
-                radii: corner_radii,
-                exponents: corner_g2,
-            },
-            ResolvedShape::Ellipse => tessera_ui::render::ClipShape::Ellipse,
-        };
-        metadata.set_clip_shape(shape);
-        content.draw(ctx.render_input);
-    }
-}
-
-impl DrawModifierNode for ClipModifierNode {
-    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
-        ctx.render_input.metadata_mut().set_clips_children(true);
-        content.draw(ctx.render_input);
     }
 }
 
@@ -181,6 +130,7 @@ impl DrawModifierNode for BorderModifierNode {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
+    use tessera_foundation::modifier::ModifierExt as _;
     use tessera_ui::{
         Modifier, State,
         headless::{HeadlessConfig, HeadlessRenderer},

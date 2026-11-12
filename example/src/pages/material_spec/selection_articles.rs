@@ -9,10 +9,11 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     column::column,
-    modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     text::text,
     theme::{MaterialTheme, TextStyle},
 };
+use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, tessera, use_context};
 
 use crate::res::I18N;
@@ -49,7 +50,7 @@ enum Figure {
 
 fn label_modifier(on_click: Callback) -> Modifier {
     Modifier::new()
-        .clickable_with(ClickableArgs {
+        .clickable(ClickableArgs {
             on_click,
             ..Default::default()
         })

@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, PxPosition, State,
     headless::{HeadlessConfig, HeadlessRenderer},
@@ -7,7 +8,7 @@ use tessera_ui::{
 
 use crate::{
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     theme::{MaterialColorScheme, MaterialTheme, material_theme},
 };

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tessera_components::{
     boxed::boxed,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     navigation_rail::{navigation_rail, navigation_rail_item},
     shape_def::Shape,
     side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
@@ -10,6 +10,7 @@ use tessera_components::{
     surface::surface,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Insets, Modifier, WindowInsetsController,
     accesskit::{Node, NodeId, Rect, Role},

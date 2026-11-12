@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, Px, PxPosition, State,
     headless::{HeadlessConfig, HeadlessRenderer},
@@ -8,7 +9,7 @@ use tessera_ui::{
 use crate::{
     boxed::boxed,
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs, with_pointer_input},
+    modifier::{ModifierExt as _, with_pointer_input},
     row::row,
 };
 

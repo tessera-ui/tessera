@@ -10,7 +10,7 @@ use tessera_components::{
     image::image,
     list_item::list_item,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -18,6 +18,7 @@ use tessera_components::{
     text_field::text_field,
     theme::MaterialTheme,
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
@@ -906,7 +907,7 @@ fn token_folder(#[prop(into)] name: String, index: usize, depth: usize, open: St
         } else {
             "ui-collapsed"
         }))
-        .content_padding(tessera_components::modifier::Padding::new(
+        .content_padding(tessera_foundation::modifier::Padding::new(
             Dp(16.0 + depth as f64 * 24.0),
             Dp(8.0),
             Dp(16.0),

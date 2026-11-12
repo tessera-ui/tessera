@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     State,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
@@ -8,7 +9,7 @@ use tessera_ui::{
     testing::text_matches,
 };
 
-use crate::{modifier::ModifierExt as _, theme::material_theme};
+use crate::theme::material_theme;
 
 use super::{
     CalendarDate, DatePickerController, DockedDatePickerView, Weekday, YearMonth, docked_date_picker,

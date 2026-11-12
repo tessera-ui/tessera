@@ -5,6 +5,7 @@
 //! Use in settings, forms, or toolbars to control a boolean state.
 use std::time::Duration;
 
+use tessera_foundation::modifier::{InteractionState, ModifierExt as _, ToggleableArgs};
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition,
@@ -17,7 +18,7 @@ use tessera_ui::{
 use crate::{
     animation,
     fluid_glass::{GlassBorder, fluid_glass},
-    modifier::{InteractionState, ModifierExt as _, ToggleableArgs},
+    modifier::ModifierExt as _,
     shape_def::Shape,
 };
 
@@ -183,7 +184,7 @@ pub fn glass_switch(
             interaction_state,
             ..Default::default()
         };
-        modifier = modifier.toggleable_with(toggle_args);
+        modifier = modifier.toggleable(toggle_args);
     }
 
     let width_px = width.to_px();

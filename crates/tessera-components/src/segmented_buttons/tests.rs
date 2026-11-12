@@ -4,6 +4,7 @@
 //!
 //! Keep connected choices accessible and usable as state and bounds change.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
@@ -16,7 +17,6 @@ use tessera_ui::{
 use crate::{
     button::button,
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
     text::text,
     theme::{MaterialTheme, material_theme},
 };
@@ -86,7 +86,7 @@ fn fixture(observed: TestProbe<Option<State<Settings>>>) {
                                 .selection_mode(mode)
                                 .label(label)
                                 .min_height(Dp(settings.get().height))
-                                .content_padding(crate::modifier::Padding::symmetric(
+                                .content_padding(tessera_foundation::modifier::Padding::symmetric(
                                     Dp(12.0),
                                     Dp(((settings.get().height - 20.0) * 0.5).clamp(0.0, 8.0)),
                                 ))

@@ -9,11 +9,12 @@ use tessera_components::{
     boxed::boxed,
     checkbox::checkbox,
     column::column,
-    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, LayoutCoordinates, Modifier, accesskit::Role, modifier::FocusModifierExt as _, remember,
     scaled_box, tessera, use_context,

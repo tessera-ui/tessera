@@ -3,7 +3,10 @@
 //! ## Usage
 //!
 //! Use to allow users to select a value from a continuous range.
-use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
+use tessera_foundation::{
+    gesture::{DragRecognizer, TapRecognizer},
+    modifier::{InteractionState, InteractionVisualState},
+};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, CallbackWith, Color,
     ComputedData, Constraint, Dp, FocusProperties, FocusRequester, LayoutResult, MeasurementError,
@@ -17,7 +20,6 @@ use tessera_ui::{
 use crate::{
     icon::icon,
     image_vector::TintMode,
-    modifier::{InteractionState, InteractionVisualState},
     painter::Painter,
     res::I18N,
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
@@ -628,7 +630,7 @@ impl SliderController {
 
     /// Clears focus from the slider if it is currently focused.
     pub fn clear_focus(&mut self) {
-        self.focus.unfocus();
+        self.focus.clear_focus();
     }
 
     /// Returns `true` if this slider currently holds focus.
@@ -1245,7 +1247,7 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::modifier::ModifierExt as _;
+/// use tessera_foundation::modifier::ModifierExt as _;
 /// use tessera_components::slider::slider;
 /// use tessera_ui::{Dp, LayoutResult, Modifier};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
@@ -1726,7 +1728,7 @@ fn measure_centered_slider(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::modifier::ModifierExt as _;
+/// use tessera_foundation::modifier::ModifierExt as _;
 /// use tessera_components::slider::centered_slider;
 /// use tessera_ui::{Dp, Modifier, remember};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
@@ -2205,7 +2207,7 @@ fn measure_range_slider(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::modifier::ModifierExt as _;
+/// use tessera_foundation::modifier::ModifierExt as _;
 /// use tessera_components::slider::{SliderOrientation, range_slider};
 /// use tessera_ui::{Dp, Modifier, remember};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
@@ -2538,12 +2540,13 @@ fn range_slider_content(
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::ModifierExt as _;
     use tessera_ui::{
         headless::{HeadlessConfig, HeadlessRenderer},
         testing::{layout_test, pump_layout_test_session, start_layout_test_session},
     };
 
-    use crate::{column::column, modifier::ModifierExt as _, theme::material_theme};
+    use crate::{column::column, theme::material_theme};
 
     use super::*;
 

@@ -1,3 +1,4 @@
+use tessera_foundation::modifier::{ModifierExt as _, Padding};
 use tessera_ui::{
     Color, Dp, Modifier, State,
     accesskit::{Rect, Role},
@@ -7,7 +8,6 @@ use tessera_ui::{
 
 use crate::{
     boxed::boxed,
-    modifier::{ModifierExt as _, Padding},
     surface::{SurfaceStyle, surface},
     theme::material_theme,
 };

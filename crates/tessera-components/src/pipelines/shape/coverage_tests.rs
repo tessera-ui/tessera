@@ -4,6 +4,7 @@
 //!
 //! Verify clipped and scaled surfaces across repeated draw batches.
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier, State,
     headless::{HeadlessConfig, HeadlessRenderer},

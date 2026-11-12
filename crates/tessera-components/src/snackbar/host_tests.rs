@@ -7,6 +7,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
@@ -14,9 +15,7 @@ use tessera_ui::{
     remember, tessera,
 };
 
-use crate::{
-    button::button, column::column, modifier::ModifierExt as _, text::text, theme::material_theme,
-};
+use crate::{button::button, column::column, text::text, theme::material_theme};
 
 use super::{SnackbarDuration, SnackbarHostController, SnackbarRequest, SnackbarResult, snackbar_host};
 

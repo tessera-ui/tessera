@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FloatRect, LayoutCoordinates, MOUSE_POINTER_ID, Modifier, PressKeyEventType, Px,
     PxPosition, State,
@@ -42,7 +43,7 @@ impl tessera_ui::PlacementModifierNode for FractionalOrigin {
 }
 
 fn observe(name: &'static str) -> Modifier {
-    Modifier::new().semantics(crate::modifier::SemanticsArgs {
+    Modifier::new().semantics(tessera_foundation::modifier::SemanticsArgs {
         test_tag: Some(name.into()),
         merge_descendants: true,
         ..Default::default()

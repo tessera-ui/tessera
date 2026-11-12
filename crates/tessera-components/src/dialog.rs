@@ -4,6 +4,7 @@
 //!
 //! Show blocking alerts, confirmations, wizards and forms.
 
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
@@ -26,7 +27,7 @@ use crate::{
     icon_button::{IconButtonColorStyle, icon_button},
     material_icons::filled,
     modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
+    modifier::{ModifierExt as _, with_keyboard_input},
     overlay_semantics::overlay_background,
     res::I18N,
     scrollable::ScrollableController,
@@ -211,7 +212,7 @@ fn dialog_content_wrapper(
         .unwrap_or_default();
     let modifier = with_keyboard_input(
         Modifier::new()
-            .focus_scope_with(focus_scope)
+            .focus_scope(Some(focus_scope))
             .focus_properties(FocusProperties::new().skip_traversal(true))
             .focus_traversal_policy(
                 FocusTraversalPolicy::linear()

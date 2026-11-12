@@ -3,14 +3,16 @@
 //! ## Usage
 //!
 //! Use for visually distinctive actions in layered or modern UIs.
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, layout::Stack, layout::layout, tessera,
+    Callback, Color, Dp, Modifier, RenderSlot,
+    layout::{Stack, layout},
+    tessera,
 };
 
 use crate::{
     button::ButtonDefaults,
     fluid_glass::{GlassAppearance, GlassBorder, GlassMaterial, fluid_glass},
-    modifier::ModifierExt as _,
     shape_def::Shape,
 };
 

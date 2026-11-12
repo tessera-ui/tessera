@@ -4,6 +4,7 @@
 //!
 //! Pair a primary action with a related secondary action or menu.
 
+use tessera_foundation::modifier::{InteractionState, Padding};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
     Modifier, Px, PxPosition, RenderSlot, State, layout::MeasureScope, tessera, use_context,
@@ -11,7 +12,6 @@ use tessera_ui::{
 
 use crate::{
     button::ButtonDefaults,
-    modifier::{InteractionState, Padding},
     shape_def::{RoundedCorner, Shape},
     theme::{MaterialColorScheme, MaterialTheme, TextStyle},
 };
@@ -770,10 +770,10 @@ mod height_tests;
 
 #[cfg(test)]
 mod tests {
+    use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{Modifier, tessera};
 
     use crate::{
-        modifier::{ModifierExt as _, SemanticsArgs},
         split_buttons::{
             SplitButtonSize, split_button_layout, split_leading_button, split_trailing_button,
         },

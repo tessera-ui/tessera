@@ -20,7 +20,7 @@ use tessera_components::{
     flow_row::flow_row,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     surface::surface,
@@ -29,6 +29,7 @@ use tessera_components::{
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role, focus,
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
@@ -2905,7 +2906,7 @@ fn modal_configuration(number: usize, initial_view: DatePickerView, input: bool)
     let status = remember(String::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
-        .modifier(Modifier::new().width(Dp(360.0)).focus_restorer(None))
+        .modifier(Modifier::new().width(Dp(360.0)).focus_restorer(None, None))
         .children(move || {
             configuration_number(number);
             if open.with(DialogController::is_open) {
@@ -3020,7 +3021,7 @@ fn range_configuration(number: usize, input: bool) {
     let status = remember(String::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
-        .modifier(Modifier::new().width(Dp(360.0)).focus_restorer(None))
+        .modifier(Modifier::new().width(Dp(360.0)).focus_restorer(None, None))
         .children(move || {
             configuration_number(number);
             if open.with(DialogController::is_open) {
@@ -3178,7 +3179,7 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
         .modifier(
             Modifier::new()
                 .width(Dp(360.0))
-                .focus_restorer(None)
+                .focus_restorer(None, None)
                 .default_min_size(Dp::ZERO, Dp(606.0)),
         )
         .children(move || {
