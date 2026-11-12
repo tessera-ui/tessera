@@ -12,43 +12,69 @@ lifetime. Remembered values may contain `!Send` and `!Sync` data.
 
 ## Models
 
-A model groups the states of a screen or feature. Implement `ModelInit` and
-create its states with `State::new` in `init`:
+A model holds the data and operations of a screen or feature. Implement
+`ModelInit`; fields the UI reads are `State` handles created with `State::new`
+in `init`, and other fields are ordinary data changed by the model's methods:
 
 ```rust
-use tessera_ui::{Model, ModelInit, State, Task, tessera};
+use tessera_ui::{Dispatcher, Model, ModelInit, State, Task, launch_once, on, spawn, tessera};
 
 struct SearchModel {
-    query: State<String>,
     results: State<Vec<String>>,
-    request: State<Option<Task>>,
+    cache: HashMap<String, Vec<String>>,
+    request: Option<Task>,
 }
 
 impl ModelInit for SearchModel {
     fn init() -> Self {
         Self {
-            query: State::new(String::new()),
             results: State::new(Vec::new()),
-            request: State::new(None),
+            cache: HashMap::new(),
+            request: None,
         }
+    }
+}
+
+impl SearchModel {
+    // Replacing the stored task cancels an outdated request.
+    fn search(&mut self, query: String) {
+        if let Some(hit) = self.cache.get(&query) {
+            self.results.set(hit.clone());
+            return;
+        }
+        let results = self.results;
+        self.request = Some(spawn(Dispatcher::Io, async move {
+            results.set(fetch(query).await);
+        }));
+    }
+
+    // Asynchronous operations take the handle and access the value between
+    // awaits.
+    async fn refresh(model: Model<Self>) {
+        let found = on(Dispatcher::Io, fetch_all()).await;
+        model.with_mut(|model| model.results.set(found));
     }
 }
 
 #[tessera]
 fn search_panel(model: Model<SearchModel>) {
-    let query = model.query.get();
+    let results = model.with(|model| model.results.get());
+    launch_once(SearchModel::refresh(model));
+    // In a callback: model.with_mut(|model| model.search(query));
 }
 ```
 
-A model value does not change after `init`. Put data the UI reads in `State`
-fields so readers are invalidated; other mutable data, such as caches or
-request bookkeeping, can use `Cell` or `RefCell`. Models stay on the UI thread;
-move the `State` handles a background task needs instead of the model.
+`Model<T>` is a copyable handle. `with` and `with_mut` are not tracked; only
+reads of `State` fields invalidate components. Keep ordinary fields private and
+change them through methods. Like `State`, the handle works on every thread and
+is `Send` and `Sync` when `T: Send`, so background tasks can call model methods
+directly. Calling `with_mut` on a model inside its own `with` or `with_mut`
+panics.
 
 A `Model<T>` component parameter is injected:
 
-- Passing an existing model with the generated setter shares it; the creating
-  owner keeps it alive.
+- Passing an existing model with the generated setter shares it; its owner
+  keeps it alive.
 - Otherwise `ModelInit::init` creates it. The nearest `ModelStore` provided
   through its `ModelStoreScope` context owns it and returns the same instance to
   every component asking for `Model<T>`. Without a store, the component owns its
@@ -61,7 +87,7 @@ them. Route destinations do not carry models.
 Ownership follows how a state was created, not where it is stored. `State::new`
 belongs to the model being initialized and is released when the model closes;
 `cargo tessera check` rejects it outside `ModelInit::init` and closures passed
-directly to `Model::new_with` or `ModelStore::model` (T0006). A `remember` state
+directly to `ModelStore::model` (T0006). A `remember` state
 stored in a model keeps its composition-slot lifetime; `cargo tessera check`
 warns about this pattern.
 
@@ -81,7 +107,7 @@ it must not block on a thread that is accessing its states.
 
 A `Task` is a running future that is cancelled when dropped; `Task::detach`
 lets it finish on its own. Keep the task where its lifetime belongs: in a model
-state, a local variable, or the composition through `launch`.
+field, a local variable, or the composition through `launch`.
 
 `spawn(dispatcher, future)` starts a `Send` future:
 
@@ -99,25 +125,11 @@ constant key. These futures may capture UI-thread-local values.
 
 ```rust
 #[tessera]
-fn search_results(model: Model<SearchModel>) {
-    let query = model.query.get();
-    let results = model.results;
+fn search_results(query: String, results: State<Vec<String>>) {
     launch(query.clone(), async move {
-        let found = on(Dispatcher::Io, search(query)).await;
-        results.set(found);
+        results.set(on(Dispatcher::Io, search(query)).await);
     });
 }
-```
-
-Replacing a task stored in a model cancels the previous one, which fits
-requests where only the latest result matters:
-
-```rust
-let results = model.results;
-let task = spawn(Dispatcher::Io, async move {
-    results.set(search(query).await);
-});
-model.request.set(Some(task));
 ```
 
 Cancellation stops a future at its next suspension point; it cannot interrupt

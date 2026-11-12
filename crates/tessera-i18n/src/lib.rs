@@ -11,7 +11,7 @@ use std::{
 };
 
 use fluent_bundle::{FluentArgs, FluentResource, concurrent::FluentBundle};
-use tessera_ui::{EntryRegistry, Model, State, TesseraPackage, local_runtime_resource};
+use tessera_ui::{EntryRegistry, ModelStore, State, TesseraPackage, local_runtime_resource};
 
 pub use fluent_bundle::FluentValue;
 pub use fluent_templates::{self, LanguageIdentifier, Loader, langid};
@@ -215,18 +215,25 @@ struct Localization {
 }
 
 #[derive(Default)]
-struct LocalizationModel(std::cell::OnceCell<Model<State<Localization>>>);
+// The store owns the localization state for the session.
+struct LocalizationModel(std::cell::OnceCell<(ModelStore, State<Localization>)>);
 
 impl TesseraPackage for Catalog {
     fn register(self, _registry: &mut EntryRegistry) {
-        let model = Model::new_with(|| {
-            State::new(Localization {
-                locale: self.default_locale.clone(),
-                catalog: self,
-            })
-        });
+        let localization = local_runtime_resource::<LocalizationModel>();
         // The first registered catalog stays in effect for the session.
-        let _ = local_runtime_resource::<LocalizationModel>().0.set(model);
+        if localization.0.get().is_none() {
+            let store = ModelStore::new();
+            let state = store
+                .model(|| {
+                    State::new(Localization {
+                        locale: self.default_locale.clone(),
+                        catalog: self,
+                    })
+                })
+                .with(|state| *state);
+            let _ = localization.0.set((store, state));
+        }
     }
 }
 
@@ -247,7 +254,7 @@ impl I18n {
         local_runtime_resource::<LocalizationModel>()
             .0
             .get()
-            .map(|model| I18n(**model))
+            .map(|(_, state)| I18n(*state))
     }
 
     /// Returns the requested locale, which may use catalog fallback.

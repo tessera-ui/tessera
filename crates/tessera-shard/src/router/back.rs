@@ -195,7 +195,7 @@ mod tests {
         observed: Option<TestProbe<Vec<(u8, usize)>>>,
     ) {
         if let (Some(label), Some(observed)) = (label, observed) {
-            observed.with_mut(|pages| pages.push((label, model.value.get())));
+            observed.with_mut(|pages| pages.push((label, model.with(|model| model.value.get()))));
         }
         layout(Stack).child(|| {});
     }
@@ -219,8 +219,7 @@ mod tests {
                     .route_models(route)
                     .expect("route exists")
                     .model(<PreviewModel as tessera_ui::ModelInit>::init)
-                    .value
-                    .set(value);
+                    .with(|model| model.value.set(value));
             }
             router
         });

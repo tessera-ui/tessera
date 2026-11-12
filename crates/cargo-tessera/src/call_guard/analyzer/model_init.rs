@@ -5,13 +5,9 @@ use ra_ap_syntax::{
     ast::{self, HasName},
 };
 
-use super::{CallAnalyzer, Diagnostic, ErrorCode, lints::MODEL_PATHS};
+use super::{CallAnalyzer, Diagnostic, ErrorCode, lints::MODEL_STORE_PATHS};
 
 const STATE_PATHS: &[&str] = &["tessera_ui::runtime::State", "tessera_ui::State"];
-const MODEL_STORE_PATHS: &[&str] = &[
-    "tessera_ui::runtime::model::ModelStore",
-    "tessera_ui::ModelStore",
-];
 const MODEL_INIT_PATHS: &[&str] = &[
     "tessera_ui::runtime::model::ModelInit",
     "tessera_ui::ModelInit",
@@ -73,11 +69,6 @@ impl CallAnalyzer<'_> {
         else {
             return false;
         };
-        if let Some(call) = ast::CallExpr::cast(owner.clone()) {
-            return self
-                .call_function(&call)
-                .is_some_and(|function| self.is_method_of(function, "new_with", MODEL_PATHS));
-        }
         let Some(call) = ast::MethodCallExpr::cast(owner) else {
             return false;
         };

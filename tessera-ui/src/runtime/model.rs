@@ -8,7 +8,6 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     collections::HashMap,
-    ops::Deref,
     rc::{Rc, Weak},
     sync::{
         Arc,
@@ -37,6 +36,7 @@ impl OwnerLease {
         }
     }
 
+    #[cfg(test)]
     fn is_alive(&self) -> bool {
         !self.closed.load(Ordering::Acquire) && self.dispatcher.is_alive()
     }
@@ -136,89 +136,91 @@ pub trait ModelInit: 'static {
     fn init() -> Self;
 }
 
-/// A shared handle to a model.
+/// A copyable handle to a model value.
 ///
 /// Declare a `Model<T>` component parameter to receive one. An explicit argument
 /// shares an existing model. Otherwise the nearest provided [`ModelStore`] owns
 /// a model created by [`ModelInit::init`], or the component owns it until it
-/// leaves the composition. States obtained from `remember` keep their
-/// composition-slot lifetime even when stored in a model.
+/// leaves the composition.
+///
+/// Access through [`Model::with`] and [`Model::with_mut`] is not tracked: put
+/// data the UI reads in `State` fields, which invalidate their readers, and
+/// keep other data in ordinary fields changed by `&mut self` methods. Like
+/// [`State`], the handle works on every thread and is `Send` and `Sync` when
+/// `T: Send`. Asynchronous model operations take the handle, for example
+/// `async fn load(model: Model<Self>)`, and access the value between awaits.
 ///
 /// ```
-/// use tessera_ui::{Model, ModelInit, RuntimeSession, State};
+/// use tessera_ui::{ModelInit, ModelStore, RuntimeSession, State};
 ///
 /// struct Counter {
 ///     count: State<u32>,
+///     clicks: u32,
 /// }
 ///
 /// impl ModelInit for Counter {
 ///     fn init() -> Self {
-///         Self { count: State::new(0) }
+///         Self {
+///             count: State::new(0),
+///             clicks: 0,
+///         }
+///     }
+/// }
+///
+/// impl Counter {
+///     fn click(&mut self) {
+///         self.clicks += 1;
+///         self.count.set(self.clicks);
 ///     }
 /// }
 ///
 /// RuntimeSession::new().run(|| {
-///     let model = Model::<Counter>::new();
-///     model.count.set(1);
-///     assert_eq!(model.count.get(), 1);
+///     let store = ModelStore::new();
+///     let model = store.model(Counter::init);
+///     model.with_mut(Counter::click);
+///     assert_eq!(model.with(|counter| counter.count.get()), 1);
 /// });
 /// ```
-pub struct Model<T>(Rc<ModelInner<T>>);
-
-// The value drops before the lease releases the states it may still use.
-struct ModelInner<T> {
-    value: T,
-    lease: OwnerLease,
-}
+pub struct Model<T: 'static>(State<T>);
 
 impl<T> Clone for Model<T> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        *self
     }
 }
 
+impl<T> Copy for Model<T> {}
+
 impl<T> PartialEq for Model<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
+        self.0 == other.0
     }
 }
 
 impl<T> Eq for Model<T> {}
 
-impl<T> Deref for Model<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.0.value
-    }
-}
-
 impl<T: 'static> Model<T> {
-    /// Creates a model with [`ModelInit::init`].
-    pub fn new() -> Self
-    where
-        T: ModelInit,
-    {
-        Self::new_with(T::init)
+    fn create(owner: &OwnerLease, init: impl FnOnce() -> T) -> Self {
+        let _guard = ConstructionGuard::enter(owner.id);
+        let value = init();
+        Self(create_model_state(value))
     }
 
-    /// Creates a model by running `init` as the model's owner.
-    pub fn new_with(init: impl FnOnce() -> T) -> Self {
-        let lease = OwnerLease::new();
-        let value = {
-            let _guard = ConstructionGuard::enter(lease.id);
-            init()
-        };
-        Self(Rc::new(ModelInner { value, lease }))
+    /// Runs `read` with a shared reference to the model value.
+    #[track_caller]
+    pub fn with<R>(&self, read: impl FnOnce(&T) -> R) -> R {
+        self.0.read_untracked(read)
     }
 
-    /// Returns whether the model still accepts state updates and task results.
+    /// Runs `update` with a mutable reference to the model value.
+    #[track_caller]
+    pub fn with_mut<R>(&self, update: impl FnOnce(&mut T) -> R) -> R {
+        self.0.write_untracked(update)
+    }
+
+    /// Returns whether the model is still open.
     pub fn is_alive(&self) -> bool {
-        self.0.lease.is_alive()
-    }
-
-    pub(crate) fn close(&self) {
-        self.0.lease.close();
+        self.0.is_alive()
     }
 }
 
@@ -235,22 +237,12 @@ pub struct ModelStoreScope(u64);
 
 struct StoreInner {
     scope: ModelStoreScope,
-    models: RefCell<HashMap<TypeId, Box<dyn StoredModel>>>,
+    models: RefCell<HashMap<TypeId, StoredModel>>,
 }
 
-trait StoredModel {
-    fn close(&self);
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl<T: 'static> StoredModel for Model<T> {
-    fn close(&self) {
-        Model::close(self);
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+struct StoredModel {
+    model: Box<dyn Any>,
+    _owner: OwnerLease,
 }
 
 #[derive(Default)]
@@ -295,12 +287,19 @@ impl StoreInner {
             .models
             .borrow()
             .get(&TypeId::of::<T>())
-            .and_then(|model| model.as_any().downcast_ref::<Model<T>>().cloned());
+            .and_then(|stored| stored.model.downcast_ref::<Model<T>>().copied())
+            .filter(Model::is_alive);
         existing.unwrap_or_else(|| {
-            let model = Model::new_with(init);
-            self.models
-                .borrow_mut()
-                .insert(TypeId::of::<T>(), Box::new(model.clone()));
+            let owner = OwnerLease::new();
+            let model = Model::create(&owner, init);
+            let previous = self.models.borrow_mut().insert(
+                TypeId::of::<T>(),
+                StoredModel {
+                    model: Box::new(model),
+                    _owner: owner,
+                },
+            );
+            drop(previous);
             model
         })
     }
@@ -309,9 +308,7 @@ impl StoreInner {
 impl Drop for ModelStore {
     fn drop(&mut self) {
         let models = std::mem::take(&mut *self.0.models.borrow_mut());
-        for model in models.values() {
-            model.close();
-        }
+        drop(models);
     }
 }
 
@@ -331,7 +328,7 @@ pub(crate) fn inject_model<T: ModelInit>(slot: u64) -> Model<T> {
         resolved
             .as_ref()
             .filter(|resolved| resolved.scope == scope && resolved.model.is_alive())
-            .map(|resolved| resolved.model.clone())
+            .map(|resolved| resolved.model)
     }) {
         return model;
     }
@@ -342,15 +339,18 @@ pub(crate) fn inject_model<T: ModelInit>(slot: u64) -> Model<T> {
             .get(&scope)
             .and_then(Weak::upgrade)
     });
-    let (model, owned) = match store {
-        Some(store) => (store.model(T::init), false),
-        None => (Model::new(), true),
+    let (model, owner) = match store {
+        Some(store) => (store.model(T::init), None),
+        None => {
+            let owner = OwnerLease::new();
+            (Model::create(&owner, T::init), Some(owner))
+        }
     };
     let previous = resolved.with_mut(|resolved| {
         resolved.replace(ResolvedModel {
             scope,
-            model: model.clone(),
-            owned,
+            model,
+            _owner: owner,
         })
     });
     drop(previous);
@@ -360,16 +360,8 @@ pub(crate) fn inject_model<T: ModelInit>(slot: u64) -> Model<T> {
 struct ResolvedModel<T: 'static> {
     scope: Option<ModelStoreScope>,
     model: Model<T>,
-    owned: bool,
-}
-
-impl<T: 'static> Drop for ResolvedModel<T> {
-    fn drop(&mut self) {
-        // The component owns its fallback model even if clones escaped it.
-        if self.owned {
-            self.model.close();
-        }
-    }
+    // Set when the component owns its fallback model.
+    _owner: Option<OwnerLease>,
 }
 
 fn release_slots(owner: u128) {
@@ -385,7 +377,7 @@ fn release_slots(owner: u128) {
 
 #[cfg(test)]
 mod tests {
-    use super::{Model, ModelInit};
+    use super::{ModelInit, ModelStore};
     use crate::State;
 
     struct Counter {
@@ -401,14 +393,18 @@ mod tests {
     }
 
     #[test]
-    fn states_created_during_initialization_close_with_the_model() {
+    fn states_created_during_initialization_close_with_the_store() {
         crate::RuntimeSession::new().run(|| {
-            let model = Model::<Counter>::new();
-            let other = Model::<Counter>::new();
-            model.value.set(3);
-            model.close();
-            assert!(!model.value.is_alive());
-            assert!(other.value.is_alive());
+            let store = ModelStore::new();
+            let other = ModelStore::new();
+            let model = store.model(Counter::init);
+            let value = model.with(|model| model.value);
+            let other_value = other.model(Counter::init).with(|model| model.value);
+            value.set(3);
+            drop(store);
+            assert!(!model.is_alive());
+            assert!(!value.is_alive());
+            assert!(other_value.is_alive());
         });
     }
 

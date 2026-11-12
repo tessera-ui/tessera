@@ -13,7 +13,10 @@ use super::{
     CallAnalyzer, CallKind, CallTarget, Diagnostic, TesseraRuntimeApi,
 };
 
-pub(super) const MODEL_PATHS: &[&str] = &["tessera_ui::runtime::model::Model", "tessera_ui::Model"];
+pub(super) const MODEL_STORE_PATHS: &[&str] = &[
+    "tessera_ui::runtime::model::ModelStore",
+    "tessera_ui::ModelStore",
+];
 
 impl<'db> CallAnalyzer<'db> {
     pub(super) fn redundant_shared_render_slot(
@@ -181,13 +184,14 @@ impl<'db> CallAnalyzer<'db> {
         })
     }
 
-    /// Reports `remember` or `retain` states captured by a `Model::new_with`
+    /// Reports `remember` or `retain` states captured by a `ModelStore::model`
     /// initializer: storing them in the model does not transfer ownership.
-    pub(super) fn remembered_state_in_model(&self, call: &ast::CallExpr) -> Vec<Diagnostic> {
-        if !self
-            .call_function(call)
-            .is_some_and(|function| self.is_method_of(function, "new_with", MODEL_PATHS))
-        {
+    pub(super) fn remembered_state_in_model(
+        &self,
+        call: &ast::MethodCallExpr,
+        function: ra_ap_hir::Function,
+    ) -> Vec<Diagnostic> {
+        if !self.is_method_of(function, "model", MODEL_STORE_PATHS) {
             return Vec::new();
         }
         let Some(ast::Expr::ClosureExpr(init)) =

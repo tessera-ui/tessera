@@ -29,11 +29,13 @@ impl ModelInit for DirectoryModel {
 #[shard]
 pub fn material_components_page(model: Model<DirectoryModel>, sessions: Option<AppLiveSessions>) {
     let router = use_router();
+    let (scroll, list, width, height) =
+        model.with(|model| (model.scroll, model.list, model.width, model.height));
     component_directory(
-        model.scroll,
-        model.list,
-        model.width,
-        model.height,
+        scroll,
+        list,
+        width,
+        height,
         CallbackWith::new(move |index| {
             router
                 .with_mut(|router| router.push(MaterialArticlePageDestination { index, sessions }));

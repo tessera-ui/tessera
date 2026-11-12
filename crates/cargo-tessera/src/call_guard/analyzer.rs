@@ -740,8 +740,6 @@ impl<'db> CallAnalyzer<'db> {
         color: ContextColor,
         allow_entry_point_new: bool,
     ) {
-        let diagnostics = self.remembered_state_in_model(&call);
-        self.diagnostics.extend(diagnostics);
         self.check_model_state(&call);
         let Some(target) = self.resolve_call_target(&call) else {
             return;
@@ -775,6 +773,8 @@ impl<'db> CallAnalyzer<'db> {
             .method_call_variants(&call)
             .find_map(|call| self.sema.resolve_method_call(&call));
         if let Some(function) = function {
+            let diagnostics = self.remembered_state_in_model(&call, function);
+            self.diagnostics.extend(diagnostics);
             if color == ContextColor::Plain
                 && let Some(CallTarget::Resolved { path, kind }) =
                     self.call_target_for_function(function)
@@ -2550,7 +2550,7 @@ pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
     fn remembered_states_captured_by_a_model_initializer_are_reported() {
         let diagnostics = diagnostics_for(
             r#"
-use tessera_ui::{Model, State, remember};
+use tessera_ui::{ModelStore, State, remember};
 
 struct Search {
     query: State<String>,
@@ -2562,7 +2562,7 @@ pub fn screen() {
     let query = remember(String::new);
     let unrelated = remember(|| 0u32);
     let _ = unrelated;
-    let _model = Model::new_with(move || Search {
+    let _model = ModelStore::new().model(move || Search {
         query,
         owned: State::new(0),
     });
@@ -2605,7 +2605,6 @@ fn helper() -> State<u32> {
 #[tessera_ui::tessera]
 pub fn screen(model: Model<Search>) {
     let _ = model;
-    let _inline = Model::new_with(|| State::new(3u32));
     let _stored = ModelStore::new().model(|| State::new(4u32));
     let _component = State::new(5u32);
 }

@@ -1953,6 +1953,22 @@ where
         .unwrap_or(false)
     }
 
+    #[track_caller]
+    pub(crate) fn read_untracked<R>(&self, read: impl FnOnce(&T) -> R) -> R {
+        self.in_live_session(|| self.with_untracked(read))
+    }
+
+    #[track_caller]
+    pub(crate) fn write_untracked<R>(&self, update: impl FnOnce(&mut T) -> R) -> R {
+        self.in_live_session(|| {
+            let (mut value, guard) = borrow_state::<T>(self, true);
+            // SAFETY: as in `with_mut`; this path publishes no invalidation.
+            let result = unsafe { update(value.as_mut()) };
+            guard.release();
+            result
+        })
+    }
+
     fn with_untracked<R>(&self, read: impl FnOnce(&T) -> R) -> R {
         let (value, guard) = borrow_state::<T>(self, false);
         // SAFETY: the guard reserves a shared access to this stable value and
@@ -4683,8 +4699,8 @@ mod tests {
         model_probe: crate::testing::TestProbe<Option<Model<LifetimeModel>>>,
         state_probe: crate::testing::TestProbe<Option<State<usize>>>,
     ) {
-        model_probe.set(Some(model.clone()));
-        state_probe.set(Some(model.value));
+        model_probe.set(Some(model));
+        state_probe.set(Some(model.with(|model| model.value)));
         crate::layout::layout(crate::layout::Stack);
     }
 
@@ -4763,7 +4779,11 @@ mod tests {
         scope_probe.set(Some(store.scope()));
         crate::testing::pump_layout_test_session(&mut session, 0);
         let state = state_probe.get().expect("injected model state");
-        let stored = session.run(|| store.model(<LifetimeModel as crate::ModelInit>::init).value);
+        let stored = session.run(|| {
+            store
+                .model(<LifetimeModel as crate::ModelInit>::init)
+                .with(|model| model.value)
+        });
         assert!(state == stored);
         assert!(session.run(|| state.is_alive()));
         session.run(|| drop(store));
@@ -4783,11 +4803,13 @@ mod tests {
         state.set(Rc::new(Cell::new(12)));
         assert_eq!(state.with(|value| value.get()), 12);
 
-        let owner = Model::new_with(|| State::new(Rc::new(Cell::new(3))));
-        let owned = *owner;
+        let store = crate::ModelStore::new();
+        let owned = store
+            .model(|| State::new(Rc::new(Cell::new(3))))
+            .with(|state| *state);
         owned.with(|value| value.set(8));
         assert_eq!(owned.with(|value| value.get()), 8);
-        owner.close();
+        drop(store);
         assert!(!owned.is_alive());
     }
 
