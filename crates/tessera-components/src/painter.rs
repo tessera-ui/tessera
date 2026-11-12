@@ -23,10 +23,20 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Painter {
     /// Content decoded from a source.
-    Source(Resource<Painter>),
+    Source(PainterSource),
     /// Vector content backed by decoded vector geometry.
     Vector(ImageVectorData),
     /// Raster content backed by decoded image pixels.
+    Raster(ImageData),
+}
+
+/// A painter source that is decoded on demand.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PainterSource(Resource<Decoded>);
+
+#[derive(Clone)]
+enum Decoded {
+    Vector(ImageVectorData),
     Raster(ImageData),
 }
 
@@ -46,7 +56,7 @@ macro_rules! painter_from_source {
     ($($ty:ty),* $(,)?) => {$(
         impl From<$ty> for Painter {
             fn from(source: $ty) -> Self {
-                Self::Source(Resource::load(source, decode))
+                Self::Source(PainterSource(Resource::load(source, decode)))
             }
         }
     )*};
@@ -67,8 +77,9 @@ painter_from_source!(
 impl Painter {
     pub(crate) fn resolve(self) -> Option<Self> {
         match self {
-            Self::Source(resource) => match resource.get() {
-                LoadState::Ready(painter) => Some(painter),
+            Self::Source(PainterSource(resource)) => match resource.get() {
+                LoadState::Ready(Decoded::Vector(data)) => Some(Self::Vector(data)),
+                LoadState::Ready(Decoded::Raster(data)) => Some(Self::Raster(data)),
                 LoadState::Loading | LoadState::Failed(_) => None,
             },
             painter => Some(painter),
@@ -76,12 +87,12 @@ impl Painter {
     }
 }
 
-fn decode(bytes: Arc<[u8]>) -> io::Result<Painter> {
+fn decode(bytes: Arc<[u8]>) -> io::Result<Decoded> {
     decode_vector(&bytes)
-        .map(Painter::Vector)
+        .map(Decoded::Vector)
         .or_else(|vector| {
             decode_raster(&bytes)
-                .map(Painter::Raster)
+                .map(Decoded::Raster)
                 .map_err(|raster| {
                     io::Error::other(format!("not SVG ({vector}) or raster ({raster})"))
                 })

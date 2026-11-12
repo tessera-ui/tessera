@@ -77,16 +77,10 @@ fn fixture(probe: FixtureProbes) {
     material_theme().child(move || {
         let probe = probe.clone();
         provide_context(
-            || ContentColor {
+            ContentColor {
                 current: settings.get().inherited,
             },
             move || {
-                let inherited = use_context::<ContentColor>().unwrap();
-                if inherited.get().current != settings.get().inherited {
-                    inherited.set(ContentColor {
-                        current: settings.get().inherited,
-                    });
-                }
                 boxed()
                     .modifier(
                         Modifier::new()

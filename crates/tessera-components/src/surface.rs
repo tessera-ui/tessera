@@ -1026,27 +1026,15 @@ fn surface_content(
             .child(move || {
                 let (absolute_tonal_elevation, content_color, child) = context.get();
                 provide_context(
-                    || AbsoluteTonalElevation {
+                    AbsoluteTonalElevation {
                         current: absolute_tonal_elevation,
                     },
                     || {
-                        let elevation = use_context::<AbsoluteTonalElevation>().unwrap();
-                        if elevation.with(|value| value.current) != absolute_tonal_elevation {
-                            elevation.set(AbsoluteTonalElevation {
-                                current: absolute_tonal_elevation,
-                            });
-                        }
                         provide_context(
-                            || ContentColor {
+                            ContentColor {
                                 current: content_color,
                             },
                             || {
-                                let color = use_context::<ContentColor>().unwrap();
-                                if color.with(|value| value.current) != content_color {
-                                    color.set(ContentColor {
-                                        current: content_color,
-                                    });
-                                }
                                 if let Some(child) = child.as_ref() {
                                     child.render();
                                 }

@@ -182,16 +182,10 @@ fn navigation_rail_item_view_content(
 
         if let Some(draw_icon) = item.icon {
             provide_context(
-                || ContentColor {
+                ContentColor {
                     current: icon_color,
                 },
                 || {
-                    let color = use_context::<ContentColor>().unwrap();
-                    if color.with(|value| value.current) != icon_color {
-                        color.set(ContentColor {
-                            current: icon_color,
-                        });
-                    }
                     draw_icon.render();
                 },
             );
@@ -203,12 +197,9 @@ fn navigation_rail_item_view_content(
                 NavigationRailIconPosition::Top => typography.label_medium,
                 NavigationRailIconPosition::Start => typography.label_large,
             };
-            provide_context(
-                || label_style,
-                move || {
-                    text(label.clone()).color(label_color).style(label_style);
-                },
-            );
+            provide_context(label_style, move || {
+                text(label.clone()).color(label_color).style(label_style);
+            });
         }
         if let Some(badge) = item.badge {
             crate::boxed::boxed().children_shared(badge);

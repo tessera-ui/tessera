@@ -771,7 +771,7 @@ pub fn date_picker_dialog(
             });
             if confirm_button.is_some() || dismiss_button.is_some() {
                 provide_context(
-                    || ContentColor {
+                    ContentColor {
                         current: theme.color_scheme.primary,
                     },
                     || {

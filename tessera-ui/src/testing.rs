@@ -101,7 +101,7 @@ where
     diagnostics: Option<LayoutFrameDiagnostics>,
     work: crate::FrameWork,
     work_totals: crate::WorkTotals,
-    frame_clock_diagnostics: crate::FrameClockDiagnostics,
+    frame_clock_diagnostics: crate::runtime::FrameClockDiagnostics,
 }
 
 impl<F: Fn()> LayoutTestSession<F> {
@@ -169,7 +169,7 @@ impl<F: Fn()> LayoutTestSession<F> {
     }
 
     /// Returns frame-clock work and remaining subscriptions for the last frame.
-    pub fn frame_clock_diagnostics(&self) -> &crate::FrameClockDiagnostics {
+    pub fn frame_clock_diagnostics(&self) -> &crate::runtime::FrameClockDiagnostics {
         &self.frame_clock_diagnostics
     }
 }
@@ -192,7 +192,7 @@ where
         diagnostics: None,
         work: Default::default(),
         work_totals: crate::WorkTotals::default(),
-        frame_clock_diagnostics: crate::FrameClockDiagnostics::default(),
+        frame_clock_diagnostics: crate::runtime::FrameClockDiagnostics::default(),
     }
 }
 
@@ -2620,7 +2620,7 @@ mod tests {
         probe.last.set(None);
     }
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq)]
     struct CallTheme(i32);
 
     #[derive(Clone, Default, PartialEq)]
@@ -2675,26 +2675,21 @@ mod tests {
         probe.reversed.set(Some(reversed));
         let reverse = reversed.get();
         crate::layout::layout(VerticalStackPolicy).child(move || {
-            let first = crate::provide_context(
-                || CallTheme(17),
-                || contextual_call("first".to_owned(), probe.clone()),
-            );
-            let second = crate::provide_context(
-                || CallTheme(17),
-                || contextual_call("second".to_owned(), probe.clone()),
-            );
-            crate::provide_context(
-                || CallTheme(91),
-                || {
-                    if reverse {
-                        configure_contextual_call(&second, "context-second", 5);
-                        configure_contextual_call(&first, "context-first", 3);
-                    } else {
-                        configure_contextual_call(&first, "context-first", 0);
-                        configure_contextual_call(&second, "context-second", 1);
-                    }
-                },
-            );
+            let first = crate::provide_context(CallTheme(17), || {
+                contextual_call("first".to_owned(), probe.clone())
+            });
+            let second = crate::provide_context(CallTheme(17), || {
+                contextual_call("second".to_owned(), probe.clone())
+            });
+            crate::provide_context(CallTheme(91), || {
+                if reverse {
+                    configure_contextual_call(&second, "context-second", 5);
+                    configure_contextual_call(&first, "context-first", 3);
+                } else {
+                    configure_contextual_call(&first, "context-first", 0);
+                    configure_contextual_call(&second, "context-second", 1);
+                }
+            });
         });
     }
 

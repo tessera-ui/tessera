@@ -26,7 +26,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle},
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
 const SEGMENTED_ICON_SPACING: Dp = Dp(8.0);
@@ -395,59 +395,49 @@ pub fn segmented_button(
             let leading_icon = icon.clone();
             let padding = content_padding;
             let label_outer = label.clone();
-            provide_context(
-                || typography.label_large,
-                move || {
-                    let inherited =
-                        use_context::<TextStyle>().expect("segmented button text style");
-                    if inherited.get() != typography.label_large {
-                        inherited.set(typography.label_large);
-                    }
-                    let leading_icon = leading_icon.clone();
-                    let label_outer = label_outer.clone();
-                    layout(Stack)
-                        .modifier(Modifier::new().padding(padding))
-                        .child(move || {
-                            let leading_icon = leading_icon.clone();
-                            let label = label_outer.clone();
-                            let label_offset = if leading_icon.is_none() {
-                                Dp::from(
-                                    Px::ZERO
-                                        - (Px::from(SegmentedButtonDefaults::ICON_SIZE)
-                                            + Px::from(SEGMENTED_ICON_SPACING))
-                                            / 2,
-                                )
-                            } else {
-                                Dp(0.0)
-                            };
-                            row()
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .children(move || {
-                                    if let Some(icon_content) = leading_icon.clone() {
-                                        icon_component()
-                                            .painter(icon_content)
-                                            .size(SegmentedButtonDefaults::ICON_SIZE);
-                                    } else {
-                                        spacer().modifier(
-                                            Modifier::new()
-                                                .width(SegmentedButtonDefaults::ICON_SIZE),
-                                        );
-                                    }
+            provide_context(typography.label_large, move || {
+                let leading_icon = leading_icon.clone();
+                let label_outer = label_outer.clone();
+                layout(Stack)
+                    .modifier(Modifier::new().padding(padding))
+                    .child(move || {
+                        let leading_icon = leading_icon.clone();
+                        let label = label_outer.clone();
+                        let label_offset = if leading_icon.is_none() {
+                            Dp::from(
+                                Px::ZERO
+                                    - (Px::from(SegmentedButtonDefaults::ICON_SIZE)
+                                        + Px::from(SEGMENTED_ICON_SPACING))
+                                        / 2,
+                            )
+                        } else {
+                            Dp(0.0)
+                        };
+                        row()
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move || {
+                                if let Some(icon_content) = leading_icon.clone() {
+                                    icon_component()
+                                        .painter(icon_content)
+                                        .size(SegmentedButtonDefaults::ICON_SIZE);
+                                } else {
+                                    spacer().modifier(
+                                        Modifier::new().width(SegmentedButtonDefaults::ICON_SIZE),
+                                    );
+                                }
 
-                                    if !label.is_empty() {
-                                        spacer().modifier(
-                                            Modifier::new().width(SEGMENTED_ICON_SPACING),
+                                if !label.is_empty() {
+                                    spacer()
+                                        .modifier(Modifier::new().width(SEGMENTED_ICON_SPACING));
+                                    {
+                                        text(label.clone()).modifier(
+                                            Modifier::new().offset(label_offset, Dp(0.0)),
                                         );
-                                        {
-                                            text(label.clone()).modifier(
-                                                Modifier::new().offset(label_offset, Dp(0.0)),
-                                            );
-                                        };
-                                    }
-                                });
-                        });
-                },
-            );
+                                    };
+                                }
+                            });
+                    });
+            });
         });
 }
 

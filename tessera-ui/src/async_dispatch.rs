@@ -88,8 +88,7 @@ pub fn spawn(dispatcher: Dispatcher, future: impl Future<Output = ()> + Send + '
 /// Runs a `!Send` future on the current UI session, starting after the current
 /// frame's work.
 pub(crate) fn spawn_local(future: impl Future<Output = ()> + 'static) -> Task {
-    let session = crate::session::current_session_identity()
-        .expect("local tasks require an active UI session");
+    let session = crate::dispatcher::register_current();
     let (abort, future) = abortable(future);
     let task = crate::local_runtime_resource::<MainTasks>()
         .tasks

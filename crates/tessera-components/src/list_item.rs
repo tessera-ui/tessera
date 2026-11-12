@@ -611,60 +611,39 @@ fn list_item_slot(
     let color = color.unwrap_or(Color::TRANSPARENT);
     let style = style.unwrap_or_default();
     let icon_size = ListItemDefaults::ICON_SIZE;
-    provide_context(
-        || ContentColor { current: color },
-        move || {
-            let current = use_context::<ContentColor>().expect("list item content color");
-            if current.get().current != color {
-                current.set(ContentColor { current: color });
-            }
-            provide_context(
-                || style,
-                move || {
-                    let current = use_context::<TextStyle>().expect("list item slot typography");
-                    if current.get() != style {
-                        current.set(style);
-                    }
-                    provide_context(
-                        || IconSize(icon_size),
-                        move || {
-                            let current = use_context::<IconSize>().expect("list item icon size");
-                            if current.get().0 != icon_size {
-                                current.set(IconSize(icon_size));
-                            }
-                            let padding = if content.is_none() || main.unwrap_or(false) {
-                                Padding::default()
-                            } else if leading.unwrap_or(false) {
-                                Padding::new(
-                                    Dp::ZERO,
-                                    Dp::ZERO,
-                                    ListItemDefaults::INTERNAL_SPACING,
-                                    Dp::ZERO,
-                                )
-                            } else {
-                                Padding::new(
-                                    ListItemDefaults::INTERNAL_SPACING,
-                                    Dp::ZERO,
-                                    Dp::ZERO,
-                                    Dp::ZERO,
-                                )
-                            };
-                            boxed()
-                                .alignment(if main.unwrap_or(false) {
-                                    Alignment::TopStart
-                                } else {
-                                    Alignment::Center
-                                })
-                                .modifier(Modifier::new().padding(padding))
-                                .children(move || {
-                                    if let Some(content) = content {
-                                        content.render();
-                                    }
-                                });
-                        },
-                    );
-                },
-            );
-        },
-    );
+    provide_context(ContentColor { current: color }, move || {
+        provide_context(style, move || {
+            provide_context(IconSize(icon_size), move || {
+                let padding = if content.is_none() || main.unwrap_or(false) {
+                    Padding::default()
+                } else if leading.unwrap_or(false) {
+                    Padding::new(
+                        Dp::ZERO,
+                        Dp::ZERO,
+                        ListItemDefaults::INTERNAL_SPACING,
+                        Dp::ZERO,
+                    )
+                } else {
+                    Padding::new(
+                        ListItemDefaults::INTERNAL_SPACING,
+                        Dp::ZERO,
+                        Dp::ZERO,
+                        Dp::ZERO,
+                    )
+                };
+                boxed()
+                    .alignment(if main.unwrap_or(false) {
+                        Alignment::TopStart
+                    } else {
+                        Alignment::Center
+                    })
+                    .modifier(Modifier::new().padding(padding))
+                    .children(move || {
+                        if let Some(content) = content {
+                            content.render();
+                        }
+                    });
+            });
+        });
+    });
 }

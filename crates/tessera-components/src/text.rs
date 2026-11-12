@@ -299,7 +299,7 @@ impl tessera_ui::DrawModifierNode for TextDraw {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        Context, State, WorkPhase, provide_context,
+        State, WorkPhase, provide_context,
         testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
     };
 
@@ -450,14 +450,13 @@ mod tests {
 
     #[tessera]
     fn inherited_defaults_fixture(
-        observed: TestProbe<Option<(Context<TextStyle>, Context<ContentColor>)>>,
+        observed: TestProbe<Option<(State<TextStyle>, State<ContentColor>)>>,
     ) {
-        provide_context(TextStyle::default, move || {
-            provide_context(ContentColor::default, move || {
-                observed.set(Some((
-                    use_context::<TextStyle>().unwrap(),
-                    use_context::<ContentColor>().unwrap(),
-                )));
+        let style = remember(TextStyle::default);
+        let color = remember(ContentColor::default);
+        observed.set(Some((style, color)));
+        provide_context(style.get(), move || {
+            provide_context(color.get(), move || {
                 text("Inherited");
                 text("Explicit")
                     .style(TextStyle::default())

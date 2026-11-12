@@ -1850,7 +1850,7 @@ pub fn inspect_root() {
 
 #[tessera_ui::tessera]
 fn themed() {
-    tessera_ui::provide_context(|| 0u32, { let _input = 1; move || { child(); } });
+    tessera_ui::provide_context(0u32, { let _input = 1; move || { child(); } });
 }
 "#,
             CheckOptions {
@@ -2020,7 +2020,7 @@ pub fn root() {
     plain::accept(|| { child(); });
     plain::layout_test(|| { child(); });
     let _boxed = Box::new(|| { child(); });
-    tessera_ui::provide_context(|| { let _ = remember(|| 1usize); 0u32 }, || {});
+    let _ = remember(|| { let _ = remember(|| 1usize); 0u32 });
 }
 
 fn render_from_helper(slot: RenderSlot, indexed: RenderSlotWith<u32>) {

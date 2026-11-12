@@ -1022,38 +1022,33 @@ fn menu_panel(
             })
             .child(move || {
                 let menu_content = menu_content;
-                provide_context(
-                    || color_style,
-                    move || {
-                        let inherited = use_context::<MenuColorStyle>().expect("menu colors");
-                        if inherited.get() != color_style {
-                            inherited.set(color_style);
-                        }
-                        let modifier = Modifier::new().fill_max_width();
-                        let modifier = if grouped {
-                            modifier.push_draw(MenuScrollClip { controller: scroll })
+                provide_context(color_style, move || {
+                    let modifier = Modifier::new().fill_max_width();
+                    let modifier = if grouped {
+                        modifier.push_draw(MenuScrollClip { controller: scroll })
+                    } else {
+                        modifier.clip_shape(if provider.animate_shape {
+                            motion.with(MenuShapeMotion::shape)
                         } else {
-                            modifier.clip_shape(if provider.animate_shape {
-                                motion.with(MenuShapeMotion::shape)
-                            } else {
-                                provider.shape
-                            })
-                        };
-                        column()
-                            .modifier(modifier.vertical_scroll(scroll).padding_symmetric(
+                            provider.shape
+                        })
+                    };
+                    column()
+                        .modifier(
+                            modifier.vertical_scroll(scroll).padding_symmetric(
                                 Dp::ZERO,
                                 if grouped { Dp::ZERO } else { Dp(2.0) },
-                            ))
-                            .cross_axis_alignment(CrossAxisAlignment::Start)
-                            .children(move || {
-                                menu_content.render(MenuScope {
-                                    host,
-                                    controller,
-                                    typeahead: typeahead::MenuTypeahead(typeahead),
-                                });
+                            ),
+                        )
+                        .cross_axis_alignment(CrossAxisAlignment::Start)
+                        .children(move || {
+                            menu_content.render(MenuScope {
+                                host,
+                                controller,
+                                typeahead: typeahead::MenuTypeahead(typeahead),
                             });
-                    },
-                );
+                        });
+                });
             });
     });
 }

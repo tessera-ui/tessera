@@ -14,7 +14,7 @@ use tessera_ui::{
     current_frame_nanos, key,
     layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    provide_context, receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
@@ -589,21 +589,13 @@ pub fn button_groups(
                         .shape(motion.get().shape())
                         .child(move || {
                             let icon_size = ButtonSize::from(size).icon_size();
-                            provide_context(
-                                || IconSize(icon_size),
-                                move || {
-                                    let inherited =
-                                        use_context::<IconSize>().expect("button group icon size");
-                                    if inherited.get().0 != icon_size {
-                                        inherited.set(IconSize(icon_size));
-                                    }
-                                    tessera_ui::layout::layout(GroupContentLayout {
-                                        padding: ButtonSize::from(size).content_padding(),
-                                        compress: style == ButtonGroupsStyle::Standard,
-                                    })
-                                    .child_shared(child_closure);
-                                },
-                            );
+                            provide_context(IconSize(icon_size), move || {
+                                tessera_ui::layout::layout(GroupContentLayout {
+                                    padding: ButtonSize::from(size).content_padding(),
+                                    compress: style == ButtonGroupsStyle::Standard,
+                                })
+                                .child_shared(child_closure);
+                            });
                         });
                 });
                 group_item()

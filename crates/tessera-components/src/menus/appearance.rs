@@ -232,28 +232,20 @@ pub fn menu_group(
                 .accessibility_label_optional(accessibility_label.clone())
                 .elevation(Dp(3.0))
                 .child(move || {
-                    provide_context(
-                        || color_style,
-                        move || {
-                            let inherited = use_context::<MenuColorStyle>().expect("menu colors");
-                            if inherited.get() != color_style {
-                                inherited.set(color_style);
-                            }
-                            column()
-                                .modifier(
-                                    Modifier::new()
-                                        .fill_max_width()
-                                        .clip_shape(
-                                            shape.unwrap_or_else(|| {
-                                                motion.with(MenuShapeMotion::shape)
-                                            }),
-                                        )
-                                        .padding_symmetric(Dp::ZERO, Dp(2.0)),
-                                )
-                                .cross_axis_alignment(CrossAxisAlignment::Start)
-                                .children_shared(children);
-                        },
-                    );
+                    provide_context(color_style, move || {
+                        column()
+                            .modifier(
+                                Modifier::new()
+                                    .fill_max_width()
+                                    .clip_shape(
+                                        shape
+                                            .unwrap_or_else(|| motion.with(MenuShapeMotion::shape)),
+                                    )
+                                    .padding_symmetric(Dp::ZERO, Dp(2.0)),
+                            )
+                            .cross_axis_alignment(CrossAxisAlignment::Start)
+                            .children_shared(children);
+                    });
                 });
         });
 }

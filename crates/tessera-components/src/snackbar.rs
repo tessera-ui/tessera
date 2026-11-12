@@ -553,7 +553,7 @@ pub fn snackbar(
                 padding: content_padding,
             })
             .child(move || {
-                provide_context(|| typography.body_medium, {
+                provide_context(typography.body_medium, {
                     let message = message.clone();
                     move || {
                         text(message.clone())

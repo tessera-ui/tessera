@@ -154,16 +154,10 @@ fn navigation_bar_item_view_content(
 
         if let Some(draw_icon) = item.icon {
             provide_context(
-                || ContentColor {
+                ContentColor {
                     current: icon_color,
                 },
                 || {
-                    let color = use_context::<ContentColor>().unwrap();
-                    if color.with(|value| value.current) != icon_color {
-                        color.set(ContentColor {
-                            current: icon_color,
-                        });
-                    }
                     draw_icon.render();
                 },
             );
@@ -171,14 +165,11 @@ fn navigation_bar_item_view_content(
 
         if has_label {
             let label = item.label.clone();
-            provide_context(
-                || typography.label_medium,
-                move || {
-                    text(label.clone())
-                        .color(label_color)
-                        .style(typography.label_medium);
-                },
-            );
+            provide_context(typography.label_medium, move || {
+                text(label.clone())
+                    .color(label_color)
+                    .style(typography.label_medium);
+            });
         }
     });
 }

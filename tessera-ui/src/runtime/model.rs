@@ -9,10 +9,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::{Rc, Weak},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
-    },
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use super::{SlotKey, State, resolve_state_key, with_slot_table_mut};
@@ -20,8 +17,7 @@ use super::{SlotKey, State, resolve_state_key, with_slot_table_mut};
 struct OwnerLease {
     id: u128,
     session: u128,
-    closed: AtomicBool,
-    dispatcher: crate::dispatcher::UiDispatcher,
+    closed: Cell<bool>,
 }
 
 impl OwnerLease {
@@ -31,25 +27,20 @@ impl OwnerLease {
             id: u128::from(NEXT_OWNER.fetch_add(1, Ordering::Relaxed)),
             session: crate::session::current_session_identity()
                 .expect("models require an active UI session"),
-            closed: AtomicBool::new(false),
-            dispatcher: crate::dispatcher::current(),
+            closed: Cell::new(false),
         }
     }
 
-    #[cfg(test)]
-    fn is_alive(&self) -> bool {
-        !self.closed.load(Ordering::Acquire) && self.dispatcher.is_alive()
-    }
-
     fn close(&self) {
-        if self.closed.swap(true, Ordering::AcqRel) {
+        if self.closed.replace(true) {
             return;
         }
         let owner = self.id;
         if crate::session::current_session_identity() == Some(self.session) {
             release_slots(owner);
         } else {
-            self.dispatcher.dispatch(move || release_slots(owner));
+            // A closed session has already released every slot.
+            let _ = crate::session::with_inactive_session(self.session, || release_slots(owner));
         }
     }
 }
@@ -60,27 +51,18 @@ impl Drop for OwnerLease {
     }
 }
 
-/// Owner of states and tasks that outlive a single composition slot.
+/// Owner of states that outlive a single composition slot.
 #[derive(Clone)]
-pub(crate) struct ModelScope(Arc<OwnerLease>);
+pub(crate) struct ModelScope(Rc<OwnerLease>);
 
 impl ModelScope {
     pub(crate) fn new() -> Self {
-        Self(Arc::new(OwnerLease::new()))
-    }
-
-    pub(crate) fn dispatcher(&self) -> crate::dispatcher::UiDispatcher {
-        let owner = Arc::downgrade(&self.0);
-        self.0.dispatcher.clone().scoped(move || {
-            owner
-                .upgrade()
-                .is_some_and(|owner| !owner.closed.load(Ordering::Acquire))
-        })
+        Self(Rc::new(OwnerLease::new()))
     }
 
     #[cfg(test)]
     pub(crate) fn is_alive(&self) -> bool {
-        self.0.is_alive()
+        !self.0.closed.get() && crate::session::is_open(self.0.session)
     }
 
     #[cfg(test)]

@@ -24,11 +24,11 @@ impl Observer {
             .document_element()
             .ok_or("document root unavailable")?
             .append_child(&probe)?;
-        let dispatcher = crate::RuntimeSession::current()
+        let session = crate::RuntimeSession::current()
             .ok_or("UI session unavailable")?
-            .run(crate::dispatcher::current);
+            .run(crate::dispatcher::register_current);
         let callback = Closure::new(move |_event: Event| {
-            dispatcher.dispatch(|| {});
+            crate::dispatcher::dispatch_to_session(session, || {});
         });
         let mut observer = Self {
             probe,

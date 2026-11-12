@@ -40,9 +40,9 @@ mod session;
 pub mod system_back;
 
 pub use session::{
-    RuntimeSession, RuntimeSessionGuard, RuntimeSessionId, WeakRuntimeSession,
-    local_runtime_resource, runtime_resource,
+    RuntimeSession, RuntimeSessionGuard, RuntimeSessionId, WeakRuntimeSession, runtime_resource,
 };
+pub(crate) use session::{local_runtime_resource, shared_runtime_resource};
 
 mod component_tree;
 pub mod context;
@@ -85,8 +85,10 @@ mod thread_utils;
 pub mod time;
 
 pub use accesskit;
-pub use indextree::{Arena, NodeId};
 pub use tessera_macros::{entry, lint, tessera};
+
+pub(crate) use crate::thread_utils::SendSync;
+pub(crate) use indextree::NodeId;
 pub use wgpu;
 pub use winit;
 
@@ -100,9 +102,8 @@ pub use crate::{
     },
     color::Color,
     component_tree::{
-        AxisConstraint, ComponentTree, ComputedData, Constraint, ImeInput, ImeInputHandlerFn,
-        ImeRequest, ImeSession, KeyboardInput, KeyboardInputHandlerFn, MeasurementError,
-        ParentConstraint, PointerEventPass, PointerInput, PointerInputHandlerFn,
+        AxisConstraint, ComputedData, Constraint, ImeInput, ImeRequest, ImeSession, KeyboardInput,
+        MeasurementError, ParentConstraint, PointerEventPass, PointerInput,
     },
     context::{Context, provide_context, use_context},
     cursor::{
@@ -132,7 +133,7 @@ pub use crate::{
     },
     pipeline_context::PipelineContext,
     plugin::{DesktopPlatformContext, Plugin, PluginContext, PluginResult, with_plugin},
-    prop::{Callback, CallbackWith, RenderSlot, RenderSlotWith, Slot},
+    prop::{Callback, CallbackWith, RenderSlot, RenderSlotWith},
     px::{Px, PxPosition, PxRect, PxSize},
     render_graph::{DrawGeometry, RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp},
     render_module::RenderModule,
@@ -144,12 +145,11 @@ pub use crate::{
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
     },
     runtime::{
-        FrameClockDiagnostics, FrameNanosControl, Model, ModelInit, ModelStore, ModelStoreScope,
-        State, current_frame_nanos, current_frame_time, frame_delta, key, launch, launch_once,
-        receive_frame_nanos, remember, remember_with_key, retain, retain_with_key,
+        FrameNanosControl, Model, ModelInit, ModelStore, ModelStoreScope, State,
+        current_frame_nanos, current_frame_time, key, launch, launch_once, receive_frame_nanos,
+        remember, remember_with_key, retain, retain_with_key,
     },
     scroll::{PlatformScrollConfig, normalize_platform_scroll_delta, platform_scroll_config},
-    thread_utils::SendSync,
 };
 
 use ime_state::ImeState;

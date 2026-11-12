@@ -75,7 +75,7 @@ impl Drop for BrowserClipboard {
 }
 
 fn bridge() -> Rc<RefCell<Option<BrowserClipboard>>> {
-    tessera_ui::local_runtime_resource::<RefCell<Option<BrowserClipboard>>>()
+    tessera_ui::runtime_resource::<RefCell<Option<BrowserClipboard>>>()
 }
 
 fn targets_canvas(event: &Event, canvas: &HtmlCanvasElement) -> bool {
@@ -102,7 +102,7 @@ pub(super) fn install(window: Arc<Window>) -> Result<(), web_sys::wasm_bindgen::
         return Ok(());
     };
     let target: EventTarget = document.unchecked_into();
-    let session = tessera_ui::WeakRuntimeSession::current().ok_or_else(|| {
+    let session = tessera_ui::RuntimeSession::current().map(|session| session.downgrade()).ok_or_else(|| {
         web_sys::wasm_bindgen::JsValue::from_str("clipboard requires a UI session")
     })?;
     let mut listeners = Vec::new();
@@ -187,7 +187,7 @@ fn handle_response(response: ClipboardResponse) {
 }
 
 pub(super) fn write_text(text: String, completion: impl FnOnce(bool) + 'static) {
-    let session = tessera_ui::WeakRuntimeSession::current();
+    let session = tessera_ui::RuntimeSession::current().map(|session| session.downgrade());
     let completion = move |succeeded| {
         if let Some(session) = session {
             let _ = session.run(|| completion(succeeded));

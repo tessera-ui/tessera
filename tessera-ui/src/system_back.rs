@@ -40,7 +40,7 @@ type BackCallback = CallbackWith<SystemBackEvent>;
 
 /// Marks an off-screen destination preview that must not handle system back.
 #[doc(hidden)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct BackPreviewScope(pub bool);
 
 #[derive(Default)]
@@ -99,7 +99,7 @@ pub fn system_back_handler(enabled: bool, on_back: Option<CallbackWith<SystemBac
     if crate::use_context::<BackPreviewScope>().is_some_and(|scope| scope.get().0) {
         return;
     }
-    let handlers = crate::runtime_resource::<Handlers>();
+    let handlers = crate::shared_runtime_resource::<Handlers>();
     let registration = remember(|| {
         let mut registry = handlers.lock();
         let id = registry.next_id;
@@ -120,7 +120,7 @@ pub fn system_back_handler(enabled: bool, on_back: Option<CallbackWith<SystemBac
 
 #[cfg(target_os = "android")]
 pub(crate) fn enabled() -> bool {
-    crate::runtime_resource::<Handlers>()
+    crate::shared_runtime_resource::<Handlers>()
         .lock()
         .active()
         .is_some()
@@ -128,7 +128,9 @@ pub(crate) fn enabled() -> bool {
 
 #[cfg(any(target_os = "android", test, feature = "testing"))]
 pub(crate) fn dispatch(event: SystemBackEvent) {
-    let callback = crate::runtime_resource::<Handlers>().lock().callback(event);
+    let callback = crate::shared_runtime_resource::<Handlers>()
+        .lock()
+        .callback(event);
     if let Some(callback) = callback {
         callback.call(event);
     }

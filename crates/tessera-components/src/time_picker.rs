@@ -1493,7 +1493,7 @@ pub fn time_picker_dialog(
                 }
                 spacer().modifier(Modifier::new().weight(1.0));
                 provide_context(
-                    || ContentColor {
+                    ContentColor {
                         current: theme.color_scheme.primary,
                     },
                     || {

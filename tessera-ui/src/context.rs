@@ -465,17 +465,6 @@ where
         f(&value)
     }
 
-    /// Execute a closure with a mutable reference to the context value.
-    pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        let cell = self.load_cell();
-        let result = f(&mut cell.borrow_mut());
-        let subscribers = context_read_subscribers(self.slot, self.generation);
-        for instance_key in subscribers {
-            record_replay_boundary_invalidation_for_instance_key(instance_key);
-        }
-        result
-    }
-
     /// Get a cloned value. Requires `T: Clone`.
     pub fn get(&self) -> T
     where
@@ -483,22 +472,12 @@ where
     {
         self.with(Clone::clone)
     }
-
-    /// Set the context value.
-    pub fn set(&self, value: T) {
-        self.with_mut(|v| *v = value);
-    }
-
-    /// Replace the context value and return the old value.
-    pub fn replace(&self, value: T) -> T {
-        self.with_mut(|v| std::mem::replace(v, value))
-    }
 }
 
-/// Provides a typed context value for the duration of the given closure.
+/// Provides `value` to descendants built by `f`.
 ///
-/// The `init` closure is evaluated only when the context slot is created (or
-/// re-created after being recycled).
+/// Each build compares `value` with the previously provided one; a change
+/// invalidates the descendants that read it.
 ///
 /// This is intended for use inside component build functions only.
 ///
@@ -507,7 +486,7 @@ where
 /// ```
 /// use tessera_ui::{Color, provide_context, tessera, use_context};
 ///
-/// #[derive(Default)]
+/// #[derive(Clone, PartialEq)]
 /// struct Theme {
 ///     primary: Color,
 /// }
@@ -515,7 +494,7 @@ where
 /// #[tessera]
 /// fn root() {
 ///     provide_context(
-///         || Theme {
+///         Theme {
 ///             primary: Color::RED,
 ///         },
 ///         || {
@@ -530,11 +509,9 @@ where
 ///     theme.with(|t| assert_eq!(t.primary, Color::RED));
 /// }
 /// ```
-pub fn provide_context<T, I, F, R>(init: I, f: F) -> R
+pub fn provide_context<T, R>(value: T, f: impl FnOnce() -> R) -> R
 where
-    T: 'static,
-    I: FnOnce() -> T,
-    F: FnOnce() -> R,
+    T: PartialEq + 'static,
 {
     ensure_build_phase();
 
@@ -546,51 +523,66 @@ where
         type_id,
     };
 
-    let (slot, generation) = {
-        with_slot_table_mut(|table| {
-            let epoch = table.epoch;
+    fn cell<T: 'static>(value: T) -> Rc<dyn Any> {
+        Rc::new(RefCell::new(value))
+    }
 
-            if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
-                let entry = table
-                    .entries
-                    .get_mut(slot as usize)
-                    .expect("context slot entry should exist");
-                entry.last_alive_epoch = epoch;
+    let (slot, generation, changed) = with_slot_table_mut(|table| {
+        let epoch = table.epoch;
 
-                if entry.value.is_none() {
-                    entry.value = Some(Rc::new(RefCell::new(init())));
-                    entry.generation = entry.generation.wrapping_add(1);
+        if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
+            let entry = table
+                .entries
+                .get_mut(slot as usize)
+                .expect("context slot entry should exist");
+            entry.last_alive_epoch = epoch;
+            let changed = match entry
+                .value
+                .as_ref()
+                .and_then(|stored| stored.downcast_ref::<RefCell<T>>())
+            {
+                Some(stored) => {
+                    let changed = *stored.borrow() != value;
+                    if changed {
+                        *stored.borrow_mut() = value;
+                    }
+                    changed
                 }
-
-                let generation = entry.generation;
-                (slot, generation)
-            } else if let Some(slot) = table.free_list.pop() {
-                let entry = table
-                    .entries
-                    .get_mut(slot as usize)
-                    .expect("context slot entry should exist");
-
-                entry.key = slot_key;
-                entry.value = Some(Rc::new(RefCell::new(init())));
-                entry.last_alive_epoch = epoch;
-
-                let generation = entry.generation;
-                table.index_slot(slot_key, slot);
-                (slot, generation)
-            } else {
-                let generation = 0;
-                let slot = table.entries.len() as u32;
-                table.entries.push(SlotEntry {
-                    key: slot_key,
-                    generation,
-                    value: Some(Rc::new(RefCell::new(init()))),
-                    last_alive_epoch: epoch,
-                });
-                table.index_slot(slot_key, slot);
-                (slot, generation)
-            }
-        })
-    };
+                None => {
+                    entry.value = Some(cell(value));
+                    entry.generation = entry.generation.wrapping_add(1);
+                    false
+                }
+            };
+            (slot, entry.generation, changed)
+        } else if let Some(slot) = table.free_list.pop() {
+            let entry = table
+                .entries
+                .get_mut(slot as usize)
+                .expect("context slot entry should exist");
+            entry.key = slot_key;
+            entry.value = Some(cell(value));
+            entry.last_alive_epoch = epoch;
+            let generation = entry.generation;
+            table.index_slot(slot_key, slot);
+            (slot, generation, false)
+        } else {
+            let slot = table.entries.len() as u32;
+            table.entries.push(SlotEntry {
+                key: slot_key,
+                generation: 0,
+                value: Some(cell(value)),
+                last_alive_epoch: epoch,
+            });
+            table.index_slot(slot_key, slot);
+            (slot, 0, false)
+        }
+    });
+    if changed {
+        for instance_key in context_read_subscribers(slot, generation) {
+            record_replay_boundary_invalidation_for_instance_key(instance_key);
+        }
+    }
 
     let map = current_context_map().update(
         type_id,
@@ -750,15 +742,12 @@ mod tests {
     fn with_context_snapshot_shares_live_bindings() {
         #[crate::tessera]
         fn context_provider() {
-            super::provide_context(
-                || 42_u8,
-                || {
-                    let snapshot = super::current_context_map();
-                    with_context_snapshot(&snapshot, || {
-                        assert!(snapshot.ptr_eq(&super::current_context_map()));
-                    });
-                },
-            );
+            super::provide_context(42_u8, || {
+                let snapshot = super::current_context_map();
+                with_context_snapshot(&snapshot, || {
+                    assert!(snapshot.ptr_eq(&super::current_context_map()));
+                });
+            });
         }
 
         crate::testing::layout_test(|| context_provider()).run();

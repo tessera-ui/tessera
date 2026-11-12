@@ -25,7 +25,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle},
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
 use motion::{Elevation, Interaction};
@@ -779,65 +779,58 @@ pub fn chip(
                 let leading_icon = leading_icon.clone();
                 let trailing_icon = trailing_icon.clone();
                 let label = label.clone();
-                provide_context(
-                    || typography.label_large,
-                    move || {
-                        let inherited = use_context::<TextStyle>().expect("chip text style");
-                        if inherited.get() != typography.label_large {
-                            inherited.set(typography.label_large);
-                        }
-                        layout(Stack)
-                            .modifier(Modifier::new().padding(padding))
-                            .child(move || {
-                                let avatar = avatar.clone();
-                                let leading_icon = leading_icon.clone();
-                                let trailing_icon = trailing_icon.clone();
-                                let label = label.clone();
-                                row()
-                                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                                    .children(move || {
-                                        let spacing = ChipDefaults::ELEMENT_SPACING;
-                                        let mut item_count = 0;
+                provide_context(typography.label_large, move || {
+                    layout(Stack)
+                        .modifier(Modifier::new().padding(padding))
+                        .child(move || {
+                            let avatar = avatar.clone();
+                            let leading_icon = leading_icon.clone();
+                            let trailing_icon = trailing_icon.clone();
+                            let label = label.clone();
+                            row()
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(move || {
+                                    let spacing = ChipDefaults::ELEMENT_SPACING;
+                                    let mut item_count = 0;
 
-                                        if let Some(avatar) = avatar.clone() {
-                                            item_count += 1;
-                                            chip_avatar().painter(avatar).alpha(avatar_alpha);
-                                        } else if let Some(icon_content) = leading_icon.clone() {
-                                            item_count += 1;
+                                    if let Some(avatar) = avatar.clone() {
+                                        item_count += 1;
+                                        chip_avatar().painter(avatar).alpha(avatar_alpha);
+                                    } else if let Some(icon_content) = leading_icon.clone() {
+                                        item_count += 1;
+                                        icon()
+                                            .painter(icon_content.clone())
+                                            .size(ChipDefaults::ICON_SIZE)
+                                            .tint(leading_icon_color);
+                                    }
+
+                                    if has_label {
+                                        if item_count > 0 {
+                                            spacer().modifier(Modifier::new().width(spacing));
+                                        }
+                                        item_count += 1;
+                                        text(label.clone());
+                                    }
+
+                                    if let Some(icon_content) = trailing_icon.clone() {
+                                        if item_count > 0 {
+                                            spacer().modifier(Modifier::new().width(spacing));
+                                        }
+                                        if separate_remove {
+                                            spacer().modifier(Modifier::new().size(
+                                                ChipDefaults::ICON_SIZE,
+                                                ChipDefaults::ICON_SIZE,
+                                            ));
+                                        } else {
                                             icon()
                                                 .painter(icon_content.clone())
                                                 .size(ChipDefaults::ICON_SIZE)
-                                                .tint(leading_icon_color);
+                                                .tint(trailing_icon_color);
                                         }
-
-                                        if has_label {
-                                            if item_count > 0 {
-                                                spacer().modifier(Modifier::new().width(spacing));
-                                            }
-                                            item_count += 1;
-                                            text(label.clone());
-                                        }
-
-                                        if let Some(icon_content) = trailing_icon.clone() {
-                                            if item_count > 0 {
-                                                spacer().modifier(Modifier::new().width(spacing));
-                                            }
-                                            if separate_remove {
-                                                spacer().modifier(Modifier::new().size(
-                                                    ChipDefaults::ICON_SIZE,
-                                                    ChipDefaults::ICON_SIZE,
-                                                ));
-                                            } else {
-                                                icon()
-                                                    .painter(icon_content.clone())
-                                                    .size(ChipDefaults::ICON_SIZE)
-                                                    .tint(trailing_icon_color);
-                                            }
-                                        }
-                                    });
-                            });
-                    },
-                );
+                                    }
+                                });
+                        });
+                });
             });
         if separate_remove {
             chip_remove_action(remove_label.clone(), on_remove.expect("input chip removal"))

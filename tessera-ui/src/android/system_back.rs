@@ -14,13 +14,10 @@ use jni::{
 use parking_lot::Mutex;
 use winit::platform::android::activity::AndroidApp;
 
-use crate::{
-    dispatcher::UiDispatcher,
-    system_back::{BackSwipeEdge, SystemBackEvent},
-};
+use crate::system_back::{BackSwipeEdge, SystemBackEvent};
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
-static DISPATCHERS: LazyLock<Mutex<HashMap<jlong, UiDispatcher>>> =
+static SESSIONS: LazyLock<Mutex<HashMap<jlong, u128>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub(crate) struct BackBridge {
@@ -31,7 +28,7 @@ pub(crate) struct BackBridge {
 }
 
 impl BackBridge {
-    pub(crate) fn new(app: &AndroidApp, dispatcher: UiDispatcher) -> Option<Self> {
+    pub(crate) fn new(app: &AndroidApp, session: u128) -> Option<Self> {
         // SAFETY: Android owns the VM and keeps the Activity reference alive.
         let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) }.ok()?;
         let activity = {
@@ -61,7 +58,7 @@ impl BackBridge {
             env.new_global_ref(activity).ok()?
         };
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        DISPATCHERS.lock().insert(id, dispatcher);
+        SESSIONS.lock().insert(id, session);
         Some(Self {
             vm,
             activity,
@@ -94,7 +91,7 @@ impl BackBridge {
 
 impl Drop for BackBridge {
     fn drop(&mut self) {
-        DISPATCHERS.lock().remove(&self.id);
+        SESSIONS.lock().remove(&self.id);
         self.set_enabled(false);
     }
 }
@@ -119,8 +116,10 @@ extern "system" fn dispatch(
         3 => SystemBackEvent::Committed,
         _ => return,
     };
-    let dispatcher = DISPATCHERS.lock().get(&id).cloned();
-    if let Some(dispatcher) = dispatcher {
-        dispatcher.dispatch(move || crate::system_back::dispatch(event));
+    let session = SESSIONS.lock().get(&id).copied();
+    if let Some(session) = session {
+        crate::dispatcher::dispatch_to_session(session, move || {
+            crate::system_back::dispatch(event)
+        });
     }
 }

@@ -630,71 +630,46 @@ pub fn button(
         layout(Stack)
             .modifier(Modifier::new().padding(padding))
             .child(move || {
-                provide_context(
-                    || text_style,
-                    move || {
-                        let inherited = use_context::<TextStyle>().expect("button text style");
-                        if inherited.get() != text_style {
-                            inherited.set(text_style);
-                        }
-                        if leading_icon.is_some() || trailing_icon.is_some() {
-                            tessera_ui::layout::layout(ButtonContentLayout {
-                                leading: leading_icon.is_some(),
-                                label: child.is_some(),
-                                trailing: trailing_icon.is_some(),
-                                icon_size: size.icon_size().to_px(),
-                                spacing: size.icon_spacing().to_px(),
-                            })
-                            .child(move || {
-                                if let Some(icon) = leading_icon {
-                                    boxed()
-                                        .modifier(
-                                            Modifier::new()
-                                                .size(size.icon_size(), size.icon_size()),
-                                        )
-                                        .children(move || {
-                                            provide_context(
-                                                || IconSize(size.icon_size()),
-                                                move || {
-                                                    let inherited = use_context::<IconSize>()
-                                                        .expect("button icon size");
-                                                    if inherited.get().0 != size.icon_size() {
-                                                        inherited.set(IconSize(size.icon_size()));
-                                                    }
-                                                    icon.render();
-                                                },
-                                            );
+                provide_context(text_style, move || {
+                    if leading_icon.is_some() || trailing_icon.is_some() {
+                        tessera_ui::layout::layout(ButtonContentLayout {
+                            leading: leading_icon.is_some(),
+                            label: child.is_some(),
+                            trailing: trailing_icon.is_some(),
+                            icon_size: size.icon_size().to_px(),
+                            spacing: size.icon_spacing().to_px(),
+                        })
+                        .child(move || {
+                            if let Some(icon) = leading_icon {
+                                boxed()
+                                    .modifier(
+                                        Modifier::new().size(size.icon_size(), size.icon_size()),
+                                    )
+                                    .children(move || {
+                                        provide_context(IconSize(size.icon_size()), move || {
+                                            icon.render();
                                         });
-                                }
-                                if let Some(child) = child {
-                                    boxed().children_shared(child);
-                                }
-                                if let Some(icon) = trailing_icon {
-                                    boxed()
-                                        .modifier(
-                                            Modifier::new()
-                                                .size(size.icon_size(), size.icon_size()),
-                                        )
-                                        .children(move || {
-                                            provide_context(
-                                                || IconSize(size.icon_size()),
-                                                move || {
-                                                    let inherited = use_context::<IconSize>()
-                                                        .expect("button icon size");
-                                                    if inherited.get().0 != size.icon_size() {
-                                                        inherited.set(IconSize(size.icon_size()));
-                                                    }
-                                                    icon.render();
-                                                },
-                                            );
+                                    });
+                            }
+                            if let Some(child) = child {
+                                boxed().children_shared(child);
+                            }
+                            if let Some(icon) = trailing_icon {
+                                boxed()
+                                    .modifier(
+                                        Modifier::new().size(size.icon_size(), size.icon_size()),
+                                    )
+                                    .children(move || {
+                                        provide_context(IconSize(size.icon_size()), move || {
+                                            icon.render();
                                         });
-                                }
-                            });
-                        } else if let Some(child) = child {
-                            child.render();
-                        }
-                    },
-                );
+                                    });
+                            }
+                        });
+                    } else if let Some(child) = child {
+                        child.render();
+                    }
+                });
             });
     });
     let container_color = if button_args.enabled {

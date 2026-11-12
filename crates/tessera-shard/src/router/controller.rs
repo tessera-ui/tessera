@@ -1,13 +1,15 @@
 use std::{any::TypeId, rc::Rc};
 
-use tessera_ui::{ModelStore, ModelStoreScope};
+use tessera_ui::ModelStore;
 
 use crate::RouterDestination;
 
 struct RouteEntry {
     id: u64,
     destination: Rc<dyn RouterDestination>,
-    models: ModelStore,
+    // Rendered route layers share the store, so its models close only after
+    // both the entry and its content are gone.
+    models: Rc<ModelStore>,
 }
 
 /// Owns the destination stack and the view models of its routes.
@@ -45,7 +47,7 @@ impl RouterController {
         self.route_stack.push(RouteEntry {
             id: self.next_route_id,
             destination,
-            models: ModelStore::new(),
+            models: Rc::new(ModelStore::new()),
         });
         self.next_route_id += 1;
     }
@@ -89,12 +91,12 @@ impl RouterController {
     pub(crate) fn route_at_depth(
         &self,
         depth: usize,
-    ) -> Option<(u64, Rc<dyn RouterDestination>, ModelStoreScope)> {
+    ) -> Option<(u64, Rc<dyn RouterDestination>, Rc<ModelStore>)> {
         self.route_stack
             .iter()
             .rev()
             .nth(depth)
-            .map(|entry| (entry.id, entry.destination.clone(), entry.models.scope()))
+            .map(|entry| (entry.id, entry.destination.clone(), entry.models.clone()))
     }
 
     #[cfg(test)]
@@ -102,7 +104,7 @@ impl RouterController {
         self.route_stack
             .iter()
             .find(|entry| entry.id == route)
-            .map(|entry| &entry.models)
+            .map(|entry| &*entry.models)
     }
 
     /// Clears all destinations and closes their models.

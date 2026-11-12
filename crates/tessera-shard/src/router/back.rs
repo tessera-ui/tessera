@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Dp, FocusManager, FrameNanosControl,
-    ModelStoreScope, Modifier, PointerInput, PointerInputModifierNode, PxPosition,
-    SemanticsModifierNode, State, current_frame_nanos, key,
+    AccessibilityActionHandler, AccessibilityNode, Dp, FocusManager, FrameNanosControl, ModelStore,
+    Modifier, PointerInput, PointerInputModifierNode, PxPosition, SemanticsModifierNode, State,
+    current_frame_nanos, key,
     layout::Stack,
     layout::layout,
     modifier::{ModifierCapabilityExt as _, PlacementModifierNode},
@@ -103,7 +103,7 @@ pub(super) fn route_display(controller: State<RouterController>) {
     layout(Stack).child(move || {
         if let Some((id, previous, previous_models)) = &previous {
             key(*id, || {
-                route_layer(*previous_models, previous.clone())
+                route_layer(previous_models.clone(), previous.clone())
                     .preview(true)
                     .modifier(
                         Modifier::new()
@@ -113,14 +113,14 @@ pub(super) fn route_display(controller: State<RouterController>) {
             });
         }
         key(route_id, || {
-            route_layer(models, route.clone()).modifier(foreground.clone());
+            route_layer(models.clone(), route.clone()).modifier(foreground.clone());
         });
     });
 }
 
 #[tessera]
 fn route_layer(
-    models: ModelStoreScope,
+    models: Rc<ModelStore>,
     #[prop(skip_eq)] route: Rc<dyn RouterDestination>,
     modifier: Option<Modifier>,
     preview: Option<bool>,
@@ -130,12 +130,9 @@ fn route_layer(
     layout(Stack)
         .modifier(modifier.unwrap_or_default())
         .child(move || {
-            provide_context(
-                || models,
-                || {
-                    provide_context(|| BackPreviewScope(preview), || route.render());
-                },
-            );
+            provide_context(models.scope(), || {
+                provide_context(BackPreviewScope(preview), || route.render());
+            });
         });
 }
 

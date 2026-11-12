@@ -35,10 +35,6 @@ fn register(session: u128, queue: &Arc<DispatchQueue>) {
     queues.insert(session, Arc::downgrade(queue));
 }
 
-pub(crate) fn ensure_current_session_registered() {
-    let _ = current();
-}
-
 pub(crate) fn dispatch_to_session(session: u128, work: impl FnOnce() + Send + 'static) -> bool {
     let queue = queues()
         .lock()
@@ -70,65 +66,17 @@ impl Default for DispatchQueue {
     }
 }
 
-/// A captured delivery service for one UI session.
-#[derive(Clone)]
-pub(crate) struct UiDispatcher {
-    queue: Arc<DispatchQueue>,
-    liveness: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
-}
-
-impl UiDispatcher {
-    /// Queues work for the next UI frame, returning false after shutdown.
-    ///
-    /// An owner-scoped dispatcher runs work only while that owner remains alive.
-    pub fn dispatch(&self, work: impl FnOnce() + Send + 'static) -> bool {
-        if !self.is_alive() {
-            return false;
-        }
-        let liveness = self.liveness.clone();
-        let work = move || {
-            if liveness.as_ref().is_none_or(|alive| alive()) {
-                work();
-            }
-        };
-        let wake = {
-            let mut state = self.queue.0.lock();
-            if !state.open {
-                return false;
-            }
-            state.pending.push_back(Box::new(work));
-            state.wake.clone()
-        };
-        if let Some(wake) = wake {
-            wake();
-        }
-        true
-    }
-
-    /// Returns whether the destination session still accepts results.
-    pub fn is_alive(&self) -> bool {
-        let open = self.queue.0.lock().open;
-        open && self.liveness.as_ref().is_none_or(|alive| alive())
-    }
-
-    pub(crate) fn scoped(mut self, alive: impl Fn() -> bool + Send + Sync + 'static) -> Self {
-        self.liveness = Some(Arc::new(alive));
-        self
-    }
-}
-
-pub(crate) fn current() -> UiDispatcher {
-    let queue = crate::runtime_resource::<DispatchQueue>();
+/// Registers the active session's queue and returns its identity for
+/// [`dispatch_to_session`].
+pub(crate) fn register_current() -> u128 {
+    let queue = crate::shared_runtime_resource::<DispatchQueue>();
     let identity = crate::session::current_session_identity().expect("active UI session");
     register(identity, &queue);
-    UiDispatcher {
-        queue,
-        liveness: None,
-    }
+    identity
 }
 
 pub(crate) fn set_waker(wake: Option<Wake>) {
-    let queue = crate::runtime_resource::<DispatchQueue>();
+    let queue = crate::shared_runtime_resource::<DispatchQueue>();
     let (previous, pending) = {
         let mut state = queue.0.lock();
         let previous = std::mem::replace(&mut state.wake, wake.clone());
@@ -142,7 +90,7 @@ pub(crate) fn set_waker(wake: Option<Wake>) {
 
 pub(crate) fn has_pending() -> bool {
     crate::RuntimeSession::current().is_some()
-        && !crate::runtime_resource::<DispatchQueue>()
+        && !crate::shared_runtime_resource::<DispatchQueue>()
             .0
             .lock()
             .pending
@@ -151,7 +99,7 @@ pub(crate) fn has_pending() -> bool {
 
 pub(crate) fn flush() {
     crate::session::serve_other_threads();
-    let queue = crate::runtime_resource::<DispatchQueue>();
+    let queue = crate::shared_runtime_resource::<DispatchQueue>();
     let work = std::mem::take(&mut queue.0.lock().pending);
     for work in work {
         work();
@@ -159,7 +107,7 @@ pub(crate) fn flush() {
 }
 
 pub(crate) fn close() {
-    let queue = crate::runtime_resource::<DispatchQueue>();
+    let queue = crate::shared_runtime_resource::<DispatchQueue>();
     if let Some(session) = crate::session::current_session_identity() {
         queues()
             .lock()

@@ -1057,22 +1057,7 @@ fn text_field_body(
 
 #[tessera]
 fn text_field_slot(content: RenderSlot, color: Color) {
-    let next = (content, color);
-    let data = remember(|| next);
-    if data.get() != next {
-        data.set(next);
-    }
-    provide_context(
-        || ContentColor { current: color },
-        || {
-            let color = data.with(|(_, color)| *color);
-            let context = use_context::<ContentColor>().expect("text field content color");
-            if context.get().current != color {
-                context.set(ContentColor { current: color });
-            }
-            data.with(|(content, _)| *content).render();
-        },
-    );
+    provide_context(ContentColor { current: color }, move || content.render());
 }
 
 fn apply_menu_action(

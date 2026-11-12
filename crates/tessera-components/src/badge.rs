@@ -16,7 +16,7 @@ use crate::{
     pipelines::shape::command::ShapeCommand,
     row::row,
     shape_def::{ResolvedShape, Shape},
-    theme::{ContentColor, MaterialTheme, TextStyle, content_color_for},
+    theme::{ContentColor, MaterialTheme, content_color_for},
 };
 
 fn badge_pixels(value: Dp) -> Px {
@@ -414,29 +414,16 @@ pub fn badge_with_content(
         .draw(policy)
         .child(move || {
             provide_context(
-                || ContentColor {
+                ContentColor {
                     current: content_color,
                 },
                 || {
-                    let inherited = use_context::<ContentColor>().expect("badge content color");
-                    if inherited.get().current != content_color {
-                        inherited.set(ContentColor {
-                            current: content_color,
-                        });
-                    }
-                    provide_context(
-                        || typography.label_small,
-                        move || {
-                            let inherited = use_context::<TextStyle>().expect("badge text style");
-                            if inherited.get() != typography.label_small {
-                                inherited.set(typography.label_small);
-                            }
-                            row()
-                                .main_axis_alignment(MainAxisAlignment::Center)
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .children_shared(content);
-                        },
-                    );
+                    provide_context(typography.label_small, move || {
+                        row()
+                            .main_axis_alignment(MainAxisAlignment::Center)
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children_shared(content);
+                    });
                 },
             );
         });

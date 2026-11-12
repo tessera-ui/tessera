@@ -16,7 +16,7 @@ use crate::{
     row::row,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
-    theme::{MaterialTheme, TextStyle},
+    theme::MaterialTheme,
 };
 
 use super::{SplitButtonDefaults, SplitButtonItemArgs, SplitButtonSize};
@@ -264,42 +264,20 @@ pub(super) fn split_button_item(
         .accessibility_label_optional(args.accessibility_label)
         .accessibility_description_optional(args.accessibility_description)
         .child(move || {
-            provide_context(
-                || text_style,
-                move || {
-                    let inherited = use_context::<TextStyle>().unwrap();
-                    if inherited.get() != text_style {
-                        inherited.set(text_style);
-                    }
-                    tessera_ui::layout::layout(OpticalOffset(optical)).child(move || {
-                        row()
-                            .modifier(Modifier::new().padding(padding))
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .children(move || {
-                                provide_context(
-                                    || IconSize(icon_size),
-                                    move || {
-                                        let inherited = use_context::<IconSize>().unwrap();
-                                        if inherited.get().0 != icon_size {
-                                            inherited.set(IconSize(icon_size));
-                                        }
-                                        provide_context(
-                                            || IconRotation(rotation),
-                                            move || {
-                                                let inherited =
-                                                    use_context::<IconRotation>().unwrap();
-                                                if inherited.get().0 != rotation {
-                                                    inherited.set(IconRotation(rotation));
-                                                }
-                                                content.render();
-                                            },
-                                        );
-                                    },
-                                );
+            provide_context(text_style, move || {
+                tessera_ui::layout::layout(OpticalOffset(optical)).child(move || {
+                    row()
+                        .modifier(Modifier::new().padding(padding))
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move || {
+                            provide_context(IconSize(icon_size), move || {
+                                provide_context(IconRotation(rotation), move || {
+                                    content.render();
+                                });
                             });
-                    });
-                },
-            );
+                        });
+                });
+            });
         });
 }
 

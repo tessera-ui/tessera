@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct CubicPair {
@@ -63,7 +61,7 @@ impl Default for Geometry {
     }
 }
 
-pub(crate) fn geometry() -> Arc<Geometry> {
+pub(crate) fn geometry() -> std::rc::Rc<Geometry> {
     tessera_ui::runtime_resource::<Geometry>()
 }
 

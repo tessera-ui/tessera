@@ -124,6 +124,11 @@ pub(crate) fn with_inactive_session<R>(session: u128, access: impl FnOnce() -> R
     Some(output)
 }
 
+#[cfg(test)]
+pub(crate) fn is_open(session: u128) -> bool {
+    gate_entry(session).is_some()
+}
+
 /// Lets threads waiting on the active session's gate run their access.
 pub(crate) fn serve_other_threads() {
     let Some(session) = RuntimeSession::current() else {
@@ -194,11 +199,6 @@ pub struct RuntimeSession(Rc<SessionState>);
 pub struct WeakRuntimeSession(Weak<SessionState>);
 
 impl WeakRuntimeSession {
-    /// Returns a reference to the active session, if any.
-    pub fn current() -> Option<Self> {
-        RuntimeSession::current().map(|session| session.downgrade())
-    }
-
     /// Runs work on the owning UI thread while the session is still alive.
     pub fn run<R>(&self, work: impl FnOnce() -> R) -> Option<R> {
         self.0
@@ -223,13 +223,8 @@ impl RuntimeSession {
     pub fn downgrade(&self) -> WeakRuntimeSession {
         WeakRuntimeSession(Rc::downgrade(&self.0))
     }
-    /// Returns a shared resource owned by this session.
-    pub fn resource<T: Default + Send + Sync + 'static>(&self) -> Arc<T> {
-        self.run(runtime_resource::<T>)
-    }
-
-    /// Returns a resource that stays on this session's UI thread.
-    pub fn local_resource<T: Default + 'static>(&self) -> Rc<T> {
+    /// Returns this session's resource of type `T`, creating it once.
+    pub fn resource<T: Default + 'static>(&self) -> Rc<T> {
         self.run(|| self.local_resource_in_session())
     }
 
@@ -317,7 +312,8 @@ impl RuntimeSession {
         });
     }
 
-    pub(crate) fn current() -> Option<Self> {
+    /// Returns the active session, if any.
+    pub fn current() -> Option<Self> {
         active_session_state().map(Self)
     }
 
@@ -490,7 +486,7 @@ impl Drop for RuntimeSessionGuard {
 /// Returns a shared resource owned by the active UI session.
 ///
 /// Without an active session, the returned resource is owned only by its caller.
-pub fn runtime_resource<T: Default + Send + Sync + 'static>() -> Arc<T> {
+pub(crate) fn shared_runtime_resource<T: Default + Send + Sync + 'static>() -> Arc<T> {
     let Some(session) = RuntimeSession::current() else {
         return Arc::new(T::default());
     };
@@ -512,11 +508,18 @@ pub fn runtime_resource<T: Default + Send + Sync + 'static>() -> Arc<T> {
     Arc::downcast(stored).unwrap_or_else(|_| unreachable!())
 }
 
-/// Returns a thread-local resource owned by the active UI session.
+/// Returns the active UI session's resource of type `T`, creating it once.
 ///
-/// Use this for platform objects that must stay on their creating thread.
-/// Without an active session, the returned resource is owned only by its caller.
-pub fn local_runtime_resource<T: Default + 'static>() -> Rc<T> {
+/// # Panics
+///
+/// Panics without an active session.
+pub fn runtime_resource<T: Default + 'static>() -> Rc<T> {
+    RuntimeSession::current()
+        .expect("runtime resources require an active UI session")
+        .local_resource_in_session()
+}
+
+pub(crate) fn local_runtime_resource<T: Default + 'static>() -> Rc<T> {
     let Some(session) = RuntimeSession::current() else {
         return Rc::new(T::default());
     };
@@ -769,11 +772,13 @@ mod tests {
         }));
         pump_layout_test_session(&mut session, 0);
         assert_eq!(output.get(), 7);
-        let dispatcher = owner.dispatcher();
+        let target = crate::dispatcher::register_current();
         assert!(
-            std::thread::spawn(move || dispatcher.dispatch(move || value.set(11)))
-                .join()
-                .expect("join succeeds in the test fixture")
+            std::thread::spawn(move || {
+                crate::dispatcher::dispatch_to_session(target, move || value.set(11))
+            })
+            .join()
+            .expect("join succeeds in the test fixture")
         );
         assert_eq!(output.get(), 7);
         pump_layout_test_session(&mut session, 1);
@@ -957,32 +962,13 @@ mod tests {
         });
     }
 
-    #[test]
-    fn closing_a_model_discards_pending_results_before_they_can_touch_freed_state() {
-        let runtime = RuntimeSession::new();
-        let _scope = runtime.enter();
-        let owner = crate::runtime::ModelScope::new();
-        let value = owner.own_state(5usize);
-        let dispatcher = owner.dispatcher();
-        assert!(dispatcher.dispatch(move || value.set(9)));
-        owner.close();
-        assert!(!dispatcher.is_alive());
-        assert!(!dispatcher.dispatch(|| panic!("closed owner accepted a result")));
-        crate::dispatcher::flush();
-        assert!(!value.is_alive());
-        let next = crate::runtime::ModelScope::new();
-        assert_eq!(next.own_state(13usize).get(), 13);
-    }
-
     #[derive(Default)]
-    struct DispatcherOnDrop(
-        std::cell::RefCell<Option<TestProbe<Option<crate::dispatcher::UiDispatcher>>>>,
-    );
+    struct DispatcherOnDrop(std::cell::RefCell<Option<TestProbe<Option<u128>>>>);
 
     impl Drop for DispatcherOnDrop {
         fn drop(&mut self) {
             if let Some(output) = self.0.get_mut().take() {
-                output.set(Some(crate::dispatcher::current()));
+                output.set(Some(crate::dispatcher::register_current()));
             }
         }
     }
@@ -993,15 +979,16 @@ mod tests {
         let output = TestProbe::default();
         let weak = session.downgrade();
         session
-            .local_resource::<DispatcherOnDrop>()
+            .resource::<DispatcherOnDrop>()
             .0
             .replace(Some(output.clone()));
         drop(session);
-        let dispatcher = output
+        let target = output
             .take()
             .expect("resource destructor captured its session service");
-        assert!(!dispatcher.is_alive());
-        assert!(!dispatcher.dispatch(|| panic!("closed session accepted destructor work")));
+        assert!(!crate::dispatcher::dispatch_to_session(target, || {
+            panic!("closed session accepted destructor work")
+        }));
         assert!(weak.run(|| ()).is_none());
     }
 
@@ -1009,12 +996,13 @@ mod tests {
     fn session_shutdown_rejects_dispatched_work_and_closes_external_models() {
         let runtime = RuntimeSession::new();
         let model = runtime.run(crate::runtime::ModelScope::new);
-        let dispatcher = runtime.run(crate::dispatcher::current);
+        let target = runtime.run(crate::dispatcher::register_current);
         let value = runtime.run(|| model.own_state(7usize));
         drop(runtime);
         assert!(!model.is_alive());
-        assert!(!dispatcher.is_alive());
-        assert!(!dispatcher.dispatch(|| panic!("shutdown work executed")));
+        assert!(!crate::dispatcher::dispatch_to_session(target, || {
+            panic!("shutdown work executed")
+        }));
         let other = RuntimeSession::new();
         other.run(|| assert!(!value.is_alive()));
     }

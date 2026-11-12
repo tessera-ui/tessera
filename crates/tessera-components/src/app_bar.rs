@@ -482,17 +482,9 @@ pub fn top_app_bar(
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .children(move || {
                         if let Some(navigation_icon) = navigation_icon {
-                            provide_context(
-                                || ContentColor { current: nav_color },
-                                move || {
-                                    let context =
-                                        use_context::<ContentColor>().expect("navigation color");
-                                    if context.get().current != nav_color {
-                                        context.set(ContentColor { current: nav_color });
-                                    }
-                                    navigation_icon.render();
-                                },
-                            );
+                            provide_context(ContentColor { current: nav_color }, move || {
+                                navigation_icon.render();
+                            });
                         }
                     });
                 let title = title.clone();
@@ -542,16 +534,10 @@ pub fn top_app_bar(
                     .children(move || {
                         let actions = actions.clone();
                         provide_context(
-                            || ContentColor {
+                            ContentColor {
                                 current: action_color,
                             },
                             move || {
-                                let context = use_context::<ContentColor>().expect("action color");
-                                if context.get().current != action_color {
-                                    context.set(ContentColor {
-                                        current: action_color,
-                                    });
-                                }
                                 for (index, action) in actions.iter().enumerate() {
                                     if index > 0 && actions_spacing.0 > 0.0 {
                                         spacer().modifier(Modifier::new().width(actions_spacing));

@@ -19,7 +19,7 @@ use crate::{
     spacer::spacer,
     surface::surface,
     text::text,
-    theme::{MaterialTheme, TextStyle},
+    theme::MaterialTheme,
 };
 
 /// Presentation of a navigation drawer surface.
@@ -247,17 +247,9 @@ pub fn navigation_drawer_item(
                     spacer().modifier(Modifier::new().weight(1.0));
                     if let Some(badge) = &badge {
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
-                        provide_context(
-                            || theme.typography.label_large,
-                            || {
-                                let style = use_context::<TextStyle>()
-                                    .expect("drawer badge style must be provided");
-                                if style.get() != theme.typography.label_large {
-                                    style.set(theme.typography.label_large);
-                                }
-                                badge.render();
-                            },
-                        );
+                        provide_context(theme.typography.label_large, || {
+                            badge.render();
+                        });
                     }
                 });
         });

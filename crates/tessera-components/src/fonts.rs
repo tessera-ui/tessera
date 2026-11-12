@@ -125,7 +125,7 @@ impl Default for FontRegistry {
 }
 
 fn registry() -> Rc<RefCell<FontRegistry>> {
-    tessera_ui::local_runtime_resource::<RefCell<FontRegistry>>()
+    tessera_ui::runtime_resource::<RefCell<FontRegistry>>()
 }
 
 /// Requests the fonts `text` needs and installs those that have loaded.

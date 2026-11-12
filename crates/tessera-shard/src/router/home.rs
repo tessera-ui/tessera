@@ -62,7 +62,7 @@ pub fn shard_home(
         panic!("shard_home requires `root` when `controller` is not provided");
     }
 
-    provide_context(|| controller, || route_display(controller));
+    provide_context(controller, || route_display(controller));
 }
 
 impl ShardHomeBuilder {

@@ -373,14 +373,11 @@ pub fn floating_action_button(
         .accessibility_description_optional(accessibility_description)
         .child({
             move || {
-                provide_context(
-                    || typography.label_large,
-                    move || {
-                        if let Some(content) = content.as_ref() {
-                            content.render();
-                        }
-                    },
-                );
+                provide_context(typography.label_large, move || {
+                    if let Some(content) = content.as_ref() {
+                        content.render();
+                    }
+                });
             }
         });
 }

@@ -5,7 +5,7 @@
 //! Internal prop comparison and replay support used by generated component
 //! props.
 
-use std::{any::Any, marker::PhantomData, ptr, rc::Rc, sync::Arc};
+use std::{any::Any, marker::PhantomData, ptr, rc::Rc};
 
 use crate::{
     runtime::{
@@ -16,42 +16,6 @@ use crate::{
     },
     tessera,
 };
-
-/// Stable, comparable slot handle for any shared callable trait object.
-///
-/// `Slot` compares by identity (`Arc::ptr_eq`) so it can be used in component
-/// props without forcing deep closure comparisons.
-pub struct Slot<F: ?Sized> {
-    inner: Arc<F>,
-}
-
-impl<F: ?Sized> Slot<F> {
-    /// Create a slot from a shared callable trait object.
-    pub fn from_shared(handler: Arc<F>) -> Self {
-        Self { inner: handler }
-    }
-
-    /// Read the current callable.
-    pub fn shared(&self) -> Arc<F> {
-        Arc::clone(&self.inner)
-    }
-}
-
-impl<F: ?Sized> Clone for Slot<F> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-impl<F: ?Sized> PartialEq for Slot<F> {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
-    }
-}
-
-impl<F: ?Sized> Eq for Slot<F> {}
 
 /// Stable, comparable callback handle for `Fn()`.
 ///

@@ -1,5 +1,7 @@
 //! Offscreen rendering, input injection, and resource observations.
 
+pub use crate::runtime::FrameClockDiagnostics;
+
 use std::{
     io::{BufRead, BufReader, Write},
     num::NonZero,
@@ -169,7 +171,7 @@ pub struct HeadlessRenderer {
     diagnostics: crate::component_tree::LayoutFrameDiagnostics,
     work: crate::FrameWork,
     work_totals: crate::WorkTotals,
-    frame_clock_diagnostics: crate::FrameClockDiagnostics,
+    frame_clock_diagnostics: FrameClockDiagnostics,
     frame_graphics_work: crate::GraphicsWorkDiagnostics,
 
     #[cfg(feature = "profiling")]
@@ -702,7 +704,7 @@ impl HeadlessRenderer {
     }
 
     /// Returns frame-clock work and remaining subscriptions for the last frame.
-    pub fn frame_clock_diagnostics(&self) -> &crate::FrameClockDiagnostics {
+    pub fn frame_clock_diagnostics(&self) -> &FrameClockDiagnostics {
         &self.frame_clock_diagnostics
     }
 

@@ -542,7 +542,7 @@ where
         let event_loop_proxy = event_loop.create_proxy();
         let android_back = crate::android::system_back::BackBridge::new(
             &android_app,
-            session.run(crate::dispatcher::current),
+            session.run(crate::dispatcher::register_current),
         );
         let app = None;
         let cursor_state = CursorState::default();

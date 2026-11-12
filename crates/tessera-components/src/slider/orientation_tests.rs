@@ -1,11 +1,10 @@
 use tessera_ui::{
-    Color, Context, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
+    Color, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PlacementModifierNode, PressKeyEventType, PxPosition, State,
     accesskit::{Orientation, Rect, Role},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
     testing::text_matches,
-    use_context,
 };
 
 use crate::{
@@ -99,7 +98,6 @@ struct FixtureHandles {
     controller: Option<State<super::SliderController>>,
     value: Option<State<f32>>,
     range: Option<State<(f32, f32)>>,
-    theme: Option<Context<MaterialTheme>>,
 }
 
 #[tessera]
@@ -115,16 +113,13 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     material_theme()
         .theme(move || settings.with(|settings| settings.palette.theme()))
         .child(move || {
-            let observed = observed.clone();
+            let _observed = observed.clone();
             super::slider_value_indicator_provider().child(move |host| {
-                let observed = observed.clone();
                 boxed()
                     .modifier(Modifier::new().fill_max_size().background(
                         settings.with(|settings| settings.background.unwrap_or(Color::WHITE)),
                     ))
                     .children(move || {
-                        let theme = use_context::<MaterialTheme>();
-                        observed.with_mut(|handles| handles.theme = theme);
                         let settings = settings.get();
                         let modifier = if let Some((x, y)) = settings.origin {
                             Modifier::new().push_placement(FractionalOrigin(
@@ -868,7 +863,7 @@ fn check_color_states_and_markers(
     observed.get().value.unwrap().set(0.75);
     FocusManager::current().clear_focus(true);
     renderer.render_frames(2);
-    observed.get().theme.unwrap().set(Palette::Contrast.theme());
+    settings.with_mut(|settings| settings.palette = Palette::Contrast);
     renderer.render_frames(2);
     assert_eq!(
         pixel(&renderer.read_pixels().unwrap(), 160, 87),
@@ -879,7 +874,7 @@ fn check_color_states_and_markers(
     assert_eq!(
         pixel(&renderer.read_pixels().unwrap(), 379, 87),
         [255, 0, 0, 255],
-        "an unchanged producer must preserve explicit context updates"
+        "unrelated changes keep the provided theme"
     );
     settings.with_mut(|settings| {
         settings.palette = Palette::Dark;
@@ -890,7 +885,7 @@ fn check_color_states_and_markers(
     assert_eq!(
         pixel(&changed, 379, 87),
         pixel(&changed, 307, 307),
-        "a changed producer replaces the previous explicit context value"
+        "a changed theme reaches its readers"
     );
 }
 

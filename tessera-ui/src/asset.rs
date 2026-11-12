@@ -8,13 +8,14 @@ use std::{
     hash::{Hash, Hasher},
     io,
     path::{Path, PathBuf},
-    sync::{Arc, Weak},
+    rc::{Rc, Weak},
+    sync::Arc,
 };
 
 use crate::{State, local_runtime_resource};
 
 #[cfg(not(target_family = "wasm"))]
-use crate::runtime_resource;
+use crate::shared_runtime_resource;
 
 #[cfg(target_os = "android")]
 mod android;
@@ -67,34 +68,34 @@ pub struct FontAsset {
 
 /// A shared resource lifetime. Retain it while observing its loading state.
 #[derive(Clone)]
-pub struct Resource<T: Send + Sync + 'static>(Arc<ResourceEntry<T>>);
+pub struct Resource<T: 'static>(Rc<ResourceEntry<T>>);
 
-struct ResourceEntry<T: Send + Sync + 'static> {
+struct ResourceEntry<T: 'static> {
     source: Source,
-    owner: crate::runtime::ModelScope,
+    _owner: crate::runtime::ModelScope,
     state: State<LoadState<T>>,
 }
 
-impl<T: Send + Sync + 'static> std::fmt::Debug for Resource<T> {
+impl<T> std::fmt::Debug for Resource<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Resource").field(&self.0.source).finish()
     }
 }
 
-impl<T: Send + Sync + 'static> PartialEq for Resource<T> {
+impl<T> PartialEq for Resource<T> {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
-impl<T: Send + Sync + 'static> Eq for Resource<T> {}
+impl<T> Eq for Resource<T> {}
 
-impl<T: Clone + Send + Sync + 'static> Resource<T> {
+impl<T: Clone + Send + 'static> Resource<T> {
     /// Requests a decoded resource in the active UI session.
     ///
-    /// Reading and decoding run off the UI thread. Retain the returned handle
-    /// while using the resource; live requests for the same source and decoder
-    /// share one result, and completion invalidates the builds and measurements
-    /// that observed it.
+    /// Reading and decoding run on [`crate::Dispatcher::Io`]. Retain the
+    /// returned handle while using the resource; live requests for the same
+    /// source and decoder share one result, and completion invalidates the
+    /// builds and measurements that observed it.
     pub fn load(source: impl Into<Source>, decode: fn(Arc<[u8]>) -> io::Result<T>) -> Self {
         let source = source.into();
         let cache = local_runtime_resource::<ResourceCache<T>>();
@@ -107,46 +108,48 @@ impl<T: Clone + Send + Sync + 'static> Resource<T> {
             entries.retain(|_, entry| entry.strong_count() > 0);
             let owner = crate::runtime::ModelScope::new();
             let state = owner.own_state(LoadState::Loading);
-            let entry = Arc::new(ResourceEntry {
+            let entry = Rc::new(ResourceEntry {
                 source: source.clone(),
-                owner,
+                _owner: owner,
                 state,
             });
-            entries.insert(key, Arc::downgrade(&entry));
+            entries.insert(key, Rc::downgrade(&entry));
             Resource(entry)
         };
         let state = resource.0.state;
+        let session = crate::dispatcher::register_current();
         let label = format!("{source:?}");
-        let finish = move |result: io::Result<T>| {
-            state.set(match result {
-                Ok(value) => LoadState::Ready(value),
-                Err(error) => {
-                    tracing::warn!(source = label, %error, "resource loading failed");
-                    LoadState::Failed(Arc::new(error))
+        // Results return through the session queue so a UI thread waiting for
+        // loads never blocks the delivery.
+        let deliver = move |result: io::Result<T>| {
+            crate::dispatcher::dispatch_to_session(session, move || {
+                if !state.is_alive() {
+                    return;
                 }
+                state.set(match result {
+                    Ok(value) => LoadState::Ready(value),
+                    Err(error) => {
+                        tracing::warn!(source = label, %error, "resource loading failed");
+                        LoadState::Failed(Arc::new(error))
+                    }
+                });
             });
         };
-        let dispatcher = resource.0.owner.dispatcher();
         #[cfg(target_family = "wasm")]
-        wasm_bindgen_futures::spawn_local(async move {
-            let result = source.read().await;
-            if dispatcher.is_alive() {
-                let result = result.and_then(decode);
-                dispatcher.dispatch(move || finish(result));
-            }
-        });
+        crate::async_dispatch::spawn_local(async move {
+            deliver(source.read().await.and_then(decode));
+        })
+        .detach();
         #[cfg(not(target_family = "wasm"))]
         {
-            let in_flight = runtime_resource::<InFlight>();
+            let in_flight = shared_runtime_resource::<InFlight>();
             *in_flight.0.lock() += 1;
             let loading = Loading(in_flight);
-            let _ = WORKERS.send(Box::new(move || {
+            crate::spawn(crate::Dispatcher::Io, async move {
                 let _loading = loading;
-                if dispatcher.is_alive() {
-                    let result = source.read().and_then(decode);
-                    dispatcher.dispatch(move || finish(result));
-                }
-            }));
+                deliver(source.read().and_then(decode));
+            })
+            .detach();
         }
         resource
     }
@@ -157,39 +160,13 @@ impl<T: Clone + Send + Sync + 'static> Resource<T> {
     }
 }
 
-struct ResourceCache<T: Send + Sync + 'static>(
-    RefCell<HashMap<(Source, usize), Weak<ResourceEntry<T>>>>,
-);
+struct ResourceCache<T: 'static>(RefCell<HashMap<(Source, usize), Weak<ResourceEntry<T>>>>);
 
-impl<T: Send + Sync + 'static> Default for ResourceCache<T> {
+impl<T> Default for ResourceCache<T> {
     fn default() -> Self {
         Self(RefCell::default())
     }
 }
-
-#[cfg(not(target_family = "wasm"))]
-type Work = Box<dyn FnOnce() + Send>;
-
-#[cfg(not(target_family = "wasm"))]
-static WORKERS: std::sync::LazyLock<std::sync::mpsc::Sender<Work>> =
-    std::sync::LazyLock::new(|| {
-        let (sender, receiver) = std::sync::mpsc::channel::<Work>();
-        let receiver = Arc::new(parking_lot::Mutex::new(receiver));
-        let threads = std::thread::available_parallelism().map_or(2, |n| n.get().clamp(2, 4));
-        for _ in 0..threads {
-            let receiver = Arc::clone(&receiver);
-            std::thread::spawn(move || {
-                loop {
-                    let work = receiver.lock().recv();
-                    match work {
-                        Ok(work) => work(),
-                        Err(_) => break,
-                    }
-                }
-            });
-        }
-        sender
-    });
 
 #[cfg(not(target_family = "wasm"))]
 #[derive(Default)]
@@ -208,7 +185,7 @@ impl Drop for Loading {
 
 #[cfg(all(any(test, feature = "testing"), not(target_family = "wasm")))]
 pub(crate) fn in_flight() -> bool {
-    *runtime_resource::<InFlight>().0.lock() > 0
+    *shared_runtime_resource::<InFlight>().0.lock() > 0
 }
 
 /// Blocks until this session's requested resources have been delivered.
@@ -217,7 +194,7 @@ pub(crate) fn in_flight() -> bool {
     not(target_family = "wasm")
 ))]
 pub(crate) fn settle() {
-    let in_flight = runtime_resource::<InFlight>();
+    let in_flight = shared_runtime_resource::<InFlight>();
     let mut count = in_flight.0.lock();
     while *count > 0 {
         in_flight.1.wait(&mut count);
@@ -355,7 +332,7 @@ source_from! {
 mod tests {
     use super::*;
 
-    fn delivered<T: Clone + Send + Sync + 'static>(resource: &Resource<T>) -> LoadState<T> {
+    fn delivered<T: Clone + Send + 'static>(resource: &Resource<T>) -> LoadState<T> {
         assert!(matches!(resource.get(), LoadState::Loading));
         settle();
         crate::dispatcher::flush();
@@ -363,7 +340,7 @@ mod tests {
     }
 
     fn upper(bytes: Arc<[u8]>) -> io::Result<Arc<[u8]>> {
-        assert!(std::thread::current().name().is_none());
+        assert_eq!(std::thread::current().name(), Some("tessera-io"));
         Ok(Arc::from(bytes.to_ascii_uppercase()))
     }
 

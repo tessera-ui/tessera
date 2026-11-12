@@ -11,7 +11,7 @@ use std::{
 };
 
 use fluent_bundle::{FluentArgs, FluentResource, concurrent::FluentBundle};
-use tessera_ui::{EntryRegistry, ModelStore, State, TesseraPackage, local_runtime_resource};
+use tessera_ui::{EntryRegistry, ModelStore, State, TesseraPackage, runtime_resource};
 
 pub use fluent_bundle::FluentValue;
 pub use fluent_templates::{self, LanguageIdentifier, Loader, langid};
@@ -220,7 +220,7 @@ struct LocalizationModel(std::cell::OnceCell<(ModelStore, State<Localization>)>)
 
 impl TesseraPackage for Catalog {
     fn register(self, _registry: &mut EntryRegistry) {
-        let localization = local_runtime_resource::<LocalizationModel>();
+        let localization = runtime_resource::<LocalizationModel>();
         // The first registered catalog stays in effect for the session.
         if localization.0.get().is_none() {
             let store = ModelStore::new();
@@ -251,7 +251,8 @@ impl I18n {
 
     /// Returns a controller when the current entry has a localization catalog.
     pub fn try_current() -> Option<Self> {
-        local_runtime_resource::<LocalizationModel>()
+        tessera_ui::RuntimeSession::current()?;
+        runtime_resource::<LocalizationModel>()
             .0
             .get()
             .map(|(_, state)| I18n(*state))

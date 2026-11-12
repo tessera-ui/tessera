@@ -777,10 +777,9 @@ fn switch_content(
                             .modifier(Modifier::new().fill_max_size())
                             .alignment(Alignment::Center)
                             .children(move || {
-                                provide_context(
-                                    || IconSize(SwitchDefaults::ICON_SIZE),
-                                    move || child.render(),
-                                );
+                                provide_context(IconSize(SwitchDefaults::ICON_SIZE), move || {
+                                    child.render()
+                                });
                             });
                     }
                 });

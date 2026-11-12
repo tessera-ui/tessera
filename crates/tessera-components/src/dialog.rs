@@ -744,7 +744,7 @@ pub fn basic_dialog(
                 let icon_color = scheme.secondary;
                 {
                     provide_context(
-                        || ContentColor {
+                        ContentColor {
                             current: icon_color,
                         },
                         || {
@@ -791,7 +791,7 @@ pub fn basic_dialog(
                 let action_color = scheme.primary;
                 {
                     provide_context(
-                        || ContentColor {
+                        ContentColor {
                             current: action_color,
                         },
                         || {

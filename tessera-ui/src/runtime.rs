@@ -1428,6 +1428,11 @@ pub(crate) fn has_pending_frame_nanos_receivers() -> bool {
 }
 
 /// Frame-clock work performed by a completed frame.
+#[cfg(any(
+    test,
+    feature = "testing",
+    all(feature = "headless", not(target_family = "wasm"))
+))]
 #[derive(Clone, Debug, Default)]
 pub struct FrameClockDiagnostics {
     /// Runtime session that owns these subscriptions.
@@ -1558,7 +1563,8 @@ pub fn current_frame_nanos() -> u64 {
 }
 
 /// Returns the elapsed time since the previous frame.
-pub fn frame_delta() -> Duration {
+#[cfg(feature = "profiling")]
+pub(crate) fn frame_delta() -> Duration {
     with_frame_clock_tracker(|tracker| tracker.frame_delta)
 }
 
@@ -1894,9 +1900,8 @@ impl<T> Hash for State<T> {
 
 impl<T> State<T> {
     fn from_slot(slot: SlotHandle, generation: u64) -> Self {
-        crate::dispatcher::ensure_current_session_registered();
         Self {
-            session: crate::session::current_session_identity().expect("active state session"),
+            session: crate::dispatcher::register_current(),
             slot,
             generation,
             _marker: PhantomData,
@@ -4769,7 +4774,7 @@ mod tests {
         state_probe: crate::testing::TestProbe<Option<State<usize>>>,
     ) {
         let scope = scope.get().expect("test provides a store");
-        crate::provide_context(|| scope, || injected_model_reader(model_probe, state_probe));
+        crate::provide_context(scope, || injected_model_reader(model_probe, state_probe));
     }
 
     #[test]
@@ -5359,7 +5364,7 @@ mod tests {
         let mut dirty = HashSet::default();
         dirty.insert(reader_instance_key);
         with_build_dirty_instance_keys(Arc::new(dirty), || {
-            let mut arena = crate::Arena::<()>::new();
+            let mut arena = indextree::Arena::<()>::new();
             let node_id = arena.new_node(());
             let _phase_guard = push_phase(RuntimePhase::Build);
             let _node_guard = push_current_node(node_id, 12002, "test_component");
@@ -5376,7 +5381,7 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         fn stable_child_instance_logic_id(with_group_child: bool) -> u64 {
-            let mut arena = crate::Arena::<()>::new();
+            let mut arena = indextree::Arena::<()>::new();
             let root_node = arena.new_node(());
             let stable_child_node = arena.new_node(());
             let group_child_node = arena.new_node(());
@@ -5409,7 +5414,7 @@ mod tests {
     fn child_components_in_different_groups_get_distinct_instance_logic_ids() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let mut arena = crate::Arena::<()>::new();
+        let mut arena = indextree::Arena::<()>::new();
         let root_node = arena.new_node(());
         let first_child_node = arena.new_node(());
         let second_child_node = arena.new_node(());
@@ -5437,7 +5442,7 @@ mod tests {
     fn child_components_in_repeated_path_groups_keep_distinct_instance_logic_ids() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let mut arena = crate::Arena::<()>::new();
+        let mut arena = indextree::Arena::<()>::new();
         let root_node = arena.new_node(());
         let first_child_node = arena.new_node(());
         let second_child_node = arena.new_node(());
