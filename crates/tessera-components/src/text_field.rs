@@ -9,7 +9,7 @@ use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, PxSize, RenderSlot,
     ScrollDeltaUnit, State,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _},
     normalize_platform_scroll_delta, provide_context, remember, tessera, use_context, winit,
 };
@@ -542,7 +542,7 @@ struct OutlinedFloatingLabelLayout {
     label_offset: PxPosition,
 }
 
-impl tessera_ui::LayoutModifierNode for OutlinedFloatingLabelLayout {
+impl tessera_ui::LayoutPolicy for OutlinedFloatingLabelLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -582,26 +582,25 @@ fn outlined_floating_label(
     let label_offset_x = label_offset_x.unwrap_or(Dp(0.0));
     let label_offset_y = label_offset_y.unwrap_or(Dp(0.0));
     let outline = outline.expect("floating outlined label requires outline geometry");
-    layout()
-        .policy(OutlinedFloatingLabelLayout {
-            label_offset: PxPosition::new(label_offset_x.into(), label_offset_y.into()),
-        })
-        .child(move || {
-            text(label_text.clone())
-                .modifier(Modifier::new().on_layout_size_changed(
-                    move |size: tessera_ui::PxSize| {
-                        if outline.with(|outline| outline.label_width) != size.width {
-                            outline.with_mut(|outline| outline.label_width = size.width);
-                        }
-                    },
-                ))
-                .color(label_color)
-                .style(TextStyle {
-                    font_size: label_font_size,
-                    line_height: Some(label_line_height),
-                    ..typography.body_small
-                });
-        });
+    tessera_ui::layout::layout(OutlinedFloatingLabelLayout {
+        label_offset: PxPosition::new(label_offset_x.into(), label_offset_y.into()),
+    })
+    .child(move || {
+        text(label_text.clone())
+            .modifier(
+                Modifier::new().on_layout_size_changed(move |size: tessera_ui::PxSize| {
+                    if outline.with(|outline| outline.label_width) != size.width {
+                        outline.with_mut(|outline| outline.label_width = size.width);
+                    }
+                }),
+            )
+            .color(label_color)
+            .style(TextStyle {
+                font_size: label_font_size,
+                line_height: Some(label_line_height),
+                ..typography.body_small
+            });
+    });
 }
 
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -618,7 +617,7 @@ struct OutlineSlicesLayout {
     band: Px,
 }
 
-impl tessera_ui::LayoutModifierNode for OutlineSlicesLayout {
+impl tessera_ui::LayoutPolicy for OutlineSlicesLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         if input.is_intrinsic() {
@@ -655,7 +654,7 @@ struct OutlineSliceLayout {
     origin: PxPosition,
 }
 
-impl tessera_ui::LayoutModifierNode for OutlineSliceLayout {
+impl tessera_ui::LayoutPolicy for OutlineSliceLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let Some(child) = input.children().first().copied() else {
             return Ok(LayoutResult::default());
@@ -700,30 +699,28 @@ fn outlined_border(
         size.width
     };
     let band = Px((width.to_pixels_f32().ceil() as i32 + 1).min(size.height.0));
-    layout()
-        .policy(OutlineSlicesLayout {
-            size,
-            left,
-            right,
-            band,
-        })
-        .child(move || {
-            for origin in [
-                PxPosition::new(Px::ZERO, band),
-                PxPosition::ZERO,
-                PxPosition::new(right, Px::ZERO),
-            ] {
-                layout()
-                    .modifier(Modifier::new().clip_shape(Shape::RECTANGLE))
-                    .policy(OutlineSliceLayout { size, origin })
-                    .child(move || {
-                        surface()
-                            .style(SurfaceStyle::Outlined { color, width })
-                            .shape(shape)
-                            .block_input(false);
-                    });
-            }
-        });
+    tessera_ui::layout::layout(OutlineSlicesLayout {
+        size,
+        left,
+        right,
+        band,
+    })
+    .child(move || {
+        for origin in [
+            PxPosition::new(Px::ZERO, band),
+            PxPosition::ZERO,
+            PxPosition::new(right, Px::ZERO),
+        ] {
+            tessera_ui::layout::layout(OutlineSliceLayout { size, origin })
+                .modifier(Modifier::new().clip_shape(Shape::RECTANGLE))
+                .child(move || {
+                    surface()
+                        .style(SurfaceStyle::Outlined { color, width })
+                        .shape(shape)
+                        .block_input(false);
+                });
+        }
+    });
 }
 
 type FieldContentData = (TextFieldProps, TextInputProps, MaterialTheme, bool, bool);
@@ -731,7 +728,7 @@ type FieldContentData = (TextFieldProps, TextInputProps, MaterialTheme, bool, bo
 #[derive(Clone, PartialEq)]
 struct FieldBodyHeight;
 
-impl tessera_ui::LayoutModifierNode for FieldBodyHeight {
+impl tessera_ui::LayoutPolicy for FieldBodyHeight {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let Some(child) = input.children().first().copied() else {
             return Ok(LayoutResult::default());
@@ -757,7 +754,7 @@ struct FieldDecorationLayout {
     line_height: Px,
 }
 
-impl tessera_ui::LayoutModifierNode for FieldDecorationLayout {
+impl tessera_ui::LayoutPolicy for FieldDecorationLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let Some(child) = input.children().first().copied() else {
             return Ok(LayoutResult::default());
@@ -787,18 +784,17 @@ fn field_decoration(content: String, color: Color, style: TextStyle, single_line
     } else {
         Modifier::new()
     };
-    layout()
-        .modifier(modifier)
-        .policy(FieldDecorationLayout {
-            single_line,
-            line_height: style
-                .line_height
-                .unwrap_or(Dp(style.font_size.0 * 1.2))
-                .to_px(),
-        })
-        .child(move || {
-            text(content.clone()).color(color).style(style);
-        });
+    tessera_ui::layout::layout(FieldDecorationLayout {
+        single_line,
+        line_height: style
+            .line_height
+            .unwrap_or(Dp(style.font_size.0 * 1.2))
+            .to_px(),
+    })
+    .modifier(modifier)
+    .child(move || {
+        text(content.clone()).color(color).style(style);
+    });
 }
 
 #[tessera]
@@ -926,7 +922,7 @@ fn text_field_body(
             .on_surface
             .with_alpha(DISABLED_CONTENT_ALPHA)
     };
-    layout().policy(FieldBodyHeight).child(move || {
+    tessera_ui::layout::layout(FieldBodyHeight).child(move || {
         boxed().children(move || {
             row()
                 .modifier(
@@ -1530,7 +1526,7 @@ pub fn text_field(
         }
     });
 
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         if menu_policy.enabled {
             let render_args = render_args.clone();
             let editor_args = editor_args.clone();

@@ -8,8 +8,7 @@ use std::ops::RangeInclusive;
 
 use tessera_ui::{
     AxisConstraint, CallbackWith, Dp, FocusProperties, FocusRequester, FocusScopeNode, Modifier,
-    RenderSlotWith, State, layout::layout, modifier::FocusModifierExt as _, remember, tessera,
-    use_context,
+    RenderSlotWith, State, modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use crate::{
@@ -536,24 +535,23 @@ fn range_calendar(
         .padding_symmetric(Dp(12.0), Dp::ZERO)
         .focus_restorer_with(focus_scope, Some(viewport_focus));
     column().modifier(modifier).children(move || {
-        layout()
-            .policy(DateGridLayout {
-                columns: DATE_COLUMNS,
-                row_height: DATE_CELL_SIZE,
-            })
-            .child(move || {
-                for day in weekday_sequence(first_day) {
-                    surface()
-                        .style(tessera_ui::Color::TRANSPARENT.into())
-                        .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-                        .content_alignment(Alignment::Center)
-                        .child(move || {
-                            text(weekday_narrow_label(day))
-                                .style(theme.typography.body_large)
-                                .color(theme.color_scheme.on_surface);
-                        });
-                }
-            });
+        tessera_ui::layout::layout(DateGridLayout {
+            columns: DATE_COLUMNS,
+            row_height: DATE_CELL_SIZE,
+        })
+        .child(move || {
+            for day in weekday_sequence(first_day) {
+                surface()
+                    .style(tessera_ui::Color::TRANSPARENT.into())
+                    .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                    .content_alignment(Alignment::Center)
+                    .child(move || {
+                        text(weekday_narrow_label(day))
+                            .style(theme.typography.body_large)
+                            .color(theme.color_scheme.on_surface);
+                    });
+            }
+        });
         lazy_column()
             .modifier(
                 keyboard.viewport_modifier(
@@ -627,47 +625,45 @@ fn range_month(
                         .style(theme.typography.title_small)
                         .color(theme.color_scheme.on_surface_variant);
                 });
-            layout()
-                .policy(DateGridLayout {
-                    columns: DATE_COLUMNS,
-                    row_height: DATE_CELL_SIZE,
-                })
-                .child(move || {
-                    for date in grid.iter().copied() {
-                        let in_range =
-                            date.zip(start)
-                                .zip(end)
-                                .is_some_and(|((date, start), end)| {
-                                    date_key(date) >= date_key(start)
-                                        && date_key(date) <= date_key(end)
-                                });
-                        let selected = date.is_some() && (date == start || date == end);
-                        let enabled = date
-                            .is_some_and(|date| state.with(|state| state.is_date_selectable(date)));
-                        calendar_day(on_select, today)
-                            .cell_optional(date)
-                            .selected(selected)
-                            .enabled(enabled)
-                            .keyboard(keyboard)
-                            .in_range(in_range)
-                            .range_band_optional(in_range.then_some(super::CalendarRangeBand {
-                                start: date == start,
-                                end: date == end,
-                            }))
-                            .description_optional(date.map(|_| {
-                                if date == start {
-                                    I18N.text("md3-start-date")
-                                } else if date == end {
-                                    I18N.text("md3-end-date")
-                                } else if in_range {
-                                    I18N.text("md3-in-selected-range")
-                                } else {
-                                    I18N.text("md3-not-selected")
-                                }
-                                .to_owned()
-                            }));
-                    }
-                });
+            tessera_ui::layout::layout(DateGridLayout {
+                columns: DATE_COLUMNS,
+                row_height: DATE_CELL_SIZE,
+            })
+            .child(move || {
+                for date in grid.iter().copied() {
+                    let in_range = date
+                        .zip(start)
+                        .zip(end)
+                        .is_some_and(|((date, start), end)| {
+                            date_key(date) >= date_key(start) && date_key(date) <= date_key(end)
+                        });
+                    let selected = date.is_some() && (date == start || date == end);
+                    let enabled =
+                        date.is_some_and(|date| state.with(|state| state.is_date_selectable(date)));
+                    calendar_day(on_select, today)
+                        .cell_optional(date)
+                        .selected(selected)
+                        .enabled(enabled)
+                        .keyboard(keyboard)
+                        .in_range(in_range)
+                        .range_band_optional(in_range.then_some(super::CalendarRangeBand {
+                            start: date == start,
+                            end: date == end,
+                        }))
+                        .description_optional(date.map(|_| {
+                            if date == start {
+                                I18N.text("md3-start-date")
+                            } else if date == end {
+                                I18N.text("md3-end-date")
+                            } else if in_range {
+                                I18N.text("md3-in-selected-range")
+                            } else {
+                                I18N.text("md3-not-selected")
+                            }
+                            .to_owned()
+                        }));
+                }
+            });
         });
 }
 

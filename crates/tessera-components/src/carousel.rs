@@ -17,7 +17,7 @@ use tessera_ui::{
     accesskit::{Action, Role},
     dp::scale_factor,
     key,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     normalize_platform_scroll_delta, receive_frame_nanos, remember, tessera, winit,
 };
@@ -460,7 +460,7 @@ struct CarouselLayout {
     reverse: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for CarouselLayout {
+impl tessera_ui::LayoutPolicy for CarouselLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = input.parent_constraint();
         let width = parent.width().resolve_max().ok_or_else(|| {
@@ -552,7 +552,7 @@ impl tessera_ui::LayoutModifierNode for CarouselLayout {
             && self.reverse == other.reverse
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -914,7 +914,7 @@ fn carousel_item(
             .config
             .is_some_and(|config| config.variant == CarouselVariant::FullScreen)
     });
-    layout()
+    layout(Stack)
         .modifier(
             Modifier::new()
                 .focus_scope_with(scope)
@@ -1325,16 +1325,18 @@ pub fn carousel(
     if render_state.with(|state| *state != value) {
         render_state.set(value);
     }
-    layout().modifier(modifier).policy(policy).child(move || {
-        let count = render_state.with(|state| state.count);
-        let indices =
-            controller.with(|state| item_indices(state, count, navigation.retained_item()));
-        for index in indices {
-            key(index, || {
-                carousel_item(index, controller, render_state, navigation);
-            });
-        }
-    });
+    tessera_ui::layout::layout(policy)
+        .modifier(modifier)
+        .child(move || {
+            let count = render_state.with(|state| state.count);
+            let indices =
+                controller.with(|state| item_indices(state, count, navigation.retained_item()));
+            for index in indices {
+                key(index, || {
+                    carousel_item(index, controller, render_state, navigation);
+                });
+            }
+        });
 }
 
 fn finite_dp(value: Dp, fallback: f32) -> f32 {

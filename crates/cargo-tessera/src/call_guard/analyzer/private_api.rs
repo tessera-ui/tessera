@@ -11,7 +11,7 @@ use ra_ap_syntax::{
 use super::{CallAnalyzer, Diagnostic, ErrorCode};
 
 const PRIVATE_MODULE_NAME: &str = "__private";
-const PRIVATE_MODULE_CRATES: [&str; 2] = ["tessera_ui", "tessera_shard"];
+const PRIVATE_MODULE_CRATES: [&str; 1] = ["tessera_ui"];
 
 impl CallAnalyzer<'_> {
     /// Rejects names that reach a Tessera crate's macro-support module.

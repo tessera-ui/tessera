@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutModifierNode, LayoutResult,
+    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition,
     accesskit::Role,
-    layout::{MeasureScope, PlacementResult, PlacementScope, group, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, group},
     remember, remember_with_key, tessera, use_context,
 };
 use unicode_linebreak::linebreaks;
@@ -202,34 +202,33 @@ pub fn text_table(
         collection_info: Some((rows, columns, false)),
         ..Default::default()
     });
-    layout()
-        .modifier(modifier)
-        .policy(TableLayout {
-            intrinsic,
-            rows,
-            columns,
-            cache,
-        })
-        .child(move || {
-            for row in 0..rows {
-                table_row(
-                    cells
-                        .iter()
-                        .filter(|cell| cell.row == row)
-                        .cloned()
-                        .collect(),
-                    row,
-                    columns,
-                    style,
-                    header_style,
-                    padding,
-                    color,
-                    header_color,
-                    header_background,
-                    divider_color,
-                );
-            }
-        });
+    tessera_ui::layout::layout(TableLayout {
+        intrinsic,
+        rows,
+        columns,
+        cache,
+    })
+    .modifier(modifier)
+    .child(move || {
+        for row in 0..rows {
+            table_row(
+                cells
+                    .iter()
+                    .filter(|cell| cell.row == row)
+                    .cloned()
+                    .collect(),
+                row,
+                columns,
+                style,
+                header_style,
+                padding,
+                color,
+                header_color,
+                header_background,
+                divider_color,
+            );
+        }
+    });
 }
 
 #[tessera]
@@ -414,7 +413,7 @@ struct TrackLayout {
     sizes: Vec<ComputedData>,
 }
 
-impl LayoutModifierNode for TableLayout {
+impl LayoutPolicy for TableLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         assert_eq!(
@@ -503,11 +502,7 @@ impl LayoutModifierNode for TableLayout {
         Ok(result)
     }
 
-    fn place_children(
-        &self,
-        scope: &PlacementScope<'_>,
-        _: &PlacementResult,
-    ) -> Option<PlacementResult> {
+    fn place(&self, scope: &PlacementScope<'_>, _: &PlacementResult) -> Option<PlacementResult> {
         let tracks = self.cache.lock();
         let tracks = tracks.as_ref()?;
         let children = scope.children();

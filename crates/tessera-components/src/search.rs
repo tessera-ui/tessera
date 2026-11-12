@@ -7,7 +7,8 @@
 use tessera_ui::{
     CallbackWith, Color, CursorEventContent, Dp, KeyboardInput, KeyboardInputModifierNode,
     Modifier, PointerInput, PointerInputModifierNode, PressKeyEventType, RenderSlot, State,
-    layout::layout, modifier::ModifierCapabilityExt as _, remember, tessera, use_context, winit,
+    layout::Stack, layout::layout, modifier::ModifierCapabilityExt as _, remember, tessera,
+    use_context, winit,
 };
 
 use crate::{
@@ -459,7 +460,7 @@ fn mount_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
     args.controller = Some(controller);
     let render_args = build_search_bar_props(args, kind);
     let modifier = render_args.modifier.clone();
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         search_bar_inner()
             .kind(render_args.kind)
             .enabled(render_args.enabled)
@@ -704,7 +705,7 @@ fn search_bar_inner(
         content,
     };
 
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let placeholder = placeholder.clone();
         let leading_icon = leading_icon;
         let trailing_icon = trailing_icon;
@@ -760,7 +761,7 @@ fn search_bar_inner(
                                 horizontal_divider().color(divider_color);
                             }
                             let content = content;
-                            layout()
+                            layout(Stack)
                                 .modifier(Modifier::new().padding_all(content_padding))
                                 .child(move || {
                                     content.render();

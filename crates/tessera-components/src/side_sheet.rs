@@ -10,7 +10,7 @@ use tessera_ui::{
     Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
     RenderSlot, State, current_frame_nanos,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
     receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -233,9 +233,7 @@ fn compute_side_sheet_x(
 }
 
 /// Create the keyboard handler closure used to close the sheet on Escape.
-fn make_keyboard_closure(
-    on_close: Callback,
-) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>) + Send + Sync> {
+fn make_keyboard_closure(on_close: Callback) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>)> {
     Box::new(move |mut input: tessera_ui::KeyboardInput<'_>| {
         let mut handled = false;
         input.keyboard_events.retain(|event| {
@@ -640,90 +638,89 @@ fn side_sheet_provider_render(
         1.0 - visibility.position
     };
 
-    layout()
-        .modifier(
-            modifier.on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
-                if coordinate_scale.get() != transform.scale() {
-                    coordinate_scale.set(transform.scale());
-                }
-            }),
-        )
-        .policy(SideSheetLayout {
-            max_width,
-            progress,
-            is_open,
-            position,
-            drag_offset,
-        })
-        .child(move || {
-            let side_sheet_content = side_sheet_content;
-            overlay_background(
-                main_content,
-                show_side_sheet && sheet_type == SideSheetType::Modal,
-            );
-            modal_back_handler(
-                is_open && sheet_type == SideSheetType::Modal,
-                on_close_request,
-            )
-            .on_preview(move |event| {
-                controller.with_mut(|controller| {
-                    controller.motion.preview_back(event, current_frame_nanos());
-                });
-            });
-
-            if show_side_sheet {
-                match sheet_type {
-                    SideSheetType::Modal => {
-                        let scrim_alpha = visibility.opacity * SCRIM_ALPHA;
-                        let scrim_color = use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .color_scheme
-                            .scrim;
-                        surface()
-                            .style(scrim_color.with_alpha(scrim_alpha).into())
-                            .on_click_shared(on_close_request)
-                            .show_ripple(false)
-                            .show_state_layer(false)
-                            .modifier(
-                                Modifier::new()
-                                    .fill_max_size()
-                                    .semantics(SemanticsArgs {
-                                        hidden: true,
-                                        ..Default::default()
-                                    })
-                                    .focusable()
-                                    .focus_properties(
-                                        FocusProperties::new()
-                                            .can_focus(false)
-                                            .can_request_focus(false)
-                                            .skip_traversal(true),
-                                    ),
-                            )
-                            .block_input(true)
-                            .child(|| {});
-                    }
-                    SideSheetType::Standard => {
-                        surface()
-                            .style(Color::TRANSPARENT.into())
-                            .modifier(Modifier::new().fill_max_size())
-                            .child(|| {});
-                    }
-                }
-
-                side_sheet_content_wrapper()
-                    .content_padding(content_padding)
-                    .nested_scroll_connection(nested_scroll_connection.clone())
-                    .accessibility_label_optional(accessibility_label.clone())
-                    .focus_scope(focus_scope)
-                    .sheet_type(sheet_type)
-                    .position(current_position)
-                    .controller(controller)
-                    .on_close_request_shared(on_close_request)
-                    .just_opened(just_opened)
-                    .content_shared(side_sheet_content);
+    tessera_ui::layout::layout(SideSheetLayout {
+        max_width,
+        progress,
+        is_open,
+        position,
+        drag_offset,
+    })
+    .modifier(
+        modifier.on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
+            if coordinate_scale.get() != transform.scale() {
+                coordinate_scale.set(transform.scale());
             }
+        }),
+    )
+    .child(move || {
+        let side_sheet_content = side_sheet_content;
+        overlay_background(
+            main_content,
+            show_side_sheet && sheet_type == SideSheetType::Modal,
+        );
+        modal_back_handler(
+            is_open && sheet_type == SideSheetType::Modal,
+            on_close_request,
+        )
+        .on_preview(move |event| {
+            controller.with_mut(|controller| {
+                controller.motion.preview_back(event, current_frame_nanos());
+            });
         });
+
+        if show_side_sheet {
+            match sheet_type {
+                SideSheetType::Modal => {
+                    let scrim_alpha = visibility.opacity * SCRIM_ALPHA;
+                    let scrim_color = use_context::<MaterialTheme>()
+                        .expect("MaterialTheme must be provided")
+                        .get()
+                        .color_scheme
+                        .scrim;
+                    surface()
+                        .style(scrim_color.with_alpha(scrim_alpha).into())
+                        .on_click_shared(on_close_request)
+                        .show_ripple(false)
+                        .show_state_layer(false)
+                        .modifier(
+                            Modifier::new()
+                                .fill_max_size()
+                                .semantics(SemanticsArgs {
+                                    hidden: true,
+                                    ..Default::default()
+                                })
+                                .focusable()
+                                .focus_properties(
+                                    FocusProperties::new()
+                                        .can_focus(false)
+                                        .can_request_focus(false)
+                                        .skip_traversal(true),
+                                ),
+                        )
+                        .block_input(true)
+                        .child(|| {});
+                }
+                SideSheetType::Standard => {
+                    surface()
+                        .style(Color::TRANSPARENT.into())
+                        .modifier(Modifier::new().fill_max_size())
+                        .child(|| {});
+                }
+            }
+
+            side_sheet_content_wrapper()
+                .content_padding(content_padding)
+                .nested_scroll_connection(nested_scroll_connection.clone())
+                .accessibility_label_optional(accessibility_label.clone())
+                .focus_scope(focus_scope)
+                .sheet_type(sheet_type)
+                .position(current_position)
+                .controller(controller)
+                .on_close_request_shared(on_close_request)
+                .just_opened(just_opened)
+                .content_shared(side_sheet_content);
+        }
+    });
 }
 
 #[tessera]
@@ -782,7 +779,7 @@ fn side_sheet_content_wrapper(
             focus_scope.restore_focus();
         }
     }
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let content = content;
         let nested_scroll_connection = nested_scroll_connection.clone();
         let edge = position.get();
@@ -830,12 +827,12 @@ struct SideSheetLayout {
     drag_offset: f32,
 }
 
-impl tessera_ui::LayoutModifierNode for SideSheetLayout {
+impl tessera_ui::LayoutPolicy for SideSheetLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.max_width == other.max_width
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,

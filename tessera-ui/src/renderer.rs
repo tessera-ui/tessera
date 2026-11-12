@@ -543,8 +543,10 @@ where
             .build()
             .unwrap();
         let event_loop_proxy = event_loop.create_proxy();
-        let android_back =
-            crate::android::system_back::BackBridge::new(&android_app, session.dispatcher());
+        let android_back = crate::android::system_back::BackBridge::new(
+            &android_app,
+            session.run(crate::dispatcher::current),
+        );
         let app = None;
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
@@ -2433,8 +2435,8 @@ mod tests {
         FocusRequester, Modifier, PxRect, State,
         component_tree::dispatch_pending_focus_reveal_request,
         focus::flush_pending_focus_callbacks,
-        layout::{LayoutResult, MeasureScope, layout},
-        modifier::{FocusModifierExt as _, LayoutModifierNode},
+        layout::{LayoutResult, MeasureScope, Stack, layout},
+        modifier::{FocusModifierExt as _, LayoutPolicy},
         remember,
         runtime::{TesseraRuntime, prune_persistent_focus_handles},
         testing::{layout_test, pump_layout_test_session, start_layout_test_session},
@@ -2455,7 +2457,7 @@ mod tests {
     #[derive(Clone, PartialEq)]
     struct FocusLeafLayout;
 
-    impl LayoutModifierNode for FocusLeafLayout {
+    impl LayoutPolicy for FocusLeafLayout {
         fn measure(
             &self,
             _scope: &mut MeasureScope<'_>,
@@ -2469,8 +2471,7 @@ mod tests {
 
     #[crate::tessera]
     fn frame_end_removable_target(requester: FocusRequester) {
-        layout()
-            .policy(FocusLeafLayout)
+        crate::layout::layout(FocusLeafLayout)
             .modifier(Modifier::new().focusable().focus_requester(requester));
     }
 
@@ -2482,7 +2483,7 @@ mod tests {
         probe.focus.set(Some((visible, removed, fallback)));
         let reveals = probe.reveals.clone();
         let events = probe.events.clone();
-        layout()
+        layout(Stack)
             .modifier(
                 Modifier::new()
                     .focus_restorer(Some(fallback))
@@ -2496,7 +2497,7 @@ mod tests {
                 if visible.get() {
                     frame_end_removable_target(removed);
                 }
-                layout().policy(FocusLeafLayout).modifier(
+                crate::layout::layout(FocusLeafLayout).modifier(
                     Modifier::new()
                         .focusable()
                         .focus_requester(fallback)
@@ -2521,7 +2522,7 @@ mod tests {
         reads: crate::testing::TestProbe<Vec<bool>>,
     ) {
         reads.with_mut(|reads| reads.push(requester.is_focus_visible()));
-        layout().policy(FocusLeafLayout);
+        crate::layout::layout(FocusLeafLayout);
     }
 
     #[crate::tessera]
@@ -2529,7 +2530,7 @@ mod tests {
         let first = remember(FocusRequester::new).get();
         let second = remember(FocusRequester::new).get();
         probe.focus.set(Some((first, second)));
-        layout().child(move || {
+        layout(Stack).child(move || {
             frame_end_removable_target(first);
             frame_end_removable_target(second);
             focus_visibility_observer(first, probe.reads.clone());
@@ -2711,8 +2712,7 @@ mod tests {
 
     #[crate::tessera]
     fn cold_geometry_child(probe: crate::testing::TestProbe<Option<PxRect>>) {
-        layout()
-            .policy(FocusLeafLayout)
+        crate::layout::layout(FocusLeafLayout)
             .modifier(Modifier::new().on_globally_positioned(move |rect| probe.set(Some(rect))));
     }
 
@@ -2720,7 +2720,7 @@ mod tests {
     fn cold_geometry_fixture(probe: ColdProbe) {
         let observed = remember(|| None::<PxRect>);
         let output = probe.clone();
-        layout()
+        layout(Stack)
             .modifier(Modifier::new().on_globally_positioned(move |rect| {
                 if observed.get() != Some(rect) {
                     let before = output.wakes.get();
@@ -2730,7 +2730,7 @@ mod tests {
                 }
             }))
             .child(move || {
-                layout().policy(FocusLeafLayout);
+                crate::layout::layout(FocusLeafLayout);
                 if observed.get().is_some() {
                     cold_geometry_child(probe.child.clone());
                 }

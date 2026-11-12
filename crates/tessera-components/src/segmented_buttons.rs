@@ -9,7 +9,7 @@ use tessera_ui::{
     Constraint, Dp, FocusDirection, FocusManager, FocusState, FocusTraversalPolicy, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, RenderSlotWith, SemanticsModifierNode,
     accesskit::{Orientation, Role, Toggled},
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera, use_context,
 };
@@ -405,7 +405,7 @@ pub fn segmented_button(
                     }
                     let leading_icon = leading_icon.clone();
                     let label_outer = label_outer.clone();
-                    layout()
+                    layout(Stack)
                         .modifier(Modifier::new().padding(padding))
                         .child(move || {
                             let leading_icon = leading_icon.clone();
@@ -532,9 +532,9 @@ pub fn single_choice_segmented_button_row(
                 .wrap(true)
                 .single_tab_stop(true),
         );
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let content = content;
-        layout().policy(layout_policy.clone()).child(move || {
+        tessera_ui::layout::layout(layout_policy.clone()).child(move || {
             let content = content;
             if let Some(content) = content {
                 content.render(SegmentedButtonSelectionMode::Single);
@@ -620,9 +620,9 @@ pub fn multi_choice_segmented_button_row(
             single_choice: false,
         })
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let content = content;
-        layout().policy(layout_policy.clone()).child(move || {
+        tessera_ui::layout::layout(layout_policy.clone()).child(move || {
             let content = content;
             if let Some(content) = content {
                 content.render(SegmentedButtonSelectionMode::Multiple);
@@ -662,7 +662,7 @@ struct SegmentedButtonRowLayout {
     equal_width: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for SegmentedButtonRowLayout {
+impl tessera_ui::LayoutPolicy for SegmentedButtonRowLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();

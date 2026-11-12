@@ -8,11 +8,10 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     marker::PhantomData,
-    sync::Arc,
+    rc::Rc,
 };
 
 use im::HashMap as ImHashMap;
-use parking_lot::RwLock;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{
@@ -36,7 +35,7 @@ struct ContextSnapshotEntry {
 type ContextBindings = ImHashMap<TypeId, ContextSnapshotEntry>;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct ContextMap(Option<Arc<ContextBindings>>);
+pub(crate) struct ContextMap(Option<Rc<ContextBindings>>);
 
 impl ContextMap {
     fn new() -> Self {
@@ -44,7 +43,7 @@ impl ContextMap {
     }
 
     fn from_bindings(bindings: ContextBindings) -> Self {
-        Self((!bindings.is_empty()).then(|| Arc::new(bindings)))
+        Self((!bindings.is_empty()).then(|| Rc::new(bindings)))
     }
 
     fn get(&self, type_id: &TypeId) -> Option<&ContextSnapshotEntry> {
@@ -65,7 +64,7 @@ impl ContextMap {
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         match (&self.0, &other.0) {
             (None, None) => true,
-            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            (Some(a), Some(b)) => Rc::ptr_eq(a, b),
             _ => false,
         }
     }
@@ -81,7 +80,7 @@ struct SlotKey {
 struct SlotEntry {
     key: SlotKey,
     generation: u64,
-    value: Option<Arc<dyn Any + Send + Sync>>,
+    value: Option<Rc<dyn Any>>,
     last_alive_epoch: u64,
 }
 
@@ -226,7 +225,7 @@ pub(crate) fn context_from_previous_snapshot_for_instance<T>(
     instance_key: u64,
 ) -> Option<Context<T>>
 where
-    T: Send + Sync + 'static,
+    T: 'static,
 {
     let map = crate::runtime::previous_component_context(instance_key)?;
     map.get(&TypeId::of::<T>())
@@ -385,7 +384,7 @@ pub struct Context<T> {
     session: u128,
     slot: u32,
     generation: u64,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<*const T>,
 }
 
 impl<T> Copy for Context<T> {}
@@ -409,9 +408,9 @@ impl<T> Context<T> {
 
 impl<T> Context<T>
 where
-    T: Send + Sync + 'static,
+    T: 'static,
 {
-    fn load_entry(&self) -> Arc<dyn Any + Send + Sync> {
+    fn load_entry(&self) -> Rc<dyn Any> {
         assert_eq!(
             crate::session::current_session_identity(),
             Some(self.session),
@@ -447,9 +446,9 @@ where
         })
     }
 
-    fn load_lock(&self) -> Arc<RwLock<T>> {
+    fn load_cell(&self) -> Rc<RefCell<T>> {
         self.load_entry()
-            .downcast::<RwLock<T>>()
+            .downcast::<RefCell<T>>()
             .unwrap_or_else(|_| panic!("Context slot {} downcast failed", self.slot))
     }
 
@@ -461,18 +460,15 @@ where
             "context belongs to a different runtime session"
         );
         track_context_read_dependency(self.slot, self.generation);
-        let lock = self.load_lock();
-        let guard = lock.read();
-        f(&guard)
+        let cell = self.load_cell();
+        let value = cell.borrow();
+        f(&value)
     }
 
     /// Execute a closure with a mutable reference to the context value.
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        let lock = self.load_lock();
-        let result = {
-            let mut guard = lock.write();
-            f(&mut guard)
-        };
+        let cell = self.load_cell();
+        let result = f(&mut cell.borrow_mut());
         let subscribers = context_read_subscribers(self.slot, self.generation);
         for instance_key in subscribers {
             record_replay_boundary_invalidation_for_instance_key(instance_key);
@@ -536,7 +532,7 @@ where
 /// ```
 pub fn provide_context<T, I, F, R>(init: I, f: F) -> R
 where
-    T: Send + Sync + 'static,
+    T: 'static,
     I: FnOnce() -> T,
     F: FnOnce() -> R,
 {
@@ -562,7 +558,7 @@ where
                 entry.last_alive_epoch = epoch;
 
                 if entry.value.is_none() {
-                    entry.value = Some(Arc::new(RwLock::new(init())));
+                    entry.value = Some(Rc::new(RefCell::new(init())));
                     entry.generation = entry.generation.wrapping_add(1);
                 }
 
@@ -575,7 +571,7 @@ where
                     .expect("context slot entry should exist");
 
                 entry.key = slot_key;
-                entry.value = Some(Arc::new(RwLock::new(init())));
+                entry.value = Some(Rc::new(RefCell::new(init())));
                 entry.last_alive_epoch = epoch;
 
                 let generation = entry.generation;
@@ -587,7 +583,7 @@ where
                 table.entries.push(SlotEntry {
                     key: slot_key,
                     generation,
-                    value: Some(Arc::new(RwLock::new(init()))),
+                    value: Some(Rc::new(RefCell::new(init()))),
                     last_alive_epoch: epoch,
                 });
                 table.index_slot(slot_key, slot);
@@ -612,7 +608,7 @@ where
 /// Returns `None` when no provider of this type is present.
 pub fn use_context<T>() -> Option<Context<T>>
 where
-    T: Send + Sync + 'static,
+    T: 'static,
 {
     ensure_build_phase();
 
@@ -628,9 +624,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{any::TypeId, sync::Arc};
-
-    use parking_lot::RwLock;
+    use std::{any::TypeId, cell::RefCell, rc::Rc};
 
     use super::{
         ContextMap, ContextSnapshotEntry, SlotEntry, SlotKey, SlotTable,
@@ -681,7 +675,7 @@ mod tests {
                 table.entries.push(SlotEntry {
                     key,
                     generation: 0,
-                    value: Some(Arc::new(ReadOnDrop)),
+                    value: Some(Rc::new(ReadOnDrop)),
                     last_alive_epoch: 0,
                 });
                 table.index_slot(key, 0);
@@ -787,7 +781,7 @@ mod tests {
                 table.entries.push(SlotEntry {
                     key,
                     generation: 2,
-                    value: Some(Arc::new(RwLock::new(42_u8))),
+                    value: Some(Rc::new(RefCell::new(42_u8))),
                     last_alive_epoch: 1,
                 });
                 table.index_slot(key, 0);
@@ -838,7 +832,7 @@ mod tests {
                 table.entries.push(SlotEntry {
                     key,
                     generation: 4,
-                    value: Some(Arc::new(RwLock::new(7_u16))),
+                    value: Some(Rc::new(RefCell::new(7_u16))),
                     last_alive_epoch: 2,
                 });
                 table.index_slot(key, 1);

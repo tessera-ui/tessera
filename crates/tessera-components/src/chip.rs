@@ -7,7 +7,7 @@ use tessera_ui::{
     Callback, Color, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     accesskit::{Role, Toggled},
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -741,117 +741,111 @@ pub fn chip(
         MaterialAlpha::DISABLED_CONTENT
     };
 
-    layout()
-        .policy(ChipRemovalLayout {
-            separate_remove,
-            trailing_padding: padding.right,
-        })
-        .child(move || {
-            let avatar = avatar.clone();
-            let leading_icon = leading_icon.clone();
-            let trailing_icon = trailing_icon.clone();
-            let label = label.clone();
-            surface()
-                .modifier(modifier.clone())
-                .style(surface_style.clone())
-                .shape(shape)
-                .content_alignment(Alignment::Center)
-                .content_color(label_color)
-                .enabled(args.enabled)
-                .ripple_color(label_color)
-                .elevation(shadow_elevation)
-                .interaction_state(interaction_state)
-                .on_click_optional(args.on_click)
-                .accessibility_role_optional((has_on_click || selectable).then_some(
-                    if selectable {
-                        Role::CheckBox
-                    } else {
-                        Role::Button
-                    },
-                ))
-                .accessibility_toggled_optional(selectable.then_some(if selected {
-                    Toggled::True
-                } else {
-                    Toggled::False
-                }))
-                .accessibility_focusable_optional(has_on_click.then_some(true))
-                .accessibility_label_optional(accessibility_label.clone())
-                .accessibility_description_optional(args.accessibility_description.clone())
-                .child(move || {
-                    let avatar = avatar.clone();
-                    let leading_icon = leading_icon.clone();
-                    let trailing_icon = trailing_icon.clone();
-                    let label = label.clone();
-                    provide_context(
-                        || typography.label_large,
-                        move || {
-                            let inherited = use_context::<TextStyle>().expect("chip text style");
-                            if inherited.get() != typography.label_large {
-                                inherited.set(typography.label_large);
-                            }
-                            layout()
-                                .modifier(Modifier::new().padding(padding))
-                                .child(move || {
-                                    let avatar = avatar.clone();
-                                    let leading_icon = leading_icon.clone();
-                                    let trailing_icon = trailing_icon.clone();
-                                    let label = label.clone();
-                                    row()
-                                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                                        .children(move || {
-                                            let spacing = ChipDefaults::ELEMENT_SPACING;
-                                            let mut item_count = 0;
+    tessera_ui::layout::layout(ChipRemovalLayout {
+        separate_remove,
+        trailing_padding: padding.right,
+    })
+    .child(move || {
+        let avatar = avatar.clone();
+        let leading_icon = leading_icon.clone();
+        let trailing_icon = trailing_icon.clone();
+        let label = label.clone();
+        surface()
+            .modifier(modifier.clone())
+            .style(surface_style.clone())
+            .shape(shape)
+            .content_alignment(Alignment::Center)
+            .content_color(label_color)
+            .enabled(args.enabled)
+            .ripple_color(label_color)
+            .elevation(shadow_elevation)
+            .interaction_state(interaction_state)
+            .on_click_optional(args.on_click)
+            .accessibility_role_optional((has_on_click || selectable).then_some(if selectable {
+                Role::CheckBox
+            } else {
+                Role::Button
+            }))
+            .accessibility_toggled_optional(selectable.then_some(if selected {
+                Toggled::True
+            } else {
+                Toggled::False
+            }))
+            .accessibility_focusable_optional(has_on_click.then_some(true))
+            .accessibility_label_optional(accessibility_label.clone())
+            .accessibility_description_optional(args.accessibility_description.clone())
+            .child(move || {
+                let avatar = avatar.clone();
+                let leading_icon = leading_icon.clone();
+                let trailing_icon = trailing_icon.clone();
+                let label = label.clone();
+                provide_context(
+                    || typography.label_large,
+                    move || {
+                        let inherited = use_context::<TextStyle>().expect("chip text style");
+                        if inherited.get() != typography.label_large {
+                            inherited.set(typography.label_large);
+                        }
+                        layout(Stack)
+                            .modifier(Modifier::new().padding(padding))
+                            .child(move || {
+                                let avatar = avatar.clone();
+                                let leading_icon = leading_icon.clone();
+                                let trailing_icon = trailing_icon.clone();
+                                let label = label.clone();
+                                row()
+                                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                                    .children(move || {
+                                        let spacing = ChipDefaults::ELEMENT_SPACING;
+                                        let mut item_count = 0;
 
-                                            if let Some(avatar) = avatar.clone() {
-                                                item_count += 1;
-                                                chip_avatar().painter(avatar).alpha(avatar_alpha);
-                                            } else if let Some(icon_content) = leading_icon.clone()
-                                            {
-                                                item_count += 1;
+                                        if let Some(avatar) = avatar.clone() {
+                                            item_count += 1;
+                                            chip_avatar().painter(avatar).alpha(avatar_alpha);
+                                        } else if let Some(icon_content) = leading_icon.clone() {
+                                            item_count += 1;
+                                            icon()
+                                                .painter(icon_content.clone())
+                                                .size(ChipDefaults::ICON_SIZE)
+                                                .tint(leading_icon_color);
+                                        }
+
+                                        if has_label {
+                                            if item_count > 0 {
+                                                spacer().modifier(Modifier::new().width(spacing));
+                                            }
+                                            item_count += 1;
+                                            text(label.clone());
+                                        }
+
+                                        if let Some(icon_content) = trailing_icon.clone() {
+                                            if item_count > 0 {
+                                                spacer().modifier(Modifier::new().width(spacing));
+                                            }
+                                            if separate_remove {
+                                                spacer().modifier(Modifier::new().size(
+                                                    ChipDefaults::ICON_SIZE,
+                                                    ChipDefaults::ICON_SIZE,
+                                                ));
+                                            } else {
                                                 icon()
                                                     .painter(icon_content.clone())
                                                     .size(ChipDefaults::ICON_SIZE)
-                                                    .tint(leading_icon_color);
+                                                    .tint(trailing_icon_color);
                                             }
-
-                                            if has_label {
-                                                if item_count > 0 {
-                                                    spacer()
-                                                        .modifier(Modifier::new().width(spacing));
-                                                }
-                                                item_count += 1;
-                                                text(label.clone());
-                                            }
-
-                                            if let Some(icon_content) = trailing_icon.clone() {
-                                                if item_count > 0 {
-                                                    spacer()
-                                                        .modifier(Modifier::new().width(spacing));
-                                                }
-                                                if separate_remove {
-                                                    spacer().modifier(Modifier::new().size(
-                                                        ChipDefaults::ICON_SIZE,
-                                                        ChipDefaults::ICON_SIZE,
-                                                    ));
-                                                } else {
-                                                    icon()
-                                                        .painter(icon_content.clone())
-                                                        .size(ChipDefaults::ICON_SIZE)
-                                                        .tint(trailing_icon_color);
-                                                }
-                                            }
-                                        });
-                                });
-                        },
-                    );
-                });
-            if separate_remove {
-                chip_remove_action(remove_label.clone(), on_remove.expect("input chip removal"))
-                    .icon_optional(removal_icon.clone())
-                    .enabled(args.enabled)
-                    .color(trailing_icon_color);
-            }
-        });
+                                        }
+                                    });
+                            });
+                    },
+                );
+            });
+        if separate_remove {
+            chip_remove_action(remove_label.clone(), on_remove.expect("input chip removal"))
+                .icon_optional(removal_icon.clone())
+                .enabled(args.enabled)
+                .color(trailing_icon_color);
+        }
+    });
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -860,7 +854,7 @@ struct ChipRemovalLayout {
     trailing_padding: Dp,
 }
 
-impl tessera_ui::LayoutModifierNode for ChipRemovalLayout {
+impl tessera_ui::LayoutPolicy for ChipRemovalLayout {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = scope.children();
         let constraints = scope.parent_constraint().without_min();

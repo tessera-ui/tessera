@@ -15,7 +15,7 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
     Block, Expr, FnArg, GenericArgument, GenericParam, Generics, Ident, ItemFn, Pat, Path,
-    PathArguments, Token, Type, parse::Parse, parse_macro_input, parse_quote, visit_mut::VisitMut,
+    PathArguments, Type, parse_macro_input, parse_quote, visit_mut::VisitMut,
 };
 
 fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Result<syn::Path> {
@@ -34,6 +34,7 @@ struct PropAttrConfig {
     into: bool,
     skip_setter: bool,
     skip_eq: bool,
+    borrow: bool,
 }
 /// The builder-helper shape a component parameter gets from its declared type.
 ///
@@ -83,6 +84,17 @@ fn parse_prop_attr(attrs: &[syn::Attribute]) -> syn::Result<PropAttrConfig> {
                             return Err(meta.error("duplicate `skip_eq` in #[prop(...)]"));
                         }
                         config.skip_eq = true;
+                        return Ok(());
+                    }
+                    // Framework layout primitives compare a borrowed candidate
+                    // with stored node state; components receive owned props.
+                    if meta.path.is_ident("borrow")
+                        && std::env::var("CARGO_CRATE_NAME").as_deref() == Ok("tessera_ui")
+                    {
+                        if config.borrow {
+                            return Err(meta.error("duplicate `borrow` in #[prop(...)]"));
+                        }
+                        config.borrow = true;
                         return Ok(());
                     }
                     if meta.path.is_ident("crate_path") {
@@ -214,17 +226,11 @@ fn field_compare_expr(field_ident: &Ident, ty: &Type) -> proc_macro2::TokenStrea
 }
 
 #[cfg(feature = "shard")]
-#[derive(Default)]
-struct ShardMacroArgs {
-    state_type: Option<Type>,
-    lifecycle: Option<Ident>,
-}
-
-#[cfg(feature = "shard")]
 struct ShardParam {
     ident: Ident,
     ty: Type,
     is_router: bool,
+    is_model: bool,
 }
 
 #[cfg(feature = "shard")]
@@ -245,14 +251,13 @@ fn parse_shard_params(sig: &syn::Signature) -> syn::Result<Vec<ShardParam>> {
                         "#[shard] parameters must be simple named bindings like `foo: T`",
                     ));
                 };
-                let is_router = pat_type
-                    .attrs
-                    .iter()
-                    .any(|attr| attr.path().is_ident("router"));
+                let is_router = is_state_router_controller_type(&pat_type.ty);
+                let is_model = model_value_type(&pat_type.ty).is_some();
                 params.push(ShardParam {
                     ident: pat_ident.ident.clone(),
                     ty: (*pat_type.ty).clone(),
                     is_router,
+                    is_model,
                 });
             }
         }
@@ -282,45 +287,6 @@ fn is_state_router_controller_type(ty: &Type) -> bool {
         .segments
         .last()
         .is_some_and(|segment| segment.ident == "RouterController")
-}
-
-#[cfg(feature = "shard")]
-impl Parse for ShardMacroArgs {
-    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-        let mut args = ShardMacroArgs::default();
-        while !input.is_empty() {
-            let key: Ident = input.parse()?;
-            input.parse::<Token![=]>()?;
-            match key.to_string().as_str() {
-                "state" => {
-                    if args.state_type.is_some() {
-                        return Err(syn::Error::new(key.span(), "duplicate `state` argument"));
-                    }
-                    args.state_type = Some(input.parse::<Type>()?);
-                }
-                "lifecycle" => {
-                    if args.lifecycle.is_some() {
-                        return Err(syn::Error::new(
-                            key.span(),
-                            "duplicate `lifecycle` argument",
-                        ));
-                    }
-                    args.lifecycle = Some(input.parse::<Ident>()?);
-                }
-                _ => {
-                    return Err(syn::Error::new(
-                        key.span(),
-                        "unsupported #[shard(...)] argument; expected `state` or `lifecycle`",
-                    ));
-                }
-            }
-
-            if input.peek(Token![,]) {
-                input.parse::<Token![,]>()?;
-            }
-        }
-        Ok(args)
-    }
 }
 
 /// Parse and validate strict component props signature:
@@ -392,8 +358,33 @@ struct PropFieldSpec {
     helper: Option<PropHelperKind>,
 }
 
+fn model_value_type(ty: &Type) -> Option<Type> {
+    let Type::Path(type_path) = ty else {
+        return None;
+    };
+    let segment = type_path.path.segments.last()?;
+    if segment.ident != "Model" {
+        return None;
+    }
+    let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return None;
+    };
+    let mut type_args = arguments.args.iter().filter_map(|arg| match arg {
+        GenericArgument::Type(ty) => Some(ty.clone()),
+        _ => None,
+    });
+    let value = type_args.next()?;
+    type_args.next().is_none().then_some(value)
+}
+
+impl PropFieldSpec {
+    fn is_model(&self) -> bool {
+        model_value_type(&self.ty).is_some()
+    }
+}
+
 fn is_required_component_field(field: &PropFieldSpec) -> bool {
-    option_inner_type(&field.ty).is_none()
+    option_inner_type(&field.ty).is_none() && !field.is_model()
 }
 
 fn stored_value_ty(field_ty: &Type) -> Type {
@@ -885,8 +876,11 @@ impl VisitMut for ControlFlowInstrumenter {
 ///
 /// # See Also
 ///
-/// * [`#[shard]`](crate::shard) for navigation‑aware components with injectable
-///   shard state.
+/// * [`#[shard]`](crate::shard) for components that are navigation destinations.
+///
+/// A `Model<T>` parameter is injected: callers may pass one, otherwise the
+/// nearest `ModelStore` (or the component itself) owns a model created by
+/// `ModelInit::init`.
 #[proc_macro_attribute]
 pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     if !attr.is_empty() {
@@ -1052,6 +1046,29 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             .map(|field| {
                 let ident = &field.ident;
                 let ty = &field.ty;
+                if field.is_model() {
+                    let Some(model_ty) = model_value_type(ty) else {
+                        unreachable!("model fields have a `Model<T>` type");
+                    };
+                    let model_index = fields
+                        .iter()
+                        .position(|candidate| candidate.ident == field.ident)
+                        .unwrap_or_default() as u64;
+                    return quote! {
+                        let #ident: #ty = __tessera_props.#ident.clone().unwrap_or_else(|| {
+                            #crate_path::__private::inject_model::<#model_ty>(#model_index)
+                        });
+                    };
+                }
+                if field.attrs.borrow {
+                    let missing_prop_message =
+                        format!("missing prop `{}` for component `{}`", ident, fn_name);
+                    return quote! {
+                        let #ident = __tessera_props.#ident.as_ref().unwrap_or_else(|| {
+                            panic!(#missing_prop_message)
+                        });
+                    };
+                }
                 if option_inner_type(ty).is_some() {
                     return quote! {
                         let #ident: #ty = __tessera_props.#ident.clone();
@@ -1198,51 +1215,30 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Transforms a function into a *shard component* that can be navigated to via
-/// the routing system and (optionally) provided with a lazily‑initialized
-/// per‑shard state.
+/// the routing system.
 ///
 /// # Features
 ///
 /// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`)
 ///   implementing `tessera_shard::router::RouterDestination`
-/// * Optional state injection via `#[shard(state = T)]`, where `T`:
-///   - Must implement `Default + Send + Sync + 'static`
-///   - Is constructed (or reused) and exposed as local variable `state` with
-///     type `tessera_shard::ShardState<T>`
-/// * Produces a stable shard ID: `module_path!()::function_name`
-///
-/// # Lifecycle
-///
-/// Controlled by the `lifecycle` shard attribute argument.
-/// * Default: `Shard` – state is removed when the destination is `pop()`‑ed
-/// * Override: `#[shard(lifecycle = scope)]` to persist for the lifetime of the
-///   current router controller hosted by `shard_home`
-///
-/// Route-scoped state is removed on route pop/clear. Scope-scoped state is
-/// removed when the hosting `shard_home` is dropped.
-///
-/// # Parameter Transformation
-///
-/// * Function parameters are treated as explicit destination props.
-/// * When `state = T` is configured, shard state is injected as local variable
-///   `state` and does not appear in the function signature.
-///
-/// # Errors
-///
-/// Emits a compile error if unsupported `lifecycle` is provided, or if
-/// `lifecycle` is used without `state`.
+/// * Other parameters become destination fields.
+/// * A `State<RouterController>` parameter receives the router rendering the
+///   page and is not a destination field.
+/// * `Model<T>` parameters are injected like in any component and are not
+///   destination fields; the route entry provides the model store, so a model
+///   lives until its route is popped.
 #[cfg(feature = "shard")]
 #[proc_macro_attribute]
 pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     use heck::ToUpperCamelCase;
-    let shard_args = if attr.is_empty() {
-        ShardMacroArgs::default()
-    } else {
-        match syn::parse::<ShardMacroArgs>(attr) {
-            Ok(value) => value,
-            Err(err) => return err.to_compile_error().into(),
-        }
-    };
+    if !attr.is_empty() {
+        return syn::Error::new_spanned(
+            proc_macro2::TokenStream::from(attr),
+            "#[shard] takes no arguments; inject a typed `Model<T>` parameter instead",
+        )
+        .to_compile_error()
+        .into();
+    }
 
     let ui_crate_path: syn::Path = syn::parse_quote!(::tessera_ui);
     let shard_crate_path: syn::Path = syn::parse_quote!(::tessera_shard);
@@ -1272,91 +1268,34 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     if router_params.len() > 1 {
         return syn::Error::new_spanned(
             &func.sig.inputs,
-            "#[shard] supports at most one `#[router]` parameter",
+            "#[shard] supports at most one `State<RouterController>` parameter",
         )
         .to_compile_error()
         .into();
     }
-    if let Some(router_param) = router_params.first()
-        && !is_state_router_controller_type(&router_param.ty)
-    {
-        return syn::Error::new_spanned(
-            &router_param.ty,
-            "`#[router]` parameters must have type `State<RouterController>`",
-        )
-        .to_compile_error()
-        .into();
-    }
-
-    let state_type = shard_args.state_type;
-    let state_lifecycle_tokens = match shard_args.lifecycle {
-        Some(lifecycle) => {
-            let lifecycle_name = lifecycle.to_string().to_lowercase();
-            if state_type.is_none() {
-                return syn::Error::new_spanned(
-                    lifecycle,
-                    "`lifecycle` requires `state` in #[shard(...)]",
-                )
-                .to_compile_error()
-                .into();
-            }
-            if lifecycle_name == "scope" {
-                quote! { #shard_crate_path::ShardStateLifeCycle::Scope }
-            } else if lifecycle_name == "shard" {
-                quote! { #shard_crate_path::ShardStateLifeCycle::Shard }
-            } else {
-                return syn::Error::new_spanned(
-                    lifecycle,
-                    "unsupported `lifecycle` in #[shard(...)]: expected `scope` or `shard`",
-                )
-                .to_compile_error()
-                .into();
-            }
-        }
-        None => quote! { #shard_crate_path::ShardStateLifeCycle::Shard },
-    };
 
     let func_body = func.block;
     let func_name_str = func.sig.ident.to_string();
 
     let func_attrs = &func.attrs;
     let func_vis = &func.vis;
-    let router_controller_resolution = quote! {
-        __tessera_router_controller
-    };
-
-    let router_binding =
-        router_params
-            .first()
-            .map_or_else(proc_macro2::TokenStream::new, |param| {
-                let router_ident = &param.ident;
-                quote! {
-                    let #router_ident = #router_ident
-                        .unwrap_or_else(|| #router_controller_resolution);
-                }
-            });
-    let mut func_sig_modified = func.sig.clone();
-    func_sig_modified.inputs.insert(0, parse_quote!(
-        #[prop(skip_setter)] __tessera_router_controller: #ui_crate_path::State<#shard_crate_path::router::RouterController>
-    ));
-    for input in &mut func_sig_modified.inputs {
-        let FnArg::Typed(pat_type) = input else {
-            continue;
-        };
-        let is_router = pat_type
-            .attrs
-            .iter()
-            .any(|attr| attr.path().is_ident("router"));
-        if !is_router {
-            continue;
+    let router_binding = router_params.first().map(|param| {
+        let ident = &param.ident;
+        let ty = &param.ty;
+        quote! {
+            let #ident: #ty = #ui_crate_path::use_context::<#ty>()
+                .expect("shard pages render inside `shard_home`")
+                .get();
         }
-        let original_ty = (*pat_type.ty).clone();
-        *pat_type.ty = parse_quote!(::core::option::Option<#original_ty>);
-        pat_type
-            .attrs
-            .retain(|attr| !attr.path().is_ident("router"));
-        pat_type.attrs.push(syn::parse_quote!(#[prop(skip_setter)]));
-    }
+    });
+    let mut func_sig_modified = func.sig.clone();
+    func_sig_modified.inputs = func_sig_modified
+        .inputs
+        .into_iter()
+        .filter(|input| {
+            !matches!(input, FnArg::Typed(pat_type) if is_state_router_controller_type(&pat_type.ty))
+        })
+        .collect();
 
     // Generate struct name for the new RouterDestination
     let func_name = func.sig.ident.clone();
@@ -1368,7 +1307,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     // `RouterDestination`
     let dest_fields = shard_params
         .iter()
-        .filter(|param| !param.is_router)
+        .filter(|param| !param.is_router && !param.is_model)
         .map(|param| {
             let ident = &param.ident;
             let ty = &param.ty;
@@ -1378,14 +1317,18 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     let expanded = {
         let required_args = shard_params
             .iter()
-            .filter(|param| !param.is_router && option_inner_type(&param.ty).is_none())
+            .filter(|param| {
+                !param.is_router && !param.is_model && option_inner_type(&param.ty).is_none()
+            })
             .map(|param| {
                 let ident = &param.ident;
                 quote! { self.#ident.clone() }
             });
         let destination_builder_setters = shard_params
             .iter()
-            .filter(|param| !param.is_router && option_inner_type(&param.ty).is_some())
+            .filter(|param| {
+                !param.is_router && !param.is_model && option_inner_type(&param.ty).is_some()
+            })
             .map(|param| {
                 let ident = &param.ident;
                 quote! {
@@ -1395,7 +1338,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
             });
 
-        if let Some(state_type) = state_type {
+        {
             quote! {
                 #[derive(Clone, PartialEq)]
                 #func_vis struct #struct_name {
@@ -1403,59 +1346,9 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
 
                 impl #shard_crate_path::router::RouterDestination for #struct_name {
-                    fn exec_component(&self, controller: #ui_crate_path::State<#shard_crate_path::router::RouterController>) {
-                        let __tessera_builder = #func_name(controller #(, #required_args)*);
+                    fn render(&self) {
+                        let __tessera_builder = #func_name(#(#required_args),*);
                         #(#destination_builder_setters)*
-                    }
-
-                    fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn(#ui_crate_path::State<#shard_crate_path::router::RouterController>) + Send + Sync> {
-                        let destination = self.clone();
-                        std::sync::Arc::new(move |controller| destination.exec_component(controller))
-                    }
-
-                    fn destination_id() -> &'static str {
-                        concat!(module_path!(), "::", #func_name_str)
-                    }
-                }
-
-                #(#func_attrs)*
-                #[#ui_crate_path::tessera]
-                #func_vis #func_sig_modified {
-                    const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
-                    let __router_controller = #router_controller_resolution;
-                    #router_binding
-                    let __route_scope = #ui_crate_path::use_context::<#shard_crate_path::__private::RouteRenderScope>().map(|scope| scope.get());
-                    #shard_crate_path::__private::with_rendered_router_shard_state::<#state_type, _, _>(
-                        SHARD_ID,
-                        #state_lifecycle_tokens,
-                        __router_controller,
-                        __route_scope,
-                        |state| {
-                            #func_body
-                        },
-                    )
-                }
-            }
-        } else {
-            quote! {
-                #[derive(Clone, PartialEq)]
-                #func_vis struct #struct_name {
-                    #(#dest_fields),*
-                }
-
-                impl #shard_crate_path::router::RouterDestination for #struct_name {
-                    fn exec_component(&self, controller: #ui_crate_path::State<#shard_crate_path::router::RouterController>) {
-                        let __tessera_builder = #func_name(controller #(, #required_args)*);
-                        #(#destination_builder_setters)*
-                    }
-
-                    fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn(#ui_crate_path::State<#shard_crate_path::router::RouterController>) + Send + Sync> {
-                        let destination = self.clone();
-                        std::sync::Arc::new(move |controller| destination.exec_component(controller))
-                    }
-
-                    fn destination_id() -> &'static str {
-                        concat!(module_path!(), "::", #func_name_str)
                     }
                 }
 

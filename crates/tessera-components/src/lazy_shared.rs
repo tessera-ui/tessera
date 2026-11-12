@@ -223,7 +223,7 @@ macro_rules! impl_lazy_builder {
             /// Append a single lazy item.
             pub fn item<F, Output>(&self, builder: F) -> Self
             where
-                F: Fn() -> Output + Send + Sync + 'static,
+                F: Fn() -> Output + 'static,
             {
                 self.items(1, move |_| builder())
             }
@@ -232,7 +232,7 @@ macro_rules! impl_lazy_builder {
             pub fn item_with_key<K, F, Output>(&self, key: K, builder: F) -> Self
             where
                 K: Hash,
-                F: Fn() -> Output + Send + Sync + 'static,
+                F: Fn() -> Output + 'static,
             {
                 let key = hash_key(key);
                 self.props.append("content", move |props| {
@@ -251,7 +251,7 @@ macro_rules! impl_lazy_builder {
             /// Append a batch of indexed lazy items.
             pub fn items<F, Output>(&self, count: usize, builder: F) -> Self
             where
-                F: Fn(usize) -> Output + Send + Sync + 'static,
+                F: Fn(usize) -> Output + 'static,
             {
                 self.props.append("content", move |props| {
                     props
@@ -271,8 +271,8 @@ macro_rules! impl_lazy_builder {
             ) -> Self
             where
                 K: Hash,
-                KF: Fn(usize) -> K + Send + Sync + 'static,
-                F: Fn(usize) -> Output + Send + Sync + 'static,
+                KF: Fn(usize) -> K + 'static,
+                F: Fn(usize) -> Output + 'static,
             {
                 self.props.append("content", move |props| {
                     props
@@ -293,8 +293,8 @@ macro_rules! impl_lazy_builder {
             pub fn items_from_iter<I, T, F, Output>(&self, iter: I, builder: F) -> Self
             where
                 I: IntoIterator<Item = T>,
-                T: Send + Sync + 'static,
-                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
+                T: 'static,
+                F: Fn(usize, &T) -> Output + 'static,
             {
                 let items: Vec<T> = iter.into_iter().collect();
                 self.props.append("content", move |props| {
@@ -321,10 +321,10 @@ macro_rules! impl_lazy_builder {
             ) -> Self
             where
                 I: IntoIterator<Item = T>,
-                T: Send + Sync + 'static,
+                T: 'static,
                 K: Hash,
-                KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
+                KF: Fn(usize, &T) -> K + 'static,
+                F: Fn(usize, &T) -> Output + 'static,
             {
                 let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
                 self.props.append("content", move |props| {
@@ -349,8 +349,8 @@ macro_rules! impl_lazy_builder {
             pub fn items_from_iter_values<I, T, F, Output>(&self, iter: I, builder: F) -> Self
             where
                 I: IntoIterator<Item = T>,
-                T: Send + Sync + 'static,
-                F: Fn(&T) -> Output + Send + Sync + 'static,
+                T: 'static,
+                F: Fn(&T) -> Output + 'static,
             {
                 self.items_from_iter(iter, move |_, item| builder(item))
             }
@@ -363,7 +363,7 @@ pub(crate) use impl_lazy_builder;
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub(crate) struct ZeroLayout;
 
-impl tessera_ui::LayoutModifierNode for ZeroLayout {
+impl tessera_ui::LayoutPolicy for ZeroLayout {
     fn measure(
         &self,
         _input: &mut tessera_ui::layout::MeasureScope<'_>,

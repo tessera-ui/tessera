@@ -7,16 +7,22 @@ use std::{
 
 use tessera_components::modifier::ModifierExt as _;
 use tessera_ui::{
-    Color, Dp, Modifier, State,
-    layout::NoopDrawModifier,
-    modifier::{LayoutModifierNode, ModifierCapabilityExt as _},
+    Color, Dp, Modifier, State, layout::NoopDrawModifier, modifier::ModifierCapabilityExt as _,
     remember,
 };
 
 #[derive(PartialEq)]
 struct GenericLayout;
 
-impl LayoutModifierNode for GenericLayout {}
+impl tessera_ui::LayoutModifier for GenericLayout {
+    fn measure(
+        &self,
+        _: &tessera_ui::LayoutModifierInput<'_>,
+        _: &mut dyn tessera_ui::LayoutModifierChild,
+    ) -> Result<tessera_ui::LayoutResult, tessera_ui::MeasurementError> {
+        unreachable!("allocation fixtures are not measured")
+    }
+}
 
 thread_local! {
     static COUNTING: Cell<bool> = const { Cell::new(false) };

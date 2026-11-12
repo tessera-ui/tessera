@@ -1,85 +1,67 @@
-use std::sync::Arc;
+use std::{any::TypeId, rc::Rc};
 
-use tessera_ui::{Model, State};
+use tessera_ui::{ModelStore, ModelStoreScope};
 
-use crate::{RouterDestination, ShardState, ShardStateLifeCycle};
+use crate::RouterDestination;
 
 struct RouteEntry {
     id: u64,
-    destination: Arc<dyn RouterDestination>,
-    model: Model,
+    destination: Rc<dyn RouterDestination>,
+    models: ModelStore,
 }
 
-/// Owns the destination stack and reactive state for its routes.
+/// Owns the destination stack and the view models of its routes.
+///
+/// Each route entry provides a [`ModelStore`] to the content rendered for it, so
+/// `Model<T>` parameters there live with the route: covered routes keep their
+/// models, and popping a route closes them.
 pub struct RouterController {
     route_stack: Vec<RouteEntry>,
     next_route_id: u64,
-    scope: Model,
-    marker: State<()>,
 }
 
 impl RouterController {
-    /// Creates an empty controller in the active UI session.
+    /// Creates an empty controller.
     pub fn new() -> Self {
-        let scope = Model::new();
-        let marker = scope.state_with_key("controller", || ());
         Self {
             route_stack: Vec::new(),
             next_route_id: 0,
-            scope,
-            marker,
         }
     }
 
     /// Creates a controller seeded with a root destination.
-    pub fn with_root(root_dest: impl RouterDestination + 'static) -> Self {
-        Self::with_root_shared(Arc::new(root_dest))
-    }
-
-    /// Creates a controller seeded with a shared root destination.
-    pub fn with_root_shared(root_dest: Arc<dyn RouterDestination>) -> Self {
+    pub fn with_root(root: impl RouterDestination) -> Self {
         let mut router = Self::new();
-        router.push_shared(root_dest);
+        router.push(root);
         router
     }
 
-    /// Pushes a destination with its own state lifetime.
-    pub fn push<T: RouterDestination + 'static>(&mut self, destination: T) {
-        self.push_shared(Arc::new(destination));
+    /// Pushes a destination with its own model lifetime.
+    pub fn push(&mut self, destination: impl RouterDestination) {
+        self.push_route(Rc::new(destination));
     }
 
-    /// Pushes a shared destination with its own state lifetime.
-    pub fn push_shared(&mut self, destination: Arc<dyn RouterDestination>) {
+    pub(crate) fn push_route(&mut self, destination: Rc<dyn RouterDestination>) {
         self.route_stack.push(RouteEntry {
             id: self.next_route_id,
             destination,
-            model: Model::new(),
+            models: ModelStore::new(),
         });
         self.next_route_id += 1;
     }
 
-    /// Pops the current destination and releases its route state.
-    pub fn pop(&mut self) -> Option<Arc<dyn RouterDestination>> {
-        let removed = self.route_stack.pop()?;
-        removed.model.close();
-        Some(removed.destination)
+    /// Pops the current destination and closes its models.
+    pub fn pop(&mut self) -> Option<Rc<dyn RouterDestination>> {
+        self.route_stack.pop().map(|removed| removed.destination)
     }
 
     /// Replaces the current destination, or pushes into an empty stack.
-    pub fn replace<T: RouterDestination + 'static>(
+    pub fn replace(
         &mut self,
-        destination: T,
-    ) -> Option<Arc<dyn RouterDestination>> {
-        self.replace_shared(Arc::new(destination))
-    }
-
-    /// Replaces the current destination with a shared destination.
-    pub fn replace_shared(
-        &mut self,
-        destination: Arc<dyn RouterDestination>,
-    ) -> Option<Arc<dyn RouterDestination>> {
+        destination: impl RouterDestination,
+    ) -> Option<Rc<dyn RouterDestination>> {
         let previous = self.pop();
-        self.push_shared(destination);
+        self.push(destination);
         previous
     }
 
@@ -87,376 +69,56 @@ impl RouterController {
     pub fn is_empty(&self) -> bool {
         self.route_stack.is_empty()
     }
+
     /// Returns the number of destinations.
     pub fn len(&self) -> usize {
         self.route_stack.len()
     }
+
     /// Returns the current destination.
     pub fn last(&self) -> Option<&dyn RouterDestination> {
         self.route_stack.last().map(|entry| &*entry.destination)
     }
+
     /// Returns whether the current destination has type `D`.
-    pub fn current_is<D: RouterDestination + 'static>(&self) -> bool {
+    pub fn current_is<D: RouterDestination>(&self) -> bool {
         self.last()
-            .is_some_and(|current| current.type_id() == std::any::TypeId::of::<D>())
+            .is_some_and(|current| current.type_id() == TypeId::of::<D>())
     }
 
-    pub(crate) fn route_at_depth(&self, depth: usize) -> Option<(u64, Arc<dyn RouterDestination>)> {
+    pub(crate) fn route_at_depth(
+        &self,
+        depth: usize,
+    ) -> Option<(u64, Rc<dyn RouterDestination>, ModelStoreScope)> {
         self.route_stack
             .iter()
             .rev()
             .nth(depth)
-            .map(|entry| (entry.id, entry.destination.clone()))
+            .map(|entry| (entry.id, entry.destination.clone(), entry.models.scope()))
     }
 
-    pub(crate) fn route_state_context(
-        &self,
-        lifecycle: ShardStateLifeCycle,
-        route: Option<u64>,
-    ) -> (Model, State<()>) {
-        let model = match lifecycle {
-            ShardStateLifeCycle::Scope => &self.scope,
-            ShardStateLifeCycle::Shard => {
-                let entry = match route {
-                    Some(id) => self.route_stack.iter().rev().find(|entry| entry.id == id),
-                    None => self.route_stack.last(),
-                };
-                &entry
-                    .expect("route-scoped shard state requires a non-empty router stack")
-                    .model
-            }
-        };
-        (model.clone(), self.marker)
+    #[cfg(test)]
+    pub(crate) fn route_models(&self, route: u64) -> Option<&ModelStore> {
+        self.route_stack
+            .iter()
+            .find(|entry| entry.id == route)
+            .map(|entry| &entry.models)
     }
 
-    /// Gets or initializes state owned by the current route.
-    pub fn init_or_get<T, F, R>(&self, id: &str, f: F) -> R
-    where
-        T: Default + 'static,
-        F: FnOnce(ShardState<T>) -> R,
-    {
-        self.init_or_get_with_lifecycle(id, ShardStateLifeCycle::Shard, f)
-    }
-
-    /// Gets or initializes state owned by a route or this controller.
-    pub fn init_or_get_with_lifecycle<T, F, R>(
-        &self,
-        id: &str,
-        lifecycle: ShardStateLifeCycle,
-        f: F,
-    ) -> R
-    where
-        T: Default + 'static,
-        F: FnOnce(ShardState<T>) -> R,
-    {
-        let (model, marker) = self.route_state_context(lifecycle, None);
-        f(ShardState::new(
-            model.state_with_key(("shard", id), T::default),
-            marker,
-        ))
-    }
-
-    /// Clears all destinations and releases their route state.
+    /// Clears all destinations and closes their models.
     pub fn clear(&mut self) {
         self.route_stack.clear();
     }
+
     /// Clears the stack and installs a new root destination.
-    pub fn reset(&mut self, root_dest: impl RouterDestination + 'static) {
-        self.reset_shared(Arc::new(root_dest));
-    }
-    /// Clears the stack and installs a shared root destination.
-    pub fn reset_shared(&mut self, root_dest: Arc<dyn RouterDestination>) {
+    pub fn reset(&mut self, root: impl RouterDestination) {
         self.clear();
-        self.push_shared(root_dest);
+        self.push(root);
     }
 }
 
 impl Default for RouterController {
     fn default() -> Self {
         Self::new()
-    }
-}
-impl Drop for RouterController {
-    fn drop(&mut self) {
-        self.route_stack.clear();
-        self.scope.close();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::panic::{AssertUnwindSafe, catch_unwind};
-
-    use super::RouterController;
-    use crate::{RouterDestination, ShardStateLifeCycle};
-
-    #[derive(Default)]
-    struct CounterState {
-        value: usize,
-    }
-
-    struct DummyDestination;
-
-    impl RouterDestination for DummyDestination {
-        fn exec_component(&self, _: tessera_ui::State<RouterController>) {}
-
-        fn exec_component_handle(
-            &self,
-        ) -> std::sync::Arc<dyn Fn(tessera_ui::State<RouterController>) + Send + Sync> {
-            std::sync::Arc::new(|_| {})
-        }
-
-        fn destination_id() -> &'static str {
-            "dummy"
-        }
-    }
-
-    fn increment_state(
-        router: &RouterController,
-        shard_id: &str,
-        life_cycle: ShardStateLifeCycle,
-    ) -> usize {
-        router.init_or_get_with_lifecycle::<CounterState, _, _>(shard_id, life_cycle, |state| {
-            state.with_mut(|value| {
-                value.value += 1;
-                value.value
-            })
-        })
-    }
-
-    #[test]
-    fn route_scoped_state_is_released_on_pop() {
-        let session = tessera_ui::RuntimeSession::new();
-        let _session = session.enter();
-        let shard_id = "route_scoped";
-        let mut router = RouterController::with_root(DummyDestination);
-
-        assert_eq!(
-            increment_state(&router, shard_id, ShardStateLifeCycle::Shard),
-            1
-        );
-        assert_eq!(
-            increment_state(&router, shard_id, ShardStateLifeCycle::Shard),
-            2
-        );
-
-        assert!(router.pop().is_some());
-        router.push(DummyDestination);
-        assert_eq!(
-            increment_state(&router, shard_id, ShardStateLifeCycle::Shard),
-            1
-        );
-    }
-
-    #[test]
-    fn route_model_is_retained_while_covered_by_a_child_route() {
-        let session = tessera_ui::RuntimeSession::new();
-        let _session = session.enter();
-        let mut router = RouterController::with_root(DummyDestination);
-        let route_state = "route_back_stack";
-
-        assert_eq!(
-            increment_state(&router, route_state, ShardStateLifeCycle::Shard),
-            1
-        );
-        assert_eq!(
-            increment_state(&router, route_state, ShardStateLifeCycle::Shard),
-            2
-        );
-        router.push(DummyDestination);
-        assert_eq!(
-            increment_state(&router, route_state, ShardStateLifeCycle::Shard),
-            1
-        );
-
-        assert!(router.pop().is_some());
-        assert_eq!(
-            increment_state(&router, route_state, ShardStateLifeCycle::Shard),
-            3
-        );
-    }
-
-    #[test]
-    fn scope_scoped_state_persists_inside_scope_but_resets_across_scopes() {
-        let session = tessera_ui::RuntimeSession::new();
-        let _session = session.enter();
-        let shard_id = "scope_scoped";
-        let mut router = RouterController::with_root(DummyDestination);
-
-        assert_eq!(
-            increment_state(&router, shard_id, ShardStateLifeCycle::Scope),
-            1
-        );
-
-        router.push(DummyDestination);
-        assert_eq!(
-            increment_state(&router, shard_id, ShardStateLifeCycle::Scope),
-            2
-        );
-
-        assert!(router.pop().is_some());
-        assert_eq!(
-            increment_state(&router, shard_id, ShardStateLifeCycle::Scope),
-            3
-        );
-
-        drop(router);
-
-        let router = RouterController::with_root(DummyDestination);
-        assert_eq!(
-            increment_state(&router, shard_id, ShardStateLifeCycle::Scope),
-            1
-        );
-    }
-
-    #[test]
-    fn route_scoped_state_requires_active_route() {
-        let session = tessera_ui::RuntimeSession::new();
-        let _session = session.enter();
-        let shard_id = "route_context_required";
-        let router = RouterController::new();
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            let _ = increment_state(&router, shard_id, ShardStateLifeCycle::Shard);
-        }));
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn controllers_do_not_share_or_alias_slots() {
-        let session = tessera_ui::RuntimeSession::new();
-        let _session = session.enter();
-        let shard_id = "isolated";
-        let left = RouterController::with_root(DummyDestination);
-        let right = RouterController::with_root(DummyDestination);
-
-        left.init_or_get::<CounterState, _, _>(shard_id, |state| {
-            state.with_mut(|value| value.value = 11);
-        });
-        right.init_or_get::<CounterState, _, _>(shard_id, |state| {
-            state.with_mut(|value| value.value = 22);
-        });
-
-        assert_eq!(
-            left.init_or_get::<CounterState, _, _>(shard_id, |state| {
-                state.with(|value| value.value)
-            }),
-            11
-        );
-        assert_eq!(
-            right.init_or_get::<CounterState, _, _>(shard_id, |state| {
-                state.with(|value| value.value)
-            }),
-            22
-        );
-
-        let stale = left.init_or_get::<CounterState, _, _>(shard_id, |state| state);
-        drop(left);
-
-        right.init_or_get::<CounterState, _, _>(shard_id, |state| {
-            state.with_mut(|value| value.value = 33);
-        });
-        assert!(stale.try_with(|value| value.value).is_err());
-        assert_eq!(
-            right.init_or_get::<CounterState, _, _>(shard_id, |state| {
-                state.with(|value| value.value)
-            }),
-            33
-        );
-    }
-    #[test]
-    fn panicking_mutation_restores_the_live_shard_value() {
-        let session = tessera_ui::RuntimeSession::new();
-        let _session = session.enter();
-        let router = RouterController::with_root(DummyDestination);
-        let state = router.init_or_get::<usize, _, _>("panic", |state| state);
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            state.with_mut(|value| {
-                *value = 42;
-                panic!("abort mutation");
-            });
-        }));
-        assert!(result.is_err());
-        assert_eq!(state.get(), 42);
-        state.set(43);
-        assert_eq!(state.get(), 43);
-    }
-    type Observed = (
-        tessera_ui::State<RouterController>,
-        crate::ShardState<usize>,
-        usize,
-    );
-
-    #[tessera_ui::tessera]
-    fn reactive_fixture(output: tessera_ui::testing::TestProbe<Option<Observed>>) {
-        let router = tessera_ui::remember(|| RouterController::with_root(DummyDestination));
-        let state = crate::router::with_current_router_shard_state(
-            "reactive",
-            ShardStateLifeCycle::Shard,
-            router,
-            |state: crate::ShardState<usize>| state,
-        );
-        output.set(Some((router, state, state.get())));
-    }
-
-    #[test]
-    fn shard_writes_rebuild_consumers_and_route_models_preserve_only_live_state() {
-        use tessera_ui::testing::{
-            TestProbe, layout_test, pump_layout_test_session, start_layout_test_session,
-        };
-
-        let output = TestProbe::default();
-        let probe = output.clone();
-        let mut session = start_layout_test_session(layout_test(move || {
-            reactive_fixture(probe.clone());
-        }));
-        pump_layout_test_session(&mut session, 0);
-        let (router, root_state, value) = output.get().expect("fixture published router output");
-        assert_eq!(value, 0);
-        pump_layout_test_session(&mut session, 1);
-        assert_eq!(
-            session
-                .work()
-                .count("reactive_fixture", tessera_ui::WorkPhase::Build),
-            0
-        );
-        session.run(|| root_state.set(7));
-        pump_layout_test_session(&mut session, 2);
-        assert_eq!(output.get().expect("fixture published router output").2, 7);
-        assert_eq!(
-            session
-                .work()
-                .count("reactive_fixture", tessera_ui::WorkPhase::Build),
-            1
-        );
-
-        session.run(|| router.with_mut(|router| router.push(DummyDestination)));
-        pump_layout_test_session(&mut session, 3);
-        let (_, top_state, value) = output.get().expect("fixture published router output");
-        assert_eq!(value, 0);
-        assert!(top_state != root_state);
-        session.run(|| top_state.set(12));
-        pump_layout_test_session(&mut session, 4);
-        assert_eq!(output.get().expect("fixture published router output").2, 12);
-        session.run(|| {
-            router.with_mut(|router| {
-                router.pop();
-            })
-        });
-        pump_layout_test_session(&mut session, 5);
-        assert!(output.get().expect("fixture published router output").1 == root_state);
-        assert_eq!(output.get().expect("fixture published router output").2, 7);
-        assert_eq!(
-            session.run(|| top_state.try_with(|value| *value)),
-            Err(crate::state::ShardStateError::Stale)
-        );
-        session.run(|| {
-            router.with_mut(|router| {
-                router.clear();
-            })
-        });
-        assert_eq!(
-            session.run(|| root_state.try_with(|value| *value)),
-            Err(crate::state::ShardStateError::Stale)
-        );
     }
 }

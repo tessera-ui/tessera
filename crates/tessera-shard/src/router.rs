@@ -12,6 +12,3 @@ mod home;
 pub use controller::RouterController;
 pub use destination::RouterDestination;
 pub use home::shard_home;
-
-#[cfg(test)]
-pub(crate) use crate::__private::with_current_router_shard_state;

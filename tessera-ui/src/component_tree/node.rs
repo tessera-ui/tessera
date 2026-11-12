@@ -19,10 +19,10 @@ use crate::{
         FocusTraversalPolicy,
     },
     layout::{
-        ChildMeasure, DefaultLayoutNode, LayoutInput, LayoutModifierDyn, LayoutModifierHandle,
-        LayoutResult, PlacementResult, PlacementScope,
+        ChildMeasure, LayoutInput, LayoutPolicyHandle, LayoutResult, PlacementResult,
+        PlacementScope,
     },
-    modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier},
+    modifier::{LayoutModifier, LayoutModifierChild, LayoutModifierInput, Modifier},
     prop::CallbackWith,
     px::{PxPosition, PxRect, PxSize},
     render_graph::RenderFragment,
@@ -71,9 +71,9 @@ pub(crate) struct ComponentNode {
     /// Node-local modifier chain attached during build.
     pub(crate) modifier: Modifier,
     pub(crate) attached_modifiers: crate::modifier::AttachedModifierChain,
-    /// Measurement copy of the policy; measurement may mutate its local state.
-    pub(crate) layout_node: Box<dyn LayoutModifierDyn>,
-    pub(crate) layout_input_policy: LayoutModifierHandle,
+    /// Optional isolated state for policies that explicitly request it.
+    pub(crate) layout_node: Option<Box<dyn crate::layout::LayoutPolicyDyn>>,
+    pub(crate) layout_policy_input: LayoutPolicyHandle,
     /// Draw modifier node used to record draw and compute commands.
     pub(crate) draw_node: crate::layout::DrawModifierHandle,
 }
@@ -95,19 +95,24 @@ impl ComponentNode {
             layout_coordinate_space: false,
             modifier: Modifier::default(),
             attached_modifiers: crate::modifier::AttachedModifierChain::default(),
-            layout_node: Box::new(DefaultLayoutNode),
-            layout_input_policy: LayoutModifierHandle::default(),
+            layout_node: None,
+            layout_policy_input: LayoutPolicyHandle::default(),
             draw_node: crate::layout::DrawModifierHandle::default(),
         }
     }
 
     pub(crate) fn interaction(&self) -> &NodeInteraction {
-        static EMPTY: NodeInteraction = NodeInteraction::EMPTY;
-        self.interaction.as_deref().unwrap_or(&EMPTY)
+        struct Empty(NodeInteraction);
+        // SAFETY: the empty interaction owns no handlers and is never mutated.
+        unsafe impl Sync for Empty {}
+        static EMPTY: Empty = Empty(NodeInteraction::EMPTY);
+        self.interaction.as_deref().unwrap_or(&EMPTY.0)
     }
 
-    pub(crate) fn layout_policy(&self) -> &dyn LayoutModifierDyn {
-        self.layout_input_policy.as_policy()
+    pub(crate) fn layout_policy(&self) -> &dyn crate::layout::LayoutPolicyDyn {
+        self.layout_node
+            .as_deref()
+            .unwrap_or_else(|| self.layout_policy_input.as_policy())
     }
 
     pub(crate) fn interaction_mut(&mut self) -> &mut NodeInteraction {
@@ -569,11 +574,11 @@ pub enum PointerEventPass {
 }
 
 /// Pointer-specific input handler.
-pub type PointerInputHandlerFn = dyn Fn(PointerInput) + Send + Sync;
+pub type PointerInputHandlerFn = dyn Fn(PointerInput);
 /// Keyboard-specific input handler.
-pub type KeyboardInputHandlerFn = dyn Fn(KeyboardInput) + Send + Sync;
+pub type KeyboardInputHandlerFn = dyn Fn(KeyboardInput);
 /// IME-specific input handler.
-pub type ImeInputHandlerFn = dyn Fn(ImeInput) + Send + Sync;
+pub type ImeInputHandlerFn = dyn Fn(ImeInput);
 /// Focus-changed callback attached to a component node.
 pub type FocusChangedHandler = CallbackWith<FocusState>;
 /// Focus-event callback attached to a component node.
@@ -1000,7 +1005,7 @@ struct MeasureLayoutContext<'a, 'ctx> {
 }
 
 fn measure_base_layout(
-    policy: &dyn LayoutModifierDyn,
+    policy: &dyn crate::layout::LayoutPolicyDyn,
     layout_ctx: &MeasureLayoutContext<'_, '_>,
     metadatas: &mut ComponentNodeMetaDatas,
     constraint: &Constraint,
@@ -1030,7 +1035,7 @@ fn measure_base_layout(
 }
 
 fn measure_with_layout_modifiers(
-    modifiers: &[&dyn LayoutModifierNode],
+    modifiers: &[&dyn LayoutModifier],
     layout_ctx: &MeasureLayoutContext<'_, '_>,
     constraint: &Constraint,
     base: &mut dyn FnMut(&Constraint) -> Result<MeasuredNodeLayout, MeasurementError>,
@@ -1091,7 +1096,7 @@ fn measure_with_layout_modifiers(
         position: None,
         _marker: std::marker::PhantomData,
     };
-    let size = head.measure_content(&modifier_input, &mut child)?.size;
+    let size = head.measure(&modifier_input, &mut child)?.size;
     if let Some(measured) = child.last.as_ref() {
         input.extend_measured_children(measured.measured_children.clone());
     }
@@ -1134,8 +1139,8 @@ fn measure_with_layout_modifiers(
 }
 
 fn relayout_base_layout(
-    policy: &dyn LayoutModifierDyn,
-    modifiers: &[&dyn LayoutModifierNode],
+    policy: &dyn crate::layout::LayoutPolicyDyn,
+    modifiers: &[&dyn LayoutModifier],
     layout_ctx: &MeasureLayoutContext<'_, '_>,
     entry: &LayoutSnapshotEntry,
     parent_constraint: &Constraint,
@@ -1167,7 +1172,7 @@ fn relayout_base_layout(
     );
     let placements = if update_placements {
         policy
-            .place_children_dyn(&scope, &PlacementResult::new())?
+            .place_dyn(&scope, &PlacementResult::new())?
             .into_placements()
     } else {
         entry
@@ -1317,7 +1322,7 @@ pub(crate) fn measure_node(
         )
     };
     let mut measurement = None;
-    let layout_node = node_data.layout_node.as_ref();
+    let layout_node = node_data.layout_policy();
     let snapshot = layout_ctx.and_then(|context| context.snapshot(node_data.instance_key));
     if let Some(layout_ctx) = layout_ctx {
         layout_ctx.inc_measure_node_calls();

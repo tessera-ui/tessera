@@ -8,9 +8,7 @@ use std::time::Duration;
 
 use tessera_ui::{
     Color, ComputedData, Dp, HeadlessConfig, HeadlessRenderer, LayoutResult, MOUSE_POINTER_ID,
-    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition,
-    layout::{MeasureScope, layout},
-    tessera,
+    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, layout::MeasureScope, tessera,
 };
 
 use crate::{button::button, modifier::ModifierExt as _, theme::material_theme};
@@ -18,7 +16,7 @@ use crate::{button::button, modifier::ModifierExt as _, theme::material_theme};
 #[derive(Clone, PartialEq)]
 struct ContentMeasure;
 
-impl tessera_ui::LayoutModifierNode for ContentMeasure {
+impl tessera_ui::LayoutPolicy for ContentMeasure {
     fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData {
             width: Px(20),
@@ -29,7 +27,7 @@ impl tessera_ui::LayoutModifierNode for ContentMeasure {
 
 #[tessera]
 fn retained_content() {
-    layout().policy(ContentMeasure);
+    tessera_ui::layout::layout(ContentMeasure);
 }
 
 #[tessera]

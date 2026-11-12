@@ -1,19 +1,7 @@
-use std::{any::Any, sync::Arc};
-
-use tessera_ui::State;
-
-use super::RouterController;
+use std::any::Any;
 
 /// A navigation destination produced by the `#[shard]` macro.
-pub trait RouterDestination: Any + Send + Sync {
-    /// Execute the component associated with this destination.
-    fn exec_component(&self, controller: State<RouterController>);
-
-    /// Copies the component entry point so it can run without borrowing `self`.
-    fn exec_component_handle(&self) -> Arc<dyn Fn(State<RouterController>) + Send + Sync>;
-
-    /// Stable destination identifier used for route identity checks.
-    fn destination_id() -> &'static str
-    where
-        Self: Sized;
+pub trait RouterDestination: Any {
+    /// Renders the destination's page.
+    fn render(&self);
 }

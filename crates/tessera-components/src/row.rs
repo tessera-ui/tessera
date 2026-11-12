@@ -6,9 +6,7 @@
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
     PxPosition, RenderSlot,
-    layout::{
-        LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout,
-    },
+    layout::{LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope},
     tessera,
 };
 
@@ -45,13 +43,13 @@ struct RowLayout {
     cross_axis_alignment: CrossAxisAlignment,
 }
 
-impl tessera_ui::LayoutModifierNode for RowLayout {
+impl tessera_ui::LayoutPolicy for RowLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         (self.cross_axis_alignment == CrossAxisAlignment::Stretch)
             == (other.cross_axis_alignment == CrossAxisAlignment::Stretch)
     }
 
-    fn place_children(
+    fn place(
         &self,
         scope: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -158,13 +156,12 @@ pub fn row(
     let modifier = modifier.unwrap_or_default();
     let main_axis_alignment = main_axis_alignment.unwrap_or_default();
     let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
-    layout()
-        .policy(RowLayout {
-            main_axis_alignment,
-            cross_axis_alignment,
-        })
-        .modifier(modifier)
-        .child_shared(children.unwrap_or_else(RenderSlot::empty));
+    tessera_ui::layout::layout(RowLayout {
+        main_axis_alignment,
+        cross_axis_alignment,
+    })
+    .modifier(modifier)
+    .child_shared(children.unwrap_or_else(RenderSlot::empty));
 }
 
 fn measure_weighted_row(
@@ -424,7 +421,7 @@ mod tests {
         height: i32,
     }
 
-    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+    impl tessera_ui::LayoutPolicy for FixedTestLayout {
         fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
@@ -433,7 +430,7 @@ mod tests {
         }
     }
 
-    impl tessera_ui::LayoutModifierNode for FillWidthTestLayout {
+    impl tessera_ui::LayoutPolicy for FillWidthTestLayout {
         fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let width = input
                 .parent_constraint()
@@ -454,8 +451,7 @@ mod tests {
         let width = width.unwrap_or_default();
         let height = height.unwrap_or_default();
 
-        layout()
-            .policy(FixedTestLayout { width, height })
+        tessera_ui::layout::layout(FixedTestLayout { width, height })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
@@ -468,8 +464,7 @@ mod tests {
         let tag = tag.unwrap_or_default();
         let height = height.unwrap_or_default();
 
-        layout()
-            .policy(FillWidthTestLayout { height })
+        tessera_ui::layout::layout(FillWidthTestLayout { height })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
@@ -488,9 +483,11 @@ mod tests {
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .children(|| {
                 row_fixed_box();
-                layout().modifier(Modifier::new().weight(1.0)).child(|| {
-                    row_weighted_content_box();
-                });
+                layout(tessera_ui::layout::Stack)
+                    .modifier(Modifier::new().weight(1.0))
+                    .child(|| {
+                        row_weighted_content_box();
+                    });
             });
     }
 
@@ -571,11 +568,13 @@ mod tests {
                     .tag("remaining".to_string())
                     .height(10);
                 if weighted {
-                    layout().modifier(Modifier::new().weight(1.0)).child(|| {
-                        fill_width_test_box()
-                            .tag("exhausted".to_string())
-                            .height(10);
-                    });
+                    layout(tessera_ui::layout::Stack)
+                        .modifier(Modifier::new().weight(1.0))
+                        .child(|| {
+                            fill_width_test_box()
+                                .tag("exhausted".to_string())
+                                .height(10);
+                        });
                 } else {
                     fill_width_test_box()
                         .tag("exhausted".to_string())

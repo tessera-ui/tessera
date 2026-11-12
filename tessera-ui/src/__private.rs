@@ -11,6 +11,10 @@ pub use crate::{
     },
 };
 
+pub fn inject_model<T: crate::ModelInit>(slot: u64) -> crate::Model<T> {
+    crate::runtime::inject_model(slot)
+}
+
 pub fn current_instance_logic_id() -> u64 {
     crate::runtime::current_instance_logic_id()
 }

@@ -8,11 +8,8 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Color, ComputedData, Dp, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode,
-    accesskit::Role,
-    layout::{MeasureScope, layout},
-    modifier::ModifierCapabilityExt as _,
-    remember, tessera, use_context,
+    MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, accesskit::Role,
+    layout::MeasureScope, modifier::ModifierCapabilityExt as _, remember, tessera, use_context,
 };
 
 use crate::{
@@ -128,19 +125,18 @@ pub fn text(
 
     // A draw-only rebuild can reuse measurement and its glyph buffer.
     let shaped = remember(|| Arc::new(Mutex::new(None))).get();
-    layout()
-        .policy(TextLayout {
-            text: content,
-            single_line: single_line.unwrap_or(false),
-            style: TextStyle {
-                font_size: size,
-                line_height: Some(line_height),
-                ..resolved_style
-            },
-            shaped: shaped.clone(),
-        })
-        .draw(TextDraw { color, shaped })
-        .modifier(modifier.push_semantics(semantics));
+    tessera_ui::layout::layout(TextLayout {
+        text: content,
+        single_line: single_line.unwrap_or(false),
+        style: TextStyle {
+            font_size: size,
+            line_height: Some(line_height),
+            ..resolved_style
+        },
+        shaped: shaped.clone(),
+    })
+    .draw(TextDraw { color, shaped })
+    .modifier(modifier.push_semantics(semantics));
 }
 
 #[derive(Clone)]
@@ -186,7 +182,7 @@ struct CachedText {
 
 impl PartialEq for TextLayout {
     fn eq(&self, other: &Self) -> bool {
-        tessera_ui::LayoutModifierNode::measure_eq(self, other)
+        tessera_ui::LayoutPolicy::measure_eq(self, other)
     }
 }
 
@@ -227,7 +223,7 @@ impl TextLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for TextLayout {
+impl tessera_ui::LayoutPolicy for TextLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.text == other.text
             && self.style == other.style

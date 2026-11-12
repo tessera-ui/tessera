@@ -7,8 +7,7 @@ use std::sync::Arc;
 
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
-    layout::{MeasureScope, layout},
-    tessera, use_context,
+    layout::MeasureScope, tessera, use_context,
 };
 
 use crate::{
@@ -61,7 +60,7 @@ struct IconLayout {
     rotation: f32,
 }
 
-impl tessera_ui::LayoutModifierNode for IconLayout {
+impl tessera_ui::LayoutPolicy for IconLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.size == other.size
             && self.width == other.width
@@ -197,7 +196,7 @@ pub fn icon(
         tint_mode,
         rotation,
     };
-    layout().policy(policy.clone()).draw(policy);
+    tessera_ui::layout::layout(policy.clone()).draw(policy);
 }
 
 fn intrinsic_dimensions(content: &Painter) -> (Px, Px) {

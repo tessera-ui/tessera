@@ -5,7 +5,7 @@
 //! Measure and align content while reserving independent interaction bounds.
 
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     collections::HashMap,
     hash::{Hash, Hasher},
 };
@@ -17,7 +17,7 @@ use crate::{
         LayoutContext, LayoutDiagnosticsCollector, LayoutSnapshotMap, NodeRole, measure_node,
     },
     modifier::{
-        DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutModifierNode, Modifier,
+        DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutPolicy, Modifier,
     },
     px::PxPosition,
     render_graph::RenderFragment,
@@ -254,7 +254,7 @@ impl<'a> MeasureScope<'a> {
     /// constraints.
     ///
     /// State read here invalidates placement instead of measurement. Implement
-    /// [`LayoutModifierNode::place_children`] to update those positions using
+    /// [`LayoutPolicy::place`] to update those positions using
     /// cached child sizes. Keep size and constraint calculations outside this
     /// closure.
     pub fn placement<R>(&self, calculate: impl FnOnce() -> R) -> R {
@@ -834,44 +834,33 @@ impl RenderMetadataMut<'_> {
 
 /// Type-erased layout node used by the runtime.
 #[doc(hidden)]
-pub trait LayoutModifierDyn {
-    crate::modifier::modifier_lifecycle!();
+pub(crate) trait LayoutPolicyDyn {
     /// Returns a typed reference for downcasting.
     fn as_any(&self) -> &dyn Any;
     /// Measures layout using a type-erased node.
     fn measure_dyn(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
     /// Recomputes child placements using cached child measurements.
-    fn place_children_dyn(
+    fn place_dyn(
         &self,
         scope: &PlacementScope<'_>,
         inner: &PlacementResult,
     ) -> Option<PlacementResult>;
     /// Compares two type-erased nodes for equality.
-    fn dyn_eq(&self, other: &dyn LayoutModifierDyn) -> bool;
+    fn dyn_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
     /// Compares two type-erased nodes for measurement-relevant equality.
-    fn dyn_measure_eq(&self, other: &dyn LayoutModifierDyn) -> bool;
+    fn dyn_measure_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
     /// Compares two type-erased nodes for placement-relevant equality.
-    fn dyn_placement_eq(&self, other: &dyn LayoutModifierDyn) -> bool;
-    /// Clones the type-erased node.
-    fn clone_box(&self) -> Box<dyn LayoutModifierDyn>;
+    fn dyn_placement_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
+    /// Reports whether measurement uses an isolated state snapshot.
+    fn isolate_measurement_state(&self) -> bool;
+    /// Clones a policy for an explicitly stateful measurement snapshot.
+    fn clone_box(&self) -> Box<dyn LayoutPolicyDyn>;
 }
 
-impl<T> LayoutModifierDyn for T
+impl<T> LayoutPolicyDyn for T
 where
-    T: LayoutModifierNode + Clone + PartialEq,
+    T: LayoutPolicy + Clone + PartialEq,
 {
-    fn on_attach(&self, context: crate::modifier::ModifierNodeContext) {
-        LayoutModifierNode::on_attach(self, context);
-    }
-
-    fn on_update(&self, context: crate::modifier::ModifierNodeContext) {
-        LayoutModifierNode::on_update(self, context);
-    }
-
-    fn on_detach(&self, context: crate::modifier::ModifierNodeContext) {
-        LayoutModifierNode::on_detach(self, context);
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -882,85 +871,104 @@ where
         } else {
             crate::WorkPhase::Measure
         });
-        LayoutModifierNode::measure(self, scope)
+        LayoutPolicy::measure(self, scope)
     }
 
-    fn place_children_dyn(
+    fn place_dyn(
         &self,
         scope: &PlacementScope<'_>,
         inner: &PlacementResult,
     ) -> Option<PlacementResult> {
         crate::work::record_policy::<T>(crate::WorkPhase::Place);
-        LayoutModifierNode::place_children(self, scope, inner)
+        LayoutPolicy::place(self, scope, inner)
     }
 
-    fn dyn_eq(&self, other: &dyn LayoutModifierDyn) -> bool {
+    fn dyn_eq(&self, other: &dyn LayoutPolicyDyn) -> bool {
         other
             .as_any()
             .downcast_ref::<T>()
             .is_some_and(|other| self == other)
     }
 
-    fn dyn_measure_eq(&self, other: &dyn LayoutModifierDyn) -> bool {
+    fn dyn_measure_eq(&self, other: &dyn LayoutPolicyDyn) -> bool {
         other
             .as_any()
             .downcast_ref::<T>()
-            .is_some_and(|other| LayoutModifierNode::measure_eq(self, other))
+            .is_some_and(|other| LayoutPolicy::measure_eq(self, other))
     }
 
-    fn dyn_placement_eq(&self, other: &dyn LayoutModifierDyn) -> bool {
+    fn dyn_placement_eq(&self, other: &dyn LayoutPolicyDyn) -> bool {
         other
             .as_any()
             .downcast_ref::<T>()
-            .is_some_and(|other| LayoutModifierNode::placement_eq(self, other))
+            .is_some_and(|other| LayoutPolicy::placement_eq(self, other))
     }
 
-    fn clone_box(&self) -> Box<dyn LayoutModifierDyn> {
+    fn isolate_measurement_state(&self) -> bool {
+        LayoutPolicy::isolate_measurement_state(self)
+    }
+
+    fn clone_box(&self) -> Box<dyn LayoutPolicyDyn> {
         Box::new(self.clone())
     }
 }
 
-impl Clone for Box<dyn LayoutModifierDyn> {
-    fn clone(&self) -> Self {
-        self.clone_box()
-    }
-}
-
-/// Type-erased layout node handle consumed by [`layout`].
-///
-/// Most callers do not construct this type directly. Instead, pass any
-/// [`LayoutModifierNode`] to the `policy(...)` builder method and rely on the
-/// `From<T>` conversion.
 #[derive(Clone, Default)]
-pub struct LayoutModifierHandle {
-    node: Option<crate::modifier::OwnedNode<dyn LayoutModifierDyn>>,
+pub(crate) struct LayoutPolicyHandle {
+    node: Option<std::rc::Rc<dyn LayoutPolicyDyn>>,
 }
 
-impl LayoutModifierHandle {
-    pub(crate) fn has_node(&self) -> bool {
-        self.node.is_some()
+impl LayoutPolicyHandle {
+    pub(crate) fn as_policy(&self) -> &dyn LayoutPolicyDyn {
+        self.node
+            .as_deref()
+            .unwrap_or(&Stack as &dyn LayoutPolicyDyn)
     }
 
-    pub(crate) fn as_policy(&self) -> &dyn LayoutModifierDyn {
-        self.node.as_deref().unwrap_or(&DefaultLayoutNode)
+    pub(crate) fn matches<P>(&self, candidate: &P) -> bool
+    where
+        P: LayoutPolicy + Clone + PartialEq,
+    {
+        self.as_policy()
+            .as_any()
+            .downcast_ref::<P>()
+            .is_some_and(|current| current == candidate)
+    }
+
+    pub(crate) fn update_if_changed<P>(&mut self, candidate: &P) -> bool
+    where
+        P: LayoutPolicy + Clone + PartialEq,
+    {
+        if self.matches(candidate) {
+            return false;
+        }
+        if TypeId::of::<P>() == TypeId::of::<Stack>() {
+            *self = Self::default();
+            return true;
+        }
+        *self = Self {
+            node: Some(std::rc::Rc::new(candidate.clone())),
+        };
+        true
     }
 }
 
-impl PartialEq for LayoutModifierHandle {
+impl PartialEq for LayoutPolicyHandle {
     fn eq(&self, other: &Self) -> bool {
         self.as_policy().dyn_eq(other.as_policy())
     }
 }
 
-impl<S> From<S> for LayoutModifierHandle
+impl<S> From<S> for LayoutPolicyHandle
 where
-    S: LayoutModifierNode + Clone + PartialEq,
+    S: LayoutPolicy + Clone + PartialEq,
 {
     fn from(node: S) -> Self {
+        if TypeId::of::<S>() == TypeId::of::<Stack>() {
+            return Self::default();
+        }
         Self {
-            node: Some(crate::modifier::OwnedNode::new(node, |node| {
-                node as &dyn LayoutModifierDyn
-            })),
+            node: Some(std::rc::Rc::new(node)),
         }
     }
 }
@@ -1049,51 +1057,52 @@ where
 
 /// # layout
 ///
-/// Emit an explicit layout node with a layout policy, draw modifier, modifier
-/// chain, and optional child slot.
+/// Emit a layout node that measures and places its children with `policy`.
 ///
 /// ## Usage
 ///
-/// Build framework or internal components that need to define explicit layout
-/// and rendering behavior inside a tessera composition boundary.
+/// Build containers and controls that arrange child content.
 ///
 /// ## Parameters
 ///
-/// - `policy` - the unified layout node used for measuring and placing the
-///   emitted layout node, defaulting to [`DefaultLayoutNode`]
-/// - `draw` - draw modifier used to record draw and compute commands for the
-///   emitted layout node, defaulting to [`NoopDrawModifier`]
-/// - `modifier` - node-local modifier chain attached before child content is
-///   emitted, defaulting to an empty [`Modifier`]
-/// - `child` - optional child slot rendered as the emitted node's content
-///   subtree
+/// - `policy` - measures the children and places them; use [`Stack`] to stack
+///   them at the origin
+/// - `draw` - draw modifier recording the node's drawing, defaulting to
+///   [`NoopDrawModifier`]
+/// - `modifier` - node-local modifier chain
+/// - `child` - content laid out by this node
+///
+/// Re-executing with an equal policy keeps the node's stored policy; a changed
+/// policy replaces it once. Wrap policies that mutate interior state during
+/// measurement in [`crate::modifier::StatefulLayoutPolicy`].
 ///
 /// ## Examples
 /// ```
 /// use tessera_ui::{
 ///     Modifier, NoopDrawModifier, RenderSlot,
-///     layout::{DefaultLayoutNode, layout},
+///     layout::{Stack, layout},
 /// };
 ///
 /// #[tessera_ui::tessera]
 /// fn primitive_example(modifier: Modifier, child: RenderSlot) {
-///     layout()
-///         .policy(DefaultLayoutNode)
+///     layout(Stack)
 ///         .draw(NoopDrawModifier)
 ///         .modifier(modifier)
 ///         .child(move || child.render());
 /// }
 /// ```
 #[tessera]
-pub fn layout(
-    #[prop(into)] policy: Option<LayoutModifierHandle>,
+pub fn layout<P>(
+    #[prop(borrow)] policy: P,
     #[prop(into)] draw: Option<DrawModifierHandle>,
     modifier: Option<Modifier>,
     child: Option<RenderSlot>,
-) {
+) where
+    P: LayoutPolicy + Clone + PartialEq,
+{
     emit_node(
         NodeRole::Layout,
-        policy.unwrap_or_default(),
+        policy,
         draw.unwrap_or_default(),
         modifier.unwrap_or_default(),
     );
@@ -1130,7 +1139,7 @@ pub fn layout(
 pub fn group(modifier: Option<Modifier>, child: Option<RenderSlot>) {
     emit_node(
         NodeRole::Group,
-        LayoutModifierHandle::default(),
+        &Stack,
         DrawModifierHandle::default(),
         modifier.unwrap_or_default(),
     );
@@ -1139,12 +1148,11 @@ pub fn group(modifier: Option<Modifier>, child: Option<RenderSlot>) {
     }
 }
 
-/// Default layout node that stacks children at (0,0) and uses the bounding
-/// size.
+/// Stacks children at the origin and sizes the node to their bounding box.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct DefaultLayoutNode;
+pub struct Stack;
 
-impl LayoutModifierNode for DefaultLayoutNode {
+impl LayoutPolicy for Stack {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let child_count = scope.children().len();
         if child_count == 0 {
@@ -1172,7 +1180,7 @@ impl LayoutModifierNode for DefaultLayoutNode {
         Ok(result)
     }
 
-    fn place_children(
+    fn place(
         &self,
         scope: &PlacementScope<'_>,
         _inner: &PlacementResult,

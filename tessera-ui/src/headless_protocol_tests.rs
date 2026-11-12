@@ -1,9 +1,7 @@
 use crate::{
-    AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, LayoutModifierNode,
+    AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, LayoutPolicy,
     LayoutResult, MeasurementError, Modifier, PointerEventPass, PointerInput,
-    PointerInputModifierNode, SemanticsModifierNode,
-    layout::{MeasureScope, layout},
-    scaled_box,
+    PointerInputModifierNode, SemanticsModifierNode, layout::MeasureScope, scaled_box,
     testing::TestProbe,
 };
 
@@ -11,7 +9,7 @@ use super::*;
 
 #[derive(Clone, PartialEq)]
 struct Anchor;
-impl LayoutModifierNode for Anchor {
+impl LayoutPolicy for Anchor {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let child = scope.children()[0].measure(scope, &Constraint::exact(Px(150), Px(35)))?;
         let mut result = LayoutResult::new(ComputedData {
@@ -25,7 +23,7 @@ impl LayoutModifierNode for Anchor {
 
 #[derive(Clone, PartialEq)]
 struct Content;
-impl LayoutModifierNode for Content {
+impl LayoutPolicy for Content {
     fn measure(&self, _: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData {
             width: Px(240),
@@ -58,10 +56,10 @@ impl SemanticsModifierNode for Tag {
 
 #[crate::tessera]
 fn protocol_fixture(probe: TestProbe<Option<PxPosition>>) {
-    layout().policy(Anchor).child(move || {
+    crate::layout::layout(Anchor).child(move || {
         let probe = probe.clone();
         scaled_box(0.625).child(move || {
-            layout().policy(Content).modifier(
+            crate::layout::layout(Content).modifier(
                 Modifier::new()
                     .push_semantics(Tag)
                     .push_pointer_input(Pointer(probe.clone())),

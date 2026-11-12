@@ -26,7 +26,7 @@ impl Observer {
             .append_child(&probe)?;
         let dispatcher = crate::RuntimeSession::current()
             .ok_or("UI session unavailable")?
-            .dispatcher();
+            .run(crate::dispatcher::current);
         let callback = Closure::new(move |_event: Event| {
             dispatcher.dispatch(|| {});
         });

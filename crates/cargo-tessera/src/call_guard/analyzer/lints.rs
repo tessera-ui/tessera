@@ -13,6 +13,8 @@ use super::{
     CallAnalyzer, CallKind, CallTarget, Diagnostic, TesseraRuntimeApi,
 };
 
+pub(super) const MODEL_PATHS: &[&str] = &["tessera_ui::runtime::model::Model", "tessera_ui::Model"];
+
 impl<'db> CallAnalyzer<'db> {
     pub(super) fn redundant_shared_render_slot(
         &self,
@@ -177,6 +179,118 @@ impl<'db> CallAnalyzer<'db> {
                 "this closure only expands the local slot".into(),
             )),
         })
+    }
+
+    /// Reports `remember` or `retain` states captured by a `Model::new_with`
+    /// initializer: storing them in the model does not transfer ownership.
+    pub(super) fn remembered_state_in_model(&self, call: &ast::CallExpr) -> Vec<Diagnostic> {
+        if !self
+            .call_function(call)
+            .is_some_and(|function| self.is_method_of(function, "new_with", MODEL_PATHS))
+        {
+            return Vec::new();
+        }
+        let Some(ast::Expr::ClosureExpr(init)) =
+            call.arg_list().and_then(|args| args.args().next())
+        else {
+            return Vec::new();
+        };
+        let Some(body) = call
+            .syntax()
+            .ancestors()
+            .find_map(ast::Fn::cast)
+            .and_then(|f| f.body())
+        else {
+            return Vec::new();
+        };
+        let remembered: Vec<(Local<'db>, ast::LetStmt)> = body
+            .syntax()
+            .descendants()
+            .filter_map(ast::LetStmt::cast)
+            .filter_map(|statement| {
+                let ast::Expr::CallExpr(initializer) = statement.initializer()? else {
+                    return None;
+                };
+                let CallTarget::Resolved {
+                    kind: CallKind::RuntimeApi(api),
+                    ..
+                } = self.resolve_call_target(&initializer)?
+                else {
+                    return None;
+                };
+                matches!(
+                    api,
+                    TesseraRuntimeApi::Remember
+                        | TesseraRuntimeApi::RememberWithKey
+                        | TesseraRuntimeApi::Retain
+                        | TesseraRuntimeApi::RetainWithKey
+                )
+                .then_some(())?;
+                Some((self.pattern_local(statement.pat()?)?, statement))
+            })
+            .collect();
+        if remembered.is_empty() {
+            return Vec::new();
+        }
+        init.syntax()
+            .descendants()
+            .filter_map(ast::PathExpr::cast)
+            .filter_map(|path| {
+                let local = self.expression_local(ast::Expr::PathExpr(path.clone()))?;
+                let (_, statement) = remembered.iter().find(|(candidate, _)| *candidate == local)?;
+                let source = self.sema.original_range(path.syntax());
+                let file_id = source.file_id.file_id(self.db);
+                if !self.local_files.contains(&file_id) {
+                    return None;
+                }
+                let declaration = self.sema.original_range(statement.syntax());
+                Some(Diagnostic {
+                    code: DiagnosticCode::Lint(Lint::RememberedStateInModel),
+                    severity: cargo_metadata::diagnostic::DiagnosticLevel::Warning,
+                    file_id,
+                    range: source.range,
+                    message: "remembered state stored in a model".into(),
+                    label: "this state keeps its composition-slot lifetime".into(),
+                    help: "create model-owned state with `State::new` inside the model initializer"
+                        .into(),
+                    notes: vec![
+                        "the model will hold a handle that expires when this component's slot is released"
+                            .into(),
+                    ],
+                    suggestions: Vec::new(),
+                    boundary: (declaration.file_id == source.file_id).then(|| {
+                        (declaration.range, "state created by the component slot here".into())
+                    }),
+                })
+            })
+            .collect()
+    }
+
+    pub(super) fn call_function(&self, call: &ast::CallExpr) -> Option<ra_ap_hir::Function> {
+        let callee = call.expr()?;
+        std::iter::once(callee.clone())
+            .chain(self.sema.descend_node_into_attributes(callee))
+            .find_map(
+                |callee| match self.sema.resolve_expr_as_callable(&callee)?.kind() {
+                    ra_ap_hir::CallableKind::Function(function) => Some(function),
+                    _ => None,
+                },
+            )
+    }
+
+    pub(super) fn is_method_of(
+        &self,
+        function: ra_ap_hir::Function,
+        name: &str,
+        type_paths: &[&str],
+    ) -> bool {
+        use ra_ap_hir::AsAssocItem;
+        function.name(self.db).as_str() == name
+            && function
+                .as_assoc_item(self.db)
+                .and_then(|item| item.implementing_ty(self.db))
+                .and_then(|ty| self.type_adt_canonical_path(&ty))
+                .is_some_and(|path| type_paths.contains(&path.as_str()))
     }
 
     fn direct_slot_suggestion(

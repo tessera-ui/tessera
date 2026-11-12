@@ -465,8 +465,8 @@ mod tests {
 
     use crate::{
         ComputedData, Constraint, LayoutResult, Modifier, Px, PxPosition, State,
-        layout::{MeasureScope, layout},
-        modifier::{LayoutModifierNode, PlacementModifierNode, PointerInputModifierNode},
+        layout::MeasureScope,
+        modifier::{LayoutPolicy, PlacementModifierNode, PointerInputModifierNode},
         remember,
         runtime::TesseraRuntime,
         tessera,
@@ -485,7 +485,7 @@ mod tests {
     #[derive(Clone, PartialEq)]
     struct Canvas(State<bool>);
 
-    impl LayoutModifierNode for Canvas {
+    impl LayoutPolicy for Canvas {
         fn measure(
             &self,
             scope: &mut MeasureScope<'_>,
@@ -505,7 +505,7 @@ mod tests {
     #[derive(Clone, PartialEq)]
     struct ControlSize(State<ComputedData>);
 
-    impl LayoutModifierNode for ControlSize {
+    impl LayoutPolicy for ControlSize {
         fn measure(
             &self,
             _: &mut MeasureScope<'_>,
@@ -547,8 +547,8 @@ mod tests {
         probe.placed.set(Some(placed));
         probe.rebuild.set(Some(rebuild));
         let generation = rebuild.get();
-        layout().policy(Canvas(placed)).child(move || {
-            layout().policy(ControlSize(size)).modifier(
+        crate::layout::layout(Canvas(placed)).child(move || {
+            crate::layout::layout(ControlSize(size)).modifier(
                 Modifier::new()
                     .push_placement(Position(position))
                     .push_pointer_input(Input(generation, probe.observed_handler.clone())),

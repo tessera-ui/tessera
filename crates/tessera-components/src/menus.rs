@@ -12,7 +12,7 @@ use tessera_ui::{
     RenderSlotWith, State,
     accesskit::{HasPopup, Role, Toggled},
     current_frame_nanos,
-    layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -400,7 +400,7 @@ impl MenuLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for MenuLayout {
+impl tessera_ui::LayoutPolicy for MenuLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.is_open == other.is_open && self.has_background == other.has_background
     }
@@ -416,7 +416,7 @@ impl tessera_ui::LayoutModifierNode for MenuLayout {
         Ok(input.placement(|| self.place(&children, &sizes, fallback)))
     }
 
-    fn place_children(
+    fn place(
         &self,
         scope: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -838,53 +838,49 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
         controller,
         rendered_open: is_open,
     });
-    layout()
-        .modifier(modifier)
-        .policy(MenuLayout {
-            is_open,
-            has_background: parent_request.is_none(),
-            placement: provider_args.placement,
-            offset: provider_args.offset,
-            anchor,
-            bounds: bounds,
-        })
-        .child(move || {
-            layout()
-                .modifier(Modifier::new().focus_scope_with(main_focus_scope))
-                .child_shared(main_content);
-            if is_open {
-                let bounds = bounds;
-                if parent_request.is_none() {
-                    surface()
-                        .style(SurfaceStyle::Filled {
-                            color: provider_args.scrim_color,
-                        })
-                        .modifier(with_pointer_input(
-                            Modifier::new().fill_max_size(),
-                            move |mut input| {
-                                let should_close = close_on_background
-                                    && input.has_unconsumed_release()
-                                    && is_click_outside_menu(
-                                        input.cursor_position_rel,
-                                        bounds.get(),
-                                    );
-                                input.block_all();
-                                if should_close {
-                                    apply_close_action(controller, &on_dismiss);
-                                }
-                            },
-                        ))
-                        .child(|| {});
-                }
-
-                menu_panel()
-                    .provider(provider_args.clone())
-                    .controller(controller)
-                    .focus_scope(menu_focus_scope)
-                    .menu_content_shared(menu_content)
-                    .just_opened(just_opened);
+    tessera_ui::layout::layout(MenuLayout {
+        is_open,
+        has_background: parent_request.is_none(),
+        placement: provider_args.placement,
+        offset: provider_args.offset,
+        anchor,
+        bounds: bounds,
+    })
+    .modifier(modifier)
+    .child(move || {
+        layout(Stack)
+            .modifier(Modifier::new().focus_scope_with(main_focus_scope))
+            .child_shared(main_content);
+        if is_open {
+            let bounds = bounds;
+            if parent_request.is_none() {
+                surface()
+                    .style(SurfaceStyle::Filled {
+                        color: provider_args.scrim_color,
+                    })
+                    .modifier(with_pointer_input(
+                        Modifier::new().fill_max_size(),
+                        move |mut input| {
+                            let should_close = close_on_background
+                                && input.has_unconsumed_release()
+                                && is_click_outside_menu(input.cursor_position_rel, bounds.get());
+                            input.block_all();
+                            if should_close {
+                                apply_close_action(controller, &on_dismiss);
+                            }
+                        },
+                    ))
+                    .child(|| {});
             }
-        });
+
+            menu_panel()
+                .provider(provider_args.clone())
+                .controller(controller)
+                .focus_scope(menu_focus_scope)
+                .menu_content_shared(menu_content)
+                .just_opened(just_opened);
+        }
+    });
 }
 
 fn closes_submenu(
@@ -1000,7 +996,7 @@ fn menu_panel(
         modifier = modifier.push_pointer_preview_input(hover);
     }
 
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let menu_content = menu_content;
         surface()
             .style(SurfaceStyle::Filled {
@@ -1379,7 +1375,7 @@ fn menu_item_surface(
     } else {
         modifier
     };
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let on_click = if has_submenu {
             let request = submenu_request.expect("submenu request");
             Some(Callback::new(move || {
@@ -1961,7 +1957,7 @@ mod tests {
         let x = remember(|| Dp(40.0));
         observed.set(Some(x));
         material_theme().child(move || {
-            tessera_ui::layout::layout()
+            tessera_ui::layout::layout(tessera_ui::layout::Stack)
                 .modifier(Modifier::new().offset(Dp(12.0), Dp(18.0)))
                 .child(move || {
                     scaled_box(0.5).child(move || {

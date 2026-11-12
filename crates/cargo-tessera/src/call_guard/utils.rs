@@ -62,6 +62,8 @@ pub(crate) fn runtime_api_label(api: TesseraRuntimeApi) -> &'static str {
         TesseraRuntimeApi::ProvideContext => "provide_context",
         TesseraRuntimeApi::UseContext => "use_context",
         TesseraRuntimeApi::ReceiveFrameNanos => "receive_frame_nanos",
+        TesseraRuntimeApi::Launch => "launch",
+        TesseraRuntimeApi::LaunchOnce => "launch_once",
         TesseraRuntimeApi::Key => "key",
         TesseraRuntimeApi::RenderSlotNew => "RenderSlot::new",
         TesseraRuntimeApi::RenderSlotWithNew => "RenderSlotWith::new",

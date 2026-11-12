@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Dp, FocusManager, FrameNanosControl, Modifier,
-    PointerInput, PointerInputModifierNode, PxPosition, SemanticsModifierNode, State,
-    current_frame_nanos, key,
+    AccessibilityActionHandler, AccessibilityNode, Dp, FocusManager, FrameNanosControl,
+    ModelStoreScope, Modifier, PointerInput, PointerInputModifierNode, PxPosition,
+    SemanticsModifierNode, State, current_frame_nanos, key,
+    layout::Stack,
     layout::layout,
     modifier::{ModifierCapabilityExt as _, PlacementModifierNode},
     provide_context, receive_frame_nanos, remember,
@@ -11,7 +12,7 @@ use tessera_ui::{
     tessera, use_context,
 };
 
-use crate::{__private::RouteRenderScope, RouterController, RouterDestination};
+use crate::{RouterController, RouterDestination};
 
 #[derive(Clone, Copy)]
 struct Preview {
@@ -23,7 +24,7 @@ struct Preview {
 
 #[tessera]
 pub(super) fn route_display(controller: State<RouterController>) {
-    let (route_id, route) = controller
+    let (route_id, route, models) = controller
         .with(|router| router.route_at_depth(0))
         .expect("Router stack should not be empty");
     let can_pop = controller.with(|router| router.len() > 1);
@@ -36,7 +37,7 @@ pub(super) fn route_display(controller: State<RouterController>) {
         });
         match event {
             SystemBackEvent::Started(edge) => {
-                preview.set(current.map(|(route_id, _)| Preview {
+                preview.set(current.map(|(route_id, _, _)| Preview {
                     route_id,
                     edge,
                     progress: 0.0,
@@ -60,7 +61,7 @@ pub(super) fn route_display(controller: State<RouterController>) {
             SystemBackEvent::Committed => {
                 let started = preview.get().filter(|preview| preview.restoring.is_none());
                 preview.set(None);
-                if let Some((id, _)) = current
+                if let Some((id, _, _)) = current
                     && started.is_none_or(|started| started.route_id == id)
                 {
                     controller.with_mut(RouterController::pop);
@@ -99,10 +100,10 @@ pub(super) fn route_display(controller: State<RouterController>) {
         let offset = Dp(72.0 * f64::from(gesture.progress) * direction);
         foreground = foreground.push_placement(RouteOffset(offset));
     }
-    layout().child(move || {
-        if let Some((id, previous)) = &previous {
+    layout(Stack).child(move || {
+        if let Some((id, previous, previous_models)) = &previous {
             key(*id, || {
-                route_layer(controller, *id, previous.clone())
+                route_layer(*previous_models, previous.clone())
                     .preview(true)
                     .modifier(
                         Modifier::new()
@@ -112,33 +113,27 @@ pub(super) fn route_display(controller: State<RouterController>) {
             });
         }
         key(route_id, || {
-            route_layer(controller, route_id, route.clone()).modifier(foreground.clone());
+            route_layer(models, route.clone()).modifier(foreground.clone());
         });
     });
 }
 
 #[tessera]
 fn route_layer(
-    controller: State<RouterController>,
-    route_id: u64,
-    #[prop(skip_eq)] route: Arc<dyn RouterDestination>,
+    models: ModelStoreScope,
+    #[prop(skip_eq)] route: Rc<dyn RouterDestination>,
     modifier: Option<Modifier>,
     preview: Option<bool>,
 ) {
-    let destination = route.exec_component_handle();
-    let scope = RouteRenderScope {
-        controller,
-        route_id,
-    };
     let preview = preview.unwrap_or(false)
         || use_context::<BackPreviewScope>().is_some_and(|scope| scope.get().0);
-    layout()
+    layout(Stack)
         .modifier(modifier.unwrap_or_default())
         .child(move || {
             provide_context(
-                || scope,
+                || models,
                 || {
-                    provide_context(|| BackPreviewScope(preview), || destination(controller));
+                    provide_context(|| BackPreviewScope(preview), || route.render());
                 },
             );
         });
@@ -181,12 +176,28 @@ mod tests {
     use super::*;
     use crate::{shard, shard_home};
 
-    #[shard(state = usize)]
-    fn preview_page(label: Option<u8>, observed: Option<TestProbe<Vec<(u8, usize)>>>) {
-        if let (Some(label), Some(observed)) = (label, observed) {
-            observed.with_mut(|pages| pages.push((label, state.get())));
+    struct PreviewModel {
+        value: tessera_ui::State<usize>,
+    }
+
+    impl tessera_ui::ModelInit for PreviewModel {
+        fn init() -> Self {
+            Self {
+                value: tessera_ui::State::new(0),
+            }
         }
-        layout().child(|| {});
+    }
+
+    #[shard]
+    fn preview_page(
+        model: tessera_ui::Model<PreviewModel>,
+        label: Option<u8>,
+        observed: Option<TestProbe<Vec<(u8, usize)>>>,
+    ) {
+        if let (Some(label), Some(observed)) = (label, observed) {
+            observed.with_mut(|pages| pages.push((label, model.value.get())));
+        }
+        layout(Stack).child(|| {});
     }
 
     #[tessera]
@@ -199,16 +210,18 @@ mod tests {
                 label: Some(1),
                 observed: Some(observed.clone()),
             });
-            router.init_or_get::<usize, _, _>(PreviewPageDestination::destination_id(), |state| {
-                state.set(10);
-            });
             router.push(PreviewPageDestination {
                 label: Some(2),
                 observed: Some(observed.clone()),
             });
-            router.init_or_get::<usize, _, _>(PreviewPageDestination::destination_id(), |state| {
-                state.set(20);
-            });
+            for (route, value) in [(0, 10), (1, 20)] {
+                router
+                    .route_models(route)
+                    .expect("route exists")
+                    .model(<PreviewModel as tessera_ui::ModelInit>::init)
+                    .value
+                    .set(value);
+            }
             router
         });
         stack.set(Some(router));

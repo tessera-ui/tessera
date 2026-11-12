@@ -7,7 +7,7 @@
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, Dp, FocusRequester, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, PxSize, State,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::ModifierCapabilityExt as _,
     remember, tessera, use_context,
 };
@@ -158,65 +158,63 @@ pub fn date_picker_day(
     let range_band = range_position.map(CalendarRangePosition::band);
     let label =
         label_formatter.map_or_else(|| date.day().to_string(), |formatter| formatter.call(date));
-    layout()
+    tessera_ui::layout::layout(CalendarDayLayout {
+        fractional_center: false,
+        range_band,
+    })
+    .modifier(
+        modifier
+            .unwrap_or_default()
+            .size(DATE_CELL_SIZE, DATE_CELL_SIZE)
+            .selectable_with(SelectableArgs {
+                selected,
+                on_click: tessera_ui::Callback::new(move || on_select.call(date)),
+                enabled,
+                interaction_state: Some(interaction),
+                focus_requester: Some(focus),
+                label: Some(accessibility_label.unwrap_or_else(|| {
+                    I18N.format(
+                        "md3-full-date",
+                        [
+                            ("month", format_month_name(date.month()).into()),
+                            ("day", date.day().into()),
+                            ("year", date.year().to_string().into()),
+                        ],
+                    )
+                })),
+                description: accessibility_description,
+                ..Default::default()
+            }),
+    )
+    .child(move || {
+        let label = label.clone();
+        if range_band.is_some() {
+            layout(Stack).modifier(Modifier::new().background(scheme.secondary_container));
+        }
+        tessera_ui::layout::layout(CalendarDayLayout {
+            fractional_center: true,
+            range_band: None,
+        })
         .modifier(
-            modifier
-                .unwrap_or_default()
-                .size(DATE_CELL_SIZE, DATE_CELL_SIZE)
-                .selectable_with(SelectableArgs {
-                    selected,
-                    on_click: tessera_ui::Callback::new(move || on_select.call(date)),
-                    enabled,
-                    interaction_state: Some(interaction),
-                    focus_requester: Some(focus),
-                    label: Some(accessibility_label.unwrap_or_else(|| {
-                        I18N.format(
-                            "md3-full-date",
-                            [
-                                ("month", format_month_name(date.month()).into()),
-                                ("day", date.day().into()),
-                                ("year", date.year().to_string().into()),
-                            ],
-                        )
-                    })),
-                    description: accessibility_description,
-                    ..Default::default()
+            Modifier::new()
+                .size(DATE_VISUAL_SIZE, DATE_VISUAL_SIZE)
+                .push_draw(CalendarFocusIndicator {
+                    visible: focus.is_focus_visible(),
+                    shape: Shape::Ellipse,
+                    color: scheme.secondary,
                 }),
         )
-        .policy(CalendarDayLayout {
-            fractional_center: false,
-            range_band,
-        })
+        .draw(visual)
         .child(move || {
-            let label = label.clone();
-            if range_band.is_some() {
-                layout().modifier(Modifier::new().background(scheme.secondary_container));
-            }
-            layout()
-                .modifier(
-                    Modifier::new()
-                        .size(DATE_VISUAL_SIZE, DATE_VISUAL_SIZE)
-                        .push_draw(CalendarFocusIndicator {
-                            visible: focus.is_focus_visible(),
-                            shape: Shape::Ellipse,
-                            color: scheme.secondary,
-                        }),
-                )
-                .policy(CalendarDayLayout {
-                    fractional_center: true,
-                    range_band: None,
-                })
-                .draw(visual)
-                .child(move || {
-                    text(label.clone())
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
-                            hidden: true,
-                            ..Default::default()
-                        }))
-                        .style(theme.typography.body_large)
-                        .color(color);
-                });
+            text(label.clone())
+                .modifier(Modifier::new().semantics(SemanticsArgs {
+                    hidden: true,
+                    ..Default::default()
+                }))
+                .style(theme.typography.body_large)
+                .color(color);
         });
+    });
 }
 
 /// # date_picker_year
@@ -309,7 +307,7 @@ pub fn date_picker_year(
         disabled_focus: !enabled && focus.is_focused(),
     };
     let label = label_formatter.map_or_else(|| year.to_string(), |formatter| formatter.call(year));
-    layout()
+    layout(Stack)
         .modifier(
             modifier
                 .unwrap_or_default()
@@ -327,7 +325,7 @@ pub fn date_picker_year(
         )
         .child(move || {
             let label = label.clone();
-            layout()
+            layout(Stack)
                 .modifier(
                     Modifier::new()
                         .size(Dp(72.0), Dp(36.0))
@@ -363,7 +361,7 @@ struct CalendarDayLayout {
     range_band: Option<CalendarRangeBand>,
 }
 
-impl tessera_ui::LayoutModifierNode for CalendarDayLayout {
+impl tessera_ui::LayoutPolicy for CalendarDayLayout {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let width = scope
             .parent_constraint()

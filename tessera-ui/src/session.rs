@@ -9,9 +9,14 @@ use std::{
     cell::{Cell, OnceCell, RefCell},
     marker::PhantomData,
     rc::{Rc, Weak},
-    sync::Arc,
+    sync::{
+        Arc, Mutex as StdMutex, OnceLock,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
+    thread::ThreadId,
 };
 
+use parking_lot::lock_api::{RawMutex as _, RawMutexFair as _};
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::{execution_context::ExecutionContext, runtime::RuntimeGlobals};
@@ -32,6 +37,106 @@ pub(crate) struct SessionState {
     runtime_globals: OnceCell<Box<RuntimeGlobals>>,
     resources: RefCell<Resources>,
     previous: RefCell<SessionSelection>,
+    gate: Arc<AccessGate>,
+    gate_guard: RefCell<Option<GateGuard>>,
+}
+
+type GateGuard = <parking_lot::RawMutex as parking_lot::lock_api::RawMutex>::Guard;
+
+/// Serializes other threads' state access with the owning UI thread.
+///
+/// The owning thread holds the lock while it runs and hands it over only at
+/// frame boundaries, so its own access needs no locking and builds never see
+/// another thread's write midway.
+struct AccessGate {
+    raw: parking_lot::RawMutex,
+    waiting: AtomicUsize,
+    closed: AtomicBool,
+    owner: ThreadId,
+}
+
+struct GateEntry {
+    gate: Arc<AccessGate>,
+    state: SessionPtr,
+}
+
+#[derive(Clone, Copy)]
+struct SessionPtr(*const SessionState);
+
+// SAFETY: the pointer is dereferenced only by a thread holding the session's
+// gate, which excludes the owning thread, and only before the session closes.
+unsafe impl Send for SessionPtr {}
+
+fn gates() -> &'static StdMutex<HashMap<u128, GateEntry>> {
+    static GATES: OnceLock<StdMutex<HashMap<u128, GateEntry>>> = OnceLock::new();
+    GATES.get_or_init(Default::default)
+}
+
+fn gate_entry(session: u128) -> Option<(Arc<AccessGate>, SessionPtr)> {
+    gates()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&session)
+        .map(|entry| (entry.gate.clone(), entry.state))
+}
+
+/// Runs `access` with `session` active when it is not the current session.
+///
+/// On the owning thread the session is entered directly. Other threads wait
+/// until the owning thread reaches a frame boundary. Returns `None` when the
+/// session has closed.
+pub(crate) fn with_inactive_session<R>(session: u128, access: impl FnOnce() -> R) -> Option<R> {
+    let (gate, state) = gate_entry(session)?;
+    if gate.owner == std::thread::current().id() {
+        // SAFETY: the registered pointer stays valid until the owning thread
+        // closes the session, and this is the owning thread.
+        let session = unsafe {
+            Rc::increment_strong_count(state.0);
+            RuntimeSession(Rc::from_raw(state.0))
+        };
+        return Some(session.run(access));
+    }
+    gate.waiting.fetch_add(1, Ordering::AcqRel);
+    crate::dispatcher::dispatch_to_session(session, || {});
+    let guard = gate.raw.lock();
+    gate.waiting.fetch_sub(1, Ordering::AcqRel);
+    struct Release<'a>(&'a AccessGate, Option<GateGuard>);
+    impl Drop for Release<'_> {
+        fn drop(&mut self) {
+            if let Some(guard) = self.1.take() {
+                // SAFETY: the guard came from locking this mutex.
+                unsafe { self.0.raw.unlock_fair(guard) };
+            }
+        }
+    }
+    let _release = Release(&gate, Some(guard));
+    if gate.closed.load(Ordering::Acquire) {
+        return None;
+    }
+    // SAFETY: holding the open gate keeps the owner parked, so the session is
+    // alive and its reference counts are not touched concurrently.
+    let session = unsafe {
+        Rc::increment_strong_count(state.0);
+        RuntimeSession(Rc::from_raw(state.0))
+    };
+    let output = session.run(access);
+    drop(session);
+    Some(output)
+}
+
+/// Lets threads waiting on the active session's gate run their access.
+pub(crate) fn serve_other_threads() {
+    let Some(session) = RuntimeSession::current() else {
+        return;
+    };
+    let gate = &session.0.gate;
+    if gate.waiting.load(Ordering::Acquire) == 0 {
+        return;
+    }
+    if let Some(guard) = session.0.gate_guard.borrow_mut().as_mut() {
+        // SAFETY: the guard came from locking this mutex on the owning thread.
+        unsafe { gate.raw.bump(guard) };
+    }
 }
 
 #[derive(Clone, Default)]
@@ -114,10 +219,6 @@ impl Default for RuntimeSession {
 }
 
 impl RuntimeSession {
-    /// Captures result delivery to this session's UI thread.
-    pub fn dispatcher(&self) -> crate::UiDispatcher {
-        self.run(crate::dispatcher::current)
-    }
     /// Returns a reference that does not keep this session alive.
     pub fn downgrade(&self) -> WeakRuntimeSession {
         WeakRuntimeSession(Rc::downgrade(&self.0))
@@ -157,7 +258,14 @@ impl RuntimeSession {
     }
     /// Creates an independent session.
     pub fn new() -> Self {
-        Self(Rc::new(SessionState {
+        let gate = Arc::new(AccessGate {
+            raw: parking_lot::RawMutex::INIT,
+            waiting: AtomicUsize::new(0),
+            closed: AtomicBool::new(false),
+            owner: std::thread::current().id(),
+        });
+        let gate_guard = gate.raw.lock();
+        let state = Rc::new(SessionState {
             identity: uuid::Uuid::new_v4().as_u128(),
             root_claimed: Cell::new(false),
             closing: Cell::new(false),
@@ -166,7 +274,20 @@ impl RuntimeSession {
             runtime_globals: OnceCell::new(),
             resources: RefCell::new(Resources::default()),
             previous: RefCell::default(),
-        }))
+            gate: gate.clone(),
+            gate_guard: RefCell::new(Some(gate_guard)),
+        });
+        gates()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                state.identity,
+                GateEntry {
+                    gate,
+                    state: SessionPtr(Rc::as_ptr(&state)),
+                },
+            );
+        Self(state)
     }
 
     /// Runs work with this session's resources available.
@@ -299,6 +420,16 @@ impl RuntimeSession {
         if was_active {
             let _ = ACTIVE_SESSION.try_with(|active| active.replace(previous));
         }
+        gates()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&self.0.identity);
+        self.0.gate.closed.store(true, Ordering::Release);
+        if let Some(guard) = self.0.gate_guard.borrow_mut().take() {
+            // SAFETY: the owning thread has held this guard since creation;
+            // waiting threads now observe the closed session and return.
+            unsafe { self.0.gate.raw.unlock(guard) };
+        }
     }
 }
 
@@ -411,7 +542,7 @@ mod tests {
     }
 
     #[test]
-    fn independent_sessions_reject_foreign_states_and_release_their_resources() {
+    fn states_access_their_own_session_and_sessions_release_their_resources() {
         let output = TestProbe::default();
         let mut first = start_layout_test_session(layout_test({
             let output = output.clone();
@@ -425,8 +556,11 @@ mod tests {
 
         let second = RuntimeSession::new();
         second.run(|| {
-            assert!(!state.is_alive());
-            assert!(std::panic::catch_unwind(AssertUnwindSafe(|| state.set(12))).is_err());
+            assert_eq!(
+                state.get(),
+                7,
+                "a state reads from the session that owns it"
+            );
             assert_eq!(local_runtime_resource::<Cell<usize>>().get(), 0);
         });
         first.run(|| {
@@ -626,11 +760,8 @@ mod tests {
     fn controller_owned_state_replays_readers_and_dispatches_worker_results_on_its_ui_session() {
         let runtime = RuntimeSession::new();
         let _scope = runtime.enter();
-        let owner = crate::Model::new();
-        let value = owner.state_with_key("route", || 7usize);
-        assert!(
-            owner.state_with_key("route", || panic!("existing state was reinitialized")) == value
-        );
+        let owner = crate::runtime::ModelScope::new();
+        let value = owner.own_state(7usize);
         let output = TestProbe::new(0usize);
         let mut session = start_layout_test_session(layout_test({
             let output = output.clone();
@@ -655,8 +786,8 @@ mod tests {
         );
         drop(owner);
         assert!(!value.is_alive());
-        let next = crate::Model::new();
-        let replacement = next.state_with_key("route", || 19usize);
+        let next = crate::runtime::ModelScope::new();
+        let replacement = next.own_state(19usize);
         assert_eq!(replacement.get(), 19);
         assert!(!value.is_alive());
         assert!(std::panic::catch_unwind(AssertUnwindSafe(|| value.set(99))).is_err());
@@ -706,16 +837,16 @@ mod tests {
                 })
                 .push_build(StatefulModifier { extra, output });
         }
-        crate::layout::layout().modifier(modifier);
+        crate::layout::layout(crate::layout::Stack).modifier(modifier);
     }
 
     #[test]
     fn capability_state_survives_unrelated_modifiers_and_dies_with_its_attachment() {
         let runtime = RuntimeSession::new();
         let _scope = runtime.enter();
-        let owner = crate::Model::new();
-        let visible = owner.state_with_key("visible", || true);
-        let extra = owner.state_with_key("extra", || false);
+        let owner = crate::runtime::ModelScope::new();
+        let visible = owner.own_state(true);
+        let extra = owner.own_state(false);
         let output = TestProbe::default();
         let unused = crate::Modifier::new().push_build(StatefulModifier {
             extra: false,
@@ -774,15 +905,15 @@ mod tests {
         } else {
             crate::Modifier::new()
         };
-        crate::layout::layout().modifier(modifier);
+        crate::layout::layout(crate::layout::Stack).modifier(modifier);
     }
 
     #[test]
     fn removing_a_stateful_modifier_unsubscribes_its_clock_before_the_next_frame() {
         let runtime = RuntimeSession::new();
         let _scope = runtime.enter();
-        let owner = crate::Model::new();
-        let visible = owner.state_with_key("visible", || true);
+        let owner = crate::runtime::ModelScope::new();
+        let visible = owner.own_state(true);
         let output = TestProbe::default();
         let mut session = start_layout_test_session(layout_test({
             let output = output.clone();
@@ -816,10 +947,10 @@ mod tests {
     fn closing_an_owner_during_state_mutation_drops_its_taken_value_outside_the_slot_borrow() {
         let runtime = RuntimeSession::new();
         runtime.run(|| {
-            let observer = crate::Model::new();
-            let observed = observer.state_with_key("drops", || 0usize);
-            let owner = crate::Model::new();
-            let value = owner.state_with_key("resource", || DropIntoState(observed));
+            let observer = crate::runtime::ModelScope::new();
+            let observed = observer.own_state(0usize);
+            let owner = crate::runtime::ModelScope::new();
+            let value = owner.own_state(DropIntoState(observed));
             value.with_mut(|_| owner.close());
             assert!(!value.is_alive());
             assert_eq!(observed.get(), 1);
@@ -830,8 +961,8 @@ mod tests {
     fn closing_a_model_discards_pending_results_before_they_can_touch_freed_state() {
         let runtime = RuntimeSession::new();
         let _scope = runtime.enter();
-        let owner = crate::Model::new();
-        let value = owner.state_with_key("route", || 5usize);
+        let owner = crate::runtime::ModelScope::new();
+        let value = owner.own_state(5usize);
         let dispatcher = owner.dispatcher();
         assert!(dispatcher.dispatch(move || value.set(9)));
         owner.close();
@@ -839,12 +970,14 @@ mod tests {
         assert!(!dispatcher.dispatch(|| panic!("closed owner accepted a result")));
         crate::dispatcher::flush();
         assert!(!value.is_alive());
-        let next = crate::Model::new();
-        assert_eq!(next.state_with_key("route", || 13usize).get(), 13);
+        let next = crate::runtime::ModelScope::new();
+        assert_eq!(next.own_state(13usize).get(), 13);
     }
 
     #[derive(Default)]
-    struct DispatcherOnDrop(std::cell::RefCell<Option<TestProbe<Option<crate::UiDispatcher>>>>);
+    struct DispatcherOnDrop(
+        std::cell::RefCell<Option<TestProbe<Option<crate::dispatcher::UiDispatcher>>>>,
+    );
 
     impl Drop for DispatcherOnDrop {
         fn drop(&mut self) {
@@ -875,9 +1008,9 @@ mod tests {
     #[test]
     fn session_shutdown_rejects_dispatched_work_and_closes_external_models() {
         let runtime = RuntimeSession::new();
-        let model = runtime.run(crate::Model::new);
-        let dispatcher = runtime.dispatcher();
-        let value = runtime.run(|| model.state_with_key("value", || 7usize));
+        let model = runtime.run(crate::runtime::ModelScope::new);
+        let dispatcher = runtime.run(crate::dispatcher::current);
+        let value = runtime.run(|| model.own_state(7usize));
         drop(runtime);
         assert!(!model.is_alive());
         assert!(!dispatcher.is_alive());

@@ -3,7 +3,7 @@ use tessera_ui::{
     MeasurementError, Modifier, PxPosition, RenderSlot, SemanticsModifierNode, State,
     accesskit::{HasPopup, Role},
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::MeasureScope,
     modifier::ModifierCapabilityExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -116,7 +116,7 @@ impl SemanticsModifierNode for DisclosureSemantics {
 #[derive(Clone, Copy, PartialEq)]
 struct OpticalOffset(Dp);
 
-impl tessera_ui::LayoutModifierNode for OpticalOffset {
+impl tessera_ui::LayoutPolicy for OpticalOffset {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let child = input.children()[0];
         let constraint = *input.parent_constraint().as_ref();
@@ -271,7 +271,7 @@ pub(super) fn split_button_item(
                     if inherited.get() != text_style {
                         inherited.set(text_style);
                     }
-                    layout().policy(OpticalOffset(optical)).child(move || {
+                    tessera_ui::layout::layout(OpticalOffset(optical)).child(move || {
                         row()
                             .modifier(Modifier::new().padding(padding))
                             .cross_axis_alignment(CrossAxisAlignment::Center)

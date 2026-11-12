@@ -9,6 +9,7 @@ use std::{
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use tessera_ui::{
     State,
+    layout::Stack,
     layout::layout,
     remember, remember_with_key, tessera,
     testing::TestProbe,
@@ -32,7 +33,7 @@ fn remembered_slot_workload(
     for &key in keys.iter() {
         black_box(remember_with_key(key, || key));
     }
-    layout();
+    layout(Stack);
 }
 
 fn benchmark_slot_workload(criterion: &mut Criterion, count: usize, structural_edit: bool) {

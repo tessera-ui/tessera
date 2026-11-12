@@ -15,7 +15,7 @@ use parking_lot::Mutex;
 use winit::platform::android::activity::AndroidApp;
 
 use crate::{
-    UiDispatcher,
+    dispatcher::UiDispatcher,
     system_back::{BackSwipeEdge, SystemBackEvent},
 };
 

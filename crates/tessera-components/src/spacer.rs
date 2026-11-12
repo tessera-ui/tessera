@@ -4,15 +4,13 @@
 //!
 //! Use to add gaps between components or to create flexible, expanding regions.
 use tessera_ui::{
-    ComputedData, LayoutResult, MeasurementError, Modifier,
-    layout::{MeasureScope, layout},
-    tessera,
+    ComputedData, LayoutResult, MeasurementError, Modifier, layout::MeasureScope, tessera,
 };
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 struct SpacerLayout;
 
-impl tessera_ui::LayoutModifierNode for SpacerLayout {
+impl tessera_ui::LayoutPolicy for SpacerLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData::min_from_constraint(
             input.parent_constraint().as_ref(),
@@ -52,7 +50,5 @@ impl tessera_ui::LayoutModifierNode for SpacerLayout {
 /// ```
 #[tessera]
 pub fn spacer(modifier: Option<Modifier>) {
-    layout()
-        .policy(SpacerLayout)
-        .modifier(modifier.unwrap_or_default());
+    tessera_ui::layout::layout(SpacerLayout).modifier(modifier.unwrap_or_default());
 }

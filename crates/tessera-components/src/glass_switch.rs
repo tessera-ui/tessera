@@ -10,7 +10,7 @@ use tessera_ui::{
     MeasurementError, Modifier, Px, PxPosition, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope},
     receive_frame_nanos, remember, tessera,
 };
 
@@ -240,38 +240,37 @@ pub fn glass_switch(
     let progress = controller.with(|c| c.animation_progress());
     let track_color = interpolate_color(track_off_color, track_on_color, progress);
 
-    layout()
-        .modifier(modifier)
-        .policy(GlassSwitchLayout {
-            width: width_px,
-            height: height_px,
-            thumb_padding: thumb_padding.to_px(),
-            progress,
-        })
-        .child(move || {
-            fluid_glass()
-                .modifier(Modifier::new().constrain(
-                    Some(AxisConstraint::exact(width_px)),
-                    Some(AxisConstraint::exact(height_px)),
-                ))
-                .tint_color(track_color)
-                .shape(Shape::CAPSULE)
-                .blur_radius(Dp(8.0))
-                .border_optional(track_border)
-                .child(|| {});
+    tessera_ui::layout::layout(GlassSwitchLayout {
+        width: width_px,
+        height: height_px,
+        thumb_padding: thumb_padding.to_px(),
+        progress,
+    })
+    .modifier(modifier)
+    .child(move || {
+        fluid_glass()
+            .modifier(Modifier::new().constrain(
+                Some(AxisConstraint::exact(width_px)),
+                Some(AxisConstraint::exact(height_px)),
+            ))
+            .tint_color(track_color)
+            .shape(Shape::CAPSULE)
+            .blur_radius(Dp(8.0))
+            .border_optional(track_border)
+            .child(|| {});
 
-            let thumb_alpha = thumb_off_alpha + (thumb_on_alpha - thumb_off_alpha) * progress;
-            let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
-            fluid_glass()
-                .modifier(Modifier::new().constrain(
-                    Some(AxisConstraint::exact(thumb_px)),
-                    Some(AxisConstraint::exact(thumb_px)),
-                ))
-                .tint_color(thumb_color)
-                .shape(Shape::Ellipse)
-                .border_optional(thumb_border)
-                .child(|| {});
-        });
+        let thumb_alpha = thumb_off_alpha + (thumb_on_alpha - thumb_off_alpha) * progress;
+        let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
+        fluid_glass()
+            .modifier(Modifier::new().constrain(
+                Some(AxisConstraint::exact(thumb_px)),
+                Some(AxisConstraint::exact(thumb_px)),
+            ))
+            .tint_color(thumb_color)
+            .shape(Shape::Ellipse)
+            .border_optional(thumb_border)
+            .child(|| {});
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -282,7 +281,7 @@ struct GlassSwitchLayout {
     progress: f32,
 }
 
-impl tessera_ui::LayoutModifierNode for GlassSwitchLayout {
+impl tessera_ui::LayoutPolicy for GlassSwitchLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -325,7 +324,7 @@ impl tessera_ui::LayoutModifierNode for GlassSwitchLayout {
             && self.progress == other.progress
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,

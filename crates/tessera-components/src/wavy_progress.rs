@@ -13,10 +13,8 @@ mod tests;
 
 use tessera_ui::{
     Color, ComputedData, Dp, FrameNanosControl, LayoutResult, MeasurementError, Modifier,
-    accesskit::Role,
-    current_frame_nanos,
-    layout::{MeasureScope, layout},
-    receive_frame_nanos, remember, tessera, use_context,
+    accesskit::Role, current_frame_nanos, layout::MeasureScope, receive_frame_nanos, remember,
+    tessera, use_context,
 };
 
 use crate::{
@@ -71,7 +69,7 @@ impl WavyProgressIndicatorDefaults {
 #[derive(Clone, Copy, PartialEq)]
 struct CircularWaveLayout;
 
-impl tessera_ui::LayoutModifierNode for CircularWaveLayout {
+impl tessera_ui::LayoutPolicy for CircularWaveLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData {
             width: input
@@ -226,7 +224,7 @@ pub fn circular_wavy_progress_indicator(
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    layout()
+    tessera_ui::layout::layout(CircularWaveLayout)
         .modifier(
             modifier
                 .unwrap_or_default()
@@ -249,7 +247,6 @@ pub fn circular_wavy_progress_indicator(
                     }
                 }),
         )
-        .policy(CircularWaveLayout)
         .draw(CircularWaveDraw {
             cache,
             wavelength,
@@ -396,7 +393,7 @@ fn indeterminate_fractions(elapsed: u64) -> [[f32; 2]; 2] {
 #[derive(Clone, Copy, PartialEq)]
 struct LinearWaveLayout;
 
-impl tessera_ui::LayoutModifierNode for LinearWaveLayout {
+impl tessera_ui::LayoutPolicy for LinearWaveLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData {
             width: input
@@ -542,14 +539,13 @@ pub fn linear_wavy_progress_indicator(
         bounds_padding: Some(Padding::vertical(Dp(10.0))),
         ..Default::default()
     };
-    layout()
+    tessera_ui::layout::layout(LinearWaveLayout)
         .modifier(
             modifier
                 .unwrap_or_default()
                 .clip_to_bounds()
                 .semantics(semantics),
         )
-        .policy(LinearWaveLayout)
         .draw(LinearWaveDraw {
             fractions,
             count: if progress.is_some() { 1 } else { 2 },

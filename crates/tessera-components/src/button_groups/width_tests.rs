@@ -9,6 +9,7 @@ use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
+    layout::Stack,
     layout::layout,
     remember, tessera,
     testing::TestProbe,
@@ -67,7 +68,7 @@ fn fixture(settings_observed: TestProbe<Option<State<Settings>>>, clicks: TestPr
                 let clicks = clicks.clone();
                 group.child(
                     move || {
-                        layout().modifier(Modifier::new().size(Dp(68.0), Dp(20.0)).semantics(
+                        layout(Stack).modifier(Modifier::new().size(Dp(68.0), Dp(20.0)).semantics(
                             SemanticsArgs {
                                 label: Some(format!("Item {index}")),
                                 ..Default::default()

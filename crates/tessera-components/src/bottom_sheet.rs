@@ -14,7 +14,7 @@ use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
     State, current_frame_nanos, current_frame_time,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
     receive_frame_nanos, remember, remember_with_key, tessera,
     time::Instant,
@@ -295,9 +295,7 @@ fn compute_bottom_sheet_y(
 }
 
 /// Create the keyboard handler closure used to close the sheet on Escape.
-fn make_keyboard_closure(
-    on_close: Callback,
-) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>) + Send + Sync> {
+fn make_keyboard_closure(on_close: Callback) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>)> {
     Box::new(move |mut input: tessera_ui::KeyboardInput<'_>| {
         let mut handled = false;
         input.keyboard_events.retain(|event| {
@@ -533,7 +531,7 @@ fn bottom_sheet_drag_handle(
         },
     );
 
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
             .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -664,7 +662,7 @@ fn bottom_sheet_content_wrapper(
     if just_opened {
         focus_scope.request_focus();
     }
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let bottom_sheet_content = bottom_sheet_content;
         let nested_scroll_connection = nested_scroll_connection.clone();
         let content_wrapper = RenderSlot::new(move || {
@@ -838,74 +836,73 @@ pub fn bottom_sheet_provider(
         1.0 - visibility.position
     };
 
-    layout()
-        .modifier(
-            modifier.on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
-                if coordinate_scale.get() != transform.scale() {
-                    coordinate_scale.set(transform.scale());
-                }
-            }),
-        )
-        .policy(BottomSheetLayout {
-            progress,
-            is_open,
-            drag_offset,
-            resize_fraction,
-            partial_height,
-            controller,
-            resize_range,
-        })
-        .child(move || {
-            let bottom_sheet_content = bottom_sheet_content;
-            overlay_background(main_content, show_bottom_sheet);
-            modal_back_handler(is_open, on_close_request).on_preview(move |event| {
-                controller.with_mut(|controller| {
-                    controller.motion.preview_back(event, current_frame_nanos());
-                });
-            });
-
-            if !show_bottom_sheet {
-                return;
+    tessera_ui::layout::layout(BottomSheetLayout {
+        progress,
+        is_open,
+        drag_offset,
+        resize_fraction,
+        partial_height,
+        controller,
+        resize_range,
+    })
+    .modifier(
+        modifier.on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
+            if coordinate_scale.get() != transform.scale() {
+                coordinate_scale.set(transform.scale());
             }
-
-            let scrim_alpha = visibility.opacity * 0.32;
-            let scrim_color = use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get()
-                .color_scheme
-                .scrim;
-            surface()
-                .style(scrim_color.with_alpha(scrim_alpha).into())
-                .on_click_shared(on_close_request)
-                .show_ripple(false)
-                .show_state_layer(false)
-                .modifier(
-                    Modifier::new()
-                        .fill_max_size()
-                        .semantics(SemanticsArgs {
-                            hidden: true,
-                            ..Default::default()
-                        })
-                        .focusable()
-                        .focus_properties(
-                            FocusProperties::new()
-                                .can_focus(false)
-                                .can_request_focus(false)
-                                .skip_traversal(true),
-                        ),
-                )
-                .block_input(true)
-                .child(|| {});
-
-            bottom_sheet_content_wrapper()
-                .nested_scroll_connection(nested_scroll_connection.clone())
-                .accessibility_label_optional(accessibility_label.clone())
-                .focus_scope(focus_scope)
-                .bottom_sheet_content_shared(bottom_sheet_content)
-                .controller(controller)
-                .on_close_shared(on_close_request)
-                .just_opened(just_opened);
+        }),
+    )
+    .child(move || {
+        let bottom_sheet_content = bottom_sheet_content;
+        overlay_background(main_content, show_bottom_sheet);
+        modal_back_handler(is_open, on_close_request).on_preview(move |event| {
+            controller.with_mut(|controller| {
+                controller.motion.preview_back(event, current_frame_nanos());
+            });
         });
+
+        if !show_bottom_sheet {
+            return;
+        }
+
+        let scrim_alpha = visibility.opacity * 0.32;
+        let scrim_color = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme
+            .scrim;
+        surface()
+            .style(scrim_color.with_alpha(scrim_alpha).into())
+            .on_click_shared(on_close_request)
+            .show_ripple(false)
+            .show_state_layer(false)
+            .modifier(
+                Modifier::new()
+                    .fill_max_size()
+                    .semantics(SemanticsArgs {
+                        hidden: true,
+                        ..Default::default()
+                    })
+                    .focusable()
+                    .focus_properties(
+                        FocusProperties::new()
+                            .can_focus(false)
+                            .can_request_focus(false)
+                            .skip_traversal(true),
+                    ),
+            )
+            .block_input(true)
+            .child(|| {});
+
+        bottom_sheet_content_wrapper()
+            .nested_scroll_connection(nested_scroll_connection.clone())
+            .accessibility_label_optional(accessibility_label.clone())
+            .focus_scope(focus_scope)
+            .bottom_sheet_content_shared(bottom_sheet_content)
+            .controller(controller)
+            .on_close_shared(on_close_request)
+            .just_opened(just_opened);
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -919,14 +916,14 @@ struct BottomSheetLayout {
     resize_range: State<Option<Dp>>,
 }
 
-impl tessera_ui::LayoutModifierNode for BottomSheetLayout {
+impl tessera_ui::LayoutPolicy for BottomSheetLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.resize_fraction == other.resize_fraction
             && self.partial_height == other.partial_height
             && self.resize_range == other.resize_range
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,

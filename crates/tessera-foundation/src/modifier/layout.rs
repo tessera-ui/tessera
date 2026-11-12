@@ -8,10 +8,9 @@
 use std::any::TypeId;
 
 use tessera_ui::{
-    AxisConstraint, ComputedData, Constraint, Dp, LayoutModifierChild, LayoutModifierInput,
-    LayoutModifierNode, LayoutResult, MeasurementError, ParentDataMap, ParentDataModifierNode,
+    AxisConstraint, ComputedData, Constraint, Dp, LayoutModifier, LayoutModifierChild,
+    LayoutModifierInput, LayoutResult, MeasurementError, ParentDataMap, ParentDataModifierNode,
     PlacementModifierNode, Px, PxPosition,
-    layout::{PlacementResult, PlacementScope},
 };
 
 use crate::alignment::Alignment;
@@ -64,8 +63,8 @@ pub(crate) struct PaddingModifierNode {
     pub padding: Padding,
 }
 
-impl LayoutModifierNode for PaddingModifierNode {
-    fn measure_content(
+impl LayoutModifier for PaddingModifierNode {
+    fn measure(
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
@@ -86,23 +85,6 @@ impl LayoutModifierNode for PaddingModifierNode {
             width: child_size.width + left_px + right_px,
             height: child_size.height + top_px + bottom_px,
         }))
-    }
-
-    fn place_children(
-        &self,
-        _scope: &PlacementScope<'_>,
-        inner: &PlacementResult,
-    ) -> Option<PlacementResult> {
-        let left_px: Px = self.padding.left.into();
-        let top_px: Px = self.padding.top.into();
-        let offset = PxPosition::new(left_px, top_px);
-        Some(PlacementResult::from_placements(
-            inner
-                .items()
-                .iter()
-                .map(|(instance_key, position)| (*instance_key, *position + offset))
-                .collect(),
-        ))
     }
 }
 
@@ -127,8 +109,8 @@ pub(crate) struct ConstraintModifierNode {
     pub enforce_incoming: bool,
 }
 
-impl LayoutModifierNode for ConstraintModifierNode {
-    fn measure_content(
+impl LayoutModifier for ConstraintModifierNode {
+    fn measure(
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
@@ -161,8 +143,8 @@ pub(crate) struct RequiredSizeModifierNode {
     pub height: Option<AxisConstraint>,
 }
 
-impl LayoutModifierNode for RequiredSizeModifierNode {
-    fn measure_content(
+impl LayoutModifier for RequiredSizeModifierNode {
+    fn measure(
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
@@ -179,14 +161,15 @@ impl LayoutModifierNode for RequiredSizeModifierNode {
         Ok(LayoutResult::new(child_size))
     }
 }
+
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct DefaultMinSizeModifierNode {
     pub min_width: Dp,
     pub min_height: Dp,
 }
 
-impl LayoutModifierNode for DefaultMinSizeModifierNode {
-    fn measure_content(
+impl LayoutModifier for DefaultMinSizeModifierNode {
+    fn measure(
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
@@ -215,8 +198,8 @@ fn default_min_axis(parent: AxisConstraint, default_min: Dp) -> AxisConstraint {
 #[derive(Clone, Copy, Default, PartialEq)]
 pub(crate) struct MinimumInteractiveModifierNode;
 
-impl LayoutModifierNode for MinimumInteractiveModifierNode {
-    fn measure_content(
+impl LayoutModifier for MinimumInteractiveModifierNode {
+    fn measure(
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,

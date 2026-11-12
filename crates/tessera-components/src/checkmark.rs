@@ -5,9 +5,7 @@
 //! Show selection feedback in boolean and aggregate selection controls.
 
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
-    layout::{MeasureScope, layout},
-    tessera,
+    Color, ComputedData, Dp, LayoutResult, MeasurementError, Px, layout::MeasureScope, tessera,
 };
 
 use crate::pipelines::checkmark::command::CheckmarkCommand;
@@ -23,7 +21,7 @@ struct CheckmarkLayout {
     checkbox_geometry: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for CheckmarkLayout {
+impl tessera_ui::LayoutPolicy for CheckmarkLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.size == other.size
     }
@@ -91,5 +89,5 @@ pub(crate) fn checkmark(
             .unwrap_or(0.0),
         checkbox_geometry: checkbox_geometry.unwrap_or(false),
     };
-    layout().policy(policy.clone()).draw(policy);
+    tessera_ui::layout::layout(policy.clone()).draw(policy);
 }

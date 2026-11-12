@@ -8,7 +8,7 @@ use tessera_ui::{
     ParentConstraint, Px, PxPosition, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -45,7 +45,7 @@ struct LinearProgressLayout {
     animation_cycle: Option<f32>,
 }
 
-impl tessera_ui::LayoutModifierNode for LinearProgressLayout {
+impl tessera_ui::LayoutPolicy for LinearProgressLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let (self_width, self_height) = resolve_linear_size(input.parent_constraint());
@@ -205,7 +205,7 @@ struct CircularProgressLayout {
     frame_tick: State<u64>,
 }
 
-impl tessera_ui::LayoutModifierNode for CircularProgressLayout {
+impl tessera_ui::LayoutPolicy for CircularProgressLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.diameter == other.diameter
     }
@@ -528,7 +528,7 @@ pub fn linear_progress_indicator(
     let gap_size = gap_size.unwrap_or(ProgressIndicatorDefaults::LINEAR_INDICATOR_TRACK_GAP_SIZE);
     let draw_stop_indicator = draw_stop_indicator.unwrap_or(true);
 
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let animation_start = remember(current_frame_nanos);
         let frame_tick = remember(current_frame_nanos);
         let should_receive_frames = remember(|| progress.is_none());
@@ -581,50 +581,49 @@ pub fn linear_progress_indicator(
             ))
         };
 
-        layout()
-            .modifier(Modifier::new().semantics(semantics))
-            .policy(LinearProgressLayout {
-                progress,
-                stroke_cap,
-                gap_size,
-                draw_stop_indicator,
-                animation_cycle,
-            })
-            .child(move || {
-                if progress.is_some() {
-                    surface()
-                        .style(track_color.into())
-                        .shape(segment_shape)
-                        .modifier(Modifier::new().fill_max_size())
-                        .child(|| {});
+        tessera_ui::layout::layout(LinearProgressLayout {
+            progress,
+            stroke_cap,
+            gap_size,
+            draw_stop_indicator,
+            animation_cycle,
+        })
+        .modifier(Modifier::new().semantics(semantics))
+        .child(move || {
+            if progress.is_some() {
+                surface()
+                    .style(track_color.into())
+                    .shape(segment_shape)
+                    .modifier(Modifier::new().fill_max_size())
+                    .child(|| {});
+                surface()
+                    .style(color.into())
+                    .shape(segment_shape)
+                    .modifier(Modifier::new().fill_max_size())
+                    .child(|| {});
+                if draw_stop_indicator {
                     surface()
                         .style(color.into())
-                        .shape(segment_shape)
+                        .shape(stop_shape)
                         .modifier(Modifier::new().fill_max_size())
                         .child(|| {});
-                    if draw_stop_indicator {
-                        surface()
-                            .style(color.into())
-                            .shape(stop_shape)
-                            .modifier(Modifier::new().fill_max_size())
-                            .child(|| {});
-                    }
-                } else {
-                    for (color, shape) in [
-                        (track_color, segment_shape),
-                        (color, segment_shape),
-                        (track_color, segment_shape),
-                        (color, segment_shape),
-                        (track_color, segment_shape),
-                    ] {
-                        surface()
-                            .style(color.into())
-                            .shape(shape)
-                            .modifier(Modifier::new().fill_max_size())
-                            .child(|| {});
-                    }
                 }
-            });
+            } else {
+                for (color, shape) in [
+                    (track_color, segment_shape),
+                    (color, segment_shape),
+                    (track_color, segment_shape),
+                    (color, segment_shape),
+                    (track_color, segment_shape),
+                ] {
+                    surface()
+                        .style(color.into())
+                        .shape(shape)
+                        .modifier(Modifier::new().fill_max_size())
+                        .child(|| {});
+                }
+            }
+        });
     });
 }
 
@@ -760,9 +759,8 @@ pub fn circular_progress_indicator(
         animation_start_nanos: animation_start.get(),
         frame_tick,
     };
-    layout()
+    tessera_ui::layout::layout(policy.clone())
         .modifier(Modifier::new().semantics(semantics))
-        .policy(policy.clone())
         .draw(policy);
 }
 

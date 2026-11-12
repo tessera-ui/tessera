@@ -10,7 +10,7 @@ use tessera_ui::{
     Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     current_frame_nanos,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
     receive_frame_nanos, remember, tessera, use_context,
 };
@@ -103,7 +103,7 @@ impl ScrollOrientation {
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct ZeroLayout;
 
-impl tessera_ui::LayoutModifierNode for ZeroLayout {
+impl tessera_ui::LayoutPolicy for ZeroLayout {
     fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData::ZERO))
     }
@@ -121,7 +121,7 @@ struct ScrollBarLayout {
     thumb_offset: PxPosition,
 }
 
-impl tessera_ui::LayoutModifierNode for ScrollBarLayout {
+impl tessera_ui::LayoutPolicy for ScrollBarLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -144,7 +144,7 @@ impl tessera_ui::LayoutModifierNode for ScrollBarLayout {
         self.thumb_offset == other.thumb_offset
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -868,12 +868,12 @@ fn scrollbar(
     let should_show = should_show_scrollbar(&args, &state);
 
     if !should_show {
-        layout().policy(ZeroLayout);
+        tessera_ui::layout::layout(ZeroLayout);
         return;
     }
 
     if args.visible <= Px::ZERO || args.total <= Px::ZERO || args.thickness <= Dp::ZERO {
-        layout().policy(ZeroLayout);
+        tessera_ui::layout::layout(ZeroLayout);
         return;
     }
 
@@ -931,24 +931,23 @@ fn scrollbar(
     let progress = compute_thumb_progress(args.offset, args.total);
     let thumb_offset = args.visible.to_f32() * progress;
 
-    layout()
-        .modifier(modifier)
-        .policy(ScrollBarLayout {
-            thumb_offset: orientation.position(Px::from_f32(thumb_offset), Px::ZERO),
-        })
-        .child(move || {
-            for (extent, color) in [(track_extent, track_color), (thumb_extent, thumb_color)] {
-                let size = orientation.size(extent, thickness);
-                surface()
-                    .modifier(Modifier::new().constrain(
-                        Some(AxisConstraint::exact(size.width)),
-                        Some(AxisConstraint::exact(size.height)),
-                    ))
-                    .style(color.into())
-                    .shape(Shape::CAPSULE)
-                    .child(|| {});
-            }
-        });
+    tessera_ui::layout::layout(ScrollBarLayout {
+        thumb_offset: orientation.position(Px::from_f32(thumb_offset), Px::ZERO),
+    })
+    .modifier(modifier)
+    .child(move || {
+        for (extent, color) in [(track_extent, track_color), (thumb_extent, thumb_color)] {
+            let size = orientation.size(extent, thickness);
+            surface()
+                .modifier(Modifier::new().constrain(
+                    Some(AxisConstraint::exact(size.width)),
+                    Some(AxisConstraint::exact(size.height)),
+                ))
+                .style(color.into())
+                .shape(Shape::CAPSULE)
+                .child(|| {});
+        }
+    });
 }
 
 #[cfg(test)]

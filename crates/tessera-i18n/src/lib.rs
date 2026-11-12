@@ -215,23 +215,20 @@ struct Localization {
 }
 
 struct LocalizationPlugin {
-    _model: Model,
-    current: I18n,
+    model: Model<State<Localization>>,
 }
 
 impl Plugin for LocalizationPlugin {}
 
 impl TesseraPackage for Catalog {
     fn register(self, registry: &mut EntryRegistry) {
-        let model = Model::new();
-        let state = model.state_with_key((), || Localization {
-            locale: self.default_locale.clone(),
-            catalog: self,
+        let model = Model::new_with(|| {
+            State::new(Localization {
+                locale: self.default_locale.clone(),
+                catalog: self,
+            })
         });
-        registry.register_plugin(LocalizationPlugin {
-            _model: model,
-            current: I18n(state),
-        });
+        registry.register_plugin(LocalizationPlugin { model });
     }
 }
 
@@ -249,7 +246,7 @@ impl I18n {
 
     /// Returns a controller when the current entry has a localization catalog.
     pub fn try_current() -> Option<Self> {
-        try_with_plugin::<LocalizationPlugin, _>(|plugin| plugin.current)
+        try_with_plugin::<LocalizationPlugin, _>(|plugin| I18n(*plugin.model))
     }
 
     /// Returns the requested locale, which may use catalog fallback.

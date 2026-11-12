@@ -5,7 +5,7 @@
 //! Place a calendar below a date field in an anchored popup or form.
 
 use tessera_ui::{
-    Callback, CallbackWith, Dp, Modifier, Px, PxPosition, State, accesskit::Role, layout::layout,
+    Callback, CallbackWith, Dp, Modifier, Px, PxPosition, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
@@ -425,43 +425,41 @@ fn calendar(
     column()
         .modifier(Modifier::new().fill_max_width().height(Dp(336.0)))
         .children(move || {
-            layout()
-                .policy(DateGridLayout {
-                    columns: DATE_COLUMNS,
-                    row_height: DATE_CELL_SIZE,
-                })
-                .child(move || {
-                    for weekday in weekday_sequence(first) {
-                        boxed()
-                            .alignment(Alignment::Center)
-                            .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-                            .children(move || {
-                                text(weekday_narrow_label(weekday))
-                                    .style(theme.typography.body_large)
-                                    .color(theme.color_scheme.on_surface);
-                            });
-                    }
-                });
-            layout()
-                .policy(DateGridLayout {
-                    columns: DATE_COLUMNS,
-                    row_height: DATE_CELL_SIZE,
-                })
-                .modifier(
-                    Modifier::new()
-                        .focus_restorer(Some(keyboard.focus_requester()))
-                        .semantics(SemanticsArgs {
-                            role: Some(Role::Group),
-                            label: Some(super::format_month_year(snapshot.displayed_month)),
-                            merge_descendants: true,
-                            ..Default::default()
-                        }),
-                )
-                .child(move || {
-                    for date in cells(snapshot.displayed_month, first) {
-                        day(state, date, today, keyboard, change);
-                    }
-                });
+            tessera_ui::layout::layout(DateGridLayout {
+                columns: DATE_COLUMNS,
+                row_height: DATE_CELL_SIZE,
+            })
+            .child(move || {
+                for weekday in weekday_sequence(first) {
+                    boxed()
+                        .alignment(Alignment::Center)
+                        .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                        .children(move || {
+                            text(weekday_narrow_label(weekday))
+                                .style(theme.typography.body_large)
+                                .color(theme.color_scheme.on_surface);
+                        });
+                }
+            });
+            tessera_ui::layout::layout(DateGridLayout {
+                columns: DATE_COLUMNS,
+                row_height: DATE_CELL_SIZE,
+            })
+            .modifier(
+                Modifier::new()
+                    .focus_restorer(Some(keyboard.focus_requester()))
+                    .semantics(SemanticsArgs {
+                        role: Some(Role::Group),
+                        label: Some(super::format_month_year(snapshot.displayed_month)),
+                        merge_descendants: true,
+                        ..Default::default()
+                    }),
+            )
+            .child(move || {
+                for date in cells(snapshot.displayed_month, first) {
+                    day(state, date, today, keyboard, change);
+                }
+            });
         });
 }
 

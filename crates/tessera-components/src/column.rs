@@ -6,9 +6,7 @@
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
     PxPosition, RenderSlot,
-    layout::{
-        LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout,
-    },
+    layout::{LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope},
     tessera,
 };
 
@@ -62,13 +60,12 @@ pub fn column(
     let modifier = modifier.unwrap_or_default();
     let main_axis_alignment = main_axis_alignment.unwrap_or_default();
     let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
-    layout()
-        .policy(ColumnLayout {
-            main_axis_alignment,
-            cross_axis_alignment,
-        })
-        .modifier(modifier)
-        .child_shared(children.unwrap_or_else(RenderSlot::empty));
+    tessera_ui::layout::layout(ColumnLayout {
+        main_axis_alignment,
+        cross_axis_alignment,
+    })
+    .modifier(modifier)
+    .child_shared(children.unwrap_or_else(RenderSlot::empty));
 }
 
 #[derive(Clone, PartialEq)]
@@ -77,13 +74,13 @@ struct ColumnLayout {
     cross_axis_alignment: CrossAxisAlignment,
 }
 
-impl tessera_ui::LayoutModifierNode for ColumnLayout {
+impl tessera_ui::LayoutPolicy for ColumnLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         (self.cross_axis_alignment == CrossAxisAlignment::Stretch)
             == (other.cross_axis_alignment == CrossAxisAlignment::Stretch)
     }
 
-    fn place_children(
+    fn place(
         &self,
         scope: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -418,7 +415,7 @@ mod tests {
         width: i32,
     }
 
-    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+    impl tessera_ui::LayoutPolicy for FixedTestLayout {
         fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
@@ -427,7 +424,7 @@ mod tests {
         }
     }
 
-    impl tessera_ui::LayoutModifierNode for FillHeightTestLayout {
+    impl tessera_ui::LayoutPolicy for FillHeightTestLayout {
         fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let height = input
                 .parent_constraint()
@@ -448,8 +445,7 @@ mod tests {
         let width = width.unwrap_or_default();
         let height = height.unwrap_or_default();
 
-        layout()
-            .policy(FixedTestLayout { width, height })
+        tessera_ui::layout::layout(FixedTestLayout { width, height })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
@@ -462,8 +458,7 @@ mod tests {
         let tag = tag.unwrap_or_default();
         let width = width.unwrap_or_default();
 
-        layout()
-            .policy(FillHeightTestLayout { width })
+        tessera_ui::layout::layout(FillHeightTestLayout { width })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
@@ -516,11 +511,13 @@ mod tests {
                     .tag("column_weighted_fixed".to_string())
                     .width(20)
                     .height(10);
-                layout().modifier(Modifier::new().weight(1.0)).child(|| {
-                    fill_height_test_box()
-                        .tag("column_weighted_fill".to_string())
-                        .width(15);
-                });
+                layout(tessera_ui::layout::Stack)
+                    .modifier(Modifier::new().weight(1.0))
+                    .child(|| {
+                        fill_height_test_box()
+                            .tag("column_weighted_fill".to_string())
+                            .width(15);
+                    });
             });
     }
 
@@ -558,7 +555,7 @@ mod tests {
         let width = width.unwrap_or(Dp(0.0));
         let height = height.unwrap_or(Dp(0.0));
 
-        layout()
+        layout(tessera_ui::layout::Stack)
             .draw(NoopDrawModifier)
             .modifier(
                 Modifier::new()

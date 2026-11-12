@@ -62,7 +62,7 @@ fn scrollbar_fixture(
             ScrollDelta::ZERO
         }
     }));
-    tessera_ui::layout::layout()
+    tessera_ui::layout::layout(tessera_ui::layout::Stack)
         .modifier(Modifier::new().nested_scroll(connection))
         .child(move || {
             row().children(move || {

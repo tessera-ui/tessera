@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, hash::Hash, ops::Range, sync::Arc};
 use tessera_ui::{
     AxisConstraint, CallbackWith, Constraint, Dp, FocusScopeNode, LayoutResult, MeasurementError,
     Modifier, Px, PxPosition, RenderSlotWith, State, key,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
     remember, remember_with_key, tessera,
 };
@@ -499,11 +499,11 @@ macro_rules! impl_lazy_list_builder {
                 &self,
                 count: usize,
                 key_provider: KF,
-                builder: impl Into<RenderSlotWith<usize>> + Send + Sync + 'static,
+                builder: impl Into<RenderSlotWith<usize>> + 'static,
             ) -> Self
             where
                 K: Hash,
-                KF: Fn(usize) -> K + Send + Sync + 'static,
+                KF: Fn(usize) -> K + 'static,
             {
                 self.props.append("content", move |props| {
                     let slot = {
@@ -527,7 +527,7 @@ macro_rules! impl_lazy_list_builder {
             /// Append a sticky header item.
             pub fn sticky_header<F, Output>(&self, builder: F) -> Self
             where
-                F: Fn() -> Output + Send + Sync + 'static,
+                F: Fn() -> Output + 'static,
             {
                 self.props.append("content", move |props| {
                     let slot = LazySlot::sticky(
@@ -548,7 +548,7 @@ macro_rules! impl_lazy_list_builder {
             pub fn sticky_header_with_key<K, F, Output>(&self, key: K, builder: F) -> Self
             where
                 K: Hash,
-                F: Fn() -> Output + Send + Sync + 'static,
+                F: Fn() -> Output + 'static,
             {
                 let key = hash_key(key);
                 self.props.append("content", move |props| {
@@ -570,7 +570,7 @@ macro_rules! impl_lazy_list_builder {
             pub fn sticky_header_with_key_shared<K>(
                 &self,
                 key: K,
-                builder: impl Into<RenderSlotWith<usize>> + Send + Sync + 'static,
+                builder: impl Into<RenderSlotWith<usize>> + 'static,
             ) -> Self
             where
                 K: Hash,
@@ -823,7 +823,7 @@ fn lazy_list_view(
                 controller.focused_item = None;
             });
         }
-        layout().policy(ZeroLayout);
+        tessera_ui::layout::layout(ZeroLayout);
         return;
     }
 
@@ -879,38 +879,37 @@ fn lazy_list_view(
             .is_ok()
     });
     let composed_item_indices = children.iter().map(|child| child.item_index).collect();
-    layout()
-        .modifier(focus_modifier)
-        .policy(LazyListLayout {
-            axis,
-            cross_axis_alignment,
-            item_spacing,
-            estimated_item_main,
-            max_viewport_main,
-            padding_main,
-            padding_cross,
-            viewport_limit,
-            visible_item_indices,
-            composed_item_indices,
-            sticky_indices: plan.sticky_indices().to_vec(),
-            scroll_offset,
-            controller,
-            scroll_controller,
-        })
-        .child(move || {
-            for child in &children {
-                let child = child.clone();
-                key(child.key_hash, || {
-                    retained_lazy_item(
-                        child.item_index,
-                        child.local_index,
-                        child.builder,
-                        controller,
-                        keep_composed_items,
-                    );
-                });
-            }
-        });
+    tessera_ui::layout::layout(LazyListLayout {
+        axis,
+        cross_axis_alignment,
+        item_spacing,
+        estimated_item_main,
+        max_viewport_main,
+        padding_main,
+        padding_cross,
+        viewport_limit,
+        visible_item_indices,
+        composed_item_indices,
+        sticky_indices: plan.sticky_indices().to_vec(),
+        scroll_offset,
+        controller,
+        scroll_controller,
+    })
+    .modifier(focus_modifier)
+    .child(move || {
+        for child in &children {
+            let child = child.clone();
+            key(child.key_hash, || {
+                retained_lazy_item(
+                    child.item_index,
+                    child.local_index,
+                    child.builder,
+                    controller,
+                    keep_composed_items,
+                );
+            });
+        }
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -931,7 +930,7 @@ struct LazyListLayout {
     scroll_controller: State<ScrollableController>,
 }
 
-impl tessera_ui::LayoutModifierNode for LazyListLayout {
+impl tessera_ui::LayoutPolicy for LazyListLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -1140,7 +1139,7 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
         self.measure_eq(other) && self.scroll_offset == other.scroll_offset
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -1343,7 +1342,7 @@ fn retained_lazy_item(
     } else {
         modifier
     };
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let (_, local_index, builder, _, _) = binding.get();
         builder.render(local_index);
     });
@@ -1721,8 +1720,7 @@ mod tests {
 
     use tessera_ui::{
         AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
-        NoopDrawModifier, Px, PxPosition, RenderSlotWith, State,
-        layout::{MeasureScope, layout},
+        NoopDrawModifier, Px, PxPosition, RenderSlotWith, State, layout::MeasureScope,
         receive_frame_nanos, remember, remember_with_key, tessera,
     };
 
@@ -1972,7 +1970,7 @@ mod tests {
     #[derive(Clone, PartialEq)]
     struct ResponsiveItemLayout(bool, bool);
 
-    impl tessera_ui::LayoutModifierNode for ResponsiveItemLayout {
+    impl tessera_ui::LayoutPolicy for ResponsiveItemLayout {
         fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let cross = if self.0 {
                 input.parent_constraint().height().resolve_max()
@@ -2013,12 +2011,12 @@ mod tests {
         observed.with_mut(|handles| handles.responsive_main = Some(main));
         observed.with_mut(|handles| handles.programmatic_list = Some(controller));
         let items = RenderSlotWith::new(move |index| {
-            layout()
-                .modifier(Modifier::new().semantics(SemanticsArgs {
+            tessera_ui::layout::layout(ResponsiveItemLayout(horizontal, tall)).modifier(
+                Modifier::new().semantics(SemanticsArgs {
                     test_tag: Some(format!("responsive_{index}")),
                     ..Default::default()
-                }))
-                .policy(ResponsiveItemLayout(horizontal, tall));
+                }),
+            );
         });
         material_theme().child(move || {
             crate::boxed::boxed().children(move || {
@@ -2389,7 +2387,7 @@ mod tests {
         preferred_height: i32,
     }
 
-    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+    impl tessera_ui::LayoutPolicy for FixedTestLayout {
         fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
@@ -2398,7 +2396,7 @@ mod tests {
         }
     }
 
-    impl tessera_ui::LayoutModifierNode for PreferredConstraintTestLayout {
+    impl tessera_ui::LayoutPolicy for PreferredConstraintTestLayout {
         fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let preferred_width = Px::new(self.preferred_width);
             let preferred_height = Px::new(self.preferred_height);
@@ -2418,8 +2416,7 @@ mod tests {
         let width = width.unwrap_or(0);
         let height = height.unwrap_or(0);
 
-        layout()
-            .policy(FixedTestLayout { width, height })
+        tessera_ui::layout::layout(FixedTestLayout { width, height })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
@@ -2433,16 +2430,15 @@ mod tests {
         let width = width.unwrap_or(0);
         let height = height.unwrap_or(0);
 
-        layout()
-            .policy(PreferredConstraintTestLayout {
-                preferred_width: width,
-                preferred_height: height,
-            })
-            .draw(NoopDrawModifier)
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                test_tag: Some(tag),
-                ..Default::default()
-            }));
+        tessera_ui::layout::layout(PreferredConstraintTestLayout {
+            preferred_width: width,
+            preferred_height: height,
+        })
+        .draw(NoopDrawModifier)
+        .modifier(Modifier::new().semantics(SemanticsArgs {
+            test_tag: Some(tag),
+            ..Default::default()
+        }));
     }
 
     #[tessera]

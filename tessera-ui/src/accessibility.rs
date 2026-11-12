@@ -401,4 +401,4 @@ impl StoredSemantics {
 ///
 /// When an assistive technology requests an action (like clicking a button),
 /// this handler is invoked.
-pub type AccessibilityActionHandler = Box<dyn Fn(Action) + Send + Sync>;
+pub type AccessibilityActionHandler = Box<dyn Fn(Action)>;

@@ -246,10 +246,9 @@ impl AttachedModifierChain {
         &mut self,
         owner: u64,
         modifier: Modifier,
-        policy: crate::layout::LayoutModifierHandle,
         draw: crate::layout::DrawModifierHandle,
     ) {
-        let modifier = modifier.with_terminal_nodes(policy, draw);
+        let modifier = modifier.with_terminal_draw(draw);
         if self.current.element.is_same(&modifier.element) && self.owner == owner {
             return;
         }
@@ -392,7 +391,6 @@ impl ModifierAction {
             Self::GloballyPositioned(_) => {
                 TypeId::of::<crate::component_tree::GloballyPositionedHandler>()
             }
-            Self::Policy(node) => node.as_policy().as_any().type_id(),
             Self::TerminalDraw(node) => node.concrete_type_id(),
         };
         kind(self) == kind(other)
@@ -409,7 +407,6 @@ impl ModifierAction {
             };
         }
         match self {
-            Self::Policy(node) => call!(node.as_policy()),
             Self::TerminalDraw(node) => call!(node.as_ref()),
             Self::Layout(node) => call!(node.node()),
             Self::Placement(node) => call!(node.node()),
@@ -443,14 +440,9 @@ mod tests {
     };
 
     use crate::{
-        LayoutResult, MeasurementError, RuntimeSession, State,
-        layout::{
-            DefaultLayoutNode, DrawModifierHandle, LayoutModifierHandle, MeasureScope, layout,
-        },
-        modifier::{
-            DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutModifierNode,
-            Modifier,
-        },
+        RuntimeSession, State,
+        layout::DrawModifierHandle,
+        modifier::{DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier},
         remember,
         runtime::TesseraRuntime,
         testing::{layout_test, pump_layout_test_session, start_layout_test_session},
@@ -524,31 +516,8 @@ mod tests {
         fn draw(&self, _: &mut DrawModifierContext<'_, '_>, _: &mut dyn DrawModifierContent) {}
     }
 
-    #[derive(Clone, PartialEq)]
-    struct Policy(Spy<9>);
-
-    impl LayoutModifierNode for Policy {
-        fn on_attach(&self, context: ModifierNodeContext) {
-            self.0.event(context, 0);
-        }
-        fn on_update(&self, context: ModifierNodeContext) {
-            self.0.event(context, 1);
-        }
-        fn on_detach(&self, context: ModifierNodeContext) {
-            self.0.event(context, 2);
-        }
-        fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-            LayoutModifierNode::measure(&DefaultLayoutNode, scope)
-        }
-    }
-
     fn update(chain: &mut AttachedModifierChain, modifier: Modifier) {
-        chain.update(
-            1,
-            modifier,
-            LayoutModifierHandle::default(),
-            DrawModifierHandle::default(),
-        );
+        chain.update(1, modifier, DrawModifierHandle::default());
         flush_lifecycle();
     }
 
@@ -562,12 +531,7 @@ mod tests {
         state.set(Some(value));
         let value = value.get();
         if value < 2 {
-            layout()
-                .policy(Policy(Spy {
-                    label: 20 + value,
-                    records: records.clone(),
-                    drops: drops.clone(),
-                }))
+            crate::layout::layout(crate::layout::Stack)
                 .draw(Spy::<2> {
                     label: 30 + value,
                     records: records.clone(),
@@ -644,12 +608,7 @@ mod tests {
         let mut first = AttachedModifierChain::default();
         let mut second = AttachedModifierChain::default();
         first_session.run(|| {
-            first.update(
-                1,
-                shared.clone(),
-                LayoutModifierHandle::default(),
-                DrawModifierHandle::default(),
-            );
+            first.update(1, shared.clone(), DrawModifierHandle::default());
         });
         second_session.run(|| {
             update(&mut second, shared);
@@ -793,7 +752,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_draw_and_chain_nodes_share_the_runtime_attachment_lifecycle() {
+    fn draw_and_chain_nodes_share_the_runtime_attachment_lifecycle() {
         let records = Rc::new(RefCell::new(Vec::new()));
         let drops = Rc::new(Cell::new(0));
         let state = Rc::new(Cell::new(None::<State<u8>>));
@@ -808,22 +767,22 @@ mod tests {
         let mut session = start_layout_test_session(harness);
         pump_layout_test_session(&mut session, 0);
         let first = records.borrow().clone();
-        assert_eq!(first.len(), 3);
+        assert_eq!(first.len(), 2);
         assert!(first.iter().all(|event| event.1 == 0));
         pump_layout_test_session(&mut session, 1);
-        assert_eq!(records.borrow().len(), 3);
+        assert_eq!(records.borrow().len(), 2);
         session.run(|| state.get().unwrap().set(1));
         pump_layout_test_session(&mut session, 2);
         let second = records.borrow().clone();
-        assert_eq!(second.len(), 6);
-        for (attached, updated) in first.iter().zip(&second[3..]) {
+        assert_eq!(second.len(), 4);
+        for (attached, updated) in first.iter().zip(&second[2..]) {
             assert_eq!((updated.1, updated.2, updated.3), (1, attached.2, 1));
         }
         session.run(|| state.get().unwrap().set(2));
         pump_layout_test_session(&mut session, 3);
-        assert_eq!(records.borrow().len(), 9);
-        assert!(records.borrow()[6..].iter().all(|event| event.1 == 2));
-        assert_eq!(drops.get(), 3);
+        assert_eq!(records.borrow().len(), 6);
+        assert!(records.borrow()[4..].iter().all(|event| event.1 == 2));
+        assert_eq!(drops.get(), 2);
         drop(session);
     }
 }

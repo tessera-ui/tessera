@@ -8,7 +8,7 @@ use std::ops::RangeInclusive;
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, key,
-    layout::{MeasureScope, layout},
+    layout::MeasureScope,
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera,
     time::{SystemTime, UNIX_EPOCH},
@@ -905,24 +905,23 @@ fn calendar_view(
                 date_year_grid(state, view, today);
             } else {
                 if show_weekday_labels {
-                    layout()
-                        .policy(DateGridLayout {
-                            columns: DATE_COLUMNS,
-                            row_height: DATE_CELL_SIZE,
-                        })
-                        .child(move || {
-                            for weekday in weekday_sequence(first_day_of_week) {
-                                surface()
-                                    .style(Color::TRANSPARENT.into())
-                                    .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-                                    .content_alignment(Alignment::Center)
-                                    .child(move || {
-                                        text(weekday_narrow_label(weekday))
-                                            .style(theme.typography.body_large)
-                                            .color(scheme.on_surface);
-                                    });
-                            }
-                        });
+                    tessera_ui::layout::layout(DateGridLayout {
+                        columns: DATE_COLUMNS,
+                        row_height: DATE_CELL_SIZE,
+                    })
+                    .child(move || {
+                        for weekday in weekday_sequence(first_day_of_week) {
+                            surface()
+                                .style(Color::TRANSPARENT.into())
+                                .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                                .content_alignment(Alignment::Center)
+                                .child(move || {
+                                    text(weekday_narrow_label(weekday))
+                                        .style(theme.typography.body_large)
+                                        .color(scheme.on_surface);
+                                });
+                        }
+                    });
                 }
                 date_grid(state, first_day_of_week, today)
                     .focus_requester_optional(focus_requester);
@@ -951,39 +950,38 @@ fn date_grid(
     let on_select = CallbackWith::new(move |date| {
         state.with_mut(|state| state.set_selected_date(date));
     });
-    layout()
-        .policy(DateGridLayout {
-            columns: DATE_COLUMNS,
-            row_height: DATE_CELL_SIZE,
-        })
-        .modifier(
-            Modifier::new()
-                .focus_restorer(Some(keyboard.focus_requester()))
-                .semantics(SemanticsArgs {
-                    role: Some(tessera_ui::accesskit::Role::Group),
-                    label: Some(format_month_year(snapshot.displayed_month)),
-                    merge_descendants: true,
-                    test_tag: cfg!(test).then(|| "date-grid".to_owned()),
-                    ..Default::default()
-                }),
-        )
-        .child(move || {
-            for cell in grid.iter().copied() {
-                let enabled = cell.is_some_and(|date| {
-                    is_date_selectable(
-                        date,
-                        &snapshot.year_range,
-                        snapshot.is_selectable_date.as_ref(),
-                        snapshot.is_selectable_year.as_ref(),
-                    )
-                });
-                calendar_day(on_select, today)
-                    .cell_optional(cell)
-                    .selected(cell.is_some() && snapshot.selected_date == cell)
-                    .enabled(enabled)
-                    .keyboard(keyboard);
-            }
-        });
+    tessera_ui::layout::layout(DateGridLayout {
+        columns: DATE_COLUMNS,
+        row_height: DATE_CELL_SIZE,
+    })
+    .modifier(
+        Modifier::new()
+            .focus_restorer(Some(keyboard.focus_requester()))
+            .semantics(SemanticsArgs {
+                role: Some(tessera_ui::accesskit::Role::Group),
+                label: Some(format_month_year(snapshot.displayed_month)),
+                merge_descendants: true,
+                test_tag: cfg!(test).then(|| "date-grid".to_owned()),
+                ..Default::default()
+            }),
+    )
+    .child(move || {
+        for cell in grid.iter().copied() {
+            let enabled = cell.is_some_and(|date| {
+                is_date_selectable(
+                    date,
+                    &snapshot.year_range,
+                    snapshot.is_selectable_date.as_ref(),
+                    snapshot.is_selectable_year.as_ref(),
+                )
+            });
+            calendar_day(on_select, today)
+                .cell_optional(cell)
+                .selected(cell.is_some() && snapshot.selected_date == cell)
+                .enabled(enabled)
+                .keyboard(keyboard);
+        }
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -992,7 +990,7 @@ struct DateGridLayout {
     row_height: Dp,
 }
 
-impl tessera_ui::LayoutModifierNode for DateGridLayout {
+impl tessera_ui::LayoutPolicy for DateGridLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let width = input.parent_constraint().width().clamp(Dp(336.0).to_px());
@@ -1105,37 +1103,36 @@ fn date_year_grid(state: State<DatePickerState>, view: State<DatePickerView>, to
                 .modifier(Modifier::new().width(Dp(336.0)))
                 .children(move || {
                     spacer().modifier(Modifier::new().height(Dp(8.0 + start as f64 * 52.0)));
-                    layout()
-                        .policy(DateGridLayout {
-                            columns: 3,
-                            row_height: Dp(52.0),
-                        })
-                        .child(move || {
-                            for index in start * 3..(end * 3).min(count) {
-                                let year = (first as i64 + index as i64) as i32;
-                                let selected = snapshot.displayed_month.year() == year;
-                                let enabled = snapshot
-                                    .is_selectable_year
-                                    .as_ref()
-                                    .is_none_or(|predicate| predicate.call(year));
-                                let today = today.year() == year;
-                                key(year, move || {
-                                    date_picker_year(year)
-                                        .selected(selected)
-                                        .is_today(today)
-                                        .enabled(enabled)
-                                        .on_select(move |year: i32| {
-                                            state.with_mut(|s| {
-                                                s.set_displayed_month(YearMonth::new_unchecked(
-                                                    year,
-                                                    s.displayed_month.month(),
-                                                ))
-                                            });
-                                            view.set(DatePickerView::Calendar);
+                    tessera_ui::layout::layout(DateGridLayout {
+                        columns: 3,
+                        row_height: Dp(52.0),
+                    })
+                    .child(move || {
+                        for index in start * 3..(end * 3).min(count) {
+                            let year = (first as i64 + index as i64) as i32;
+                            let selected = snapshot.displayed_month.year() == year;
+                            let enabled = snapshot
+                                .is_selectable_year
+                                .as_ref()
+                                .is_none_or(|predicate| predicate.call(year));
+                            let today = today.year() == year;
+                            key(year, move || {
+                                date_picker_year(year)
+                                    .selected(selected)
+                                    .is_today(today)
+                                    .enabled(enabled)
+                                    .on_select(move |year: i32| {
+                                        state.with_mut(|s| {
+                                            s.set_displayed_month(YearMonth::new_unchecked(
+                                                year,
+                                                s.displayed_month.month(),
+                                            ))
                                         });
-                                });
-                            }
-                        });
+                                        view.set(DatePickerView::Calendar);
+                                    });
+                            });
+                        }
+                    });
                     spacer().modifier(Modifier::new().height(Dp((rows - end) as f64 * 52.0)));
                 });
         });

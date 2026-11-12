@@ -1,5 +1,5 @@
 use tessera_ui::{
-    AxisConstraint, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, LayoutResult,
+    AxisConstraint, LayoutModifier, LayoutModifierChild, LayoutModifierInput, LayoutResult,
     MeasurementError, WindowInsets,
 };
 
@@ -11,8 +11,8 @@ pub(super) struct InsetPadding {
     pub consume_only: bool,
 }
 
-impl LayoutModifierNode for InsetPadding {
-    fn measure_content(
+impl LayoutModifier for InsetPadding {
+    fn measure(
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
@@ -26,7 +26,7 @@ impl LayoutModifierNode for InsetPadding {
         input
             .layout_input
             .with_consumed_window_insets(requested, || {
-                PaddingModifierNode { padding }.measure_content(input, child)
+                PaddingModifierNode { padding }.measure(input, child)
             })
     }
 }
@@ -37,8 +37,8 @@ pub(super) struct InsetSize {
     pub edge: usize,
 }
 
-impl LayoutModifierNode for InsetSize {
-    fn measure_content(
+impl LayoutModifier for InsetSize {
+    fn measure(
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
@@ -56,6 +56,6 @@ impl LayoutModifierNode for InsetSize {
             fill_height: false,
             enforce_incoming: true,
         }
-        .measure_content(input, child)
+        .measure(input, child)
     }
 }

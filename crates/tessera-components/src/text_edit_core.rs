@@ -13,11 +13,8 @@ use glyphon::{
 use tessera_platform::clipboard;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Dp, FocusRequester, LayoutResult, MeasurementError, Px,
-    PxPosition, State, current_frame_nanos,
-    layout::{MeasureScope, layout},
-    receive_frame_nanos, remember, tessera,
-    time::Instant,
-    winit,
+    PxPosition, State, current_frame_nanos, layout::MeasureScope, receive_frame_nanos, remember,
+    tessera, time::Instant, winit,
 };
 use winit::keyboard::NamedKey;
 
@@ -3480,7 +3477,7 @@ impl PartialEq for TextEditLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for TextEditLayout {
+impl tessera_ui::LayoutPolicy for TextEditLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let display = self.controller.with(TextEditorController::prepare_display);
         let fonts = self
@@ -3656,28 +3653,31 @@ pub fn text_edit_core(
         presentation_focused: presentation_focused.unwrap_or(false),
         blink,
     };
-    layout().policy(policy).draw(draw).child(move || {
-        let focused = controller.with(|c| c.focus_handler().is_focused());
-        if focused {
-            receive_frame_nanos(move |frame_nanos| {
-                let (is_focused, blink_start) = controller.with(|controller| {
-                    (
-                        controller.focus_handler().is_focused(),
-                        controller.blink_start_frame_nanos(),
-                    )
+    tessera_ui::layout::layout(policy)
+        .draw(draw)
+        .child(move || {
+            let focused = controller.with(|c| c.focus_handler().is_focused());
+            if focused {
+                receive_frame_nanos(move |frame_nanos| {
+                    let (is_focused, blink_start) = controller.with(|controller| {
+                        (
+                            controller.focus_handler().is_focused(),
+                            controller.blink_start_frame_nanos(),
+                        )
+                    });
+                    if !is_focused {
+                        return tessera_ui::FrameNanosControl::Stop;
+                    }
+                    let visible =
+                        frame_nanos.saturating_sub(blink_start) % 1_000_000_000 < 500_000_000;
+                    let next = (blink_start, visible);
+                    if blink.get() != next {
+                        blink.set(next);
+                    }
+                    tessera_ui::FrameNanosControl::Continue
                 });
-                if !is_focused {
-                    return tessera_ui::FrameNanosControl::Stop;
-                }
-                let visible = frame_nanos.saturating_sub(blink_start) % 1_000_000_000 < 500_000_000;
-                let next = (blink_start, visible);
-                if blink.get() != next {
-                    blink.set(next);
-                }
-                tessera_ui::FrameNanosControl::Continue
-            });
-        }
-    });
+            }
+        });
 }
 
 #[cfg(test)]
@@ -3728,7 +3728,7 @@ mod tests {
                 controller
             });
             probe.controller.set(Some(controller));
-            layout().child(move || {
+            layout(tessera_ui::layout::Stack).child(move || {
                 editor_cache_contents(controller);
             });
         }
@@ -3740,7 +3740,7 @@ mod tests {
             output: tessera_ui::testing::TestProbe<Option<tessera_ui::ComputedData>>,
         }
 
-        impl tessera_ui::LayoutModifierNode for ProbeAfterFinal {
+        impl tessera_ui::LayoutPolicy for ProbeAfterFinal {
             fn measure(
                 &self,
                 input: &mut tessera_ui::layout::MeasureScope<'_>,
@@ -3783,15 +3783,14 @@ mod tests {
             let width = remember(|| 40_i32);
             probe.enabled.set(Some(enabled));
             probe.width.set(Some(width));
-            layout()
-                .policy(ProbeAfterFinal {
-                    enabled,
-                    width,
-                    output: probe.size.clone(),
-                })
-                .child(move || {
-                    editor_cache_contents(controller);
-                });
+            tessera_ui::layout::layout(ProbeAfterFinal {
+                enabled,
+                width,
+                output: probe.size.clone(),
+            })
+            .child(move || {
+                editor_cache_contents(controller);
+            });
         }
 
         #[test]

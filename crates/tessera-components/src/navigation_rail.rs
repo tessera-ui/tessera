@@ -12,7 +12,7 @@ use tessera_ui::{
     PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -128,95 +128,92 @@ fn navigation_rail_item_view_content(
     let ripple_color = icon_color;
     let indicator_color = scheme.secondary_container.with_alpha(selection_fraction);
 
-    layout()
-        .policy(NavigationRailItemLayout {
-            icon_position,
-            has_label,
-            has_icon,
-            has_badge,
-            selection_fraction,
-            item_min_height,
-        })
-        .child(move || {
-            surface()
-                .style(SurfaceStyle::Filled {
-                    color: indicator_color,
-                })
-                .shape(Shape::CAPSULE)
-                .show_state_layer(false)
-                .show_ripple(false)
-                .child(|| {});
+    tessera_ui::layout::layout(NavigationRailItemLayout {
+        icon_position,
+        has_label,
+        has_icon,
+        has_badge,
+        selection_fraction,
+        item_min_height,
+    })
+    .child(move || {
+        surface()
+            .style(SurfaceStyle::Filled {
+                color: indicator_color,
+            })
+            .shape(Shape::CAPSULE)
+            .show_state_layer(false)
+            .show_ripple(false)
+            .child(|| {});
 
-            surface()
-                .style(SurfaceStyle::Filled {
-                    color: Color::TRANSPARENT,
-                })
-                .shape(Shape::CAPSULE)
-                .modifier(Modifier::new().on_layout_coordinates(
-                    move |bounds: tessera_ui::LayoutCoordinates| {
-                        if let Some(indicator_geometry) = indicator_geometry {
-                            if indicator_geometry.with(|geometry| geometry.indicator)
-                                != Some(bounds)
-                            {
-                                indicator_geometry
-                                    .with_mut(|geometry| geometry.indicator = Some(bounds));
-                            }
+        surface()
+            .style(SurfaceStyle::Filled {
+                color: Color::TRANSPARENT,
+            })
+            .shape(Shape::CAPSULE)
+            .modifier(Modifier::new().on_layout_coordinates(
+                move |bounds: tessera_ui::LayoutCoordinates| {
+                    if let Some(indicator_geometry) = indicator_geometry {
+                        if indicator_geometry.with(|geometry| geometry.indicator) != Some(bounds) {
+                            indicator_geometry
+                                .with_mut(|geometry| geometry.indicator = Some(bounds));
                         }
-                    },
-                ))
-                .enabled(true)
-                .interaction_state(interaction_state)
-                .focus_requester(focus_requester)
-                .show_focus_indicator(true)
-                .ripple_color(ripple_color)
-                .child(move || {
-                    surface()
-                        .style(SurfaceStyle::Filled {
-                            color: Color::TRANSPARENT,
-                        })
-                        .shape(Shape::CAPSULE)
-                        .modifier(Modifier::new().fill_max_size())
-                        .enabled(true)
-                        .ripple_color(ripple_color)
-                        .show_state_layer(false)
-                        .ripple_state(ripple_state)
-                        .child(|| {});
-                });
+                    }
+                },
+            ))
+            .enabled(true)
+            .interaction_state(interaction_state)
+            .focus_requester(focus_requester)
+            .show_focus_indicator(true)
+            .ripple_color(ripple_color)
+            .child(move || {
+                surface()
+                    .style(SurfaceStyle::Filled {
+                        color: Color::TRANSPARENT,
+                    })
+                    .shape(Shape::CAPSULE)
+                    .modifier(Modifier::new().fill_max_size())
+                    .enabled(true)
+                    .ripple_color(ripple_color)
+                    .show_state_layer(false)
+                    .ripple_state(ripple_state)
+                    .child(|| {});
+            });
 
-            if let Some(draw_icon) = item.icon {
-                provide_context(
-                    || ContentColor {
-                        current: icon_color,
-                    },
-                    || {
-                        let color = use_context::<ContentColor>().unwrap();
-                        if color.with(|value| value.current) != icon_color {
-                            color.set(ContentColor {
-                                current: icon_color,
-                            });
-                        }
-                        draw_icon.render();
-                    },
-                );
-            }
+        if let Some(draw_icon) = item.icon {
+            provide_context(
+                || ContentColor {
+                    current: icon_color,
+                },
+                || {
+                    let color = use_context::<ContentColor>().unwrap();
+                    if color.with(|value| value.current) != icon_color {
+                        color.set(ContentColor {
+                            current: icon_color,
+                        });
+                    }
+                    draw_icon.render();
+                },
+            );
+        }
 
-            if has_label {
-                let label = item.label.clone();
-                let label_style = match icon_position {
-                    NavigationRailIconPosition::Top => typography.label_medium,
-                    NavigationRailIconPosition::Start => typography.label_large,
-                };
-                provide_context(
-                    || label_style,
-                    move || {
-                        text(label.clone()).color(label_color).style(label_style);
-                    },
-                );
-            }
-            if let Some(badge) = item.badge {
-                crate::boxed::boxed().children_shared(badge);
-            }
-        });
+        if has_label {
+            let label = item.label.clone();
+            let label_style = match icon_position {
+                NavigationRailIconPosition::Top => typography.label_medium,
+                NavigationRailIconPosition::Start => typography.label_large,
+            };
+            provide_context(
+                || label_style,
+                move || {
+                    text(label.clone()).color(label_color).style(label_style);
+                },
+            );
+        }
+        if let Some(badge) = item.badge {
+            crate::boxed::boxed().children_shared(badge);
+        }
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -229,7 +226,7 @@ struct NavigationRailItemLayout {
     item_min_height: Dp,
 }
 
-impl tessera_ui::LayoutModifierNode for NavigationRailItemLayout {
+impl tessera_ui::LayoutPolicy for NavigationRailItemLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -624,7 +621,7 @@ fn navigation_rail_item_view(
                 indicator_geometry.with_mut(|geometry| geometry.target = Some(bounds));
             }
         });
-    layout().modifier(modifier).child({
+    layout(Stack).modifier(modifier).child({
         let item = item.clone();
         move || {
             navigation_rail_item_view_content()
@@ -731,7 +728,7 @@ pub fn navigation_rail_item(
     }
 
     let item_spacing = composition.item_spacing;
-    layout()
+    layout(Stack)
         .modifier(Modifier::new().padding(Padding::new(Dp::ZERO, Dp::ZERO, Dp::ZERO, item_spacing)))
         .child(move || {
             let item = NavigationRailItemDefinition {
@@ -842,7 +839,7 @@ pub fn navigation_rail(
     let modifier = Modifier::new()
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true));
-    layout().modifier(modifier).child({
+    layout(Stack).modifier(modifier).child({
         let composition = composition;
         move || {
             let composition = composition;
@@ -888,7 +885,7 @@ fn navigation_rail_content(
                     .children(move || {
                         header.render();
                     });
-                layout().modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
+                layout(Stack).modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
             }
 
             if let Some(content) = content {
@@ -991,9 +988,8 @@ pub fn modal_navigation_rail(
         });
     }
     let modifier = modal_focus_modifier(Modifier::new(), focus, is_open, scope);
-    layout()
+    tessera_ui::layout::layout(ModalNavigationRailLayout)
         .modifier(modifier)
-        .policy(ModalNavigationRailLayout)
         .child(move || {
             overlay_background(main_content, is_open);
             modal_back_handler(is_open, on_close_request).on_preview(move |event| {
@@ -1098,7 +1094,7 @@ fn modal_rail_key(
 #[derive(Clone, PartialEq)]
 struct ModalNavigationRailLayout;
 
-impl tessera_ui::LayoutModifierNode for ModalNavigationRailLayout {
+impl tessera_ui::LayoutPolicy for ModalNavigationRailLayout {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = scope.children();
         let main = children[0];

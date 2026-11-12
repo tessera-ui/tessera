@@ -29,8 +29,7 @@ mod dispatcher;
 mod graphics;
 mod work;
 
-pub use async_dispatch::{Dispatcher, TaskHandle, dispatch};
-pub use dispatcher::UiDispatcher;
+pub use async_dispatch::{Dispatcher, Task, on, spawn};
 pub use graphics::{
     FrameBuffer, GraphicsDevice, GraphicsWork, GraphicsWorkDiagnostics, ScratchFit, ScratchTexture,
     ScratchTextureDescriptor, TrackedBuffer,
@@ -61,6 +60,8 @@ mod ime_state;
 mod inline_set;
 mod keyboard_state;
 pub mod layout;
+#[cfg(test)]
+mod layout_policy_tests;
 pub mod modifier;
 pub mod nested_scroll;
 pub(crate) mod pipeline_cache;
@@ -119,15 +120,15 @@ pub use crate::{
     geometry::{FloatRect, LayoutCoordinates, LocalToWindow, scaled_box},
     keyboard_state::KeyboardEvent,
     layout::{
-        DefaultLayoutNode, DrawModifierHandle, LayoutModifierHandle, LayoutResult,
-        NoopDrawModifier, RenderInput, RenderMetadataMut,
+        DrawModifierHandle, LayoutResult, NoopDrawModifier, RenderInput, RenderMetadataMut, Stack,
     },
     modifier::{
         BuildModifierNode, CursorModifierExt, CursorModifierNode, DrawModifierContent,
         DrawModifierContext, DrawModifierNode, FocusModifierExt, ImeInputModifierNode,
-        KeyboardInputModifierNode, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode,
-        Modifier, ModifierBuildContext, ParentDataMap, ParentDataModifierNode,
+        KeyboardInputModifierNode, LayoutModifier, LayoutModifierChild, LayoutModifierInput,
+        LayoutPolicy, Modifier, ModifierBuildContext, ParentDataMap, ParentDataModifierNode,
         PlacementModifierNode, PointerInputModifierNode, SemanticsModifierNode,
+        StatefulLayoutPolicy,
     },
     pipeline_context::PipelineContext,
     plugin::{
@@ -147,9 +148,9 @@ pub use crate::{
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
     },
     runtime::{
-        FrameClockDiagnostics, FrameNanosControl, Model, ModelTaskContext, State, StateAccessError,
-        current_frame_nanos, current_frame_time, frame_delta, key, receive_frame_nanos, remember,
-        remember_model, remember_model_with_key, remember_with_key, retain, retain_with_key,
+        FrameClockDiagnostics, FrameNanosControl, Model, ModelInit, ModelStore, ModelStoreScope,
+        State, current_frame_nanos, current_frame_time, frame_delta, key, launch, launch_once,
+        receive_frame_nanos, remember, remember_with_key, retain, retain_with_key,
     },
     scroll::{PlatformScrollConfig, normalize_platform_scroll_delta, platform_scroll_config},
     thread_utils::SendSync,

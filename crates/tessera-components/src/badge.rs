@@ -6,9 +6,8 @@
 
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
-    Px, PxPosition, PxSize, RenderSlot,
-    layout::{MeasureScope, layout},
-    provide_context, tessera, use_context,
+    Px, PxPosition, PxSize, RenderSlot, layout::MeasureScope, provide_context, tessera,
+    use_context,
 };
 
 use crate::{
@@ -27,7 +26,7 @@ fn badge_pixels(value: Dp) -> Px {
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 struct BadgedBoxLayout;
 
-impl tessera_ui::LayoutModifierNode for BadgedBoxLayout {
+impl tessera_ui::LayoutPolicy for BadgedBoxLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -83,7 +82,7 @@ struct BadgeLayout {
     container_color: Color,
 }
 
-impl tessera_ui::LayoutModifierNode for BadgeLayout {
+impl tessera_ui::LayoutPolicy for BadgeLayout {
     fn measure_eq(&self, _other: &Self) -> bool {
         true
     }
@@ -128,7 +127,7 @@ struct BadgeWithContentLayout {
     padding_px: Px,
 }
 
-impl tessera_ui::LayoutModifierNode for BadgeWithContentLayout {
+impl tessera_ui::LayoutPolicy for BadgeWithContentLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.padding_px == other.padding_px
     }
@@ -282,9 +281,8 @@ pub fn badged_box(
     content: Option<RenderSlot>,
     modifier: Option<Modifier>,
 ) {
-    layout()
+    tessera_ui::layout::layout(BadgedBoxLayout)
         .modifier(modifier.unwrap_or_default())
-        .policy(BadgedBoxLayout)
         .child(move || {
             boxed()
                 .alignment(Alignment::Center)
@@ -341,9 +339,8 @@ pub fn badge(
             .error
     };
     let policy = BadgeLayout { container_color };
-    layout()
+    tessera_ui::layout::layout(policy)
         .modifier(modifier.unwrap_or_default())
-        .policy(policy)
         .draw(policy);
 }
 
@@ -412,9 +409,8 @@ pub fn badge_with_content(
         container_color,
         padding_px,
     };
-    layout()
+    tessera_ui::layout::layout(policy)
         .modifier(modifier.unwrap_or_default())
-        .policy(policy)
         .draw(policy)
         .child(move || {
             provide_context(

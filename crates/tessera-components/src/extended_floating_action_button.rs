@@ -6,8 +6,7 @@
 
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FrameNanosControl, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, current_frame_nanos,
-    layout::{MeasureScope, layout},
+    MeasurementError, Modifier, Px, PxPosition, current_frame_nanos, layout::MeasureScope,
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -139,7 +138,7 @@ struct ExtendedFabLayout {
     progress: f32,
 }
 
-impl tessera_ui::LayoutModifierNode for ExtendedFabLayout {
+impl tessera_ui::LayoutPolicy for ExtendedFabLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let height = input
@@ -310,33 +309,32 @@ pub fn extended_floating_action_button(
         .content(move || {
             let snapshot = content.get();
             let progress = motion.with(|motion| motion.width.value());
-            layout()
-                .modifier(
+            tessera_ui::layout::layout(ExtendedFabLayout {
+                size: snapshot.size,
+                has_icon: snapshot.icon.is_some(),
+                progress,
+            })
+            .modifier(
+                Modifier::new()
+                    .clip_to_bounds()
+                    .clear_and_set_semantics(SemanticsArgs {
+                        hidden: true,
+                        test_tag: cfg!(test).then(|| "extended-fab-content".into()),
+                        ..Default::default()
+                    }),
+            )
+            .child(move || {
+                let snapshot = content.get();
+                if let Some(painter) = snapshot.icon {
+                    crate::icon::icon()
+                        .painter(painter)
+                        .size(snapshot.size.icon_size());
+                }
+                text(snapshot.label).style(snapshot.style).modifier(
                     Modifier::new()
-                        .clip_to_bounds()
-                        .clear_and_set_semantics(SemanticsArgs {
-                            hidden: true,
-                            test_tag: cfg!(test).then(|| "extended-fab-content".into()),
-                            ..Default::default()
-                        }),
-                )
-                .policy(ExtendedFabLayout {
-                    size: snapshot.size,
-                    has_icon: snapshot.icon.is_some(),
-                    progress,
-                })
-                .child(move || {
-                    let snapshot = content.get();
-                    if let Some(painter) = snapshot.icon {
-                        crate::icon::icon()
-                            .painter(painter)
-                            .size(snapshot.size.icon_size());
-                    }
-                    text(snapshot.label).style(snapshot.style).modifier(
-                        Modifier::new()
-                            .alpha(motion.with(|motion| motion.opacity.value().clamp(0.0, 1.0))),
-                    );
-                });
+                        .alpha(motion.with(|motion| motion.opacity.value().clamp(0.0, 1.0))),
+                );
+            });
         });
 }
 
@@ -416,17 +414,16 @@ mod tests {
     #[tessera]
     fn geometry_fixture(size: ExtendedFloatingActionButtonSize) {
         column().children(move || {
-            layout()
-                .modifier(tag("geometry"))
-                .policy(ExtendedFabLayout {
-                    size,
-                    has_icon: true,
-                    progress: 1.0,
-                })
-                .child(move || {
-                    spacer().modifier(tag("icon").size(size.icon_size(), size.icon_size()));
-                    spacer().modifier(tag("label").size(Dp(80.0), Dp(24.0)));
-                });
+            tessera_ui::layout::layout(ExtendedFabLayout {
+                size,
+                has_icon: true,
+                progress: 1.0,
+            })
+            .modifier(tag("geometry"))
+            .child(move || {
+                spacer().modifier(tag("icon").size(size.icon_size(), size.icon_size()));
+                spacer().modifier(tag("label").size(Dp(80.0), Dp(24.0)));
+            });
         });
     }
 

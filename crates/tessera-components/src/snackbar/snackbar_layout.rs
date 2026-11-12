@@ -5,8 +5,8 @@
 //! Keep message text and actions aligned as notifications resize.
 
 use tessera_ui::{
-    AxisConstraint, ComputedData, Constraint, Dp, LayoutModifierNode, LayoutResult,
-    MeasurementError, Px, PxPosition, layout::MeasureScope,
+    AxisConstraint, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult, MeasurementError, Px,
+    PxPosition, layout::MeasureScope,
 };
 
 use crate::modifier::Padding;
@@ -21,7 +21,7 @@ pub(super) struct SnackbarLayout {
     pub padding: Option<Padding>,
 }
 
-impl LayoutModifierNode for SnackbarLayout {
+impl LayoutPolicy for SnackbarLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = input.parent_constraint();
         let width_axis = parent.width();

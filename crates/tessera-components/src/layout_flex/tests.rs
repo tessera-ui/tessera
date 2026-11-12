@@ -1,7 +1,7 @@
 use tessera_ui::{
-    AxisConstraint, ComputedData, Dp, LayoutModifierNode, LayoutResult, MeasurementError, Modifier,
-    Px, RenderSlot, State,
-    layout::{MeasureScope, layout},
+    AxisConstraint, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
+    RenderSlot, State,
+    layout::MeasureScope,
     remember, tessera,
     testing::{layout_test, pump_layout_test_session, start_layout_test_session},
 };
@@ -89,7 +89,7 @@ fn fixed_size_wrappers_preserve_child_origins_when_offered_bounds_change() {
 #[derive(Clone, PartialEq)]
 struct Leaf;
 
-impl LayoutModifierNode for Leaf {
+impl LayoutPolicy for Leaf {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData {
             width: scope.parent_constraint().width().clamp(Px(20)),
@@ -100,16 +100,14 @@ impl LayoutModifierNode for Leaf {
 
 #[tessera]
 fn leaf(id: Option<u32>, weight: Option<f32>) {
-    layout()
-        .policy(Leaf)
-        .modifier(
-            Modifier::new()
-                .weight(weight.unwrap_or(0.0))
-                .semantics(SemanticsArgs {
-                    test_tag: Some(format!("flex-{}", id.unwrap_or(0))),
-                    ..Default::default()
-                }),
-        );
+    tessera_ui::layout::layout(Leaf).modifier(
+        Modifier::new()
+            .weight(weight.unwrap_or(0.0))
+            .semantics(SemanticsArgs {
+                test_tag: Some(format!("flex-{}", id.unwrap_or(0))),
+                ..Default::default()
+            }),
+    );
 }
 
 #[tessera]

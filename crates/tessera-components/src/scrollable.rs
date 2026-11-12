@@ -14,11 +14,11 @@ use tessera_foundation::{
 };
 use tessera_ui::{
     AxisConstraint, BuildModifierNode, CallbackWith, Color, ComputedData, Constraint, Dp,
-    LayoutCoordinates, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, LayoutResult,
+    LayoutCoordinates, LayoutModifier, LayoutModifierChild, LayoutModifierInput, LayoutResult,
     MeasurementError, Modifier, ModifierBuildContext, PointerInput, PointerInputModifierNode, Px,
     PxPosition, RenderSlot, ScrollEventSource, State, current_frame_nanos, current_frame_time,
     focus::FocusRevealRequest,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     receive_frame_nanos, remember, tessera,
     time::Instant,
@@ -527,7 +527,7 @@ struct ScrollableAlongsideLayout {
     horizontal: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for ScrollableAlongsideLayout {
+impl tessera_ui::LayoutPolicy for ScrollableAlongsideLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -601,8 +601,8 @@ impl PartialEq for ScrollLayoutModifierNode {
     }
 }
 
-impl LayoutModifierNode for ScrollLayoutModifierNode {
-    fn measure_content(
+impl LayoutModifier for ScrollLayoutModifierNode {
+    fn measure(
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
@@ -650,34 +650,6 @@ impl LayoutModifierNode for ScrollLayoutModifierNode {
         child.place(current_child_position);
 
         Ok(LayoutResult::new(computed_data))
-    }
-
-    fn place_children(
-        &self,
-        _scope: &PlacementScope<'_>,
-        inner: &PlacementResult,
-    ) -> Option<PlacementResult> {
-        // The viewport only shifts its content by the current scroll offset.
-        // Re-applying it from cached placements keeps scrolling from forcing a
-        // full re-measure of the content subtree.
-        let (child_size, visible_size) = self.controller.with(|c| (c.child_size, c.visible_size));
-        if self.controller.with(|c| {
-            c.needs_layout_reconciliation(child_size, visible_size, self.vertical, self.horizontal)
-        }) {
-            self.controller.with_mut(|c| {
-                c.reconcile_layout_extents(child_size, visible_size, self.vertical, self.horizontal)
-            });
-        }
-        let offset = if self.apply_child_offset {
-            self.controller.with(|c| c.child_position())
-        } else {
-            PxPosition::ZERO
-        };
-        let mut result = PlacementResult::new();
-        for (instance_key, position) in inner.iter() {
-            result.place(*instance_key, offset + *position);
-        }
-        Some(result)
     }
 }
 
@@ -812,7 +784,7 @@ pub(crate) fn scrollable(
 
     match scrollbar_layout {
         ScrollBarLayout::Alongside => {
-            layout().modifier(modifier).child(move || {
+            layout(Stack).modifier(modifier).child(move || {
                 scrollable_with_alongside_scrollbar()
                     .controller(controller)
                     .vertical(vertical)
@@ -827,7 +799,7 @@ pub(crate) fn scrollable(
             });
         }
         ScrollBarLayout::Overlay => {
-            layout().modifier(modifier).child(move || {
+            layout(Stack).modifier(modifier).child(move || {
                 scrollable_with_overlay_scrollbar()
                     .controller(controller)
                     .vertical(vertical)
@@ -921,45 +893,44 @@ fn scrollable_with_alongside_scrollbar(
     let scrollbar_v_state = ScrollBarState::viewport(controller, true);
     let scrollbar_h_state = ScrollBarState::viewport(controller, false);
 
-    layout()
-        .policy(ScrollableAlongsideLayout {
-            vertical,
-            horizontal,
-        })
-        .child(move || {
-            scrollable_viewport()
-                .vertical(vertical)
-                .horizontal(horizontal)
-                .scroll_smoothing(scroll_smoothing)
-                .apply_child_offset(apply_child_offset)
-                .scrollbar_behavior(scrollbar_behavior.clone())
+    tessera_ui::layout::layout(ScrollableAlongsideLayout {
+        vertical,
+        horizontal,
+    })
+    .child(move || {
+        scrollable_viewport()
+            .vertical(vertical)
+            .horizontal(horizontal)
+            .scroll_smoothing(scroll_smoothing)
+            .apply_child_offset(apply_child_offset)
+            .scrollbar_behavior(scrollbar_behavior.clone())
+            .controller(controller)
+            .scrollbar_state_v(scrollbar_v_state)
+            .scrollbar_state_h(scrollbar_h_state)
+            .child_shared(child);
+
+        if vertical {
+            scrollbar_v_bound()
                 .controller(controller)
-                .scrollbar_state_v(scrollbar_v_state)
-                .scrollbar_state_h(scrollbar_h_state)
-                .child_shared(child);
+                .scrollbar_behavior(scrollbar_behavior.clone())
+                .thickness(ScrollbarDefaults::THICKNESS)
+                .track_color_optional(scrollbar_track_color)
+                .thumb_color_optional(scrollbar_thumb_color)
+                .thumb_hover_color_optional(scrollbar_thumb_hover_color)
+                .scrollbar_state(scrollbar_v_state);
+        }
 
-            if vertical {
-                scrollbar_v_bound()
-                    .controller(controller)
-                    .scrollbar_behavior(scrollbar_behavior.clone())
-                    .thickness(ScrollbarDefaults::THICKNESS)
-                    .track_color_optional(scrollbar_track_color)
-                    .thumb_color_optional(scrollbar_thumb_color)
-                    .thumb_hover_color_optional(scrollbar_thumb_hover_color)
-                    .scrollbar_state(scrollbar_v_state);
-            }
-
-            if horizontal {
-                scrollbar_h_bound()
-                    .controller(controller)
-                    .scrollbar_behavior(scrollbar_behavior.clone())
-                    .thickness(ScrollbarDefaults::THICKNESS)
-                    .track_color_optional(scrollbar_track_color)
-                    .thumb_color_optional(scrollbar_thumb_color)
-                    .thumb_hover_color_optional(scrollbar_thumb_hover_color)
-                    .scrollbar_state(scrollbar_h_state);
-            }
-        });
+        if horizontal {
+            scrollbar_h_bound()
+                .controller(controller)
+                .scrollbar_behavior(scrollbar_behavior.clone())
+                .thickness(ScrollbarDefaults::THICKNESS)
+                .track_color_optional(scrollbar_track_color)
+                .thumb_color_optional(scrollbar_thumb_color)
+                .thumb_hover_color_optional(scrollbar_thumb_hover_color)
+                .scrollbar_state(scrollbar_h_state);
+        }
+    });
 }
 
 #[tessera]
@@ -1515,7 +1486,9 @@ fn scrollable_viewport(
             apply_child_offset,
             has_override,
         });
-    layout().modifier(modifier).child(move || child.render());
+    layout(Stack)
+        .modifier(modifier)
+        .child(move || child.render());
 }
 
 fn apply_scrollable_focus_reveal_modifier(
@@ -2063,7 +2036,7 @@ mod scroll_tests {
         ) {
             let controller = remember(ScrollableController::new);
             output.set(Some(controller));
-            layout()
+            layout(tessera_ui::layout::Stack)
                 .modifier(Modifier::new().vertical_scroll(controller))
                 .child(move || {
                     column().children(move || {

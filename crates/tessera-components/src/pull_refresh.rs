@@ -5,7 +5,8 @@
 //! Trigger data reloads when users pull down at the top of a scrollable view.
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, FocusModifierExt, Modifier, Px, RenderSlot, State,
-    current_frame_nanos, layout::layout, receive_frame_nanos, remember, tessera, use_context,
+    current_frame_nanos, layout::Stack, layout::layout, receive_frame_nanos, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -363,7 +364,11 @@ pub fn pull_refresh_indicator(
 ///     scrollable::ScrollableController,
 ///     text::text,
 /// };
-/// use tessera_ui::{Modifier, layout::layout, remember, tessera};
+/// use tessera_ui::{
+///     Modifier,
+///     layout::{Stack, layout},
+///     remember, tessera,
+/// };
 ///
 /// #[tessera]
 /// fn demo() {
@@ -377,7 +382,7 @@ pub fn pull_refresh_indicator(
 ///                 .refreshing(false)
 ///                 .controller(refresh_controller)
 ///                 .child(move || {
-///                     layout()
+///                     layout(Stack)
 ///                         .modifier(Modifier::new().vertical_scroll(scroll))
 ///                         .child(move || {
 ///                             column().children(|| {
@@ -512,7 +517,7 @@ pub fn pull_refresh(
         }))
         .with_parent(parent_nested_scroll);
 
-    layout()
+    layout(Stack)
         .modifier(
             modifier.on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
                 if coordinate_scale.get() != transform.scale() {
@@ -532,14 +537,14 @@ pub fn pull_refresh(
                 .alignment(Alignment::TopCenter)
                 .children(move || {
                     child.render();
-                    layout()
+                    layout(Stack)
                         .modifier(Modifier::new().align(Alignment::TopCenter))
                         .child(move || {
                             let offset = indicator_offset_dp(
                                 controller,
                                 indicator_size.unwrap_or(PullRefreshDefaults::INDICATOR_SIZE),
                             );
-                            layout()
+                            layout(Stack)
                                 .modifier(Modifier::new().offset(Dp(0.0), offset))
                                 .child(move || {
                                     if let Some(indicator) = indicator {

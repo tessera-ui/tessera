@@ -6,7 +6,7 @@
 
 use tessera_ui::{
     CallbackWith, Dp, FocusModifierExt, Modifier, RenderSlot, ScrollEventSource, State,
-    current_frame_nanos, layout::layout, receive_frame_nanos, remember, tessera,
+    current_frame_nanos, layout::Stack, layout::layout, receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
@@ -393,7 +393,7 @@ pub fn app_bar_scroll_provider(
             ScrollVelocity::ZERO
         }));
     let child = child.unwrap_or_else(RenderSlot::empty);
-    layout()
+    layout(Stack)
         .modifier(Modifier::new().on_local_to_window(
             move |transform: tessera_ui::LocalToWindow| {
                 if coordinate_scale.get() != transform.scale() {

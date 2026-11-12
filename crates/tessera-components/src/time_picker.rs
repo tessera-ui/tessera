@@ -12,7 +12,7 @@ use tessera_ui::{
     MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PressKeyEventType, Px,
     PxPosition, RenderSlot, State,
     accesskit::{Role, Toggled},
-    layout::{MeasureScope, layout},
+    layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera,
     time::{SystemTime, UNIX_EPOCH},
@@ -336,31 +336,30 @@ fn time_picker_content(
     let input = snapshot.display_mode == TimePickerDisplayMode::Input;
     #[cfg(test)]
     let modifier = modifier.push_semantics(TimePickerTag("time-picker"));
-    layout()
-        .modifier(modifier)
-        .policy(TimePickerMeasure {
-            arrangement,
-            input,
-            is_24_hour: snapshot.is_24_hour,
-        })
-        .child(move || {
-            time_number(state, TimePickerSelection::Hour, input);
-            let theme = use_context::<MaterialTheme>().unwrap().get();
-            surface()
-                .modifier(Modifier::new().size(Dp(24.0), Dp(if input { 72.0 } else { 80.0 })))
-                .style(Color::TRANSPARENT.into())
-                .content_alignment(Alignment::Center)
-                .child(move || {
-                    text(":").style(theme.typography.display_large);
-                });
-            time_number(state, TimePickerSelection::Minute, input);
-            if !snapshot.is_24_hour {
-                time_period_selector(state, input);
-            }
-            if !input {
-                time_clock(state, hour_step, minute_step);
-            }
-        });
+    tessera_ui::layout::layout(TimePickerMeasure {
+        arrangement,
+        input,
+        is_24_hour: snapshot.is_24_hour,
+    })
+    .modifier(modifier)
+    .child(move || {
+        time_number(state, TimePickerSelection::Hour, input);
+        let theme = use_context::<MaterialTheme>().unwrap().get();
+        surface()
+            .modifier(Modifier::new().size(Dp(24.0), Dp(if input { 72.0 } else { 80.0 })))
+            .style(Color::TRANSPARENT.into())
+            .content_alignment(Alignment::Center)
+            .child(move || {
+                text(":").style(theme.typography.display_large);
+            });
+        time_number(state, TimePickerSelection::Minute, input);
+        if !snapshot.is_24_hour {
+            time_period_selector(state, input);
+        }
+        if !input {
+            time_clock(state, hour_step, minute_step);
+        }
+    });
 }
 
 #[cfg(test)]
@@ -385,7 +384,7 @@ struct TimePickerMeasure {
     is_24_hour: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for TimePickerMeasure {
+impl tessera_ui::LayoutPolicy for TimePickerMeasure {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = *scope.parent_constraint().as_ref();
         let horizontal = !self.input
@@ -654,8 +653,7 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
         remember(InteractionState::new),
         remember(InteractionState::new),
     ];
-    layout()
-        .policy(PeriodMeasure { input })
+    tessera_ui::layout::layout(PeriodMeasure { input })
         .modifier(Modifier::new().semantics(SemanticsArgs {
             test_tag: cfg!(test).then(|| "time-period".to_owned()),
             role: Some(Role::RadioGroup),
@@ -664,8 +662,7 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
             ..Default::default()
         }))
         .child(move || {
-            layout()
-                .policy(PeriodVisualMeasure { input })
+            tessera_ui::layout::layout(PeriodVisualMeasure { input })
                 .modifier(
                     Modifier::new()
                         .clip_shape(theme.shapes.small)
@@ -755,7 +752,7 @@ struct PeriodMeasure {
     input: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for PeriodMeasure {
+impl tessera_ui::LayoutPolicy for PeriodMeasure {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = *scope.parent_constraint().as_ref();
         let width = parent.width.clamp(Dp(52.0).to_px());
@@ -809,7 +806,7 @@ struct PeriodVisualMeasure {
     input: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for PeriodVisualMeasure {
+impl tessera_ui::LayoutPolicy for PeriodVisualMeasure {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = *scope.parent_constraint().as_ref();
         let width = parent.width.clamp(Dp(52.0).to_px());
@@ -955,7 +952,7 @@ impl ClockLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for ClockLayout {
+impl tessera_ui::LayoutPolicy for ClockLayout {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let size = CLOCK_SIZE.to_px();
         let mut result = LayoutResult::new(ComputedData {
@@ -1240,7 +1237,7 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
         minute_step,
         focus,
     };
-    layout()
+    tessera_ui::layout::layout(policy.clone())
         .modifier(
             Modifier::new()
                 .size(CLOCK_SIZE, CLOCK_SIZE)
@@ -1261,7 +1258,6 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
                 .focus_restorer(Some(focus.with(|focus| focus.requesters[focus.anchor])))
                 .push_pointer_preview_input(interaction),
         )
-        .policy(policy.clone())
         .child(move || {
             surface()
                 .modifier(Modifier::new().size(CLOCK_SIZE, CLOCK_SIZE))
@@ -1469,56 +1465,55 @@ pub fn time_picker_dialog(
     let modifier = Modifier::new();
     #[cfg(test)]
     let modifier = modifier.push_semantics(TimePickerTag("time-picker-dialog"));
-    layout()
-        .modifier(modifier)
-        .policy(TimeDialogMeasure {
-            arrangement: picker_layout.unwrap_or_default(),
-            input: state.with(|state| state.display_mode() == TimePickerDisplayMode::Input),
-        })
-        .child(move || {
-            text(
-                title
-                    .clone()
-                    .unwrap_or_else(|| I18N.text("md3-select-time")),
-            )
-            .style(theme.typography.label_medium)
-            .color(theme.color_scheme.on_surface_variant);
-            time_picker()
-                .modifier(picker_modifier.clone())
-                .state(state)
-                .hour_step(picker_hour_step)
-                .minute_step(picker_minute_step)
-                .layout(picker_layout.unwrap_or_default());
-            row()
-                .modifier(Modifier::new().fill_max_width().height(Dp(40.0)))
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .children(move || {
-                    if show_mode_toggle {
-                        time_display_mode_toggle(state);
-                    }
-                    spacer().modifier(Modifier::new().weight(1.0));
-                    provide_context(
-                        || ContentColor {
-                            current: theme.color_scheme.primary,
-                        },
-                        || {
-                            row()
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .children(move || {
-                                    if let Some(dismiss) = dismiss_button {
-                                        dismiss.render();
-                                    }
-                                    if dismiss_button.is_some() && confirm_button.is_some() {
-                                        spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                    }
-                                    if let Some(confirm) = confirm_button {
-                                        confirm.render();
-                                    }
-                                });
-                        },
-                    );
-                });
-        });
+    tessera_ui::layout::layout(TimeDialogMeasure {
+        arrangement: picker_layout.unwrap_or_default(),
+        input: state.with(|state| state.display_mode() == TimePickerDisplayMode::Input),
+    })
+    .modifier(modifier)
+    .child(move || {
+        text(
+            title
+                .clone()
+                .unwrap_or_else(|| I18N.text("md3-select-time")),
+        )
+        .style(theme.typography.label_medium)
+        .color(theme.color_scheme.on_surface_variant);
+        time_picker()
+            .modifier(picker_modifier.clone())
+            .state(state)
+            .hour_step(picker_hour_step)
+            .minute_step(picker_minute_step)
+            .layout(picker_layout.unwrap_or_default());
+        row()
+            .modifier(Modifier::new().fill_max_width().height(Dp(40.0)))
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .children(move || {
+                if show_mode_toggle {
+                    time_display_mode_toggle(state);
+                }
+                spacer().modifier(Modifier::new().weight(1.0));
+                provide_context(
+                    || ContentColor {
+                        current: theme.color_scheme.primary,
+                    },
+                    || {
+                        row()
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move || {
+                                if let Some(dismiss) = dismiss_button {
+                                    dismiss.render();
+                                }
+                                if dismiss_button.is_some() && confirm_button.is_some() {
+                                    spacer().modifier(Modifier::new().width(Dp(8.0)));
+                                }
+                                if let Some(confirm) = confirm_button {
+                                    confirm.render();
+                                }
+                            });
+                    },
+                );
+            });
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -1527,7 +1522,7 @@ struct TimeDialogMeasure {
     input: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for TimeDialogMeasure {
+impl tessera_ui::LayoutPolicy for TimeDialogMeasure {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = *scope.parent_constraint().as_ref();
         let children = scope.children();

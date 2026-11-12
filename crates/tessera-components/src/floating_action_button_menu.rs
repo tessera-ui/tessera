@@ -10,7 +10,7 @@ use tessera_ui::{
     RenderSlot, State,
     accesskit::{HasPopup, Role},
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::MeasureScope,
     modifier::FocusModifierExt as _,
     receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -208,7 +208,7 @@ struct MenuLayout {
     bounds: State<PanelBounds>,
 }
 
-impl tessera_ui::LayoutModifierNode for MenuLayout {
+impl tessera_ui::LayoutPolicy for MenuLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let main = children[0].measure(input, &input.parent_constraint().without_min())?;
@@ -252,7 +252,7 @@ struct PanelLayout {
     alignment: FloatingActionButtonMenuAlignment,
 }
 
-impl tessera_ui::LayoutModifierNode for PanelLayout {
+impl tessera_ui::LayoutPolicy for PanelLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let button = children[1].measure(input, &input.parent_constraint().without_min())?;
@@ -305,7 +305,7 @@ struct ActionContentLayout {
     has_icon: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for ActionContentLayout {
+impl tessera_ui::LayoutPolicy for ActionContentLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let padding = Dp(24.0).to_px();
@@ -349,7 +349,7 @@ impl tessera_ui::LayoutModifierNode for ActionContentLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for RevealLayout {
+impl tessera_ui::LayoutPolicy for RevealLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let child = input.children()[0];
         let size = child.measure(input, &input.parent_constraint().without_min())?;
@@ -567,23 +567,22 @@ pub fn floating_action_button_menu(
         previous.set(expanded);
         pending_focus.set(true);
     }
-    layout()
-        .modifier(modifier.unwrap_or_default())
-        .policy(MenuLayout {
-            alignment,
-            bounds: bounds.clone(),
-        })
-        .child(move || {
-            boxed()
-                .modifier(Modifier::new().semantics(SemanticsArgs {
-                    hidden: data.with(|data| data.expanded),
-                    merge_descendants: true,
-                    ..Default::default()
-                }))
-                .children_optional(main_content.clone());
-            fab_menu_scrim(data, state, motion).bounds(bounds.clone());
-            fab_menu_panel(data, state, motion, pending_focus);
-        });
+    tessera_ui::layout::layout(MenuLayout {
+        alignment,
+        bounds: bounds.clone(),
+    })
+    .modifier(modifier.unwrap_or_default())
+    .child(move || {
+        boxed()
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                hidden: data.with(|data| data.expanded),
+                merge_descendants: true,
+                ..Default::default()
+            }))
+            .children_optional(main_content.clone());
+        fab_menu_scrim(data, state, motion).bounds(bounds.clone());
+        fab_menu_panel(data, state, motion, pending_focus);
+    });
 }
 
 #[tessera]
@@ -660,109 +659,107 @@ fn fab_menu_panel(
             }
         },
     );
-    layout()
-        .modifier(modifier)
-        .policy(PanelLayout {
-            alignment: snapshot.alignment,
-        })
-        .child(move || {
-            column()
-                .modifier(
-                    Modifier::new()
-                        .clip_to_bounds()
-                        .vertical_scroll(scroll)
-                        .semantics(SemanticsArgs {
-                            role: Some(Role::Menu),
-                            hidden: !data.with(|data| data.expanded),
-                            merge_descendants: true,
-                            ..Default::default()
-                        }),
-                )
-                .cross_axis_alignment(
-                    if data.with(|data| data.alignment) == FloatingActionButtonMenuAlignment::End {
-                        CrossAxisAlignment::End
-                    } else {
-                        CrossAxisAlignment::Start
-                    },
-                )
-                .children(move || {
-                    let first_visible = motion.with(|motion| {
-                        motion
-                            .items
-                            .iter()
-                            .position(|item| item.opacity.value() > 0.001)
-                    });
-                    for index in 0..data.with(|data| data.items.len()) {
-                        fab_menu_action(
-                            index,
-                            data,
-                            state,
-                            motion,
-                            first_visible.is_some_and(|first| index > first),
-                        );
-                    }
-                });
-            let snapshot = data.get();
-            let progress = motion.with(|motion| motion.toggle.value().clamp(0.0, 1.0));
-            let corner =
-                RoundedCorner::manual(Dp(16.0 + 12.0 * f64::from(progress)), 3.0 - progress);
-            let semantics = SemanticsArgs {
-                expanded: Some(snapshot.expanded),
-                has_popup: Some(HasPopup::Menu),
-                ..Default::default()
-            };
-            surface()
-                .modifier(
-                    Modifier::new()
-                        .size(Dp(56.0), Dp(56.0))
-                        .semantics(semantics)
-                        .on_globally_positioned(move |_| {
-                            if pending_focus.get() {
-                                pending_focus.set(false);
-                                data.with(|data| data.trigger).request_focus();
-                            }
-                        }),
-                )
-                .style(
-                    snapshot.colors[0]
-                        .lerp(&snapshot.colors[2], progress)
-                        .into(),
-                )
-                .content_color(snapshot.colors[1].lerp(&snapshot.colors[3], progress))
-                .shape(Shape::RoundedRectangle {
-                    top_left: corner,
-                    top_right: corner,
-                    bottom_right: corner,
-                    bottom_left: corner,
-                })
-                .elevation(Dp(6.0))
-                .tonal_elevation(Dp(0.0))
-                .content_alignment(Alignment::Center)
-                .enabled(snapshot.enabled)
-                .accessibility_label(if snapshot.expanded {
-                    snapshot.close_label.clone()
+    tessera_ui::layout::layout(PanelLayout {
+        alignment: snapshot.alignment,
+    })
+    .modifier(modifier)
+    .child(move || {
+        column()
+            .modifier(
+                Modifier::new()
+                    .clip_to_bounds()
+                    .vertical_scroll(scroll)
+                    .semantics(SemanticsArgs {
+                        role: Some(Role::Menu),
+                        hidden: !data.with(|data| data.expanded),
+                        merge_descendants: true,
+                        ..Default::default()
+                    }),
+            )
+            .cross_axis_alignment(
+                if data.with(|data| data.alignment) == FloatingActionButtonMenuAlignment::End {
+                    CrossAxisAlignment::End
                 } else {
-                    snapshot.open_label.clone()
-                })
-                .accessibility_focusable(snapshot.enabled)
-                .focus_requester(snapshot.trigger)
-                .focus_properties(focus_properties(&snapshot, snapshot.items.len()))
-                .on_click(move || {
-                    state.with_mut(FloatingActionButtonMenuState::toggle);
-                })
-                .child(move || {
-                    icon()
-                        .painter(if data.with(|data| data.expanded) {
-                            filled::CLOSE_SVG
-                        } else {
-                            filled::ADD_SVG
-                        })
-                        .size(Dp(24.0
-                            - f64::from(
-                                motion.with(|motion| motion.toggle.value().clamp(0.0, 1.0)),
-                            ) * 4.0));
+                    CrossAxisAlignment::Start
+                },
+            )
+            .children(move || {
+                let first_visible = motion.with(|motion| {
+                    motion
+                        .items
+                        .iter()
+                        .position(|item| item.opacity.value() > 0.001)
                 });
-        });
+                for index in 0..data.with(|data| data.items.len()) {
+                    fab_menu_action(
+                        index,
+                        data,
+                        state,
+                        motion,
+                        first_visible.is_some_and(|first| index > first),
+                    );
+                }
+            });
+        let snapshot = data.get();
+        let progress = motion.with(|motion| motion.toggle.value().clamp(0.0, 1.0));
+        let corner = RoundedCorner::manual(Dp(16.0 + 12.0 * f64::from(progress)), 3.0 - progress);
+        let semantics = SemanticsArgs {
+            expanded: Some(snapshot.expanded),
+            has_popup: Some(HasPopup::Menu),
+            ..Default::default()
+        };
+        surface()
+            .modifier(
+                Modifier::new()
+                    .size(Dp(56.0), Dp(56.0))
+                    .semantics(semantics)
+                    .on_globally_positioned(move |_| {
+                        if pending_focus.get() {
+                            pending_focus.set(false);
+                            data.with(|data| data.trigger).request_focus();
+                        }
+                    }),
+            )
+            .style(
+                snapshot.colors[0]
+                    .lerp(&snapshot.colors[2], progress)
+                    .into(),
+            )
+            .content_color(snapshot.colors[1].lerp(&snapshot.colors[3], progress))
+            .shape(Shape::RoundedRectangle {
+                top_left: corner,
+                top_right: corner,
+                bottom_right: corner,
+                bottom_left: corner,
+            })
+            .elevation(Dp(6.0))
+            .tonal_elevation(Dp(0.0))
+            .content_alignment(Alignment::Center)
+            .enabled(snapshot.enabled)
+            .accessibility_label(if snapshot.expanded {
+                snapshot.close_label.clone()
+            } else {
+                snapshot.open_label.clone()
+            })
+            .accessibility_focusable(snapshot.enabled)
+            .focus_requester(snapshot.trigger)
+            .focus_properties(focus_properties(&snapshot, snapshot.items.len()))
+            .on_click(move || {
+                state.with_mut(FloatingActionButtonMenuState::toggle);
+            })
+            .child(move || {
+                icon()
+                    .painter(if data.with(|data| data.expanded) {
+                        filled::CLOSE_SVG
+                    } else {
+                        filled::ADD_SVG
+                    })
+                    .size(Dp(24.0
+                        - f64::from(
+                            motion.with(|motion| motion.toggle.value().clamp(0.0, 1.0)),
+                        ) * 4.0));
+            });
+    });
 }
 
 #[tessera]
@@ -781,75 +778,72 @@ fn fab_menu_action(
         )
     });
     let visible = opacity > 0.001;
-    layout()
-        .modifier(
-            Modifier::new()
-                .clip_to_bounds()
-                .alpha(opacity)
-                .semantics(SemanticsArgs {
-                    hidden: !visible || !snapshot.expanded,
-                    test_tag: cfg!(test).then(|| format!("fab-menu-item-{index}")),
-                    merge_descendants: true,
-                    ..Default::default()
-                }),
-        )
-        .policy(RevealLayout {
-            progress,
-            visible,
-            gap,
-            alignment: snapshot.alignment,
-        })
-        .child(move || {
-            let snapshot = data.get();
-            let item = snapshot.items[index].clone();
-            let visible = motion.with(|motion| motion.items[index].opacity.value() > 0.001);
-            let enabled =
-                snapshot.enabled && snapshot.expanded && visible && item.on_click.is_some();
-            surface()
-                .modifier(
-                    Modifier::new()
-                        .default_min_size(Dp(56.0), Dp(56.0))
-                        .height(Dp(56.0)),
-                )
-                .style(snapshot.colors[0].into())
-                .content_color(snapshot.colors[1])
-                .shape(Shape::CAPSULE)
-                .content_alignment(Alignment::CenterStart)
-                .tonal_elevation(Dp(0.0))
-                .enabled(enabled)
-                .accessibility_role(Role::MenuItem)
-                .accessibility_label(item.label.clone())
-                .accessibility_focusable(enabled)
-                .focus_requester(snapshot.requesters[index])
-                .focus_properties(focus_properties(&snapshot, index).can_focus(enabled))
-                .on_click(move || {
-                    let snapshot = data.get();
-                    dismiss(state, snapshot.trigger);
-                    if let Some(callback) = &snapshot.items[index].on_click {
-                        callback.call();
-                    }
+    tessera_ui::layout::layout(RevealLayout {
+        progress,
+        visible,
+        gap,
+        alignment: snapshot.alignment,
+    })
+    .modifier(
+        Modifier::new()
+            .clip_to_bounds()
+            .alpha(opacity)
+            .semantics(SemanticsArgs {
+                hidden: !visible || !snapshot.expanded,
+                test_tag: cfg!(test).then(|| format!("fab-menu-item-{index}")),
+                merge_descendants: true,
+                ..Default::default()
+            }),
+    )
+    .child(move || {
+        let snapshot = data.get();
+        let item = snapshot.items[index].clone();
+        let visible = motion.with(|motion| motion.items[index].opacity.value() > 0.001);
+        let enabled = snapshot.enabled && snapshot.expanded && visible && item.on_click.is_some();
+        surface()
+            .modifier(
+                Modifier::new()
+                    .default_min_size(Dp(56.0), Dp(56.0))
+                    .height(Dp(56.0)),
+            )
+            .style(snapshot.colors[0].into())
+            .content_color(snapshot.colors[1])
+            .shape(Shape::CAPSULE)
+            .content_alignment(Alignment::CenterStart)
+            .tonal_elevation(Dp(0.0))
+            .enabled(enabled)
+            .accessibility_role(Role::MenuItem)
+            .accessibility_label(item.label.clone())
+            .accessibility_focusable(enabled)
+            .focus_requester(snapshot.requesters[index])
+            .focus_properties(focus_properties(&snapshot, index).can_focus(enabled))
+            .on_click(move || {
+                let snapshot = data.get();
+                dismiss(state, snapshot.trigger);
+                if let Some(callback) = &snapshot.items[index].on_click {
+                    callback.call();
+                }
+            })
+            .child(move || {
+                tessera_ui::layout::layout(ActionContentLayout {
+                    has_icon: data.with(|data| data.items[index].icon.is_some()),
                 })
                 .child(move || {
-                    layout()
-                        .policy(ActionContentLayout {
-                            has_icon: data.with(|data| data.items[index].icon.is_some()),
-                        })
-                        .child(move || {
-                            let item = data.with(|data| data.items[index].clone());
-                            let style = use_context::<MaterialTheme>()
-                                .unwrap()
-                                .get()
-                                .typography
-                                .title_medium;
-                            if let Some(painter) = item.icon.clone() {
-                                icon().painter(painter).size(Dp(24.0));
-                            }
-                            text(item.label.clone())
-                                .style(style)
-                                .modifier(Modifier::new().clip_to_bounds());
-                        });
+                    let item = data.with(|data| data.items[index].clone());
+                    let style = use_context::<MaterialTheme>()
+                        .unwrap()
+                        .get()
+                        .typography
+                        .title_medium;
+                    if let Some(painter) = item.icon.clone() {
+                        icon().painter(painter).size(Dp(24.0));
+                    }
+                    text(item.label.clone())
+                        .style(style)
+                        .modifier(Modifier::new().clip_to_bounds());
                 });
-        });
+            });
+    });
 }
 
 #[cfg(test)]

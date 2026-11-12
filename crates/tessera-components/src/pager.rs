@@ -10,7 +10,7 @@ use tessera_ui::{
     AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusProperties, KeyboardInput,
     KeyboardInputModifierNode, LayoutResult, MeasurementError, Modifier, PointerInput,
     PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventSource, State, key,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     normalize_platform_scroll_delta, receive_frame_nanos, remember, tessera, winit,
 };
@@ -485,11 +485,11 @@ struct PagerLayout {
 
 impl PartialEq for PagerLayout {
     fn eq(&self, other: &Self) -> bool {
-        tessera_ui::LayoutModifierNode::placement_eq(self, other)
+        tessera_ui::LayoutPolicy::placement_eq(self, other)
     }
 }
 
-impl tessera_ui::LayoutModifierNode for PagerLayout {
+impl tessera_ui::LayoutPolicy for PagerLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -587,7 +587,7 @@ impl tessera_ui::LayoutModifierNode for PagerLayout {
         self.measure_eq(other) && self.scroll_offset == other.scroll_offset
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -639,7 +639,7 @@ impl tessera_ui::DrawModifierNode for PagerLayout {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct ZeroLayout;
 
-impl tessera_ui::LayoutModifierNode for ZeroLayout {
+impl tessera_ui::LayoutPolicy for ZeroLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData::min_from_constraint(
             input.parent_constraint().as_ref(),
@@ -1082,7 +1082,7 @@ fn pager_render(
     );
 
     if visible_pages.is_empty() {
-        layout().modifier(args.modifier.clone()).policy(ZeroLayout);
+        tessera_ui::layout::layout(ZeroLayout).modifier(args.modifier.clone());
         return;
     }
 
@@ -1110,9 +1110,8 @@ fn pager_render(
         scroll_offset: controller.with(|current| current.scroll_offset_px()),
         controller,
     };
-    layout()
+    tessera_ui::layout::layout(policy.clone())
         .modifier(modifier)
-        .policy(policy.clone())
         .draw(policy)
         .child(move || {
             for page_index in visible_pages.iter().copied() {

@@ -7,10 +7,8 @@
 
 use tessera_ui::{
     Color, ComputedData, Dp, FrameNanosControl, LayoutResult, MeasurementError, Modifier,
-    accesskit::Role,
-    current_frame_nanos,
-    layout::{MeasureScope, layout},
-    receive_frame_nanos, remember, tessera, use_context,
+    accesskit::Role, current_frame_nanos, layout::MeasureScope, receive_frame_nanos, remember,
+    tessera, use_context,
 };
 
 use crate::{
@@ -95,7 +93,7 @@ impl AnimationClock {
 #[derive(Clone, Copy, PartialEq)]
 struct LoadingLayout;
 
-impl tessera_ui::LayoutModifierNode for LoadingLayout {
+impl tessera_ui::LayoutPolicy for LoadingLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData {
             width: input.parent_constraint().width().clamp(Dp(48.0).to_px()),
@@ -227,7 +225,7 @@ pub fn loading_indicator(
         numeric_range: progress.map(|_| (0.0, 1.0)),
         ..Default::default()
     };
-    layout()
+    tessera_ui::layout::layout(LoadingLayout)
         .modifier(
             modifier
                 .unwrap_or_default()
@@ -235,7 +233,6 @@ pub fn loading_indicator(
                 .clip_to_bounds()
                 .semantics(semantics),
         )
-        .policy(LoadingLayout)
         .draw(LoadingDraw { pose, color });
 }
 
@@ -304,9 +301,8 @@ mod tests {
             rotation: 0.0,
         });
         probe.set(Some(pose));
-        layout()
+        tessera_ui::layout::layout(LoadingLayout)
             .modifier(Modifier::new().size(Dp(64.0), Dp(64.0)))
-            .policy(LoadingLayout)
             .draw(LoadingDraw {
                 pose: pose.get(),
                 color: Color::WHITE,

@@ -11,6 +11,7 @@ use tessera_ui::{
     RenderSlotWith, State,
     accesskit::{Live, Role},
     current_frame_nanos,
+    layout::Stack,
     layout::layout,
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
@@ -545,46 +546,45 @@ pub fn snackbar(
             let message = message.clone();
             let action_label = action_label.clone();
             let dismiss_action_label = dismiss_action_label.clone();
-            layout()
-                .policy(snackbar_layout::SnackbarLayout {
-                    stacked: action_on_new_line,
-                    action: has_action,
-                    dismiss: show_dismiss_action,
-                    padding: content_padding,
-                })
-                .child(move || {
-                    provide_context(|| typography.body_medium, {
-                        let message = message.clone();
-                        move || {
-                            text(message.clone())
-                                .modifier(Modifier::new().semantics(SemanticsArgs {
-                                    role: Some(Role::Status),
-                                    live: Some(Live::Polite),
-                                    ..Default::default()
-                                }))
-                                .color(content_color);
-                        }
-                    });
-                    if let Some(label) = action_label.clone() {
-                        button()
-                            .text()
-                            .accessibility_label(label.clone())
-                            .on_click_shared(on_action.unwrap_or_default())
-                            .content_color(action_color)
-                            .ripple_color(action_color)
-                            .child(move || {
-                                text(label.clone()).color(action_color);
-                            });
-                    }
-                    if let Some(on_dismiss) = on_dismiss {
-                        icon_button()
-                            .icon(filled::CLOSE_SVG)
-                            .accessibility_label(dismiss_action_label.clone())
-                            .variant(IconButtonVariant::Standard)
-                            .content_color(dismiss_action_color)
-                            .on_click_shared(on_dismiss);
+            tessera_ui::layout::layout(snackbar_layout::SnackbarLayout {
+                stacked: action_on_new_line,
+                action: has_action,
+                dismiss: show_dismiss_action,
+                padding: content_padding,
+            })
+            .child(move || {
+                provide_context(|| typography.body_medium, {
+                    let message = message.clone();
+                    move || {
+                        text(message.clone())
+                            .modifier(Modifier::new().semantics(SemanticsArgs {
+                                role: Some(Role::Status),
+                                live: Some(Live::Polite),
+                                ..Default::default()
+                            }))
+                            .color(content_color);
                     }
                 });
+                if let Some(label) = action_label.clone() {
+                    button()
+                        .text()
+                        .accessibility_label(label.clone())
+                        .on_click_shared(on_action.unwrap_or_default())
+                        .content_color(action_color)
+                        .ripple_color(action_color)
+                        .child(move || {
+                            text(label.clone()).color(action_color);
+                        });
+                }
+                if let Some(on_dismiss) = on_dismiss {
+                    icon_button()
+                        .icon(filled::CLOSE_SVG)
+                        .accessibility_label(dismiss_action_label.clone())
+                        .variant(IconButtonVariant::Standard)
+                        .content_color(dismiss_action_color)
+                        .on_click_shared(on_dismiss);
+                }
+            });
         });
 }
 
@@ -711,14 +711,14 @@ pub fn snackbar_host(
         });
     }
     let data = record.map(|record| SnackbarData::new(record, state));
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let Some(data) = data.clone() else {
             return;
         };
         if let Some(snackbar_slot) = snackbar_slot {
             snackbar_slot.render(data.clone());
         } else {
-            layout()
+            layout(Stack)
                 .modifier(Modifier::new().padding(SnackbarDefaults::HOST_PADDING))
                 .child(move || {
                     snackbar_from_data().data(data.clone());

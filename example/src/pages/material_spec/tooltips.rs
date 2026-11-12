@@ -21,8 +21,7 @@ use tessera_components::{
 };
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, Dp, LayoutModifierChild, LayoutModifierInput,
-    LayoutModifierNode, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
-    RenderSlot, State,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, scaled_box, tessera, use_context,
@@ -1161,8 +1160,8 @@ fn tooltip_plain_placement_annotations(geometry: State<SpaceGeometry>) {
 #[derive(Clone, Copy, PartialEq)]
 struct TooltipTableColumnRule(State<PxSize>);
 
-impl LayoutModifierNode for TooltipTableColumnRule {
-    fn measure_content(
+impl tessera_ui::LayoutModifier for TooltipTableColumnRule {
+    fn measure(
         &self,
         _input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,

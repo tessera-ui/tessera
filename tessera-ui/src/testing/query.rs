@@ -303,9 +303,9 @@ mod tests {
     use super::*;
 
     use crate::{
-        AccessibilityActionHandler, ComputedData, Constraint, LayoutModifierNode, LayoutResult,
+        AccessibilityActionHandler, ComputedData, Constraint, LayoutPolicy, LayoutResult,
         MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode,
-        layout::{MeasureScope, layout},
+        layout::MeasureScope,
         tessera,
         testing::{layout_test, pump_layout_test_session, start_layout_test_session},
     };
@@ -323,7 +323,7 @@ mod tests {
     #[derive(Clone, PartialEq)]
     struct Figure(bool);
 
-    impl LayoutModifierNode for Figure {
+    impl LayoutPolicy for Figure {
         fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let mut result = LayoutResult::new(ComputedData {
                 width: Px(if self.0 { 50 } else { 30 }),
@@ -340,12 +340,10 @@ mod tests {
 
     #[tessera]
     fn query_figure() {
-        layout()
-            .policy(Figure(true))
+        crate::layout::layout(Figure(true))
             .modifier(Modifier::new().push_semantics(Target("parent", Role::Group)))
             .child(|| {
-                layout()
-                    .policy(Figure(false))
+                crate::layout::layout(Figure(false))
                     .modifier(Modifier::new().push_semantics(Target("target", Role::Button)));
             });
     }

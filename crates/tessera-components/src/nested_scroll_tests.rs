@@ -52,7 +52,7 @@ fn connection_fixture(
         observed,
     );
     connection.set(Some(inner));
-    tessera_ui::layout::layout();
+    tessera_ui::layout::layout(tessera_ui::layout::Stack);
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn nested_scroll_consumption_and_fling_cross_each_providers_local_space_once() {
 #[tessera]
 fn observe_ancestor(observed: TestProbe<Option<NestedScrollConnection>>) {
     observed.set(NestedScrollConnection::nearest());
-    tessera_ui::layout::layout();
+    tessera_ui::layout::layout(tessera_ui::layout::Stack);
 }
 
 #[tessera]
@@ -128,7 +128,7 @@ fn replaceable_scroll_owner(
         1 => tessera_ui::Modifier::new().nested_scroll(second),
         _ => tessera_ui::Modifier::new(),
     };
-    tessera_ui::layout::layout()
+    tessera_ui::layout::layout(tessera_ui::layout::Stack)
         .modifier(modifier)
         .child_shared(content);
 }

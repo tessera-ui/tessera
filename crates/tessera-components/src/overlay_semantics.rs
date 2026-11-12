@@ -5,7 +5,7 @@
 //! Name dialogs and hide background controls while a modal is visible.
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-use tessera_ui::{Modifier, RenderSlot, accesskit::Role, layout::layout, tessera};
+use tessera_ui::{Modifier, RenderSlot, accesskit::Role, layout::Stack, layout::layout, tessera};
 
 pub(crate) fn dialog_semantics(modifier: Modifier, label: Option<String>, modal: bool) -> Modifier {
     dialog_semantics_with_role(modifier, label, modal, Role::Dialog)
@@ -37,5 +37,5 @@ pub(crate) fn overlay_background(content: RenderSlot, blocked: bool) {
     } else {
         Modifier::new()
     };
-    layout().modifier(modifier).child_shared(content);
+    layout(Stack).modifier(modifier).child_shared(content);
 }

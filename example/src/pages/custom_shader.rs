@@ -140,7 +140,9 @@ fn raymarch_canvas(modifier: Modifier, time_scale_state: State<f32>) {
         camera_up,
     };
 
-    layout().modifier(modifier).draw(policy);
+    layout(tessera_ui::layout::Stack)
+        .modifier(modifier)
+        .draw(policy);
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]

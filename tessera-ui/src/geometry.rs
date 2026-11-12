@@ -233,7 +233,7 @@ impl crate::BuildModifierNode for ScaleChildren {
 #[derive(Clone, Copy, PartialEq)]
 struct ScaleLayout(f32);
 
-impl crate::LayoutModifierNode for ScaleLayout {
+impl crate::LayoutPolicy for ScaleLayout {
     fn measure(
         &self,
         scope: &mut crate::layout::MeasureScope<'_>,
@@ -297,12 +297,16 @@ impl crate::LayoutModifierNode for ScaleLayout {
 /// ## Examples
 ///
 /// ```
-/// use tessera_ui::{LocalToWindow, Px, PxPosition, PxSize, layout::layout, scaled_box};
+/// use tessera_ui::{
+///     LocalToWindow, Px, PxPosition, PxSize,
+///     layout::{Stack, layout},
+///     scaled_box,
+/// };
 ///
 /// #[tessera_ui::tessera]
 /// fn preview() {
 ///     scaled_box(0.625).child(|| {
-///         layout().child(|| {});
+///         layout(Stack).child(|| {});
 ///     });
 /// }
 ///
@@ -317,8 +321,7 @@ pub fn scaled_box(scale: f32, child: Option<crate::RenderSlot>) {
     let transform = LocalToWindow::new(scale, PxPosition::ZERO)
         .expect("Scale must be finite, positive, and invertible");
     let child = child.unwrap_or_else(crate::RenderSlot::empty);
-    crate::layout::layout()
-        .policy(ScaleLayout(transform.scale()))
+    crate::layout::layout(ScaleLayout(transform.scale()))
         .modifier(crate::Modifier::new().push_build(ScaleChildren(transform.scale())))
         .child(move || child.render());
 }

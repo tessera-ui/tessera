@@ -8,7 +8,7 @@ use tessera_ui::{
     Callback, ComputedData, CursorEventContent, FocusManager, FocusRequester, FocusScopeNode,
     LayoutResult, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PxPosition,
     RenderSlot, RenderSlotWith, State, key,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
 };
@@ -290,7 +290,7 @@ impl Drop for MenuPopupLease {
 #[derive(Clone, PartialEq)]
 struct MenuHostLayout;
 
-impl tessera_ui::LayoutModifierNode for MenuHostLayout {
+impl tessera_ui::LayoutPolicy for MenuHostLayout {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let constraint = scope.parent_constraint().without_min();
         let mut size = ComputedData::ZERO;
@@ -340,8 +340,7 @@ pub(super) fn menu_host(provider: Option<MenuProviderConfig>) {
     }
     modifier = modifier.push_pointer_preview_input(MenuHierarchyPointer(host.clone()));
     let origin = host.origin;
-    layout()
-        .policy(MenuHostLayout)
+    tessera_ui::layout::layout(MenuHostLayout)
         .modifier(modifier.on_layout_coordinates(move |bounds| {
             origin.set_if_changed(bounds);
         }))
@@ -395,7 +394,7 @@ fn menu_popup_layer(request: Option<State<MenuPopupRequest>>) {
         menu_content: Some(value.content),
         ..Default::default()
     };
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         menu_provider_content().provider(provider.clone());
     });
 }

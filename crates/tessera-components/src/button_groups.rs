@@ -12,7 +12,7 @@ use tessera_ui::{
     RenderSlot, SemanticsModifierNode, State,
     accesskit::{Orientation, Role},
     current_frame_nanos, key,
-    layout::{MeasureScope, layout},
+    layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -77,8 +77,8 @@ impl ButtonGroupsBuilder {
     /// Add a child item and click callback.
     pub fn child<F, C, Output>(&self, child: F, on_click: C) -> Self
     where
-        F: Fn() -> Output + Send + Sync + 'static,
-        C: Fn(bool) + Send + Sync + 'static,
+        F: Fn() -> Output + 'static,
+        C: Fn(bool) + 'static,
     {
         self.props.append("child_closures", move |props| {
             props
@@ -98,8 +98,8 @@ impl ButtonGroupsBuilder {
     /// Add a child item and click callback using shared callbacks.
     pub fn child_shared(
         &self,
-        child: impl Into<RenderSlot> + Send + Sync + 'static,
-        on_click: impl Into<CallbackWith<bool>> + Send + Sync + 'static,
+        child: impl Into<RenderSlot> + 'static,
+        on_click: impl Into<CallbackWith<bool>> + 'static,
     ) -> Self {
         self.props.append("child_closures", move |props| {
             props
@@ -424,203 +424,199 @@ pub fn button_groups(
     {
         state.with_mut(|state| state.set_selected(index, true));
     }
-    layout()
-        .modifier(
-            modifier
-                .unwrap_or_default()
-                .focus_group()
-                .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true))
-                .push_semantics(ButtonGroupsSemantics)
-                .size_in(
-                    None,
-                    None,
-                    Some(Dp(metrics.container_height.0.max(48.0))),
-                    None,
-                ),
-        )
-        .policy(ButtonGroupsRowLayout {
-            connected: style == ButtonGroupsStyle::Connected,
-            spacing: metrics.between_space.into(),
-            expanded_ratio,
-        })
-        .child(move || {
-            for (index, child_closure) in child_closures.iter().cloned().enumerate() {
-                key(index, || {
-                    let on_click_closure = on_click_closures[index];
-                    let item_layout = metrics.clone();
-                    let enabled = enabled && !disabled_indices.contains(&index);
-                    let presentation = presentation_states.get(index).copied();
+    tessera_ui::layout::layout(ButtonGroupsRowLayout {
+        connected: style == ButtonGroupsStyle::Connected,
+        spacing: metrics.between_space.into(),
+        expanded_ratio,
+    })
+    .modifier(
+        modifier
+            .unwrap_or_default()
+            .focus_group()
+            .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true))
+            .push_semantics(ButtonGroupsSemantics)
+            .size_in(
+                None,
+                None,
+                Some(Dp(metrics.container_height.0.max(48.0))),
+                None,
+            ),
+    )
+    .child(move || {
+        for (index, child_closure) in child_closures.iter().cloned().enumerate() {
+            key(index, || {
+                let on_click_closure = on_click_closures[index];
+                let item_layout = metrics.clone();
+                let enabled = enabled && !disabled_indices.contains(&index);
+                let presentation = presentation_states.get(index).copied();
 
-                    let interaction = remember(InteractionState::new);
-                    let width_motion = remember(PressWidthMotion::default);
-                    let item = RenderSlot::new(move || {
-                        let actived = state.with(|state| state.is_selected(index));
-                        let pressed = enabled
-                            && (presentation == Some(InteractionVisualState::Pressed)
-                                || interaction.with(InteractionState::is_pressed));
-                        let resting_shape = if actived {
-                            item_layout.active_button_shape
-                        } else if child_len == 1 && style == ButtonGroupsStyle::Connected {
-                            let corner = item_layout.outer_corner;
+                let interaction = remember(InteractionState::new);
+                let width_motion = remember(PressWidthMotion::default);
+                let item = RenderSlot::new(move || {
+                    let actived = state.with(|state| state.is_selected(index));
+                    let pressed = enabled
+                        && (presentation == Some(InteractionVisualState::Pressed)
+                            || interaction.with(InteractionState::is_pressed));
+                    let resting_shape = if actived {
+                        item_layout.active_button_shape
+                    } else if child_len == 1 && style == ButtonGroupsStyle::Connected {
+                        let corner = item_layout.outer_corner;
+                        Shape::RoundedRectangle {
+                            top_left: corner,
+                            top_right: corner,
+                            bottom_right: corner,
+                            bottom_left: corner,
+                        }
+                    } else if index == 0 {
+                        item_layout.inactive_button_shape_start
+                    } else if index == child_len - 1 {
+                        item_layout.inactive_button_shape_end
+                    } else {
+                        item_layout.inactive_button_shape
+                    };
+                    let shape = if pressed {
+                        if style == ButtonGroupsStyle::Connected && child_len > 1 {
+                            let radius = match size {
+                                ButtonGroupsSize::Large => Dp(12.0),
+                                ButtonGroupsSize::ExtraLarge => Dp(16.0),
+                                _ => Dp(4.0),
+                            };
+                            let inner = RoundedCorner::manual(radius, 2.0);
+                            Shape::RoundedRectangle {
+                                top_left: if index == 0 {
+                                    item_layout.outer_corner
+                                } else {
+                                    inner
+                                },
+                                top_right: if index + 1 == child_len {
+                                    item_layout.outer_corner
+                                } else {
+                                    inner
+                                },
+                                bottom_right: if index + 1 == child_len {
+                                    item_layout.outer_corner
+                                } else {
+                                    inner
+                                },
+                                bottom_left: if index == 0 {
+                                    item_layout.outer_corner
+                                } else {
+                                    inner
+                                },
+                            }
+                        } else {
+                            let corner =
+                                RoundedCorner::manual(ButtonSize::from(size).pressed_radius(), 2.0);
                             Shape::RoundedRectangle {
                                 top_left: corner,
                                 top_right: corner,
                                 bottom_right: corner,
                                 bottom_left: corner,
                             }
-                        } else if index == 0 {
-                            item_layout.inactive_button_shape_start
-                        } else if index == child_len - 1 {
-                            item_layout.inactive_button_shape_end
-                        } else {
-                            item_layout.inactive_button_shape
-                        };
-                        let shape = if pressed {
-                            if style == ButtonGroupsStyle::Connected && child_len > 1 {
-                                let radius = match size {
-                                    ButtonGroupsSize::Large => Dp(12.0),
-                                    ButtonGroupsSize::ExtraLarge => Dp(16.0),
-                                    _ => Dp(4.0),
-                                };
-                                let inner = RoundedCorner::manual(radius, 2.0);
-                                Shape::RoundedRectangle {
-                                    top_left: if index == 0 {
-                                        item_layout.outer_corner
-                                    } else {
-                                        inner
-                                    },
-                                    top_right: if index + 1 == child_len {
-                                        item_layout.outer_corner
-                                    } else {
-                                        inner
-                                    },
-                                    bottom_right: if index + 1 == child_len {
-                                        item_layout.outer_corner
-                                    } else {
-                                        inner
-                                    },
-                                    bottom_left: if index == 0 {
-                                        item_layout.outer_corner
-                                    } else {
-                                        inner
-                                    },
-                                }
-                            } else {
-                                let corner = RoundedCorner::manual(
-                                    ButtonSize::from(size).pressed_radius(),
-                                    2.0,
-                                );
-                                Shape::RoundedRectangle {
-                                    top_left: corner,
-                                    top_right: corner,
-                                    bottom_right: corner,
-                                    bottom_left: corner,
-                                }
+                        }
+                    } else {
+                        resting_shape
+                    };
+                    let motion = remember(|| ShapeMotion::new(shape));
+                    let mut next = motion.get();
+                    next.retarget(shape, enabled, current_frame_nanos());
+                    if next != motion.get() {
+                        motion.set(next);
+                    }
+                    if next.is_animating() {
+                        receive_frame_nanos(move |frame| {
+                            let mut next = motion.get();
+                            next.advance(frame);
+                            if next != motion.get() {
+                                motion.set(next);
                             }
-                        } else {
-                            resting_shape
-                        };
-                        let motion = remember(|| ShapeMotion::new(shape));
-                        let mut next = motion.get();
-                        next.retarget(shape, enabled, current_frame_nanos());
-                        if next != motion.get() {
-                            motion.set(next);
-                        }
-                        if next.is_animating() {
-                            receive_frame_nanos(move |frame| {
-                                let mut next = motion.get();
-                                next.advance(frame);
-                                if next != motion.get() {
-                                    motion.set(next);
-                                }
-                                if next.is_animating() {
-                                    tessera_ui::FrameNanosControl::Continue
-                                } else {
-                                    tessera_ui::FrameNanosControl::Stop
-                                }
+                            if next.is_animating() {
+                                tessera_ui::FrameNanosControl::Continue
+                            } else {
+                                tessera_ui::FrameNanosControl::Stop
+                            }
+                        });
+                    }
+                    button()
+                        .variant(variant)
+                        .presentation_state_optional(presentation)
+                        .size(size.into())
+                        .content_padding(Padding::default())
+                        .selected(actived)
+                        .enabled(enabled)
+                        .accessibility_role(Role::CheckBox)
+                        .interaction_state(interaction)
+                        .on_click(move || {
+                            let mut next = width_motion.get();
+                            next.pulse(current_frame_nanos());
+                            if next != width_motion.get() {
+                                width_motion.set(next);
+                            }
+                            let active = state.with(|state| {
+                                state
+                                    .item_states
+                                    .get(&index)
+                                    .is_some_and(|item| item.actived)
                             });
-                        }
-                        button()
-                            .variant(variant)
-                            .presentation_state_optional(presentation)
-                            .size(size.into())
-                            .content_padding(Padding::default())
-                            .selected(actived)
-                            .enabled(enabled)
-                            .accessibility_role(Role::CheckBox)
-                            .interaction_state(interaction)
-                            .on_click(move || {
-                                let mut next = width_motion.get();
-                                next.pulse(current_frame_nanos());
-                                if next != width_motion.get() {
-                                    width_motion.set(next);
-                                }
-                                let active = state.with(|state| {
+                            let (mode, required) = selection_policy.get();
+                            if active
+                                && required
+                                && state.with(|state| {
                                     state
                                         .item_states
-                                        .get(&index)
-                                        .is_some_and(|item| item.actived)
-                                });
-                                let (mode, required) = selection_policy.get();
-                                if active
-                                    && required
-                                    && state.with(|state| {
-                                        state
-                                            .item_states
-                                            .values()
-                                            .filter(|item| item.actived)
-                                            .count()
-                                            == 1
-                                    })
-                                {
-                                    return;
-                                }
-                                state.with_mut(|s| {
-                                    if !active && mode == ButtonGroupsSelectionMode::Single {
-                                        for (other_index, item) in &mut s.item_states {
-                                            if *other_index != index && item.actived {
-                                                item.actived = false;
-                                            }
+                                        .values()
+                                        .filter(|item| item.actived)
+                                        .count()
+                                        == 1
+                                })
+                            {
+                                return;
+                            }
+                            state.with_mut(|s| {
+                                if !active && mode == ButtonGroupsSelectionMode::Single {
+                                    for (other_index, item) in &mut s.item_states {
+                                        if *other_index != index && item.actived {
+                                            item.actived = false;
                                         }
                                     }
+                                }
 
-                                    let item = s.item_state_mut(index);
-                                    item.actived = !active;
-                                });
-                                on_click_closure.call(!active);
-                            })
-                            .shape(motion.get().shape())
-                            .child(move || {
-                                let icon_size = ButtonSize::from(size).icon_size();
-                                provide_context(
-                                    || IconSize(icon_size),
-                                    move || {
-                                        let inherited = use_context::<IconSize>()
-                                            .expect("button group icon size");
-                                        if inherited.get().0 != icon_size {
-                                            inherited.set(IconSize(icon_size));
-                                        }
-                                        layout()
-                                            .policy(GroupContentLayout {
-                                                padding: ButtonSize::from(size).content_padding(),
-                                                compress: style == ButtonGroupsStyle::Standard,
-                                            })
-                                            .child_shared(child_closure);
-                                    },
-                                );
+                                let item = s.item_state_mut(index);
+                                item.actived = !active;
                             });
-                    });
-                    group_item()
-                        .interaction_state(interaction)
-                        .width_motion(width_motion)
-                        .presented_pressed(presentation == Some(InteractionVisualState::Pressed))
-                        .enabled(enabled && expanded_ratio > 0.0 && child_len > 1)
-                        .compression_limit(ButtonSize::from(size).content_padding().right)
-                        .connected(style == ButtonGroupsStyle::Connected)
-                        .child_shared(item);
+                            on_click_closure.call(!active);
+                        })
+                        .shape(motion.get().shape())
+                        .child(move || {
+                            let icon_size = ButtonSize::from(size).icon_size();
+                            provide_context(
+                                || IconSize(icon_size),
+                                move || {
+                                    let inherited =
+                                        use_context::<IconSize>().expect("button group icon size");
+                                    if inherited.get().0 != icon_size {
+                                        inherited.set(IconSize(icon_size));
+                                    }
+                                    tessera_ui::layout::layout(GroupContentLayout {
+                                        padding: ButtonSize::from(size).content_padding(),
+                                        compress: style == ButtonGroupsStyle::Standard,
+                                    })
+                                    .child_shared(child_closure);
+                                },
+                            );
+                        });
                 });
-            }
-        });
+                group_item()
+                    .interaction_state(interaction)
+                    .width_motion(width_motion)
+                    .presented_pressed(presentation == Some(InteractionVisualState::Pressed))
+                    .enabled(enabled && expanded_ratio > 0.0 && child_len > 1)
+                    .compression_limit(ButtonSize::from(size).content_padding().right)
+                    .connected(style == ButtonGroupsStyle::Connected)
+                    .child_shared(item);
+            });
+        }
+    });
 }
 
 #[tessera]
@@ -660,7 +656,7 @@ fn group_item(
             }
         });
     }
-    layout()
+    tessera_ui::layout::layout(GroupItemLayout)
         .modifier(
             Modifier::new()
                 .push_parent_data(WidthData {
@@ -673,7 +669,6 @@ fn group_item(
                     presented_pressed,
                 }),
         )
-        .policy(GroupItemLayout)
         .child(move || {
             child.render();
         });
@@ -682,7 +677,7 @@ fn group_item(
 #[derive(Clone, PartialEq)]
 struct GroupItemLayout;
 
-impl tessera_ui::LayoutModifierNode for GroupItemLayout {
+impl tessera_ui::LayoutPolicy for GroupItemLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let child = input.children()[0];
         let constraint = *input.parent_constraint().as_ref();
@@ -699,7 +694,7 @@ struct GroupContentLayout {
     compress: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for GroupContentLayout {
+impl tessera_ui::LayoutPolicy for GroupContentLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = *input.parent_constraint().as_ref();
         let children = input.children();
@@ -765,7 +760,7 @@ struct ButtonGroupsRowLayout {
     expanded_ratio: f32,
 }
 
-impl tessera_ui::LayoutModifierNode for ButtonGroupsRowLayout {
+impl tessera_ui::LayoutPolicy for ButtonGroupsRowLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let parent = *input.parent_constraint().as_ref();

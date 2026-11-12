@@ -5,8 +5,8 @@
 //! Keep list content consistent across layout and state changes.
 
 use tessera_ui::{
-    ComputedData, Constraint, Dp, LayoutModifierNode, LayoutResult, MeasurementError, Px,
-    PxPosition, layout::MeasureScope,
+    ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult, MeasurementError, Px, PxPosition,
+    layout::MeasureScope,
 };
 
 use crate::modifier::Padding;
@@ -27,7 +27,7 @@ fn rounded(value: Dp) -> Px {
     Px(value.to_pixels_f32().round().max(0.0) as i32)
 }
 
-impl LayoutModifierNode for ListItemLayout {
+impl LayoutPolicy for ListItemLayout {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = scope.children();
         let parent = *scope.parent_constraint().as_ref();

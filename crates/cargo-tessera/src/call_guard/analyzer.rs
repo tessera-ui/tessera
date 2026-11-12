@@ -36,6 +36,7 @@ use super::{
 
 mod lint_levels;
 mod lints;
+mod model_init;
 mod private_api;
 
 const RENDER_SLOT_TYPE_PATH: &str = "tessera_ui::prop::RenderSlot";
@@ -58,6 +59,10 @@ const USE_CONTEXT_PATH: &str = "tessera_ui::context::use_context";
 const PUBLIC_USE_CONTEXT_PATH: &str = "tessera_ui::use_context";
 const RECEIVE_FRAME_NANOS_PATH: &str = "tessera_ui::runtime::receive_frame_nanos";
 const PUBLIC_RECEIVE_FRAME_NANOS_PATH: &str = "tessera_ui::receive_frame_nanos";
+const LAUNCH_PATH: &str = "tessera_ui::runtime::launch";
+const PUBLIC_LAUNCH_PATH: &str = "tessera_ui::launch";
+const LAUNCH_ONCE_PATH: &str = "tessera_ui::runtime::launch_once";
+const PUBLIC_LAUNCH_ONCE_PATH: &str = "tessera_ui::launch_once";
 const KEY_PATH: &str = "tessera_ui::runtime::key";
 const PUBLIC_KEY_PATH: &str = "tessera_ui::key";
 const RUNTIME_MODULE_PATH_PREFIX: &str = "tessera_ui::runtime::";
@@ -733,6 +738,9 @@ impl<'db> CallAnalyzer<'db> {
         color: ContextColor,
         allow_entry_point_new: bool,
     ) {
+        let diagnostics = self.remembered_state_in_model(&call);
+        self.diagnostics.extend(diagnostics);
+        self.check_model_state(&call);
         let Some(target) = self.resolve_call_target(&call) else {
             return;
         };
@@ -955,6 +963,8 @@ impl<'db> CallAnalyzer<'db> {
             RECEIVE_FRAME_NANOS_PATH | PUBLIC_RECEIVE_FRAME_NANOS_PATH => {
                 Some(TesseraRuntimeApi::ReceiveFrameNanos)
             }
+            LAUNCH_PATH | PUBLIC_LAUNCH_PATH => Some(TesseraRuntimeApi::Launch),
+            LAUNCH_ONCE_PATH | PUBLIC_LAUNCH_ONCE_PATH => Some(TesseraRuntimeApi::LaunchOnce),
             KEY_PATH | PUBLIC_KEY_PATH => Some(TesseraRuntimeApi::Key),
             path => {
                 let name = path.rsplit("::").next().unwrap_or(path);
@@ -1397,6 +1407,8 @@ impl<'db> CallAnalyzer<'db> {
                 | "provide_context"
                 | "use_context"
                 | "receive_frame_nanos"
+                | "launch"
+                | "launch_once"
                 | "key"
         ) || self.index.tessera_function_names.contains(last)
             || Self::is_render_slot_constructor_path(path)
@@ -2094,6 +2106,36 @@ pub fn root(value: usize) {
     }
 
     #[test]
+    fn launch_requires_a_tessera_context() {
+        let diagnostics = diagnostics_for(
+            r#"
+use tessera_ui::{launch, launch_once};
+
+#[tessera_ui::tessera]
+pub fn screen(id: u32) {
+    launch(id, async {});
+    launch_once(async {});
+}
+
+pub fn helper() {
+    launch(1u32, async {});
+    tessera_ui::launch_once(async {});
+}
+"#,
+        );
+        assert_eq!(
+            count_containing(&diagnostics, "(launch)"),
+            1,
+            "{diagnostics:?}"
+        );
+        assert_eq!(
+            count_containing(&diagnostics, "(launch_once)"),
+            1,
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn user_functions_named_like_runtime_apis_remain_plain() {
         let diagnostics = diagnostics_for(
             r#"
@@ -2498,6 +2540,81 @@ pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
         assert_eq!(cross.2, changed.2);
         assert!(cross.0 > 0 && !cross.1);
         assert_eq!(pass(Some("wasm32-unknown-unknown")), (0, true, cross.2));
+    }
+
+    #[test]
+    fn remembered_states_captured_by_a_model_initializer_are_reported() {
+        let diagnostics = diagnostics_for(
+            r#"
+use tessera_ui::{Model, State, remember};
+
+struct Search {
+    query: State<String>,
+    owned: State<u32>,
+}
+
+#[tessera_ui::tessera]
+pub fn screen() {
+    let query = remember(String::new);
+    let unrelated = remember(|| 0u32);
+    let _ = unrelated;
+    let _model = Model::new_with(move || Search {
+        query,
+        owned: State::new(0),
+    });
+}
+"#,
+        );
+        assert_eq!(diagnostics, ["remembered state stored in a model"]);
+    }
+
+    #[test]
+    fn model_state_is_created_only_by_model_initializers() {
+        let diagnostics = diagnostics_for(
+            r#"
+use tessera_ui::{Model, ModelInit, ModelStore, State};
+
+struct Search {
+    value: State<u32>,
+}
+
+impl ModelInit for Search {
+    fn init() -> Self {
+        Self { value: State::new(0) }
+    }
+}
+
+struct NotAModel {
+    value: State<u32>,
+}
+
+impl Default for NotAModel {
+    fn default() -> Self {
+        Self { value: State::new(1) }
+    }
+}
+
+fn helper() -> State<u32> {
+    State::new(2)
+}
+
+#[tessera_ui::tessera]
+pub fn screen(model: Model<Search>) {
+    let _ = model;
+    let _inline = Model::new_with(|| State::new(3u32));
+    let _stored = ModelStore::new().model(|| State::new(4u32));
+    let _component = State::new(5u32);
+}
+"#,
+        );
+        assert_eq!(
+            diagnostics,
+            [
+                "`State::new` outside a model initializer",
+                "`State::new` outside a model initializer",
+                "`State::new` outside a model initializer",
+            ]
+        );
     }
 
     fn diagnostics_for(source: &str) -> Vec<String> {

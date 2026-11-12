@@ -1,9 +1,9 @@
 use crate::{
     ComputedData, Constraint, CursorEventContent, FocusModifierExt, GestureState,
-    LayoutCoordinates, LayoutModifierNode, LayoutResult, Modifier, PointerChange, PointerEventPass,
+    LayoutCoordinates, LayoutPolicy, LayoutResult, Modifier, PointerChange, PointerEventPass,
     PointerInput, PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent,
     ScrollEventSource, State,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     testing::{
         layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
         start_layout_test_session,
@@ -39,7 +39,7 @@ struct GeometryProbe {
 #[derive(Clone, PartialEq)]
 struct SizeOnlyRoot(State<bool>);
 
-impl LayoutModifierNode for SizeOnlyRoot {
+impl LayoutPolicy for SizeOnlyRoot {
     fn measure(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -59,7 +59,7 @@ impl LayoutModifierNode for SizeOnlyRoot {
 #[derive(Clone, PartialEq)]
 struct SizeOnlyContent(State<ComputedData>);
 
-impl LayoutModifierNode for SizeOnlyContent {
+impl LayoutPolicy for SizeOnlyContent {
     fn measure(
         &self,
         _scope: &mut MeasureScope<'_>,
@@ -85,8 +85,7 @@ fn size_only_observer_fixture(probe: GeometryProbe) {
     probe.outer_scale.set(Some(scale));
     probe.content_size.set(Some(size));
     probe.late_observer.set(Some(late));
-    layout()
-        .policy(SizeOnlyRoot(visible))
+    crate::layout::layout(SizeOnlyRoot(visible))
         .modifier(Modifier::new().push_placement(StateTranslation(parent)))
         .child(move || {
             let probe = probe.clone();
@@ -101,7 +100,7 @@ fn size_only_observer_fixture(probe: GeometryProbe) {
                 } else {
                     modifier
                 };
-                layout().policy(SizeOnlyContent(size)).modifier(modifier);
+                crate::layout::layout(SizeOnlyContent(size)).modifier(modifier);
             });
         });
 }
@@ -337,7 +336,7 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
 #[derive(Clone, PartialEq)]
 struct SpaceContent(State<bool>, State<ComputedData>);
 
-impl LayoutModifierNode for SpaceContent {
+impl LayoutPolicy for SpaceContent {
     fn measure(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -381,8 +380,7 @@ fn relative_observer_fixture(probe: GeometryProbe) {
     probe.space_offset.set(Some(space_offset));
     probe.counter_offset.set(Some(counter_offset));
     probe.content_size.set(Some(size));
-    layout()
-        .policy(Anchor)
+    crate::layout::layout(Anchor)
         .modifier(Modifier::new().push_placement(StateTranslation(parent)))
         .child(move || {
             let probe = probe.clone();
@@ -393,8 +391,7 @@ fn relative_observer_fixture(probe: GeometryProbe) {
                 } else {
                     Modifier::new()
                 };
-                layout()
-                    .policy(Anchor)
+                crate::layout::layout(Anchor)
                     .modifier(modifier.push_placement(StateTranslation(space_offset)))
                     .child(move || {
                         let probe = probe.clone();
@@ -405,12 +402,11 @@ fn relative_observer_fixture(probe: GeometryProbe) {
                             } else {
                                 Modifier::new()
                             };
-                            layout()
-                                .policy(SpaceContent(visible, size))
+                            crate::layout::layout(SpaceContent(visible, size))
                                 .modifier(modifier.push_placement(StateTranslation(counter_offset)))
                                 .child(move || {
                                     let probe = probe.clone();
-                                    layout().modifier(
+                                    layout(Stack).modifier(
                                         Modifier::new()
                                             .push_placement(StateTranslation(child))
                                             .on_layout_rect_in_space(probe.space_rects.recorder())
@@ -657,10 +653,10 @@ fn observer_follow_fixture(probe: GeometryProbe) {
         height: Px(10),
     });
     probe.parent_offset.set(Some(source));
-    layout().child(move || {
+    layout(Stack).child(move || {
         let input = probe.input.clone();
         scaled_box(0.625).child(move || {
-            layout().policy(SizeOnlyContent(size)).modifier(
+            crate::layout::layout(SizeOnlyContent(size)).modifier(
                 Modifier::new()
                     .push_pointer_input(ObserveInput(false, input.clone()))
                     .push_placement(StateTranslation(source))
@@ -670,7 +666,7 @@ fn observer_follow_fixture(probe: GeometryProbe) {
                     }),
             );
         });
-        layout().policy(SizeOnlyContent(size)).modifier(
+        crate::layout::layout(SizeOnlyContent(size)).modifier(
             Modifier::new()
                 .push_pointer_input(ObserveInput(true, probe.input.clone()))
                 .push_placement(StateTranslation(observed))
@@ -776,12 +772,11 @@ fn inherited_translation_fixture(probe: GeometryProbe) {
     let child = crate::remember(|| PxPosition::from_f32_xy(2.25, 3.5));
     probe.parent_offset.set(Some(parent));
     probe.child_offset.set(Some(child));
-    layout()
-        .policy(Anchor)
+    crate::layout::layout(Anchor)
         .modifier(Modifier::new().push_placement(StateTranslation(parent)))
         .child(move || {
             let probe = probe.clone();
-            layout().modifier(
+            layout(Stack).modifier(
                 Modifier::new()
                     .push_placement(StateTranslation(child))
                     .push_semantics(GeometryChildTag)
@@ -868,7 +863,7 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
 #[derive(Clone, PartialEq)]
 struct PlaceWhenVisible(State<bool>);
 
-impl LayoutModifierNode for PlaceWhenVisible {
+impl LayoutPolicy for PlaceWhenVisible {
     fn measure(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -891,12 +886,12 @@ fn hidden_position_observer_fixture(probe: GeometryProbe) {
     let parent = crate::remember(|| PxPosition::ZERO);
     probe.observer_visible.set(Some(visible));
     probe.parent_offset.set(Some(parent));
-    layout()
-        .policy(PlaceWhenVisible(visible))
+    crate::layout::layout(PlaceWhenVisible(visible))
         .modifier(Modifier::new().push_placement(StateTranslation(parent)))
         .child(move || {
             let probe = probe.clone();
-            layout().modifier(Modifier::new().on_layout_coordinates(probe.coordinates.recorder()));
+            layout(Stack)
+                .modifier(Modifier::new().on_layout_coordinates(probe.coordinates.recorder()));
         });
 }
 
@@ -948,7 +943,7 @@ fn position_observer_resumes_after_hidden_ancestor_moves() {
 #[derive(Clone, PartialEq)]
 struct Anchor;
 
-impl LayoutModifierNode for Anchor {
+impl LayoutPolicy for Anchor {
     fn measure(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -966,7 +961,7 @@ impl LayoutModifierNode for Anchor {
 #[derive(Clone, PartialEq)]
 struct Content;
 
-impl LayoutModifierNode for Content {
+impl LayoutPolicy for Content {
     fn measure(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -1008,7 +1003,7 @@ impl PointerInputModifierNode for ObserveInput {
 #[derive(Clone, PartialEq)]
 struct ResponsiveInputStage(State<ComputedData>);
 
-impl LayoutModifierNode for ResponsiveInputStage {
+impl LayoutPolicy for ResponsiveInputStage {
     fn measure(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -1034,13 +1029,11 @@ fn dynamic_scale_input_fixture(probe: GeometryProbe) {
     });
     probe.content_size.set(Some(stage_size));
     let content = crate::RenderSlot::new(move || {
-        layout()
-            .policy(SizeOnlyContent(size))
+        crate::layout::layout(SizeOnlyContent(size))
             .modifier(Modifier::new().push_pointer_input(ObserveInput(true, probe.input.clone())));
     });
-    layout().policy(SizeOnlyRoot(visible)).child(move || {
-        layout()
-            .policy(ResponsiveInputStage(stage_size))
+    crate::layout::layout(SizeOnlyRoot(visible)).child(move || {
+        crate::layout::layout(ResponsiveInputStage(stage_size))
             .modifier(Modifier::new().on_layout_coordinates(
                 move |coordinates: crate::LayoutCoordinates| {
                     let next = coordinates.local_size.width.0 as f32 / 200.0;
@@ -1132,14 +1125,13 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
 
 #[crate::tessera]
 fn scale_fixture(probe: GeometryProbe) {
-    layout()
-        .policy(Anchor)
+    crate::layout::layout(Anchor)
         .modifier(Modifier::new().push_pointer_input(ObserveInput(false, probe.input.clone())))
         .child(move || {
             let probe = probe.clone();
             scaled_box(0.625).child(move || {
                 let probe = probe.clone();
-                layout().policy(Content).modifier(
+                crate::layout::layout(Content).modifier(
                     Modifier::new()
                         .push_pointer_input(ObserveInput(true, probe.input.clone()))
                         .on_layout_coordinates(probe.coordinates.recorder()),

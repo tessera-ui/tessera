@@ -10,7 +10,7 @@ use tessera_ui::{
     RenderSlotWith, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, remember_with_key, tessera, use_context, winit,
 };
@@ -157,7 +157,7 @@ impl Default for DialogController {
 
 fn make_keyboard_handler(
     on_close: Callback,
-) -> Box<dyn for<'a> Fn(tessera_ui::KeyboardInput<'a>) + Send + Sync + 'static> {
+) -> Box<dyn for<'a> Fn(tessera_ui::KeyboardInput<'a>) + 'static> {
     Box::new(move |mut input| {
         let mut handled = false;
         input.keyboard_events.retain(|event| {
@@ -233,63 +233,65 @@ fn dialog_content_wrapper(
         focus_scope.request_focus();
     }
     let policy = DialogContentLayout { alpha };
-    layout().policy(policy.clone()).draw(policy).child(move || {
-        let content = content;
-        let modifier = modifier.clone();
-        boxed()
-            .modifier(Modifier::new().fill_max_size())
-            .alignment(Alignment::Center)
-            .children(move || {
-                let content = content;
-                let modifier = modifier.clone();
-                surface()
-                    .style(Color::TRANSPARENT.into())
-                    .modifier(
-                        Modifier::new()
-                            .constrain(Some(AxisConstraint::NONE), Some(AxisConstraint::NONE))
-                            .padding_all(if full_screen { Dp::ZERO } else { Dp(24.0) }),
-                    )
-                    .child(move || {
-                        let content = content;
-                        surface()
-                            .modifier(if full_screen {
-                                modifier.clone().width(Dp(560.0)).fill_max_height()
-                            } else {
-                                modifier.clone()
-                            })
-                            .style(
-                                use_context::<MaterialTheme>()
-                                    .expect("MaterialTheme must be provided")
-                                    .get()
-                                    .color_scheme
-                                    .surface_container_high
-                                    .into(),
-                            )
-                            .elevation(if full_screen { Dp::ZERO } else { Dp(6.0) })
-                            .shape(if full_screen {
-                                Shape::RECTANGLE
-                            } else {
-                                Shape::RoundedRectangle {
-                                    top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                    top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                    bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                    bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                }
-                            })
-                            .block_input(true)
-                            .child(move || {
-                                let content = content;
-                                layout()
-                                    .modifier(Modifier::new().padding_all(padding))
-                                    .child(move || {
-                                        if let Some(content) = content {
-                                            content.render(context);
-                                        }
-                                    });
-                            });
-                    });
-            });
-    });
+    tessera_ui::layout::layout(policy.clone())
+        .draw(policy)
+        .child(move || {
+            let content = content;
+            let modifier = modifier.clone();
+            boxed()
+                .modifier(Modifier::new().fill_max_size())
+                .alignment(Alignment::Center)
+                .children(move || {
+                    let content = content;
+                    let modifier = modifier.clone();
+                    surface()
+                        .style(Color::TRANSPARENT.into())
+                        .modifier(
+                            Modifier::new()
+                                .constrain(Some(AxisConstraint::NONE), Some(AxisConstraint::NONE))
+                                .padding_all(if full_screen { Dp::ZERO } else { Dp(24.0) }),
+                        )
+                        .child(move || {
+                            let content = content;
+                            surface()
+                                .modifier(if full_screen {
+                                    modifier.clone().width(Dp(560.0)).fill_max_height()
+                                } else {
+                                    modifier.clone()
+                                })
+                                .style(
+                                    use_context::<MaterialTheme>()
+                                        .expect("MaterialTheme must be provided")
+                                        .get()
+                                        .color_scheme
+                                        .surface_container_high
+                                        .into(),
+                                )
+                                .elevation(if full_screen { Dp::ZERO } else { Dp(6.0) })
+                                .shape(if full_screen {
+                                    Shape::RECTANGLE
+                                } else {
+                                    Shape::RoundedRectangle {
+                                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                    }
+                                })
+                                .block_input(true)
+                                .child(move || {
+                                    let content = content;
+                                    layout(Stack)
+                                        .modifier(Modifier::new().padding_all(padding))
+                                        .child(move || {
+                                            if let Some(content) = content {
+                                                content.render(context);
+                                            }
+                                        });
+                                });
+                        });
+                });
+        });
 }
 
 #[derive(Clone, PartialEq)]
@@ -297,7 +299,7 @@ struct DialogContentLayout {
     alpha: f32,
 }
 
-impl tessera_ui::LayoutModifierNode for DialogContentLayout {
+impl tessera_ui::LayoutPolicy for DialogContentLayout {
     fn measure_eq(&self, _other: &Self) -> bool {
         true
     }
@@ -476,7 +478,7 @@ fn dialog_provider_render(
     let focus_state = remember(ModalFocusState::default);
     let visible = is_open || is_animating;
     let modifier = modal_focus_modifier(Modifier::new(), focus_state, visible, focus_scope);
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         overlay_background(main_content, visible);
         modal_back_handler(is_open, on_close_request).on_preview(move |event| {
             controller.with_mut(|controller| {
@@ -723,99 +725,98 @@ pub fn basic_dialog(
     };
     let scroll = remember(ScrollableController::new);
 
-    layout()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::new(
-                Dp(232.0).into(),
-                Some(Dp(512.0).into()),
-            )),
-            Some(AxisConstraint::NONE),
-        ))
-        .policy(BasicDialogLayout {
-            center: icon.is_some(),
-        })
-        .child(move || {
-            let headline = headline.clone();
-            let supporting_text = supporting_text.clone();
-            column().cross_axis_alignment(alignment).children(move || {
-                if let Some(icon) = icon.as_ref() {
-                    let icon = *icon;
-                    let icon_color = scheme.secondary;
-                    {
-                        provide_context(
-                            || ContentColor {
-                                current: icon_color,
-                            },
-                            || {
-                                icon.render();
-                            },
-                        );
-                    };
-                    {
-                        spacer().modifier(Modifier::new().height(Dp(16.0)));
-                    };
-                }
+    tessera_ui::layout::layout(BasicDialogLayout {
+        center: icon.is_some(),
+    })
+    .modifier(Modifier::new().constrain(
+        Some(AxisConstraint::new(
+            Dp(232.0).into(),
+            Some(Dp(512.0).into()),
+        )),
+        Some(AxisConstraint::NONE),
+    ))
+    .child(move || {
+        let headline = headline.clone();
+        let supporting_text = supporting_text.clone();
+        column().cross_axis_alignment(alignment).children(move || {
+            if let Some(icon) = icon.as_ref() {
+                let icon = *icon;
+                let icon_color = scheme.secondary;
+                {
+                    provide_context(
+                        || ContentColor {
+                            current: icon_color,
+                        },
+                        || {
+                            icon.render();
+                        },
+                    );
+                };
+                {
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                };
+            }
 
-                if let Some(headline) = headline.as_ref() {
-                    let headline = headline.clone();
-                    {
-                        text(headline.clone())
-                            .style(theme.typography.headline_small)
-                            .color(scheme.on_surface);
-                    };
-                    {
-                        spacer().modifier(Modifier::new().height(Dp(16.0)));
-                    };
-                }
-            });
-
-            column()
-                .modifier(Modifier::new().vertical_scroll(scroll))
-                .cross_axis_alignment(alignment)
-                .children(move || {
-                    if let Some(content) = content {
-                        content.render();
-                    } else {
-                        text(supporting_text.clone())
-                            .style(theme.typography.body_medium)
-                            .color(scheme.on_surface_variant);
-                    }
-                });
-
-            column().children(move || {
-                if confirm_button.is_some() || dismiss_button.is_some() {
-                    {
-                        spacer().modifier(Modifier::new().height(Dp(24.0)));
-                    };
-                    let action_color = scheme.primary;
-                    {
-                        provide_context(
-                            || ContentColor {
-                                current: action_color,
-                            },
-                            || {
-                                flow_row()
-                                    .modifier(Modifier::new().fill_max_width())
-                                    .main_axis_alignment(MainAxisAlignment::End)
-                                    .item_spacing(Dp(8.0))
-                                    .line_spacing(Dp(8.0))
-                                    .children(move || {
-                                        if let Some(dismiss) = dismiss_button.as_ref() {
-                                            let dismiss = *dismiss;
-                                            dismiss.render();
-                                        }
-
-                                        if let Some(confirm) = confirm_button.as_ref() {
-                                            let confirm = *confirm;
-                                            confirm.render();
-                                        }
-                                    });
-                            },
-                        );
-                    };
-                }
-            });
+            if let Some(headline) = headline.as_ref() {
+                let headline = headline.clone();
+                {
+                    text(headline.clone())
+                        .style(theme.typography.headline_small)
+                        .color(scheme.on_surface);
+                };
+                {
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                };
+            }
         });
+
+        column()
+            .modifier(Modifier::new().vertical_scroll(scroll))
+            .cross_axis_alignment(alignment)
+            .children(move || {
+                if let Some(content) = content {
+                    content.render();
+                } else {
+                    text(supporting_text.clone())
+                        .style(theme.typography.body_medium)
+                        .color(scheme.on_surface_variant);
+                }
+            });
+
+        column().children(move || {
+            if confirm_button.is_some() || dismiss_button.is_some() {
+                {
+                    spacer().modifier(Modifier::new().height(Dp(24.0)));
+                };
+                let action_color = scheme.primary;
+                {
+                    provide_context(
+                        || ContentColor {
+                            current: action_color,
+                        },
+                        || {
+                            flow_row()
+                                .modifier(Modifier::new().fill_max_width())
+                                .main_axis_alignment(MainAxisAlignment::End)
+                                .item_spacing(Dp(8.0))
+                                .line_spacing(Dp(8.0))
+                                .children(move || {
+                                    if let Some(dismiss) = dismiss_button.as_ref() {
+                                        let dismiss = *dismiss;
+                                        dismiss.render();
+                                    }
+
+                                    if let Some(confirm) = confirm_button.as_ref() {
+                                        let confirm = *confirm;
+                                        confirm.render();
+                                    }
+                                });
+                        },
+                    );
+                };
+            }
+        });
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -823,7 +824,7 @@ struct BasicDialogLayout {
     center: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for BasicDialogLayout {
+impl tessera_ui::LayoutPolicy for BasicDialogLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let (Some(header), Some(body), Some(actions)) = (

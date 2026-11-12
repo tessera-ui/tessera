@@ -5,9 +5,7 @@
 //! Layer top/bottom bars, floating buttons, and snackbars above app content.
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot, WindowInsets,
-    layout::{MeasureScope, layout},
-    tessera, use_context,
+    RenderSlot, WindowInsets, layout::MeasureScope, tessera, use_context,
 };
 
 use crate::{
@@ -76,7 +74,7 @@ impl ScaffoldLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for ScaffoldLayout {
+impl tessera_ui::LayoutPolicy for ScaffoldLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -317,46 +315,43 @@ pub fn scaffold(
     let snackbar_alignment = snackbar_alignment.unwrap_or(Alignment::BottomCenter);
     let snackbar_offset = snackbar_offset.unwrap_or([Dp(0.0), Dp(0.0)]);
 
-    layout()
-        .modifier(modifier)
-        .policy(ScaffoldLayout {
-            content_padding,
-            fab_alignment,
-            fab_offset: floating_action_button_offset,
-            snackbar_alignment,
-            snackbar_offset,
-            has_content: content.is_some(),
-            has_top_bar: top_bar.is_some(),
-            has_bottom_bar: bottom_bar.is_some(),
-            has_fab: floating_action_button.is_some(),
-            has_snackbar: snackbar_host.is_some(),
-        })
-        .child(move || {
-            if let Some(content) = content {
-                content.render();
-            }
-            if let Some(bottom_bar) = bottom_bar {
-                bottom_bar.render();
-            }
-            if let Some(top_bar) = top_bar {
-                top_bar.render();
-            }
-            if let Some(snackbar_host) = snackbar_host {
-                snackbar_host.render();
-            }
-            if let Some(floating_action_button) = floating_action_button {
-                floating_action_button.render();
-            }
-        });
+    tessera_ui::layout::layout(ScaffoldLayout {
+        content_padding,
+        fab_alignment,
+        fab_offset: floating_action_button_offset,
+        snackbar_alignment,
+        snackbar_offset,
+        has_content: content.is_some(),
+        has_top_bar: top_bar.is_some(),
+        has_bottom_bar: bottom_bar.is_some(),
+        has_fab: floating_action_button.is_some(),
+        has_snackbar: snackbar_host.is_some(),
+    })
+    .modifier(modifier)
+    .child(move || {
+        if let Some(content) = content {
+            content.render();
+        }
+        if let Some(bottom_bar) = bottom_bar {
+            bottom_bar.render();
+        }
+        if let Some(top_bar) = top_bar {
+            top_bar.render();
+        }
+        if let Some(snackbar_host) = snackbar_host {
+            snackbar_host.render();
+        }
+        if let Some(floating_action_button) = floating_action_button {
+            floating_action_button.render();
+        }
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
         ComputedData, Dp, Insets, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px,
-        WindowInsets,
-        layout::{MeasureScope, layout},
-        tessera,
+        WindowInsets, layout::MeasureScope, tessera,
     };
 
     use crate::modifier::{ModifierExt as _, SemanticsArgs};
@@ -369,7 +364,7 @@ mod tests {
         height: i32,
     }
 
-    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+    impl tessera_ui::LayoutPolicy for FixedTestLayout {
         fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
@@ -384,8 +379,7 @@ mod tests {
         let width = width.unwrap_or_default();
         let height = height.unwrap_or_default();
 
-        layout()
-            .policy(FixedTestLayout { width, height })
+        tessera_ui::layout::layout(FixedTestLayout { width, height })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),

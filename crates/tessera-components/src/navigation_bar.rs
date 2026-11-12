@@ -10,7 +10,7 @@ use tessera_ui::{
     RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -111,77 +111,76 @@ fn navigation_bar_item_view_content(
 
     let indicator_color = scheme.secondary_container.with_alpha(indicator_alpha);
 
-    layout()
-        .policy(NavigationBarItemLayout {
-            selection_fraction,
-            always_show_label,
-            has_label,
-            has_icon,
-            icon_position: item.icon_position,
-        })
-        .child(move || {
-            surface()
-                .style(SurfaceStyle::Filled {
-                    color: indicator_color,
-                })
-                .shape(Shape::CAPSULE)
-                .show_state_layer(false)
-                .show_ripple(false)
-                .child(|| {});
+    tessera_ui::layout::layout(NavigationBarItemLayout {
+        selection_fraction,
+        always_show_label,
+        has_label,
+        has_icon,
+        icon_position: item.icon_position,
+    })
+    .child(move || {
+        surface()
+            .style(SurfaceStyle::Filled {
+                color: indicator_color,
+            })
+            .shape(Shape::CAPSULE)
+            .show_state_layer(false)
+            .show_ripple(false)
+            .child(|| {});
 
-            surface()
-                .style(SurfaceStyle::Filled {
-                    color: Color::TRANSPARENT,
-                })
-                .shape(Shape::CAPSULE)
-                .enabled(true)
-                .interaction_state(interaction_state)
-                .focus_requester(focus_requester)
-                .show_focus_indicator(true)
-                .ripple_color(ripple_color)
-                .child(move || {
-                    surface()
-                        .style(SurfaceStyle::Filled {
-                            color: Color::TRANSPARENT,
-                        })
-                        .shape(Shape::CAPSULE)
-                        .modifier(Modifier::new().fill_max_size())
-                        .enabled(true)
-                        .ripple_color(ripple_color)
-                        .show_state_layer(false)
-                        .ripple_state(ripple_state)
-                        .child(|| {});
-                });
+        surface()
+            .style(SurfaceStyle::Filled {
+                color: Color::TRANSPARENT,
+            })
+            .shape(Shape::CAPSULE)
+            .enabled(true)
+            .interaction_state(interaction_state)
+            .focus_requester(focus_requester)
+            .show_focus_indicator(true)
+            .ripple_color(ripple_color)
+            .child(move || {
+                surface()
+                    .style(SurfaceStyle::Filled {
+                        color: Color::TRANSPARENT,
+                    })
+                    .shape(Shape::CAPSULE)
+                    .modifier(Modifier::new().fill_max_size())
+                    .enabled(true)
+                    .ripple_color(ripple_color)
+                    .show_state_layer(false)
+                    .ripple_state(ripple_state)
+                    .child(|| {});
+            });
 
-            if let Some(draw_icon) = item.icon {
-                provide_context(
-                    || ContentColor {
-                        current: icon_color,
-                    },
-                    || {
-                        let color = use_context::<ContentColor>().unwrap();
-                        if color.with(|value| value.current) != icon_color {
-                            color.set(ContentColor {
-                                current: icon_color,
-                            });
-                        }
-                        draw_icon.render();
-                    },
-                );
-            }
+        if let Some(draw_icon) = item.icon {
+            provide_context(
+                || ContentColor {
+                    current: icon_color,
+                },
+                || {
+                    let color = use_context::<ContentColor>().unwrap();
+                    if color.with(|value| value.current) != icon_color {
+                        color.set(ContentColor {
+                            current: icon_color,
+                        });
+                    }
+                    draw_icon.render();
+                },
+            );
+        }
 
-            if has_label {
-                let label = item.label.clone();
-                provide_context(
-                    || typography.label_medium,
-                    move || {
-                        text(label.clone())
-                            .color(label_color)
-                            .style(typography.label_medium);
-                    },
-                );
-            }
-        });
+        if has_label {
+            let label = item.label.clone();
+            provide_context(
+                || typography.label_medium,
+                move || {
+                    text(label.clone())
+                        .color(label_color)
+                        .style(typography.label_medium);
+                },
+            );
+        }
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -193,7 +192,7 @@ struct NavigationBarItemLayout {
     icon_position: NavigationBarIconPosition,
 }
 
-impl tessera_ui::LayoutModifierNode for NavigationBarItemLayout {
+impl tessera_ui::LayoutPolicy for NavigationBarItemLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -458,7 +457,7 @@ fn navigation_bar_item_view(
     };
 
     let modifier = Modifier::new().selectable_with(selectable_args);
-    layout().modifier(modifier).child({
+    layout(Stack).modifier(modifier).child({
         let item = item.clone();
         move || {
             navigation_bar_item_view_content()
@@ -559,7 +558,7 @@ pub fn navigation_bar_item(
         });
     }
 
-    layout()
+    layout(Stack)
         .modifier(Modifier::new().weight(1.0))
         .child(move || {
             let item = NavigationBarItemDefinition {
@@ -640,7 +639,7 @@ pub fn navigation_bar(
         })
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
-    layout().modifier(modifier).child({
+    layout(Stack).modifier(modifier).child({
         move || {
             surface()
                 .modifier(
@@ -651,15 +650,14 @@ pub fn navigation_bar(
                 .style(scheme.surface_container.into())
                 .block_input(true)
                 .child(move || {
-                    layout()
-                        .policy(NavigationBarLayout {
-                            centered: resolved_position == NavigationBarIconPosition::Start,
-                        })
-                        .child(move || {
-                            if let Some(content) = content {
-                                content.render(resolved_position);
-                            }
-                        });
+                    tessera_ui::layout::layout(NavigationBarLayout {
+                        centered: resolved_position == NavigationBarIconPosition::Start,
+                    })
+                    .child(move || {
+                        if let Some(content) = content {
+                            content.render(resolved_position);
+                        }
+                    });
                 });
         }
     });
@@ -670,7 +668,7 @@ struct NavigationBarLayout {
     centered: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for NavigationBarLayout {
+impl tessera_ui::LayoutPolicy for NavigationBarLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let width = input

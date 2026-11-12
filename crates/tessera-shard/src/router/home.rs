@@ -1,13 +1,12 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
-use tessera_ui::{State, remember, tessera};
+use tessera_ui::{State, provide_context, remember, tessera};
 
 use crate::router::{RouterController, RouterDestination, back::route_display};
 
 /// # shard_home
 ///
-/// Provide a router controller and render shard UI rooted at the active
-/// destination.
+/// Provide a router to shard pages and render the active destination.
 ///
 /// ## Usage
 ///
@@ -18,38 +17,40 @@ use crate::router::{RouterController, RouterDestination, back::route_display};
 /// ## Parameters
 ///
 /// - `root` — initial destination used when `controller` is omitted
-/// - `controller` — optional external router controller state
+/// - `controller` — optional external router controller state, provided to
+///   descendants as a `State<RouterController>` context
 ///
 /// ## Examples
 ///
 /// ```rust
-/// use tessera_shard::shard_home;
+/// use tessera_shard::{RouterController, shard, shard_home};
+/// use tessera_ui::{State, tessera};
 ///
-/// # #[derive(Clone)]
-/// # struct DemoDestination;
-/// # impl tessera_shard::router::RouterDestination for DemoDestination {
-/// #     fn exec_component(&self, _: tessera_ui::State<tessera_shard::RouterController>) {}
-/// #     fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn(tessera_ui::State<tessera_shard::RouterController>) + Send + Sync> {
-/// #         std::sync::Arc::new(|_| {})
-/// #     }
-/// #     fn destination_id() -> &'static str { "demo" }
-/// # }
-/// # #[tessera_ui::tessera]
-/// # fn demo() {
-/// shard_home().root(DemoDestination);
-/// # }
-/// # tessera_ui::testing::layout_test(demo).run();
+/// #[shard]
+/// fn home_page(router: State<RouterController>) {
+///     assert_eq!(router.with(RouterController::len), 1);
+/// }
+///
+/// #[tessera]
+/// fn app() {
+///     shard_home().root(HomePageDestination {});
+/// }
+///
+/// tessera_ui::testing::layout_test(app).run();
 /// ```
 #[tessera]
 pub fn shard_home(
-    #[prop(skip_setter)] root: Option<Arc<dyn RouterDestination>>,
+    #[prop(skip_setter)] root: Option<Rc<dyn RouterDestination>>,
     controller: Option<State<RouterController>>,
 ) {
     let internal_controller = remember({
         let root = root.clone();
-        move || match root.clone() {
-            Some(root) => RouterController::with_root_shared(root),
-            None => RouterController::new(),
+        move || {
+            let mut router = RouterController::new();
+            if let Some(root) = root {
+                router.push_route(root);
+            }
+            router
         }
     });
     let controller = controller.unwrap_or(internal_controller);
@@ -61,15 +62,13 @@ pub fn shard_home(
         panic!("shard_home requires `root` when `controller` is not provided");
     }
 
-    route_display(controller);
+    provide_context(|| controller, || route_display(controller));
 }
 
 impl ShardHomeBuilder {
-    pub fn root<T>(&self, root: T) -> Self
-    where
-        T: RouterDestination + 'static,
-    {
-        let value: Option<Arc<dyn RouterDestination>> = Some(Arc::new(root));
+    /// Sets the initial destination used when `controller` is omitted.
+    pub fn root(&self, root: impl RouterDestination) -> Self {
+        let value: Option<Rc<dyn RouterDestination>> = Some(Rc::new(root));
         self.props
             .configure("root", move |props| props.root = value);
         Self { props: self.props }

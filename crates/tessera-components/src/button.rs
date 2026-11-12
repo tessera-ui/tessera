@@ -9,7 +9,7 @@ use tessera_ui::{
     accesskit::{Role, Toggled},
     context::provide_context,
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -627,7 +627,7 @@ pub fn button(
             .get(),
     );
     let child = RenderSlot::new(move || {
-        layout()
+        layout(Stack)
             .modifier(Modifier::new().padding(padding))
             .child(move || {
                 provide_context(
@@ -638,61 +638,58 @@ pub fn button(
                             inherited.set(text_style);
                         }
                         if leading_icon.is_some() || trailing_icon.is_some() {
-                            layout()
-                                .policy(ButtonContentLayout {
-                                    leading: leading_icon.is_some(),
-                                    label: child.is_some(),
-                                    trailing: trailing_icon.is_some(),
-                                    icon_size: size.icon_size().to_px(),
-                                    spacing: size.icon_spacing().to_px(),
-                                })
-                                .child(move || {
-                                    if let Some(icon) = leading_icon {
-                                        boxed()
-                                            .modifier(
-                                                Modifier::new()
-                                                    .size(size.icon_size(), size.icon_size()),
-                                            )
-                                            .children(move || {
-                                                provide_context(
-                                                    || IconSize(size.icon_size()),
-                                                    move || {
-                                                        let inherited = use_context::<IconSize>()
-                                                            .expect("button icon size");
-                                                        if inherited.get().0 != size.icon_size() {
-                                                            inherited
-                                                                .set(IconSize(size.icon_size()));
-                                                        }
-                                                        icon.render();
-                                                    },
-                                                );
-                                            });
-                                    }
-                                    if let Some(child) = child {
-                                        boxed().children_shared(child);
-                                    }
-                                    if let Some(icon) = trailing_icon {
-                                        boxed()
-                                            .modifier(
-                                                Modifier::new()
-                                                    .size(size.icon_size(), size.icon_size()),
-                                            )
-                                            .children(move || {
-                                                provide_context(
-                                                    || IconSize(size.icon_size()),
-                                                    move || {
-                                                        let inherited = use_context::<IconSize>()
-                                                            .expect("button icon size");
-                                                        if inherited.get().0 != size.icon_size() {
-                                                            inherited
-                                                                .set(IconSize(size.icon_size()));
-                                                        }
-                                                        icon.render();
-                                                    },
-                                                );
-                                            });
-                                    }
-                                });
+                            tessera_ui::layout::layout(ButtonContentLayout {
+                                leading: leading_icon.is_some(),
+                                label: child.is_some(),
+                                trailing: trailing_icon.is_some(),
+                                icon_size: size.icon_size().to_px(),
+                                spacing: size.icon_spacing().to_px(),
+                            })
+                            .child(move || {
+                                if let Some(icon) = leading_icon {
+                                    boxed()
+                                        .modifier(
+                                            Modifier::new()
+                                                .size(size.icon_size(), size.icon_size()),
+                                        )
+                                        .children(move || {
+                                            provide_context(
+                                                || IconSize(size.icon_size()),
+                                                move || {
+                                                    let inherited = use_context::<IconSize>()
+                                                        .expect("button icon size");
+                                                    if inherited.get().0 != size.icon_size() {
+                                                        inherited.set(IconSize(size.icon_size()));
+                                                    }
+                                                    icon.render();
+                                                },
+                                            );
+                                        });
+                                }
+                                if let Some(child) = child {
+                                    boxed().children_shared(child);
+                                }
+                                if let Some(icon) = trailing_icon {
+                                    boxed()
+                                        .modifier(
+                                            Modifier::new()
+                                                .size(size.icon_size(), size.icon_size()),
+                                        )
+                                        .children(move || {
+                                            provide_context(
+                                                || IconSize(size.icon_size()),
+                                                move || {
+                                                    let inherited = use_context::<IconSize>()
+                                                        .expect("button icon size");
+                                                    if inherited.get().0 != size.icon_size() {
+                                                        inherited.set(IconSize(size.icon_size()));
+                                                    }
+                                                    icon.render();
+                                                },
+                                            );
+                                        });
+                                }
+                            });
                         } else if let Some(child) = child {
                             child.render();
                         }
@@ -773,7 +770,7 @@ struct ButtonContentLayout {
     spacing: Px,
 }
 
-impl tessera_ui::LayoutModifierNode for ButtonContentLayout {
+impl tessera_ui::LayoutPolicy for ButtonContentLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let expected =

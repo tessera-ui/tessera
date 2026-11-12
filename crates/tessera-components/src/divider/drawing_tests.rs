@@ -1,8 +1,6 @@
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, LayoutModifierNode, LayoutResult,
-    MeasurementError, Modifier, PxPosition, State,
-    layout::{MeasureScope, layout},
-    remember, tessera,
+    Color, Dp, HeadlessConfig, HeadlessRenderer, LayoutPolicy, LayoutResult, MeasurementError,
+    Modifier, PxPosition, State, layout::MeasureScope, remember, tessera,
 };
 
 use crate::{
@@ -17,7 +15,7 @@ use super::{DividerDefaults, horizontal_divider, vertical_divider};
 #[derive(Clone, PartialEq)]
 struct HalfPosition;
 
-impl LayoutModifierNode for HalfPosition {
+impl LayoutPolicy for HalfPosition {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let child = scope.children()[0];
         let constraint = scope.parent_constraint().without_min();
@@ -54,9 +52,8 @@ fn fractional_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) 
             } else {
                 modifier
             };
-            layout()
+            tessera_ui::layout::layout(HalfPosition)
                 .modifier(modifier)
-                .policy(HalfPosition)
                 .child(move || {
                     horizontal_divider()
                         .modifier(Modifier::new().width(Dp(8.0)).alpha(if faint.get() {

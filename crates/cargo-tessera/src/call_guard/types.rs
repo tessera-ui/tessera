@@ -164,6 +164,8 @@ pub(crate) enum TesseraRuntimeApi {
     ProvideContext,
     UseContext,
     ReceiveFrameNanos,
+    Launch,
+    LaunchOnce,
     Key,
     RenderSlotNew,
     RenderSlotWithNew,

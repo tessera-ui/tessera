@@ -778,10 +778,10 @@ mod tests {
 
     use crate::{
         AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
-        FrameNanosControl, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode,
-        LayoutResult, Modifier, NoopDrawModifier, PlacementModifierNode, Px, PxPosition,
-        RenderSlot, SemanticsModifierNode, State, component_tree::NodeRole, layout::MeasureScope,
-        receive_frame_nanos, remember, runtime::TesseraRuntime, tessera,
+        FrameNanosControl, LayoutModifierChild, LayoutModifierInput, LayoutPolicy, LayoutResult,
+        Modifier, NoopDrawModifier, PlacementModifierNode, Px, PxPosition, RenderSlot,
+        SemanticsModifierNode, State, StatefulLayoutPolicy, component_tree::NodeRole,
+        layout::MeasureScope, receive_frame_nanos, remember, runtime::TesseraRuntime, tessera,
     };
 
     use super::{
@@ -800,7 +800,7 @@ mod tests {
         width: State<i32>,
     }
 
-    impl LayoutModifierNode for MeasureOnlyWidthPolicy {
+    impl LayoutPolicy for MeasureOnlyWidthPolicy {
         fn measure(
             &self,
             _input: &mut MeasureScope<'_>,
@@ -815,7 +815,7 @@ mod tests {
     #[derive(Clone, PartialEq)]
     struct MeasureRevisionPolicy(State<u8>);
 
-    impl LayoutModifierNode for MeasureRevisionPolicy {
+    impl LayoutPolicy for MeasureRevisionPolicy {
         fn measure(
             &self,
             _: &mut MeasureScope<'_>,
@@ -832,11 +832,9 @@ mod tests {
     fn transparent_dirty_siblings(revision: State<u8>) {
         let stable = remember(|| 0_u8);
         for (tag, revision) in [("left", revision), ("right", revision), ("stable", stable)] {
-            crate::layout::layout()
-                .policy(MeasureRevisionPolicy(revision))
-                .modifier(
-                    Modifier::new().push_semantics(TestTagSemanticsModifier { tag: tag.into() }),
-                );
+            crate::layout::layout(MeasureRevisionPolicy(revision)).modifier(
+                Modifier::new().push_semantics(TestTagSemanticsModifier { tag: tag.into() }),
+            );
         }
     }
 
@@ -844,8 +842,7 @@ mod tests {
     fn dirty_siblings_fixture(probe: super::TestProbe<Option<State<u8>>>) {
         let revision = remember(|| 0_u8);
         probe.set(Some(revision));
-        crate::layout::layout()
-            .policy(VerticalStackPolicy)
+        crate::layout::layout(VerticalStackPolicy)
             .child(move || transparent_dirty_siblings(revision));
     }
 
@@ -872,11 +869,11 @@ mod tests {
     fn measure_only_width_fixture(probe: MeasureProbe) {
         let width = remember(|| 40);
         probe.width.set(Some(width));
-        crate::layout::layout()
-            .policy(MeasureOnlyWidthPolicy { width })
-            .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
+        crate::layout::layout(MeasureOnlyWidthPolicy { width }).modifier(
+            Modifier::new().push_semantics(TestTagSemanticsModifier {
                 tag: "measure-only".into(),
-            }));
+            }),
+        );
     }
 
     #[test]
@@ -911,23 +908,20 @@ mod tests {
         let observed_width = remember(|| 0);
         probe.width.set(Some(width));
         receive_frame_nanos(|_| FrameNanosControl::Continue);
-        crate::layout::layout()
-            .policy(MeasureOnlyWidthPolicy { width })
-            .modifier(
-                Modifier::new().on_layout_size_changed(move |size: crate::PxSize| {
-                    if observed_width.get() != size.width.0 {
-                        observed_width.set(size.width.0);
-                    }
-                }),
-            );
-        crate::layout::layout()
-            .policy(FixedSizePolicy {
-                width: observed_width.get(),
-                height: 20,
-            })
-            .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
-                tag: "layout-dependent-build".into(),
-            }));
+        crate::layout::layout(MeasureOnlyWidthPolicy { width }).modifier(
+            Modifier::new().on_layout_size_changed(move |size: crate::PxSize| {
+                if observed_width.get() != size.width.0 {
+                    observed_width.set(size.width.0);
+                }
+            }),
+        );
+        crate::layout::layout(FixedSizePolicy {
+            width: observed_width.get(),
+            height: 20,
+        })
+        .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
+            tag: "layout-dependent-build".into(),
+        }));
     }
 
     #[test]
@@ -957,15 +951,14 @@ mod tests {
     fn layout_feedback_fixture(probe: super::TestProbe<Option<State<i32>>>) {
         let width = remember(|| 1);
         probe.set(Some(width));
-        crate::layout::layout()
-            .policy(FixedSizePolicy {
-                width: width.get(),
-                height: 20,
-            })
-            .modifier(
-                Modifier::new()
-                    .on_layout_size_changed(move |size: crate::PxSize| width.set(size.width.0 + 1)),
-            );
+        crate::layout::layout(FixedSizePolicy {
+            width: width.get(),
+            height: 20,
+        })
+        .modifier(
+            Modifier::new()
+                .on_layout_size_changed(move |size: crate::PxSize| width.set(size.width.0 + 1)),
+        );
     }
 
     #[test]
@@ -988,7 +981,7 @@ mod tests {
         visible: Option<State<bool>>,
     }
 
-    impl LayoutModifierNode for RetainedChildPolicy {
+    impl LayoutPolicy for RetainedChildPolicy {
         fn measure(
             &self,
             scope: &mut MeasureScope<'_>,
@@ -1012,21 +1005,18 @@ mod tests {
         let width = remember(|| 40);
         probe.visible.set(Some(visible));
         probe.width.set(Some(width));
-        crate::layout::layout()
-            .policy(RetainedChildPolicy {
-                visible: Some(visible),
-            })
-            .child(move || {
-                crate::layout::layout()
-                    .policy(RetainedChildPolicy { visible: None })
-                    .child(move || {
-                        crate::layout::layout()
-                            .policy(MeasureOnlyWidthPolicy { width })
-                            .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
-                                tag: "retained-measure".into(),
-                            }));
-                    });
+        crate::layout::layout(RetainedChildPolicy {
+            visible: Some(visible),
+        })
+        .child(move || {
+            crate::layout::layout(RetainedChildPolicy { visible: None }).child(move || {
+                crate::layout::layout(MeasureOnlyWidthPolicy { width }).modifier(
+                    Modifier::new().push_semantics(TestTagSemanticsModifier {
+                        tag: "retained-measure".into(),
+                    }),
+                );
             });
+        });
     }
 
     #[test]
@@ -1136,12 +1126,11 @@ mod tests {
                     geometry_counts.with_mut(|counts| counts.2 += 1);
                 });
         }
-        crate::layout::layout()
-            .modifier(modifier)
-            .policy(FixedSizePolicy {
-                width: width.get(),
-                height: 20,
-            });
+        crate::layout::layout(FixedSizePolicy {
+            width: width.get(),
+            height: 20,
+        })
+        .modifier(modifier);
     }
 
     #[test]
@@ -1227,7 +1216,7 @@ mod tests {
     #[tessera]
     fn remembered_resource_child(owner: State<u32>, drops: super::TestProbe<usize>) {
         let _lease = remember(|| ResourceLease { owner, drops });
-        crate::layout::layout();
+        crate::layout::layout(crate::layout::Stack);
     }
 
     #[tessera]
@@ -1238,7 +1227,7 @@ mod tests {
         probe.owner.set(Some(owner));
         probe.local.set(Some(local));
         probe.child.set(Some(child));
-        crate::layout::layout().child(move || {
+        crate::layout::layout(crate::layout::Stack).child(move || {
             if local.get() {
                 let drops = drops.clone();
                 let _lease = remember(|| ResourceLease { owner, drops });
@@ -1306,7 +1295,7 @@ mod tests {
         assert_eq!(drops.get(), 6);
     }
 
-    impl crate::modifier::LayoutModifierNode for FixedSizePolicy {
+    impl crate::modifier::LayoutPolicy for FixedSizePolicy {
         fn measure(
             &self,
             input: &mut MeasureScope<'_>,
@@ -1329,7 +1318,7 @@ mod tests {
     #[derive(Clone, Default, PartialEq)]
     struct VerticalStackPolicy;
 
-    impl crate::modifier::LayoutModifierNode for VerticalStackPolicy {
+    impl crate::modifier::LayoutPolicy for VerticalStackPolicy {
         fn measure(
             &self,
             input: &mut MeasureScope<'_>,
@@ -1359,7 +1348,7 @@ mod tests {
         x: i32,
     }
 
-    impl crate::modifier::LayoutModifierNode for OffsetChildPolicy {
+    impl crate::modifier::LayoutPolicy for OffsetChildPolicy {
         fn measure(
             &self,
             input: &mut MeasureScope<'_>,
@@ -1401,8 +1390,8 @@ mod tests {
         height: i32,
     }
 
-    impl LayoutModifierNode for AnimatedWidthModifierNode {
-        fn measure_content(
+    impl crate::modifier::LayoutModifier for AnimatedWidthModifierNode {
+        fn measure(
             &self,
             _input: &LayoutModifierInput<'_>,
             child: &mut dyn LayoutModifierChild,
@@ -1433,8 +1422,8 @@ mod tests {
         padding: i32,
     }
 
-    impl LayoutModifierNode for TestPaddingModifierNode {
-        fn measure_content(
+    impl crate::modifier::LayoutModifier for TestPaddingModifierNode {
+        fn measure(
             &self,
             input: &LayoutModifierInput<'_>,
             child: &mut dyn LayoutModifierChild,
@@ -1471,8 +1460,7 @@ mod tests {
         let tag = tag.unwrap_or_default();
         let width = width.unwrap_or_default();
         let height = height.unwrap_or_default();
-        crate::layout::layout()
-            .policy(FixedSizePolicy { width, height })
+        crate::layout::layout(FixedSizePolicy { width, height })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
     }
@@ -1480,16 +1468,14 @@ mod tests {
     #[tessera]
     fn responsive_box(tag: Option<String>) {
         let tag = tag.unwrap_or_default();
-        crate::layout::layout()
-            .policy(crate::layout::DefaultLayoutNode)
+        crate::layout::layout(crate::layout::Stack)
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
     }
 
     #[tessera]
     fn stack_content() {
-        crate::layout::layout()
-            .policy(VerticalStackPolicy)
+        crate::layout::layout(VerticalStackPolicy)
             .draw(NoopDrawModifier)
             .modifier(Modifier::new())
             .child(|| {
@@ -1500,16 +1486,15 @@ mod tests {
 
     #[tessera]
     fn sample_layout() {
-        crate::layout::layout()
-            .policy(FixedSizePolicy {
-                width: 800,
-                height: 600,
-            })
-            .draw(NoopDrawModifier)
-            .modifier(Modifier::new())
-            .child(|| {
-                stack_content();
-            });
+        crate::layout::layout(FixedSizePolicy {
+            width: 800,
+            height: 600,
+        })
+        .draw(NoopDrawModifier)
+        .modifier(Modifier::new())
+        .child(|| {
+            stack_content();
+        });
     }
 
     #[tessera]
@@ -1542,8 +1527,7 @@ mod tests {
             }
         });
 
-        crate::layout::layout()
-            .policy(OffsetChildPolicy { x: offset.get() })
+        crate::layout::layout(OffsetChildPolicy { x: offset.get() })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new())
             .child(|| {
@@ -1571,8 +1555,7 @@ mod tests {
             }
         });
 
-        crate::layout::layout()
-            .policy(crate::layout::DefaultLayoutNode)
+        crate::layout::layout(crate::layout::Stack)
             .draw(NoopDrawModifier)
             .modifier(
                 Modifier::new()
@@ -1609,26 +1592,24 @@ mod tests {
             }
         });
 
-        crate::layout::layout()
-            .policy(FixedSizePolicy {
-                width: 20,
-                height: 20,
-            })
-            .draw(NoopDrawModifier)
-            .modifier(
-                Modifier::new()
-                    .push_semantics(TestTagSemanticsModifier {
-                        tag: "offset_box".to_string(),
-                    })
-                    .push_placement(AnimatedOffsetPlacementNode { x: x.get(), y: 0 }),
-            );
+        crate::layout::layout(FixedSizePolicy {
+            width: 20,
+            height: 20,
+        })
+        .draw(NoopDrawModifier)
+        .modifier(
+            Modifier::new()
+                .push_semantics(TestTagSemanticsModifier {
+                    tag: "offset_box".to_string(),
+                })
+                .push_placement(AnimatedOffsetPlacementNode { x: x.get(), y: 0 }),
+        );
     }
 
     #[tessera]
     fn slot_host(slot: Option<RenderSlot>) {
         let slot = slot.unwrap_or_default();
-        crate::layout::layout()
-            .policy(VerticalStackPolicy)
+        crate::layout::layout(VerticalStackPolicy)
             .draw(NoopDrawModifier)
             .modifier(Modifier::new())
             .child(move || {
@@ -1639,11 +1620,11 @@ mod tests {
     #[tessera]
     fn nested_prop_slot(width: i32, remaining: usize) {
         if remaining == 0 {
-            crate::layout::layout()
-                .policy(FixedSizePolicy { width, height: 20 })
-                .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
+            crate::layout::layout(FixedSizePolicy { width, height: 20 }).modifier(
+                Modifier::new().push_semantics(TestTagSemanticsModifier {
                     tag: "deep-slot-value".to_owned(),
-                }));
+                }),
+            );
         } else {
             slot_host().slot(move || {
                 nested_prop_slot(width, remaining - 1);
@@ -1706,29 +1687,27 @@ mod tests {
             }
         });
 
-        crate::layout::layout()
-            .policy(FixedSizePolicy {
-                width: 200,
-                height: 100,
-            })
-            .draw(NoopDrawModifier)
-            .modifier(Modifier::new())
-            .child(move || {
+        crate::layout::layout(FixedSizePolicy {
+            width: 200,
+            height: 100,
+        })
+        .draw(NoopDrawModifier)
+        .modifier(Modifier::new())
+        .child(move || {
+            slot_host().slot(move || {
                 slot_host().slot(move || {
-                    slot_host().slot(move || {
-                        tagged_box()
-                            .tag("nested_moving".to_string())
-                            .width(width.get())
-                            .height(20);
-                    });
+                    tagged_box()
+                        .tag("nested_moving".to_string())
+                        .width(width.get())
+                        .height(20);
                 });
             });
+        });
     }
 
     #[tessera]
     fn ordered_layout_modifier_sample() {
-        crate::layout::layout()
-            .policy(crate::layout::DefaultLayoutNode)
+        crate::layout::layout(crate::layout::Stack)
             .draw(NoopDrawModifier)
             .modifier(
                 Modifier::new()
@@ -1750,7 +1729,7 @@ mod tests {
     fn explicit_layout_boundary_sample(width: super::TestProbe<Option<State<i32>>>) {
         let state = remember(|| 24);
         width.set(Some(state));
-        crate::layout::layout().policy(FixedSizePolicy {
+        crate::layout::layout(FixedSizePolicy {
             width: state.get(),
             height: 12,
         });
@@ -1776,7 +1755,7 @@ mod tests {
     #[derive(Clone, Copy, PartialEq)]
     struct IntrinsicAwarePolicy;
 
-    impl LayoutModifierNode for IntrinsicAwarePolicy {
+    impl LayoutPolicy for IntrinsicAwarePolicy {
         fn measure(
             &self,
             scope: &mut MeasureScope<'_>,
@@ -1794,7 +1773,7 @@ mod tests {
         intrinsic_first: bool,
     }
 
-    impl LayoutModifierNode for IntrinsicProbePolicy {
+    impl LayoutPolicy for IntrinsicProbePolicy {
         fn measure(
             &self,
             scope: &mut MeasureScope<'_>,
@@ -1834,19 +1813,15 @@ mod tests {
 
     #[tessera]
     fn intrinsic_probe_fixture(intrinsic_first: bool) {
-        crate::layout::layout()
-            .policy(IntrinsicProbePolicy { intrinsic_first })
-            .child(|| {
-                crate::layout::layout()
-                    .policy(IntrinsicAwarePolicy)
-                    .modifier(
-                        Modifier::new()
-                            .push_layout(TestPaddingModifierNode { padding: 4 })
-                            .push_semantics(TestTagSemanticsModifier {
-                                tag: "intrinsic-child".to_string(),
-                            }),
-                    );
-            });
+        crate::layout::layout(IntrinsicProbePolicy { intrinsic_first }).child(|| {
+            crate::layout::layout(IntrinsicAwarePolicy).modifier(
+                Modifier::new()
+                    .push_layout(TestPaddingModifierNode { padding: 4 })
+                    .push_semantics(TestTagSemanticsModifier {
+                        tag: "intrinsic-child".to_string(),
+                    }),
+            );
+        });
     }
 
     #[test]
@@ -2058,7 +2033,7 @@ mod tests {
         width: State<i32>,
     }
 
-    impl LayoutModifierNode for IntrinsicStateLeaf {
+    impl LayoutPolicy for IntrinsicStateLeaf {
         fn measure(
             &self,
             scope: &mut MeasureScope<'_>,
@@ -2077,7 +2052,7 @@ mod tests {
     #[derive(Clone, PartialEq)]
     struct IntrinsicPositionPolicy;
 
-    impl LayoutModifierNode for IntrinsicPositionPolicy {
+    impl LayoutPolicy for IntrinsicPositionPolicy {
         fn measure(
             &self,
             scope: &mut MeasureScope<'_>,
@@ -2098,15 +2073,13 @@ mod tests {
     fn intrinsic_state_fixture(probe: super::TestProbe<Option<State<i32>>>) {
         let width = remember(|| 40);
         probe.set(Some(width));
-        crate::layout::layout()
-            .policy(IntrinsicPositionPolicy)
-            .child(move || {
-                crate::layout::layout()
-                    .policy(IntrinsicStateLeaf { width })
-                    .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
-                        tag: "intrinsic-state".into(),
-                    }));
-            });
+        crate::layout::layout(IntrinsicPositionPolicy).child(move || {
+            crate::layout::layout(IntrinsicStateLeaf { width }).modifier(
+                Modifier::new().push_semantics(TestTagSemanticsModifier {
+                    tag: "intrinsic-state".into(),
+                }),
+            );
+        });
     }
 
     #[test]
@@ -2147,7 +2120,7 @@ mod tests {
         transform: bool,
     }
 
-    impl LayoutModifierNode for PlacementStatePolicy {
+    impl LayoutPolicy for PlacementStatePolicy {
         fn measure(
             &self,
             scope: &mut MeasureScope<'_>,
@@ -2163,7 +2136,7 @@ mod tests {
             Ok(result)
         }
 
-        fn place_children(
+        fn place(
             &self,
             scope: &crate::layout::PlacementScope<'_>,
             _inner: &crate::layout::PlacementResult,
@@ -2195,8 +2168,7 @@ mod tests {
         } else {
             Modifier::new()
         };
-        crate::layout::layout()
-            .policy(PlacementStatePolicy { offset, transform })
+        crate::layout::layout(PlacementStatePolicy { offset, transform })
             .modifier(modifier)
             .child(|| {
                 tagged_box()
@@ -2303,13 +2275,12 @@ mod tests {
     fn retained_phase_fixture(transform: bool, probe: PhaseProbe) {
         let visible = remember(|| true);
         probe.visible.set(Some(visible));
-        crate::layout::layout()
-            .policy(RetainedChildPolicy {
-                visible: Some(visible),
-            })
-            .child(move || {
-                placement_state_fixture(transform, probe.clone());
-            });
+        crate::layout::layout(RetainedChildPolicy {
+            visible: Some(visible),
+        })
+        .child(move || {
+            placement_state_fixture(transform, probe.clone());
+        });
     }
 
     #[test]
@@ -2403,12 +2374,12 @@ mod tests {
 
     #[tessera]
     fn inner_layout_cache_sample() {
-        crate::layout::layout();
+        crate::layout::layout(crate::layout::Stack);
     }
 
     #[tessera]
     fn nested_composition_layout_sample() {
-        crate::layout::layout().child(|| inner_layout_cache_sample());
+        crate::layout::layout(crate::layout::Stack).child(|| inner_layout_cache_sample());
     }
 
     #[test]
@@ -2455,7 +2426,7 @@ mod tests {
         }
     }
 
-    impl LayoutModifierNode for PolicyWithLocalMeasurement {
+    impl LayoutPolicy for PolicyWithLocalMeasurement {
         fn measure(
             &self,
             _: &mut MeasureScope<'_>,
@@ -2473,8 +2444,7 @@ mod tests {
         let renamed = remember(|| false);
         probe.set(Some(renamed));
         let tag = if renamed.get() { "renamed" } else { "original" };
-        crate::layout::layout()
-            .policy(PolicyWithLocalMeasurement::default())
+        crate::layout::layout(StatefulLayoutPolicy(PolicyWithLocalMeasurement::default()))
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag: tag.into() }));
     }
 
@@ -2484,7 +2454,8 @@ mod tests {
         let mut session = start_layout_test_session(
             layout_test(|| {
                 let probe = probe.clone();
-                crate::layout::layout().child(move || policy_snapshot_fixture(probe.clone()));
+                crate::layout::layout(crate::layout::Stack)
+                    .child(move || policy_snapshot_fixture(probe.clone()));
             })
             .viewport_px(100, 100),
         );
@@ -2494,7 +2465,9 @@ mod tests {
         assert!(
             session
                 .work()
-                .executed::<PolicyWithLocalMeasurement>(crate::WorkPhase::Measure)
+                .executed::<StatefulLayoutPolicy<PolicyWithLocalMeasurement>>(
+                    crate::WorkPhase::Measure,
+                )
                 > 0
         );
 
@@ -2505,26 +2478,26 @@ mod tests {
         assert_eq!(
             session
                 .work()
-                .executed::<PolicyWithLocalMeasurement>(crate::WorkPhase::Measure),
+                .executed::<StatefulLayoutPolicy<PolicyWithLocalMeasurement>>(
+                    crate::WorkPhase::Measure,
+                ),
             0
         );
     }
 
     #[tessera]
     fn registered_handles_layout() {
-        crate::layout::layout()
-            .policy(VerticalStackPolicy)
-            .child(|| {
-                let first = tagged_box().tag("declared-first".to_owned());
-                let second = tagged_box().tag("declared-second".to_owned());
-                if true {
-                    second.width(20).height(12);
-                    first.width(10).height(8);
-                }
-                drop(second);
-                let forgotten = tagged_box().tag("forgotten".to_owned()).width(5).height(6);
-                std::mem::forget(forgotten);
-            });
+        crate::layout::layout(VerticalStackPolicy).child(|| {
+            let first = tagged_box().tag("declared-first".to_owned());
+            let second = tagged_box().tag("declared-second".to_owned());
+            if true {
+                second.width(20).height(12);
+                first.width(10).height(8);
+            }
+            drop(second);
+            let forgotten = tagged_box().tag("forgotten".to_owned()).width(5).height(6);
+            std::mem::forget(forgotten);
+        });
     }
 
     #[test]
@@ -2558,22 +2531,20 @@ mod tests {
 
     #[tessera]
     fn interleaved_slot_fixture() {
-        crate::layout::layout()
-            .policy(VerticalStackPolicy)
-            .child(|| {
+        crate::layout::layout(VerticalStackPolicy).child(|| {
+            tagged_box()
+                .tag("before-slot".to_owned())
+                .width(10)
+                .height(8);
+            RenderSlot::new(|| {
                 tagged_box()
-                    .tag("before-slot".to_owned())
-                    .width(10)
-                    .height(8);
-                RenderSlot::new(|| {
-                    tagged_box()
-                        .tag("inside-slot".to_owned())
-                        .width(20)
-                        .height(12);
-                })
-                .render();
-                tagged_box().tag("after-slot".to_owned()).width(5).height(6);
-            });
+                    .tag("inside-slot".to_owned())
+                    .width(20)
+                    .height(12);
+            })
+            .render();
+            tagged_box().tag("after-slot".to_owned()).width(5).height(6);
+        });
     }
 
     #[test]
@@ -2703,30 +2674,28 @@ mod tests {
         let reversed = remember(|| false);
         probe.reversed.set(Some(reversed));
         let reverse = reversed.get();
-        crate::layout::layout()
-            .policy(VerticalStackPolicy)
-            .child(move || {
-                let first = crate::provide_context(
-                    || CallTheme(17),
-                    || contextual_call("first".to_owned(), probe.clone()),
-                );
-                let second = crate::provide_context(
-                    || CallTheme(17),
-                    || contextual_call("second".to_owned(), probe.clone()),
-                );
-                crate::provide_context(
-                    || CallTheme(91),
-                    || {
-                        if reverse {
-                            configure_contextual_call(&second, "context-second", 5);
-                            configure_contextual_call(&first, "context-first", 3);
-                        } else {
-                            configure_contextual_call(&first, "context-first", 0);
-                            configure_contextual_call(&second, "context-second", 1);
-                        }
-                    },
-                );
-            });
+        crate::layout::layout(VerticalStackPolicy).child(move || {
+            let first = crate::provide_context(
+                || CallTheme(17),
+                || contextual_call("first".to_owned(), probe.clone()),
+            );
+            let second = crate::provide_context(
+                || CallTheme(17),
+                || contextual_call("second".to_owned(), probe.clone()),
+            );
+            crate::provide_context(
+                || CallTheme(91),
+                || {
+                    if reverse {
+                        configure_contextual_call(&second, "context-second", 5);
+                        configure_contextual_call(&first, "context-first", 3);
+                    } else {
+                        configure_contextual_call(&first, "context-first", 0);
+                        configure_contextual_call(&second, "context-second", 1);
+                    }
+                },
+            );
+        });
     }
 
     #[test]
@@ -2803,7 +2772,7 @@ mod tests {
     fn static_slot_choice_fixture(probe: super::TestProbe<Option<State<bool>>>) {
         let choice = remember(|| false);
         probe.set(Some(choice));
-        let host = crate::layout::layout();
+        let host = crate::layout::layout(crate::layout::Stack);
         if choice.get() {
             host.child(|| {
                 tagged_box()

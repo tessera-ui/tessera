@@ -12,6 +12,7 @@ use tessera_ui::{
     PxSize, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     clipboard::{ClipboardAction, ClipboardInput, ClipboardInputModifierNode},
+    layout::Stack,
     layout::layout,
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context, winit,
@@ -349,7 +350,7 @@ impl TextInputBuilder {
     /// Set a display-only transform with explicit offset mapping.
     pub fn display_transform_mapped<F>(&self, transform: F) -> Self
     where
-        F: Fn(&str) -> DisplayTransformText + Send + Sync + 'static,
+        F: Fn(&str) -> DisplayTransformText + 'static,
     {
         self.props
             .configure_deferred("display_transform", move |props| {
@@ -569,7 +570,7 @@ pub fn text_input(
     if editor_args.with(|args| args != &current) {
         editor_args.set(current);
     }
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let args = editor_args.get();
         let text_input_surface = create_surface_args(&args, &controller, &scheme);
         surface()
@@ -639,7 +640,7 @@ fn text_input_padded_content(
     let props = props.expect("text_input_padded_content requires props to be set");
     let padding = props.with(|args| args.padding);
     let controller = controller.expect("text_input_padded_content requires controller to be set");
-    layout()
+    layout(Stack)
         .modifier(Modifier::new().padding_all(padding))
         .child(move || {
             text_edit_core()
@@ -2582,7 +2583,7 @@ mod tests {
             material_theme()
                 .theme(|| MaterialTheme::default())
                 .child(move || {
-                    layout()
+                    layout(tessera_ui::layout::Stack)
                         .modifier(
                             Modifier::new()
                                 .width(Dp(200.0))
@@ -2607,7 +2608,7 @@ mod tests {
             material_theme()
                 .theme(|| MaterialTheme::default())
                 .child(move || {
-                    layout()
+                    layout(tessera_ui::layout::Stack)
                         .modifier(
                             Modifier::new()
                                 .width(Dp(200.0))
@@ -2729,7 +2730,7 @@ mod tests {
             material_theme()
                 .theme(|| MaterialTheme::default())
                 .child(move || {
-                    layout()
+                    layout(tessera_ui::layout::Stack)
                         .modifier(
                             Modifier::new()
                                 .width(Dp(200.0))

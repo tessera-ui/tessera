@@ -11,7 +11,7 @@ use tessera_ui::{
     Px, PxPosition, State,
     accesskit::{Role, Toggled},
     current_frame_nanos,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope},
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -466,43 +466,42 @@ fn fluid_switch_content(
         expansion_progress,
     );
 
-    layout()
-        .modifier(modifier)
-        .policy(FluidSwitchLayout {
-            track_width: FluidSwitchDefaults::TRACK_WIDTH.to_px(),
-            track_height: FluidSwitchDefaults::TRACK_HEIGHT.to_px(),
-            lens_width: lens_width.to_px(),
-            lens_height: lens_height.to_px(),
-            progress: travel_progress,
-        })
-        .child(move || {
-            surface()
-                .modifier(Modifier::new().size(
-                    FluidSwitchDefaults::TRACK_WIDTH,
-                    FluidSwitchDefaults::TRACK_HEIGHT,
-                ))
-                .style(SurfaceStyle::FilledOutlined {
-                    fill_color: track_color,
-                    border_color: track_outline_color,
-                    border_width: FluidSwitchDefaults::TRACK_OUTLINE_WIDTH,
-                })
-                .shape(Shape::CAPSULE)
-                .show_state_layer(false)
-                .show_ripple(false)
-                .child(|| {});
+    tessera_ui::layout::layout(FluidSwitchLayout {
+        track_width: FluidSwitchDefaults::TRACK_WIDTH.to_px(),
+        track_height: FluidSwitchDefaults::TRACK_HEIGHT.to_px(),
+        lens_width: lens_width.to_px(),
+        lens_height: lens_height.to_px(),
+        progress: travel_progress,
+    })
+    .modifier(modifier)
+    .child(move || {
+        surface()
+            .modifier(Modifier::new().size(
+                FluidSwitchDefaults::TRACK_WIDTH,
+                FluidSwitchDefaults::TRACK_HEIGHT,
+            ))
+            .style(SurfaceStyle::FilledOutlined {
+                fill_color: track_color,
+                border_color: track_outline_color,
+                border_width: FluidSwitchDefaults::TRACK_OUTLINE_WIDTH,
+            })
+            .shape(Shape::CAPSULE)
+            .show_state_layer(false)
+            .show_ripple(false)
+            .child(|| {});
 
-            let lens_modifier = Modifier::new().size(lens_width, lens_height);
-            #[cfg(test)]
-            let lens_modifier = lens_modifier.semantics(SemanticsArgs {
-                test_tag: Some(LENS_TEST_TAG.to_string()),
-                ..Default::default()
-            });
-
-            fluid_glass()
-                .modifier(lens_modifier)
-                .shape(Shape::CAPSULE)
-                .block_input(false);
+        let lens_modifier = Modifier::new().size(lens_width, lens_height);
+        #[cfg(test)]
+        let lens_modifier = lens_modifier.semantics(SemanticsArgs {
+            test_tag: Some(LENS_TEST_TAG.to_string()),
+            ..Default::default()
         });
+
+        fluid_glass()
+            .modifier(lens_modifier)
+            .shape(Shape::CAPSULE)
+            .block_input(false);
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -514,7 +513,7 @@ struct FluidSwitchLayout {
     progress: f32,
 }
 
-impl tessera_ui::LayoutModifierNode for FluidSwitchLayout {
+impl tessera_ui::LayoutPolicy for FluidSwitchLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -556,7 +555,7 @@ impl tessera_ui::LayoutModifierNode for FluidSwitchLayout {
         self.measure_eq(other) && self.progress == other.progress
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,

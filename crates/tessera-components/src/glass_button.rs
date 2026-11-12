@@ -3,7 +3,9 @@
 //! ## Usage
 //!
 //! Use for visually distinctive actions in layered or modern UIs.
-use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, layout::layout, tessera};
+use tessera_ui::{
+    Callback, Color, Dp, Modifier, RenderSlot, layout::Stack, layout::layout, tessera,
+};
 
 use crate::{
     button::ButtonDefaults,
@@ -117,7 +119,7 @@ pub fn glass_button(
     let outer_modifier =
         modifier.default_min_size(ButtonDefaults::MIN_WIDTH, ButtonDefaults::MIN_HEIGHT);
 
-    layout().modifier(outer_modifier).child(move || {
+    layout(Stack).modifier(outer_modifier).child(move || {
         fluid_glass()
             .modifier(Modifier::new())
             .tint_color_optional(tint_color)

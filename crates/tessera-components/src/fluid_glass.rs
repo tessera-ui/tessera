@@ -9,7 +9,7 @@ use tessera_ui::{
     PointerInputModifierNode, PressKeyEventType, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::ModifierCapabilityExt as _,
     receive_frame_nanos, remember, tessera, use_context,
 };
@@ -387,7 +387,7 @@ pub fn fluid_glass(
         feedback: 0.0,
     };
 
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         fluid_glass_inner(render.clone())
             .padding(padding)
             .clickable(clickable)
@@ -457,9 +457,8 @@ fn fluid_glass_inner(
         render: render.clone(),
         padding,
     };
-    layout()
+    tessera_ui::layout::layout(policy.clone())
         .modifier(modifier)
-        .policy(policy.clone())
         .draw(policy)
         .child(move || {
             if let Some(child) = child.as_ref() {
@@ -474,7 +473,7 @@ struct FluidGlassLayout {
     padding: Dp,
 }
 
-impl tessera_ui::LayoutModifierNode for FluidGlassLayout {
+impl tessera_ui::LayoutPolicy for FluidGlassLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.padding == other.padding
     }

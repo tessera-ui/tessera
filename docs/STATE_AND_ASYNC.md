@@ -7,74 +7,113 @@ recomposition while its slot remains present and is released when that
 component leaves the composition. `remember_with_key` keeps identity stable when
 keyed content is reordered.
 
-Remembered values stay in the UI session and may contain `!Send` and `!Sync`
-data. `State<T>` is a small, copyable handle; it does not own or extend the
-value's lifetime.
+`State<T>` is a small, copyable handle; it does not own or extend the value's
+lifetime. Remembered values may contain `!Send` and `!Sync` data.
 
-## Model scopes
+## Models
 
-Use `remember_model()` for business state and tasks that should live as long as
-the current component. Pass the model to children that share its state. When a
-larger scope is needed, create the model in a common parent and pass it down.
-Shard routes create one model per route entry: covered routes keep their models
-while on the back stack, and popping a route closes its model.
+A model groups the states of a screen or feature. Implement `ModelInit` and
+create its states with `State::new` in `init`:
 
 ```rust
-#[tessera_ui::tessera]
-fn search_panel() {
-    let model = tessera_ui::remember_model();
-    let query = model.state_with_key("query", String::new);
-    query.with_mut(|value| value.push_str("tessera"));
+use tessera_ui::{Model, ModelInit, State, Task, tessera};
+
+struct SearchModel {
+    query: State<String>,
+    results: State<Vec<String>>,
+    request: State<Option<Task>>,
+}
+
+impl ModelInit for SearchModel {
+    fn init() -> Self {
+        Self {
+            query: State::new(String::new()),
+            results: State::new(Vec::new()),
+            request: State::new(None),
+        }
+    }
+}
+
+#[tessera]
+fn search_panel(model: Model<SearchModel>) {
+    let query = model.query.get();
 }
 ```
 
-`Model::new()` creates an explicit scope for a router entry or another
-deliberately owned lifetime. Cloning a model shares its lifetime. Closing it, or
-dropping its final clone, cancels its tasks and releases its keyed state.
+A `Model<T>` component parameter is injected:
 
-## Updating and reading state asynchronously
+- Passing an existing model with the generated setter shares it; the creating
+  owner keeps it alive.
+- Otherwise `ModelInit::init` creates it. The nearest `ModelStore` provided
+  through its `ModelStoreScope` context owns it and returns the same instance to
+  every component asking for `Model<T>`. Without a store, the component owns its
+  model until it leaves the composition.
 
-`State::update` runs immediately when called in the owning session and queues
-the mutation when called from another thread or session. The mutation closure
-must be `Send + 'static`, but the stored value does not need to be `Send` or
-`Sync`. Applying the mutation publishes normal state invalidation to its UI
-readers. A `true` return means the session accepted the message; the state may
-still expire before delivery.
+Navigation provides one store per route entry, so models below a route live as
+long as the route: covered routes keep their models and popping a route closes
+them. Route destinations do not carry models.
+
+Ownership follows how a state was created, not where it is stored. `State::new`
+belongs to the model being initialized and is released when the model closes;
+`cargo tessera check` rejects it outside `ModelInit::init` and closures passed
+directly to `Model::new_with` or `ModelStore::model` (T0006). A `remember` state
+stored in a model keeps its composition-slot lifetime; `cargo tessera check`
+warns about this pattern.
+
+## Threads
+
+`State` has the same methods on every thread. A handle is `Send` and `Sync`
+when its value is `Send`, so `!Send` values stay on the UI thread at compile
+time.
+
+The UI thread accesses its states directly. Another thread's access waits until
+the owning session reaches a frame boundary and then runs with the session
+active, so a frame never observes a write midway. Writes publish the usual
+invalidation. Because the UI thread serves waiting threads only between frames,
+it must not block on a thread that is accessing its states.
+
+## Tasks
+
+A `Task` is a running future that is cancelled when dropped; `Task::detach`
+lets it finish on its own. Keep the task where its lifetime belongs: in a model
+state, a local variable, or the composition through `launch`.
+
+`spawn(dispatcher, future)` starts a `Send` future:
+
+- `Dispatcher::Main` runs it on the UI session that spawned it, between frames;
+- `Dispatcher::Io` runs it on a thread that may block;
+- `Dispatcher::Default` runs it on a pool sized for computation.
+
+`on(dispatcher, future).await` runs a future on another dispatcher and returns
+its output. On the web, all dispatchers run on the browser's event loop.
+
+In a component, `launch(key, future)` runs a future on the UI session while the
+component call keeps the same key; a new key cancels it and starts the new
+future, and leaving the composition cancels it. `launch_once(future)` uses a
+constant key. These futures may capture UI-thread-local values.
 
 ```rust
-let accepted = count.update(|value| *value += 1);
+#[tessera]
+fn search_results(model: Model<SearchModel>) {
+    let query = model.query.get();
+    let results = model.results;
+    launch(query.clone(), async move {
+        let found = on(Dispatcher::Io, search(query)).await;
+        results.set(found);
+    });
+}
 ```
 
-`State::read` asynchronously evaluates a closure on the owning UI session and
-returns its result. The closure and result must be `Send`; the state value itself
-does not. This read is untracked and does not subscribe the caller to dependency
-invalidation. Its value is the snapshot observed when the queued read executes.
+Replacing a task stored in a model cancels the previous one, which fits
+requests where only the latest result matters:
 
 ```rust
-let length = count.read(|value| value.to_string().len()).await?;
-```
-
-Use `dispatch(Dispatcher::Io, work)` for blocking IO and
-`dispatch(Dispatcher::Compute, work)` for synchronous background computation.
-Call `State::update` from the work closure to deliver changes. Cancellation is
-best-effort after synchronous work begins; queued state messages still validate
-that their target is live.
-
-## Keyed model tasks
-
-Call `Model::launch` from the owning UI session. The call site's source location
-identifies the effect slot. Recomposition at that site with an equal key keeps
-the task; changing the key invalidates and cancels the previous task before
-starting the replacement. Use `ModelTaskContext::update` to prevent a result
-from an old key from applying after a replacement has started.
-
-```rust
-model.launch(Dispatcher::Io, request_id, move |task| async move {
-    let result = load_request().await;
-    task.update(result_state, move |state| *state = result);
+let results = model.results;
+let task = spawn(Dispatcher::Io, async move {
+    results.set(search(query).await);
 });
+model.request.set(Some(task));
 ```
 
-Task cancellation is cooperative and cannot stop arbitrary synchronous work.
-Always preserve the task context or another request generation check across
-await points before delivering a result.
+Cancellation stops a future at its next suspension point; it cannot interrupt
+synchronous work that has already started.

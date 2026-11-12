@@ -8,6 +8,7 @@ use tessera_ui::{
     Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
     Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
+    layout::Stack,
     layout::layout,
     remember, tessera,
     testing::TestProbe,
@@ -142,7 +143,7 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
                                         row()
                                             .cross_axis_alignment(CrossAxisAlignment::Center)
                                             .children(move || {
-                                                layout()
+                                                layout(Stack)
                                                     .modifier(Modifier::new().semantics(
                                                         SemanticsArgs {
                                                             test_tag: Some(format!(

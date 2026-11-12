@@ -98,34 +98,12 @@ pub struct DrawModifierContext<'a, 'b> {
     pub render_input: &'a mut RenderInput<'b>,
 }
 
-/// A node-local layout modifier.
+/// Measures a layout node's children and places them.
 ///
-/// This is the single layout measurement contract shared by the innermost
-/// layout node (the measure policy applied at the innermost layer) and by
-/// wrapping layout modifiers. A node overrides either [`Self::measure`] (pure
-/// measure, applied at the innermost layer) or [`Self::measure_content`]
-/// (wrapping measure). An innermost node may override [`Self::place_children`]
-/// to update placements against cached child sizes. Wrapping modifiers can be
-/// measured again around that cached result to update their content bounds.
-pub trait LayoutModifierNode: Any {
-    modifier_lifecycle!();
-    /// Computes layout for this node when it is applied at the innermost layer.
-    fn measure(&self, _scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        Err(MeasurementError::MeasureFnFailed(
-            "layout node does not implement pure measure".to_string(),
-        ))
-    }
-
-    /// Measures and places the wrapped content.
-    fn measure_content(
-        &self,
-        _input: &LayoutModifierInput<'_>,
-        _child: &mut dyn LayoutModifierChild,
-    ) -> Result<LayoutResult, MeasurementError> {
-        Err(MeasurementError::MeasureFnFailed(
-            "layout node does not implement wrapped measure".to_string(),
-        ))
-    }
+/// Pass a policy to [`crate::layout::layout`].
+pub trait LayoutPolicy: Any {
+    /// Measures the children and returns this node's size and placements.
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
 
     /// Compares measurement-relevant state for layout dirty tracking.
     fn measure_eq(&self, other: &Self) -> bool
@@ -143,19 +121,100 @@ pub trait LayoutModifierNode: Any {
         self == other
     }
 
-    /// Recomputes child placements from cached child sizes.
+    /// Returns whether measurement needs an isolated clone of this policy.
     ///
-    /// An innermost layout node derives placements from the cached child sizes
-    /// in `scope`. Returning `None` means it cannot place without re-measuring.
-    /// Wrapping modifiers use [`Self::measure_content`] around the cached
-    /// result so drawing receives the same content bounds as child
-    /// placement.
-    fn place_children(
+    /// Most policies are immutable configuration and should leave this false.
+    /// Use [`StatefulLayoutPolicy`] when measurement intentionally mutates
+    /// interior state that must not affect later build comparisons.
+    #[doc(hidden)]
+    fn isolate_measurement_state(&self) -> bool {
+        false
+    }
+
+    /// Recomputes placements from cached child sizes when only placement
+    /// inputs changed.
+    ///
+    /// Returning `None` makes the node measure again instead.
+    fn place(
         &self,
         _scope: &PlacementScope<'_>,
-        _inner: &PlacementResult,
+        _measured: &PlacementResult,
     ) -> Option<PlacementResult> {
         None
+    }
+}
+
+/// A modifier that measures and places the content it wraps.
+pub trait LayoutModifier: Any {
+    modifier_lifecycle!();
+
+    /// Measures the wrapped content and returns the wrapped size.
+    fn measure(
+        &self,
+        input: &LayoutModifierInput<'_>,
+        child: &mut dyn LayoutModifierChild,
+    ) -> Result<LayoutResult, MeasurementError>;
+
+    /// Compares measurement-relevant state for layout dirty tracking.
+    fn measure_eq(&self, other: &Self) -> bool
+    where
+        Self: Sized + PartialEq,
+    {
+        self == other
+    }
+
+    /// Compares placement-relevant state for layout dirty tracking.
+    fn placement_eq(&self, other: &Self) -> bool
+    where
+        Self: Sized + PartialEq,
+    {
+        self == other
+    }
+}
+
+/// Explicitly opts a layout policy into a per-node measurement snapshot.
+///
+/// The wrapped policy is cloned once when its layout node is created or
+/// changed. Stable recomposition retains both the configured policy and its
+/// current measurement snapshot.
+#[derive(Clone)]
+pub struct StatefulLayoutPolicy<P>(pub P);
+
+impl<P> PartialEq for StatefulLayoutPolicy<P>
+where
+    P: LayoutPolicy + PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<P> LayoutPolicy for StatefulLayoutPolicy<P>
+where
+    P: LayoutPolicy + Clone + PartialEq,
+{
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        self.0.measure(scope)
+    }
+
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.0.measure_eq(&other.0)
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.0.placement_eq(&other.0)
+    }
+
+    fn place(
+        &self,
+        scope: &PlacementScope<'_>,
+        measured: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        self.0.place(scope, measured)
+    }
+
+    fn isolate_measurement_state(&self) -> bool {
+        true
     }
 }
 
@@ -343,7 +402,7 @@ pub trait ModifierCapabilityExt {
     /// Appends a layout modifier node to the current modifier chain.
     fn push_layout<N>(self, node: N) -> Self
     where
-        N: LayoutModifierNode + PartialEq;
+        N: LayoutModifier + PartialEq;
 
     /// Appends a placement modifier node to the current modifier chain.
     fn push_placement<N>(self, node: N) -> Self
@@ -439,7 +498,7 @@ enum FocusModifierOp {
 }
 
 pub(crate) trait ErasedLayoutModifierNode: 'static {
-    fn node(&self) -> &dyn LayoutModifierNode;
+    fn node(&self) -> &dyn LayoutModifier;
 
     fn eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
 
@@ -464,54 +523,17 @@ pub(crate) trait ErasedPlacementModifierNode: 'static {
 
 struct ComparableLayoutModifierNode<N>
 where
-    N: LayoutModifierNode + PartialEq,
+    N: LayoutModifier + PartialEq,
 {
     node: N,
 }
 
-impl<N> LayoutModifierNode for ComparableLayoutModifierNode<N>
-where
-    N: LayoutModifierNode + PartialEq,
-{
-    fn on_attach(&self, context: ModifierNodeContext) {
-        self.node.on_attach(context);
-    }
-
-    fn on_update(&self, context: ModifierNodeContext) {
-        self.node.on_update(context);
-    }
-
-    fn on_detach(&self, context: ModifierNodeContext) {
-        self.node.on_detach(context);
-    }
-
-    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        self.node.measure(scope)
-    }
-
-    fn measure_content(
-        &self,
-        input: &LayoutModifierInput<'_>,
-        child: &mut dyn LayoutModifierChild,
-    ) -> Result<LayoutResult, MeasurementError> {
-        self.node.measure_content(input, child)
-    }
-
-    fn place_children(
-        &self,
-        scope: &PlacementScope<'_>,
-        inner: &PlacementResult,
-    ) -> Option<PlacementResult> {
-        self.node.place_children(scope, inner)
-    }
-}
-
 impl<N> ErasedLayoutModifierNode for ComparableLayoutModifierNode<N>
 where
-    N: LayoutModifierNode + PartialEq,
+    N: LayoutModifier + PartialEq,
 {
-    fn node(&self) -> &dyn LayoutModifierNode {
-        self
+    fn node(&self) -> &dyn LayoutModifier {
+        &self.node
     }
 
     fn eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
@@ -600,7 +622,6 @@ enum ModifierAction {
     ClipboardInput(NodeRef<dyn ClipboardInputModifierNode>),
     ImePreviewInput(NodeRef<dyn ImeInputModifierNode>),
     ImeInput(NodeRef<dyn ImeInputModifierNode>),
-    Policy(crate::layout::LayoutModifierHandle),
     TerminalDraw(crate::layout::DrawModifierHandle),
     Focus(FocusModifierOp),
     GloballyPositioned(crate::component_tree::GloballyPositionedHandler),
@@ -627,7 +648,7 @@ impl ModifierAction {
             Self::Focus(_) => ActionKinds::FOCUS,
             Self::GloballyPositioned(_) => ActionKinds::POSITIONED,
             Self::BuildOwner(_) => ActionKinds::LIFECYCLE,
-            Self::Policy(_) | Self::TerminalDraw(_) => ActionKinds::default(),
+            Self::TerminalDraw(_) => ActionKinds::default(),
         }
     }
 }
@@ -778,14 +799,7 @@ pub trait CursorModifierExt {
 }
 
 impl Modifier {
-    fn with_terminal_nodes(
-        mut self,
-        policy: crate::layout::LayoutModifierHandle,
-        draw: crate::layout::DrawModifierHandle,
-    ) -> Self {
-        if policy.has_node() {
-            self = self.push_action(ModifierAction::Policy(policy));
-        }
+    fn with_terminal_draw(mut self, draw: crate::layout::DrawModifierHandle) -> Self {
         if draw.has_node() {
             self = self.push_action(ModifierAction::TerminalDraw(draw));
         }
@@ -870,7 +884,7 @@ impl Modifier {
 
     pub(crate) fn push_layout<N>(self, node: N) -> Self
     where
-        N: LayoutModifierNode + PartialEq,
+        N: LayoutModifier + PartialEq,
     {
         self.push_node(
             ComparableLayoutModifierNode { node },
@@ -1201,7 +1215,7 @@ impl Modifier {
                 .and_then(|id| tree.get(id))
                 .expect(
                     "modifiers attach to a node emitted by the current component; \
-                     emit one with `layout()` or `group()`",
+                     emit one with `layout(Stack)` or `group()`",
                 );
             (node.instance_logic_id, node.instance_key)
         });
@@ -1295,7 +1309,6 @@ impl Modifier {
                 | ModifierAction::Semantics(_)
                 | ModifierAction::Focus(_)
                 | ModifierAction::GloballyPositioned(_)
-                | ModifierAction::Policy(_)
                 | ModifierAction::BuildOwner(_)
                 | ModifierAction::TerminalDraw(_) => return,
             };
@@ -1454,7 +1467,7 @@ impl Modifier {
         selected
     }
 
-    pub(crate) fn layout_modifiers(&self) -> SmallVec<[&dyn LayoutModifierNode; 4]> {
+    pub(crate) fn layout_modifiers(&self) -> SmallVec<[&dyn LayoutModifier; 4]> {
         if !self.contains(ActionKinds::LAYOUT) {
             return SmallVec::new();
         }
@@ -1498,7 +1511,7 @@ impl ModifierCapabilityExt for Modifier {
     }
     fn push_layout<N>(self, node: N) -> Self
     where
-        N: LayoutModifierNode + PartialEq,
+        N: LayoutModifier + PartialEq,
     {
         Modifier::push_layout(self, node)
     }
@@ -1723,7 +1736,6 @@ impl fmt::Debug for Modifier {
 
 fn modifier_action_eq(lhs: &ModifierAction, rhs: &ModifierAction) -> bool {
     match (lhs, rhs) {
-        (ModifierAction::Policy(lhs), ModifierAction::Policy(rhs)) => lhs == rhs,
         (ModifierAction::TerminalDraw(lhs), ModifierAction::TerminalDraw(rhs)) => lhs == rhs,
         (ModifierAction::BuildOwner(lhs), ModifierAction::BuildOwner(rhs)) => lhs == rhs,
         (ModifierAction::Layout(lhs), ModifierAction::Layout(rhs)) => lhs.as_ref().eq(rhs.as_ref()),
@@ -1784,7 +1796,6 @@ fn hash_rc<T: ?Sized, H: Hasher>(value: &NodeRef<T>, state: &mut H) {
 fn hash_modifier_action<H: Hasher>(action: &ModifierAction, state: &mut H) {
     std::mem::discriminant(action).hash(state);
     match action {
-        ModifierAction::Policy(node) => node.as_policy().as_any().type_id().hash(state),
         ModifierAction::TerminalDraw(node) => node.concrete_type_id().hash(state),
         ModifierAction::BuildOwner(node) => node.hash(state),
         ModifierAction::Layout(node) => node.as_ref().hash_node(state),
@@ -2038,8 +2049,8 @@ mod tests {
 
     use super::{
         BuildModifierNode, DrawModifierContent, DrawModifierContext, DrawModifierNode,
-        FocusModifierOp, LayoutModifierNode, Modifier, ModifierAction, ModifierBuildContext,
-        ParentDataMap, ParentDataModifierNode,
+        FocusModifierOp, Modifier, ModifierAction, ModifierBuildContext, ParentDataMap,
+        ParentDataModifierNode,
     };
 
     fn flag(value: bool) -> Modifier {
@@ -2079,7 +2090,15 @@ mod tests {
     #[derive(Clone, Copy, PartialEq)]
     struct Width(u32);
 
-    impl LayoutModifierNode for Width {}
+    impl crate::modifier::LayoutModifier for Width {
+        fn measure(
+            &self,
+            _: &crate::LayoutModifierInput<'_>,
+            _: &mut dyn crate::LayoutModifierChild,
+        ) -> Result<crate::LayoutResult, crate::MeasurementError> {
+            unreachable!("modifier identity fixtures are not measured")
+        }
+    }
 
     #[derive(Clone)]
     struct LocalLayout(Rc<Cell<u32>>);
@@ -2090,7 +2109,15 @@ mod tests {
         }
     }
 
-    impl LayoutModifierNode for LocalLayout {}
+    impl crate::modifier::LayoutModifier for LocalLayout {
+        fn measure(
+            &self,
+            _: &crate::LayoutModifierInput<'_>,
+            _: &mut dyn crate::LayoutModifierChild,
+        ) -> Result<crate::LayoutResult, crate::MeasurementError> {
+            unreachable!("modifier identity fixtures are not measured")
+        }
+    }
 
     struct LocalDraw(Rc<Cell<u32>>);
 
@@ -2117,12 +2144,6 @@ mod tests {
         assert_eq!(Rc::strong_count(&state), 3);
         drop(modifier);
         drop(shared);
-        assert_eq!(Rc::strong_count(&state), 1);
-        let policy = crate::layout::LayoutModifierHandle::from(LocalLayout(state.clone()));
-        let shared_policy = policy.clone();
-        assert!(policy == shared_policy);
-        drop(policy);
-        drop(shared_policy);
         assert_eq!(Rc::strong_count(&state), 1);
     }
 

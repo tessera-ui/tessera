@@ -1,8 +1,9 @@
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, DrawModifierContent, DrawModifierContext,
-    DrawModifierNode, HeadlessConfig, HeadlessRenderer, LayoutModifierChild, LayoutModifierInput,
-    LayoutModifierNode, LayoutResult, MeasurementError, Modifier, PxPosition, State, WorkPhase,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    DrawModifierNode, HeadlessConfig, HeadlessRenderer, LayoutModifier, LayoutModifierChild,
+    LayoutModifierInput, LayoutPolicy, LayoutResult, MeasurementError, Modifier, PxPosition, State,
+    WorkPhase,
+    layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
     testing::TestProbe,
@@ -156,8 +157,8 @@ struct ShiftContents {
     placed: bool,
 }
 
-impl LayoutModifierNode for ShiftContents {
-    fn measure_content(
+impl LayoutModifier for ShiftContents {
+    fn measure(
         &self,
         _input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
@@ -180,14 +181,14 @@ impl LayoutModifierNode for ShiftContents {
 #[derive(Clone, Copy, PartialEq)]
 struct SolidLeaf;
 
-impl LayoutModifierNode for SolidLeaf {
+impl LayoutPolicy for SolidLeaf {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData::min_from_constraint(
             scope.parent_constraint().as_ref(),
         )))
     }
 
-    fn place_children(
+    fn place(
         &self,
         _scope: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -221,12 +222,11 @@ fn placement_fixture(probe: TestProbe<FixtureHandles>) {
     boxed()
         .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
         .children(move || {
-            layout()
+            tessera_ui::layout::layout(SolidLeaf)
                 .modifier(Modifier::new().push_layout(ShiftContents {
                     offset: shift.get(),
                     placed: placed.get(),
                 }))
-                .policy(SolidLeaf)
                 .draw(SolidLeaf);
         });
 }
@@ -311,7 +311,7 @@ fn paint_state_fixture(probe: TestProbe<FixtureHandles>) {
         ink: Some(ink),
         ..Default::default()
     });
-    layout().policy(SolidLeaf).draw(StateInkDraw { ink });
+    tessera_ui::layout::layout(SolidLeaf).draw(StateInkDraw { ink });
 }
 
 #[test]

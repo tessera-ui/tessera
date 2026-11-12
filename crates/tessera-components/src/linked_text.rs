@@ -129,13 +129,12 @@ pub fn linked_text(
         link_color,
         cache: Arc::clone(&cache),
     };
-    layout()
+    tessera_ui::layout::layout(policy.clone())
         .modifier(modifier.unwrap_or_default().semantics(SemanticsArgs {
             role: Some(Role::Paragraph),
             merge_descendants: true,
             ..Default::default()
         }))
-        .policy(policy.clone())
         .draw(policy)
         .child(move || {
             for (index, run) in runs.iter().cloned().enumerate() {
@@ -330,7 +329,7 @@ impl ParagraphLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for ParagraphLayout {
+impl tessera_ui::LayoutPolicy for ParagraphLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.cache, &other.cache)
             && self.runs == other.runs
@@ -481,9 +480,8 @@ fn linked_run(
             ..Default::default()
         })
     };
-    layout()
+    tessera_ui::layout::layout(policy.clone())
         .modifier(modifier)
-        .policy(policy.clone())
         .draw(policy);
 }
 
@@ -577,7 +575,7 @@ impl PartialEq for RunLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for RunLayout {
+impl tessera_ui::LayoutPolicy for RunLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.index == other.index
     }

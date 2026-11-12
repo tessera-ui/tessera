@@ -4,8 +4,7 @@
 //!
 //! Separate sections in lists, menus, and settings screens.
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px,
-    layout::{MeasureScope, layout},
+    Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px, layout::MeasureScope,
     tessera, use_context,
 };
 
@@ -65,7 +64,7 @@ impl DividerLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for DividerLayout {
+impl tessera_ui::LayoutPolicy for DividerLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.thickness == other.thickness && self.orientation == other.orientation
     }
@@ -176,8 +175,7 @@ pub fn horizontal_divider(modifier: Option<Modifier>, thickness: Option<Dp>, col
         }
     };
     let policy = DividerLayout::new(thickness, color, DividerOrientation::Horizontal);
-    layout()
-        .policy(policy)
+    tessera_ui::layout::layout(policy)
         .draw(policy)
         .modifier(modifier.unwrap_or_default());
 }
@@ -222,8 +220,7 @@ pub fn vertical_divider(modifier: Option<Modifier>, thickness: Option<Dp>, color
         }
     };
     let policy = DividerLayout::new(thickness, color, DividerOrientation::Vertical);
-    layout()
-        .policy(policy)
+    tessera_ui::layout::layout(policy)
         .draw(policy)
         .modifier(modifier.unwrap_or_default());
 }

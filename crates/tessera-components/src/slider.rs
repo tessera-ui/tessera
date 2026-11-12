@@ -9,7 +9,7 @@ use tessera_ui::{
     ComputedData, Constraint, Dp, FocusProperties, FocusRequester, LayoutResult, MeasurementError,
     Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
 };
@@ -212,7 +212,7 @@ fn range_slider_thumb(
     } else {
         modifier
     };
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         slider_handle()
             .layout(thumb_layout)
             .width(handle_width)
@@ -484,7 +484,7 @@ impl PartialEq for Slider {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for Slider {
+impl tessera_ui::LayoutPolicy for Slider {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let component_width = resolve_component_width(&self.args, input.parent_constraint());
@@ -522,7 +522,7 @@ impl PartialEq for CenteredSlider {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for CenteredSlider {
+impl tessera_ui::LayoutPolicy for CenteredSlider {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let component_width = resolve_component_width(&self.args, input.parent_constraint());
@@ -565,7 +565,7 @@ impl PartialEq for RangeSlider {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for RangeSlider {
+impl tessera_ui::LayoutPolicy for RangeSlider {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let component_width = resolve_component_width(&self.slider, input.parent_constraint());
@@ -1433,82 +1433,81 @@ fn slider_content(
     if render_data.with(|current| current != &next) {
         render_data.set(next);
     }
-    layout()
-        .modifier(modifier)
-        .policy(Slider {
-            args: args.clone(),
-            clamped_value,
-            handle_width,
-            has_inset_icon: args.inset_icon.is_some(),
-        })
-        .child(move || {
-            let (args, initial_width, clamped_value, handle_width, indicator_anchor, focused) =
-                render_data.get();
-            let slider_layout = slider_layout_with_handle_width(&args, initial_width, handle_width);
+    tessera_ui::layout::layout(Slider {
+        args: args.clone(),
+        clamped_value,
+        handle_width,
+        has_inset_icon: args.inset_icon.is_some(),
+    })
+    .modifier(modifier)
+    .child(move || {
+        let (args, initial_width, clamped_value, handle_width, indicator_anchor, focused) =
+            render_data.get();
+        let slider_layout = slider_layout_with_handle_width(&args, initial_width, handle_width);
+        let scheme = use_context::<MaterialTheme>()
+            .map(|theme| theme.get().color_scheme)
+            .unwrap_or_else(|| MaterialTheme::default().color_scheme);
+        let colors = slider_colors(&args, &scheme);
+
+        active_segment().layout(slider_layout).colors(colors);
+        inactive_segment().layout(slider_layout).colors(colors);
+
+        if let Some(icon_size) = slider_layout.icon_size
+            && let Some(inset_icon) = args.inset_icon.as_ref()
+        {
             let scheme = use_context::<MaterialTheme>()
-                .map(|theme| theme.get().color_scheme)
-                .unwrap_or_else(|| MaterialTheme::default().color_scheme);
-            let colors = slider_colors(&args, &scheme);
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme;
+            let tint = if args.disabled {
+                scheme
+                    .on_surface
+                    .with_alpha(MaterialAlpha::DISABLED_CONTENT)
+            } else {
+                scheme.on_primary
+            };
 
-            active_segment().layout(slider_layout).colors(colors);
-            inactive_segment().layout(slider_layout).colors(colors);
-
-            if let Some(icon_size) = slider_layout.icon_size
-                && let Some(inset_icon) = args.inset_icon.as_ref()
-            {
-                let scheme = use_context::<MaterialTheme>()
-                    .expect("MaterialTheme must be provided")
-                    .get()
-                    .color_scheme;
-                let tint = if args.disabled {
+            icon()
+                .painter(inset_icon.clone())
+                .tint(tint)
+                .tint_mode(TintMode::Solid)
+                .size(icon_size);
+            icon()
+                .painter(inset_icon.clone())
+                .tint(if args.disabled {
                     scheme
                         .on_surface
                         .with_alpha(MaterialAlpha::DISABLED_CONTENT)
                 } else {
-                    scheme.on_primary
+                    scheme.on_secondary_container
+                })
+                .tint_mode(TintMode::Solid)
+                .size(icon_size);
+        }
+
+        if args.steps > 0 {
+            for fraction in tick_fractions(args.steps) {
+                let is_active = fraction <= clamped_value;
+                let color = if is_active {
+                    colors.active_tick
+                } else {
+                    colors.inactive_tick
                 };
-
-                icon()
-                    .painter(inset_icon.clone())
-                    .tint(tint)
-                    .tint_mode(TintMode::Solid)
-                    .size(icon_size);
-                icon()
-                    .painter(inset_icon.clone())
-                    .tint(if args.disabled {
-                        scheme
-                            .on_surface
-                            .with_alpha(MaterialAlpha::DISABLED_CONTENT)
-                    } else {
-                        scheme.on_secondary_container
-                    })
-                    .tint_mode(TintMode::Solid)
-                    .size(icon_size);
+                slider_tick()
+                    .diameter(slider_layout.stop_indicator_diameter)
+                    .color(color);
             }
-
-            if args.steps > 0 {
-                for fraction in tick_fractions(args.steps) {
-                    let is_active = fraction <= clamped_value;
-                    let color = if is_active {
-                        colors.active_tick
-                    } else {
-                        colors.inactive_tick
-                    };
-                    slider_tick()
-                        .diameter(slider_layout.stop_indicator_diameter)
-                        .color(color);
-                }
-            }
-            if slider_layout.show_stop_indicator {
-                stop_indicator().layout(slider_layout).colors(colors);
-            }
-            slider_handle()
-                .layout(slider_layout)
-                .width(handle_width)
-                .colors(colors)
-                .focused(focused)
-                .indicator_anchor_optional(indicator_anchor);
-        });
+        }
+        if slider_layout.show_stop_indicator {
+            stop_indicator().layout(slider_layout).colors(colors);
+        }
+        slider_handle()
+            .layout(slider_layout)
+            .width(handle_width)
+            .colors(colors)
+            .focused(focused)
+            .indicator_anchor_optional(indicator_anchor);
+    });
 }
 
 fn measure_centered_slider(
@@ -1926,53 +1925,52 @@ fn centered_slider_content(
     if render_data.with(|current| current != &next) {
         render_data.set(next);
     }
-    layout()
-        .modifier(modifier)
-        .policy(CenteredSlider {
-            args: args.clone(),
-            clamped_value,
-            handle_width,
-        })
-        .child(move || {
-            let (args, initial_width, clamped_value, handle_width, indicator_anchor, focused) =
-                render_data.get();
-            let centered_layout = CenteredSliderLayout {
-                base: slider_layout_with_handle_width(&args, initial_width, handle_width),
-            };
-            let scheme = use_context::<MaterialTheme>()
-                .map(|theme| theme.get().color_scheme)
-                .unwrap_or_else(|| MaterialTheme::default().color_scheme);
-            let colors = slider_colors(&args, &scheme);
+    tessera_ui::layout::layout(CenteredSlider {
+        args: args.clone(),
+        clamped_value,
+        handle_width,
+    })
+    .modifier(modifier)
+    .child(move || {
+        let (args, initial_width, clamped_value, handle_width, indicator_anchor, focused) =
+            render_data.get();
+        let centered_layout = CenteredSliderLayout {
+            base: slider_layout_with_handle_width(&args, initial_width, handle_width),
+        };
+        let scheme = use_context::<MaterialTheme>()
+            .map(|theme| theme.get().color_scheme)
+            .unwrap_or_else(|| MaterialTheme::default().color_scheme);
+        let colors = slider_colors(&args, &scheme);
 
-            split_tracks().layout(centered_layout.base).colors(colors);
-            if args.steps > 0 {
-                let active_start = clamped_value.min(0.5);
-                let active_end = clamped_value.max(0.5);
-                for fraction in tick_fractions(args.steps) {
-                    let is_active = fraction >= active_start && fraction <= active_end;
-                    let color = if is_active {
-                        colors.active_tick
-                    } else {
-                        colors.inactive_tick
-                    };
-                    slider_tick()
-                        .diameter(centered_layout.base.stop_indicator_diameter)
-                        .color(color);
-                }
+        split_tracks().layout(centered_layout.base).colors(colors);
+        if args.steps > 0 {
+            let active_start = clamped_value.min(0.5);
+            let active_end = clamped_value.max(0.5);
+            for fraction in tick_fractions(args.steps) {
+                let is_active = fraction >= active_start && fraction <= active_end;
+                let color = if is_active {
+                    colors.active_tick
+                } else {
+                    colors.inactive_tick
+                };
+                slider_tick()
+                    .diameter(centered_layout.base.stop_indicator_diameter)
+                    .color(color);
             }
-            if centered_layout.base.show_stop_indicator {
-                stop_indicator()
-                    .layout(centered_layout.base)
-                    .colors(colors)
-                    .count(2);
-            }
-            slider_handle()
+        }
+        if centered_layout.base.show_stop_indicator {
+            stop_indicator()
                 .layout(centered_layout.base)
-                .width(handle_width)
                 .colors(colors)
-                .focused(focused)
-                .indicator_anchor_optional(indicator_anchor);
-        });
+                .count(2);
+        }
+        slider_handle()
+            .layout(centered_layout.base)
+            .width(handle_width)
+            .colors(colors)
+            .focused(focused)
+            .indicator_anchor_optional(indicator_anchor);
+    });
 }
 
 fn measure_range_slider(
@@ -2438,131 +2436,130 @@ fn range_slider_content(
     if render_data.with(|current| current != &next) {
         render_data.set(next);
     }
-    layout()
-        .modifier(modifier)
-        .policy(RangeSlider {
-            args: args.clone(),
-            slider,
+    tessera_ui::layout::layout(RangeSlider {
+        args: args.clone(),
+        slider,
+        start,
+        end,
+        start_handle_width,
+        end_handle_width,
+    })
+    .modifier(modifier)
+    .child(move || {
+        let (
+            args,
+            range_layout,
             start,
             end,
             start_handle_width,
             end_handle_width,
-        })
-        .child(move || {
-            let (
-                args,
-                range_layout,
-                start,
-                end,
-                start_handle_width,
-                end_handle_width,
-                indicator_anchors,
-            ) = render_data.get();
-            let state = args.controller.expect("range slider controller");
-            let scheme = use_context::<MaterialTheme>()
-                .map(|theme| theme.get().color_scheme)
-                .unwrap_or_else(|| MaterialTheme::default().color_scheme);
-            let colors = range_slider_colors(&args, &scheme);
+            indicator_anchors,
+        ) = render_data.get();
+        let state = args.controller.expect("range slider controller");
+        let scheme = use_context::<MaterialTheme>()
+            .map(|theme| theme.get().color_scheme)
+            .unwrap_or_else(|| MaterialTheme::default().color_scheme);
+        let colors = range_slider_colors(&args, &scheme);
 
-            split_tracks().layout(range_layout.base).colors(colors);
-            if args.steps > 0 {
-                for fraction in tick_fractions(args.steps) {
-                    let is_active = fraction >= start && fraction <= end;
-                    let color = if is_active {
-                        colors.active_tick
-                    } else {
-                        colors.inactive_tick
-                    };
-                    slider_tick()
-                        .diameter(range_layout.base.stop_indicator_diameter)
-                        .color(color);
-                }
+        split_tracks().layout(range_layout.base).colors(colors);
+        if args.steps > 0 {
+            for fraction in tick_fractions(args.steps) {
+                let is_active = fraction >= start && fraction <= end;
+                let color = if is_active {
+                    colors.active_tick
+                } else {
+                    colors.inactive_tick
+                };
+                slider_tick()
+                    .diameter(range_layout.base.stop_indicator_diameter)
+                    .color(color);
             }
-            if range_layout.base.show_stop_indicator {
-                stop_indicator()
-                    .layout(range_layout.base)
-                    .colors(colors)
-                    .count(2);
-            }
+        }
+        if range_layout.base.show_stop_indicator {
+            stop_indicator()
+                .layout(range_layout.base)
+                .colors(colors)
+                .count(2);
+        }
 
-            let start_thumb_args = RangeSliderThumbProps {
-                thumb_layout: range_layout.base,
-                handle_width: start_handle_width,
-                colors,
-                focus: state.with(|s| s.focus_start),
-                accessibility: RangeThumbAccessibility {
-                    key: "range_slider_start_thumb",
-                    value_label: args.start_value_label.clone().or_else(|| {
-                        (args.value_indicator != SliderValueIndicatorVisibility::Hidden)
-                            .then(|| format!("{}%", default_value_label(start)))
-                    }),
-                    axis: args.axis,
-                    label: Some(range_thumb_label(&args, true)),
-                    description: args.accessibility_description.clone(),
-                    fallback_description: I18N.text("md3-range-start"),
-                    steps: args.steps,
-                    disabled: args.disabled,
-                    value: start,
-                    min: 0.0,
-                    max: end,
-                    keyboard_model: SliderKeyboardModel::Start(keyboard_values),
-                    space_held: start_space_held,
-                    on_change: CallbackWith::new(move |new_start: f32| {
-                        let on_change = render_data.with(|(args, ..)| args.on_change);
-                        if keyboard_values.get().0 != new_start {
-                            keyboard_values.with_mut(|value| value.0 = new_start.min(value.1));
-                        }
-                        on_change.call(keyboard_values.get());
-                    }),
-                },
-            };
-            range_slider_thumb()
-                .thumb_layout(start_thumb_args.thumb_layout)
-                .handle_width(start_thumb_args.handle_width)
-                .colors(start_thumb_args.colors)
-                .focus(start_thumb_args.focus)
-                .accessibility(start_thumb_args.accessibility)
-                .indicator_anchor_optional(indicator_anchors[0]);
+        let start_thumb_args = RangeSliderThumbProps {
+            thumb_layout: range_layout.base,
+            handle_width: start_handle_width,
+            colors,
+            focus: state.with(|s| s.focus_start),
+            accessibility: RangeThumbAccessibility {
+                key: "range_slider_start_thumb",
+                value_label: args.start_value_label.clone().or_else(|| {
+                    (args.value_indicator != SliderValueIndicatorVisibility::Hidden)
+                        .then(|| format!("{}%", default_value_label(start)))
+                }),
+                axis: args.axis,
+                label: Some(range_thumb_label(&args, true)),
+                description: args.accessibility_description.clone(),
+                fallback_description: I18N.text("md3-range-start"),
+                steps: args.steps,
+                disabled: args.disabled,
+                value: start,
+                min: 0.0,
+                max: end,
+                keyboard_model: SliderKeyboardModel::Start(keyboard_values),
+                space_held: start_space_held,
+                on_change: CallbackWith::new(move |new_start: f32| {
+                    let on_change = render_data.with(|(args, ..)| args.on_change);
+                    if keyboard_values.get().0 != new_start {
+                        keyboard_values.with_mut(|value| value.0 = new_start.min(value.1));
+                    }
+                    on_change.call(keyboard_values.get());
+                }),
+            },
+        };
+        range_slider_thumb()
+            .thumb_layout(start_thumb_args.thumb_layout)
+            .handle_width(start_thumb_args.handle_width)
+            .colors(start_thumb_args.colors)
+            .focus(start_thumb_args.focus)
+            .accessibility(start_thumb_args.accessibility)
+            .indicator_anchor_optional(indicator_anchors[0]);
 
-            let end_thumb_args = RangeSliderThumbProps {
-                thumb_layout: range_layout.base,
-                handle_width: end_handle_width,
-                colors,
-                focus: state.with(|s| s.focus_end),
-                accessibility: RangeThumbAccessibility {
-                    key: "range_slider_end_thumb",
-                    value_label: args.end_value_label.clone().or_else(|| {
-                        (args.value_indicator != SliderValueIndicatorVisibility::Hidden)
-                            .then(|| format!("{}%", default_value_label(end)))
-                    }),
-                    axis: args.axis,
-                    label: Some(range_thumb_label(&args, false)),
-                    description: args.accessibility_description.clone(),
-                    fallback_description: I18N.text("md3-range-end"),
-                    steps: args.steps,
-                    disabled: args.disabled,
-                    value: end,
-                    min: start,
-                    max: 1.0,
-                    keyboard_model: SliderKeyboardModel::End(keyboard_values),
-                    space_held: end_space_held,
-                    on_change: CallbackWith::new(move |new_end: f32| {
-                        let on_change = render_data.with(|(args, ..)| args.on_change);
-                        if keyboard_values.get().1 != new_end {
-                            keyboard_values.with_mut(|value| value.1 = new_end.max(value.0));
-                        }
-                        on_change.call(keyboard_values.get());
-                    }),
-                },
-            };
-            range_slider_thumb()
-                .thumb_layout(end_thumb_args.thumb_layout)
-                .handle_width(end_thumb_args.handle_width)
-                .colors(end_thumb_args.colors)
-                .focus(end_thumb_args.focus)
-                .accessibility(end_thumb_args.accessibility)
-                .indicator_anchor_optional(indicator_anchors[1]);
-        });
+        let end_thumb_args = RangeSliderThumbProps {
+            thumb_layout: range_layout.base,
+            handle_width: end_handle_width,
+            colors,
+            focus: state.with(|s| s.focus_end),
+            accessibility: RangeThumbAccessibility {
+                key: "range_slider_end_thumb",
+                value_label: args.end_value_label.clone().or_else(|| {
+                    (args.value_indicator != SliderValueIndicatorVisibility::Hidden)
+                        .then(|| format!("{}%", default_value_label(end)))
+                }),
+                axis: args.axis,
+                label: Some(range_thumb_label(&args, false)),
+                description: args.accessibility_description.clone(),
+                fallback_description: I18N.text("md3-range-end"),
+                steps: args.steps,
+                disabled: args.disabled,
+                value: end,
+                min: start,
+                max: 1.0,
+                keyboard_model: SliderKeyboardModel::End(keyboard_values),
+                space_held: end_space_held,
+                on_change: CallbackWith::new(move |new_end: f32| {
+                    let on_change = render_data.with(|(args, ..)| args.on_change);
+                    if keyboard_values.get().1 != new_end {
+                        keyboard_values.with_mut(|value| value.1 = new_end.max(value.0));
+                    }
+                    on_change.call(keyboard_values.get());
+                }),
+            },
+        };
+        range_slider_thumb()
+            .thumb_layout(end_thumb_args.thumb_layout)
+            .handle_width(end_thumb_args.handle_width)
+            .colors(end_thumb_args.colors)
+            .focus(end_thumb_args.focus)
+            .accessibility(end_thumb_args.accessibility)
+            .indicator_anchor_optional(indicator_anchors[1]);
+    });
 }
 
 #[cfg(test)]

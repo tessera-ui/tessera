@@ -4,8 +4,7 @@
 //!
 //! Use to display images from pre-decoded data or bytes/assets loaded once.
 use tessera_ui::{
-    Color, ComputedData, LayoutResult, MeasurementError, Modifier, Px,
-    layout::{MeasureScope, layout},
+    Color, ComputedData, LayoutResult, MeasurementError, Modifier, Px, layout::MeasureScope,
     tessera,
 };
 
@@ -42,7 +41,7 @@ struct ImageLayout {
     painter: Painter,
 }
 
-impl tessera_ui::LayoutModifierNode for ImageLayout {
+impl tessera_ui::LayoutPolicy for ImageLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (intrinsic_width, intrinsic_height) = match &self.painter {
             Painter::Source(_) => (Px::ZERO, Px::ZERO),
@@ -129,8 +128,7 @@ pub fn image(#[prop(skip_setter)] painter: Option<Painter>, modifier: Option<Mod
         .and_then(Painter::resolve)
         .unwrap_or_else(|| Painter::Raster(placeholder_image_data()));
     let policy = ImageLayout { painter };
-    layout()
-        .policy(policy.clone())
+    tessera_ui::layout::layout(policy.clone())
         .draw(policy)
         .modifier(modifier.unwrap_or_default());
 }

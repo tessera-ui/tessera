@@ -332,7 +332,15 @@ mod tests {
     #[derive(PartialEq)]
     struct Width(u32);
 
-    impl crate::modifier::LayoutModifierNode for Width {}
+    impl crate::modifier::LayoutModifier for Width {
+        fn measure(
+            &self,
+            _: &crate::LayoutModifierInput<'_>,
+            _: &mut dyn crate::LayoutModifierChild,
+        ) -> Result<crate::LayoutResult, crate::MeasurementError> {
+            unreachable!("modifier identity fixtures are not measured")
+        }
+    }
 
     #[repr(align(64))]
     struct LargeNode {

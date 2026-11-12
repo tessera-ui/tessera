@@ -6,11 +6,8 @@
 
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
-    Px, PxPosition, RenderSlot,
-    accesskit::Role,
-    layout::{MeasureScope, layout},
-    modifier::FocusModifierExt as _,
-    tessera, use_context,
+    Px, PxPosition, RenderSlot, accesskit::Role, layout::MeasureScope,
+    modifier::FocusModifierExt as _, tessera, use_context,
 };
 
 use crate::{modifier::ModifierExt, shape_def::Shape, surface::surface, theme::MaterialTheme};
@@ -47,7 +44,7 @@ struct FloatingToolbarLayout {
     orientation: ToolbarOrientation,
 }
 
-impl tessera_ui::LayoutModifierNode for FloatingToolbarLayout {
+impl tessera_ui::LayoutPolicy for FloatingToolbarLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let horizontal = self.orientation == ToolbarOrientation::Horizontal;
         let parent = *input.parent_constraint().as_ref();
@@ -198,9 +195,8 @@ pub fn floating_toolbar(
                 ToolbarOrientation::Horizontal => Modifier::new().height(Dp(64.0)),
                 ToolbarOrientation::Vertical => Modifier::new().width(Dp(64.0)),
             };
-            layout()
+            tessera_ui::layout::layout(FloatingToolbarLayout { orientation })
                 .modifier(modifier.padding_all(Dp(8.0)))
-                .policy(FloatingToolbarLayout { orientation })
                 .child_shared(actions);
         });
 }
@@ -208,7 +204,7 @@ pub fn floating_toolbar(
 #[derive(Clone, Copy, PartialEq)]
 struct DockedToolbarLayout;
 
-impl tessera_ui::LayoutModifierNode for DockedToolbarLayout {
+impl tessera_ui::LayoutPolicy for DockedToolbarLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let padding = Dp(16.0).to_px();
         let height = input.parent_constraint().height().clamp(Dp(64.0).to_px());
@@ -322,8 +318,7 @@ pub fn docked_toolbar(
         .accessibility_role(Role::Toolbar)
         .accessibility_label_optional(accessibility_label)
         .child(move || {
-            layout()
-                .policy(DockedToolbarLayout)
+            tessera_ui::layout::layout(DockedToolbarLayout)
                 .child_shared(content.unwrap_or_else(RenderSlot::empty));
         });
 }

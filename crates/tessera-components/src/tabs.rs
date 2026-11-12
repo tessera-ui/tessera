@@ -11,7 +11,7 @@ use tessera_ui::{
     FocusRequester, FocusState, LayoutResult, MeasurementError, Modifier, ParentDataMap,
     ParentDataModifierNode, Px, PxPosition, RenderSlot, RenderSlotWith, State,
     accesskit::Role,
-    layout::{MeasureScope, layout},
+    layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     receive_frame_nanos, remember, tessera, use_context,
 };
@@ -426,7 +426,7 @@ impl TabBuilder {
     /// Set a custom title slot for the tab and clear built-in label state.
     pub fn title<F, Output>(&self, title: F) -> Self
     where
-        F: Fn() -> Output + Send + Sync + 'static,
+        F: Fn() -> Output + 'static,
     {
         self.props.configure_deferred("title_slot", move |props| {
             props.title_slot = Some(RenderSlot::new(title))
@@ -442,7 +442,7 @@ impl TabBuilder {
 
     /// Set a shared custom title slot for the tab and clear built-in label
     /// state.
-    pub fn title_shared(&self, title: impl Into<RenderSlot> + Send + Sync + 'static) -> Self {
+    pub fn title_shared(&self, title: impl Into<RenderSlot> + 'static) -> Self {
         self.props.configure_deferred("title_slot", move |props| {
             props.title_slot = Some(title.into())
         });
@@ -811,7 +811,7 @@ impl PartialEq for TabsLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for TabsLayout {
+impl tessera_ui::LayoutPolicy for TabsLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -1453,9 +1453,8 @@ fn tabs_content(
         scroll_user_overridden: controller
             .with(|controller| controller.tab_row_scroll_user_overridden),
     };
-    layout()
+    tessera_ui::layout::layout(policy.clone())
         .modifier(modifier)
-        .policy(policy.clone())
         .draw(policy)
         .child(move || {
             let args = live.get();

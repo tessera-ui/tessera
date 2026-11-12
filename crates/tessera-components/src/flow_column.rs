@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! Wrap tall lists or cards into multiple columns.
-use tessera_ui::{Dp, Modifier, Px, RenderSlot, layout::layout, tessera};
+use tessera_ui::{Dp, Modifier, Px, RenderSlot, tessera};
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
@@ -72,19 +72,18 @@ pub fn flow_column(
     let line_spacing = Px::from(line_spacing.unwrap_or(Dp(0.0))).max(Px::ZERO);
     let max_items_per_line = max_items_per_line.unwrap_or(usize::MAX);
     let max_lines = max_lines.unwrap_or(usize::MAX);
-    layout()
-        .policy(FlowLayout {
-            axis: FlowAxis::Vertical,
-            main_axis_alignment,
-            cross_axis_alignment,
-            line_alignment,
-            item_spacing,
-            line_spacing,
-            max_items_per_line,
-            max_lines,
-        })
-        .modifier(modifier)
-        .child_shared(children.unwrap_or_else(RenderSlot::empty));
+    tessera_ui::layout::layout(FlowLayout {
+        axis: FlowAxis::Vertical,
+        main_axis_alignment,
+        cross_axis_alignment,
+        line_alignment,
+        item_spacing,
+        line_spacing,
+        max_items_per_line,
+        max_lines,
+    })
+    .modifier(modifier)
+    .child_shared(children.unwrap_or_else(RenderSlot::empty));
 }
 
 #[cfg(test)]
@@ -109,7 +108,7 @@ mod tests {
         height: i32,
     }
 
-    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+    impl tessera_ui::LayoutPolicy for FixedTestLayout {
         fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
@@ -124,8 +123,7 @@ mod tests {
         let width = width.unwrap_or_default();
         let height = height.unwrap_or_default();
 
-        layout()
-            .policy(FixedTestLayout { width, height })
+        tessera_ui::layout::layout(FixedTestLayout { width, height })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
@@ -182,7 +180,7 @@ mod tests {
         let width = width.unwrap_or(Dp(0.0));
         let height = height.unwrap_or(Dp(0.0));
 
-        layout()
+        layout(tessera_ui::layout::Stack)
             .draw(NoopDrawModifier)
             .modifier(
                 Modifier::new()

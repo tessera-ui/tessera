@@ -25,7 +25,7 @@ use crate::{
         FocusDirection, FocusHandleId, FocusOwner, PendingFocusCallbackInvocation, bind_focus_owner,
     },
     keyboard_state::QueuedInput,
-    layout::{LayoutModifierHandle, LayoutResult, RenderInput},
+    layout::{LayoutPolicyHandle, LayoutResult, RenderInput},
     modifier::{
         DrawModifierContent, DrawModifierContext, Modifier, ModifierChanges, OrderedModifierAction,
         PointerInputModifierNode,
@@ -653,7 +653,7 @@ pub(crate) struct ReplayReplaceContext {
 /// Values a rebuilt node replaced in place, kept until the new ones are attached.
 pub(crate) struct PreviousBuildNode {
     pub(crate) modifier: Modifier,
-    pub(crate) policy: LayoutModifierHandle,
+    pub(crate) policy: LayoutPolicyHandle,
     fn_name: &'static str,
     children_scale: f32,
     same_parent: bool,
@@ -661,22 +661,30 @@ pub(crate) struct PreviousBuildNode {
 }
 
 /// Build inputs of a node emitted by a layout or group primitive.
-pub(crate) struct NodeInput {
+pub(crate) struct NodeInput<'a, P = crate::layout::Stack> {
     pub(crate) fn_name: &'static str,
     pub(crate) role: NodeRole,
     pub(crate) instance_logic_id: u64,
     pub(crate) instance_key: u64,
-    pub(crate) policy: LayoutModifierHandle,
+    pub(crate) policy: &'a P,
     pub(crate) draw: crate::layout::DrawModifierHandle,
 }
 
-impl NodeInput {
+impl<P> NodeInput<'_, P>
+where
+    P: crate::modifier::LayoutPolicy + Clone + PartialEq,
+{
     fn into_node(self) -> ComponentNode {
+        let policy = LayoutPolicyHandle::from((*self.policy).clone());
+        let layout_node = policy
+            .as_policy()
+            .isolate_measurement_state()
+            .then(|| policy.as_policy().clone_box());
         ComponentNode {
             instance_logic_id: self.instance_logic_id,
             instance_key: self.instance_key,
-            layout_node: self.policy.as_policy().clone_box(),
-            layout_input_policy: self.policy,
+            layout_policy_input: policy,
+            layout_node,
             draw_node: self.draw,
             ..ComponentNode::new(self.fn_name, self.role)
         }
@@ -1063,7 +1071,13 @@ impl ComponentTree {
     }
 
     /// Reuses the matching node in place, or inserts a new one.
-    pub(crate) fn rebuild_node(&mut self, input: NodeInput) -> (NodeId, Option<PreviousBuildNode>) {
+    pub(crate) fn rebuild_node<P>(
+        &mut self,
+        input: NodeInput<'_, P>,
+    ) -> (NodeId, Option<PreviousBuildNode>)
+    where
+        P: crate::modifier::LayoutPolicy + Clone + PartialEq,
+    {
         let reusable = self.claim_replay_candidate(input.instance_key, |old| {
             old.role == input.role && old.instance_logic_id == input.instance_logic_id
         });
@@ -1089,12 +1103,17 @@ impl ComponentTree {
         let interaction = old.interaction.take();
         old.layout_coordinate_space = false;
         old.draw_node = input.draw;
-        if !old.layout_policy().dyn_eq(input.policy.as_policy()) {
-            old.layout_node = input.policy.as_policy().clone_box();
+        let previous_policy = old.layout_policy_input.clone();
+        if old.layout_policy_input.update_if_changed(input.policy) {
+            old.layout_node = old
+                .layout_policy_input
+                .as_policy()
+                .isolate_measurement_state()
+                .then(|| old.layout_policy_input.as_policy().clone_box());
         }
         let mut previous = PreviousBuildNode {
             modifier: std::mem::take(&mut old.modifier),
-            policy: std::mem::replace(&mut old.layout_input_policy, input.policy),
+            policy: previous_policy,
             fn_name: std::mem::replace(&mut old.fn_name, input.fn_name),
             children_scale: std::mem::replace(&mut old.children_scale, 1.0),
             same_parent,
@@ -4556,7 +4575,7 @@ mod tests {
             }
         });
         probe.handler.set(Some(handler));
-        crate::layout::layout();
+        crate::layout::layout(crate::layout::Stack);
     }
 
     fn reveal_viewport_tree(
@@ -6381,7 +6400,7 @@ mod tests {
             role,
             instance_logic_id: key,
             instance_key: key,
-            policy: LayoutModifierHandle::default(),
+            policy: &crate::layout::Stack,
             draw: crate::layout::DrawModifierHandle::default(),
         });
         tree.emit_call_node(id, previous);

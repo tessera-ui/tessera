@@ -13,6 +13,7 @@ use tessera_ui::{
     Px, PxSize, RenderSlotWith, SemanticsModifierNode, State,
     accesskit::{Orientation, Role, Toggled},
     current_frame_nanos,
+    layout::Stack,
     layout::layout,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     receive_frame_nanos, remember, tessera, use_context,
@@ -274,7 +275,7 @@ pub fn radio_group(
         description: accessibility_description,
         orientation: Some(orientation),
     });
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         if let Some(content) = content {
             content.render(RadioGroupSelection { selected });
         }

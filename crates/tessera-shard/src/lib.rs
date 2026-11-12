@@ -1,8 +1,8 @@
-//! Shard routing, state, and async support for Tessera applications.
+//! Navigation for Tessera applications.
 //!
 //! ## Usage
 //!
-//! Define route destinations and shard-scoped state for router-driven screens.
+//! Define route destinations whose view models live as long as their routes.
 
 #![deny(
     missing_docs,
@@ -14,15 +14,8 @@
 
 extern crate self as tessera_shard;
 
-#[doc(hidden)]
-pub mod __private;
-pub mod async_support;
 pub mod router;
-pub mod state;
 
 pub use tessera_macros::shard;
 
-pub use crate::{
-    router::{RouterController, RouterDestination, shard_home},
-    state::{ShardState, ShardStateLifeCycle},
-};
+pub use crate::router::{RouterController, RouterDestination, shard_home};

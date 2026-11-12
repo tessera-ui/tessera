@@ -6,8 +6,8 @@
 
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State, current_frame_nanos,
-    layout::layout, modifier::ModifierCapabilityExt as _, provide_context, receive_frame_nanos,
-    remember, tessera, use_context,
+    modifier::ModifierCapabilityExt as _, provide_context, receive_frame_nanos, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -537,44 +537,43 @@ pub fn list_item(
             let headline = headline.clone();
             let overline_text = overline_text.clone();
             let supporting_text = supporting_text.clone();
-            layout()
-                .policy(ListItemLayout {
-                    padding: content_padding,
-                    min_height,
-                    has_overline,
-                    has_supporting,
-                    supporting_line_height: typography
-                        .body_medium
-                        .line_height
-                        .unwrap_or(Dp(typography.body_medium.font_size.0 * 1.2)),
-                    vertical_alignment: vertical_alignment.unwrap_or_default(),
-                })
-                .child(move || {
-                    list_item_slot()
-                        .content_optional(leading)
-                        .color(leading_color)
-                        .style(typography.title_medium)
-                        .leading(true);
-                    list_item_slot()
-                        .content_optional(trailing)
-                        .color(trailing_color)
-                        .style(typography.label_small);
-                    list_item_text_line()
-                        .text_value_optional(overline_text.clone())
-                        .content_optional(overline_content)
-                        .style(typography.label_small)
-                        .color(overline_color);
-                    list_item_text_line()
-                        .text_value(headline.clone())
-                        .content_optional(content)
-                        .style(typography.body_large)
-                        .color(headline_color);
-                    list_item_text_line()
-                        .text_value_optional(supporting_text.clone())
-                        .content_optional(supporting_content)
-                        .style(typography.body_medium)
-                        .color(supporting_color);
-                });
+            tessera_ui::layout::layout(ListItemLayout {
+                padding: content_padding,
+                min_height,
+                has_overline,
+                has_supporting,
+                supporting_line_height: typography
+                    .body_medium
+                    .line_height
+                    .unwrap_or(Dp(typography.body_medium.font_size.0 * 1.2)),
+                vertical_alignment: vertical_alignment.unwrap_or_default(),
+            })
+            .child(move || {
+                list_item_slot()
+                    .content_optional(leading)
+                    .color(leading_color)
+                    .style(typography.title_medium)
+                    .leading(true);
+                list_item_slot()
+                    .content_optional(trailing)
+                    .color(trailing_color)
+                    .style(typography.label_small);
+                list_item_text_line()
+                    .text_value_optional(overline_text.clone())
+                    .content_optional(overline_content)
+                    .style(typography.label_small)
+                    .color(overline_color);
+                list_item_text_line()
+                    .text_value(headline.clone())
+                    .content_optional(content)
+                    .style(typography.body_large)
+                    .color(headline_color);
+                list_item_text_line()
+                    .text_value_optional(supporting_text.clone())
+                    .content_optional(supporting_content)
+                    .style(typography.body_medium)
+                    .color(supporting_color);
+            });
         });
 }
 

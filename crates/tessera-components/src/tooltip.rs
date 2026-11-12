@@ -12,7 +12,7 @@ use tessera_ui::{
     RenderSlotWith, State,
     accesskit::{Live, Role},
     current_frame_nanos,
-    layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     receive_frame_nanos, remember, tessera, use_context,
     winit::{
@@ -666,7 +666,7 @@ impl TooltipLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for TooltipLayout {
+impl tessera_ui::LayoutPolicy for TooltipLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.open == other.open && self.visible_size == other.visible_size
     }
@@ -688,7 +688,7 @@ impl tessera_ui::LayoutModifierNode for TooltipLayout {
         Ok(input.placement(|| self.place(&children, &sizes)))
     }
 
-    fn place_children(
+    fn place(
         &self,
         scope: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -853,47 +853,46 @@ pub fn tooltip_provider(
             visible.set_if_changed(bounds);
             publish_tooltip_viewport_size(origin, visible, visible_size);
         });
-    layout()
-        .modifier(modifier)
-        .policy(TooltipLayout {
+    tessera_ui::layout::layout(TooltipLayout {
+        open,
+        anchor,
+        origin,
+        visible,
+        visible_size,
+        placement: placement.unwrap_or_default(),
+    })
+    .modifier(modifier)
+    .child(move || {
+        let (
             open,
-            anchor,
-            origin,
-            visible,
-            visible_size,
-            placement: placement.unwrap_or_default(),
-        })
-        .child(move || {
-            let (
-                open,
-                message,
-                headline,
-                action_label,
-                on_action,
-                child,
-                variant,
-                persistent,
-                actions,
-                popup_modifier,
-            ) = render_data.get();
-            if let Some(child) = child {
-                child.render(controller);
-            }
-            if open {
-                let has_actions = actions.is_some();
-                tooltip_panel(message.clone())
-                    .modifier_optional(popup_modifier)
-                    .variant(variant)
-                    .headline(headline.clone().unwrap_or_default())
-                    .action_label(action_label.clone().unwrap_or_default())
-                    .on_action_shared(on_action.unwrap_or_default())
-                    .controller(controller)
-                    .popup(popup)
-                    .persistent(persistent)
-                    .actions_shared(actions.unwrap_or_else(RenderSlot::empty))
-                    .has_actions(has_actions);
-            }
-        });
+            message,
+            headline,
+            action_label,
+            on_action,
+            child,
+            variant,
+            persistent,
+            actions,
+            popup_modifier,
+        ) = render_data.get();
+        if let Some(child) = child {
+            child.render(controller);
+        }
+        if open {
+            let has_actions = actions.is_some();
+            tooltip_panel(message.clone())
+                .modifier_optional(popup_modifier)
+                .variant(variant)
+                .headline(headline.clone().unwrap_or_default())
+                .action_label(action_label.clone().unwrap_or_default())
+                .on_action_shared(on_action.unwrap_or_default())
+                .controller(controller)
+                .popup(popup)
+                .persistent(persistent)
+                .actions_shared(actions.unwrap_or_else(RenderSlot::empty))
+                .has_actions(has_actions);
+        }
+    });
 }
 
 /// # tooltip_anchor
@@ -947,7 +946,9 @@ pub fn tooltip_anchor(
             popup: false,
             persistent: controller.with(|controller| controller.persistent),
         });
-    layout().modifier(modifier).child(move || child.render());
+    layout(Stack)
+        .modifier(modifier)
+        .child(move || child.render());
 }
 
 #[tessera]

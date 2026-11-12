@@ -9,7 +9,7 @@ use tessera_ui::{
     LayoutResult, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px,
     PxPosition, State,
     accesskit::Role,
-    layout::{MeasureScope, layout},
+    layout::MeasureScope,
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera,
     winit::window::CursorIcon,
@@ -304,27 +304,26 @@ fn render_glass_slider(
         drag_recognizer,
     });
 
-    layout()
-        .modifier(modifier)
-        .policy(GlassSliderLayout {
-            track_height: args.track_height.to_px(),
-            fallback_width: Dp(200.0).to_px(),
-        })
-        .child(move || {
-            fluid_glass()
-                .modifier(Modifier::new().fill_max_size())
-                .tint_color(args.track_tint_color)
-                .blur_radius(args.blur_radius)
-                .shape(Shape::CAPSULE)
-                .border(GlassBorder::new(args.track_border_width.into()))
-                .padding(args.track_border_width)
-                .child(move || {
-                    glass_progress_fill()
-                        .value(args.value)
-                        .tint_color(args.progress_tint_color)
-                        .blur_radius(args.blur_radius);
-                });
-        });
+    tessera_ui::layout::layout(GlassSliderLayout {
+        track_height: args.track_height.to_px(),
+        fallback_width: Dp(200.0).to_px(),
+    })
+    .modifier(modifier)
+    .child(move || {
+        fluid_glass()
+            .modifier(Modifier::new().fill_max_size())
+            .tint_color(args.track_tint_color)
+            .blur_radius(args.blur_radius)
+            .shape(Shape::CAPSULE)
+            .border(GlassBorder::new(args.track_border_width.into()))
+            .padding(args.track_border_width)
+            .child(move || {
+                glass_progress_fill()
+                    .value(args.value)
+                    .tint_color(args.progress_tint_color)
+                    .blur_radius(args.blur_radius);
+            });
+    });
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -333,7 +332,7 @@ struct GlassSliderLayout {
     fallback_width: Px,
 }
 
-impl tessera_ui::LayoutModifierNode for GlassSliderLayout {
+impl tessera_ui::LayoutPolicy for GlassSliderLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let self_width = input.parent_constraint().width().clamp(self.fallback_width);

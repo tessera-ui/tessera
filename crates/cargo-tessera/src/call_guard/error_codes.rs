@@ -12,15 +12,17 @@ pub enum ErrorCode {
     UnresolvedCall = 3,
     LintConfiguration = 4,
     PrivateApi = 5,
+    ModelState = 6,
 }
 
 impl ErrorCode {
-    const ALL: [Self; 5] = [
+    const ALL: [Self; 6] = [
         Self::ComponentCall,
         Self::RuntimeCall,
         Self::UnresolvedCall,
         Self::LintConfiguration,
         Self::PrivateApi,
+        Self::ModelState,
     ];
 
     pub fn explanation(self) -> &'static str {
@@ -30,6 +32,7 @@ impl ErrorCode {
             Self::UnresolvedCall => include_str!("error_codes/T0003.md"),
             Self::LintConfiguration => include_str!("error_codes/T0004.md"),
             Self::PrivateApi => include_str!("error_codes/T0005.md"),
+            Self::ModelState => include_str!("error_codes/T0006.md"),
         }
     }
 }
@@ -54,12 +57,16 @@ impl FromStr for ErrorCode {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Lint {
     RedundantRenderSlot,
+    RememberedStateInModel,
 }
 
 impl Lint {
+    const ALL: [Self; 2] = [Self::RedundantRenderSlot, Self::RememberedStateInModel];
+
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::RedundantRenderSlot => "tessera::redundant_render_slot",
+            Self::RememberedStateInModel => "tessera::remembered_state_in_model",
         }
     }
 
@@ -78,7 +85,7 @@ impl FromStr for Lint {
     type Err = String;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        [Self::RedundantRenderSlot]
+        Self::ALL
             .into_iter()
             .find(|lint| lint.name() == value)
             .ok_or_else(|| format!("unknown Tessera lint `{value}`"))

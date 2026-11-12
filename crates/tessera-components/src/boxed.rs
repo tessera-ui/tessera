@@ -5,7 +5,7 @@
 //! Use to create layered UIs, overlays, or composite controls.
 use tessera_ui::{
     ComputedData, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope},
     tessera,
 };
 
@@ -90,8 +90,7 @@ pub fn boxed(
 ) {
     let alignment = alignment.unwrap_or_default();
     let modifier = modifier.unwrap_or_default();
-    layout()
-        .policy(BoxedLayout { alignment })
+    tessera_ui::layout::layout(BoxedLayout { alignment })
         .modifier(modifier)
         .child_shared(children.unwrap_or_else(RenderSlot::empty));
 }
@@ -101,8 +100,8 @@ struct BoxedLayout {
     alignment: Alignment,
 }
 
-impl tessera_ui::LayoutModifierNode for BoxedLayout {
-    fn place_children(
+impl tessera_ui::LayoutPolicy for BoxedLayout {
+    fn place(
         &self,
         scope: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -212,7 +211,7 @@ mod tests {
         height: i32,
     }
 
-    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+    impl tessera_ui::LayoutPolicy for FixedTestLayout {
         fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
@@ -233,8 +232,7 @@ mod tests {
         let width = width.unwrap_or_default();
         let height = height.unwrap_or_default();
 
-        layout()
-            .policy(FixedTestLayout { width, height })
+        tessera_ui::layout::layout(FixedTestLayout { width, height })
             .draw(NoopDrawModifier)
             .modifier(modifier.then(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
@@ -252,7 +250,7 @@ mod tests {
             ))
             .children(|| {
                 boxed_start_box();
-                layout()
+                layout(tessera_ui::layout::Stack)
                     .modifier(Modifier::new().align(Alignment::BottomEnd))
                     .child(|| {
                         boxed_end_box();

@@ -9,7 +9,7 @@ use tessera_ui::{
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::{Role, Toggled},
     current_frame_nanos,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -153,7 +153,7 @@ struct SwitchLayout {
     thumb_offset: Dp,
 }
 
-impl tessera_ui::LayoutModifierNode for SwitchLayout {
+impl tessera_ui::LayoutPolicy for SwitchLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -215,7 +215,7 @@ impl tessera_ui::LayoutModifierNode for SwitchLayout {
         self.measure_eq(other) && self.thumb_offset == other.thumb_offset
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -268,7 +268,7 @@ struct SwitchThumbLayout {
     size: Px,
 }
 
-impl tessera_ui::LayoutModifierNode for SwitchThumbLayout {
+impl tessera_ui::LayoutPolicy for SwitchThumbLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let constraint = Constraint::new(
@@ -695,99 +695,97 @@ fn switch_content(
     let thumb_diameter_dp = Dp(geometry.with(|geometry| geometry.diameter.value).max(0.0));
     let thumb_offset = Dp(geometry.with(|geometry| geometry.offset.value));
     let thumb_size_px = thumb_diameter_dp.to_px();
-    layout()
-        .modifier(modifier)
-        .policy(SwitchLayout {
-            track_width: width,
-            track_height: height,
-            thumb_diameter: thumb_diameter_dp,
-            thumb_offset,
+    tessera_ui::layout::layout(SwitchLayout {
+        track_width: width,
+        track_height: height,
+        thumb_diameter: thumb_diameter_dp,
+        thumb_offset,
+    })
+    .modifier(modifier)
+    .child(move || {
+        let track_style = if checked {
+            SurfaceStyle::Filled {
+                color: colors.track_color,
+            }
+        } else {
+            SurfaceStyle::FilledOutlined {
+                fill_color: colors.track_color,
+                border_color: colors.track_outline_color,
+                border_width: track_outline_width,
+            }
+        };
+
+        surface()
+            .modifier(Modifier::new().size(width, height))
+            .style(track_style)
+            .shape(Shape::CAPSULE)
+            .show_state_layer(false)
+            .show_ripple(false)
+            .focus_requester_optional(focus_requester)
+            .interaction_state_optional(interaction_state)
+            .presentation_state_optional(presentation_state)
+            .show_focus_indicator(true)
+            .enabled(enabled)
+            .child(|| {});
+
+        surface()
+            .modifier(Modifier::new().size(
+                SwitchDefaults::STATE_LAYER_SIZE,
+                SwitchDefaults::STATE_LAYER_SIZE,
+            ))
+            .shape(Shape::Ellipse)
+            .style(SurfaceStyle::Filled {
+                color: Color::TRANSPARENT,
+            })
+            .show_state_layer(true)
+            .show_ripple(true)
+            .ripple_bounded(false)
+            .ripple_radius(Dp(SwitchDefaults::STATE_LAYER_SIZE.0 / 2.0))
+            .ripple_color(if checked {
+                scheme.primary
+            } else {
+                scheme.on_surface
+            })
+            .interaction_state_optional(interaction_state)
+            .presentation_state_optional(presentation_state)
+            .enabled(enabled)
+            .ripple_state_optional(ripple_state)
+            .child(|| {});
+        tessera_ui::layout::layout(SwitchThumbLayout {
+            size: thumb_size_px,
+        })
+        .modifier({
+            let modifier = Modifier::new();
+            #[cfg(test)]
+            let modifier = modifier.semantics(crate::modifier::SemanticsArgs {
+                test_tag: Some(THUMB_TEST_TAG.to_string()),
+                ..Default::default()
+            });
+            modifier
         })
         .child(move || {
-            let track_style = if checked {
-                SurfaceStyle::Filled {
-                    color: colors.track_color,
-                }
-            } else {
-                SurfaceStyle::FilledOutlined {
-                    fill_color: colors.track_color,
-                    border_color: colors.track_outline_color,
-                    border_width: track_outline_width,
-                }
-            };
-
             surface()
-                .modifier(Modifier::new().size(width, height))
-                .style(track_style)
-                .shape(Shape::CAPSULE)
-                .show_state_layer(false)
-                .show_ripple(false)
-                .focus_requester_optional(focus_requester)
-                .interaction_state_optional(interaction_state)
-                .presentation_state_optional(presentation_state)
-                .show_focus_indicator(true)
-                .enabled(enabled)
-                .child(|| {});
-
-            surface()
-                .modifier(Modifier::new().size(
-                    SwitchDefaults::STATE_LAYER_SIZE,
-                    SwitchDefaults::STATE_LAYER_SIZE,
-                ))
-                .shape(Shape::Ellipse)
+                .modifier(Modifier::new().fill_max_size())
                 .style(SurfaceStyle::Filled {
-                    color: Color::TRANSPARENT,
+                    color: colors.thumb_color,
                 })
-                .show_state_layer(true)
-                .show_ripple(true)
-                .ripple_bounded(false)
-                .ripple_radius(Dp(SwitchDefaults::STATE_LAYER_SIZE.0 / 2.0))
-                .ripple_color(if checked {
-                    scheme.primary
-                } else {
-                    scheme.on_surface
-                })
-                .interaction_state_optional(interaction_state)
-                .presentation_state_optional(presentation_state)
-                .enabled(enabled)
-                .ripple_state_optional(ripple_state)
-                .child(|| {});
-            layout()
-                .policy(SwitchThumbLayout {
-                    size: thumb_size_px,
-                })
-                .modifier({
-                    let modifier = Modifier::new();
-                    #[cfg(test)]
-                    let modifier = modifier.semantics(crate::modifier::SemanticsArgs {
-                        test_tag: Some(THUMB_TEST_TAG.to_string()),
-                        ..Default::default()
-                    });
-                    modifier
-                })
+                .shape(Shape::Ellipse)
+                .content_color(colors.icon_color)
                 .child(move || {
-                    surface()
-                        .modifier(Modifier::new().fill_max_size())
-                        .style(SurfaceStyle::Filled {
-                            color: colors.thumb_color,
-                        })
-                        .shape(Shape::Ellipse)
-                        .content_color(colors.icon_color)
-                        .child(move || {
-                            if let Some(child) = child {
-                                boxed()
-                                    .modifier(Modifier::new().fill_max_size())
-                                    .alignment(Alignment::Center)
-                                    .children(move || {
-                                        provide_context(
-                                            || IconSize(SwitchDefaults::ICON_SIZE),
-                                            move || child.render(),
-                                        );
-                                    });
-                            }
-                        });
+                    if let Some(child) = child {
+                        boxed()
+                            .modifier(Modifier::new().fill_max_size())
+                            .alignment(Alignment::Center)
+                            .children(move || {
+                                provide_context(
+                                    || IconSize(SwitchDefaults::ICON_SIZE),
+                                    move || child.render(),
+                                );
+                            });
+                    }
                 });
         });
+    });
 }
 
 #[cfg(test)]

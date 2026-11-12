@@ -5,8 +5,7 @@
 //! Use to indicate the completion of a task or a specific value in a range.
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    layout::{MeasureScope, layout},
-    tessera,
+    layout::MeasureScope, tessera,
 };
 
 use crate::{
@@ -42,15 +41,13 @@ pub(crate) fn glass_progress_fill(
     let blur_radius = blur_radius.unwrap_or(Dp(0.0));
     let shape = shape.unwrap_or(Shape::CAPSULE);
     let value = value.clamp(0.0, 1.0);
-    layout()
-        .policy(GlassProgressFillLayout { value })
-        .child(move || {
-            fluid_glass()
-                .tint_color(tint_color)
-                .blur_radius(blur_radius)
-                .shape(shape)
-                .child(|| {});
-        });
+    tessera_ui::layout::layout(GlassProgressFillLayout { value }).child(move || {
+        fluid_glass()
+            .tint_color(tint_color)
+            .blur_radius(blur_radius)
+            .shape(shape)
+            .child(|| {});
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -58,7 +55,7 @@ struct GlassProgressFillLayout {
     value: f32,
 }
 
-impl tessera_ui::LayoutModifierNode for GlassProgressFillLayout {
+impl tessera_ui::LayoutPolicy for GlassProgressFillLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let available_width = input
@@ -140,9 +137,8 @@ pub fn glass_progress(
     let blur_radius = blur_radius.unwrap_or(Dp(8.0));
     let track_border_width = track_border_width.unwrap_or(Dp(1.0));
     let height_px = height.to_px();
-    layout()
+    tessera_ui::layout::layout(GlassProgressLayout { height: height_px })
         .modifier(modifier)
-        .policy(GlassProgressLayout { height: height_px })
         .child(move || {
             let effective_height = Dp((height.0 - (track_border_width.0 * 2.0)).max(0.0));
             let fill_shape = capsule_shape_for_height(effective_height);
@@ -168,7 +164,7 @@ struct GlassProgressLayout {
     height: Px,
 }
 
-impl tessera_ui::LayoutModifierNode for GlassProgressLayout {
+impl tessera_ui::LayoutPolicy for GlassProgressLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let track = input

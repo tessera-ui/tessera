@@ -6,9 +6,7 @@
 
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot, State,
-    layout::{MeasureScope, layout},
-    tessera, use_context,
+    Modifier, Px, PxPosition, RenderSlot, State, layout::MeasureScope, tessera, use_context,
 };
 
 use crate::{
@@ -437,9 +435,8 @@ pub fn split_button_layout(
     let leading_button = leading_button.unwrap_or_else(RenderSlot::empty);
     let trailing_button = trailing_button.unwrap_or_else(RenderSlot::empty);
     let spacing = Px::from(spacing.unwrap_or(SplitButtonDefaults::SPACING)).max(Px::ZERO);
-    layout()
+    tessera_ui::layout::layout(SplitButton { spacing })
         .modifier(modifier)
-        .policy(SplitButton { spacing })
         .child(move || {
             leading_button.render();
             trailing_button.render();
@@ -687,7 +684,7 @@ struct SplitButton {
     spacing: Px,
 }
 
-impl tessera_ui::LayoutModifierNode for SplitButton {
+impl tessera_ui::LayoutPolicy for SplitButton {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();

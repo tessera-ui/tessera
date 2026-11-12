@@ -1,102 +1,237 @@
-use std::future::Future;
+use std::{
+    cell::{Cell, RefCell},
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll, Wake, Waker},
+};
 
 use futures_util::future::{AbortHandle, Abortable};
 
-/// Execution context for background work.
+/// Where a task runs.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Dispatcher {
-    /// Run work on the platform's IO-capable executor.
+    /// The UI session that spawned the task, polled between frames.
+    Main,
+    /// A pool for work that blocks on IO.
     Io,
-    /// Run work on the platform's general asynchronous executor.
-    Compute,
+    /// A pool sized to the CPU cores for computation.
+    Default,
 }
 
-/// Cancellation handle for one dispatched task.
-#[derive(Clone)]
-pub struct TaskHandle(AbortHandle);
-
-impl TaskHandle {
-    /// Requests cancellation of the task.
-    pub fn cancel(&self) {
-        self.0.abort();
-    }
-
-    /// Returns whether cancellation has been requested.
-    pub fn is_cancelled(&self) -> bool {
-        self.0.is_aborted()
-    }
-}
-
-/// Runs synchronous work on a background executor.
+/// A running task, cancelled when dropped.
 ///
-/// Use [`State::update`](crate::State::update) to deliver changes to UI-owned
-/// state. Cancellation is best-effort once synchronous work has started.
-pub fn dispatch(dispatcher: Dispatcher, work: impl FnOnce() + Send + 'static) -> TaskHandle {
-    let (abort, registration) = AbortHandle::new_pair();
-    let handle = TaskHandle(abort.clone());
-    #[cfg(not(target_family = "wasm"))]
-    match dispatcher {
-        Dispatcher::Io => {
-            let _ = executor(dispatcher).spawn_blocking(move || {
-                if !abort.is_aborted() {
-                    work();
-                }
-            });
-        }
-        Dispatcher::Compute => {
-            let _ = executor(dispatcher).spawn(Abortable::new(async move { work() }, registration));
-        }
+/// Store the task where its lifetime belongs: a model state, a composition
+/// slot, or a local variable. Call [`Task::detach`] to let it run to
+/// completion on its own.
+#[must_use = "dropping a task cancels it; call `detach` to let it run"]
+pub struct Task(Option<AbortHandle>);
+
+impl Task {
+    /// Lets the task run to completion without a handle.
+    pub fn detach(mut self) {
+        self.0 = None;
     }
-    #[cfg(target_family = "wasm")]
-    {
-        let _ = dispatcher;
-        wasm_bindgen_futures::spawn_local(async move {
-            let _ = Abortable::new(async move { work() }, registration).await;
-        });
+
+    /// Returns whether the task has finished or was cancelled.
+    pub fn is_finished(&self) -> bool {
+        self.0.as_ref().is_none_or(AbortHandle::is_aborted)
     }
-    handle
 }
 
-pub(crate) fn launch(
-    dispatcher: Dispatcher,
-    work: impl Future<Output = ()> + Send + 'static,
-) -> TaskHandle {
+impl Drop for Task {
+    fn drop(&mut self) {
+        if let Some(handle) = self.0.take() {
+            handle.abort();
+        }
+    }
+}
+
+thread_local! {
+    // The UI session a task belongs to while one of its futures is polled.
+    static TASK_SESSION: Cell<Option<u128>> = const { Cell::new(None) };
+}
+
+/// Runs `future` on `dispatcher`; dropping the returned [`Task`] cancels it.
+///
+/// [`Dispatcher::Main`] targets the current UI session, or the session of the
+/// task that calls `spawn`.
+pub fn spawn(dispatcher: Dispatcher, future: impl Future<Output = ()> + Send + 'static) -> Task {
+    let session = session_for(dispatcher);
+    let (abort, future) = abortable(future);
+    let future = SessionScoped { session, future };
+    match dispatcher {
+        Dispatcher::Main => spawn_main(session.expect("checked by session_for"), future),
+        #[cfg(not(target_family = "wasm"))]
+        Dispatcher::Io => {
+            // Each IO task owns a blocking-capable thread, so it may block
+            // while still driving Tokio IO resources.
+            let runtime = executor(dispatcher).handle().clone();
+            let _ = runtime
+                .clone()
+                .spawn_blocking(move || runtime.block_on(future));
+        }
+        #[cfg(not(target_family = "wasm"))]
+        Dispatcher::Default => {
+            let _ = executor(dispatcher).spawn(future);
+        }
+        #[cfg(target_family = "wasm")]
+        Dispatcher::Io | Dispatcher::Default => wasm_bindgen_futures::spawn_local(future),
+    }
+    Task(Some(abort))
+}
+
+/// Runs a `!Send` future on the current UI session, starting after the current
+/// frame's work.
+pub(crate) fn spawn_local(future: impl Future<Output = ()> + 'static) -> Task {
+    let session = crate::session::current_session_identity()
+        .expect("local tasks require an active UI session");
+    let (abort, future) = abortable(future);
+    let task = crate::local_runtime_resource::<MainTasks>()
+        .tasks
+        .borrow_mut()
+        .insert(Some(Box::pin(future)));
+    // The first poll waits for the next frame boundary, so spawning during a
+    // build never runs task code inside that build.
+    crate::dispatcher::dispatch_to_session(session, move || poll_main(task));
+    Task(Some(abort))
+}
+
+fn abortable<F: Future<Output = ()>>(future: F) -> (AbortHandle, impl Future<Output = ()>) {
     let (abort, registration) = AbortHandle::new_pair();
-    let handle = TaskHandle(abort);
-    #[cfg(not(target_family = "wasm"))]
-    {
-        let _ = executor(dispatcher).spawn(Abortable::new(work, registration));
+    let handle = abort.clone();
+    let future = Abortable::new(future, registration);
+    (abort, async move {
+        let _ = future.await;
+        // Marks the task finished for `Task::is_finished`.
+        handle.abort();
+    })
+}
+
+/// Runs `future` on `dispatcher` and returns its output.
+///
+/// Dropping the returned future cancels the work.
+pub fn on<R: Send + 'static>(
+    dispatcher: Dispatcher,
+    future: impl Future<Output = R> + Send + 'static,
+) -> impl Future<Output = R> + Send {
+    let (sender, receiver) = futures_channel::oneshot::channel();
+    let task = spawn(dispatcher, async move {
+        let _ = sender.send(future.await);
+    });
+    async move {
+        let output = receiver.await;
+        drop(task);
+        output.expect("a dispatched future completes unless cancelled")
     }
-    #[cfg(target_family = "wasm")]
-    {
-        let _ = dispatcher;
-        wasm_bindgen_futures::spawn_local(async move {
-            let _ = Abortable::new(work, registration).await;
-        });
+}
+
+fn session_for(dispatcher: Dispatcher) -> Option<u128> {
+    let session =
+        crate::session::current_session_identity().or_else(|| TASK_SESSION.with(Cell::get));
+    if dispatcher == Dispatcher::Main {
+        assert!(
+            session.is_some(),
+            "Dispatcher::Main requires a UI session or a task spawned from one"
+        );
     }
-    handle
+    session
+}
+
+struct SessionScoped<F> {
+    session: Option<u128>,
+    future: F,
+}
+
+impl<F: Future> Future for SessionScoped<F> {
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
+        // SAFETY: `future` is structurally pinned and never moved out.
+        let this = unsafe { self.get_unchecked_mut() };
+        let previous = TASK_SESSION.with(|current| current.replace(this.session));
+        let output = unsafe { Pin::new_unchecked(&mut this.future) }.poll(context);
+        TASK_SESSION.with(|current| current.set(previous));
+        output
+    }
+}
+
+type MainFuture = Pin<Box<dyn Future<Output = ()>>>;
+
+#[derive(Default)]
+struct MainTasks {
+    tasks: RefCell<slotmap::SlotMap<slotmap::DefaultKey, Option<MainFuture>>>,
+}
+
+struct MainWaker {
+    session: u128,
+    task: slotmap::DefaultKey,
+}
+
+impl Wake for MainWaker {
+    fn wake(self: Arc<Self>) {
+        let task = self.task;
+        crate::dispatcher::dispatch_to_session(self.session, move || poll_main(task));
+    }
+}
+
+fn spawn_main(session: u128, future: impl Future<Output = ()> + Send + 'static) {
+    // The first poll waits for the next frame boundary, so spawning during a
+    // build never runs task code inside that build.
+    crate::dispatcher::dispatch_to_session(session, move || {
+        let task = crate::local_runtime_resource::<MainTasks>()
+            .tasks
+            .borrow_mut()
+            .insert(Some(Box::pin(future)));
+        poll_main(task);
+    });
+}
+
+fn poll_main(task: slotmap::DefaultKey) {
+    let tasks = crate::local_runtime_resource::<MainTasks>();
+    let Some(mut future) = tasks
+        .tasks
+        .borrow_mut()
+        .get_mut(task)
+        .and_then(Option::take)
+    else {
+        return;
+    };
+    let session = crate::session::current_session_identity().expect("main tasks run in a session");
+    let waker = Waker::from(Arc::new(MainWaker { session, task }));
+    let poll = future.as_mut().poll(&mut Context::from_waker(&waker));
+    let mut slots = tasks.tasks.borrow_mut();
+    match poll {
+        Poll::Ready(()) => {
+            slots.remove(task);
+        }
+        Poll::Pending => {
+            if let Some(slot) = slots.get_mut(task) {
+                *slot = Some(future);
+            }
+        }
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]
 fn executor(dispatcher: Dispatcher) -> &'static tokio::runtime::Runtime {
     static IO: std::sync::LazyLock<tokio::runtime::Runtime> = std::sync::LazyLock::new(|| {
         tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
+            .worker_threads(1)
             .enable_all()
             .thread_name("tessera-io")
             .build()
             .expect("IO task executor")
     });
-    static COMPUTE: std::sync::LazyLock<tokio::runtime::Runtime> = std::sync::LazyLock::new(|| {
+    static DEFAULT: std::sync::LazyLock<tokio::runtime::Runtime> = std::sync::LazyLock::new(|| {
         tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_time()
-            .thread_name("tessera-compute")
+            .enable_all()
+            .thread_name("tessera-default")
             .build()
-            .expect("compute task executor")
+            .expect("default task executor")
     });
     match dispatcher {
         Dispatcher::Io => &IO,
-        Dispatcher::Compute => &COMPUTE,
+        Dispatcher::Default | Dispatcher::Main => &DEFAULT,
     }
 }

@@ -72,8 +72,7 @@ impl Default for DispatchQueue {
 
 /// A captured delivery service for one UI session.
 #[derive(Clone)]
-pub struct UiDispatcher {
-    owner: crate::RuntimeSessionId,
+pub(crate) struct UiDispatcher {
     queue: Arc<DispatchQueue>,
     liveness: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
 }
@@ -116,21 +115,13 @@ impl UiDispatcher {
         self.liveness = Some(Arc::new(alive));
         self
     }
-
-    /// Returns the destination session's identity.
-    pub fn session_id(&self) -> crate::RuntimeSessionId {
-        self.owner
-    }
 }
 
 pub(crate) fn current() -> UiDispatcher {
-    let session =
-        crate::RuntimeSession::current().expect("a UI dispatcher requires an active session");
     let queue = crate::runtime_resource::<DispatchQueue>();
     let identity = crate::session::current_session_identity().expect("active UI session");
     register(identity, &queue);
     UiDispatcher {
-        owner: session.identity(),
         queue,
         liveness: None,
     }
@@ -159,6 +150,7 @@ pub(crate) fn has_pending() -> bool {
 }
 
 pub(crate) fn flush() {
+    crate::session::serve_other_threads();
     let queue = crate::runtime_resource::<DispatchQueue>();
     let work = std::mem::take(&mut queue.0.lock().pending);
     for work in work {

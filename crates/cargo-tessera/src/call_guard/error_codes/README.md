@@ -8,5 +8,6 @@ retired codes retain their explanations. Add the next unused number and its docu
 - [T0003](T0003.md): unresolved Tessera-sensitive call.
 - [T0004](T0004.md): invalid Tessera lint configuration.
 - [T0005](T0005.md): private Tessera macro-support item outside generated code.
+- [T0006](T0006.md): model state created outside a model initializer.
 
 Read an explanation with `cargo tessera check --explain T0001`.

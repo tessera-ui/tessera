@@ -7,10 +7,7 @@ use tessera_foundation::gesture::DragAxis;
 use tessera_ui::{
     Asset, AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
-    layout::{MeasureScope, layout},
-    provide_context, remember,
-    renderer::AppTitleBar,
-    tessera, use_context,
+    layout::MeasureScope, provide_context, remember, renderer::AppTitleBar, tessera, use_context,
 };
 
 use crate::{
@@ -191,7 +188,7 @@ impl TopAppBarBuilder {
     /// Append a trailing action item.
     pub fn action<F, Output>(&self, action: F) -> Self
     where
-        F: Fn() -> Output + Send + Sync + 'static,
+        F: Fn() -> Output + 'static,
     {
         self.props.append("actions", move |props| {
             props
@@ -203,7 +200,7 @@ impl TopAppBarBuilder {
     }
 
     /// Append a trailing action item using a shared callback.
-    pub fn action_shared(&self, action: impl Into<RenderSlot> + Send + Sync + 'static) -> Self {
+    pub fn action_shared(&self, action: impl Into<RenderSlot> + 'static) -> Self {
         self.props.append("actions", move |props| {
             props
                 .actions
@@ -480,7 +477,7 @@ pub fn top_app_bar(
             let subtitle = subtitle.clone();
             let title_area_modifier = title_area_modifier.clone();
             let actions = actions.clone();
-            layout().policy(policy.clone()).child(move || {
+            tessera_ui::layout::layout(policy.clone()).child(move || {
                 row()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .children(move || {
@@ -620,7 +617,7 @@ struct TopAppBarLayout {
     title_inset: Dp,
 }
 
-impl tessera_ui::LayoutModifierNode for TopAppBarLayout {
+impl tessera_ui::LayoutPolicy for TopAppBarLayout {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = *scope.parent_constraint().as_ref();
         let width = parent.width.max.unwrap_or(parent.width.min);

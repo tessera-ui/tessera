@@ -22,7 +22,7 @@ pub enum ClipboardAction {
 /// A clipboard write awaiting acknowledgement from the platform.
 pub struct ClipboardWrite {
     text: String,
-    on_success: Box<dyn FnOnce() + Send + Sync>,
+    on_success: Box<dyn FnOnce()>,
 }
 
 impl ClipboardWrite {
@@ -63,7 +63,7 @@ impl ClipboardInput<'_> {
     }
 
     /// Requests a write and a callback after the platform confirms success.
-    pub fn write_text(&mut self, text: String, on_success: impl FnOnce() + Send + Sync + 'static) {
+    pub fn write_text(&mut self, text: String, on_success: impl FnOnce() + 'static) {
         *self.response = Some(ClipboardResponse::Write(ClipboardWrite {
             text,
             on_success: Box::new(on_success),
@@ -81,7 +81,7 @@ pub trait ClipboardInputModifierNode: std::any::Any {
 pub(crate) struct QueuedClipboardAction {
     pub sequence: u64,
     pub action: ClipboardAction,
-    pub reply: Box<dyn FnOnce(ClipboardResponse) + Send + Sync>,
+    pub reply: Box<dyn FnOnce(ClipboardResponse)>,
 }
 
 const REQUESTS: crate::session::SessionLocal<RefCell<VecDeque<QueuedClipboardAction>>> =
@@ -94,7 +94,7 @@ const REQUESTS: crate::session::SessionLocal<RefCell<VecDeque<QueuedClipboardAct
 /// Call this on the runtime's UI thread.
 pub fn request_clipboard_action(
     action: ClipboardAction,
-    reply: impl FnOnce(ClipboardResponse) + Send + Sync + 'static,
+    reply: impl FnOnce(ClipboardResponse) + 'static,
 ) {
     REQUESTS.with_borrow_mut(|requests| {
         requests.push_back(QueuedClipboardAction {

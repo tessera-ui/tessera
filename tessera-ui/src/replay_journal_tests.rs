@@ -3,10 +3,10 @@ use std::collections::BTreeMap;
 use crate::{
     AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, CursorEventContent,
     FocusDirection, FocusManager, FocusModifierExt, FocusRequester, FocusScopeNode, GestureState,
-    LayoutModifierNode, LayoutResult, Modifier, PointerChange, PointerEventPass, PointerInput,
+    LayoutPolicy, LayoutResult, Modifier, PointerChange, PointerEventPass, PointerInput,
     PointerInputModifierNode, PressKeyEventType, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::Role,
-    layout::{MeasureScope, layout},
+    layout::MeasureScope,
     remember,
     runtime::TesseraRuntime,
     tessera,
@@ -31,7 +31,7 @@ struct ReplayProbe {
 #[derive(Clone, PartialEq)]
 struct Overlap;
 
-impl LayoutModifierNode for Overlap {
+impl LayoutPolicy for Overlap {
     fn measure(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -83,7 +83,7 @@ impl PointerInputModifierNode for Pointer {
 #[derive(Clone, PartialEq)]
 struct RevisionedOverlap(u32);
 
-impl LayoutModifierNode for RevisionedOverlap {
+impl LayoutPolicy for RevisionedOverlap {
     fn measure(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -94,7 +94,7 @@ impl LayoutModifierNode for RevisionedOverlap {
 
 #[tessera]
 fn edited_leaf(version: u32, probe: ReplayProbe) {
-    layout().policy(RevisionedOverlap(version)).modifier(
+    crate::layout::layout(RevisionedOverlap(version)).modifier(
         Modifier::new()
             .push_semantics(Tag {
                 key: "edited".to_owned(),
@@ -110,7 +110,7 @@ fn retained_leaf(index: usize, probe: ReplayProbe) {
     probe.requesters.with_mut(|requesters| {
         requesters.insert(index, requester);
     });
-    layout().policy(Overlap).modifier(
+    crate::layout::layout(Overlap).modifier(
         Modifier::new()
             .push_semantics(Tag {
                 key: format!("retained-{index}"),
@@ -124,7 +124,7 @@ fn retained_leaf(index: usize, probe: ReplayProbe) {
 
 #[tessera]
 fn retained_branch(count: usize, probe: ReplayProbe) {
-    layout().policy(Overlap).child(move || {
+    crate::layout::layout(Overlap).child(move || {
         let probe = probe.clone();
         for index in 0..count {
             let probe = probe.clone();
@@ -140,7 +140,7 @@ fn replay_fixture(count: usize, probe: ReplayProbe) {
     let version = remember(|| 0_u32);
     probe.version.set(Some(version));
     let version = version.get();
-    layout().policy(Overlap).child(move || {
+    crate::layout::layout(Overlap).child(move || {
         let probe = probe.clone();
         edited_leaf(version, probe.clone());
         retained_branch(count, probe.clone());
@@ -279,7 +279,7 @@ fn independently_dirty_leaf(
     if backwards_write && version == 1 {
         parent.set(2);
     }
-    layout().policy(Overlap).modifier(
+    crate::layout::layout(Overlap).modifier(
         Modifier::new()
             .push_semantics(Tag {
                 key: "retained-dirty-leaf".to_owned(),
@@ -296,7 +296,7 @@ fn retained_dirty_branch(
     backwards_write: bool,
     probe: ReplayProbe,
 ) {
-    layout().policy(Overlap).child(move || {
+    crate::layout::layout(Overlap).child(move || {
         let probe = probe.clone();
         independently_dirty_leaf(version, parent, backwards_write, probe.clone());
     });
@@ -312,7 +312,7 @@ fn nested_dirty_fixture(write_during_replay: bool, backwards_write: bool, probe:
     if write_during_replay && version > 0 {
         leaf.set(version);
     }
-    layout().policy(Overlap).child(move || {
+    crate::layout::layout(Overlap).child(move || {
         let probe = probe.clone();
         edited_leaf(version, probe.clone());
         retained_dirty_branch(leaf, parent, backwards_write, probe.clone());
@@ -467,12 +467,10 @@ fn cyclic_replay_peer(index: usize, own: State<u32>, other: State<u32>, armed: S
     if armed.get() {
         other.set(value + 1);
     }
-    layout()
-        .policy(Overlap)
-        .modifier(Modifier::new().push_semantics(Tag {
-            key: format!("cyclic-{index}"),
-            label: format!("Cycle {index}"),
-        }));
+    crate::layout::layout(Overlap).modifier(Modifier::new().push_semantics(Tag {
+        key: format!("cyclic-{index}"),
+        label: format!("Cycle {index}"),
+    }));
 }
 
 #[tessera]
@@ -481,7 +479,7 @@ fn cyclic_replay_fixture(probe: ReplayProbe) {
     let right = remember(|| 0_u32);
     let armed = remember(|| false);
     probe.armed.set(Some(armed));
-    layout().policy(Overlap).child(move || {
+    crate::layout::layout(Overlap).child(move || {
         cyclic_replay_peer(0, left, right, armed);
         cyclic_replay_peer(1, right, left, armed);
     });
@@ -533,7 +531,7 @@ fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
 
 #[tessera]
 fn ordered_branch(index: usize, probe: ReplayProbe) {
-    layout().policy(Overlap).child(move || {
+    crate::layout::layout(Overlap).child(move || {
         let probe = probe.clone();
         retained_leaf(index, probe.clone());
     });
@@ -544,7 +542,7 @@ fn ordered_fixture(probe: ReplayProbe) {
     let reverse = remember(|| false);
     probe.reverse.set(Some(reverse));
     let reverse = reverse.get();
-    layout().policy(Overlap).child(move || {
+    crate::layout::layout(Overlap).child(move || {
         let probe = probe.clone();
         for index in if reverse { [1_usize, 0] } else { [0_usize, 1] } {
             let probe = probe.clone();
@@ -558,7 +556,7 @@ fn ordered_fixture(probe: ReplayProbe) {
 #[derive(Clone, PartialEq)]
 struct PlacementOrder(State<bool>);
 
-impl LayoutModifierNode for PlacementOrder {
+impl LayoutPolicy for PlacementOrder {
     fn measure(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -582,7 +580,7 @@ impl LayoutModifierNode for PlacementOrder {
 fn placement_order_fixture(probe: ReplayProbe) {
     let reverse = remember(|| false);
     probe.reverse.set(Some(reverse));
-    layout().policy(PlacementOrder(reverse)).child(move || {
+    crate::layout::layout(PlacementOrder(reverse)).child(move || {
         let probe = probe.clone();
         ordered_branch(0, probe.clone());
         ordered_branch(1, probe.clone());
@@ -723,7 +721,7 @@ fn optional_pointer_fixture(probe: ReplayProbe) {
     } else {
         modifier
     };
-    layout().policy(Overlap).modifier(modifier);
+    crate::layout::layout(Overlap).modifier(modifier);
 }
 
 #[test]
@@ -732,9 +730,7 @@ fn retained_layout_leaves_pointer_index_when_its_last_handler_is_removed() {
     let mut session = start_layout_test_session(
         layout_test(|| {
             let probe = probe.clone();
-            layout()
-                .policy(Overlap)
-                .child(move || optional_pointer_fixture(probe.clone()));
+            crate::layout::layout(Overlap).child(move || optional_pointer_fixture(probe.clone()));
         })
         .viewport_px(100, 100),
     );
@@ -803,7 +799,7 @@ fn conditional_description(probe: ReplayProbe) {
     } else {
         Modifier::new()
     };
-    layout().policy(Overlap).modifier(modifier);
+    crate::layout::layout(Overlap).modifier(modifier);
 }
 
 #[test]
@@ -854,8 +850,7 @@ fn scoped_fixture(probe: ReplayProbe) {
     let changed = changed.get();
     let scopes = remember(|| (FocusScopeNode::new(), FocusScopeNode::new())).get();
     probe.scopes.set(Some(scopes));
-    layout()
-        .policy(Overlap)
+    crate::layout::layout(Overlap)
         .modifier(
             Modifier::new()
                 .focus_scope_with(if changed { scopes.1 } else { scopes.0 })

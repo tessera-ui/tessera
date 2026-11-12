@@ -7,7 +7,7 @@
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, FrameNanosControl, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, RenderSlotWith, State, current_frame_nanos, key,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
     receive_frame_nanos, remember, remember_with_key, tessera, use_context,
 };
@@ -145,7 +145,7 @@ impl Reveal {
 #[derive(Clone, PartialEq)]
 struct HostLayout;
 
-impl tessera_ui::LayoutModifierNode for HostLayout {
+impl tessera_ui::LayoutPolicy for HostLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let parent = input.parent_constraint();
@@ -253,7 +253,7 @@ impl LabelLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for LabelLayout {
+impl tessera_ui::LayoutPolicy for LabelLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = input.parent_constraint();
         let size = ComputedData {
@@ -276,7 +276,7 @@ impl tessera_ui::LayoutModifierNode for LabelLayout {
         Ok(result)
     }
 
-    fn place_children(
+    fn place(
         &self,
         scope: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -320,58 +320,54 @@ fn label_layer(
     if data.with(|current| current != &next) {
         data.set(next);
     }
-    layout()
-        .modifier(Modifier::new().semantics(SemanticsArgs {
-            hidden: true,
-            ..Default::default()
-        }))
-        .policy(LabelLayout {
-            anchor: request.anchor,
-            origin,
-            orientation: request.orientation,
-            scale,
-        })
-        .child(move || {
-            let (request, scale) = data.get();
-            if scale > 0.0 {
-                let dp = move |value| tessera_ui::Dp(value * f64::from(scale));
-                let modifier = Modifier::new().alpha(scale).constrain(
-                    Some(AxisConstraint::new(dp(48.0).to_px(), None)),
-                    Some(AxisConstraint::new(dp(44.0).to_px(), None)),
-                );
-                #[cfg(test)]
-                let modifier = modifier.semantics(SemanticsArgs {
-                    test_tag: Some("slider-value-label".into()),
-                    label: Some(request.label.clone()),
-                    ..Default::default()
+    tessera_ui::layout::layout(LabelLayout {
+        anchor: request.anchor,
+        origin,
+        orientation: request.orientation,
+        scale,
+    })
+    .modifier(Modifier::new().semantics(SemanticsArgs {
+        hidden: true,
+        ..Default::default()
+    }))
+    .child(move || {
+        let (request, scale) = data.get();
+        if scale > 0.0 {
+            let dp = move |value| tessera_ui::Dp(value * f64::from(scale));
+            let modifier = Modifier::new().alpha(scale).constrain(
+                Some(AxisConstraint::new(dp(48.0).to_px(), None)),
+                Some(AxisConstraint::new(dp(44.0).to_px(), None)),
+            );
+            #[cfg(test)]
+            let modifier = modifier.semantics(SemanticsArgs {
+                test_tag: Some("slider-value-label".into()),
+                label: Some(request.label.clone()),
+                ..Default::default()
+            });
+            surface()
+                .modifier(modifier)
+                .shape(Shape::CAPSULE)
+                .style(request.background.into())
+                .child(move || {
+                    let scale = data.with(|(_, scale)| *scale);
+                    let dp = move |value| tessera_ui::Dp(value * f64::from(scale));
+                    boxed()
+                        .modifier(Modifier::new().padding(Padding::symmetric(dp(16.0), dp(12.0))))
+                        .alignment(Alignment::Center)
+                        .children(move || {
+                            let (request, scale) = data.get();
+                            let mut style = request.style;
+                            style.font_size = tessera_ui::Dp(style.font_size.0 * f64::from(scale));
+                            style.line_height = style
+                                .line_height
+                                .map(|height| tessera_ui::Dp(height.0 * f64::from(scale)));
+                            style.letter_spacing =
+                                tessera_ui::Dp(style.letter_spacing.0 * f64::from(scale));
+                            text(request.label).color(request.foreground).style(style);
+                        });
                 });
-                surface()
-                    .modifier(modifier)
-                    .shape(Shape::CAPSULE)
-                    .style(request.background.into())
-                    .child(move || {
-                        let scale = data.with(|(_, scale)| *scale);
-                        let dp = move |value| tessera_ui::Dp(value * f64::from(scale));
-                        boxed()
-                            .modifier(
-                                Modifier::new().padding(Padding::symmetric(dp(16.0), dp(12.0))),
-                            )
-                            .alignment(Alignment::Center)
-                            .children(move || {
-                                let (request, scale) = data.get();
-                                let mut style = request.style;
-                                style.font_size =
-                                    tessera_ui::Dp(style.font_size.0 * f64::from(scale));
-                                style.line_height = style
-                                    .line_height
-                                    .map(|height| tessera_ui::Dp(height.0 * f64::from(scale)));
-                                style.letter_spacing =
-                                    tessera_ui::Dp(style.letter_spacing.0 * f64::from(scale));
-                                text(request.label).color(request.foreground).style(style);
-                            });
-                    });
-            }
-        });
+        }
+    });
 }
 
 /// # slider_value_indicator_provider
@@ -426,7 +422,7 @@ pub fn slider_value_indicator_provider(
     if child_data.get() != next {
         child_data.set(next);
     }
-    layout()
+    tessera_ui::layout::layout(HostLayout)
         .modifier(
             child_data
                 .with(|(modifier, _)| modifier.clone())
@@ -434,9 +430,8 @@ pub fn slider_value_indicator_provider(
                     origin.set_if_changed(coordinates);
                 }),
         )
-        .policy(HostLayout)
         .child(move || {
-            layout().child(move || {
+            layout(Stack).child(move || {
                 if let Some(child) = child_data.with(|(_, child)| *child) {
                     child.render(SliderValueIndicatorHost { entries });
                 }

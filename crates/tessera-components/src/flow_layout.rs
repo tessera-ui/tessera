@@ -69,7 +69,7 @@ pub(crate) struct FlowLayout {
     pub(crate) max_lines: usize,
 }
 
-impl tessera_ui::LayoutModifierNode for FlowLayout {
+impl tessera_ui::LayoutPolicy for FlowLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let weights: Vec<_> = children

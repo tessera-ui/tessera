@@ -10,7 +10,7 @@ use tessera_ui::{
     PointerInputModifierNode, Px, PxPosition, PxSize, RenderSlot, SemanticsModifierNode, State,
     accesskit::{Role, Toggled},
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -616,7 +616,7 @@ impl PartialEq for SurfaceLayout {
     }
 }
 
-impl tessera_ui::LayoutModifierNode for SurfaceLayout {
+impl tessera_ui::LayoutPolicy for SurfaceLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.has_foreground() == other.has_foreground()
     }
@@ -625,7 +625,7 @@ impl tessera_ui::LayoutModifierNode for SurfaceLayout {
         self.measure_eq(other) && self.args.content_alignment == other.args.content_alignment
     }
 
-    fn place_children(
+    fn place(
         &self,
         scope: &tessera_ui::layout::PlacementScope<'_>,
         _inner: &tessera_ui::layout::PlacementResult,
@@ -889,7 +889,7 @@ fn focus_indicator_geometry(
 fn surface_foreground(paint: Option<State<SurfaceLayout>>) {
     let paint = paint.expect("surface foreground paint").get();
     if paint.has_foreground() {
-        layout().draw(SurfaceForeground(paint));
+        layout(Stack).draw(SurfaceForeground(paint));
     }
 }
 
@@ -1013,16 +1013,15 @@ fn surface_content(
     if live.with(|value| value != &current) {
         live.set(current);
     }
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         let policy = live.get();
         let modifier = if policy.args.clip_content {
             Modifier::new().clip_shape(policy.args.shape)
         } else {
             Modifier::new()
         };
-        layout()
+        tessera_ui::layout::layout(policy.clone())
             .modifier(modifier)
-            .policy(policy.clone())
             .draw(policy)
             .child(move || {
                 let (absolute_tonal_elevation, content_color, child) = context.get();
@@ -1374,7 +1373,7 @@ pub fn surface(
         modifier = modifier.push_semantics(SurfaceToggleSemantics(resolved.accessibility_toggled));
     }
 
-    layout().modifier(modifier).child(move || {
+    layout(Stack).modifier(modifier).child(move || {
         surface_content()
             .resolved(resolved.clone())
             .interaction_state_optional(interaction_state)
@@ -1692,7 +1691,7 @@ mod tests {
 
     #[tessera]
     fn transparent_outline_rgb_sample(fill_color: Color, ripple_opacity: f32) {
-        tessera_ui::layout::layout()
+        tessera_ui::layout::layout(tessera_ui::layout::Stack)
             .modifier(Modifier::new().required_size(Dp(64.0), Dp(64.0)))
             .draw(TransparentOutlineSample {
                 fill_color,

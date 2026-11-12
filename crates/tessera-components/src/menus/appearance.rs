@@ -8,6 +8,7 @@ use tessera_ui::{
     Color, Dp, FocusScopeNode, Modifier, RenderSlot,
     accesskit::Role,
     current_frame_nanos,
+    layout::Stack,
     layout::layout,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, receive_frame_nanos, remember, tessera, use_context,
@@ -212,7 +213,7 @@ pub fn menu_group(
             controller: menu.map(|menu| menu.controller),
         });
     }
-    layout()
+    layout(Stack)
         .modifier(Modifier::new().padding(Padding::top(
             if matches!(position, MenuPosition::Middle | MenuPosition::Last) {
                 MenuDefaults::GROUP_SPACING

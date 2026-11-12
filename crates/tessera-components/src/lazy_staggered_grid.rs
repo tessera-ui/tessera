@@ -8,7 +8,7 @@ use std::{hash::Hash, ops::Range, sync::Arc};
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Dp, LayoutResult, MeasurementError,
     Modifier, Px, PxPosition, RenderSlotWith, State, key,
-    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::FocusModifierExt as _,
     remember, tessera,
 };
@@ -419,11 +419,11 @@ struct LazyStaggeredGridLayout {
 
 impl PartialEq for LazyStaggeredGridLayout {
     fn eq(&self, other: &Self) -> bool {
-        tessera_ui::LayoutModifierNode::placement_eq(self, other)
+        tessera_ui::LayoutPolicy::placement_eq(self, other)
     }
 }
 
-impl tessera_ui::LayoutModifierNode for LazyStaggeredGridLayout {
+impl tessera_ui::LayoutPolicy for LazyStaggeredGridLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -520,7 +520,7 @@ impl tessera_ui::LayoutModifierNode for LazyStaggeredGridLayout {
         self.measure_eq(other) && self.scroll_offset == other.scroll_offset
     }
 
-    fn place_children(
+    fn place(
         &self,
         input: &PlacementScope<'_>,
         _inner: &PlacementResult,
@@ -640,7 +640,7 @@ fn lazy_staggered_grid_view(
     let visible_items = visible_items(&plan, visible_range.clone());
 
     if visible_items.is_empty() {
-        layout().policy(ZeroLayout);
+        tessera_ui::layout::layout(ZeroLayout);
         return;
     }
 
@@ -664,34 +664,33 @@ fn lazy_staggered_grid_view(
         })
         .collect();
 
-    layout()
-        .modifier(focus_modifier)
-        .policy(LazyStaggeredGridLayout {
-            axis,
-            item_alignment,
-            estimated_item_main,
-            main_spacing: main_axis_spacing,
-            max_viewport_main,
-            padding_main,
-            padding_cross,
-            viewport_limit,
-            total_count,
-            slots: grid_slots.clone(),
-            visible_items: visible_layout_items,
-            scroll_offset,
-            controller,
-            scroll_controller,
-        })
-        .child(move || {
-            for child in &visible_items {
-                let child = child.clone();
-                key(child.key_hash, || {
-                    lazy_staggered_grid_item_host()
-                        .builder_handle_shared(child.builder)
-                        .local_index(child.local_index);
-                });
-            }
-        });
+    tessera_ui::layout::layout(LazyStaggeredGridLayout {
+        axis,
+        item_alignment,
+        estimated_item_main,
+        main_spacing: main_axis_spacing,
+        max_viewport_main,
+        padding_main,
+        padding_cross,
+        viewport_limit,
+        total_count,
+        slots: grid_slots.clone(),
+        visible_items: visible_layout_items,
+        scroll_offset,
+        controller,
+        scroll_controller,
+    })
+    .modifier(focus_modifier)
+    .child(move || {
+        for child in &visible_items {
+            let child = child.clone();
+            key(child.key_hash, || {
+                lazy_staggered_grid_item_host()
+                    .builder_handle_shared(child.builder)
+                    .local_index(child.local_index);
+            });
+        }
+    });
 }
 
 #[tessera]
@@ -1164,9 +1163,8 @@ fn compute_staggered_layout_positions(
 mod tests {
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
-        Px, PxPosition, RenderSlotWith,
-        layout::{MeasureScope, layout},
-        receive_frame_nanos, remember, tessera,
+        Px, PxPosition, RenderSlotWith, layout::MeasureScope, receive_frame_nanos, remember,
+        tessera,
     };
 
     use crate::{
@@ -1185,7 +1183,7 @@ mod tests {
         height: i32,
     }
 
-    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+    impl tessera_ui::LayoutPolicy for FixedTestLayout {
         fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
@@ -1200,8 +1198,7 @@ mod tests {
         let width = width.unwrap_or(0);
         let height = height.unwrap_or(0);
 
-        layout()
-            .policy(FixedTestLayout { width, height })
+        tessera_ui::layout::layout(FixedTestLayout { width, height })
             .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),

@@ -1,8 +1,6 @@
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutModifierNode, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition,
-    layout::{MeasureScope, layout},
-    tessera,
+    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
+    MeasurementError, Modifier, Px, PxPosition, layout::MeasureScope, tessera,
     testing::layout_test,
 };
 
@@ -13,7 +11,7 @@ use super::{horizontal_divider, vertical_divider};
 #[derive(Clone, PartialEq)]
 struct Constrained(Constraint);
 
-impl LayoutModifierNode for Constrained {
+impl LayoutPolicy for Constrained {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let child = scope.children()[0];
         let size = child.measure(scope, &self.0)?.size();
@@ -35,7 +33,7 @@ fn tagged() -> Modifier {
 
 #[tessera]
 fn fixture(constraint: Constraint, vertical: bool, thickness: Dp, inset: bool) {
-    layout().policy(Constrained(constraint)).child(move || {
+    tessera_ui::layout::layout(Constrained(constraint)).child(move || {
         let modifier = if inset {
             tagged().padding_symmetric(Dp(16.0), Dp::ZERO)
         } else {
