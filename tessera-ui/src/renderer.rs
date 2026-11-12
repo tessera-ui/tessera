@@ -53,12 +53,12 @@ use crate::{
     runtime::{
         TesseraRuntime, begin_frame_build_invalidations, begin_frame_clock,
         clear_persistent_focus_handles, clear_redraw_waker, has_pending_build_invalidations,
-        has_pending_frame_nanos_receivers, has_pending_layout_invalidations,
+        has_pending_frame_waiters, has_pending_layout_invalidations,
         has_pending_persistent_focus_prune, has_ready_build_invalidations, install_redraw_waker,
         prune_persistent_focus_handles, release_retired_replay_snapshots,
         reset_build_invalidations, reset_focus_read_dependencies, reset_frame_clock,
         reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
-        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_nanos_receivers,
+        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_clock,
     },
     thread_utils,
     time::Instant,
@@ -136,7 +136,7 @@ type RenderComputationOutput = (
 struct RuntimePendingWork {
     invalidation_pending: bool,
     layout_pending: bool,
-    frame_receiver_pending: bool,
+    frame_waiter_pending: bool,
 }
 
 pub(crate) const MAX_FRAME_SETTLING_RETRIES: usize = 8;
@@ -161,12 +161,12 @@ impl RuntimePendingWork {
                             .has_pending_navigation()
                 }),
             layout_pending: has_pending_layout_invalidations(),
-            frame_receiver_pending: has_pending_frame_nanos_receivers(),
+            frame_waiter_pending: has_pending_frame_waiters(),
         }
     }
 
     fn requires_redraw(self) -> bool {
-        self.invalidation_pending || self.layout_pending || self.frame_receiver_pending
+        self.invalidation_pending || self.layout_pending || self.frame_waiter_pending
     }
 
     #[cfg(feature = "profiling")]
@@ -175,7 +175,7 @@ impl RuntimePendingWork {
         if self.invalidation_pending || self.layout_pending {
             reasons.push(RedrawReason::RuntimeInvalidation);
         }
-        if self.frame_receiver_pending {
+        if self.frame_waiter_pending {
             reasons.push(RedrawReason::RuntimeFrameAwaiter);
         }
         reasons
@@ -1120,7 +1120,7 @@ Fps: {:.2}
         begin_frame_build_invalidations();
         // Tick frame-nanos receivers before build so their state writes are
         // consumed by the current recomposition pass.
-        tick_frame_nanos_receivers();
+        tick_frame_clock();
         // notify the windowing system before rendering
         // this will help winit to properly schedule and make assumptions about
         // its internal state
@@ -2676,7 +2676,7 @@ mod tests {
         pump_layout_test_session(&mut session, 4);
         assert!(!crate::runtime::has_pending_build_invalidations());
         assert!(!crate::runtime::has_pending_layout_invalidations());
-        assert!(!crate::runtime::has_pending_frame_nanos_receivers());
+        assert!(!crate::runtime::has_pending_frame_waiters());
         assert!(!crate::runtime::has_pending_persistent_focus_prune());
         assert!(!crate::clipboard::has_pending_requests());
         assert!(!TesseraRuntime::with(|runtime| {

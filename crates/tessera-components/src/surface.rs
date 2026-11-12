@@ -12,7 +12,7 @@ use tessera_ui::{
     current_frame_nanos,
     layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -963,16 +963,24 @@ fn surface_content(
         });
         if has_active_ripple {
             ripple_frame_nanos = Some(frame_nanos);
-            receive_frame_nanos(move |frame_nanos| {
-                let has_active_ripple = ripple_state.with(|state| {
-                    state
-                        .animation_snapshot_at_frame_nanos(frame_nanos)
-                        .is_some()
-                });
-                if has_active_ripple {
-                    tessera_ui::FrameNanosControl::Continue
-                } else {
-                    tessera_ui::FrameNanosControl::Stop
+            // Rebuilds this component on every animated frame.
+            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+            let _ = frame_clock.get();
+            tessera_ui::launch_once(async move {
+                let step = move |frame_nanos: u64| {
+                    let has_active_ripple = ripple_state.with(|state| {
+                        state
+                            .animation_snapshot_at_frame_nanos(frame_nanos)
+                            .is_some()
+                    });
+                    if has_active_ripple { true } else { false }
+                };
+                loop {
+                    let now = tessera_ui::next_frame().await;
+                    frame_clock.set(now);
+                    if !step(now) {
+                        break;
+                    }
                 }
             });
         }
@@ -1242,18 +1250,31 @@ pub fn surface(
         }
         if state.with(LongPressRecognizer::needs_frame) {
             let callback = resolved.on_long_click.expect("long click handler");
-            receive_frame_nanos(move |frame| {
-                if !state.is_alive() {
-                    return tessera_ui::FrameNanosControl::Stop;
-                }
-                let triggered = state.with_mut(|recognizer| recognizer.advance_frame_nanos(frame));
-                if triggered {
-                    callback.call();
-                }
-                if state.with(LongPressRecognizer::needs_frame) {
-                    tessera_ui::FrameNanosControl::Continue
-                } else {
-                    tessera_ui::FrameNanosControl::Stop
+            // Rebuilds this component on every animated frame.
+            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+            let _ = frame_clock.get();
+            tessera_ui::launch_once(async move {
+                let step = move |frame: u64| {
+                    if !state.is_alive() {
+                        return false;
+                    }
+                    let triggered =
+                        state.with_mut(|recognizer| recognizer.advance_frame_nanos(frame));
+                    if triggered {
+                        callback.call();
+                    }
+                    if state.with(LongPressRecognizer::needs_frame) {
+                        true
+                    } else {
+                        false
+                    }
+                };
+                loop {
+                    let now = tessera_ui::next_frame().await;
+                    frame_clock.set(now);
+                    if !step(now) {
+                        break;
+                    }
                 }
             });
         }

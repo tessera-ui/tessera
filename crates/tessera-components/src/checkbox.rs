@@ -10,7 +10,7 @@ use tessera_ui::{
     accesskit::{Role, Toggled},
     current_frame_nanos,
     modifier::ModifierCapabilityExt as _,
-    receive_frame_nanos, remember, tessera, use_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -524,19 +524,31 @@ fn checkbox_inner(
     }
     if controller.with(CheckboxController::is_animating) || colors.with(ColorsMotion::is_animating)
     {
-        receive_frame_nanos(move |frame| {
-            let stroke_active = controller.with_mut(|controller| {
-                controller.update_progress(frame);
-                controller.is_animating()
-            });
-            let color_active = colors.with_mut(|colors| {
-                colors.advance(frame);
-                colors.is_animating()
-            });
-            if stroke_active || color_active {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                let stroke_active = controller.with_mut(|controller| {
+                    controller.update_progress(frame);
+                    controller.is_animating()
+                });
+                let color_active = colors.with_mut(|colors| {
+                    colors.advance(frame);
+                    colors.is_animating()
+                });
+                if stroke_active || color_active {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

@@ -14,7 +14,7 @@ use tessera_ui::{
     current_frame_nanos, key,
     layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, receive_frame_nanos, remember, tessera,
+    provide_context, remember, tessera,
 };
 
 use crate::{
@@ -524,16 +524,24 @@ pub fn button_groups(
                         motion.set(next);
                     }
                     if next.is_animating() {
-                        receive_frame_nanos(move |frame| {
-                            let mut next = motion.get();
-                            next.advance(frame);
-                            if next != motion.get() {
-                                motion.set(next);
-                            }
-                            if next.is_animating() {
-                                tessera_ui::FrameNanosControl::Continue
-                            } else {
-                                tessera_ui::FrameNanosControl::Stop
+                        // Rebuilds this component on every animated frame.
+                        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+                        let _ = frame_clock.get();
+                        tessera_ui::launch_once(async move {
+                            let step = move |frame: u64| {
+                                let mut next = motion.get();
+                                next.advance(frame);
+                                if next != motion.get() {
+                                    motion.set(next);
+                                }
+                                if next.is_animating() { true } else { false }
+                            };
+                            loop {
+                                let now = tessera_ui::next_frame().await;
+                                frame_clock.set(now);
+                                if !step(now) {
+                                    break;
+                                }
                             }
                         });
                     }
@@ -635,16 +643,24 @@ fn group_item(
         motion.set(next);
     }
     if next.is_animating() {
-        receive_frame_nanos(move |frame| {
-            let mut next = motion.get();
-            next.advance(frame);
-            if next != motion.get() {
-                motion.set(next);
-            }
-            if next.is_animating() {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                let mut next = motion.get();
+                next.advance(frame);
+                if next != motion.get() {
+                    motion.set(next);
+                }
+                if next.is_animating() { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

@@ -163,7 +163,6 @@ pub(crate) enum TesseraRuntimeApi {
     RetainWithKey,
     ProvideContext,
     UseContext,
-    ReceiveFrameNanos,
     Launch,
     LaunchOnce,
     UseRouter,

@@ -149,5 +149,21 @@ fn search_results(query: String, results: State<Vec<String>>) {
 }
 ```
 
+UI tasks drive animation by awaiting `next_frame()`, which resumes them once
+per frame with its timestamp, after queued results and before the build:
+
+```rust
+if motion.with(Motion::is_animating) {
+    launch_once(async move {
+        loop {
+            let now = next_frame().await;
+            if !motion.with_mut(|motion| motion.advance(now)) {
+                break;
+            }
+        }
+    });
+}
+```
+
 Cancellation stops a future at its next suspension point; it cannot interrupt
 synchronous work that has already started.

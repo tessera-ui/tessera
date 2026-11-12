@@ -11,7 +11,7 @@ use tessera_ui::{
     current_frame_nanos,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -468,15 +468,23 @@ pub fn switch(
     };
 
     if controller.with(|c| c.is_animating()) {
-        receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller.with_mut(|controller| {
-                controller.update_progress(frame_nanos);
-                controller.is_animating()
-            });
-            if is_animating {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let is_animating = controller.with_mut(|controller| {
+                    controller.update_progress(frame_nanos);
+                    controller.is_animating()
+                });
+                if is_animating { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }
@@ -680,15 +688,23 @@ fn switch_content(
         geometry.set(current_geometry);
     }
     if geometry.with(Geometry::is_animating) {
-        receive_frame_nanos(move |frame| {
-            let active = geometry.with_mut(|geometry| {
-                geometry.advance(frame);
-                geometry.is_animating()
-            });
-            if active {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                let active = geometry.with_mut(|geometry| {
+                    geometry.advance(frame);
+                    geometry.is_animating()
+                });
+                if active { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

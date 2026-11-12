@@ -51,7 +51,6 @@ enum OrderCounterKind {
     Remember,
     Functor,
     Context,
-    FrameReceiver,
     ModifierAttachment,
 }
 
@@ -101,11 +100,6 @@ fn next_order_counter_in(
                 .modifier_attachment
                 .checked_add(1)
                 .expect("modifier attachment counter exhausted");
-            counter
-        }
-        OrderCounterKind::FrameReceiver => {
-            let counter = frame.frame_receiver;
-            frame.frame_receiver = frame.frame_receiver.wrapping_add(1);
             counter
         }
     };
@@ -1367,31 +1361,6 @@ struct FrameClockTracker {
     current_frame_nanos: u64,
     previous_frame_time: Option<Instant>,
     frame_delta: Duration,
-    receivers: HashMap<FrameNanosReceiverKey, FrameNanosReceiver>,
-    executed_receiver_owners: Vec<u64>,
-    receivers_by_owner: HashMap<u64, HashSet<FrameNanosReceiverKey>>,
-}
-
-#[derive(Hash, Eq, PartialEq, Clone, Copy)]
-struct FrameNanosReceiverKey {
-    instance_logic_id: u64,
-    receiver_hash: u64,
-}
-
-/// Control flow for [`receive_frame_nanos`] callbacks.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FrameNanosControl {
-    /// Keep this receiver registered and run it again on the next frame.
-    Continue,
-    /// Unregister this receiver after the current frame tick.
-    Stop,
-}
-
-type FrameNanosReceiverCallback = Box<dyn FnMut(u64) -> FrameNanosControl + 'static>;
-
-struct FrameNanosReceiver {
-    owner_instance_key: u64,
-    callback: FrameNanosReceiverCallback,
 }
 
 fn with_frame_clock_tracker<R>(f: impl FnOnce(&FrameClockTracker) -> R) -> R {
@@ -1423,8 +1392,8 @@ pub(crate) fn reset_frame_clock() {
     drop(removed);
 }
 
-pub(crate) fn has_pending_frame_nanos_receivers() -> bool {
-    with_frame_clock_tracker(|tracker| !tracker.receivers.is_empty())
+pub(crate) fn has_pending_frame_waiters() -> bool {
+    crate::async_dispatch::has_frame_waiters()
 }
 
 /// Frame-clock work performed by a completed frame.
@@ -1435,14 +1404,12 @@ pub(crate) fn has_pending_frame_nanos_receivers() -> bool {
 ))]
 #[derive(Clone, Debug, Default)]
 pub struct FrameClockDiagnostics {
-    /// Runtime session that owns these subscriptions.
+    /// Runtime session that owns these tasks.
     pub session: Option<crate::RuntimeSessionId>,
-    /// Number of actual frame callback invocations.
-    pub callbacks_executed: usize,
-    /// Number of subscriptions remaining after the frame.
-    pub pending_subscriptions: usize,
-    /// Replay boundary owners whose callbacks executed this frame.
-    pub executed_owners: Vec<u64>,
+    /// Number of tasks resumed by the frame.
+    pub resumed_tasks: usize,
+    /// Number of tasks waiting for the next frame.
+    pub waiting_tasks: usize,
 }
 
 #[cfg(any(
@@ -1451,103 +1418,18 @@ pub struct FrameClockDiagnostics {
     all(feature = "headless", not(target_family = "wasm"))
 ))]
 pub(crate) fn frame_clock_diagnostics() -> FrameClockDiagnostics {
-    with_frame_clock_tracker(|tracker| FrameClockDiagnostics {
+    FrameClockDiagnostics {
         session: crate::RuntimeSession::current().map(|session| session.identity()),
-        callbacks_executed: tracker.executed_receiver_owners.len(),
-        pending_subscriptions: tracker.receivers.len(),
-        executed_owners: tracker.executed_receiver_owners.clone(),
-    })
-}
-
-pub(crate) fn tick_frame_nanos_receivers() {
-    with_batched_state_writes(tick_frame_nanos_receivers_inner);
-}
-
-fn tick_frame_nanos_receivers_inner() {
-    crate::dispatcher::flush();
-    let (frame_nanos, receivers) = with_frame_clock_tracker_mut(|tracker| {
-        tracker.executed_receiver_owners.clear();
-        (
-            tracker.current_frame_nanos,
-            std::mem::take(&mut tracker.receivers),
-        )
-    });
-    for (key, mut receiver) in receivers {
-        let registered = with_frame_clock_tracker(|tracker| {
-            tracker
-                .receivers_by_owner
-                .get(&receiver.owner_instance_key)
-                .is_some_and(|keys| keys.contains(&key))
-        });
-        if !registered {
-            continue;
-        }
-        with_frame_clock_tracker_mut(|tracker| {
-            tracker
-                .executed_receiver_owners
-                .push(receiver.owner_instance_key)
-        });
-        let active = matches!(
-            (receiver.callback)(frame_nanos),
-            FrameNanosControl::Continue
-        );
-        let discarded = with_frame_clock_tracker_mut(|tracker| {
-            if active
-                && tracker
-                    .receivers_by_owner
-                    .get(&receiver.owner_instance_key)
-                    .is_some_and(|keys| keys.contains(&key))
-            {
-                match tracker.receivers.entry(key) {
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert(receiver);
-                        return None;
-                    }
-                    std::collections::hash_map::Entry::Occupied(_) => {}
-                }
-            } else if !tracker.receivers.contains_key(&key) {
-                if let Some(keys) = tracker
-                    .receivers_by_owner
-                    .get_mut(&receiver.owner_instance_key)
-                {
-                    keys.remove(&key);
-                    if keys.is_empty() {
-                        tracker
-                            .receivers_by_owner
-                            .remove(&receiver.owner_instance_key);
-                    }
-                }
-            }
-            Some(receiver)
-        });
-        drop(discarded);
+        resumed_tasks: crate::async_dispatch::frame_waiters_resumed_last_frame(),
+        waiting_tasks: crate::async_dispatch::frame_waiter_count(),
     }
 }
 
-pub(crate) fn remove_frame_nanos_receivers(instance_keys: &HashSet<u64>) {
-    if instance_keys.is_empty() {
-        return;
-    }
-    let removed = with_frame_clock_tracker_mut(|tracker| {
-        let mut removed = Vec::new();
-        for owner in instance_keys {
-            if let Some(keys) = tracker.receivers_by_owner.remove(owner) {
-                for key in keys {
-                    removed.extend(tracker.receivers.remove(&key));
-                }
-            }
-        }
-        removed
+pub(crate) fn tick_frame_clock() {
+    with_batched_state_writes(|| {
+        crate::dispatcher::flush();
+        crate::async_dispatch::resume_frame_waiters();
     });
-    drop(removed);
-}
-
-pub(crate) fn clear_frame_nanos_receivers() {
-    let removed = with_frame_clock_tracker_mut(|tracker| {
-        tracker.receivers_by_owner.clear();
-        std::mem::take(&mut tracker.receivers)
-    });
-    drop(removed);
 }
 
 /// Returns the timestamp of the current frame, if available.
@@ -1566,77 +1448,6 @@ pub fn current_frame_nanos() -> u64 {
 #[cfg(feature = "profiling")]
 pub(crate) fn frame_delta() -> Duration {
     with_frame_clock_tracker(|tracker| tracker.frame_delta)
-}
-
-fn ensure_frame_receive_phase() {
-    match current_phase() {
-        Some(RuntimePhase::Build) => {}
-        Some(RuntimePhase::Measure) => {
-            panic!("receive_frame_nanos must not be called inside measure")
-        }
-        Some(RuntimePhase::Place | RuntimePhase::Paint | RuntimePhase::Input) => {
-            panic!("receive_frame_nanos must be called inside a tessera component build")
-        }
-        None => panic!("receive_frame_nanos must be called inside a tessera component build"),
-    }
-}
-
-fn compute_frame_nanos_receiver_key() -> FrameNanosReceiverKey {
-    let instance_logic_id = current_instance_logic_id();
-    let group_path_hash = current_group_path_hash();
-
-    let call_counter = next_order_counter(
-        OrderCounterKind::FrameReceiver,
-        "ORDER_FRAME_STACK is empty; receive_frame_nanos must be called inside a component",
-    );
-
-    let receiver_hash = hash_components(&[&group_path_hash, &call_counter]);
-    FrameNanosReceiverKey {
-        instance_logic_id,
-        receiver_hash,
-    }
-}
-
-/// Register a per-frame callback driven by the renderer's frame clock.
-///
-/// Registration is keyed by the current callsite identity. Repeated calls from
-/// the same position keep the existing active callback until it returns
-/// [`FrameNanosControl::Stop`].
-pub fn receive_frame_nanos<F>(callback: F)
-where
-    F: FnMut(u64) -> FrameNanosControl + 'static,
-{
-    ensure_frame_receive_phase();
-    let frame_nanos_state = remember(current_frame_nanos);
-    let _ = frame_nanos_state.get();
-
-    let owner_instance_key = current_replay_boundary_instance_key_from_scope()
-        .unwrap_or_else(|| panic!("receive_frame_nanos requires an active component node context"));
-    let key = compute_frame_nanos_receiver_key();
-
-    let mut unused = Some(callback);
-    with_frame_clock_tracker_mut(|tracker| {
-        tracker.receivers.entry(key).or_insert_with(|| {
-            let mut callback = unused.take().expect("new component clock callback");
-            FrameNanosReceiver {
-                owner_instance_key,
-                callback: Box::new(move |frame_nanos| {
-                    if !frame_nanos_state.is_alive() {
-                        return FrameNanosControl::Stop;
-                    }
-                    frame_nanos_state.set(frame_nanos);
-                    callback(frame_nanos)
-                }),
-            }
-        });
-        let owner = tracker.receivers[&key].owner_instance_key;
-        tracker
-            .receivers_by_owner
-            .entry(owner)
-            .or_default()
-            .insert(key);
-    });
-    drop(unused);
 }
 
 pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64>) {
@@ -3394,74 +3205,6 @@ pub(crate) fn modifier_state<T: 'static>(
     resolve_state_key(key, false, init)
 }
 
-struct ModifierClockLifetime {
-    session: u128,
-    key: FrameNanosReceiverKey,
-    owner: u64,
-}
-
-impl Drop for ModifierClockLifetime {
-    fn drop(&mut self) {
-        if crate::session::current_session_identity() != Some(self.session) {
-            return;
-        }
-        let removed = with_frame_clock_tracker_mut(|tracker| {
-            if let Some(keys) = tracker.receivers_by_owner.get_mut(&self.owner) {
-                keys.remove(&self.key);
-                if keys.is_empty() {
-                    tracker.receivers_by_owner.remove(&self.owner);
-                }
-            }
-            tracker.receivers.remove(&self.key)
-        });
-        drop(removed);
-    }
-}
-
-pub(crate) fn modifier_frame_receiver<F>(
-    instance: u64,
-    owner: u64,
-    path: &[u64],
-    ordinal: usize,
-    callback: F,
-) where
-    F: FnMut(u64) -> FrameNanosControl + 'static,
-{
-    let state = modifier_state(instance, path, ordinal, current_frame_nanos);
-    let _ = state.get();
-    let key = FrameNanosReceiverKey {
-        instance_logic_id: instance,
-        receiver_hash: hash_components(&[&("modifier-clock", path, ordinal)]),
-    };
-    let _lifetime = modifier_state(instance, path, ordinal, || ModifierClockLifetime {
-        session: crate::session::current_session_identity().expect("modifier clock session"),
-        key,
-        owner,
-    });
-    let mut unused = Some(callback);
-    with_frame_clock_tracker_mut(|tracker| {
-        tracker.receivers.entry(key).or_insert_with(|| {
-            let mut callback = unused.take().expect("new modifier clock callback");
-            FrameNanosReceiver {
-                owner_instance_key: owner,
-                callback: Box::new(move |nanos| {
-                    if !state.is_alive() {
-                        return FrameNanosControl::Stop;
-                    }
-                    state.set(nanos);
-                    callback(nanos)
-                }),
-            }
-        });
-        tracker
-            .receivers_by_owner
-            .entry(owner)
-            .or_default()
-            .insert(key);
-    });
-    drop(unused);
-}
-
 fn resolve_state_slot<K, F, T>(
     key: K,
     init: F,
@@ -3480,8 +3223,8 @@ where
     let positional = key_hash == hash_components(&[&()]);
     // Positional state is addressed by the dedicated remember counter, not by
     // the number of preceding state slots. Conditional state (for example the
-    // frame-clock slot inside `receive_frame_nanos`) must not shift later
-    // `remember` calls onto another value.
+    // task slot inside `launch`) must not shift later `remember` calls onto
+    // another value.
     let call_counter = next_order_counter(
         OrderCounterKind::Remember,
         "ORDER_FRAME_STACK is empty; remember must be called inside a component",
@@ -3866,7 +3609,6 @@ pub fn begin_recompose_slot_epoch() {
 }
 
 pub(crate) fn shutdown_runtime() {
-    clear_frame_nanos_receivers();
     reset_slots();
     release_retired_replay_snapshots();
     clear_redraw_waker();
@@ -4863,45 +4605,6 @@ mod tests {
     }
 
     #[test]
-    fn receive_frame_nanos_panics_without_component_scope() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        reset_frame_clock();
-        begin_frame_clock(Instant::now());
-
-        let result = std::panic::catch_unwind(|| {
-            receive_frame_nanos(|_| FrameNanosControl::Continue);
-        });
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn tick_frame_nanos_receivers_removes_stopped_receivers() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        reset_frame_clock();
-        begin_frame_clock(Instant::now());
-
-        with_frame_clock_tracker_mut(|tracker| {
-            tracker.receivers.insert(
-                FrameNanosReceiverKey {
-                    instance_logic_id: 1,
-                    receiver_hash: 1,
-                },
-                FrameNanosReceiver {
-                    owner_instance_key: 123,
-                    callback: Box::new(|_| FrameNanosControl::Stop),
-                },
-            );
-        });
-
-        tick_frame_nanos_receivers();
-        assert!(with_frame_clock_tracker(|tracker| tracker
-            .receivers
-            .is_empty()));
-    }
-
-    #[test]
     fn with_build_dirty_instance_keys_marks_current_scope() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
@@ -5190,31 +4893,6 @@ mod tests {
             }
             let stable_state = remember(|| 1usize);
             assert_eq!(stable_state.get(), 41);
-        });
-    }
-
-    #[test]
-    fn conditional_frame_receiver_does_not_shift_following_remember_slots() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        reset_slots();
-        reset_frame_clock();
-        begin_frame_clock(Instant::now());
-
-        begin_recompose_slot_epoch();
-        with_test_component_scope(1002, || {
-            let stable_state = remember(|| 1usize);
-            stable_state.set(99);
-        });
-
-        begin_recompose_slot_epoch();
-        with_test_component_scope(1002, || {
-            {
-                let _group_guard = GroupGuard::new(9);
-                receive_frame_nanos(|_| FrameNanosControl::Stop);
-            }
-            let stable_state = remember(|| 1usize);
-            assert_eq!(stable_state.get(), 99);
         });
     }
 

@@ -4,13 +4,13 @@
 //!
 //! Trigger actions, submit forms, or navigate.
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FrameNanosControl, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
+    Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::{Role, Toggled},
     context::provide_context,
     current_frame_nanos,
     layout::{MeasureScope, Stack, layout},
-    receive_frame_nanos, remember, tessera, use_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -576,12 +576,24 @@ pub fn button(
         motion.with_mut(|motion| motion.retarget(target, frame));
     }
     if !motion.with(ButtonMotion::is_idle) {
-        receive_frame_nanos(move |frame| {
-            motion.with_mut(|motion| motion.advance(frame));
-            if motion.with(ButtonMotion::is_idle) {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                motion.with_mut(|motion| motion.advance(frame));
+                if motion.with(ButtonMotion::is_idle) {
+                    false
+                } else {
+                    true
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

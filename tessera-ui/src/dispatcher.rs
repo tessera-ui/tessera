@@ -17,10 +17,32 @@ type Wake = Arc<dyn Fn() + Send + Sync>;
 struct QueueState {
     open: bool,
     pending: VecDeque<UiWork>,
+    ready: Vec<crate::async_dispatch::TaskKey>,
     wake: Option<Wake>,
 }
 
-struct DispatchQueue(Mutex<QueueState>);
+pub(crate) struct DispatchQueue(Mutex<QueueState>);
+
+impl DispatchQueue {
+    /// Queues a woken UI task without allocating once the buffer has grown.
+    pub(crate) fn schedule(&self, task: crate::async_dispatch::TaskKey) {
+        let wake = {
+            let mut state = self.0.lock();
+            if !state.open {
+                return;
+            }
+            state.ready.push(task);
+            state.wake.clone()
+        };
+        if let Some(wake) = wake {
+            wake();
+        }
+    }
+
+    pub(crate) fn take_ready(&self, keys: &mut Vec<crate::async_dispatch::TaskKey>) {
+        std::mem::swap(keys, &mut self.0.lock().ready);
+    }
+}
 
 fn queues() -> &'static StdMutex<HashMap<u128, Weak<DispatchQueue>>> {
     static QUEUES: OnceLock<StdMutex<HashMap<u128, Weak<DispatchQueue>>>> = OnceLock::new();
@@ -61,6 +83,7 @@ impl Default for DispatchQueue {
         Self(Mutex::new(QueueState {
             open: crate::RuntimeSession::current().is_some_and(|session| session.accepts_work()),
             pending: VecDeque::new(),
+            ready: Vec::new(),
             wake: None,
         }))
     }
@@ -75,12 +98,19 @@ pub(crate) fn register_current() -> u128 {
     identity
 }
 
+pub(crate) fn current_queue() -> Arc<DispatchQueue> {
+    crate::shared_runtime_resource::<DispatchQueue>()
+}
+
 pub(crate) fn set_waker(wake: Option<Wake>) {
     let queue = crate::shared_runtime_resource::<DispatchQueue>();
     let (previous, pending) = {
         let mut state = queue.0.lock();
         let previous = std::mem::replace(&mut state.wake, wake.clone());
-        (previous, !state.pending.is_empty())
+        (
+            previous,
+            !state.pending.is_empty() || !state.ready.is_empty(),
+        )
     };
     drop(previous);
     if pending && let Some(wake) = wake {
@@ -89,12 +119,11 @@ pub(crate) fn set_waker(wake: Option<Wake>) {
 }
 
 pub(crate) fn has_pending() -> bool {
-    crate::RuntimeSession::current().is_some()
-        && !crate::shared_runtime_resource::<DispatchQueue>()
-            .0
-            .lock()
-            .pending
-            .is_empty()
+    crate::RuntimeSession::current().is_some() && {
+        let queue = crate::shared_runtime_resource::<DispatchQueue>();
+        let state = queue.0.lock();
+        !state.pending.is_empty() || !state.ready.is_empty()
+    }
 }
 
 pub(crate) fn flush() {
@@ -104,6 +133,7 @@ pub(crate) fn flush() {
     for work in work {
         work();
     }
+    crate::async_dispatch::run_ready(&queue);
 }
 
 pub(crate) fn close() {
@@ -117,6 +147,7 @@ pub(crate) fn close() {
     let removed = {
         let mut state = queue.0.lock();
         state.open = false;
+        state.ready.clear();
         (std::mem::take(&mut state.pending), state.wake.take())
     };
     drop(removed);

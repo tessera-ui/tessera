@@ -29,7 +29,7 @@ mod dispatcher;
 mod graphics;
 mod work;
 
-pub use async_dispatch::{Dispatcher, Task, on, spawn};
+pub use async_dispatch::{Dispatcher, Task, next_frame, on, spawn};
 pub use graphics::{
     FrameBuffer, GraphicsDevice, GraphicsWork, GraphicsWorkDiagnostics, ScratchFit, ScratchTexture,
     ScratchTextureDescriptor, TrackedBuffer,
@@ -145,9 +145,9 @@ pub use crate::{
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
     },
     runtime::{
-        FrameNanosControl, Model, ModelInit, ModelStore, ModelStoreScope, State,
-        current_frame_nanos, current_frame_time, key, launch, launch_once, receive_frame_nanos,
-        remember, remember_with_key, retain, retain_with_key,
+        Model, ModelInit, ModelStore, ModelStoreScope, State, current_frame_nanos,
+        current_frame_time, key, launch, launch_once, remember, remember_with_key, retain,
+        retain_with_key,
     },
     scroll::{PlatformScrollConfig, normalize_platform_scroll_delta, platform_scroll_config},
 };

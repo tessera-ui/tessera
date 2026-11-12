@@ -12,7 +12,7 @@ use tessera_ui::{
     accesskit::{Role, Toggled},
     current_frame_nanos,
     layout::{MeasureScope, PlacementResult, PlacementScope},
-    receive_frame_nanos, remember, tessera, use_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -446,11 +446,23 @@ fn fluid_switch_content(
 
     let should_continue = update_state_for_frame(state, current_frame_nanos());
     if should_continue {
-        receive_frame_nanos(move |frame_nanos| {
-            if update_state_for_frame(state, frame_nanos) {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                if update_state_for_frame(state, frame_nanos) {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

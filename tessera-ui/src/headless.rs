@@ -39,7 +39,7 @@ use crate::{
         prune_persistent_focus_handles, release_retired_replay_snapshots,
         reset_build_invalidations, reset_focus_read_dependencies, reset_frame_clock,
         reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
-        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_nanos_receivers,
+        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_clock,
     },
     time::Instant,
 };
@@ -504,7 +504,7 @@ impl HeadlessRenderer {
         crate::asset::settle();
         // Tick frame-nanos receivers before the build so their state writes are
         // consumed by the current recomposition pass.
-        tick_frame_nanos_receivers();
+        tick_frame_clock();
 
         let mut _build_tree_result = build_component_tree(&self.entry);
 

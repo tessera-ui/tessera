@@ -12,9 +12,8 @@ mod shapes;
 mod tests;
 
 use tessera_ui::{
-    Color, ComputedData, Dp, FrameNanosControl, LayoutResult, MeasurementError, Modifier,
-    accesskit::Role, current_frame_nanos, layout::MeasureScope, receive_frame_nanos, remember,
-    tessera, use_context,
+    Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, accesskit::Role,
+    current_frame_nanos, layout::MeasureScope, remember, tessera, use_context,
 };
 
 use crate::{
@@ -206,12 +205,24 @@ pub fn circular_wavy_progress_indicator(
         clock.with_mut(|clock| clock.configure(motion, now));
     }
     if clock.with(Clock::needs_frames) {
-        receive_frame_nanos(move |frame| {
-            clock.with_mut(|clock| clock.advance(frame));
-            if clock.with(Clock::needs_frames) {
-                FrameNanosControl::Continue
-            } else {
-                FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                clock.with_mut(|clock| clock.advance(frame));
+                if clock.with(Clock::needs_frames) {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }
@@ -513,12 +524,24 @@ pub fn linear_wavy_progress_indicator(
         clock.with_mut(|clock| clock.configure(motion, now));
     }
     if clock.with(Clock::needs_frames) {
-        receive_frame_nanos(move |frame| {
-            clock.with_mut(|clock| clock.advance(frame));
-            if clock.with(Clock::needs_frames) {
-                FrameNanosControl::Continue
-            } else {
-                FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                clock.with_mut(|clock| clock.advance(frame));
+                if clock.with(Clock::needs_frames) {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

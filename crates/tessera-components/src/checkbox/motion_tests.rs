@@ -116,7 +116,7 @@ fn check_motion(samples: u32) {
     assert_eq!(controller.with(CheckboxController::progress), 0.0);
     assert_eq!(selection(&renderer).1.toggled(), Some(Toggled::True));
     renderer.render_frames(5);
-    assert!(renderer.frame_clock_diagnostics().callbacks_executed > 0);
+    assert!(renderer.frame_clock_diagnostics().resumed_tasks > 0);
     assert!((controller.with(CheckboxController::progress) - 0.28017744).abs() < 0.00001);
     let alpha = fill(&renderer)[3];
     assert!((145..=158).contains(&alpha), "50ms fill alpha: {alpha}");
@@ -132,10 +132,10 @@ fn check_motion(samples: u32) {
         renderer.step_frame();
         let clock = renderer.frame_clock_diagnostics();
         assert_eq!(
-            clock.callbacks_executed, 0,
+            clock.resumed_tasks, 0,
             "settled controls must stop their frame receiver"
         );
-        assert_eq!(clock.pending_subscriptions, 0);
+        assert_eq!(clock.waiting_tasks, 0);
     }
 
     assert!(renderer.dispatch_accessibility_action(ActionRequest {

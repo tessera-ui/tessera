@@ -6,7 +6,7 @@
 
 use tessera_ui::{
     CallbackWith, Dp, FocusModifierExt, Modifier, RenderSlot, ScrollEventSource, State,
-    current_frame_nanos, layout::Stack, layout::layout, receive_frame_nanos, remember, tessera,
+    current_frame_nanos, layout::Stack, layout::layout, remember, tessera,
 };
 
 use crate::{
@@ -366,13 +366,25 @@ pub fn app_bar_scroll_provider(
         }
     }
     if state.with(AppBarScrollState::is_animating) {
-        receive_frame_nanos(move |frame| {
-            let state = active.get();
-            state.with_mut(|value| value.tick(frame));
-            if state.with(AppBarScrollState::is_animating) {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                let state = active.get();
+                state.with_mut(|value| value.tick(frame));
+                if state.with(AppBarScrollState::is_animating) {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

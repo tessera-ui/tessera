@@ -5,8 +5,7 @@
 //! Trigger data reloads when users pull down at the top of a scrollable view.
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, FocusModifierExt, Modifier, Px, RenderSlot, State,
-    current_frame_nanos, layout::Stack, layout::layout, receive_frame_nanos, remember, tessera,
-    use_context,
+    current_frame_nanos, layout::Stack, layout::layout, remember, tessera, use_context,
 };
 
 use crate::{
@@ -450,15 +449,27 @@ pub fn pull_refresh(
         s.update_position(frame_nanos, INDICATOR_SMOOTHING);
     });
     if controller.with(|s| s.has_pending_animation_frame()) {
-        receive_frame_nanos(move |frame_nanos| {
-            let has_pending_animation_frame = controller.with_mut(|s| {
-                s.update_position(frame_nanos, INDICATOR_SMOOTHING);
-                s.has_pending_animation_frame()
-            });
-            if has_pending_animation_frame {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let has_pending_animation_frame = controller.with_mut(|s| {
+                    s.update_position(frame_nanos, INDICATOR_SMOOTHING);
+                    s.has_pending_animation_frame()
+                });
+                if has_pending_animation_frame {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

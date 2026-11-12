@@ -6,8 +6,7 @@
 
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State, current_frame_nanos,
-    modifier::ModifierCapabilityExt as _, provide_context, receive_frame_nanos, remember, tessera,
-    use_context,
+    modifier::ModifierCapabilityExt as _, provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -469,21 +468,33 @@ pub fn list_item(
         color_motion.set(next_colors);
     }
     if next.is_animating() || next_colors.is_animating() {
-        receive_frame_nanos(move |frame| {
-            let mut next = motion.get();
-            next.advance(frame);
-            if next != motion.get() {
-                motion.set(next);
-            }
-            let mut next_colors = color_motion.get();
-            next_colors.advance(frame);
-            if next_colors != color_motion.get() {
-                color_motion.set(next_colors);
-            }
-            if next.is_animating() || next_colors.is_animating() {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                let mut next = motion.get();
+                next.advance(frame);
+                if next != motion.get() {
+                    motion.set(next);
+                }
+                let mut next_colors = color_motion.get();
+                next_colors.advance(frame);
+                if next_colors != color_motion.get() {
+                    color_motion.set(next_colors);
+                }
+                if next.is_animating() || next_colors.is_animating() {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

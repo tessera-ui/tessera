@@ -6,11 +6,10 @@ use tessera_components::{
 };
 use tessera_shard::shard;
 use tessera_ui::{
-    Dp, DrawCommand, EntryRegistry, FrameNanosControl, Modifier, PipelineContext, RenderModule,
-    State, TesseraPackage,
+    Dp, DrawCommand, EntryRegistry, Modifier, PipelineContext, RenderModule, State, TesseraPackage,
     layout::layout,
     px::{Px, PxRect, PxSize},
-    receive_frame_nanos, remember,
+    remember,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     tessera, use_context, wgpu,
 };
@@ -119,9 +118,21 @@ pub fn custom_shader_page() {
 fn raymarch_canvas(modifier: Modifier, time_scale_state: State<f32>) {
     let frame_nanos_state = remember(|| 0_u64);
 
-    receive_frame_nanos(move |frame_nanos| {
-        frame_nanos_state.set(frame_nanos);
-        FrameNanosControl::Continue
+    // Rebuilds this component on every animated frame.
+    let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+    let _ = frame_clock.get();
+    tessera_ui::launch_once(async move {
+        let step = move |frame_nanos: u64| {
+            frame_nanos_state.set(frame_nanos);
+            true
+        };
+        loop {
+            let now = tessera_ui::next_frame().await;
+            frame_clock.set(now);
+            if !step(now) {
+                break;
+            }
+        }
     });
 
     let time_scale = 0.2 + time_scale_state.get().clamp(0.0, 1.0) * 2.8;

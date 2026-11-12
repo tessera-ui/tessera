@@ -11,7 +11,7 @@ use tessera_ui::{
     layout::Stack,
     layout::layout,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -203,7 +203,19 @@ pub fn menu_group(
         motion.with_mut(|motion| motion.update(position, focused, frame));
     }
     if shape.is_none() && !motion.with(MenuShapeMotion::is_idle) {
-        receive_frame_nanos(move |frame| advance(motion, frame));
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| advance(motion, frame);
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
+            }
+        });
     }
     let mut modifier = modifier.focus_scope_with(focus_scope);
     if shape.is_none() {

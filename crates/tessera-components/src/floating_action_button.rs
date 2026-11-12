@@ -4,8 +4,8 @@
 //!
 //! Emphasize a primary action with a prominent floating button.
 use tessera_ui::{
-    Callback, Color, Dp, FrameNanosControl, Modifier, RenderSlot, State, accesskit::Role,
-    current_frame_nanos, provide_context, receive_frame_nanos, remember, tessera, use_context,
+    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, current_frame_nanos,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -341,12 +341,24 @@ pub fn floating_action_button(
         });
     }
     if !elevation_motion.with(|motion| motion.motion.is_idle()) {
-        receive_frame_nanos(move |frame| {
-            elevation_motion.with_mut(|motion| motion.advance(frame));
-            if elevation_motion.with(|motion| motion.motion.is_idle()) {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                elevation_motion.with_mut(|motion| motion.advance(frame));
+                if elevation_motion.with(|motion| motion.motion.is_idle()) {
+                    false
+                } else {
+                    true
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

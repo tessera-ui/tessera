@@ -1,11 +1,11 @@
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Dp, FrameNanosControl, LayoutResult,
-    MeasurementError, Modifier, PxPosition, RenderSlot, SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, Dp, LayoutResult, MeasurementError, Modifier,
+    PxPosition, RenderSlot, SemanticsModifierNode, State,
     accesskit::{HasPopup, Role},
     current_frame_nanos,
     layout::MeasureScope,
     modifier::ModifierCapabilityExt as _,
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -185,12 +185,24 @@ pub(super) fn split_button_item(
         motion.with_mut(|motion| motion.retarget(target, frame, shape.is_some()));
     }
     if !motion.with(SplitMotion::is_idle) {
-        receive_frame_nanos(move |frame| {
-            motion.with_mut(|motion| motion.advance(frame));
-            if motion.with(SplitMotion::is_idle) {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                motion.with_mut(|motion| motion.advance(frame));
+                if motion.with(SplitMotion::is_idle) {
+                    false
+                } else {
+                    true
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

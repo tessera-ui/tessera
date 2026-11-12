@@ -14,7 +14,7 @@ use tessera_ui::{
     layout::Stack,
     layout::layout,
     modifier::FocusModifierExt as _,
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -669,19 +669,27 @@ pub fn snackbar_host(
         state.with(|host| host.current.clone())
     };
     if state.with(|host| host.has_pending_timeout(frame_nanos)) {
-        receive_frame_nanos(move |frame_nanos| {
-            let should_dismiss =
-                state.with(|host| host.should_dismiss_current_timeout(frame_nanos));
-            if should_dismiss {
-                state.with_mut(|host| {
-                    let _ = host.poll(frame_nanos);
-                });
-            }
-            let has_pending_timeout = state.with(|host| host.has_pending_timeout(frame_nanos));
-            if has_pending_timeout {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let should_dismiss =
+                    state.with(|host| host.should_dismiss_current_timeout(frame_nanos));
+                if should_dismiss {
+                    state.with_mut(|host| {
+                        let _ = host.poll(frame_nanos);
+                    });
+                }
+                let has_pending_timeout = state.with(|host| host.has_pending_timeout(frame_nanos));
+                if has_pending_timeout { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

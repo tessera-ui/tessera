@@ -9,7 +9,7 @@ use tessera_ui::{
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, Stack, layout},
-    receive_frame_nanos, remember, tessera, use_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -535,12 +535,24 @@ pub fn linear_progress_indicator(
         should_receive_frames.set(progress.is_none());
 
         if should_receive_frames.get() {
-            receive_frame_nanos(move |frame_nanos| {
-                if !should_receive_frames.get() {
-                    return tessera_ui::FrameNanosControl::Stop;
+            // Rebuilds this component on every animated frame.
+            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+            let _ = frame_clock.get();
+            tessera_ui::launch_once(async move {
+                let step = move |frame_nanos: u64| {
+                    if !should_receive_frames.get() {
+                        return false;
+                    }
+                    frame_tick.set(frame_nanos);
+                    true
+                };
+                loop {
+                    let now = tessera_ui::next_frame().await;
+                    frame_clock.set(now);
+                    if !step(now) {
+                        break;
+                    }
                 }
-                frame_tick.set(frame_nanos);
-                tessera_ui::FrameNanosControl::Continue
             });
         }
 
@@ -723,12 +735,24 @@ pub fn circular_progress_indicator(
     should_receive_frames.set(progress.is_none());
 
     if should_receive_frames.get() {
-        receive_frame_nanos(move |frame_nanos| {
-            if !should_receive_frames.get() {
-                return tessera_ui::FrameNanosControl::Stop;
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                if !should_receive_frames.get() {
+                    return false;
+                }
+                frame_tick.set(frame_nanos);
+                true
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
-            frame_tick.set(frame_nanos);
-            tessera_ui::FrameNanosControl::Continue
         });
     }
 

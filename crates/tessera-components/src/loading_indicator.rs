@@ -6,9 +6,8 @@
 //! value.
 
 use tessera_ui::{
-    Color, ComputedData, Dp, FrameNanosControl, LayoutResult, MeasurementError, Modifier,
-    accesskit::Role, current_frame_nanos, layout::MeasureScope, receive_frame_nanos, remember,
-    tessera, use_context,
+    Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, accesskit::Role,
+    current_frame_nanos, layout::MeasureScope, remember, tessera, use_context,
 };
 
 use crate::{
@@ -186,12 +185,24 @@ pub fn loading_indicator(
         clock.with_mut(|clock| clock.set_running(running, now));
     }
     if running {
-        receive_frame_nanos(move |frame| {
-            if !clock.with(|clock| clock.running) {
-                return FrameNanosControl::Stop;
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                if !clock.with(|clock| clock.running) {
+                    return false;
+                }
+                clock.with_mut(|clock| clock.advance(frame));
+                true
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
-            clock.with_mut(|clock| clock.advance(frame));
-            FrameNanosControl::Continue
         });
     }
     let pose = if let Some(progress) = progress {

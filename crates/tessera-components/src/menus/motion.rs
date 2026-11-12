@@ -4,9 +4,7 @@
 //!
 //! Distinguish the current action group while moving between related menus.
 
-use tessera_ui::{
-    Dp, FrameNanosControl, MOUSE_POINTER_ID, PointerInput, PointerInputModifierNode, State,
-};
+use tessera_ui::{Dp, MOUSE_POINTER_ID, PointerInput, PointerInputModifierNode, State};
 
 use crate::{
     animation::Animatable,
@@ -99,13 +97,9 @@ impl MenuShapeMotion {
     }
 }
 
-pub(super) fn advance(motion: State<MenuShapeMotion>, frame_nanos: u64) -> FrameNanosControl {
+pub(super) fn advance(motion: State<MenuShapeMotion>, frame_nanos: u64) -> bool {
     motion.with_mut(|motion| motion.advance(frame_nanos));
-    if motion.with(MenuShapeMotion::is_idle) {
-        FrameNanosControl::Stop
-    } else {
-        FrameNanosControl::Continue
-    }
+    !motion.with(MenuShapeMotion::is_idle)
 }
 
 pub(super) struct MenuShapeHover {

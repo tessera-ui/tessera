@@ -15,7 +15,7 @@ gates, and platform support. Use `cargo doc --open` in the application workspace
 | Text editing | `tessera_components::{text, text_input, text_field}`; editor controllers and documented transforms |
 | Localization | `tessera_i18n::{Catalog, I18n, FluentValue, LanguageIdentifier, langid}`; generated `res::{I18N, i18n}` |
 | Overlays and navigation | `tessera_components::{dialog, menus, tooltip, bottom_sheet, side_sheet, snackbar, navigation_bar, navigation_rail, navigation_drawer}`; `tessera_shard::{shard, router}` |
-| Tasks and animation | `tessera_ui::{launch, launch_once, spawn, on, Task, Dispatcher, receive_frame_nanos, FrameNanosControl, current_frame_nanos, current_frame_time}` |
+| Tasks and animation | `tessera_ui::{launch, launch_once, spawn, on, Task, Dispatcher, next_frame, current_frame_nanos, current_frame_time}` |
 | Platform integration | `tessera_platform::{PlatformPackage, clipboard, window}`; `tessera_ui::{Plugin, PluginContext, with_plugin}` |
 | Public extensions | `tessera_ui::{modifier, Plugin, RenderModule, PipelineContext, DrawCommand, DrawablePipeline, ComputeCommand, ComputablePipeline}`; documented sampling, clipping, and resource contracts |
 | Build and verification | `cargo tessera` commands; `tessera_ui::{testing, headless, profiler}` with their feature gates |

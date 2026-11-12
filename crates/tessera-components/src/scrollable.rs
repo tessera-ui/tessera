@@ -20,7 +20,7 @@ use tessera_ui::{
     focus::FocusRevealRequest,
     layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    receive_frame_nanos, remember, tessera,
+    remember, tessera,
     time::Instant,
 };
 
@@ -695,15 +695,16 @@ impl BuildModifierNode for ScrollBuild {
         let tap_recognizer = context.state(TapRecognizer::default);
         let scroll_recognizer = context.state(ScrollRecognizer::default);
         if controller.with(|c| c.has_pending_animation_frame()) {
-            context.receive_frame_nanos(move |frame_nanos| {
-                let pending = controller.with_mut(|c| {
-                    c.update_scroll_position(frame_nanos, DEFAULT_SCROLL_SMOOTHING);
-                    c.has_pending_animation_frame()
-                });
-                if pending {
-                    tessera_ui::FrameNanosControl::Continue
-                } else {
-                    tessera_ui::FrameNanosControl::Stop
+            context.launch(async move {
+                loop {
+                    let frame_nanos = tessera_ui::next_frame().await;
+                    let pending = controller.with_mut(|c| {
+                        c.update_scroll_position(frame_nanos, DEFAULT_SCROLL_SMOOTHING);
+                        c.has_pending_animation_frame()
+                    });
+                    if !pending {
+                        break;
+                    }
                 }
             });
         }
@@ -1435,15 +1436,27 @@ fn scrollable_viewport(
     let scroll_recognizer = remember(ScrollRecognizer::default);
     if controller.with(|c| c.has_pending_animation_frame()) {
         let smoothing = scroll_smoothing;
-        receive_frame_nanos(move |frame_nanos| {
-            let has_pending_animation_frame = controller.with_mut(|c| {
-                c.update_scroll_position(frame_nanos, smoothing);
-                c.has_pending_animation_frame()
-            });
-            if has_pending_animation_frame {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let has_pending_animation_frame = controller.with_mut(|c| {
+                    c.update_scroll_position(frame_nanos, smoothing);
+                    c.has_pending_animation_frame()
+                });
+                if has_pending_animation_frame {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

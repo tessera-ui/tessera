@@ -19,7 +19,7 @@ use tessera_ui::{
     key,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    normalize_platform_scroll_delta, receive_frame_nanos, remember, tessera, winit,
+    normalize_platform_scroll_delta, remember, tessera, winit,
 };
 
 use crate::{
@@ -1124,12 +1124,24 @@ pub fn carousel(
         }
     } else if navigation.pending.get().is_some() {
         FocusManager::current().defer_keyboard_until_layout();
-        receive_frame_nanos(move |_| {
-            if navigation.finish(controller.with(|state| !state.needs_frame())) {
-                tessera_ui::FrameNanosControl::Stop
-            } else {
-                FocusManager::current().defer_keyboard_until_layout();
-                tessera_ui::FrameNanosControl::Continue
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |_: u64| {
+                if navigation.finish(controller.with(|state| !state.needs_frame())) {
+                    false
+                } else {
+                    FocusManager::current().defer_keyboard_until_layout();
+                    true
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }
@@ -1149,12 +1161,24 @@ pub fn carousel(
         }));
     }
     if controller.with(CarouselController::needs_frame) {
-        receive_frame_nanos(move |now| {
-            controller.with_mut(|state| state.tick(now));
-            if controller.with(CarouselController::needs_frame) {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |now: u64| {
+                controller.with_mut(|state| state.tick(now));
+                if controller.with(CarouselController::needs_frame) {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

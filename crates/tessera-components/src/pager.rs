@@ -12,7 +12,7 @@ use tessera_ui::{
     PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventSource, State, key,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    normalize_platform_scroll_delta, receive_frame_nanos, remember, tessera, winit,
+    normalize_platform_scroll_delta, remember, tessera, winit,
 };
 
 use crate::{
@@ -922,15 +922,27 @@ pub fn horizontal_pager(
     if controller.with(|current| current.has_pending_animation_frame(frame_nanos)) {
         let snap_threshold = pager_args.snap_threshold;
         let scroll_smoothing = pager_args.scroll_smoothing;
-        receive_frame_nanos(move |frame_nanos| {
-            let has_pending_animation_frame = controller.with_mut(|current| {
-                current.tick(frame_nanos, snap_threshold, scroll_smoothing);
-                current.has_pending_animation_frame(frame_nanos)
-            });
-            if has_pending_animation_frame {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let has_pending_animation_frame = controller.with_mut(|current| {
+                    current.tick(frame_nanos, snap_threshold, scroll_smoothing);
+                    current.has_pending_animation_frame(frame_nanos)
+                });
+                if has_pending_animation_frame {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }
@@ -1035,15 +1047,27 @@ pub fn vertical_pager(
     if controller.with(|current| current.has_pending_animation_frame(frame_nanos)) {
         let snap_threshold = pager_args.snap_threshold;
         let scroll_smoothing = pager_args.scroll_smoothing;
-        receive_frame_nanos(move |frame_nanos| {
-            let has_pending_animation_frame = controller.with_mut(|current| {
-                current.tick(frame_nanos, snap_threshold, scroll_smoothing);
-                current.has_pending_animation_frame(frame_nanos)
-            });
-            if has_pending_animation_frame {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let has_pending_animation_frame = controller.with_mut(|current| {
+                    current.tick(frame_nanos, snap_threshold, scroll_smoothing);
+                    current.has_pending_animation_frame(frame_nanos)
+                });
+                if has_pending_animation_frame {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

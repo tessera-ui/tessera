@@ -5,8 +5,8 @@
 //! Group related content into a single, elevated or outlined container.
 
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, receive_frame_nanos,
-    remember, tessera, use_context,
+    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -437,15 +437,23 @@ pub fn card(
     let should_schedule_frame = elevation_spring.with(|spring| spring.is_animating());
 
     if should_schedule_frame {
-        receive_frame_nanos(move |frame_nanos| {
-            let is_animating = elevation_spring.with_mut(|spring| {
-                spring.tick(frame_nanos);
-                spring.is_animating()
-            });
-            if is_animating {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let is_animating = elevation_spring.with_mut(|spring| {
+                    spring.tick(frame_nanos);
+                    spring.is_animating()
+                });
+                if is_animating { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

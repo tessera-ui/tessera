@@ -34,7 +34,6 @@ pub(crate) struct OrderFrame {
     pub(crate) functor: u64,
     pub(crate) context: u64,
     pub(crate) instance: u64,
-    pub(crate) frame_receiver: u64,
     pub(crate) modifier_attachment: u64,
     pub(crate) occurrence_salt: u64,
     pub(crate) group_occurrences: SmallVec<[(u64, u64); 4]>,

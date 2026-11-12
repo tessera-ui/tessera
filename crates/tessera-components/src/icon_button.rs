@@ -5,9 +5,9 @@
 //! Offer compact actions and toggles in toolbars, navigation, and media
 //! controls.
 use tessera_ui::{
-    Callback, Color, Dp, FrameNanosControl, Modifier, State,
+    Callback, Color, Dp, Modifier, State,
     accesskit::{Role, Toggled},
-    current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
+    current_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -449,12 +449,24 @@ pub fn icon_button(
         motion.with_mut(|motion| motion.retarget(target, frame));
     }
     if !motion.with(IconButtonMotion::is_idle) {
-        receive_frame_nanos(move |frame| {
-            motion.with_mut(|motion| motion.advance(frame));
-            if motion.with(IconButtonMotion::is_idle) {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                motion.with_mut(|motion| motion.advance(frame));
+                if motion.with(IconButtonMotion::is_idle) {
+                    false
+                } else {
+                    true
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

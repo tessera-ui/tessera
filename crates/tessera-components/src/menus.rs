@@ -6,15 +6,14 @@
 use tessera_ui::{
     AxisConstraint, Callback, ClipRegion, ClipShape, Color, ComputedData, CursorEventContent, Dp,
     DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusDirection, FocusManager,
-    FocusRequester, FocusScopeNode, FocusTraversalPolicy, FrameNanosControl, KeyboardInput,
-    KeyboardInputModifierNode, LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier,
-    ParentConstraint, PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, RenderSlot,
-    RenderSlotWith, State,
+    FocusRequester, FocusScopeNode, FocusTraversalPolicy, KeyboardInput, KeyboardInputModifierNode,
+    LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier, ParentConstraint, PointerInput,
+    PointerInputModifierNode, Px, PxPosition, PxSize, RenderSlot, RenderSlotWith, State,
     accesskit::{HasPopup, Role, Toggled},
     current_frame_nanos,
     layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
+    provide_context, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -930,7 +929,19 @@ fn menu_panel(
             motion.with_mut(|motion| motion.update(MenuPosition::Standalone, focused, frame));
         }
         if !motion.with(MenuShapeMotion::is_idle) {
-            receive_frame_nanos(move |frame| motion::advance(motion, frame));
+            // Rebuilds this component on every animated frame.
+            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+            let _ = frame_clock.get();
+            tessera_ui::launch_once(async move {
+                let step = move |frame: u64| motion::advance(motion, frame);
+                loop {
+                    let now = tessera_ui::next_frame().await;
+                    frame_clock.set(now);
+                    if !step(now) {
+                        break;
+                    }
+                }
+            });
         }
     }
     let hover = MenuShapeHover {
@@ -1306,25 +1317,37 @@ fn menu_item_surface(
     let parent = item.menu.map(|menu| menu.controller);
     if enabled && hover.with(|hover| hover.deadline.is_some()) {
         let host = host.clone();
-        receive_frame_nanos(move |frame| {
-            let Some(deadline) = hover.with(|hover| hover.deadline) else {
-                return FrameNanosControl::Stop;
-            };
-            if !hover.with(|hover| hover.inside)
-                || !focus_requester.is_focused()
-                || parent.is_none_or(|parent| !parent.with(MenuController::is_open))
-            {
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                let Some(deadline) = hover.with(|hover| hover.deadline) else {
+                    return false;
+                };
+                if !hover.with(|hover| hover.inside)
+                    || !focus_requester.is_focused()
+                    || parent.is_none_or(|parent| !parent.with(MenuController::is_open))
+                {
+                    hover.with_mut(|hover| hover.deadline = None);
+                    return false;
+                }
+                if frame < deadline {
+                    return true;
+                }
                 hover.with_mut(|hover| hover.deadline = None);
-                return FrameNanosControl::Stop;
+                if let Some((host, parent)) = host.as_ref().zip(parent) {
+                    host.apply_hover(parent, submenu_request);
+                }
+                false
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
-            if frame < deadline {
-                return FrameNanosControl::Continue;
-            }
-            hover.with_mut(|hover| hover.deadline = None);
-            if let Some((host, parent)) = host.as_ref().zip(parent) {
-                host.apply_hover(parent, submenu_request);
-            }
-            FrameNanosControl::Stop
         });
     }
     let modifier = if let Some(request) = submenu_request {

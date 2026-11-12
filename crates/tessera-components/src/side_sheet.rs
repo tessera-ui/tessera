@@ -12,7 +12,7 @@ use tessera_ui::{
     RenderSlot, State, current_frame_nanos,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    receive_frame_nanos, remember, tessera, use_context, winit,
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -611,13 +611,21 @@ fn side_sheet_provider_render(
         *was_open = is_open;
     });
     if is_animating {
-        receive_frame_nanos(move |frame_nanos| {
-            let is_animating =
-                controller.with(|controller| controller.is_animating_at(frame_nanos));
-            if is_animating {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let is_animating =
+                    controller.with(|controller| controller.is_animating_at(frame_nanos));
+                if is_animating { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

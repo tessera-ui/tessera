@@ -19,8 +19,8 @@ use tessera_components::{
 };
 use tessera_ui::{
     Callback, Dp, FocusManager, LayoutCoordinates, Modifier, Px, PxPosition, RenderSlot, State,
-    accesskit::Role, current_frame_nanos, modifier::FocusModifierExt as _, receive_frame_nanos,
-    remember, tessera, use_context,
+    accesskit::Role, current_frame_nanos, modifier::FocusModifierExt as _, remember, tessera,
+    use_context,
 };
 
 use crate::res::I18N;
@@ -497,16 +497,28 @@ fn article_tab_row(
         });
     }
     if motions.with(|motions| motions.iter().any(|motion| motion.is_running())) {
-        receive_frame_nanos(move |frame| {
-            motions.with_mut(|motions| {
-                for motion in motions.iter_mut().filter(|motion| motion.is_running()) {
-                    motion.advance(frame);
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                motions.with_mut(|motions| {
+                    for motion in motions.iter_mut().filter(|motion| motion.is_running()) {
+                        motion.advance(frame);
+                    }
+                });
+                if motions.with(|motions| motions.iter().any(|motion| motion.is_running())) {
+                    true
+                } else {
+                    false
                 }
-            });
-            if motions.with(|motions| motions.iter().any(|motion| motion.is_running())) {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

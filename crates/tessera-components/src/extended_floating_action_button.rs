@@ -5,9 +5,9 @@
 //! Emphasize a primary action with an icon and a descriptive label.
 
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FrameNanosControl, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, current_frame_nanos, layout::MeasureScope,
-    receive_frame_nanos, remember, tessera, use_context,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
+    Modifier, Px, PxPosition, current_frame_nanos, layout::MeasureScope, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -277,12 +277,24 @@ pub fn extended_floating_action_button(
         was_expanded.set(expanded);
     }
     if !motion.with(ExpansionMotion::is_idle) {
-        receive_frame_nanos(move |frame| {
-            motion.with_mut(|motion| motion.advance(frame));
-            if motion.with(ExpansionMotion::is_idle) {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                motion.with_mut(|motion| motion.advance(frame));
+                if motion.with(ExpansionMotion::is_idle) {
+                    false
+                } else {
+                    true
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

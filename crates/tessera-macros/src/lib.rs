@@ -839,6 +839,16 @@ impl VisitMut for ControlFlowInstrumenter {
     fn visit_expr_loop_mut(&mut self, l: &mut syn::ExprLoop) {
         self.wrap_block_in_path_group(&mut l.body);
     }
+
+    // Async blocks run as tasks outside the build, and a group guard held
+    // across an await would leave the build's group scope unbalanced.
+    fn visit_expr_async_mut(&mut self, _: &mut syn::ExprAsync) {}
+
+    fn visit_expr_closure_mut(&mut self, closure: &mut syn::ExprClosure) {
+        if closure.asyncness.is_none() {
+            syn::visit_mut::visit_expr_closure_mut(self, closure);
+        }
+    }
 }
 
 /// Transforms a regular Rust function into a Tessera UI component.

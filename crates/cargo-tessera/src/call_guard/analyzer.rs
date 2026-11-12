@@ -57,8 +57,6 @@ const PROVIDE_CONTEXT_PATH: &str = "tessera_ui::context::provide_context";
 const PUBLIC_PROVIDE_CONTEXT_PATH: &str = "tessera_ui::provide_context";
 const USE_CONTEXT_PATH: &str = "tessera_ui::context::use_context";
 const PUBLIC_USE_CONTEXT_PATH: &str = "tessera_ui::use_context";
-const RECEIVE_FRAME_NANOS_PATH: &str = "tessera_ui::runtime::receive_frame_nanos";
-const PUBLIC_RECEIVE_FRAME_NANOS_PATH: &str = "tessera_ui::receive_frame_nanos";
 const LAUNCH_PATH: &str = "tessera_ui::runtime::launch";
 const PUBLIC_LAUNCH_PATH: &str = "tessera_ui::launch";
 const LAUNCH_ONCE_PATH: &str = "tessera_ui::runtime::launch_once";
@@ -962,9 +960,6 @@ impl<'db> CallAnalyzer<'db> {
                 Some(TesseraRuntimeApi::ProvideContext)
             }
             USE_CONTEXT_PATH | PUBLIC_USE_CONTEXT_PATH => Some(TesseraRuntimeApi::UseContext),
-            RECEIVE_FRAME_NANOS_PATH | PUBLIC_RECEIVE_FRAME_NANOS_PATH => {
-                Some(TesseraRuntimeApi::ReceiveFrameNanos)
-            }
             LAUNCH_PATH | PUBLIC_LAUNCH_PATH => Some(TesseraRuntimeApi::Launch),
             LAUNCH_ONCE_PATH | PUBLIC_LAUNCH_ONCE_PATH => Some(TesseraRuntimeApi::LaunchOnce),
             USE_ROUTER_PATH | PUBLIC_USE_ROUTER_PATH => Some(TesseraRuntimeApi::UseRouter),
@@ -1409,7 +1404,6 @@ impl<'db> CallAnalyzer<'db> {
                 | "retain_with_key"
                 | "provide_context"
                 | "use_context"
-                | "receive_frame_nanos"
                 | "launch"
                 | "launch_once"
                 | "use_router"

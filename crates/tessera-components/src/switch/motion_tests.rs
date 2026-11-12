@@ -181,10 +181,10 @@ fn check_motion(samples: u32) {
         renderer.step_frame();
         let clock = renderer.frame_clock_diagnostics();
         assert_eq!(
-            clock.callbacks_executed, 0,
+            clock.resumed_tasks, 0,
             "settled switch frame receivers stop"
         );
-        assert_eq!(clock.pending_subscriptions, 0);
+        assert_eq!(clock.waiting_tasks, 0);
     }
 }
 

@@ -1163,8 +1163,7 @@ fn compute_staggered_layout_positions(
 mod tests {
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
-        Px, PxPosition, RenderSlotWith, layout::MeasureScope, receive_frame_nanos, remember,
-        tessera,
+        Px, PxPosition, RenderSlotWith, layout::MeasureScope, remember, tessera,
     };
 
     use crate::{
@@ -1399,17 +1398,29 @@ mod tests {
             });
         });
 
-        receive_frame_nanos(move |frame_nanos| {
-            let offset = match frame_nanos {
-                0 => 0,
-                16_666_667 => 1,
-                33_333_334 => 2,
-                _ => 2,
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let offset = match frame_nanos {
+                    0 => 0,
+                    16_666_667 => 1,
+                    33_333_334 => 2,
+                    _ => 2,
+                };
+                scroll_controller.with_mut(|c| {
+                    c.set_scroll_position(PxPosition::new(Px::ZERO, Px::new(-offset)));
+                });
+                true
             };
-            scroll_controller.with_mut(|c| {
-                c.set_scroll_position(PxPosition::new(Px::ZERO, Px::new(-offset)));
-            });
-            tessera_ui::FrameNanosControl::Continue
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
+            }
         });
 
         material_theme()

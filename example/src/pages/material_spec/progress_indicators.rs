@@ -15,10 +15,7 @@ use tessera_components::{
     text::text,
     wavy_progress::{circular_wavy_progress_indicator, linear_wavy_progress_indicator},
 };
-use tessera_ui::{
-    Dp, FrameNanosControl, Modifier, RenderSlot, current_frame_nanos, receive_frame_nanos,
-    remember, tessera,
-};
+use tessera_ui::{Dp, Modifier, RenderSlot, current_frame_nanos, remember, tessera};
 
 use crate::res::I18N;
 
@@ -209,20 +206,32 @@ fn auto_determinate() {
     let running = remember(|| true);
     let last = remember(current_frame_nanos);
     if running.get() {
-        receive_frame_nanos(move |frame_nanos| {
-            if !running.get() {
-                return FrameNanosControl::Stop;
-            }
-            let elapsed =
-                (frame_nanos.saturating_sub(last.get()) as f32 / 1_000_000_000.0).min(0.1);
-            last.set(frame_nanos);
-            let next = (progress.get() + elapsed / 5.0).min(1.0);
-            progress.set(next);
-            if next >= 1.0 {
-                running.set(false);
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                if !running.get() {
+                    return false;
+                }
+                let elapsed =
+                    (frame_nanos.saturating_sub(last.get()) as f32 / 1_000_000_000.0).min(0.1);
+                last.set(frame_nanos);
+                let next = (progress.get() + elapsed / 5.0).min(1.0);
+                progress.set(next);
+                if next >= 1.0 {
+                    running.set(false);
+                    false
+                } else {
+                    true
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

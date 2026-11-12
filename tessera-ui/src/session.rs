@@ -674,39 +674,40 @@ mod tests {
         let active = remember(|| true);
         if active.get() {
             let capture = ObserveClockOnDrop(output.clone());
-            crate::receive_frame_nanos(move |nanos| {
+            crate::launch_once(async move {
+                let nanos = crate::next_frame().await;
                 assert_eq!(crate::current_frame_nanos(), nanos);
-                let _ = &capture;
+                let _capture = capture;
                 output.with_mut(|values| values.push(nanos));
                 active.set(false);
-                crate::FrameNanosControl::Stop
             });
         }
     }
 
     #[test]
-    fn frame_callbacks_and_stopped_captures_read_the_clock_without_borrowing_the_registry() {
+    fn frame_tasks_and_finished_captures_read_the_clock_of_their_frame() {
         let output = TestProbe::default();
         let mut session = start_layout_test_session(layout_test({
             let output = output.clone();
             move || clock_probe(output.clone())
         }));
         pump_layout_test_session(&mut session, 0);
-        assert_eq!(session.frame_clock_diagnostics().pending_subscriptions, 1);
         pump_layout_test_session(&mut session, 10);
         assert_eq!(output.get(), [10, 10]);
-        assert_eq!(session.frame_clock_diagnostics().callbacks_executed, 1);
-        assert_eq!(session.frame_clock_diagnostics().pending_subscriptions, 0);
+        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 1);
+        assert_eq!(session.frame_clock_diagnostics().waiting_tasks, 0);
         pump_layout_test_session(&mut session, 20);
-        assert_eq!(session.frame_clock_diagnostics().callbacks_executed, 0);
+        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 0);
     }
 
     #[crate::tessera]
     fn persistent_clock_probe(output: TestProbe<Vec<u64>>) {
         let capture = ObserveClockOnDrop(output);
-        crate::receive_frame_nanos(move |_| {
-            let _ = &capture;
-            crate::FrameNanosControl::Continue
+        crate::launch_once(async move {
+            let _capture = capture;
+            loop {
+                crate::next_frame().await;
+            }
         });
     }
 
@@ -895,9 +896,11 @@ mod tests {
             context: &mut crate::ModifierBuildContext,
         ) -> Option<crate::Modifier> {
             let output = self.0.clone();
-            context.receive_frame_nanos(move |nanos| {
-                output.with_mut(|values| values.push(nanos));
-                crate::FrameNanosControl::Continue
+            context.launch(async move {
+                loop {
+                    let nanos = crate::next_frame().await;
+                    output.with_mut(|values| values.push(nanos));
+                }
             });
             Some(crate::Modifier::new())
         }
@@ -914,7 +917,7 @@ mod tests {
     }
 
     #[test]
-    fn removing_a_stateful_modifier_unsubscribes_its_clock_before_the_next_frame() {
+    fn removing_a_stateful_modifier_cancels_its_frame_task() {
         let runtime = RuntimeSession::new();
         let _scope = runtime.enter();
         let owner = crate::runtime::ModelScope::new();
@@ -925,16 +928,15 @@ mod tests {
             move || clock_modifier_fixture(visible, output.clone())
         }));
         pump_layout_test_session(&mut session, 0);
-        assert_eq!(session.frame_clock_diagnostics().pending_subscriptions, 1);
         pump_layout_test_session(&mut session, 1);
         assert_eq!(output.get(), [1]);
-        assert_eq!(session.frame_clock_diagnostics().pending_subscriptions, 1);
+        assert_eq!(session.frame_clock_diagnostics().waiting_tasks, 1);
         visible.set(false);
         pump_layout_test_session(&mut session, 2);
         assert_eq!(output.get(), [1, 2]);
-        assert_eq!(session.frame_clock_diagnostics().pending_subscriptions, 0);
+        assert_eq!(session.frame_clock_diagnostics().waiting_tasks, 0);
         pump_layout_test_session(&mut session, 3);
-        assert_eq!(session.frame_clock_diagnostics().callbacks_executed, 0);
+        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 0);
         assert_eq!(output.get(), [1, 2]);
     }
 

@@ -288,10 +288,8 @@ pub trait BuildModifierNode: Any {
 /// inserting unrelated modifier types does not change that ownership.
 pub struct ModifierBuildContext {
     instance: u64,
-    owner: u64,
     path: Vec<u64>,
     state_positions: SmallVec<[(TypeId, usize); 4]>,
-    clock_positions: SmallVec<[(TypeId, usize); 4]>,
 }
 
 fn next_type_position(positions: &mut SmallVec<[(TypeId, usize); 4]>, id: TypeId) -> usize {
@@ -321,23 +319,17 @@ impl ModifierBuildContext {
         crate::runtime::modifier_state(self.instance, &self.path, ordinal, init)
     }
 
-    /// Registers a callback on this node's frame clock.
-    pub fn receive_frame_nanos<F>(&mut self, callback: F)
-    where
-        F: FnMut(u64) -> crate::FrameNanosControl + 'static,
-    {
-        let callback_type = TypeId::of::<F>();
-        let ordinal = next_type_position(&mut self.clock_positions, callback_type);
-        let mut path = self.path.clone();
-        path.push(u64::MAX);
-        path.push(modifier_type_key(callback_type));
-        crate::runtime::modifier_frame_receiver(
-            self.instance,
-            self.owner,
-            &path,
-            ordinal,
-            callback,
-        );
+    /// Runs `future` on the UI session while this capability stays attached.
+    ///
+    /// A running task keeps running when the capability attaches again; a
+    /// finished task is replaced by `future`. Detaching cancels the task.
+    pub fn launch(&mut self, future: impl std::future::Future<Output = ()> + 'static) {
+        let task = self.state(|| None::<crate::Task>);
+        if task.with(|task| task.as_ref().is_none_or(crate::Task::is_finished)) {
+            let previous =
+                task.with_mut(|task| task.replace(crate::async_dispatch::spawn_local(future)));
+            drop(previous);
+        }
     }
 
     /// Gets the nearest nested scroll connection above the attached node.
@@ -1177,10 +1169,8 @@ impl Modifier {
             path.push(position as u64);
             let mut context = ModifierBuildContext {
                 instance,
-                owner,
                 path: path.clone(),
                 state_positions: SmallVec::new(),
-                clock_positions: SmallVec::new(),
             };
             if let Some(modifier) = node.materialize(&mut context) {
                 result = result.then(Modifier {

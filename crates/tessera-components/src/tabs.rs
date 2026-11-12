@@ -13,7 +13,7 @@ use tessera_ui::{
     accesskit::Role,
     layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    receive_frame_nanos, remember, tessera, use_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -1354,15 +1354,27 @@ pub fn tabs(
         controller.with_mut(|controller| controller.sync_selected(selected_index));
     }
     if controller.with(|c| c.has_pending_animation_frame()) {
-        receive_frame_nanos(move |frame_nanos| {
-            let has_pending_animation_frame = controller.with_mut(|controller| {
-                controller.advance_from_frame_nanos(frame_nanos);
-                controller.has_pending_animation_frame()
-            });
-            if has_pending_animation_frame {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let has_pending_animation_frame = controller.with_mut(|controller| {
+                    controller.advance_from_frame_nanos(frame_nanos);
+                    controller.has_pending_animation_frame()
+                });
+                if has_pending_animation_frame {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

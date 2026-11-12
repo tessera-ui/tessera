@@ -13,8 +13,8 @@ use glyphon::{
 use tessera_platform::clipboard;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Dp, FocusRequester, LayoutResult, MeasurementError, Px,
-    PxPosition, State, current_frame_nanos, layout::MeasureScope, receive_frame_nanos, remember,
-    tessera, time::Instant, winit,
+    PxPosition, State, current_frame_nanos, layout::MeasureScope, remember, tessera, time::Instant,
+    winit,
 };
 use winit::keyboard::NamedKey;
 
@@ -3658,23 +3658,35 @@ pub fn text_edit_core(
         .child(move || {
             let focused = controller.with(|c| c.focus_handler().is_focused());
             if focused {
-                receive_frame_nanos(move |frame_nanos| {
-                    let (is_focused, blink_start) = controller.with(|controller| {
-                        (
-                            controller.focus_handler().is_focused(),
-                            controller.blink_start_frame_nanos(),
-                        )
-                    });
-                    if !is_focused {
-                        return tessera_ui::FrameNanosControl::Stop;
+                // Rebuilds this component on every animated frame.
+                let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+                let _ = frame_clock.get();
+                tessera_ui::launch_once(async move {
+                    let step = move |frame_nanos: u64| {
+                        let (is_focused, blink_start) = controller.with(|controller| {
+                            (
+                                controller.focus_handler().is_focused(),
+                                controller.blink_start_frame_nanos(),
+                            )
+                        });
+                        if !is_focused {
+                            return false;
+                        }
+                        let visible =
+                            frame_nanos.saturating_sub(blink_start) % 1_000_000_000 < 500_000_000;
+                        let next = (blink_start, visible);
+                        if blink.get() != next {
+                            blink.set(next);
+                        }
+                        true
+                    };
+                    loop {
+                        let now = tessera_ui::next_frame().await;
+                        frame_clock.set(now);
+                        if !step(now) {
+                            break;
+                        }
                     }
-                    let visible =
-                        frame_nanos.saturating_sub(blink_start) % 1_000_000_000 < 500_000_000;
-                    let next = (blink_start, visible);
-                    if blink.get() != next {
-                        blink.set(next);
-                    }
-                    tessera_ui::FrameNanosControl::Continue
                 });
             }
         });

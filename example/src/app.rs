@@ -20,8 +20,8 @@ use tessera_components::{
 use tessera_i18n::{I18n, langid};
 use tessera_shard::{RouterController, RouterDestination, shard_home};
 use tessera_ui::{
-    Asset, Color, Dp, FrameNanosControl, Modifier, RenderSlotWith, State, WindowInsets,
-    current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
+    Asset, Color, Dp, Modifier, RenderSlotWith, State, WindowInsets, current_frame_nanos, remember,
+    tessera, use_context,
 };
 
 use crate::{
@@ -293,19 +293,32 @@ pub(crate) fn navigation_button(
         });
     }
     if fade.with(|fade| fade.value != fade.target) {
-        receive_frame_nanos(move |frame| {
-            fade.with_mut(|fade| {
-                let t = (frame.saturating_sub(fade.started) as f32 / 200_000_000.0).clamp(0.0, 1.0);
-                let eased = t * t * (3.0 - 2.0 * t);
-                fade.value = fade.from + (fade.target - fade.from) * eased;
-                if t == 1.0 {
-                    fade.value = fade.target;
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                fade.with_mut(|fade| {
+                    let t =
+                        (frame.saturating_sub(fade.started) as f32 / 200_000_000.0).clamp(0.0, 1.0);
+                    let eased = t * t * (3.0 - 2.0 * t);
+                    fade.value = fade.from + (fade.target - fade.from) * eased;
+                    if t == 1.0 {
+                        fade.value = fade.target;
+                    }
+                });
+                if fade.with(|fade| fade.value == fade.target) {
+                    false
+                } else {
+                    true
                 }
-            });
-            if fade.with(|fade| fade.value == fade.target) {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

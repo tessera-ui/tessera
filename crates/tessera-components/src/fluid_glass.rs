@@ -11,7 +11,7 @@ use tessera_ui::{
     current_frame_nanos,
     layout::{MeasureScope, Stack, layout},
     modifier::ModifierCapabilityExt as _,
-    receive_frame_nanos, remember, tessera, use_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -435,13 +435,21 @@ fn fluid_glass_inner(
         })
     }) {
         if let Some(ripple_state) = ripple_state {
-            receive_frame_nanos(move |frame_nanos| {
-                let has_active_ripple = ripple_state
-                    .with_mut(|ripple| ripple.animation_at_frame_nanos(frame_nanos).is_some());
-                if has_active_ripple {
-                    tessera_ui::FrameNanosControl::Continue
-                } else {
-                    tessera_ui::FrameNanosControl::Stop
+            // Rebuilds this component on every animated frame.
+            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+            let _ = frame_clock.get();
+            tessera_ui::launch_once(async move {
+                let step = move |frame_nanos: u64| {
+                    let has_active_ripple = ripple_state
+                        .with_mut(|ripple| ripple.animation_at_frame_nanos(frame_nanos).is_some());
+                    if has_active_ripple { true } else { false }
+                };
+                loop {
+                    let now = tessera_ui::next_frame().await;
+                    frame_clock.set(now);
+                    if !step(now) {
+                        break;
+                    }
                 }
             });
         }

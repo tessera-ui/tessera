@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Dp, FocusManager, FrameNanosControl, ModelStore,
-    Modifier, PointerInput, PointerInputModifierNode, PxPosition, SemanticsModifierNode, State,
-    current_frame_nanos, key,
+    AccessibilityActionHandler, AccessibilityNode, Dp, FocusManager, ModelStore, Modifier,
+    PointerInput, PointerInputModifierNode, PxPosition, SemanticsModifierNode, State,
+    current_frame_nanos, key, launch_once,
     layout::Stack,
     layout::layout,
     modifier::{ModifierCapabilityExt as _, PlacementModifierNode},
-    provide_context, receive_frame_nanos, remember,
+    next_frame, provide_context, remember,
     system_back::{BackPreviewScope, BackSwipeEdge, SystemBackEvent, system_back_handler},
     tessera, use_context,
 };
@@ -73,20 +73,26 @@ pub(super) fn route_display(controller: State<RouterController>) {
 
     let gesture = preview.get().filter(|preview| preview.route_id == route_id);
     if gesture.is_some_and(|gesture| gesture.restoring.is_some()) {
-        receive_frame_nanos(move |now| {
-            preview.with_mut(|preview| {
-                if let Some(active) = preview
-                    && let Some((start, progress)) = active.restoring
-                {
-                    let remaining = 1.0 - now.saturating_sub(start) as f32 / 160_000_000.0;
-                    if remaining > 0.0 {
-                        active.progress = progress * remaining;
-                        return FrameNanosControl::Continue;
+        launch_once(async move {
+            loop {
+                let now = next_frame().await;
+                let restoring = preview.with_mut(|preview| {
+                    if let Some(active) = preview
+                        && let Some((start, progress)) = active.restoring
+                    {
+                        let remaining = 1.0 - now.saturating_sub(start) as f32 / 160_000_000.0;
+                        if remaining > 0.0 {
+                            active.progress = progress * remaining;
+                            return true;
+                        }
                     }
+                    *preview = None;
+                    false
+                });
+                if !restoring {
+                    break;
                 }
-                *preview = None;
-                FrameNanosControl::Stop
-            })
+            }
         });
     }
     let gesture = gesture.filter(|gesture| gesture.progress > 0.0);

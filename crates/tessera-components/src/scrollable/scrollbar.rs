@@ -12,7 +12,7 @@ use tessera_ui::{
     current_frame_nanos,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
-    receive_frame_nanos, remember, tessera, use_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -855,12 +855,24 @@ fn scrollbar(
     if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
         let args = args.clone();
         let state = state;
-        receive_frame_nanos(move |frame_nanos| {
-            frame_time.set(frame_nanos);
-            if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                frame_time.set(frame_nanos);
+                if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

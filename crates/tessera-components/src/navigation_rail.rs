@@ -14,7 +14,7 @@ use tessera_ui::{
     current_frame_nanos,
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -705,15 +705,23 @@ pub fn navigation_rail_item(
         state.progress()
     });
     if animation.with(|state| state.is_animating()) {
-        receive_frame_nanos(move |frame_nanos| {
-            let is_animating = animation.with_mut(|state| {
-                state.update(frame_nanos);
-                state.is_animating()
-            });
-            if is_animating {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let is_animating = animation.with_mut(|state| {
+                    state.update(frame_nanos);
+                    state.is_animating()
+                });
+                if is_animating { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }
@@ -790,15 +798,23 @@ pub fn navigation_rail(
         c.expand_fraction()
     });
     if controller.with(|c| c.is_animating()) {
-        receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller.with_mut(|c| {
-                c.update(frame_nanos);
-                c.is_animating()
-            });
-            if is_animating {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let is_animating = controller.with_mut(|c| {
+                    c.update(frame_nanos);
+                    c.is_animating()
+                });
+                if is_animating { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }
@@ -970,11 +986,23 @@ pub fn modal_navigation_rail(
     }
     let back = back_motion.get().sample(current_frame_nanos());
     if back.active {
-        receive_frame_nanos(move |frame| {
-            if back_motion.with(|motion| motion.sample(frame).active) {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame: u64| {
+                if back_motion.with(|motion| motion.sample(frame).active) {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

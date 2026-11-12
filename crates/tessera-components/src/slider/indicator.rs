@@ -5,11 +5,11 @@
 //! Help users select exact values while adjusting settings.
 
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Constraint, FrameNanosControl, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlotWith, State, current_frame_nanos, key,
+    AxisConstraint, Color, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlotWith, State, current_frame_nanos, key,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    receive_frame_nanos, remember, remember_with_key, tessera, use_context,
+    remember, remember_with_key, tessera, use_context,
 };
 
 use crate::{
@@ -305,12 +305,24 @@ fn label_layer(
         reveal.with_mut(|reveal| reveal.retarget(request.visible, now));
     }
     if reveal.with(Reveal::running) {
-        receive_frame_nanos(move |now| {
-            reveal.with_mut(|reveal| reveal.advance(now));
-            if reveal.with(Reveal::running) {
-                FrameNanosControl::Continue
-            } else {
-                FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |now: u64| {
+                reveal.with_mut(|reveal| reveal.advance(now));
+                if reveal.with(Reveal::running) {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

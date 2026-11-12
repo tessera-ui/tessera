@@ -17,7 +17,7 @@ use crate::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
         release_retired_replay_snapshots, reset_build_invalidations, reset_focus_read_dependencies,
         reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
-        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_nanos_receivers,
+        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_clock,
     },
     time::Instant,
 };
@@ -229,7 +229,7 @@ where
     #[cfg(not(target_family = "wasm"))]
     crate::asset::settle();
     // Match renderer frame order so frame callbacks update state before build.
-    tick_frame_nanos_receivers();
+    tick_frame_clock();
     let _ = build_component_tree(&session.content);
 
     let screen_size = PxSize::new(
@@ -778,10 +778,10 @@ mod tests {
 
     use crate::{
         AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
-        FrameNanosControl, LayoutModifierChild, LayoutModifierInput, LayoutPolicy, LayoutResult,
-        Modifier, NoopDrawModifier, PlacementModifierNode, Px, PxPosition, RenderSlot,
-        SemanticsModifierNode, State, StatefulLayoutPolicy, component_tree::NodeRole,
-        layout::MeasureScope, receive_frame_nanos, remember, runtime::TesseraRuntime, tessera,
+        LayoutModifierChild, LayoutModifierInput, LayoutPolicy, LayoutResult, Modifier,
+        NoopDrawModifier, PlacementModifierNode, Px, PxPosition, RenderSlot, SemanticsModifierNode,
+        State, StatefulLayoutPolicy, component_tree::NodeRole, launch_once, layout::MeasureScope,
+        next_frame, remember, runtime::TesseraRuntime, tessera,
     };
 
     use super::{
@@ -907,7 +907,14 @@ mod tests {
         let width = remember(|| 40);
         let observed_width = remember(|| 0);
         probe.width.set(Some(width));
-        receive_frame_nanos(|_| FrameNanosControl::Continue);
+        // Rebuilds this fixture on every frame.
+        let frame = remember(|| 0_u64);
+        let _ = frame.get();
+        launch_once(async move {
+            loop {
+                frame.set(next_frame().await);
+            }
+        });
         crate::layout::layout(MeasureOnlyWidthPolicy { width }).modifier(
             Modifier::new().on_layout_size_changed(move |size: crate::PxSize| {
                 if observed_width.get() != size.width.0 {
@@ -938,12 +945,12 @@ mod tests {
         pump_layout_test_session(&mut session, 16_666_667)
             .node("layout-dependent-build")
             .width(80);
-        assert_eq!(session.frame_clock_diagnostics().callbacks_executed, 1);
+        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 1);
         assert!(!session.run(|| crate::renderer::frame_settling_can_progress(false)));
         pump_layout_test_session(&mut session, 33_333_334)
             .node("layout-dependent-build")
             .width(80);
-        assert_eq!(session.frame_clock_diagnostics().callbacks_executed, 1);
+        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 1);
         assert!(!session.run(|| crate::renderer::frame_settling_can_progress(false)));
     }
 
@@ -1511,19 +1518,31 @@ mod tests {
     fn animated_layout_sample() {
         let offset = remember(|| 0_i32);
 
-        receive_frame_nanos(move |frame_nanos| {
-            let next_offset = if frame_nanos >= 200_000_000 {
-                100
-            } else if frame_nanos >= 100_000_000 {
-                50
-            } else {
-                0
+        // Rebuilds this component on every animated frame.
+        let frame_clock = crate::remember(crate::current_frame_nanos);
+        let _ = frame_clock.get();
+        crate::launch_once(async move {
+            let step = move |frame_nanos| {
+                let next_offset = if frame_nanos >= 200_000_000 {
+                    100
+                } else if frame_nanos >= 100_000_000 {
+                    50
+                } else {
+                    0
+                };
+                offset.set(next_offset);
+                if frame_nanos >= 200_000_000 {
+                    false
+                } else {
+                    true
+                }
             };
-            offset.set(next_offset);
-            if frame_nanos >= 200_000_000 {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+            loop {
+                let now = crate::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
 
@@ -1539,19 +1558,31 @@ mod tests {
     fn animated_modifier_layout_sample() {
         let width = remember(|| 20_i32);
 
-        receive_frame_nanos(move |frame_nanos| {
-            let next_width = if frame_nanos >= 200_000_000 {
-                100
-            } else if frame_nanos >= 100_000_000 {
-                50
-            } else {
-                20
+        // Rebuilds this component on every animated frame.
+        let frame_clock = crate::remember(crate::current_frame_nanos);
+        let _ = frame_clock.get();
+        crate::launch_once(async move {
+            let step = move |frame_nanos| {
+                let next_width = if frame_nanos >= 200_000_000 {
+                    100
+                } else if frame_nanos >= 100_000_000 {
+                    50
+                } else {
+                    20
+                };
+                width.set(next_width);
+                if frame_nanos >= 200_000_000 {
+                    false
+                } else {
+                    true
+                }
             };
-            width.set(next_width);
-            if frame_nanos >= 200_000_000 {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+            loop {
+                let now = crate::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
 
@@ -1576,19 +1607,31 @@ mod tests {
     fn animated_offset_modifier_sample() {
         let x = remember(|| 0_i32);
 
-        receive_frame_nanos(move |frame_nanos| {
-            let next_x = if frame_nanos >= 200_000_000 {
-                100
-            } else if frame_nanos >= 100_000_000 {
-                50
-            } else {
-                0
+        // Rebuilds this component on every animated frame.
+        let frame_clock = crate::remember(crate::current_frame_nanos);
+        let _ = frame_clock.get();
+        crate::launch_once(async move {
+            let step = move |frame_nanos| {
+                let next_x = if frame_nanos >= 200_000_000 {
+                    100
+                } else if frame_nanos >= 100_000_000 {
+                    50
+                } else {
+                    0
+                };
+                x.set(next_x);
+                if frame_nanos >= 200_000_000 {
+                    false
+                } else {
+                    true
+                }
             };
-            x.set(next_x);
-            if frame_nanos >= 200_000_000 {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+            loop {
+                let now = crate::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
 
@@ -1671,19 +1714,31 @@ mod tests {
     fn animated_nested_slot_sample() {
         let width = remember(|| 20_i32);
 
-        receive_frame_nanos(move |frame_nanos| {
-            let next_width = if frame_nanos >= 200_000_000 {
-                100
-            } else if frame_nanos >= 100_000_000 {
-                50
-            } else {
-                20
+        // Rebuilds this component on every animated frame.
+        let frame_clock = crate::remember(crate::current_frame_nanos);
+        let _ = frame_clock.get();
+        crate::launch_once(async move {
+            let step = move |frame_nanos| {
+                let next_width = if frame_nanos >= 200_000_000 {
+                    100
+                } else if frame_nanos >= 100_000_000 {
+                    50
+                } else {
+                    20
+                };
+                width.set(next_width);
+                if frame_nanos >= 200_000_000 {
+                    false
+                } else {
+                    true
+                }
             };
-            width.set(next_width);
-            if frame_nanos >= 200_000_000 {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+            loop {
+                let now = crate::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
 

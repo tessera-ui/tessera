@@ -6,13 +6,12 @@
 
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
-    FocusScopeNode, FrameNanosControl, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot, State,
+    FocusScopeNode, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::{HasPopup, Role},
     current_frame_nanos,
     layout::MeasureScope,
     modifier::FocusModifierExt as _,
-    receive_frame_nanos, remember, tessera, use_context, winit,
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -551,12 +550,24 @@ pub fn floating_action_button_menu(
         });
     }
     if !motion.with(MenuMotion::is_idle) {
-        receive_frame_nanos(move |now| {
-            motion.with_mut(|motion| motion.advance(now));
-            if motion.with(MenuMotion::is_idle) {
-                FrameNanosControl::Stop
-            } else {
-                FrameNanosControl::Continue
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |now: u64| {
+                motion.with_mut(|motion| motion.advance(now));
+                if motion.with(MenuMotion::is_idle) {
+                    false
+                } else {
+                    true
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

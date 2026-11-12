@@ -102,9 +102,11 @@ pub(super) fn install(window: Arc<Window>) -> Result<(), web_sys::wasm_bindgen::
         return Ok(());
     };
     let target: EventTarget = document.unchecked_into();
-    let session = tessera_ui::RuntimeSession::current().map(|session| session.downgrade()).ok_or_else(|| {
-        web_sys::wasm_bindgen::JsValue::from_str("clipboard requires a UI session")
-    })?;
+    let session = tessera_ui::RuntimeSession::current()
+        .map(|session| session.downgrade())
+        .ok_or_else(|| {
+            web_sys::wasm_bindgen::JsValue::from_str("clipboard requires a UI session")
+        })?;
     let mut listeners = Vec::new();
     let restore = Rc::new(Cell::new(None));
     listeners.push(Listener::new(&target, "keydown", true, {

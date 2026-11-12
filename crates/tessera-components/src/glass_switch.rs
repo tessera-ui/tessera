@@ -11,7 +11,7 @@ use tessera_ui::{
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, PlacementResult, PlacementScope},
-    receive_frame_nanos, remember, tessera,
+    remember, tessera,
 };
 
 use crate::{
@@ -225,15 +225,23 @@ pub fn glass_switch(
     let thumb_px = thumb_dp.to_px();
 
     if controller.with(|c| c.is_animating()) {
-        receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller.with_mut(|controller| {
-                controller.update_progress(frame_nanos);
-                controller.is_animating()
-            });
-            if is_animating {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |frame_nanos: u64| {
+                let is_animating = controller.with_mut(|controller| {
+                    controller.update_progress(frame_nanos);
+                    controller.is_animating()
+                });
+                if is_animating { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

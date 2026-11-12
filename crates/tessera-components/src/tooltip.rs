@@ -6,15 +6,15 @@
 
 use tessera_ui::{
     AxisConstraint, Callback, ComputedData, CursorEventContent, Dp, FocusDirection, FocusGroupNode,
-    FocusRequester, FocusState, FrameNanosControl, GestureState, KeyboardInput,
-    KeyboardInputModifierNode, LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier,
-    PointerInput, PointerInputModifierNode, PressKeyEventType, Px, PxPosition, PxRect, RenderSlot,
+    FocusRequester, FocusState, GestureState, KeyboardInput, KeyboardInputModifierNode,
+    LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier, PointerInput,
+    PointerInputModifierNode, PressKeyEventType, Px, PxPosition, PxRect, RenderSlot,
     RenderSlotWith, State,
     accesskit::{Live, Role},
     current_frame_nanos,
     layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    receive_frame_nanos, remember, tessera, use_context,
+    remember, tessera, use_context,
     winit::{
         event::ElementState,
         keyboard::{Key, NamedKey},
@@ -784,12 +784,24 @@ pub fn tooltip_provider(
     let origin = remember(tessera_ui::LayoutCoordinates::default);
     let popup = remember(|| tessera_ui::FloatRect::ZERO);
     if controller.with(TooltipController::needs_frame) {
-        receive_frame_nanos(move |now| {
-            controller.with_mut(|controller| controller.advance(now));
-            if controller.with(TooltipController::needs_frame) {
-                FrameNanosControl::Continue
-            } else {
-                FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |now: u64| {
+                controller.with_mut(|controller| controller.advance(now));
+                if controller.with(TooltipController::needs_frame) {
+                    true
+                } else {
+                    false
+                }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }

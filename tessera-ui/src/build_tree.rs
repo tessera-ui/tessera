@@ -18,13 +18,13 @@ use crate::{
     },
     runtime::{
         TesseraRuntime, begin_frame_component_replay_tracking, begin_frame_layout_dirty_tracking,
-        begin_recompose_slot_epoch, clear_frame_nanos_receivers, drop_slots_for_instance_logic_ids,
+        begin_recompose_slot_epoch, drop_slots_for_instance_logic_ids,
         finalize_frame_layout_dirty_tracking, release_retired_replay_snapshots,
-        remove_focus_read_dependencies, remove_frame_nanos_receivers,
-        remove_layout_state_read_dependencies, remove_render_slot_read_dependencies,
-        remove_state_read_dependencies, reset_focus_read_dependencies,
-        reset_render_slot_read_dependencies, reset_state_read_dependencies,
-        take_build_invalidations, with_build_dirty_instance_keys, with_replay_scope,
+        remove_focus_read_dependencies, remove_layout_state_read_dependencies,
+        remove_render_slot_read_dependencies, remove_state_read_dependencies,
+        reset_focus_read_dependencies, reset_render_slot_read_dependencies,
+        reset_state_read_dependencies, take_build_invalidations, with_build_dirty_instance_keys,
+        with_replay_scope,
     },
     time::Instant,
 };
@@ -269,7 +269,6 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         let recomposed_context_instance_logic_ids = live_context_slot_instance_logic_ids();
         let tree_timer = Instant::now();
         debug!("Building component tree...");
-        clear_frame_nanos_receivers();
         reset_focus_read_dependencies();
         reset_render_slot_read_dependencies();
         reset_state_read_dependencies();
@@ -514,7 +513,6 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
 
         release_retired_replay_snapshots();
         finalize_frame_layout_dirty_tracking();
-        remove_frame_nanos_receivers(&stale_instance_keys);
         remove_focus_read_dependencies(&stale_instance_keys);
         remove_render_slot_read_dependencies(&stale_instance_keys);
         remove_state_read_dependencies(&stale_instance_keys);

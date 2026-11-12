@@ -463,12 +463,9 @@ fn check_scrolling(samples: u32) {
     for _ in 0..12 {
         renderer.step_frame();
         let clock = renderer.frame_clock_diagnostics();
+        assert_eq!(clock.resumed_tasks, 0, "the provider stops ticking at rest");
         assert_eq!(
-            clock.callbacks_executed, 0,
-            "the provider stops ticking at rest"
-        );
-        assert_eq!(
-            clock.pending_subscriptions, 0,
+            clock.waiting_tasks, 0,
             "the provider unregisters its frame callback at rest"
         );
     }

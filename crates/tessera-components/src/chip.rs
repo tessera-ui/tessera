@@ -8,7 +8,7 @@ use tessera_ui::{
     accesskit::{Role, Toggled},
     current_frame_nanos,
     layout::{MeasureScope, Stack, layout},
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -619,16 +619,24 @@ pub fn chip(
         elevation.set(next);
     }
     if next.is_animating() {
-        receive_frame_nanos(move |now| {
-            let mut next = elevation.get();
-            next.advance(now);
-            if next != elevation.get() {
-                elevation.set(next);
-            }
-            if next.is_animating() {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |now: u64| {
+                let mut next = elevation.get();
+                next.advance(now);
+                if next != elevation.get() {
+                    elevation.set(next);
+                }
+                if next.is_animating() { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }
@@ -658,16 +666,24 @@ pub fn chip(
         shape_motion.set(next);
     }
     if next.is_animating() {
-        receive_frame_nanos(move |now| {
-            let mut next = shape_motion.get();
-            next.advance(now);
-            if next != shape_motion.get() {
-                shape_motion.set(next);
-            }
-            if next.is_animating() {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+        // Rebuilds this component on every animated frame.
+        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
+        let _ = frame_clock.get();
+        tessera_ui::launch_once(async move {
+            let step = move |now: u64| {
+                let mut next = shape_motion.get();
+                next.advance(now);
+                if next != shape_motion.get() {
+                    shape_motion.set(next);
+                }
+                if next.is_animating() { true } else { false }
+            };
+            loop {
+                let now = tessera_ui::next_frame().await;
+                frame_clock.set(now);
+                if !step(now) {
+                    break;
+                }
             }
         });
     }
