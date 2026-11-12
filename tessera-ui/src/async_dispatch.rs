@@ -9,10 +9,14 @@ use std::{
 use futures_util::future::{AbortHandle, Abortable};
 
 /// Where a task runs.
+///
+/// On native targets every dispatcher runs tasks inside a Tokio 1 runtime
+/// context, so Tokio-based libraries work in any task. On the web all
+/// dispatchers run on the browser event loop.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Dispatcher {
     /// The UI session that spawned the task, polled between frames.
-    Main,
+    Ui,
     /// A pool for work that blocks on IO.
     Io,
     /// A pool sized to the CPU cores for computation.
@@ -54,14 +58,14 @@ thread_local! {
 
 /// Runs `future` on `dispatcher`; dropping the returned [`Task`] cancels it.
 ///
-/// [`Dispatcher::Main`] targets the current UI session, or the session of the
+/// [`Dispatcher::Ui`] targets the current UI session, or the session of the
 /// task that calls `spawn`.
 pub fn spawn(dispatcher: Dispatcher, future: impl Future<Output = ()> + Send + 'static) -> Task {
     let session = session_for(dispatcher);
     let (abort, future) = abortable(future);
     let future = SessionScoped { session, future };
     match dispatcher {
-        Dispatcher::Main => spawn_main(session.expect("checked by session_for"), future),
+        Dispatcher::Ui => spawn_main(session.expect("checked by session_for"), future),
         #[cfg(not(target_family = "wasm"))]
         Dispatcher::Io => {
             // Each IO task owns a blocking-capable thread, so it may block
@@ -129,10 +133,10 @@ pub fn on<R: Send + 'static>(
 fn session_for(dispatcher: Dispatcher) -> Option<u128> {
     let session =
         crate::session::current_session_identity().or_else(|| TASK_SESSION.with(Cell::get));
-    if dispatcher == Dispatcher::Main {
+    if dispatcher == Dispatcher::Ui {
         assert!(
             session.is_some(),
-            "Dispatcher::Main requires a UI session or a task spawned from one"
+            "Dispatcher::Ui requires a UI session or a task spawned from one"
         );
     }
     session
@@ -197,8 +201,12 @@ fn poll_main(task: slotmap::DefaultKey) {
     else {
         return;
     };
-    let session = crate::session::current_session_identity().expect("main tasks run in a session");
+    let session = crate::session::current_session_identity().expect("UI tasks run in a session");
     let waker = Waker::from(Arc::new(MainWaker { session, task }));
+    // Tokio-based futures register with the shared runtime's reactor, whose
+    // driver threads wake this task back onto the UI thread.
+    #[cfg(not(target_family = "wasm"))]
+    let _runtime = executor(Dispatcher::Default).enter();
     let poll = future.as_mut().poll(&mut Context::from_waker(&waker));
     let mut slots = tasks.tasks.borrow_mut();
     match poll {
@@ -232,6 +240,6 @@ fn executor(dispatcher: Dispatcher) -> &'static tokio::runtime::Runtime {
     });
     match dispatcher {
         Dispatcher::Io => &IO,
-        Dispatcher::Default | Dispatcher::Main => &DEFAULT,
+        Dispatcher::Default | Dispatcher::Ui => &DEFAULT,
     }
 }

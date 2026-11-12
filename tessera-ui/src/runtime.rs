@@ -4564,7 +4564,7 @@ mod tests {
         let session = crate::RuntimeSession::new();
         session.run(|| {
             let state = with_test_component_scope(831, || remember(|| 0usize));
-            crate::spawn(crate::Dispatcher::Main, async move {
+            crate::spawn(crate::Dispatcher::Ui, async move {
                 let value = crate::on(crate::Dispatcher::Io, async { 6 + 1 }).await;
                 state.set(value);
             })
@@ -4574,11 +4574,25 @@ mod tests {
     }
 
     #[test]
+    fn ui_tasks_can_await_tokio_timers() {
+        let session = crate::RuntimeSession::new();
+        session.run(|| {
+            let state = with_test_component_scope(832, || remember(|| 0usize));
+            crate::spawn(crate::Dispatcher::Ui, async move {
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                state.set(1);
+            })
+            .detach();
+            flush_until(|| state.get() == 1);
+        });
+    }
+
+    #[test]
     fn dropping_a_task_cancels_it() {
         let session = crate::RuntimeSession::new();
         session.run(|| {
             let state = with_test_component_scope(829, || remember(|| 0usize));
-            let task = crate::spawn(crate::Dispatcher::Main, async move { state.set(1) });
+            let task = crate::spawn(crate::Dispatcher::Ui, async move { state.set(1) });
             assert!(!task.is_finished());
             drop(task);
             crate::dispatcher::flush();

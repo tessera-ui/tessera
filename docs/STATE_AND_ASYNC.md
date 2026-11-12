@@ -111,12 +111,15 @@ field, a local variable, or the composition through `launch`.
 
 `spawn(dispatcher, future)` starts a `Send` future:
 
-- `Dispatcher::Main` runs it on the UI session that spawned it, between frames;
+- `Dispatcher::Ui` runs it on the UI session that spawned it, between frames;
 - `Dispatcher::Io` runs it on a thread that may block;
 - `Dispatcher::Default` runs it on a pool sized for computation.
 
 `on(dispatcher, future).await` runs a future on another dispatcher and returns
-its output. On the web, all dispatchers run on the browser's event loop.
+its output. On native targets every dispatcher, including `launch`, provides a
+Tokio 1 runtime context, so depend on `tokio = "1"` to use Tokio timers, files,
+or sockets, or libraries built on them. On the web, all dispatchers run on the
+browser's event loop.
 
 In a component, `launch(key, future)` runs a future on the UI session while the
 component call keeps the same key; a new key cancels it and starts the new
