@@ -64,6 +64,20 @@ fn search_panel(model: Model<SearchModel>) {
 }
 ```
 
+When only the work before the first await changes ordinary fields, a method can
+take `&mut self` and return a `'static` future that captures the `State`
+handles it updates afterwards:
+
+```rust
+fn reload(&mut self) -> impl Future<Output = ()> + 'static {
+    self.cache.clear();
+    let results = self.results;
+    async move { results.set(fetch_all().await) }
+}
+
+// launch_once(model.with_mut(SearchModel::reload));
+```
+
 `Model<T>` is a copyable handle. `with` and `with_mut` are not tracked; only
 reads of `State` fields invalidate components. Keep ordinary fields private and
 change them through methods. Like `State`, the handle works on every thread and
