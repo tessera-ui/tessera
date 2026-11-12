@@ -10,14 +10,17 @@ use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Callback, Color, Dp, FocusRestorationTarget, FocusScopeNode, Modifier, RenderSlotWith, State,
     accesskit::{Live, Role},
-    current_frame_nanos, focus,
+    focus, launch_once,
     layout::{Stack, layout},
     modifier::FocusModifierExt as _,
-    provide_context, remember, tessera, use_context,
+    provide_context, remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::Alignment,
+    animation::{Delay, run_frames},
     button::button,
     icon_button::{IconButtonVariant, icon_button},
     material_icons::filled,
@@ -207,7 +210,7 @@ struct SnackbarRecord {
 pub struct SnackbarHostController {
     queue: VecDeque<SnackbarRecord>,
     current: Option<SnackbarRecord>,
-    current_started_frame_nanos: Option<u64>,
+    timeout: Option<Delay>,
     next_id: u64,
     last_result: Option<SnackbarResult>,
 }
@@ -218,7 +221,7 @@ impl SnackbarHostController {
         Self {
             queue: VecDeque::new(),
             current: None,
-            current_started_frame_nanos: None,
+            timeout: None,
             next_id: 1,
             last_result: None,
         }
@@ -255,79 +258,17 @@ impl SnackbarHostController {
         self.last_result.take()
     }
 
-    fn poll(&mut self, frame_nanos: u64) -> Option<SnackbarRecord> {
-        if self.current.is_none() {
-            self.advance_queue();
-        }
-
-        if self.current.is_some() && self.current_started_frame_nanos.is_none() {
-            self.current_started_frame_nanos = Some(frame_nanos);
-        }
-
-        let mut should_dismiss = false;
-        if let Some(current) = &self.current
-            && let Some(timeout) = current.resolved.duration.timeout()
-            && let Some(started_frame_nanos) = self.current_started_frame_nanos
+    /// Advances the current snackbar's timeout to `now` and returns whether
+    /// a timeout is still pending.
+    fn advance(&mut self, now: Instant) -> bool {
+        if let Some(timeout) = &mut self.timeout
+            && timeout.elapsed(now)
+            && let Some(id) = self.current.as_ref().map(|current| current.id)
         {
-            let elapsed_nanos = frame_nanos.saturating_sub(started_frame_nanos);
-            let timeout_nanos = timeout.as_nanos().min(u64::MAX as u128) as u64;
-            if elapsed_nanos >= timeout_nanos {
-                should_dismiss = true;
-            }
+            self.resolve_current(id, SnackbarResult::Dismissed);
         }
-
-        if should_dismiss && let Some(current) = &self.current {
-            self.resolve_current(current.id, SnackbarResult::Dismissed);
-        }
-
-        self.current.clone()
+        self.timeout.is_some()
     }
-
-    fn has_pending_timeout(&self, frame_nanos: u64) -> bool {
-        let Some(current) = &self.current else {
-            return false;
-        };
-        let Some(timeout) = current.resolved.duration.timeout() else {
-            return false;
-        };
-
-        self.current_started_frame_nanos
-            .map(|started_frame_nanos| {
-                let elapsed_nanos = frame_nanos.saturating_sub(started_frame_nanos);
-                let timeout_nanos = timeout.as_nanos().min(u64::MAX as u128) as u64;
-                elapsed_nanos < timeout_nanos
-            })
-            .unwrap_or(true)
-    }
-
-    fn should_dismiss_current_timeout(&self, frame_nanos: u64) -> bool {
-        let Some(current) = &self.current else {
-            return false;
-        };
-        let Some(timeout) = current.resolved.duration.timeout() else {
-            return false;
-        };
-        let Some(started_frame_nanos) = self.current_started_frame_nanos else {
-            return false;
-        };
-
-        let elapsed_nanos = frame_nanos.saturating_sub(started_frame_nanos);
-        let timeout_nanos = timeout.as_nanos().min(u64::MAX as u128) as u64;
-        elapsed_nanos >= timeout_nanos
-    }
-
-    fn should_poll(&self, frame_nanos: u64) -> bool {
-        if self.current.is_none() {
-            return !self.queue.is_empty();
-        }
-
-        if self.current_started_frame_nanos.is_none() {
-            return true;
-        }
-
-        self.should_dismiss_current_timeout(frame_nanos)
-    }
-
     fn resolve_current(&mut self, id: u64, result: SnackbarResult) -> bool {
         if self.current.as_ref().map(|record| record.id) != Some(id) {
             return false;
@@ -339,7 +280,11 @@ impl SnackbarHostController {
 
     fn advance_queue(&mut self) {
         self.current = self.queue.pop_front();
-        self.current_started_frame_nanos = None;
+        self.timeout = self
+            .current
+            .as_ref()
+            .and_then(|current| current.resolved.duration.timeout())
+            .map(|duration| Delay::new(None, duration));
     }
 }
 
@@ -660,37 +605,9 @@ pub fn snackbar_host(
         None => remember(SnackbarHostController::default),
     };
     let snackbar_slot = snackbar;
-    let frame_nanos = current_frame_nanos();
-    let should_poll = state.with(|host| host.should_poll(frame_nanos));
-    let record = if should_poll {
-        state.with_mut(|host| host.poll(frame_nanos))
-    } else {
-        state.with(|host| host.current.clone())
-    };
-    if state.with(|host| host.has_pending_timeout(frame_nanos)) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let should_dismiss =
-                    state.with(|host| host.should_dismiss_current_timeout(frame_nanos));
-                if should_dismiss {
-                    state.with_mut(|host| {
-                        let _ = host.poll(frame_nanos);
-                    });
-                }
-                let has_pending_timeout = state.with(|host| host.has_pending_timeout(frame_nanos));
-                if has_pending_timeout { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+    let record = state.with(|host| host.current.clone());
+    if state.with(|host| host.timeout.is_some()) {
+        launch_once(run_frames(state, SnackbarHostController::advance));
     }
     let scope = remember(FocusScopeNode::new).get();
     let showing = remember(|| false);

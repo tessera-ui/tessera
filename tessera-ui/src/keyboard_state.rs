@@ -77,6 +77,7 @@ pub(crate) struct QueuedInput<E = KeyboardEvent> {
     pub event: E,
     pub modifiers: ModifiersState,
     pub sequence: u64,
+    pub timestamp: crate::time::Instant,
 }
 
 pub(crate) fn next_input_sequence() -> u64 {
@@ -111,10 +112,15 @@ impl<E> Default for KeyboardQueue<E> {
 
 impl<E> KeyboardQueue<E> {
     pub fn push_event(&mut self, event: E) {
+        self.push_event_at(event, crate::time::Instant::now());
+    }
+
+    pub fn push_event_at(&mut self, event: E, timestamp: crate::time::Instant) {
         self.events.push_back(QueuedInput {
             event,
             modifiers: self.modifiers,
             sequence: next_input_sequence(),
+            timestamp,
         });
     }
 

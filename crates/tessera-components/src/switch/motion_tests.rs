@@ -93,7 +93,7 @@ fn check_motion(samples: u32) {
         initial,
         "selection starts from the rendered geometry"
     );
-    renderer.frames(5);
+    renderer.frames(6);
     let halfway = thumb(&renderer);
     assert_eq!((halfway[0], halfway[2]), (32, 40));
     assert_ne!(renderer.read_pixels(), initial_pixels);
@@ -124,7 +124,7 @@ fn check_motion(samples: u32) {
         (4, 56),
         "release starts from the pressed geometry without advancing the clock twice"
     );
-    renderer.frames(5);
+    renderer.frames(6);
     assert_eq!((thumb(&renderer)[0], thumb(&renderer)[2]), (10, 43));
     renderer.frames(100);
     assert_eq!(settings.get().activations, 0);
@@ -132,7 +132,7 @@ fn check_motion(samples: u32) {
 
     settings.with_mut(|value| value.icons = true);
     renderer.frames(1);
-    renderer.frames(5);
+    renderer.frames(6);
     assert_eq!(
         thumb(&renderer)[2],
         40,

@@ -4,7 +4,7 @@
 //!
 //! Preserve color timing and velocity across changing visual states.
 
-use tessera_ui::Color;
+use tessera_ui::{Color, time::Instant};
 
 use super::material_motion::{Scalar, Spec};
 
@@ -51,29 +51,29 @@ impl ColorMotion {
         }
     }
 
-    pub(crate) fn retarget(&mut self, color: Color, spec: Spec, frame: u64, snap: bool) {
+    pub(crate) fn retarget(&mut self, color: Color, spec: Spec, now: Instant, snap: bool) {
         if snap {
             *self = Self::new(color);
         } else if self.target != color {
             for (channel, target) in self.channels.iter_mut().zip(color_vector(color)) {
-                channel.start_to(target, spec, frame);
+                channel.start_to(target, spec, now);
             }
             let duration = self
                 .channels
                 .iter()
-                .map(|channel| channel.duration_millis)
+                .map(|channel| channel.duration)
                 .max()
-                .unwrap_or(0);
+                .unwrap_or_default();
             for channel in &mut self.channels {
-                channel.duration_millis = duration;
+                channel.duration = duration;
             }
             self.target = color;
         }
     }
 
-    pub(crate) fn advance(&mut self, frame: u64) {
+    pub(crate) fn advance(&mut self, now: Instant) {
         for channel in &mut self.channels {
-            channel.advance(frame);
+            channel.advance(now);
         }
     }
 

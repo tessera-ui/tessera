@@ -10,14 +10,19 @@ use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
-    RenderSlot, State, current_frame_nanos,
+    RenderSlot, State, launch,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    remember, tessera, use_context, winit,
+    remember,
+    system_back::SystemBackEvent,
+    tessera,
+    time::Instant,
+    use_context, winit,
 };
 
 use crate::{
     animation::{
+        Motion, run_frames,
         sheet_drag::SheetDrag,
         visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
     },
@@ -91,6 +96,7 @@ pub struct SideSheetController {
     is_open: bool,
     motion: VisibilityMotion,
     drag: SheetDrag,
+    requests: u32,
 }
 
 impl SideSheetController {
@@ -100,6 +106,7 @@ impl SideSheetController {
             is_open: initial_open,
             motion: VisibilityMotion::new(initial_open, true),
             drag: SheetDrag::new(),
+            requests: 0,
         }
     }
 
@@ -110,9 +117,10 @@ impl SideSheetController {
     /// current animated position.
     pub fn open(&mut self) {
         if !self.is_open {
-            self.motion.retarget(true, current_frame_nanos());
+            self.motion.request(true);
             self.is_open = true;
-            self.drag.settle(current_frame_nanos());
+            self.drag.settle();
+            self.requests = self.requests.wrapping_add(1);
         }
     }
 
@@ -123,9 +131,10 @@ impl SideSheetController {
     /// current animated position.
     pub fn close(&mut self) {
         if self.is_open {
-            self.motion.retarget(false, current_frame_nanos());
+            self.motion.request(false);
             self.is_open = false;
-            self.drag.settle(current_frame_nanos());
+            self.drag.settle();
+            self.requests = self.requests.wrapping_add(1);
         }
     }
 
@@ -134,25 +143,40 @@ impl SideSheetController {
         self.is_open
     }
 
-    /// Returns whether the side sheet is currently animating.
+    /// Returns whether the side sheet is animating or is about to start
+    /// animating on the next frame.
     pub fn is_animating(&self) -> bool {
-        self.is_animating_at(current_frame_nanos())
+        self.motion.sample().active || (self.is_open && self.drag.is_animating())
     }
 
-    fn is_animating_at(&self, frame: u64) -> bool {
-        self.motion.sample(frame).active || (self.is_open && self.drag.sample(frame).1)
+    /// Advances the sheet's motions to `now` and returns whether they are
+    /// still running.
+    fn advance(&mut self, now: Instant) -> bool {
+        self.motion.advance(now);
+        self.drag.advance(now);
+        self.is_animating()
+    }
+
+    fn preview_back(&mut self, event: SystemBackEvent) {
+        self.motion.preview_back(event);
+        self.requests = self.requests.wrapping_add(1);
     }
 
     fn snapshot(&self) -> (bool, VisibilitySample, f32) {
-        (
-            self.is_open,
-            self.motion.sample(current_frame_nanos()),
-            self.drag_offset(),
-        )
+        (self.is_open, self.motion.sample(), self.drag_offset())
     }
 
     fn drag_offset(&self) -> f32 {
-        self.drag.sample(current_frame_nanos()).0
+        self.drag.offset()
+    }
+
+    fn grab(&mut self) {
+        self.drag.grab();
+    }
+
+    fn settle_drag(&mut self) {
+        self.drag.settle();
+        self.requests = self.requests.wrapping_add(1);
     }
 
     fn apply_drag_delta(&mut self, delta_x: f32, position: SideSheetPosition) -> f32 {
@@ -161,9 +185,7 @@ impl SideSheetController {
         } else {
             1.0
         };
-        self.drag
-            .apply_delta(delta_x * direction, current_frame_nanos())
-            * direction
+        self.drag.apply_delta(delta_x * direction) * direction
     }
 
     fn complete_drag(&mut self, velocity: f32, position: SideSheetPosition) -> bool {
@@ -177,15 +199,10 @@ impl SideSheetController {
         } else {
             MAX_SHEET_WIDTH.0
         };
-        self.drag.release(
-            current_frame_nanos(),
-            velocity * direction,
-            extent * 0.5,
-            500.0,
-        )
+        self.requests = self.requests.wrapping_add(1);
+        self.drag.release(velocity * direction, extent * 0.5, 500.0)
     }
 }
-
 impl Default for SideSheetController {
     fn default() -> Self {
         Self::new(false)
@@ -270,7 +287,7 @@ fn side_sheet_extent_modifier(controller: State<SideSheetController>) -> Modifie
         move |coordinates: tessera_ui::LayoutCoordinates| {
             let extent = Dp::from_pixels_f64(f64::from(coordinates.local_size.width.0)).0;
             if controller.with(|c| c.drag.extent() != extent) {
-                controller.with_mut(|c| c.drag.set_extent(extent, current_frame_nanos()));
+                controller.with_mut(|c| c.drag.set_extent(extent));
             }
         },
     )
@@ -594,23 +611,10 @@ fn side_sheet_provider_render(
         *was_open = is_open;
     });
     if is_animating {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating =
-                    controller.with(|controller| controller.is_animating_at(frame_nanos));
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch(
+            controller.with(|c| c.requests),
+            run_frames(controller, SideSheetController::advance),
+        );
     }
 
     let show_side_sheet = is_open || is_animating;
@@ -654,9 +658,7 @@ fn side_sheet_provider_render(
             on_close_request,
         )
         .on_preview(move |event| {
-            controller.with_mut(|controller| {
-                controller.motion.preview_back(event, current_frame_nanos());
-            });
+            controller.with_mut(|controller| controller.preview_back(event));
         });
 
         if show_side_sheet {

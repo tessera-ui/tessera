@@ -269,7 +269,7 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
             <[u8; 3]>::try_from(&rgba[offset..offset + 3]).unwrap()
         };
         assert_eq!(edge(&renderer), [248, 241, 246]);
-        for frame in 1..=12 {
+        for frame in 1..=13 {
             renderer.frames(1);
             let diagnostics = renderer.diagnostics();
             assert_eq!(
@@ -295,7 +295,7 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
                 initial,
                 "animation frame{frame} must preserve targets"
             );
-            if frame == 6 {
+            if frame == 7 {
                 assert_pixel(&renderer, "Overview", 8.0, [223, 221, 245]);
                 assert_eq!(
                     edge(&renderer),

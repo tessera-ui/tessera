@@ -13,11 +13,10 @@ use tessera_foundation::{
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, BuildModifierNode, Callback, CallbackWith,
-    ComputedData, FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode, Modifier,
-    ModifierBuildContext, PointerInput, PointerInputModifierNode, PxPosition, PxSize,
+    CursorEventContent, FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode,
+    Modifier, ModifierBuildContext, PointerInput, PointerInputModifierNode, PxPosition, PxSize,
     SemanticsModifierNode, State,
     accesskit::{self, Action, Toggled},
-    current_frame_nanos,
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     winit::window::CursorIcon,
 };
@@ -86,21 +85,32 @@ fn has_keyboard_activation_event(
     })
 }
 
-fn pointer_context(position: Option<PxPosition>, size: ComputedData) -> PointerEventContext {
-    let Some(position) = position else {
-        return PointerEventContext {
-            normalized_pos: [0.5, 0.5],
-            size: PxSize::new(size.width, size.height),
-        };
-    };
-    let width = size.width.to_f32().max(1.0);
-    let height = size.height.to_f32().max(1.0);
-    let x = (position.x / width).clamp(0.0, 1.0);
-    let y = (position.y / height).clamp(0.0, 1.0);
-    PointerEventContext {
-        normalized_pos: [x, y],
+fn pointer_context(input: &PointerInput<'_>, released: bool) -> Option<PointerEventContext> {
+    let changes = input.pointer_changes.as_slice();
+    let timestamp = changes
+        .iter()
+        .rev()
+        .find(|change| match change.content {
+            CursorEventContent::Pressed(_) => !released,
+            CursorEventContent::Released(_) => released,
+            _ => false,
+        })
+        .or_else(|| changes.last())?
+        .timestamp;
+    let size = input.computed_data;
+    let normalized_pos = input.cursor_position_rel.map_or([0.5, 0.5], |position| {
+        let width = size.width.to_f32().max(1.0);
+        let height = size.height.to_f32().max(1.0);
+        [
+            (position.x / width).clamp(0.0, 1.0),
+            (position.y / height).clamp(0.0, 1.0),
+        ]
+    });
+    Some(PointerEventContext {
+        normalized_pos,
         size: PxSize::new(size.width, size.height),
-    }
+        timestamp,
+    })
 }
 
 fn reset_disabled_interaction_state(state: State<InteractionState>) {
@@ -175,7 +185,6 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
                         input.pass,
                         input.pointer_changes.as_mut_slice(),
                         within_bounds,
-                        current_frame_nanos(),
                         tap_result,
                     );
                     (already, result.triggered)
@@ -219,11 +228,11 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
             return;
         }
 
-        let context = pointer_context(input.cursor_position_rel, input.computed_data);
-
         if tap_result.pressed {
             self.focus_requester.request_focus();
-            if let Some(on_press) = self.on_press.as_ref() {
+            if let Some(on_press) = self.on_press.as_ref()
+                && let Some(context) = pointer_context(&input, false)
+            {
                 on_press.call(context);
             }
             let press_changed = interaction_state.with(|state| !state.is_pressed());
@@ -237,7 +246,9 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
             if was_pressed {
                 interaction_state.with_mut(|state| state.release());
             }
-            if let Some(on_release) = self.on_release.as_ref() {
+            if let Some(on_release) = self.on_release.as_ref()
+                && let Some(context) = pointer_context(&input, true)
+            {
                 on_release.call(context);
             }
         }
@@ -427,11 +438,11 @@ impl PointerInputModifierNode for ActivationPointerModifierNode {
             return;
         }
 
-        let context = pointer_context(input.cursor_position_rel, input.computed_data);
-
         if tap_result.pressed {
             self.focus_requester.request_focus();
-            if let Some(on_press) = self.on_press.as_ref() {
+            if let Some(on_press) = self.on_press.as_ref()
+                && let Some(context) = pointer_context(&input, false)
+            {
                 on_press.call(context);
             }
             let press_changed = interaction_state.with(|state| !state.is_pressed());
@@ -445,7 +456,9 @@ impl PointerInputModifierNode for ActivationPointerModifierNode {
             if was_pressed {
                 interaction_state.with_mut(|state| state.release());
             }
-            if let Some(on_release) = self.on_release.as_ref() {
+            if let Some(on_release) = self.on_release.as_ref()
+                && let Some(context) = pointer_context(&input, true)
+            {
                 on_release.call(context);
             }
         }

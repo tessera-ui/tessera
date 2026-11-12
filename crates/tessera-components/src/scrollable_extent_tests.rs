@@ -8,8 +8,7 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     CursorEventContent, Dp, GestureState, LayoutCoordinates, MOUSE_POINTER_ID, Modifier,
     PointerChange, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource, State,
-    current_frame_time, modifier::FocusModifierExt as _, remember, scaled_box, tessera,
-    testing::UiTest,
+    modifier::FocusModifierExt as _, remember, scaled_box, tessera, testing::UiTest,
 };
 
 use crate::{
@@ -86,7 +85,7 @@ fn wheel_bottom_is_clamped_during_resize_before_further_input() {
             assert_eq!(scroll.with(|scroll| scroll.visible_size().height), Px(320));
             renderer.inject_pointer(
                 PointerChange::new(
-                    current_frame_time().expect("Explicit headless frame timestamp"),
+                    renderer.frame_origin() + renderer.frame_time(),
                     MOUSE_POINTER_ID,
                     CursorEventContent::Scroll(ScrollEventContent {
                         delta_x: 0.0,

@@ -17,6 +17,7 @@ use tessera_ui::{
 };
 
 use crate::{
+    animation::test_instant as at,
     boxed::boxed,
     button::button,
     column::column,
@@ -36,7 +37,7 @@ fn elevation_converges_after_slow_frames_idle_and_retargeting() {
         let mut now = 0;
         for _ in 0..120 {
             now += interval;
-            spring.tick(now);
+            spring.tick(at(now));
             assert!(spring.value_dp().0.is_finite());
             assert!((0.0..=6.0).contains(&spring.value_dp().0));
         }
@@ -44,24 +45,24 @@ fn elevation_converges_after_slow_frames_idle_and_retargeting() {
         assert!(!spring.is_animating());
         now += 5_000_000_000;
         spring.set_target(Dp(1.0));
-        spring.tick(now);
+        spring.tick(at(now));
         assert!(
             (3.0..4.0).contains(&spring.value_dp().0),
             "retargeting after idle starts with a fresh frame delta"
         );
         for _ in 0..120 {
             now += interval;
-            spring.tick(now);
+            spring.tick(at(now));
         }
         assert_eq!(spring.value_dp(), Dp(1.0));
         assert!(!spring.is_animating());
         spring.set_target(Dp(4.0));
-        spring.tick(now + interval);
+        spring.tick(at(now + interval));
         let velocity = spring.spring.velocity();
         spring.set_target(Dp(0.0));
         assert_eq!(spring.spring.velocity(), velocity);
         for frame in 2..122 {
-            spring.tick(now + frame * interval);
+            spring.tick(at(now + frame * interval));
         }
         assert_eq!(spring.value_dp(), Dp(0.0));
         assert!(!spring.is_animating());

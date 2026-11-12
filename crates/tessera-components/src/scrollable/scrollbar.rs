@@ -4,6 +4,8 @@
 //!
 //! Show and drag scroll thumbs beside overflowing content.
 
+use std::time::Duration;
+
 use tessera_foundation::{
     gesture::{DragRecognizer, ScrollRecognizer, TapRecognizer},
     modifier::ModifierExt as _,
@@ -12,13 +14,16 @@ use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
     Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
-    current_frame_nanos,
+    launch_once,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context, with_frame_time,
 };
 
 use crate::{
+    animation::FrameDelta,
     modifier::with_pointer_input,
     nested_scroll::NestedScrollConnection,
     scrollable::{ScrollBarBehavior, ScrollableController, ScrollbarWheelModifierNode},
@@ -113,11 +118,7 @@ impl tessera_ui::LayoutPolicy for ZeroLayout {
 }
 
 const HOVER_FADE_DURATION_SECS: f32 = 0.2;
-const AUTO_HIDE_TIMEOUT_SECS: f32 = 2.0;
-
-fn elapsed_secs_from_frame_nanos(current_frame_nanos: u64, start_frame_nanos: u64) -> f32 {
-    current_frame_nanos.saturating_sub(start_frame_nanos) as f32 / 1_000_000_000.0
-}
+const AUTO_HIDE_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone, PartialEq)]
 struct ScrollBarLayout {
@@ -189,11 +190,10 @@ pub struct ScrollBarInteractionState {
     pub pressed_on_thumb: bool,
     /// Whether the scrollbar's thumb is currently being hovered.
     pub is_hovered: bool,
-    /// The frame timestamp when the hover state last changed.
-    pub hover_start_frame_nanos: Option<u64>,
-    /// The frame timestamp when the last scroll activity occurred (for AutoHide
-    /// behavior).
-    pub last_scroll_activity_frame_nanos: Option<u64>,
+    /// Blend from the resting thumb color (0.0) to the hover color (1.0).
+    pub hover_progress: f32,
+    /// Counts scroll activity; each change restarts the AutoHide timeout.
+    pub scroll_activity: u64,
     /// Whether the scrollbar should be visible (for AutoHide behavior).
     pub should_be_visible: bool,
 }
@@ -297,21 +297,12 @@ fn compute_thumb_color(
     state: &ScrollBarInteractionState,
     thumb_color: Color,
     thumb_hover_color: Color,
-    frame_nanos: u64,
 ) -> Color {
-    // Before the first hover there is no previous color to fade from, so the
-    // thumb starts at its resting color.
-    let Some(hover_start_frame_nanos) = state.hover_start_frame_nanos else {
-        return thumb_color;
-    };
-    let progress = (elapsed_secs_from_frame_nanos(frame_nanos, hover_start_frame_nanos)
-        / HOVER_FADE_DURATION_SECS)
-        .min(1.0);
-    if state.is_hovered {
-        thumb_color.lerp(&thumb_hover_color, progress)
-    } else {
-        thumb_hover_color.lerp(&thumb_color, progress)
-    }
+    thumb_color.lerp(&thumb_hover_color, state.hover_progress.clamp(0.0, 1.0))
+}
+
+fn hover_target(state: &ScrollBarInteractionState) -> f32 {
+    if state.is_hovered { 1.0 } else { 0.0 }
 }
 fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarController) -> bool {
     match args.scrollbar_behavior {
@@ -324,65 +315,70 @@ fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarController) ->
     }
 }
 
-fn handle_autohide_if_needed(
-    args: &ScrollBarConfig,
-    state: &ScrollBarController,
-    frame_nanos: u64,
-) {
-    if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
-        let current = state.read();
-        if current.should_be_visible
-            && current
-                .last_scroll_activity_frame_nanos
-                .is_some_and(|last| {
-                    elapsed_secs_from_frame_nanos(frame_nanos, last) > AUTO_HIDE_TIMEOUT_SECS
-                })
-        {
-            state.with_mut(|state| state.should_be_visible = false);
+fn needs_scrollbar_frame_tick(state: &ScrollBarInteractionState, auto_hide: bool) -> bool {
+    state.hover_progress != hover_target(state) || (auto_hide && state.should_be_visible)
+}
+
+/// Frame-driven hover fades and AutoHide timeouts of one scrollbar.
+#[derive(Default)]
+struct ScrollBarFrames {
+    delta: FrameDelta,
+    activity: Option<(u64, Instant)>,
+}
+
+impl ScrollBarFrames {
+    fn advance(
+        &mut self,
+        state: &mut ScrollBarInteractionState,
+        auto_hide: bool,
+        now: Instant,
+    ) -> bool {
+        let dt = self.delta.step(now);
+        let target = hover_target(state);
+        let step = dt / HOVER_FADE_DURATION_SECS;
+        state.hover_progress = if state.hover_progress < target {
+            (state.hover_progress + step).min(target)
+        } else {
+            (state.hover_progress - step).max(target)
+        };
+        if auto_hide && state.should_be_visible {
+            let since = match self.activity {
+                Some((activity, since)) if activity == state.scroll_activity => since,
+                _ => {
+                    self.activity = Some((state.scroll_activity, now));
+                    now
+                }
+            };
+            if now.saturating_duration_since(since) > AUTO_HIDE_TIMEOUT {
+                state.should_be_visible = false;
+            }
+        }
+        needs_scrollbar_frame_tick(state, auto_hide)
+    }
+}
+
+async fn run_scrollbar_frames(state: ScrollBarController, auto_hide: bool) {
+    let mut frames = ScrollBarFrames::default();
+    loop {
+        let running = with_frame_time(|now| {
+            let mut next = state.read();
+            let running = frames.advance(&mut next, auto_hide, now);
+            if next != state.read() {
+                state.with_mut(|state| *state = next);
+            }
+            running
+        })
+        .await;
+        if !running {
+            break;
         }
     }
 }
 
-fn needs_scrollbar_frame_tick(
-    args: &ScrollBarConfig,
-    state: &ScrollBarController,
-    frame_nanos: u64,
-) -> bool {
-    let state_guard = state.read();
-
-    let hover_animating =
-        state_guard
-            .hover_start_frame_nanos
-            .is_some_and(|hover_start_frame_nanos| {
-                elapsed_secs_from_frame_nanos(frame_nanos, hover_start_frame_nanos)
-                    < HOVER_FADE_DURATION_SECS
-            });
-    if hover_animating || state_guard.is_dragging {
-        return true;
-    }
-
-    if !matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
-        return false;
-    }
-
-    state_guard.should_be_visible
-        || state_guard.is_hovered
-        || state_guard.last_scroll_activity_frame_nanos.is_some_and(
-            |last_scroll_activity_frame_nanos| {
-                elapsed_secs_from_frame_nanos(frame_nanos, last_scroll_activity_frame_nanos)
-                    < AUTO_HIDE_TIMEOUT_SECS
-            },
-        )
-}
-
-fn mark_scroll_activity(
-    state: &ScrollBarController,
-    behavior: &ScrollBarBehavior,
-    frame_nanos: u64,
-) {
+fn mark_scroll_activity(state: &ScrollBarController, behavior: &ScrollBarBehavior) {
     if matches!(*behavior, ScrollBarBehavior::AutoHide) {
         state.with_mut(|state_guard| {
-            state_guard.last_scroll_activity_frame_nanos = Some(frame_nanos);
+            state_guard.scroll_activity = state_guard.scroll_activity.wrapping_add(1);
             state_guard.should_be_visible = true;
         });
     }
@@ -509,7 +505,7 @@ fn scroll_accessibility_step(
     });
     args.state.with_mut(|c| c.set_target_position(new_target));
 
-    mark_scroll_activity(state, &args.scrollbar_behavior, current_frame_nanos());
+    mark_scroll_activity(state, &args.scrollbar_behavior);
 }
 
 fn update_drag(
@@ -518,7 +514,6 @@ fn update_drag(
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarConfig,
     state: &ScrollBarController,
-    frame_nanos: u64,
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
         let new_target_pos = calculate_target(orientation.axis_px(cursor_pos));
@@ -526,24 +521,16 @@ fn update_drag(
         // the pointer without the eased follow used for wheel notches.
         args.state
             .with_mut(|c| c.set_scroll_position(new_target_pos));
-        mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
+        mark_scroll_activity(state, &args.scrollbar_behavior);
     } else {
         // Cursor left window: stop dragging.
         state.with_mut(|state| state.is_dragging = false);
     }
 }
 
-fn update_hover_state(is_on_thumb: bool, state: &ScrollBarController, frame_nanos: u64) {
-    if is_on_thumb && !state.read().is_hovered {
-        state.with_mut(|state_guard| {
-            state_guard.is_hovered = true;
-            state_guard.hover_start_frame_nanos = Some(frame_nanos);
-        });
-    } else if !is_on_thumb && state.read().is_hovered {
-        state.with_mut(|state_guard| {
-            state_guard.is_hovered = false;
-            state_guard.hover_start_frame_nanos = Some(frame_nanos);
-        });
+fn update_hover_state(is_on_thumb: bool, state: &ScrollBarController) {
+    if is_on_thumb != state.read().is_hovered {
+        state.with_mut(|state_guard| state_guard.is_hovered = is_on_thumb);
     }
 }
 
@@ -561,10 +548,7 @@ fn handle_state(
     tap_recognizer: State<TapRecognizer>,
     drag_recognizer: State<DragRecognizer>,
     input: &mut tessera_ui::PointerInput<'_>,
-    frame_nanos: u64,
 ) {
-    handle_autohide_if_needed(args, state, frame_nanos);
-
     // Capture current target position once to avoid locking inside helper on
     // every call.
     let fallback_pos = args.state.with(|c| c.target_position());
@@ -596,7 +580,7 @@ fn handle_state(
             )
         })
         .unwrap_or(false);
-    update_hover_state(is_on_thumb, state, frame_nanos);
+    update_hover_state(is_on_thumb, state);
     let tap_result = tap_recognizer.with_mut(|recognizer| {
         recognizer.update(
             input.pass,
@@ -619,7 +603,7 @@ fn handle_state(
             let new_target_pos = calculate_target_pos(orientation.axis_px(cursor_pos));
             args.state
                 .with_mut(|c| c.set_target_position(new_target_pos));
-            mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
+            mark_scroll_activity(state, &args.scrollbar_behavior);
         }
     }
 
@@ -628,14 +612,7 @@ fn handle_state(
     }
 
     if state.read().is_dragging && drag_result.updated {
-        update_drag(
-            orientation,
-            input,
-            &calculate_target_pos,
-            args,
-            state,
-            frame_nanos,
-        );
+        update_drag(orientation, input, &calculate_target_pos, args, state);
     } else if state.read().is_dragging && cursor_pos.is_none() {
         state.with_mut(|state_guard| {
             state_guard.is_dragging = false;
@@ -854,38 +831,14 @@ fn scrollbar(
     } else {
         ScrollBarController::new(remember(ScrollBarInteractionState::default))
     };
-    let frame_time = remember(current_frame_nanos);
-    let _ = frame_time.get();
+
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
     let scroll_recognizer = remember(ScrollRecognizer::default);
     let nested_scroll_connection = NestedScrollConnection::nearest();
-    let frame_nanos = current_frame_nanos();
-
-    handle_autohide_if_needed(&args, &state, frame_nanos);
-    if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
-        let args = args.clone();
-        let state = state;
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                frame_time.set(frame_nanos);
-                if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+    let auto_hide = matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide);
+    if needs_scrollbar_frame_tick(&state.read(), auto_hide) {
+        launch_once(run_scrollbar_frames(state, auto_hide));
     }
 
     let should_show = should_show_scrollbar(&args, &state);
@@ -913,7 +866,6 @@ fn scrollbar(
     let handler_args = args.clone();
     let handler_state = state;
     let modifier = with_pointer_input(Modifier::new(), move |mut input| {
-        let frame_nanos = current_frame_nanos();
         handle_state(
             orientation,
             &handler_args,
@@ -925,7 +877,6 @@ fn scrollbar(
             tap_recognizer,
             drag_recognizer,
             &mut input,
-            frame_nanos,
         );
     })
     .push_pointer_input(ScrollbarWheelModifierNode {
@@ -942,12 +893,7 @@ fn scrollbar(
     });
 
     let thumb_color = if has_overflow {
-        compute_thumb_color(
-            &state.read(),
-            args.thumb_color,
-            args.thumb_hover_color,
-            frame_nanos,
-        )
+        compute_thumb_color(&state.read(), args.thumb_color, args.thumb_hover_color)
     } else {
         args.thumb_color.with_alpha(0.0)
     };
@@ -977,27 +923,65 @@ fn scrollbar(
 mod tests {
     use tessera_ui::Color;
 
-    use super::{HOVER_FADE_DURATION_SECS, ScrollBarInteractionState, compute_thumb_color};
+    use crate::animation::test_instant;
+
+    use super::{
+        AUTO_HIDE_TIMEOUT, HOVER_FADE_DURATION_SECS, ScrollBarFrames, ScrollBarInteractionState,
+        compute_thumb_color,
+    };
+
+    fn nanos(seconds: f32) -> u64 {
+        (seconds * 1_000_000_000.0) as u64
+    }
 
     #[test]
-    fn thumb_color_interpolates_towards_the_hover_color() {
+    fn thumb_color_fades_towards_the_hover_color_over_frames() {
         let thumb = Color::new(1.0, 0.0, 0.0, 0.4);
         let hovered = Color::new(1.0, 0.0, 0.0, 0.6);
         let mut state = ScrollBarInteractionState::default();
+        let mut frames = ScrollBarFrames::default();
 
-        assert_eq!(compute_thumb_color(&state, thumb, hovered, 0), thumb);
+        assert_eq!(compute_thumb_color(&state, thumb, hovered), thumb);
 
-        {
-            state.is_hovered = true;
-            state.hover_start_frame_nanos = Some(0);
-        }
-        let fade_nanos = (HOVER_FADE_DURATION_SECS * 1_000_000_000.0) as u64;
+        state.is_hovered = true;
+        assert!(frames.advance(&mut state, false, test_instant(0)));
+        assert_eq!(compute_thumb_color(&state, thumb, hovered), thumb);
 
-        assert_eq!(compute_thumb_color(&state, thumb, hovered, 0), thumb);
+        let half = frames.advance(
+            &mut state,
+            false,
+            test_instant(nanos(HOVER_FADE_DURATION_SECS / 2.0)),
+        );
+        assert!(half);
+        let midway = compute_thumb_color(&state, thumb, hovered);
+        assert!(midway.a > thumb.a + 1e-3 && midway.a < hovered.a - 1e-3);
 
-        let faded = compute_thumb_color(&state, thumb, hovered, fade_nanos);
+        let running = frames.advance(
+            &mut state,
+            false,
+            test_instant(nanos(HOVER_FADE_DURATION_SECS)),
+        );
+        assert!(!running);
+        let faded = compute_thumb_color(&state, thumb, hovered);
         assert!((faded.a - hovered.a).abs() < 1e-5);
-        assert!((faded.a - thumb.a).abs() > 1e-3);
+    }
+
+    #[test]
+    fn auto_hide_timeout_restarts_with_scroll_activity() {
+        let mut state = ScrollBarInteractionState {
+            should_be_visible: true,
+            ..Default::default()
+        };
+        let mut frames = ScrollBarFrames::default();
+        let timeout = AUTO_HIDE_TIMEOUT.as_nanos() as u64;
+
+        assert!(frames.advance(&mut state, true, test_instant(0)));
+        state.scroll_activity += 1;
+        assert!(frames.advance(&mut state, true, test_instant(timeout / 2)));
+        assert!(frames.advance(&mut state, true, test_instant(timeout + 1)));
+        assert!(state.should_be_visible);
+        assert!(!frames.advance(&mut state, true, test_instant(timeout / 2 + timeout + 1)));
+        assert!(!state.should_be_visible);
     }
 }
 

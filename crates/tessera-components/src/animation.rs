@@ -10,6 +10,138 @@ pub(crate) mod shape_motion;
 pub(crate) mod sheet_drag;
 pub(crate) mod visibility_motion;
 
+use std::time::Duration;
+
+use tessera_ui::{State, time::Instant, with_frame_time};
+
+/// State advanced from frame times toward a target.
+pub(crate) trait Motion: 'static {
+    type Target;
+
+    /// Returns whether the motion rests at `target`.
+    fn is_settled_at(&self, target: &Self::Target) -> bool;
+
+    /// Starts moving toward `target` from the state at `now`.
+    fn retarget(&mut self, target: Self::Target, now: Instant);
+
+    /// Moves to `now` and returns whether the motion is still running.
+    fn advance(&mut self, now: Instant) -> bool;
+}
+
+/// Measures the time between frames for integrated motion.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct FrameDelta(Option<Instant>);
+
+impl FrameDelta {
+    /// Returns the seconds since the previous step, or zero for the first one.
+    pub(crate) fn step(&mut self, now: Instant) -> f32 {
+        let previous = self.0.unwrap_or(now);
+        let now = now.max(previous);
+        self.0 = Some(now);
+        now.saturating_duration_since(previous).as_secs_f32()
+    }
+}
+
+/// A spring integrated over frame time deltas.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SpringMotion {
+    spring: Animatable,
+    delta: FrameDelta,
+}
+
+impl SpringMotion {
+    pub(crate) fn new(spring: Animatable) -> Self {
+        Self {
+            spring,
+            delta: FrameDelta::default(),
+        }
+    }
+
+    pub(crate) fn value(&self) -> f32 {
+        self.spring.value()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn spring(&self) -> &Animatable {
+        &self.spring
+    }
+}
+
+impl Motion for SpringMotion {
+    type Target = f32;
+
+    fn is_settled_at(&self, target: &f32) -> bool {
+        self.spring.target() == *target && self.spring.is_idle()
+    }
+
+    fn retarget(&mut self, target: f32, now: Instant) {
+        self.advance(now);
+        self.spring.set_target(target);
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        let dt = self.delta.step(now);
+        self.spring.tick(dt);
+        !self.spring.is_idle()
+    }
+}
+
+/// Calls `step` with each following frame's time until it returns `false`.
+pub(crate) async fn run_frames<T: 'static>(
+    state: State<T>,
+    mut step: impl FnMut(&mut T, Instant) -> bool,
+) {
+    loop {
+        let running = with_frame_time(|now| state.with_mut(|value| step(value, now))).await;
+        if !running {
+            break;
+        }
+    }
+}
+
+/// Retargets `motion` on the next frame and advances it until it settles.
+///
+/// Launch it keyed by `target` so that a new target restarts the motion from
+/// its current value and velocity.
+pub(crate) async fn animate_to<M: Motion>(motion: State<M>, target: M::Target) {
+    if motion.with(|motion| motion.is_settled_at(&target)) {
+        return;
+    }
+    let mut target = Some(target);
+    run_frames(motion, move |motion, now| {
+        if let Some(target) = target.take() {
+            motion.retarget(target, now);
+        }
+        motion.advance(now)
+    })
+    .await;
+}
+
+/// A delay measured from an input timestamp or, without one, from the first
+/// frame that observes it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Delay {
+    start: Option<Instant>,
+    duration: Duration,
+}
+
+impl Delay {
+    pub(crate) fn new(start: Option<Instant>, duration: Duration) -> Self {
+        Self { start, duration }
+    }
+
+    pub(crate) fn elapsed(&mut self, now: Instant) -> bool {
+        let start = *self.start.get_or_insert(now);
+        now.saturating_duration_since(start) >= self.duration
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn test_instant(nanos: u64) -> Instant {
+    static ORIGIN: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
+    *ORIGIN + Duration::from_nanos(nanos)
+}
+
 /// Cubic ease-in-out mapping (smooth start and end).
 /// Input: linear progress in [0.0, 1.0].
 /// Output: eased progress in [0.0, 1.0].
@@ -192,7 +324,7 @@ pub(crate) struct SelectionAnimation {
     selected: bool,
     progress: f32,
     start_progress: f32,
-    last_change_frame_nanos: Option<u64>,
+    started: Option<Instant>,
 }
 
 impl SelectionAnimation {
@@ -202,15 +334,7 @@ impl SelectionAnimation {
             selected,
             progress,
             start_progress: progress,
-            last_change_frame_nanos: None,
-        }
-    }
-
-    pub(crate) fn set_selected(&mut self, selected: bool) {
-        if self.selected != selected {
-            self.selected = selected;
-            self.start_progress = self.progress;
-            self.last_change_frame_nanos = Some(tessera_ui::current_frame_nanos());
+            started: None,
         }
     }
 
@@ -218,26 +342,42 @@ impl SelectionAnimation {
         if self.selected { 1.0 } else { 0.0 }
     }
 
-    pub(crate) fn update(&mut self, frame_nanos: u64) {
-        if let Some(start_frame_nanos) = self.last_change_frame_nanos {
-            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-            let fraction = (elapsed_nanos as f32 / 300_000_000.0).min(1.0);
-            let eased = easing(fraction);
-            let target = self.target();
-            self.progress = self.start_progress + (target - self.start_progress) * eased;
-            if fraction >= 1.0 {
-                self.last_change_frame_nanos = None;
-                self.progress = target;
-                self.start_progress = target;
-            }
-        }
-    }
-
     pub(crate) fn progress(&self) -> f32 {
         self.progress
     }
+}
 
-    pub(crate) fn is_animating(&self) -> bool {
-        self.last_change_frame_nanos.is_some()
+impl Motion for SelectionAnimation {
+    type Target = bool;
+
+    fn is_settled_at(&self, selected: &bool) -> bool {
+        self.selected == *selected && self.started.is_none()
+    }
+
+    fn retarget(&mut self, selected: bool, now: Instant) {
+        if self.selected != selected {
+            self.selected = selected;
+            self.start_progress = self.progress;
+            self.started = Some(now);
+        }
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        let Some(started) = self.started else {
+            return false;
+        };
+        let fraction = (now.saturating_duration_since(started).as_secs_f32()
+            / SELECTION_DURATION.as_secs_f32())
+        .min(1.0);
+        let target = self.target();
+        self.progress = self.start_progress + (target - self.start_progress) * easing(fraction);
+        if fraction >= 1.0 {
+            self.started = None;
+            self.progress = target;
+            self.start_progress = target;
+        }
+        self.started.is_some()
     }
 }
+
+const SELECTION_DURATION: Duration = Duration::from_millis(300);

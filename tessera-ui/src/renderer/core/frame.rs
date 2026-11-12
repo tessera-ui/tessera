@@ -328,7 +328,7 @@ impl RenderCore {
             if let Some(timing) = timing {
                 debug!(
                     elapsed_us = timing.elapsed().as_micros(),
-                    frame_nanos = crate::current_frame_nanos(),
+                    frame_nanos = crate::runtime::frame_nanos_since_origin(),
                     "render_pass_cpu"
                 );
             }
@@ -1010,7 +1010,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
         debug!(
             record_us,
             finalize_us = finalize_start.elapsed().as_micros(),
-            frame_nanos = crate::current_frame_nanos(),
+            frame_nanos = crate::runtime::frame_nanos_since_origin(),
             "draw_pass_cpu"
         );
     }

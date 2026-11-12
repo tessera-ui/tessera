@@ -14,13 +14,16 @@ use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, CallbackWith, Color, Dp, FocusRequester,
     Modifier, PxSize, RenderSlot, SemanticsModifierNode, State,
     accesskit::{Role, Toggled},
-    current_frame_nanos,
+    launch, launch_once,
     modifier::ModifierCapabilityExt as _,
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::Alignment,
+    animation::{animate_to, run_frames},
     boxed::boxed,
     checkmark::checkmark,
     modifier::{DisabledToggleSemantics, ModifierExt as _},
@@ -129,8 +132,9 @@ impl CheckboxMotion {
         }
     }
 
-    fn update_progress(&mut self, frame_nanos: u64) {
-        self.checkmark.update_progress(frame_nanos);
+    fn update_progress(&mut self, now: Instant) -> bool {
+        self.checkmark.update_progress(now);
+        self.is_animating()
     }
 
     fn progress(&self) -> f32 {
@@ -176,27 +180,28 @@ impl CheckmarkState {
         self.snap_revision = self.snap_revision.wrapping_add(1);
     }
 
-    fn animate_to(&mut self, checked: bool, indeterminate: bool, frame_nanos: u64) {
+    /// Changes the state; the stroke starts moving on the next frame.
+    fn animate_to(&mut self, checked: bool, indeterminate: bool) {
         let active = checked || indeterminate;
         if self.checked == active && self.indeterminate == indeterminate {
             return;
         }
         let spec = if active { Spec::Spatial } else { Spec::Removal };
         self.progress
-            .retarget(if active { 1.0 } else { 0.0 }, spec, frame_nanos);
+            .request_retarget(if active { 1.0 } else { 0.0 }, spec);
         let morph = if indeterminate { 1.0 } else { 0.0 };
         if !self.checked {
             self.morph.snap(morph);
         } else {
-            self.morph.retarget(morph, spec, frame_nanos);
+            self.morph.request_retarget(morph, spec);
         }
         self.checked = active;
         self.indeterminate = indeterminate;
     }
 
-    fn update_progress(&mut self, frame_nanos: u64) {
-        self.progress.advance(frame_nanos);
-        self.morph.advance(frame_nanos);
+    fn update_progress(&mut self, now: Instant) {
+        self.progress.advance(now);
+        self.morph.advance(now);
     }
 
     fn progress(&self) -> f32 {
@@ -340,11 +345,7 @@ pub fn checkbox(
         controller.checkmark.checked != (checked || indeterminate)
             || controller.is_indeterminate() != indeterminate
     }) {
-        controller.with_mut(|controller| {
-            controller
-                .checkmark
-                .animate_to(checked, indeterminate, current_frame_nanos())
-        });
+        controller.with_mut(|controller| controller.checkmark.animate_to(checked, indeterminate));
     }
 
     checkbox_inner(checked, indeterminate)
@@ -463,39 +464,13 @@ fn checkbox_inner(
         active: is_active,
         snap_revision: controller.with(|controller| controller.checkmark.snap_revision),
     };
-    let frame = current_frame_nanos();
     let colors = remember(|| ColorsMotion::new(target));
     if colors.with(|colors| colors.target != target) {
-        colors.with_mut(|colors| colors.retarget(target, frame));
+        colors.with_mut(|colors| colors.snap(&target));
     }
-    if controller.with(CheckboxMotion::is_animating) || colors.with(ColorsMotion::is_animating) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                let stroke_active = controller.with_mut(|controller| {
-                    controller.update_progress(frame);
-                    controller.is_animating()
-                });
-                let color_active = colors.with_mut(|colors| {
-                    colors.advance(frame);
-                    colors.is_animating()
-                });
-                if stroke_active || color_active {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+    launch(target, animate_to(colors, target));
+    if controller.with(CheckboxMotion::is_animating) {
+        launch_once(run_frames(controller, CheckboxMotion::update_progress));
     }
     let (fill_color, border_color, icon_color) = colors.with(ColorsMotion::value);
     let outline_width = Dp::from_pixels_f32(Dp(2.0).to_pixels_f32().floor());
@@ -604,7 +579,9 @@ fn checkbox_inner(
             let spec = ripple_spec;
             let size = ripple_size;
             move |ctx: PointerEventContext| {
-                state.with_mut(|s| s.start_animation_with_spec(ctx.normalized_pos, size, spec));
+                state.with_mut(|s| {
+                    s.start_animation_with_spec(ctx.normalized_pos, size, spec, ctx.timestamp)
+                });
             }
         });
         let release_handler = ripple_state
@@ -653,19 +630,22 @@ fn checkbox_inner(
 
 #[cfg(test)]
 mod tests {
+    use crate::animation::test_instant as at;
+
     use super::CheckboxMotion;
 
     #[test]
     fn checkbox_controller_animates_to_checked_state() {
         let mut controller = CheckboxMotion::new(false);
 
-        controller.checkmark.animate_to(true, false, 1_000_000_000);
+        controller.checkmark.animate_to(true, false);
+        controller.update_progress(at(1_000_000_000));
 
         assert!(controller.is_checked());
         assert!(controller.is_animating());
         assert_eq!(controller.progress(), 0.0);
 
-        controller.update_progress(1_100_000_000);
+        controller.update_progress(at(1_100_000_000));
         assert!((controller.progress() - 0.65983105).abs() < 0.00001);
         assert!(controller.is_animating());
     }
@@ -674,64 +654,60 @@ mod tests {
     fn checkbox_controller_animates_to_unchecked_state() {
         let mut controller = CheckboxMotion::new(true);
 
-        controller.checkmark.animate_to(false, false, 1_000_000_000);
+        controller.checkmark.animate_to(false, false);
+        controller.update_progress(at(1_000_000_000));
 
         assert!(!controller.is_checked());
         assert!(controller.is_animating());
         assert_eq!(controller.progress(), 1.0);
 
-        controller.update_progress(1_099_000_000);
+        controller.update_progress(at(1_099_000_000));
         assert_eq!(controller.progress(), 1.0);
         assert!(controller.is_animating());
 
-        controller.update_progress(1_100_000_000);
+        controller.update_progress(at(1_100_000_000));
         assert_eq!(controller.progress(), 0.0);
         assert!(!controller.is_animating());
     }
 
     #[test]
     fn mixed_to_checked_morph_retargeting_preserves_the_stroke() {
-        let runtime = tessera_ui::RuntimeSession::new();
-        let _scope = runtime.enter();
         let mut controller = CheckboxMotion::new(false);
         controller.set_indeterminate(true);
         assert!(controller.is_indeterminate());
         assert!(!controller.is_checked());
-        let start = tessera_ui::current_frame_nanos();
-        controller.checkmark.animate_to(true, false, start);
+        let start = 0;
+        controller.checkmark.animate_to(true, false);
         assert!(controller.is_checked());
         assert!(!controller.is_indeterminate());
-        controller.update_progress(start + 100_000_000);
+        controller.update_progress(at(start));
+        controller.update_progress(at(start + 100_000_000));
         assert_eq!(controller.progress(), 1.0);
         let morph = controller.checkmark.morph.value;
         let velocity = controller.checkmark.morph.velocity;
         assert!((morph - 0.34016894).abs() < 0.00001);
-        controller
-            .checkmark
-            .animate_to(false, true, start + 100_000_000);
-        controller.update_progress(start + 100_000_000);
+        controller.checkmark.animate_to(false, true);
+        controller.update_progress(at(start + 100_000_000));
         assert!((controller.checkmark.morph.value - morph).abs() < 0.000000000001);
         assert!((controller.checkmark.morph.velocity - velocity).abs() < 0.000000000001);
-        controller.update_progress(start + 120_000_000);
+        controller.update_progress(at(start + 120_000_000));
         assert!(
             controller.checkmark.morph.value < morph,
             "reversal retains incoming velocity"
         );
-        controller.update_progress(start + 600_000_000);
+        controller.update_progress(at(start + 600_000_000));
         assert_eq!(controller.checkmark.morph.value, 1.0);
         assert!(controller.is_indeterminate());
         assert!(!controller.is_animating());
-        controller
-            .checkmark
-            .animate_to(true, false, start + 600_000_000);
-        controller.update_progress(start + 700_000_000);
+        controller.checkmark.animate_to(true, false);
+        controller.update_progress(at(start + 600_000_000));
+        controller.update_progress(at(start + 700_000_000));
         let held_morph = controller.checkmark.morph.value;
-        controller
-            .checkmark
-            .animate_to(false, false, start + 700_000_000);
-        controller.update_progress(start + 799_000_000);
+        controller.checkmark.animate_to(false, false);
+        controller.update_progress(at(start + 700_000_000));
+        controller.update_progress(at(start + 799_000_000));
         assert!((controller.checkmark.morph.value - held_morph).abs() < 0.000000000001);
-        controller.update_progress(start + 800_000_000);
+        controller.update_progress(at(start + 800_000_000));
         assert_eq!(controller.checkmark.morph.value, 0.0);
         assert_eq!(controller.progress(), 0.0);
         assert!(!controller.is_animating());

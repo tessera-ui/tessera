@@ -7,14 +7,17 @@
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
-    PxPosition, RenderSlotWith, State, current_frame_nanos, key,
+    PxPosition, RenderSlotWith, State, key, launch,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    remember, remember_with_key, tessera, use_context,
+    remember, remember_with_key, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::Alignment,
+    animation::{Motion, animate_to},
     boxed::boxed,
     progress::cubic_bezier_easing,
     shape_def::Shape,
@@ -85,7 +88,7 @@ struct Reveal {
     value: f32,
     origin: f32,
     target: bool,
-    start: u64,
+    start: Option<Instant>,
 }
 
 fn emphasized(progress: f32) -> f32 {
@@ -103,7 +106,7 @@ impl Reveal {
             value: 0.0,
             origin: 0.0,
             target: false,
-            start: 0,
+            start: None,
         }
     }
 
@@ -111,13 +114,11 @@ impl Reveal {
         self.value != f32::from(u8::from(self.target))
     }
 
-    fn advance(&mut self, now: u64) {
-        let duration = if self.target {
-            400_000_000
-        } else {
-            150_000_000
-        };
-        let t = (now.saturating_sub(self.start) as f64 / duration as f64).clamp(0.0, 1.0) as f32;
+    fn tick(&mut self, now: Instant) {
+        let duration = if self.target { 0.4 } else { 0.15 };
+        let t = self.start.map_or(1.0, |start| {
+            (now.saturating_duration_since(start).as_secs_f32() / duration).clamp(0.0, 1.0)
+        });
         let target = f32::from(u8::from(self.target));
         if t >= 1.0 {
             self.value = target;
@@ -130,15 +131,27 @@ impl Reveal {
             self.value = self.origin + (target - self.origin) * t;
         }
     }
+}
 
-    fn retarget(&mut self, target: bool, now: u64) {
-        if self.target == target {
-            return;
+impl Motion for Reveal {
+    type Target = bool;
+
+    fn is_settled_at(&self, &target: &bool) -> bool {
+        self.target == target && !self.running()
+    }
+
+    fn retarget(&mut self, target: bool, now: Instant) {
+        self.tick(now);
+        if self.target != target {
+            self.origin = self.value;
+            self.target = target;
+            self.start = Some(now);
         }
-        self.advance(now);
-        self.origin = self.value;
-        self.target = target;
-        self.start = now;
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        self.tick(now);
+        self.running()
     }
 }
 
@@ -299,33 +312,8 @@ fn label_layer(
     let request_state = request.expect("slider label request");
     let request = request_state.get();
     let origin = origin.expect("slider label origin");
-    let now = current_frame_nanos();
     let reveal = remember(Reveal::new);
-    if reveal.with(|reveal| reveal.target != request.visible) {
-        reveal.with_mut(|reveal| reveal.retarget(request.visible, now));
-    }
-    if reveal.with(Reveal::running) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |now: u64| {
-                reveal.with_mut(|reveal| reveal.advance(now));
-                if reveal.with(Reveal::running) {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    launch(request.visible, animate_to(reveal, request.visible));
     let scale = reveal.with(|reveal| reveal.value);
     let next = (request.clone(), scale);
     let data = remember(|| next.clone());
@@ -502,23 +490,24 @@ pub(super) fn register_indicator(
 #[cfg(test)]
 mod tests {
     use super::Reveal;
+    use crate::animation::{Motion as _, test_instant};
 
     #[test]
     fn value_label_reveal_reverses_without_a_jump_and_settles_at_material_durations() {
         let mut reveal = Reveal::new();
-        reveal.retarget(true, 1_000_000_000);
-        reveal.advance(1_035_833_333);
+        reveal.retarget(true, test_instant(1_000_000_000));
+        reveal.tick(test_instant(1_035_833_333));
         assert!((reveal.value - 0.0725).abs() < 0.00004);
         let halfway = reveal.value;
-        reveal.retarget(false, 1_035_833_333);
+        reveal.retarget(false, test_instant(1_035_833_333));
         assert_eq!(reveal.value, halfway);
-        reveal.advance(1_185_833_333);
+        reveal.tick(test_instant(1_185_833_333));
         assert_eq!(reveal.value, 0.0);
         assert!(!reveal.running());
-        reveal.retarget(true, 2_000_000_000);
-        reveal.advance(2_399_000_000);
+        reveal.retarget(true, test_instant(2_000_000_000));
+        reveal.tick(test_instant(2_399_000_000));
         assert!(reveal.running());
-        reveal.advance(2_400_000_000);
+        reveal.tick(test_instant(2_400_000_000));
         assert_eq!(reveal.value, 1.0);
         assert!(!reveal.running());
     }

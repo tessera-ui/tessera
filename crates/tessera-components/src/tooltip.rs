@@ -4,6 +4,8 @@
 //!
 //! Explain controls on hover, keyboard focus, or touch long press.
 
+use std::time::Duration;
+
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Callback, ComputedData, CursorEventContent, Dp, FocusDirection, FocusGroupNode,
@@ -12,10 +14,12 @@ use tessera_ui::{
     PointerInputModifierNode, PressKeyEventType, Px, PxPosition, PxRect, RenderSlot,
     RenderSlotWith, State,
     accesskit::{Live, Role},
-    current_frame_nanos,
+    launch_once,
     layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context,
     winit::{
         event::ElementState,
         keyboard::{Key, NamedKey},
@@ -23,13 +27,18 @@ use tessera_ui::{
 };
 
 use crate::{
-    button::button, column::column, shape_def::Shape, surface::surface, text::text,
+    animation::{Delay, run_frames},
+    button::button,
+    column::column,
+    shape_def::Shape,
+    surface::surface,
+    text::text,
     theme::MaterialTheme,
 };
 
-const SHOW_DELAY: u64 = 500_000_000;
-const EXIT_DELAY: u64 = 100_000_000;
-const TOUCH_DURATION: u64 = 1_500_000_000;
+const SHOW_DELAY: Duration = Duration::from_millis(500);
+const EXIT_DELAY: Duration = Duration::from_millis(100);
+const TOUCH_DURATION: Duration = Duration::from_millis(1500);
 
 /// Tooltip content and interaction style.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -59,7 +68,7 @@ pub enum TooltipPlacement {
 struct TouchPress {
     pointer: u64,
     origin: PxPosition,
-    since: u64,
+    since: Instant,
     triggered: bool,
 }
 
@@ -79,8 +88,8 @@ pub struct TooltipController {
     interactive: bool,
     mouse_present: bool,
     touch_focus_suppressed: bool,
-    pending_show: Option<u64>,
-    pending_hide: Option<u64>,
+    pending_show: Option<Delay>,
+    pending_hide: Option<Delay>,
     touch: Option<TouchPress>,
     anchor: Option<State<tessera_ui::FloatRect>>,
     focus: FocusRequester,
@@ -174,7 +183,7 @@ impl TooltipController {
             || (self.open && (self.popup_hovered || self.popup_focused))
     }
 
-    fn hover(&mut self, popup: bool, inside: bool, now: u64) {
+    fn hover(&mut self, popup: bool, inside: bool, at: Option<Instant>) {
         let hovered = if popup {
             &mut self.popup_hovered
         } else {
@@ -194,15 +203,15 @@ impl TooltipController {
             self.suppressed = false;
             self.pending_hide = None;
             if !self.open {
-                self.pending_show = Some(now.saturating_add(SHOW_DELAY));
+                self.pending_show = Some(Delay::new(at, SHOW_DELAY));
             }
         } else if !self.engaged() && !self.manual {
             self.pending_show = None;
-            self.pending_hide = self.open.then_some(now.saturating_add(EXIT_DELAY));
+            self.pending_hide = self.open.then_some(Delay::new(at, EXIT_DELAY));
         }
     }
 
-    fn focus(&mut self, popup: bool, focused: bool, now: u64) {
+    fn focus(&mut self, popup: bool, focused: bool) {
         if !popup && !focused {
             self.touch_focus_suppressed = false;
             self.ignore_anchor_focus = false;
@@ -235,7 +244,7 @@ impl TooltipController {
             self.pending_show = None;
             self.pending_hide = None;
         } else if !self.engaged() && !self.manual {
-            self.pending_hide = Some(now.saturating_add(EXIT_DELAY));
+            self.pending_hide = Some(Delay::new(None, EXIT_DELAY));
         }
     }
 
@@ -245,17 +254,20 @@ impl TooltipController {
             || self.touch.is_some_and(|touch| !touch.triggered)
     }
 
-    fn advance(&mut self, now: u64) {
-        if self.pending_show.is_some_and(|deadline| now >= deadline) {
+    fn advance(&mut self, now: Instant) -> bool {
+        if self
+            .pending_show
+            .as_mut()
+            .is_some_and(|delay| delay.elapsed(now))
+        {
             self.pending_show = None;
             if !self.suppressed && self.engaged() {
                 self.open = true;
             }
         }
-        if self
-            .touch
-            .is_some_and(|touch| !touch.triggered && now.saturating_sub(touch.since) >= SHOW_DELAY)
-        {
+        if self.touch.is_some_and(|touch| {
+            !touch.triggered && now.saturating_duration_since(touch.since) >= SHOW_DELAY
+        }) {
             if let Some(touch) = &mut self.touch {
                 touch.triggered = true;
             }
@@ -263,12 +275,17 @@ impl TooltipController {
             self.pending_show = None;
             self.pending_hide = None;
         }
-        if self.pending_hide.is_some_and(|deadline| now >= deadline) {
+        if self
+            .pending_hide
+            .as_mut()
+            .is_some_and(|delay| delay.elapsed(now))
+        {
             self.pending_hide = None;
             if !self.engaged() && !self.manual {
                 self.open = false;
             }
         }
+        self.needs_frame()
     }
 }
 
@@ -286,7 +303,6 @@ fn within(position: Option<PxPosition>, rect: impl Into<tessera_ui::FloatRect>) 
 
 impl PointerInputModifierNode for TooltipPointer {
     fn on_pointer_input(&self, input: PointerInput<'_>) {
-        let now = current_frame_nanos();
         let rect = PxRect::new(
             Px::ZERO,
             Px::ZERO,
@@ -294,6 +310,12 @@ impl PointerInputModifierNode for TooltipPointer {
             input.computed_data.height,
         );
         let inside = within(input.cursor_position_rel, rect);
+        let at = input
+            .pointer_changes
+            .iter()
+            .map(|change| change.timestamp)
+            .max();
+
         let mouse = self.controller.with(|controller| controller.mouse_present);
         let changed = self.controller.with(|controller| {
             (if self.popup {
@@ -304,7 +326,7 @@ impl PointerInputModifierNode for TooltipPointer {
         });
         if (mouse || input.cursor_position_rel.is_none()) && changed {
             self.controller
-                .with_mut(|controller| controller.hover(self.popup, inside, now));
+                .with_mut(|controller| controller.hover(self.popup, inside, at));
         }
         if self.popup {
             return;
@@ -334,7 +356,7 @@ impl PointerInputModifierNode for TooltipPointer {
                             controller.touch = Some(TouchPress {
                                 pointer: event.pointer_id,
                                 origin,
-                                since: now,
+                                since: event.timestamp,
                                 triggered: false,
                             });
                         });
@@ -375,8 +397,8 @@ impl PointerInputModifierNode for TooltipPointer {
                             controller.dismiss();
                         } else if triggered {
                             controller.manual = self.persistent;
-                            controller.pending_hide =
-                                (!self.persistent).then_some(now.saturating_add(TOUCH_DURATION));
+                            controller.pending_hide = (!self.persistent)
+                                .then_some(Delay::new(Some(event.timestamp), TOUCH_DURATION));
                         }
                     });
                 }
@@ -481,8 +503,13 @@ impl PointerInputModifierNode for TooltipDismissInput {
                     controller.touch_focus_suppressed = false;
                 }
                 if !mouse {
-                    controller.hover(false, false, current_frame_nanos());
-                    controller.hover(true, false, current_frame_nanos());
+                    let at = input
+                        .pointer_changes
+                        .iter()
+                        .map(|change| change.timestamp)
+                        .max();
+                    controller.hover(false, false, at);
+                    controller.hover(true, false, at);
                 }
             });
         }
@@ -526,7 +553,7 @@ fn sync_tooltip_focus(controller: State<TooltipController>, popup: bool) {
                 && (controller.touch_focus_suppressed || controller.ignore_anchor_focus))
     });
     if changed {
-        controller.with_mut(|controller| controller.focus(popup, focused, current_frame_nanos()));
+        controller.with_mut(|controller| controller.focus(popup, focused));
     }
 }
 
@@ -780,26 +807,7 @@ pub fn tooltip_provider(
     let origin = remember(tessera_ui::LayoutCoordinates::default);
     let popup = remember(|| tessera_ui::FloatRect::ZERO);
     if controller.with(TooltipController::needs_frame) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |now: u64| {
-                controller.with_mut(|controller| controller.advance(now));
-                if controller.with(TooltipController::needs_frame) {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(controller, TooltipController::advance));
     }
     let open = controller.with(TooltipController::is_open);
     if open && active.get() != Some(controller) {
@@ -1117,55 +1125,59 @@ mod tests {
 
     use tessera_ui::{accesskit::Action, testing::UiTest};
 
-    use crate::{boxed::boxed, theme::material_theme};
+    use crate::{animation::test_instant, boxed::boxed, theme::material_theme};
 
     use super::*;
+
+    fn at(offset: Duration) -> Instant {
+        test_instant(0) + offset
+    }
 
     #[test]
     fn hover_delay_gap_crossing_escape_suppression_and_idle_clock() {
         let mut controller = TooltipController::new();
-        controller.hover(false, true, 0);
-        controller.advance(SHOW_DELAY - 1);
+        controller.hover(false, true, Some(at(Duration::ZERO)));
+        controller.advance(at(SHOW_DELAY - Duration::from_nanos(1)));
         assert!(!controller.is_open());
-        controller.advance(SHOW_DELAY);
+        controller.advance(at(SHOW_DELAY));
         assert!(controller.is_open());
         assert!(!controller.needs_frame());
-        controller.hover(false, false, SHOW_DELAY);
-        controller.hover(true, true, SHOW_DELAY + EXIT_DELAY / 2);
-        controller.advance(SHOW_DELAY + EXIT_DELAY * 2);
+        controller.hover(false, false, Some(at(SHOW_DELAY)));
+        controller.hover(true, true, Some(at(SHOW_DELAY + EXIT_DELAY / 2)));
+        controller.advance(at(SHOW_DELAY + EXIT_DELAY * 2));
         assert!(controller.is_open());
         controller.dismiss();
-        controller.hover(true, true, SHOW_DELAY * 2);
-        controller.advance(SHOW_DELAY * 3);
+        controller.hover(true, true, Some(at(SHOW_DELAY * 2)));
+        controller.advance(at(SHOW_DELAY * 3));
         assert!(!controller.is_open());
         assert!(!controller.needs_frame());
-        controller.hover(true, false, SHOW_DELAY * 3);
-        controller.hover(false, true, SHOW_DELAY * 4);
-        controller.advance(SHOW_DELAY * 5);
+        controller.hover(true, false, Some(at(SHOW_DELAY * 3)));
+        controller.hover(false, true, Some(at(SHOW_DELAY * 4)));
+        controller.advance(at(SHOW_DELAY * 5));
         assert!(controller.is_open());
     }
 
     #[test]
     fn focus_keeps_hovered_content_and_escape_restoration_does_not_reopen_it() {
         let mut controller = TooltipController::new();
-        controller.focus(false, true, 0);
+        controller.focus(false, true);
         assert!(controller.is_open());
-        controller.focus(false, false, 1);
-        controller.focus(true, true, 2);
-        controller.advance(EXIT_DELAY * 2);
+        controller.focus(false, false);
+        controller.focus(true, true);
+        controller.advance(at(EXIT_DELAY * 2));
         assert!(controller.is_open());
         controller.dismiss();
-        controller.focus(true, false, 3);
-        controller.focus(false, true, 4);
-        controller.advance(EXIT_DELAY * 3);
+        controller.focus(true, false);
+        controller.focus(false, true);
+        controller.advance(at(EXIT_DELAY * 3));
         assert!(!controller.is_open());
-        controller.focus(false, false, EXIT_DELAY * 4);
-        controller.focus(false, true, EXIT_DELAY * 5);
+        controller.focus(false, false);
+        controller.focus(false, true);
         assert!(controller.is_open());
         controller.dismiss();
         controller.ignore_anchor_focus = true;
-        controller.focus(false, false, EXIT_DELAY * 6);
-        controller.focus(false, true, EXIT_DELAY * 7);
+        controller.focus(false, false);
+        controller.focus(false, true);
         assert!(controller.is_open());
     }
 
@@ -1175,17 +1187,17 @@ mod tests {
         controller.touch = Some(TouchPress {
             pointer: 1,
             origin: PxPosition::ZERO,
-            since: 0,
+            since: at(Duration::ZERO),
             triggered: false,
         });
-        controller.focus(false, true, 0);
-        controller.advance(SHOW_DELAY - 1);
+        controller.focus(false, true);
+        controller.advance(at(SHOW_DELAY - Duration::from_nanos(1)));
         assert!(!controller.is_open());
-        controller.advance(SHOW_DELAY);
+        controller.advance(at(SHOW_DELAY));
         assert!(controller.is_open());
         assert!(!controller.needs_frame());
         controller.show();
-        controller.advance(u64::MAX);
+        controller.advance(at(SHOW_DELAY * 100));
         assert!(controller.is_open());
         assert!(!controller.needs_frame());
     }
@@ -1195,13 +1207,13 @@ mod tests {
         let mut controller = TooltipController::new();
         controller.show();
         controller.dismiss();
-        controller.focus(true, true, 1);
-        controller.hover(true, true, 2);
-        controller.advance(SHOW_DELAY * 2);
+        controller.focus(true, true);
+        controller.hover(true, true, Some(at(Duration::from_nanos(2))));
+        controller.advance(at(SHOW_DELAY * 2));
         assert!(!controller.is_open());
         assert!(!controller.needs_frame());
-        controller.focus(true, false, SHOW_DELAY * 3);
-        controller.focus(false, true, SHOW_DELAY * 4);
+        controller.focus(true, false);
+        controller.focus(false, true);
         assert!(controller.is_open());
     }
 

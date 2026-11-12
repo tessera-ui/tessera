@@ -3,6 +3,8 @@
 //! ## Usage
 //!
 //! Present anchored overflow or context actions as surfaced menus.
+use std::time::Duration;
+
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, CursorEventContent, Dp, DrawModifierContent,
@@ -11,16 +13,17 @@ use tessera_ui::{
     MeasurementError, Modifier, ParentConstraint, PointerInput, PointerInputModifierNode, Px,
     PxPosition, PxSize, RenderSlot, RenderSlotWith, State,
     accesskit::{HasPopup, Role, Toggled},
-    current_frame_nanos, focus,
+    focus, launch, launch_once,
     layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember,
     render::{ClipRegion, ClipShape},
-    tessera, use_context, winit,
+    tessera, use_context, winit, with_frame_time,
 };
 
 use crate::{
     alignment::CrossAxisAlignment,
+    animation::{Delay, animate_to},
     checkmark::checkmark,
     column::column,
     icon::icon,
@@ -55,7 +58,7 @@ const MENU_HORIZONTAL_PADDING: Dp = Dp(12.0);
 const MENU_LEADING_SIZE: Dp = Dp(20.0);
 const MENU_ITEM_HEIGHT: Dp = MenuDefaults::ITEM_HEIGHT;
 const MENU_TRAILING_SPACING: Dp = Dp(12.0);
-const MENU_HOVER_DELAY_NANOS: u64 = 150_000_000;
+const MENU_HOVER_DELAY: Duration = Duration::from_millis(150);
 
 fn default_menu_width() -> AxisConstraint {
     AxisConstraint::new(Px::from(MENU_MIN_WIDTH), Some(Px::from(MENU_MAX_WIDTH)))
@@ -902,28 +905,14 @@ fn menu_panel(
     let color_style = provider.color_style;
     let grouped = provider.grouped;
     let host = provider.host.expect("menu host");
-    let frame = current_frame_nanos();
-    let motion = remember(|| MenuShapeMotion::new(MenuPosition::Standalone, frame));
+    let motion = remember(|| MenuShapeMotion::new(MenuPosition::Standalone));
     let focused = focus_scope.has_focus();
     if !grouped && provider.animate_shape {
-        if motion.with(|motion| motion.needs_update(MenuPosition::Standalone, focused)) {
-            motion.with_mut(|motion| motion.update(MenuPosition::Standalone, focused, frame));
-        }
-        if !motion.with(MenuShapeMotion::is_idle) {
-            // Rebuilds this component on every animated frame.
-            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-            let _ = frame_clock.get();
-            tessera_ui::launch_once(async move {
-                let step = move |frame: u64| motion::advance(motion, frame);
-                loop {
-                    let now = tessera_ui::next_frame().await;
-                    frame_clock.set(now);
-                    if !step(now) {
-                        break;
-                    }
-                }
-            });
-        }
+        let hovered = motion.with(MenuShapeMotion::hovered);
+        launch(
+            (focused, hovered),
+            animate_to(motion, (MenuPosition::Standalone, focused)),
+        );
     }
     let hover = MenuShapeHover {
         motion,
@@ -962,7 +951,7 @@ fn menu_panel(
                         true
                     }
                     winit::keyboard::Key::Character(text) => {
-                        typeahead::type_text(typeahead, text.as_str(), current_frame_nanos())
+                        typeahead::type_text(typeahead, text.as_str(), input.timestamp)
                     }
                     _ => false,
                 };
@@ -1303,36 +1292,27 @@ fn menu_item_surface(
     let parent = item.menu.map(|menu| menu.controller);
     if enabled && hover.with(|hover| hover.deadline.is_some()) {
         let host = host.clone();
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                let Some(deadline) = hover.with(|hover| hover.deadline) else {
-                    return false;
+        launch_once(async move {
+            loop {
+                let now = with_frame_time(|now| now).await;
+                let Some(mut deadline) = hover.with(|hover| hover.deadline) else {
+                    break;
                 };
                 if !hover.with(|hover| hover.inside)
                     || !focus_requester.is_focused()
                     || parent.is_none_or(|parent| !parent.with(MenuController::is_open))
                 {
                     hover.with_mut(|hover| hover.deadline = None);
-                    return false;
+                    break;
                 }
-                if frame < deadline {
-                    return true;
+                if !deadline.elapsed(now) {
+                    continue;
                 }
                 hover.with_mut(|hover| hover.deadline = None);
                 if let Some((host, parent)) = host.as_ref().zip(parent) {
                     host.apply_hover(parent, submenu_request);
                 }
-                false
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
+                break;
             }
         });
     }
@@ -1533,15 +1513,21 @@ struct MenuItemHoverFocus {
 struct MenuHoverIntent {
     inside: bool,
     mouse: bool,
-    deadline: Option<u64>,
+    deadline: Option<Delay>,
 }
 
 impl PointerInputModifierNode for MenuItemHoverFocus {
     fn on_pointer_input(&self, input: PointerInput<'_>) {
-        let moved = input.pointer_changes.iter().any(|change| {
-            change.pointer_id == MOUSE_POINTER_ID
-                && matches!(change.content, CursorEventContent::Moved(_))
-        });
+        let moved_at = input
+            .pointer_changes
+            .iter()
+            .filter(|change| {
+                change.pointer_id == MOUSE_POINTER_ID
+                    && matches!(change.content, CursorEventContent::Moved(_))
+            })
+            .map(|change| change.timestamp)
+            .max();
+        let moved = moved_at.is_some();
         let mouse = input
             .pointer_changes
             .last()
@@ -1587,8 +1573,7 @@ impl PointerInputModifierNode for MenuItemHoverFocus {
                 if !inside {
                     hover.deadline = None;
                 } else if schedule {
-                    hover.deadline =
-                        Some(current_frame_nanos().saturating_add(MENU_HOVER_DELAY_NANOS));
+                    hover.deadline = Some(Delay::new(moved_at, MENU_HOVER_DELAY));
                 }
             });
         }
@@ -1670,7 +1655,10 @@ mod tests {
         remember, scaled_box, tessera, testing::LayoutSnapshot,
     };
 
-    use crate::{button::button, column::column, spacer::spacer, theme::material_theme};
+    use crate::{
+        animation::test_instant, button::button, column::column, spacer::spacer,
+        theme::material_theme,
+    };
 
     use super::{MenuAnchor, MenuController, menu_item, menu_provider};
 
@@ -1759,7 +1747,11 @@ mod tests {
             ("do", 4_000_000_000, "Duplicate"),
             ("d", 6_000_000_000, "Delete"),
         ] {
-            assert!(super::typeahead::type_text(registry, text, time));
+            assert!(super::typeahead::type_text(
+                registry,
+                text,
+                test_instant(time)
+            ));
             renderer.frames(2);
             assert_eq!(
                 focused(&renderer).as_deref(),
@@ -1769,7 +1761,7 @@ mod tests {
         }
         observed.get().remove_delete.unwrap().set(true);
         renderer.frames(3);
-        super::typeahead::type_text(registry, "d", 8_000_000_000);
+        super::typeahead::type_text(registry, "d", test_instant(8_000_000_000));
         renderer.frames(2);
         assert_eq!(focused(&renderer).as_deref(), Some("Duplicate"));
         let tree = renderer.accessibility_snapshot().unwrap();
@@ -1782,7 +1774,7 @@ mod tests {
         assert!(renderer.accessibility_action(share, Action::Click));
         renderer.frames(6);
         let child = observed.get().child_typeahead.unwrap();
-        super::typeahead::type_text(child, "s", 0);
+        super::typeahead::type_text(child, "s", test_instant(0));
         renderer.frames(2);
         assert_eq!(focused(&renderer).as_deref(), Some("Send"));
         observed

@@ -14,15 +14,21 @@ use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusRequester,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::{Role, Toggled},
-    current_frame_nanos,
+    launch, launch_once,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
-    provide_context, remember, tessera, use_context,
+    provide_context, remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    animation::material_motion::{Scalar, Spec},
+    animation::{
+        Motion as _, animate_to,
+        material_motion::{Scalar, Spec},
+        run_frames,
+    },
     boxed::boxed,
     icon::IconSize,
     modifier::{DisabledToggleSemantics, ModifierExt as _},
@@ -294,7 +300,6 @@ impl tessera_ui::LayoutPolicy for SwitchThumbLayout {
 struct SwitchMotion {
     checked: bool,
     progress: Scalar,
-    snap_revision: u64,
 }
 
 impl SwitchMotion {
@@ -302,7 +307,6 @@ impl SwitchMotion {
         Self {
             checked: initial_state,
             progress: Scalar::new(if initial_state { 1.0 } else { 0.0 }),
-            snap_revision: 0,
         }
     }
 
@@ -311,16 +315,9 @@ impl SwitchMotion {
     }
 
     fn toggle(&mut self) {
-        self.toggle_at(current_frame_nanos());
-    }
-
-    fn toggle_at(&mut self, frame_nanos: u64) {
         self.checked = !self.checked;
-        self.progress.retarget(
-            if self.checked { 1.0 } else { 0.0 },
-            Spec::FastSpatial,
-            frame_nanos,
-        );
+        self.progress
+            .request_retarget(if self.checked { 1.0 } else { 0.0 }, Spec::FastSpatial);
     }
 
     #[cfg(test)]
@@ -332,8 +329,9 @@ impl SwitchMotion {
         self.progress.is_animating()
     }
 
-    fn update_progress(&mut self, frame_nanos: u64) {
-        self.progress.advance(frame_nanos);
+    fn update_progress(&mut self, now: Instant) -> bool {
+        self.progress.advance(now);
+        self.progress.is_animating()
     }
 }
 
@@ -440,25 +438,7 @@ pub fn switch(
     };
 
     if controller.with(|c| c.is_animating()) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating = controller.with_mut(|controller| {
-                    controller.update_progress(frame_nanos);
-                    controller.is_animating()
-                });
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(controller, SwitchMotion::update_progress));
     }
 
     switch_content(checked)
@@ -559,7 +539,9 @@ fn switch_content(
             let spec = ripple_spec;
             let size = ripple_size;
             move |ctx: PointerEventContext| {
-                state.with_mut(|s| s.start_animation_with_spec(ctx.normalized_pos, size, spec));
+                state.with_mut(|s| {
+                    s.start_animation_with_spec(ctx.normalized_pos, size, spec, ctx.timestamp)
+                });
             }
         });
         let release_handler = ripple_state
@@ -644,40 +626,16 @@ fn switch_content(
     } else {
         (height.0 - target_diameter.0) / 2.0
     };
-    let revision = controller.with(|controller| controller.snap_revision);
-    let geometry = remember(|| Geometry::new(target_offset, target_diameter.0, revision));
-    let mut current_geometry = geometry.get();
-    current_geometry.retarget(
-        target_offset,
-        target_diameter.0,
-        is_pressed,
-        revision,
-        current_frame_nanos(),
+    let geometry = remember(|| Geometry::new(target_offset, target_diameter.0));
+    if is_pressed
+        && !geometry.with(|geometry| geometry.is_settled_at(&(target_offset, target_diameter.0)))
+    {
+        geometry.set(Geometry::new(target_offset, target_diameter.0));
+    }
+    launch(
+        (target_offset.to_bits(), target_diameter.0.to_bits()),
+        animate_to(geometry, (target_offset, target_diameter.0)),
     );
-    if geometry.with(|geometry| *geometry != current_geometry) {
-        geometry.set(current_geometry);
-    }
-    if geometry.with(Geometry::is_animating) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                let active = geometry.with_mut(|geometry| {
-                    geometry.advance(frame);
-                    geometry.is_animating()
-                });
-                if active { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
     let thumb_diameter_dp = Dp(geometry.with(|geometry| geometry.diameter.value).max(0.0));
     let thumb_offset = Dp(geometry.with(|geometry| geometry.offset.value));
     let thumb_size_px = thumb_diameter_dp.to_px();
@@ -782,27 +740,29 @@ mod motion_tests;
 #[cfg(test)]
 mod tests {
     use super::SwitchMotion;
+    use crate::animation::test_instant;
 
     #[test]
     fn selection_spring_matches_reference_samples_and_settles_both_values() {
         for checked in [false, true] {
             let mut controller = SwitchMotion::new(checked);
-            controller.toggle_at(0);
-            controller.update_progress(50_000_000);
+            controller.toggle();
+            controller.update_progress(test_instant(0));
+            controller.update_progress(test_instant(50_000_000));
             let expected = if checked {
                 1.0 - 0.5273674995
             } else {
                 0.5273674995
             };
             assert!((controller.animation_progress() as f64 - expected).abs() < 0.000001);
-            controller.update_progress(150_000_000);
+            controller.update_progress(test_instant(150_000_000));
             assert!(if checked {
                 controller.progress.value < 0.0
             } else {
                 controller.progress.value > 1.0
             });
             assert!(controller.is_animating());
-            controller.update_progress(2_000_000_000);
+            controller.update_progress(test_instant(2_000_000_000));
             assert_eq!(
                 controller.animation_progress(),
                 if checked { 0.0 } else { 1.0 }
@@ -814,14 +774,16 @@ mod tests {
     #[test]
     fn retarget_samples_the_incoming_position_and_preserves_velocity() {
         let mut controller = SwitchMotion::new(false);
-        controller.toggle_at(0);
-        controller.update_progress(50_000_000);
-        controller.toggle_at(75_000_000);
+        controller.toggle();
+        controller.update_progress(test_instant(0));
+        controller.update_progress(test_instant(50_000_000));
+        controller.toggle();
+        controller.update_progress(test_instant(75_000_000));
         assert!((controller.progress.value - 0.8269005484).abs() < 0.000001);
         assert!((controller.progress.velocity - 9.8223966780).abs() < 0.000001);
-        controller.update_progress(76_000_000);
+        controller.update_progress(test_instant(76_000_000));
         assert!(controller.progress.value > 0.8269005484);
-        controller.update_progress(2_000_000_000);
+        controller.update_progress(test_instant(2_000_000_000));
         assert_eq!(controller.animation_progress(), 0.0);
         assert!(!controller.is_animating());
     }

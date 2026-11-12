@@ -29,7 +29,7 @@ mod dispatcher;
 mod graphics;
 mod work;
 
-pub use async_dispatch::{Dispatcher, Task, next_frame, on, spawn};
+pub use async_dispatch::{Dispatcher, Task, on, spawn, with_frame_time};
 
 mod session;
 pub mod system_back;
@@ -129,9 +129,8 @@ pub use crate::{
     px::{Px, PxPosition, PxRect, PxSize},
     renderer::Renderer,
     runtime::{
-        Model, ModelInit, ModelStore, ModelStoreScope, State, current_frame_nanos,
-        current_frame_time, key, launch, launch_once, remember, remember_with_key, retain,
-        retain_with_key,
+        Model, ModelInit, ModelStore, ModelStoreScope, State, key, launch, launch_once, remember,
+        remember_with_key, retain, retain_with_key,
     },
 };
 

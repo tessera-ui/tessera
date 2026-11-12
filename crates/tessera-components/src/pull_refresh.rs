@@ -5,14 +5,17 @@
 //! Trigger data reloads when users pull down at the top of a scrollable view.
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, Modifier, Px, RenderSlot, State, current_frame_nanos,
+    Callback, CallbackWith, Color, Dp, Modifier, Px, RenderSlot, State, launch_once,
     layout::{Stack, layout},
     modifier::FocusModifierExt as _,
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::Alignment,
+    animation::run_frames,
     boxed::boxed,
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
@@ -54,7 +57,7 @@ pub struct PullRefreshController {
     distance_pulled: f32,
     threshold: f32,
     refreshing_offset: f32,
-    last_frame_nanos: Option<u64>,
+    last_frame: Option<Instant>,
 }
 
 impl Default for PullRefreshController {
@@ -73,7 +76,7 @@ impl PullRefreshController {
             distance_pulled: 0.0,
             threshold: PullRefreshDefaults::REFRESH_THRESHOLD.to_pixels_f32(),
             refreshing_offset: PullRefreshDefaults::REFRESHING_OFFSET.to_pixels_f32(),
-            last_frame_nanos: None,
+            last_frame: None,
         }
     }
 
@@ -161,13 +164,11 @@ impl PullRefreshController {
         }
     }
 
-    fn update_position(&mut self, frame_nanos: u64, smoothing: f32) -> bool {
-        let delta_time = if let Some(last_frame_nanos) = self.last_frame_nanos {
-            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
-        } else {
-            0.016
-        };
-        self.last_frame_nanos = Some(frame_nanos);
+    fn update_position(&mut self, now: Instant, smoothing: f32) -> bool {
+        let delta_time = self.last_frame.map_or(0.016, |last| {
+            now.saturating_duration_since(last).as_secs_f32()
+        });
+        self.last_frame = Some(now);
 
         let diff = self.target_position - self.position;
         if diff.abs() < 0.5 {
@@ -442,34 +443,15 @@ pub fn pull_refresh(
                 .to_pixels_f32(),
         );
     });
-    let frame_nanos = current_frame_nanos();
-    controller.with_mut(|s| {
-        s.update_position(frame_nanos, INDICATOR_SMOOTHING);
-    });
     if controller.with(|s| s.has_pending_animation_frame()) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let has_pending_animation_frame = controller.with_mut(|s| {
-                    s.update_position(frame_nanos, INDICATOR_SMOOTHING);
-                    s.has_pending_animation_frame()
-                });
-                if has_pending_animation_frame {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
+        launch_once(run_frames(controller, |s, now| {
+            s.update_position(now, INDICATOR_SMOOTHING);
+            let pending = s.has_pending_animation_frame();
+            if !pending {
+                s.last_frame = None;
             }
-        });
+            pending
+        }));
     }
 
     let parent_nested_scroll = NestedScrollConnection::nearest();

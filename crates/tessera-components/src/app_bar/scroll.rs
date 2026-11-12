@@ -4,11 +4,15 @@
 //!
 //! Coordinate a screen header with scrolling lists and feeds.
 
+use std::time::Duration;
+
 use tessera_ui::{
-    CallbackWith, Dp, Modifier, RenderSlot, ScrollEventSource, State, current_frame_nanos,
+    CallbackWith, Dp, Modifier, RenderSlot, ScrollEventSource, State, launch_once,
     layout::{Stack, layout},
     modifier::FocusModifierExt as _,
     remember, tessera,
+    time::Instant,
+    with_frame_time,
 };
 
 use crate::{
@@ -42,8 +46,9 @@ pub struct AppBarScrollController {
     collapse: Animatable,
     color: Animatable,
     content_offset: f64,
-    last_frame: Option<u64>,
-    last_input: Option<u64>,
+    last_frame: Option<Instant>,
+    last_input: Option<Instant>,
+    input_since_frame: bool,
     touch_active: bool,
     pending_snap: bool,
 }
@@ -60,6 +65,7 @@ impl Default for AppBarScrollController {
             content_offset: 0.0,
             last_frame: None,
             last_input: None,
+            input_since_frame: false,
             touch_active: false,
             pending_snap: false,
         }
@@ -141,7 +147,7 @@ impl AppBarScrollController {
         }
     }
     pub(super) fn end_drag(&mut self) {
-        self.finish(current_frame_nanos());
+        self.finish();
     }
 
     pub(super) fn color_fraction(&self) -> f32 {
@@ -153,11 +159,10 @@ impl AppBarScrollController {
     }
 
     fn input(&mut self, source: ScrollEventSource) {
-        let frame = current_frame_nanos();
         if !self.is_animating() {
-            self.last_frame = Some(frame);
+            self.last_frame = None;
         }
-        self.last_input = Some(frame);
+        self.input_since_frame = true;
         self.touch_active = source == ScrollEventSource::Touch;
         self.pending_snap = self.snap
             && self.range > 0.0
@@ -217,9 +222,11 @@ impl AppBarScrollController {
         ScrollDelta::new(0.0, consumed)
     }
 
-    fn finish(&mut self, frame: u64) {
+    fn finish(&mut self) {
+        if !self.is_animating() {
+            self.last_frame = None;
+        }
         self.touch_active = false;
-        self.last_frame = Some(frame);
         if self.pending_snap && self.snap {
             self.collapse
                 .set_target(if self.collapsed_fraction() < 0.5 {
@@ -231,19 +238,26 @@ impl AppBarScrollController {
         self.pending_snap = false;
     }
 
-    fn tick(&mut self, frame: u64) {
-        let previous = self.last_frame.replace(frame).unwrap_or(frame);
+    /// Advances to `now` and returns whether motion is still pending.
+    fn tick(&mut self, now: Instant) -> bool {
+        let previous = self.last_frame.replace(now).unwrap_or(now);
+        // Input handlers carry no frame time, so the settling delay starts at
+        // the first frame after the latest input.
+        if std::mem::take(&mut self.input_since_frame) {
+            self.last_input = Some(now);
+        }
         if self.pending_snap
             && !self.touch_active
-            && self
-                .last_input
-                .is_some_and(|last| frame.saturating_sub(last) >= 150_000_000)
+            && self.last_input.is_some_and(|last| {
+                now.saturating_duration_since(last) >= Duration::from_millis(150)
+            })
         {
-            self.finish(frame);
+            self.finish();
         }
-        let dt = frame.saturating_sub(previous) as f32 / 1_000_000_000.0;
+        let dt = now.saturating_duration_since(previous).as_secs_f32();
         self.collapse.tick(dt);
         self.color.tick(dt);
+        self.is_animating()
     }
 }
 
@@ -353,12 +367,11 @@ pub fn app_bar_scroll_provider(
         let offset = controller.with(|controller| controller.target_position().y as f64)
             / Dp(1.0).to_pixels_f32().max(f32::EPSILON) as f64;
         if state.with(|value| value.content_offset) != offset {
-            let frame = current_frame_nanos();
             state.with_mut(|value| {
                 value.content_offset = offset.min(0.0);
                 if value.range <= 0.0 {
                     if value.color.is_idle() {
-                        value.last_frame = Some(frame);
+                        value.last_frame = None;
                     }
                     value
                         .color
@@ -368,23 +381,11 @@ pub fn app_bar_scroll_provider(
         }
     }
     if state.with(AppBarScrollController::is_animating) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                let state = active.get();
-                state.with_mut(|value| value.tick(frame));
-                if state.with(AppBarScrollController::is_animating) {
-                    true
-                } else {
-                    false
-                }
-            };
+        launch_once(async move {
             loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
+                let animating =
+                    with_frame_time(|now| active.get().with_mut(|value| value.tick(now))).await;
+                if !animating {
                     break;
                 }
             }
@@ -402,8 +403,7 @@ pub fn app_bar_scroll_provider(
             active.get().with_mut(|value| value.post_scroll(input))
         }))
         .with_post_fling_handler(CallbackWith::new(move |_| {
-            let frame = current_frame_nanos();
-            active.get().with_mut(|value| value.finish(frame));
+            active.get().with_mut(AppBarScrollController::finish);
             ScrollVelocity::ZERO
         }));
     let child = child.unwrap_or_else(RenderSlot::empty);

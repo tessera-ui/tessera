@@ -7,12 +7,12 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
-    Modifier, Px, PxPosition, current_frame_nanos, layout::MeasureScope, remember, tessera,
+    Modifier, Px, PxPosition, launch, layout::MeasureScope, remember, tessera, time::Instant,
     use_context,
 };
 
 use crate::{
-    animation::Animatable,
+    animation::{Animatable, FrameDelta, Motion, animate_to},
     floating_action_button::{
         FloatingActionButtonElevation, FloatingActionButtonSize, floating_action_button,
     },
@@ -89,37 +89,46 @@ impl ExtendedFloatingActionButtonSize {
 struct ExpansionMotion {
     width: Animatable,
     opacity: Animatable,
-    frame_nanos: u64,
+    expanded: bool,
+    delta: FrameDelta,
 }
 
 impl ExpansionMotion {
-    fn new(expanded: bool, frame_nanos: u64) -> Self {
+    fn new(expanded: bool) -> Self {
         let value = if expanded { 1.0 } else { 0.0 };
         Self {
             width: Animatable::spring(value, 800.0_f32.sqrt(), 0.6),
             opacity: Animatable::spring(value, 3800.0_f32.sqrt(), 1.0),
-            frame_nanos,
+            expanded,
+            delta: FrameDelta::default(),
         }
     }
 
-    fn advance(&mut self, frame_nanos: u64) {
-        if frame_nanos > self.frame_nanos {
-            let dt = (frame_nanos - self.frame_nanos) as f32 / 1_000_000_000.0;
-            self.width.tick(dt);
-            self.opacity.tick(dt);
-            self.frame_nanos = frame_nanos;
-        }
+    fn is_idle(&self) -> bool {
+        self.width.is_idle() && self.opacity.is_idle()
+    }
+}
+
+impl Motion for ExpansionMotion {
+    type Target = bool;
+
+    fn is_settled_at(&self, expanded: &bool) -> bool {
+        self.expanded == *expanded && self.is_idle()
     }
 
-    fn set_expanded(&mut self, expanded: bool, frame_nanos: u64) {
-        self.advance(frame_nanos);
+    fn retarget(&mut self, expanded: bool, now: Instant) {
+        self.advance(now);
+        self.expanded = expanded;
         let target = if expanded { 1.0 } else { 0.0 };
         self.width.set_target(target);
         self.opacity.set_target(target);
     }
 
-    fn is_idle(&self) -> bool {
-        self.width.is_idle() && self.opacity.is_idle()
+    fn advance(&mut self, now: Instant) -> bool {
+        let dt = self.delta.step(now);
+        self.width.tick(dt);
+        self.opacity.tick(dt);
+        !self.is_idle()
     }
 }
 
@@ -269,35 +278,8 @@ pub fn extended_floating_action_button(
         .get();
     let size = size.unwrap_or_default();
     let expanded = icon.is_none() || expanded.unwrap_or(true);
-    let frame = current_frame_nanos();
-    let motion = remember(|| ExpansionMotion::new(expanded, frame));
-    let was_expanded = remember(|| expanded);
-    if was_expanded.get() != expanded {
-        motion.with_mut(|motion| motion.set_expanded(expanded, frame));
-        was_expanded.set(expanded);
-    }
-    if !motion.with(ExpansionMotion::is_idle) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                motion.with_mut(|motion| motion.advance(frame));
-                if motion.with(ExpansionMotion::is_idle) {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    let motion = remember(|| ExpansionMotion::new(expanded));
+    launch(expanded, animate_to(motion, expanded));
     let current = ExtendedFabContent {
         label: label.clone(),
         icon,
@@ -547,14 +529,16 @@ mod tests {
 
     #[test]
     fn reversing_expansion_keeps_position_and_velocity_then_settles() {
-        let mut motion = ExpansionMotion::new(false, 0);
-        motion.set_expanded(true, 0);
-        motion.advance(33_333_333);
+        use crate::animation::{Motion as _, test_instant as at};
+
+        let mut motion = ExpansionMotion::new(false);
+        motion.retarget(true, at(0));
+        motion.advance(at(33_333_333));
         let before = (motion.width.value(), motion.width.velocity());
-        motion.set_expanded(false, 33_333_333);
+        motion.retarget(false, at(33_333_333));
         assert_eq!((motion.width.value(), motion.width.velocity()), before);
         for frame in 3..120 {
-            motion.advance(frame * 16_666_667);
+            motion.advance(at(frame * 16_666_667));
         }
         assert!(motion.is_idle());
         assert_eq!(motion.width.value(), 0.0);

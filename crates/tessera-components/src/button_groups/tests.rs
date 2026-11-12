@@ -6,6 +6,8 @@
 
 use tessera_ui::Px;
 
+use crate::animation::test_instant as at;
+
 use super::width_motion::{PressWidthMotion, WidthData, redistribute_widths};
 
 fn data(progress: [f64; 3], limit: i32) -> [WidthData; 3] {
@@ -56,13 +58,14 @@ fn width_exchange_respects_tiny_neighbors_and_singletons() {
 #[test]
 fn short_press_finishes_a_visible_expansion_before_returning() {
     let mut motion = PressWidthMotion::default();
-    motion.update(false, true, 0);
-    motion.update(true, true, 0);
-    motion.update(false, true, 1);
-    motion.advance(80_000_000);
+    motion.update(false, true);
+    motion.update(true, true);
+    motion.advance(at(0));
+    motion.update(false, true);
+    motion.advance(at(80_000_000));
     assert!(motion.value() >= 0.75);
     assert!(motion.is_animating());
-    motion.advance(1_000_000_000);
+    motion.advance(at(1_000_000_000));
     assert_eq!(motion.value(), 0.0);
     assert!(!motion.is_animating());
 }
@@ -70,13 +73,15 @@ fn short_press_finishes_a_visible_expansion_before_returning() {
 #[test]
 fn held_press_stays_expanded_and_release_stops_the_clock() {
     let mut motion = PressWidthMotion::default();
-    motion.update(true, true, 0);
-    motion.advance(1_000_000_000);
+    motion.update(true, true);
+    motion.advance(at(0));
+    motion.advance(at(1_000_000_000));
     assert_eq!(motion.value(), 1.0);
     assert!(!motion.is_animating());
-    motion.update(false, true, 1_000_000_000);
+    motion.update(false, true);
     assert!(motion.is_animating());
-    motion.advance(2_000_000_000);
+    motion.advance(at(1_000_000_000));
+    motion.advance(at(2_000_000_000));
     assert_eq!(motion.value(), 0.0);
     assert!(!motion.is_animating());
 }
@@ -84,28 +89,30 @@ fn held_press_stays_expanded_and_release_stops_the_clock() {
 #[test]
 fn disabled_motion_snaps_and_reactivation_keeps_interrupted_values() {
     let mut motion = PressWidthMotion::default();
-    motion.update(false, true, 0);
-    motion.pulse(0);
-    motion.advance(80_000_000);
+    motion.update(false, true);
+    motion.pulse();
+    motion.advance(at(0));
+    motion.advance(at(80_000_000));
     let interrupted = motion.value();
-    motion.update(true, true, 80_000_000);
+    motion.update(true, true);
     assert_eq!(motion.value(), interrupted);
-    motion.update(false, false, 100_000_000);
+    motion.update(false, false);
     assert_eq!(motion.value(), 0.0);
-    motion.pulse(100_000_000);
+    motion.pulse();
     assert!(!motion.is_animating());
-    motion.update(false, true, 100_000_000);
-    motion.pulse(100_000_000);
+    motion.update(false, true);
+    motion.pulse();
     assert!(motion.is_animating());
 }
 
 #[test]
 fn press_width_uses_the_button_group_pressed_spring() {
     let mut motion = PressWidthMotion::default();
-    motion.update(true, true, 0);
+    motion.update(true, true);
+    motion.advance(at(0));
     let mut peak = 0.0_f64;
     for millis in 1..=400 {
-        motion.advance(millis * 1_000_000);
+        motion.advance(at(millis * 1_000_000));
         peak = peak.max(motion.value());
     }
     // A 0.9 damping ratio overshoots by about 0.15%; the 0.6 fast-spatial

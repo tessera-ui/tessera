@@ -4,9 +4,11 @@
 //!
 //! Move focus between labeled menu actions without activating them.
 
-use tessera_ui::{FloatRect, FocusRequester, State};
+use std::time::Duration;
 
-const PREFIX_TIMEOUT: u64 = 1_000_000_000;
+use tessera_ui::{FloatRect, FocusRequester, State, time::Instant};
+
+const PREFIX_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct MenuTypeahead(pub State<Registry>);
@@ -22,7 +24,7 @@ struct Item {
 pub(super) struct Registry {
     items: Vec<Item>,
     prefix: String,
-    last_input: Option<u64>,
+    last_input: Option<Instant>,
 }
 
 impl Registry {
@@ -40,11 +42,10 @@ impl Registry {
             .collect()
     }
 
-    fn candidates(&mut self, text: &str, now: u64) -> Vec<FocusRequester> {
-        if self
-            .last_input
-            .is_none_or(|previous| now < previous || now - previous >= PREFIX_TIMEOUT)
-        {
+    fn candidates(&mut self, text: &str, now: Instant) -> Vec<FocusRequester> {
+        if self.last_input.is_none_or(|previous| {
+            now < previous || now.saturating_duration_since(previous) >= PREFIX_TIMEOUT
+        }) {
             self.prefix.clear();
         }
         self.last_input = Some(now);
@@ -133,7 +134,7 @@ pub(super) fn position(registry: State<Registry>, requester: FocusRequester, bou
     });
 }
 
-pub(super) fn type_text(registry: State<Registry>, text: &str, now: u64) -> bool {
+pub(super) fn type_text(registry: State<Registry>, text: &str, now: Instant) -> bool {
     if text.trim().is_empty() || text.chars().any(char::is_control) {
         return false;
     }

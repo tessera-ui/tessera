@@ -6,12 +6,12 @@
 
 use tessera_foundation::modifier::InteractionState;
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera,
-    use_context,
+    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, launch_once, remember,
+    tessera, time::Instant, use_context,
 };
 
 use crate::{
-    animation::Animatable,
+    animation::{Animatable, run_frames},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
     theme::{ContentColor, MaterialAlpha, MaterialTheme, content_color_for},
@@ -39,14 +39,14 @@ fn composite_over(base: Color, overlay: Color) -> Color {
 
 #[derive(Clone, PartialEq, Debug)]
 struct CardElevationSpring {
-    last_frame_nanos: Option<u64>,
+    last_frame: Option<Instant>,
     spring: Animatable,
 }
 
 impl CardElevationSpring {
     fn new(initial: Dp) -> Self {
         Self {
-            last_frame_nanos: None,
+            last_frame: None,
             spring: Animatable::spring(
                 initial.0 as f32,
                 DEFAULT_SPATIAL_STIFFNESS.sqrt(),
@@ -57,7 +57,7 @@ impl CardElevationSpring {
 
     fn set_target(&mut self, target: Dp) {
         if self.spring.target() != target.0 as f32 {
-            self.last_frame_nanos = None;
+            self.last_frame = None;
         }
         self.spring.set_target(target.0 as f32);
     }
@@ -66,14 +66,15 @@ impl CardElevationSpring {
         *self = Self::new(target);
     }
 
-    fn tick(&mut self, frame_nanos: u64) {
-        let dt = if let Some(last_frame_nanos) = self.last_frame_nanos {
-            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
+    fn tick(&mut self, now: Instant) -> bool {
+        let dt = if let Some(last_frame) = self.last_frame {
+            now.saturating_duration_since(last_frame).as_secs_f32()
         } else {
             1.0 / 60.0
         };
-        self.last_frame_nanos = Some(frame_nanos);
+        self.last_frame = Some(now);
         self.spring.tick(dt);
+        self.is_animating()
     }
 
     fn is_animating(&self) -> bool {
@@ -437,25 +438,7 @@ pub fn card(
     let should_schedule_frame = elevation_spring.with(|spring| spring.is_animating());
 
     if should_schedule_frame {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating = elevation_spring.with_mut(|spring| {
-                    spring.tick(frame_nanos);
-                    spring.is_animating()
-                });
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(elevation_spring, CardElevationSpring::tick));
     }
 
     let shadow_elevation = if clickable {

@@ -12,14 +12,14 @@ use tessera_ui::{
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
     RenderSlot, State,
     accesskit::Role,
-    current_frame_nanos,
+    launch,
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context,
 };
 
 use crate::{
-    animation::SelectionAnimation,
+    animation::{SelectionAnimation, animate_to},
     modifier::ModifierExt as _,
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
@@ -428,6 +428,7 @@ fn navigation_bar_item_view(
                 ctx.normalized_pos,
                 PxSize::new(INDICATOR_WIDTH.to_px(), INDICATOR_HEIGHT.to_px()),
                 spec,
+                ctx.timestamp,
             );
         });
     };
@@ -532,33 +533,8 @@ pub fn navigation_bar_item(
     // call position, so it stays stable across rebuilds without any shared
     // index registry.
     let animation = remember(|| SelectionAnimation::new(selected));
-    let frame_nanos = current_frame_nanos();
-    animation.with_mut(|state| state.set_selected(selected));
-    let selection_fraction = animation.with_mut(|state| {
-        state.update(frame_nanos);
-        state.progress()
-    });
-    if animation.with(|state| state.is_animating()) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating = animation.with_mut(|state| {
-                    state.update(frame_nanos);
-                    state.is_animating()
-                });
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    launch(selected, animate_to(animation, selected));
+    let selection_fraction = animation.with(SelectionAnimation::progress);
 
     layout(Stack)
         .modifier(Modifier::new().weight(1.0))

@@ -14,10 +14,12 @@ use tessera_foundation::{
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    State, current_frame_nanos, current_frame_time,
+    State, launch,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    remember, remember_with_key, tessera,
+    remember, remember_with_key,
+    system_back::SystemBackEvent,
+    tessera,
     time::Instant,
     use_context, winit,
 };
@@ -25,7 +27,9 @@ use tessera_ui::{
 use crate::{
     alignment::CrossAxisAlignment,
     animation::{
+        Motion,
         material_motion::{Scalar, Spec},
+        run_frames,
         sheet_drag::SheetDrag,
         visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
     },
@@ -72,6 +76,7 @@ pub struct BottomSheetController {
     resize_origin: BottomSheetExpansion,
     resize_range: Dp,
     can_resize: bool,
+    requests: u32,
 }
 
 impl BottomSheetController {
@@ -87,6 +92,7 @@ impl BottomSheetController {
             resize_origin: BottomSheetExpansion::PartiallyExpanded,
             resize_range: Dp::ZERO,
             can_resize: true,
+            requests: 0,
         }
     }
 
@@ -97,9 +103,10 @@ impl BottomSheetController {
     /// its current position.
     pub fn open(&mut self) {
         if !self.is_open {
-            self.motion.retarget(true, current_frame_nanos());
+            self.motion.request(true);
             self.is_open = true;
-            self.drag.settle(current_frame_nanos());
+            self.drag.settle();
+            self.requests = self.requests.wrapping_add(1);
         }
     }
 
@@ -110,11 +117,12 @@ impl BottomSheetController {
     /// its current position.
     pub fn close(&mut self) {
         if self.is_open {
-            self.motion.retarget(false, current_frame_nanos());
+            self.motion.request(false);
             self.is_open = false;
             self.is_dragging = false;
-            self.drag.settle(current_frame_nanos());
+            self.drag.settle();
             self.resize.snap(self.expansion_fraction());
+            self.requests = self.requests.wrapping_add(1);
         }
     }
 
@@ -149,34 +157,38 @@ impl BottomSheetController {
         }
     }
 
-    /// Returns whether the sheet is currently animating in either direction.
+    /// Returns whether the sheet is animating in either direction or is about
+    /// to start animating on the next frame.
     pub fn is_animating(&self) -> bool {
-        self.is_animating_at(current_frame_nanos())
+        self.motion.sample().active
+            || (self.is_open && (self.drag.is_animating() || self.resize.is_animating()))
     }
 
-    fn is_animating_at(&self, frame: u64) -> bool {
-        let mut resize = self.resize;
-        resize.advance(frame);
-        self.motion.sample(frame).active
-            || (self.is_open && (self.drag.sample(frame).1 || resize.is_animating()))
+    /// Advances the sheet's motions to `now` and returns whether they are
+    /// still running.
+    fn advance(&mut self, now: Instant) -> bool {
+        self.motion.advance(now);
+        self.drag.advance(now);
+        self.resize.advance(now);
+        self.is_animating()
+    }
+
+    fn preview_back(&mut self, event: SystemBackEvent) {
+        self.motion.preview_back(event);
+        self.requests = self.requests.wrapping_add(1);
     }
 
     fn snapshot(&self) -> (bool, VisibilitySample, f32, f64) {
-        let frame = current_frame_nanos();
-        let mut resize = self.resize;
-        resize.advance(frame);
         (
             self.is_open,
-            self.motion.sample(frame),
+            self.motion.sample(),
             self.drag_offset(),
-            resize.value.clamp(0.0, 1.0),
+            self.resize_fraction(),
         )
     }
 
     fn resize_fraction(&self) -> f64 {
-        let mut resize = self.resize;
-        resize.advance(current_frame_nanos());
-        resize.value.clamp(0.0, 1.0)
+        self.resize.value.clamp(0.0, 1.0)
     }
 
     fn expansion_fraction(&self) -> f64 {
@@ -189,9 +201,7 @@ impl BottomSheetController {
     fn set_dragging(&mut self, dragging: bool) {
         self.is_dragging = dragging;
         if dragging {
-            let frame = current_frame_nanos();
-            self.drag.grab(frame);
-            self.resize.advance(frame);
+            self.drag.grab();
             self.resize.snap(self.resize.value.clamp(0.0, 1.0));
             self.resize_origin = self.expansion;
         }
@@ -201,16 +211,14 @@ impl BottomSheetController {
         if !self.is_dragging {
             self.set_dragging(true);
         }
-        let frame = current_frame_nanos();
         let mut remaining = delta_y;
         let mut consumed = 0.0;
         if remaining < 0.0 && self.drag_offset() > 0.0 {
-            let delta = self.drag.apply_delta(remaining, frame);
+            let delta = self.drag.apply_delta(remaining);
             consumed += delta;
             remaining -= delta;
         }
         if self.resize_range.0 > 0.0 {
-            self.resize.advance(frame);
             let before = self.resize.value.clamp(0.0, 1.0);
             let after =
                 (before - Dp::from_pixels_f32(remaining).0 / self.resize_range.0).clamp(0.0, 1.0);
@@ -220,19 +228,18 @@ impl BottomSheetController {
             remaining -= delta;
         }
         if remaining > 0.0 {
-            consumed += self.drag.apply_delta(remaining, frame);
+            consumed += self.drag.apply_delta(remaining);
         }
         consumed
     }
 
     fn drag_offset(&self) -> f32 {
-        self.drag.sample(current_frame_nanos()).0
+        self.drag.offset()
     }
 
     fn complete_drag(&mut self, velocity: f32) -> bool {
         self.is_dragging = false;
-        let frame = current_frame_nanos();
-        self.resize.advance(frame);
+        self.requests = self.requests.wrapping_add(1);
         if self.resize_range.0 > 0.0 && self.resize.value > 0.0 {
             let velocity = Dp::from_pixels_f32(velocity).0;
             let expanded = if velocity.abs() >= 125.0 {
@@ -247,27 +254,26 @@ impl BottomSheetController {
             };
             self.resize.velocity = -velocity / self.resize_range.0;
             self.resize
-                .start_to(self.expansion_fraction(), Spec::Spatial, frame);
-            self.drag.settle(frame);
+                .request_start(self.expansion_fraction(), Spec::Spatial);
+            self.drag.settle();
             false
         } else {
             if self.resize_range.0 > 0.0 {
                 self.partially_expand();
             }
-            self.drag.release(frame, velocity, 56.0, 125.0)
+            self.drag.release(velocity, 56.0, 125.0)
         }
     }
 
     fn cancel_drag(&mut self) {
         self.is_dragging = false;
         self.expansion = self.resize_origin;
-        let frame = current_frame_nanos();
         self.resize
-            .retarget(self.expansion_fraction(), Spec::Spatial, frame);
-        self.drag.settle(frame);
+            .request_retarget(self.expansion_fraction(), Spec::Spatial);
+        self.drag.settle();
+        self.requests = self.requests.wrapping_add(1);
     }
 }
-
 impl Default for BottomSheetController {
     fn default() -> Self {
         Self::new(false)
@@ -331,8 +337,9 @@ fn handle_drag_gestures(
         .cursor_position_rel
         .map(|pos| is_position_inside_bounds(input.computed_data, pos))
         .unwrap_or(false);
-    let now = current_frame_time().unwrap_or_else(Instant::now);
-    if within_bounds
+    let now = input.pointer_changes.last().map(|change| change.timestamp);
+    if let Some(now) = now
+        && within_bounds
         && input.pointer_changes.iter().any(|change| {
             !change.is_consumed()
                 && matches!(
@@ -371,7 +378,7 @@ fn handle_drag_gestures(
             c.apply_drag_delta(input.local_delta(0.0, drag_result.delta_y.to_f32()).1)
         });
         velocity_tracker.with_mut(|tracker| {
-            if let Some(tracker) = tracker {
+            if let (Some(tracker), Some(now)) = (tracker, now) {
                 let window = input
                     .local_to_window
                     .map_vector(PxPosition::from_f32_xy(0.0, consumed));
@@ -384,7 +391,8 @@ fn handle_drag_gestures(
         let velocity = velocity_tracker.with_mut(|tracker| {
             tracker
                 .take()
-                .and_then(|mut tracker| tracker.resolve(now))
+                .zip(now)
+                .and_then(|(mut tracker, now)| tracker.resolve(now))
                 .map(|v| v.y)
                 .unwrap_or(0.0)
         });
@@ -700,7 +708,7 @@ fn bottom_sheet_content_wrapper(
                 move |coordinates: tessera_ui::LayoutCoordinates| {
                     let extent = Dp::from_pixels_f64(f64::from(coordinates.local_size.height.0)).0;
                     if controller.with(|c| c.drag.extent() != extent) {
-                        controller.with_mut(|c| c.drag.set_extent(extent, current_frame_nanos()));
+                        controller.with_mut(|c| c.drag.set_extent(extent));
                     }
                 },
             ))
@@ -793,23 +801,10 @@ pub fn bottom_sheet_provider(
         *was_open = is_open;
     });
     if is_animating {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating =
-                    controller.with(|controller| controller.is_animating_at(frame_nanos));
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch(
+            controller.with(|c| c.requests),
+            run_frames(controller, BottomSheetController::advance),
+        );
     }
 
     // The sheet overlay is gated by open state, but `main_content` must keep
@@ -846,9 +841,7 @@ pub fn bottom_sheet_provider(
         let bottom_sheet_content = bottom_sheet_content;
         overlay_background(main_content, show_bottom_sheet);
         modal_back_handler(is_open, on_close_request).on_preview(move |event| {
-            controller.with_mut(|controller| {
-                controller.motion.preview_back(event, current_frame_nanos());
-            });
+            controller.with_mut(|controller| controller.preview_back(event));
         });
 
         if !show_bottom_sheet {

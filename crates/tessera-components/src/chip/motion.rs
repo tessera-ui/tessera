@@ -4,10 +4,12 @@
 //!
 //! Keep chip silhouettes and shadows continuous during state changes.
 
-use tessera_foundation::modifier::InteractionState;
-use tessera_ui::Dp;
+use std::time::Duration;
 
-use crate::progress::cubic_bezier_easing;
+use tessera_foundation::modifier::InteractionState;
+use tessera_ui::{Dp, time::Instant};
+
+use crate::{animation::Motion, progress::cubic_bezier_easing};
 
 #[derive(Clone, Copy, Default, PartialEq)]
 pub(super) enum Interaction {
@@ -40,10 +42,17 @@ pub(super) struct Elevation {
     value: Dp,
     origin: Dp,
     target: Dp,
-    start: u64,
-    duration: u64,
+    start: Option<Instant>,
+    duration: Duration,
     incoming: bool,
     interaction: Interaction,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(super) struct ElevationTarget {
+    pub elevation: Dp,
+    pub interaction: Interaction,
+    pub enabled: bool,
 }
 
 impl Elevation {
@@ -52,8 +61,8 @@ impl Elevation {
             value,
             origin: value,
             target: value,
-            start: 0,
-            duration: 0,
+            start: None,
+            duration: Duration::ZERO,
             incoming: false,
             interaction: Interaction::Idle,
         }
@@ -66,72 +75,99 @@ impl Elevation {
     pub fn is_animating(self) -> bool {
         self.value != self.target
     }
+}
 
-    pub fn update(&mut self, target: Dp, interaction: Interaction, enabled: bool, now: u64) {
+impl Motion for Elevation {
+    type Target = ElevationTarget;
+
+    fn is_settled_at(&self, target: &ElevationTarget) -> bool {
+        !self.is_animating()
+            && self.target == target.elevation
+            && (self.interaction == target.interaction || !target.enabled)
+    }
+
+    fn retarget(&mut self, target: ElevationTarget, now: Instant) {
         self.advance(now);
+        let ElevationTarget {
+            elevation,
+            interaction,
+            enabled,
+        } = target;
         if !enabled {
-            *self = Self::new(target);
+            *self = Self::new(elevation);
             return;
         }
-        if target != self.target {
+        if elevation != self.target {
             self.origin = self.value;
-            self.target = target;
-            self.start = now;
+            self.target = elevation;
+            self.start = Some(now);
             self.incoming = interaction != Interaction::Idle;
-            self.duration = if self.incoming || self.interaction == Interaction::Hover {
-                120_000_000
-            } else {
-                150_000_000
-            };
+            self.duration =
+                Duration::from_millis(if self.incoming || self.interaction == Interaction::Hover {
+                    120
+                } else {
+                    150
+                });
             if interaction == Interaction::Idle && self.interaction == Interaction::Idle {
-                self.value = target;
+                self.value = elevation;
             }
         }
         self.interaction = interaction;
     }
 
-    pub fn advance(&mut self, now: u64) {
-        if !self.is_animating() {
-            return;
-        }
-        let elapsed = now.saturating_sub(self.start);
+    fn advance(&mut self, now: Instant) -> bool {
+        let Some(start) = self.start.filter(|_| self.is_animating()) else {
+            return false;
+        };
+        let elapsed = now.saturating_duration_since(start);
         if elapsed >= self.duration {
             self.value = self.target;
-            return;
+            return false;
         }
-        let t = elapsed as f32 / self.duration as f32;
+        let t = elapsed.as_secs_f32() / self.duration.as_secs_f32();
         let eased = cubic_bezier_easing(t, 0.4, 0.0, if self.incoming { 0.2 } else { 0.6 }, 1.0);
         self.value = Dp(self.origin.0 + (self.target.0 - self.origin.0) * f64::from(eased));
+        true
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::animation::test_instant as at;
+
     use super::*;
+
+    fn target(elevation: Dp, interaction: Interaction, enabled: bool) -> ElevationTarget {
+        ElevationTarget {
+            elevation,
+            interaction,
+            enabled,
+        }
+    }
 
     #[test]
     fn elevation_uses_reference_durations_and_preserves_interrupted_values() {
         let mut motion = Elevation::new(Dp(1.0));
-        motion.update(Dp(3.0), Interaction::Hover, true, 0);
-        motion.advance(60_000_000);
+        motion.retarget(target(Dp(3.0), Interaction::Hover, true), at(0));
+        motion.advance(at(60_000_000));
         assert!((motion.value().0 - 2.55112).abs() < 0.001);
         let interrupted = motion.value();
-        motion.update(Dp(1.0), Interaction::Idle, true, 60_000_000);
+        motion.retarget(target(Dp(1.0), Interaction::Idle, true), at(60_000_000));
         assert_eq!(motion.value(), interrupted);
-        motion.advance(180_000_000);
+        motion.advance(at(180_000_000));
         assert_eq!(motion.value(), Dp(1.0));
         assert!(!motion.is_animating());
-        motion.update(Dp(8.0), Interaction::Drag, true, 200_000_000);
-        motion.advance(320_000_000);
+        motion.retarget(target(Dp(8.0), Interaction::Drag, true), at(200_000_000));
+        motion.advance(at(320_000_000));
         assert_eq!(motion.value(), Dp(8.0));
-        motion.update(Dp(1.0), Interaction::Idle, true, 320_000_000);
-        motion.advance(440_000_000);
+        motion.retarget(target(Dp(1.0), Interaction::Idle, true), at(320_000_000));
+        motion.advance(at(440_000_000));
         assert!(motion.is_animating());
-        motion.advance(470_000_000);
+        motion.advance(at(470_000_000));
         assert_eq!(motion.value(), Dp(1.0));
-        motion.update(Dp(3.0), Interaction::Hover, true, 500_000_000);
-        motion.advance(550_000_000);
-        motion.update(Dp::ZERO, Interaction::Idle, false, 550_000_000);
+        motion.retarget(target(Dp(3.0), Interaction::Hover, true), at(500_000_000));
+        motion.advance(at(550_000_000));
+        motion.retarget(target(Dp::ZERO, Interaction::Idle, false), at(550_000_000));
         assert_eq!(motion.value(), Dp::ZERO);
         assert!(!motion.is_animating());
     }

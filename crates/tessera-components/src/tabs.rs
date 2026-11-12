@@ -14,15 +14,17 @@ use tessera_ui::{
     FocusRequester, FocusState, LayoutResult, MeasurementError, Modifier, ParentDataMap,
     ParentDataModifierNode, Px, PxPosition, RenderSlot, RenderSlotWith, State,
     accesskit::Role,
-    focus,
+    focus, launch_once,
     layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    animation::Animatable,
+    animation::{Animatable, run_frames},
     boxed::boxed,
     column::column,
     icon::icon as icon_component,
@@ -183,7 +185,7 @@ struct TabsController {
     tab_row_scroll_max: Px,
     tab_row_scroll_user_overridden: bool,
     tab_bar_height: Px,
-    last_frame_nanos: Option<u64>,
+    last_frame: Option<Instant>,
     indicator_initialized: bool,
     tab_row_scroll_initialized: bool,
     pending_retarget_frame: bool,
@@ -204,7 +206,7 @@ impl TabsController {
             tab_row_scroll_max: Px(0),
             tab_row_scroll_user_overridden: false,
             tab_bar_height: Px(0),
-            last_frame_nanos: None,
+            last_frame: None,
             indicator_initialized: false,
             tab_row_scroll_initialized: false,
             pending_retarget_frame: false,
@@ -220,7 +222,7 @@ impl TabsController {
             self.active_tab = index;
             self.tab_row_scroll_user_overridden = false;
             self.pending_retarget_frame = true;
-            self.last_frame_nanos = None;
+            self.last_frame = None;
         }
     }
 
@@ -301,7 +303,7 @@ impl TabsController {
             self.tab_row_scroll_offset.snap_to(target.to_f32());
             self.tab_row_scroll_initialized = true;
         } else {
-            self.last_frame_nanos = None;
+            self.last_frame = None;
             self.tab_row_scroll_offset.set_target(target.to_f32());
         }
     }
@@ -319,7 +321,7 @@ impl TabsController {
             self.indicator_x.snap_to(x);
             self.indicator_initialized = true;
         } else {
-            self.last_frame_nanos = None;
+            self.last_frame = None;
             self.indicator_width.set_target(width);
             self.indicator_x.set_target(x);
         }
@@ -333,13 +335,11 @@ impl TabsController {
         self.indicator_x.value_px()
     }
 
-    fn advance_from_frame_nanos(&mut self, frame_nanos: u64) {
-        let dt = if let Some(last_frame_nanos) = self.last_frame_nanos {
-            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
-        } else {
-            1.0 / 60.0
-        };
-        self.last_frame_nanos = Some(frame_nanos);
+    fn advance(&mut self, now: Instant) {
+        let dt = self.last_frame.map_or(1.0 / 60.0, |last| {
+            now.saturating_duration_since(last).as_secs_f32()
+        });
+        self.last_frame = Some(now);
 
         self.indicator_x
             .update(dt, DEFAULT_SPATIAL_STIFFNESS, DEFAULT_SPATIAL_DAMPING_RATIO);
@@ -1344,29 +1344,10 @@ pub fn tabs(
         controller.with_mut(|controller| controller.sync_selected(selected));
     }
     if controller.with(|c| c.has_pending_animation_frame()) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let has_pending_animation_frame = controller.with_mut(|controller| {
-                    controller.advance_from_frame_nanos(frame_nanos);
-                    controller.has_pending_animation_frame()
-                });
-                if has_pending_animation_frame {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(controller, |controller, now| {
+            controller.advance(now);
+            controller.has_pending_animation_frame()
+        }));
     }
     let body = tabs_content()
         .args(config)
@@ -1660,6 +1641,7 @@ mod tests {
     use tessera_ui::{Dp, Modifier, Px, PxPosition, remember, tessera};
 
     use crate::{
+        animation::test_instant,
         column::column,
         lazy_list::lazy_column,
         spacer::spacer,
@@ -1688,11 +1670,11 @@ mod tests {
         };
         original.tab_row_scroll_max = Px(1000);
         original.tab_bar_height = Px(48);
-        original.last_frame_nanos = Some(0);
+        original.last_frame = Some(test_instant(0));
         let mut scaled = original.clone();
         scaled.update_density(original.density * 1.5);
-        original.advance_from_frame_nanos(16_666_667);
-        scaled.advance_from_frame_nanos(16_666_667);
+        original.advance(test_instant(16_666_667));
+        scaled.advance(test_instant(16_666_667));
         for (before, after) in [
             (original.indicator_x, scaled.indicator_x),
             (original.indicator_width, scaled.indicator_width),

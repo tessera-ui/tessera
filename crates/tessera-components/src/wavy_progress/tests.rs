@@ -7,6 +7,7 @@ use tessera_ui::{
 };
 
 use crate::{
+    animation::test_instant,
     boxed::boxed,
     modifier::ModifierExt as _,
     progress::ProgressStrokeCap,
@@ -160,28 +161,29 @@ fn clock_preserves_phase_across_pauses_and_settles_amplitude_changes() {
         paused: false,
         circular: false,
     };
-    let mut clock = Clock::new(motion, 0);
-    clock.advance(250_000_000);
+    let mut clock = Clock::new(motion);
+    clock.tick(test_instant(0));
+    clock.tick(test_instant(250_000_000));
     assert_eq!(clock.phase, 0.25);
     motion.paused = true;
-    clock.configure(motion, 300_000_000);
-    clock.advance(8_000_000_000);
+    clock.configure(motion, test_instant(300_000_000));
+    clock.tick(test_instant(8_000_000_000));
     assert_eq!(clock.elapsed, 300_000_000);
     assert!((clock.phase - 0.3).abs() < 0.000001);
     assert!(!clock.needs_frames());
     motion.paused = false;
     motion.amplitude = 0.0;
-    clock.configure(motion, 9_000_000_000);
+    clock.configure(motion, test_instant(9_000_000_000));
     assert_eq!(clock.amplitude(), 1.0);
-    clock.advance(9_225_000_000);
+    clock.tick(test_instant(9_225_000_000));
     assert!(clock.amplitude() > 0.5 && clock.amplitude() < 1.0);
-    clock.advance(9_450_000_000);
+    clock.tick(test_instant(9_450_000_000));
     assert!(clock.amplitude() > 0.0);
-    clock.advance(9_500_000_000);
+    clock.tick(test_instant(9_500_000_000));
     assert_eq!(clock.amplitude(), 0.0);
     assert!(!clock.needs_frames());
     let elapsed = clock.elapsed;
-    clock.advance(99_000_000_000);
+    clock.tick(test_instant(99_000_000_000));
     assert_eq!(clock.elapsed, elapsed);
     assert!(
         (clock.phase - 0.3).abs() < 0.000001,
@@ -573,8 +575,9 @@ fn circular_timing_runs_all_four_rotation_steps_and_preserves_holds() {
         paused: false,
         circular: true,
     };
-    let mut clock = Clock::new(motion, 0);
-    clock.advance(99_000_000_000);
+    let mut clock = Clock::new(motion);
+    clock.tick(test_instant(0));
+    clock.tick(test_instant(99_000_000_000));
     assert_eq!(clock.phase, 0.0, "a flat circular wave stops offset travel");
     assert!(!clock.needs_frames());
 }

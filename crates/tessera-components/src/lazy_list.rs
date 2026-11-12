@@ -2539,29 +2539,15 @@ mod tests {
     #[tessera]
     fn lazy_column_stable_visible_items_case() {
         let controller = remember(LazyListController::new);
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
         tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let offset = match frame_nanos {
-                    0 => 0,
-                    16_666_667 => 2,
-                    33_333_334 => 4,
-                    _ => 4,
-                };
+            // Frames are pumped every 16.67ms, starting after the launching frame.
+            for frame in 1.. {
+                tessera_ui::with_frame_time(|_| ()).await;
+                let offset = if frame == 1 { 2 } else { 4 };
                 let position = PxPosition::new(Px::ZERO, Px::new(-offset));
                 controller.with_mut(|c| {
                     c.scroll_controller_mut().set_scroll_position(position);
                 });
-                true
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
             }
         });
 

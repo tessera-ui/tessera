@@ -100,7 +100,7 @@ fn check_motion(samples: u32) {
     settings.with_mut(|value| value.checked = true);
     renderer.frames(1);
     assert_eq!(selection(&renderer).1.toggled(), Some(Toggled::True));
-    renderer.frames(5);
+    renderer.frames(6);
     assert!(renderer.frame_clock_diagnostics().resumed_tasks > 0);
     let alpha = fill(&renderer)[3];
     assert!((145..=158).contains(&alpha), "50ms fill alpha: {alpha}");
@@ -127,7 +127,7 @@ fn check_motion(samples: u32) {
         fill(&renderer)[3] < 100,
         "removal uses the faster color effect"
     );
-    renderer.frames(2);
+    renderer.frames(4);
     renderer.frames(30);
     settings.with_mut(|value| value.mixed = true);
     renderer.frames(1);
@@ -137,7 +137,7 @@ fn check_motion(samples: u32) {
         value.mixed = false;
         value.checked = true;
     });
-    renderer.frames(6);
+    renderer.frames(7);
     assert_ne!(
         renderer.read_pixels(),
         dash_pixels,

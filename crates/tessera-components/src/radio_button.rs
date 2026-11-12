@@ -15,15 +15,17 @@ use tessera_ui::{
     Dp, FocusDirection, FocusRequester, FocusState, FocusTraversalPolicy, Modifier, Px, PxSize,
     RenderSlotWith, SemanticsModifierNode, State,
     accesskit::{Orientation, Role, Toggled},
-    current_frame_nanos, focus,
+    focus, launch_once,
     layout::{Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    animation,
+    animation::{self, run_frames},
     boxed::boxed,
     modifier::ModifierExt as _,
     ripple_state::{RippleSpec, RippleState},
@@ -106,7 +108,9 @@ struct RadioButtonMotion {
     selected: bool,
     progress: f32,
     start_progress: f32,
-    last_change_frame_nanos: Option<u64>,
+    animating: bool,
+    // The first frame that observes a selection change starts its animation.
+    animation_start: Option<Instant>,
 }
 
 impl RadioButtonMotion {
@@ -116,7 +120,8 @@ impl RadioButtonMotion {
             selected,
             progress,
             start_progress: progress,
-            last_change_frame_nanos: None,
+            animating: false,
+            animation_start: None,
         }
     }
 
@@ -128,23 +133,27 @@ impl RadioButtonMotion {
         if self.selected != selected {
             self.selected = selected;
             self.start_progress = self.progress;
-            self.last_change_frame_nanos = Some(current_frame_nanos());
+            self.animating = true;
+            self.animation_start = None;
         }
     }
 
-    fn update_animation(&mut self, frame_nanos: u64) {
-        if let Some(start_frame_nanos) = self.last_change_frame_nanos {
-            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-            let animation_nanos = RADIO_ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-            let fraction = (elapsed_nanos as f32 / animation_nanos as f32).min(1.0);
+    fn update_animation(&mut self, now: Instant) -> bool {
+        if self.animating {
+            let start = *self.animation_start.get_or_insert(now);
+            let fraction = (now.saturating_duration_since(start).as_secs_f32()
+                / RADIO_ANIMATION_DURATION.as_secs_f32())
+            .min(1.0);
             let target = if self.selected { 1.0 } else { 0.0 };
             self.progress = self.start_progress + (target - self.start_progress) * fraction;
             if fraction >= 1.0 {
-                self.last_change_frame_nanos = None;
+                self.animating = false;
+                self.animation_start = None;
                 self.progress = target;
                 self.start_progress = target;
             }
         }
+        self.animating
     }
 
     fn animation_progress(&self) -> f32 {
@@ -152,7 +161,7 @@ impl RadioButtonMotion {
     }
 
     fn is_animating(&self) -> bool {
-        self.last_change_frame_nanos.is_some()
+        self.animating
     }
 }
 
@@ -405,25 +414,7 @@ fn radio_button_inner(
         None
     };
     if controller.with(|c| c.is_animating()) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating = controller.with_mut(|controller| {
-                    controller.update_animation(frame_nanos);
-                    controller.is_animating()
-                });
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(controller, RadioButtonMotion::update_animation));
     }
     let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
@@ -477,7 +468,9 @@ fn radio_button_inner(
             let spec = ripple_spec;
             let size = ripple_size;
             move |ctx: PointerEventContext| {
-                state.with_mut(|s| s.start_animation_with_spec(ctx.normalized_pos, size, spec));
+                state.with_mut(|s| {
+                    s.start_animation_with_spec(ctx.normalized_pos, size, spec, ctx.timestamp)
+                });
             }
         });
         let release_handler = ripple_state

@@ -9,15 +9,17 @@ use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
     FocusScopeNode, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::{HasPopup, Role},
-    current_frame_nanos,
+    launch,
     layout::MeasureScope,
     modifier::FocusModifierExt as _,
-    remember, tessera, use_context, winit,
+    remember, tessera,
+    time::Instant,
+    use_context, winit,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
-    animation::Animatable,
+    animation::{Animatable, FrameDelta, Motion, animate_to},
     boxed::boxed,
     column::column,
     icon::icon,
@@ -129,11 +131,11 @@ struct MenuMotion {
     count: Animatable,
     toggle: Animatable,
     items: Vec<ItemMotion>,
-    frame_nanos: u64,
+    delta: FrameDelta,
 }
 
 impl MenuMotion {
-    fn new(expanded: bool, count: usize, frame_nanos: u64) -> Self {
+    fn new(expanded: bool, count: usize) -> Self {
         Self {
             count: Animatable::spring(
                 if expanded { count as f32 } else { 0.0 },
@@ -142,7 +144,7 @@ impl MenuMotion {
             ),
             toggle: Animatable::spring(f32::from(expanded), 3800.0_f32.sqrt(), 1.0),
             items: (0..count).map(|_| ItemMotion::new(expanded)).collect(),
-            frame_nanos,
+            delta: FrameDelta::default(),
         }
     }
 
@@ -153,9 +155,8 @@ impl MenuMotion {
         self.toggle.set_target(f32::from(expanded));
     }
 
-    fn advance(&mut self, frame_nanos: u64) {
-        let dt = frame_nanos.saturating_sub(self.frame_nanos) as f32 / 1_000_000_000.0;
-        self.frame_nanos = frame_nanos;
+    fn tick(&mut self, now: Instant) {
+        let dt = self.delta.step(now);
         self.count.tick(dt);
         self.toggle.tick(dt);
         let count = self
@@ -184,6 +185,24 @@ impl MenuMotion {
 
     fn is_visible(&self) -> bool {
         self.items.iter().any(|item| item.opacity.value() > 0.001)
+    }
+}
+
+impl Motion for MenuMotion {
+    type Target = (bool, usize);
+
+    fn is_settled_at(&self, &(expanded, count): &Self::Target) -> bool {
+        self.toggle.target() == f32::from(expanded) && self.items.len() == count && self.is_idle()
+    }
+
+    fn retarget(&mut self, (expanded, count): Self::Target, now: Instant) {
+        self.tick(now);
+        self.set_target(expanded, count);
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        self.tick(now);
+        !self.is_idle()
     }
 }
 
@@ -539,39 +558,9 @@ pub fn floating_action_button_menu(
     if data.with(|data| data != &current) {
         data.set(current);
     }
-    let now = current_frame_nanos();
     let count = data.with(|data| data.items.len());
-    let motion = remember(|| MenuMotion::new(expanded, count, now));
-    if motion
-        .with(|motion| motion.toggle.target() != f32::from(expanded) || motion.items.len() != count)
-    {
-        motion.with_mut(|motion| {
-            motion.advance(now);
-            motion.set_target(expanded, count);
-        });
-    }
-    if !motion.with(MenuMotion::is_idle) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |now: u64| {
-                motion.with_mut(|motion| motion.advance(now));
-                if motion.with(MenuMotion::is_idle) {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    let motion = remember(|| MenuMotion::new(expanded, count));
+    launch((expanded, count), animate_to(motion, (expanded, count)));
     let bounds = remember(PanelBounds::default);
     let pending_focus = remember(|| false);
     let previous = remember(|| false);
@@ -862,7 +851,7 @@ fn fab_menu_action(
 mod tests {
     use tessera_ui::testing::UiTest;
 
-    use crate::theme::material_theme;
+    use crate::{animation::test_instant, theme::material_theme};
 
     use super::*;
 
@@ -959,27 +948,27 @@ mod tests {
 
     #[test]
     fn stagger_reveals_bottom_first_hides_top_first_and_reverses_to_rest() {
-        let mut motion = MenuMotion::new(false, 3, 0);
-        motion.set_target(true, 3);
-        motion.advance(33_333_334);
+        let mut motion = MenuMotion::new(false, 3);
+        motion.retarget((true, 3), test_instant(0));
+        motion.tick(test_instant(33_333_334));
         assert!(motion.items[2].opacity.value() > 0.0);
         assert_eq!(motion.items[0].opacity.value(), 0.0);
         for frame in 3..120 {
-            motion.advance(frame * 16_666_667);
+            motion.tick(test_instant(frame * 16_666_667));
         }
         assert!(motion.is_idle());
         motion.set_target(false, 3);
-        motion.advance(2_033_333_334);
+        motion.tick(test_instant(2_033_333_334));
         assert!(motion.items[0].opacity.value() < motion.items[2].opacity.value());
         motion.set_target(true, 3);
         for frame in 123..260 {
-            motion.advance(frame * 16_666_667);
+            motion.tick(test_instant(frame * 16_666_667));
         }
         assert!(motion.is_idle());
         assert!(motion.items.iter().all(|item| item.opacity.value() == 1.0));
         motion.set_target(false, 3);
         for frame in 260..400 {
-            motion.advance(frame * 16_666_667);
+            motion.tick(test_instant(frame * 16_666_667));
         }
         assert!(motion.is_idle());
         assert!(!motion.is_visible());

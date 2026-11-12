@@ -5,13 +5,13 @@
 //! Emphasize a primary action with a prominent floating button.
 use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, current_frame_nanos,
-    provide_context, remember, tessera, use_context,
+    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, launch, provide_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    animation::Animatable,
+    animation::{Animatable, SpringMotion, animate_to},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
     theme::{
@@ -110,26 +110,12 @@ impl FloatingActionButtonElevation {
     }
 }
 
-struct ElevationMotion {
-    motion: Animatable,
-    frame_nanos: u64,
-}
-
-impl ElevationMotion {
-    fn new(elevation: Dp, frame_nanos: u64) -> Self {
-        Self {
-            motion: Animatable::spring(elevation.0 as f32, 3800.0_f32.sqrt(), 1.0),
-            frame_nanos,
-        }
-    }
-
-    fn advance(&mut self, frame_nanos: u64) {
-        if frame_nanos > self.frame_nanos {
-            self.motion
-                .tick((frame_nanos - self.frame_nanos) as f32 / 1_000_000_000.0);
-            self.frame_nanos = frame_nanos;
-        }
-    }
+fn elevation_motion(elevation: Dp) -> SpringMotion {
+    SpringMotion::new(Animatable::spring(
+        elevation.0 as f32,
+        3800.0_f32.sqrt(),
+        1.0,
+    ))
 }
 
 /// Material Design defaults for [`floating_action_button`].
@@ -332,37 +318,10 @@ pub fn floating_action_button(
     };
 
     let target_elevation = elevation.shadow_elevation(enabled, interaction_state);
-    let frame = current_frame_nanos();
-    let elevation_motion = remember(|| ElevationMotion::new(target_elevation, frame));
-    if elevation_motion.with(|motion| motion.motion.target()) != target_elevation.0 as f32 {
-        elevation_motion.with_mut(|motion| {
-            motion.advance(frame);
-            motion.motion.set_target(target_elevation.0 as f32);
-        });
-    }
-    if !elevation_motion.with(|motion| motion.motion.is_idle()) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                elevation_motion.with_mut(|motion| motion.advance(frame));
-                if elevation_motion.with(|motion| motion.motion.is_idle()) {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
-    let shadow_elevation = Dp(elevation_motion.with(|motion| motion.motion.value()) as f64);
+    let motion = remember(|| elevation_motion(target_elevation));
+    let target = target_elevation.0 as f32;
+    launch(target, animate_to(motion, target));
+    let shadow_elevation = Dp(motion.with(SpringMotion::value) as f64);
     let tonal_elevation = elevation.tonal_elevation();
 
     surface()
@@ -455,18 +414,20 @@ mod tests {
 
     #[test]
     fn elevation_effect_retargets_continuously_and_settles_without_overshoot() {
-        let mut motion = ElevationMotion::new(Dp(6.0), 0);
-        motion.motion.set_target(8.0);
-        motion.advance(16_666_667);
-        let initial = motion.motion.value();
+        use crate::animation::{Motion as _, test_instant as at};
+
+        let mut motion = super::elevation_motion(Dp(6.0));
+        motion.retarget(8.0, at(0));
+        motion.advance(at(16_666_667));
+        let initial = motion.value();
         assert!(initial > 6.0 && initial < 8.0);
-        motion.motion.set_target(6.0);
-        assert_eq!(motion.motion.value(), initial);
+        motion.retarget(6.0, at(16_666_667));
+        assert_eq!(motion.value(), initial);
         for frame in 2..120 {
-            motion.advance(frame * 16_666_667);
-            assert!(motion.motion.value() >= 6.0 && motion.motion.value() <= 8.0);
+            motion.advance(at(frame * 16_666_667));
+            assert!(motion.value() >= 6.0 && motion.value() <= 8.0);
         }
-        assert!(motion.motion.is_idle());
-        assert_eq!(motion.motion.value(), 6.0);
+        assert!(motion.spring().is_idle());
+        assert_eq!(motion.value(), 6.0);
     }
 }

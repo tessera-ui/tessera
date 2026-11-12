@@ -8,12 +8,13 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, accesskit::Role,
-    current_frame_nanos, layout::MeasureScope, remember, tessera, use_context,
+    launch_once, layout::MeasureScope, remember, tessera, time::Instant, use_context,
 };
 
 use crate::{
-    modifier::ModifierExt as _, pipelines::loading_shape::command::LoadingShapeCommand, res::I18N,
-    shape_def::Shape, theme::MaterialTheme,
+    animation::run_frames, modifier::ModifierExt as _,
+    pipelines::loading_shape::command::LoadingShapeCommand, res::I18N, shape_def::Shape,
+    theme::MaterialTheme,
 };
 
 const MORPH_INTERVAL_NANOS: u64 = 650_000_000;
@@ -67,23 +68,38 @@ fn indeterminate_pose(nanos: u64) -> Pose {
 #[derive(Clone, Copy)]
 struct AnimationClock {
     elapsed: u64,
-    frame: u64,
+    last_frame: Option<Instant>,
     running: bool,
 }
 
 impl AnimationClock {
-    fn advance(&mut self, frame: u64) {
-        if self.running {
-            self.elapsed = self
-                .elapsed
-                .saturating_add(frame.saturating_sub(self.frame));
+    fn new(running: bool) -> Self {
+        Self {
+            elapsed: 0,
+            last_frame: None,
+            running,
         }
-        self.frame = frame;
     }
 
-    fn set_running(&mut self, running: bool, frame: u64) {
-        self.advance(frame);
+    fn advance(&mut self, now: Instant) -> bool {
+        if !self.running {
+            return false;
+        }
+        if let Some(last) = self.last_frame {
+            let delta = now.saturating_duration_since(last).as_nanos();
+            self.elapsed = self
+                .elapsed
+                .saturating_add(u64::try_from(delta).unwrap_or(u64::MAX));
+        }
+        self.last_frame = Some(now);
+        true
+    }
+
+    // Time between the last observed frame and a pause or resume is not
+    // counted, so a paused indicator never jumps when it resumes.
+    fn set_running(&mut self, running: bool) {
         self.running = running;
+        self.last_frame = None;
     }
 }
 
@@ -173,35 +189,12 @@ pub fn loading_indicator(
 ) {
     let progress = progress.map(normalize_progress);
     let running = progress.is_none() && !paused.unwrap_or(false);
-    let now = current_frame_nanos();
-    let clock = remember(|| AnimationClock {
-        elapsed: 0,
-        frame: now,
-        running,
-    });
+    let clock = remember(|| AnimationClock::new(running));
     if clock.with(|clock| clock.running) != running {
-        clock.with_mut(|clock| clock.set_running(running, now));
+        clock.with_mut(|clock| clock.set_running(running));
     }
     if running {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                if !clock.with(|clock| clock.running) {
-                    return false;
-                }
-                clock.with_mut(|clock| clock.advance(frame));
-                true
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(clock, AnimationClock::advance));
     }
     let pose = if let Some(progress) = progress {
         Pose {
@@ -253,6 +246,7 @@ mod tests {
     };
 
     use crate::{
+        animation::test_instant,
         boxed::boxed,
         column::column,
         pipelines::loading_shape::geometry::{center, geometry},
@@ -340,17 +334,15 @@ mod tests {
 
     #[test]
     fn paused_clock_excludes_time_spent_waiting() {
-        let mut clock = AnimationClock {
-            elapsed: 0,
-            frame: 0,
-            running: true,
-        };
-        clock.advance(100_000_000);
-        clock.set_running(false, 150_000_000);
-        clock.advance(5_000_000_000);
+        let mut clock = AnimationClock::new(true);
+        assert!(clock.advance(test_instant(0)));
+        assert!(clock.advance(test_instant(150_000_000)));
+        clock.set_running(false);
+        assert!(!clock.advance(test_instant(5_000_000_000)));
         assert_eq!(clock.elapsed, 150_000_000);
-        clock.set_running(true, 10_000_000_000);
-        clock.advance(10_050_000_000);
+        clock.set_running(true);
+        assert!(clock.advance(test_instant(10_000_000_000)));
+        assert!(clock.advance(test_instant(10_050_000_000)));
         assert_eq!(clock.elapsed, 200_000_000);
         assert_eq!(normalize_progress(f32::NAN), 0.0);
         assert_eq!(normalize_progress(f32::INFINITY), 1.0);

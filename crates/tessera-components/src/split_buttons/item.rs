@@ -3,15 +3,17 @@ use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Dp, LayoutResult, MeasurementError, Modifier,
     PxPosition, RenderSlot, SemanticsModifierNode, State,
     accesskit::{HasPopup, Role},
-    current_frame_nanos,
+    launch,
     layout::MeasureScope,
     modifier::ModifierCapabilityExt as _,
-    provide_context, remember, tessera, use_context,
+    provide_context, remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
-    animation::Animatable,
+    animation::{Animatable, FrameDelta, Motion, animate_to},
     icon::{IconRotation, IconSize},
     row::row,
     shape_def::{RoundedCorner, Shape},
@@ -35,34 +37,27 @@ struct SplitMotion {
     elevation: Animatable,
     rotation: Animatable,
     target: MotionTarget,
-    frame: u64,
+    delta: FrameDelta,
 }
 
-impl SplitMotion {
-    fn new(target: MotionTarget, frame: u64) -> Self {
-        Self {
-            fraction: Animatable::spring(target.fraction, 40.0, 1.0),
-            radius: Animatable::spring(target.radius, 40.0, 1.0),
-            elevation: Animatable::spring(target.elevation, 40.0, 1.0),
-            rotation: Animatable::spring(target.rotation, 40.0, 1.0),
-            target,
-            frame,
-        }
+impl Motion for SplitMotion {
+    type Target = (MotionTarget, bool);
+
+    fn is_settled_at(&self, (target, _): &(MotionTarget, bool)) -> bool {
+        self.target == *target && self.is_idle()
     }
 
-    fn advance(&mut self, frame: u64) {
-        if frame > self.frame {
-            let dt = (frame - self.frame) as f32 / 1_000_000_000.0;
-            self.fraction.tick(dt);
-            self.radius.tick(dt);
-            self.elevation.tick(dt);
-            self.rotation.tick(dt);
-            self.frame = frame;
-        }
+    fn advance(&mut self, now: Instant) -> bool {
+        let dt = self.delta.step(now);
+        self.fraction.tick(dt);
+        self.radius.tick(dt);
+        self.elevation.tick(dt);
+        self.rotation.tick(dt);
+        !self.is_idle()
     }
 
-    fn retarget(&mut self, target: MotionTarget, frame: u64, fixed_shape: bool) {
-        self.advance(frame);
+    fn retarget(&mut self, (target, fixed_shape): (MotionTarget, bool), now: Instant) {
+        self.advance(now);
         if fixed_shape {
             self.fraction = Animatable::spring(target.fraction, 40.0, 1.0);
             self.radius = Animatable::spring(target.radius, 40.0, 1.0);
@@ -73,6 +68,19 @@ impl SplitMotion {
         self.elevation.set_target(target.elevation);
         self.rotation.set_target(target.rotation);
         self.target = target;
+    }
+}
+
+impl SplitMotion {
+    fn new(target: MotionTarget) -> Self {
+        Self {
+            fraction: Animatable::spring(target.fraction, 40.0, 1.0),
+            radius: Animatable::spring(target.radius, 40.0, 1.0),
+            elevation: Animatable::spring(target.elevation, 40.0, 1.0),
+            rotation: Animatable::spring(target.rotation, 40.0, 1.0),
+            target,
+            delta: FrameDelta::default(),
+        }
     }
 
     fn is_idle(&self) -> bool {
@@ -179,33 +187,9 @@ pub(super) fn split_button_item(
         elevation,
         rotation: if expanded == Some(true) { 180.0 } else { 0.0 },
     };
-    let frame = current_frame_nanos();
-    let motion = remember(|| SplitMotion::new(target, frame));
-    if motion.with(|motion| motion.target) != target {
-        motion.with_mut(|motion| motion.retarget(target, frame, shape.is_some()));
-    }
-    if !motion.with(SplitMotion::is_idle) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                motion.with_mut(|motion| motion.advance(frame));
-                if motion.with(SplitMotion::is_idle) {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    let motion = remember(|| SplitMotion::new(target));
+    let motion_target = (target, shape.is_some());
+    launch(motion_target, animate_to(motion, motion_target));
     let content_color = args.colors.content_color(enabled);
     let overlay = content_color.with_alpha(1.0);
     let container = args.colors.container_color(enabled);
@@ -297,6 +281,8 @@ pub(super) fn split_button_item(
 mod tests {
     use tessera_ui::{Px, PxSize};
 
+    use crate::animation::test_instant as at;
+
     use super::*;
 
     #[test]
@@ -312,20 +298,22 @@ mod tests {
             elevation: 3.0,
             ..initial
         };
-        let mut motion = SplitMotion::new(initial, 0);
-        motion.retarget(active, 0, false);
-        motion.advance(33_333_334);
+        let mut motion = SplitMotion::new(initial);
+        motion.retarget((active, false), at(0));
+        motion.advance(at(33_333_334));
         let radius = (motion.radius.value(), motion.radius.velocity());
         let elevation = (motion.elevation.value(), motion.elevation.velocity());
         motion.retarget(
-            MotionTarget {
-                fraction: 0.5,
-                radius: 0.0,
-                elevation: 1.0,
-                rotation: 180.0,
-            },
-            33_333_334,
-            false,
+            (
+                MotionTarget {
+                    fraction: 0.5,
+                    radius: 0.0,
+                    elevation: 1.0,
+                    rotation: 180.0,
+                },
+                false,
+            ),
+            at(33_333_334),
         );
         assert_eq!((motion.radius.value(), motion.radius.velocity()), radius);
         assert_eq!(
@@ -333,7 +321,7 @@ mod tests {
             elevation
         );
         for frame in 3..150 {
-            motion.advance(frame * 16_666_667);
+            motion.advance(at(frame * 16_666_667));
             assert!((0.0..=0.5).contains(&motion.fraction.value()));
             assert!((0.0..=180.0).contains(&motion.rotation.value()));
         }
@@ -350,17 +338,19 @@ mod tests {
         assert_eq!(top_left.resolve(size), (48.0, 2.0));
         assert_eq!(top_right.resolve(size), (48.0, 2.0));
         motion.retarget(
-            MotionTarget {
-                elevation: 3.0,
-                ..initial
-            },
-            2_500_000_000,
-            true,
+            (
+                MotionTarget {
+                    elevation: 3.0,
+                    ..initial
+                },
+                true,
+            ),
+            at(2_500_000_000),
         );
         assert!(motion.fraction.is_idle() && motion.radius.is_idle());
         assert!(!motion.elevation.is_idle() && !motion.rotation.is_idle());
         for frame in 151..300 {
-            motion.advance(frame * 16_666_667);
+            motion.advance(at(frame * 16_666_667));
         }
         assert!(motion.is_idle());
     }

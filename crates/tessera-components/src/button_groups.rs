@@ -14,14 +14,14 @@ use tessera_ui::{
     Constraint, Dp, FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     RenderSlot, SemanticsModifierNode, State,
     accesskit::{Orientation, Role},
-    current_frame_nanos, key,
+    key, launch, launch_once,
     layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera,
 };
 
 use crate::{
-    animation::shape_motion::ShapeMotion,
+    animation::{Motion, animate_to, run_frames, shape_motion::ShapeMotion},
     button::{ButtonShape, ButtonSize, ButtonVariant, button},
     icon::IconSize,
     shape_def::{RoundedCorner, Shape},
@@ -520,33 +520,10 @@ pub fn button_groups(
                         resting_shape
                     };
                     let motion = remember(|| ShapeMotion::new(shape));
-                    let mut next = motion.get();
-                    next.retarget(shape, enabled, current_frame_nanos());
-                    if next != motion.get() {
-                        motion.set(next);
+                    if !enabled && !motion.with(|motion| motion.is_settled_at(&shape)) {
+                        motion.with_mut(|motion| motion.snap(shape));
                     }
-                    if next.is_animating() {
-                        // Rebuilds this component on every animated frame.
-                        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-                        let _ = frame_clock.get();
-                        tessera_ui::launch_once(async move {
-                            let step = move |frame: u64| {
-                                let mut next = motion.get();
-                                next.advance(frame);
-                                if next != motion.get() {
-                                    motion.set(next);
-                                }
-                                if next.is_animating() { true } else { false }
-                            };
-                            loop {
-                                let now = tessera_ui::next_frame().await;
-                                frame_clock.set(now);
-                                if !step(now) {
-                                    break;
-                                }
-                            }
-                        });
-                    }
+                    launch(shape, animate_to(motion, shape));
                     button()
                         .variant(variant)
                         .presentation_state_optional(presentation)
@@ -558,7 +535,7 @@ pub fn button_groups(
                         .interaction_state(interaction)
                         .on_click(move || {
                             let mut next = width_motion.get();
-                            next.pulse(current_frame_nanos());
+                            next.pulse();
                             if next != width_motion.get() {
                                 width_motion.set(next);
                             }
@@ -639,32 +616,12 @@ fn group_item(
     next.update(
         presented_pressed || interaction.with(InteractionState::is_pressed),
         enabled.unwrap_or(true) && !connected.unwrap_or(false),
-        current_frame_nanos(),
     );
     if next != motion.get() {
         motion.set(next);
     }
     if next.is_animating() {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                let mut next = motion.get();
-                next.advance(frame);
-                if next != motion.get() {
-                    motion.set(next);
-                }
-                if next.is_animating() { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(motion, PressWidthMotion::advance));
     }
     tessera_ui::layout::layout(GroupItemLayout)
         .modifier(

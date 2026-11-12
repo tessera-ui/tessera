@@ -17,8 +17,9 @@ use tessera_ui::{
     AxisConstraint, BuildModifierNode, CallbackWith, Color, ComputedData, Constraint, Dp,
     LayoutCoordinates, LayoutModifier, LayoutModifierChild, LayoutModifierInput, LayoutResult,
     MeasurementError, Modifier, ModifierBuildContext, PointerInput, PointerInputModifierNode, Px,
-    PxPosition, RenderSlot, ScrollEventSource, State, current_frame_nanos, current_frame_time,
+    PxPosition, RenderSlot, ScrollEventSource, State,
     focus::FocusRevealRequest,
+    launch_once,
     layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera,
@@ -27,6 +28,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::Alignment,
+    animation::run_frames,
     boxed::boxed,
     nested_scroll::{NestedScrollConnection, ScrollDelta, ScrollVelocity},
     pos_misc::is_position_inside_bounds,
@@ -119,7 +121,7 @@ pub struct ScrollableController {
     /// Optional override for the child size used to clamp scroll extents.
     override_child_size: Option<ComputedData>,
     /// Last frame time for delta time calculation
-    last_frame_nanos: Option<u64>,
+    last_frame: Option<Instant>,
     /// The state for vertical scrollbar
     scrollbar_state_v: scrollbar::ScrollBarInteractionState,
     /// The state for horizontal scrollbar
@@ -159,7 +161,7 @@ impl ScrollableController {
             child_size: ComputedData::ZERO,
             visible_size: ComputedData::ZERO,
             override_child_size: None,
-            last_frame_nanos: None,
+            last_frame: None,
             scrollbar_state_v: scrollbar::ScrollBarInteractionState::default(),
             scrollbar_state_h: scrollbar::ScrollBarInteractionState::default(),
             velocity_tracker: None,
@@ -233,7 +235,7 @@ impl ScrollableController {
         self.update_density(tessera_ui::dp::scale_factor());
         self.cancel_inertia();
         self.velocity_tracker = None;
-        self.last_frame_nanos = None;
+        self.last_frame = None;
         self.positioned = true;
         self.child_position = position;
         self.target_position = position;
@@ -350,19 +352,19 @@ impl ScrollableController {
             inertia.position_y = inertia.position_y.clamp(minimum.y, 0.0);
         }
         if !self.has_pending_animation_frame() {
-            self.last_frame_nanos = None;
+            self.last_frame = None;
         }
     }
 
     /// Updates the scroll position based on time-based interpolation
     /// Returns true if the position changed (needs redraw)
-    pub(crate) fn update_scroll_position(&mut self, frame_nanos: u64, smoothing: f32) -> bool {
+    pub(crate) fn update_scroll_position(&mut self, now: Instant, smoothing: f32) -> bool {
         let delta_time = self
-            .last_frame_nanos
-            .map(|last| frame_nanos.saturating_sub(last) as f32 / 1_000_000_000.0)
+            .last_frame
+            .map(|last| now.saturating_duration_since(last).as_secs_f32())
             .unwrap_or(1.0 / 60.0)
             .clamp(0.0, 0.25);
-        self.last_frame_nanos = Some(frame_nanos);
+        self.last_frame = Some(now);
         let old = self.child_position;
         let (target_x, target_y) = self.target_position_f32;
         let (current_x, current_y) = self.animation_position;
@@ -394,7 +396,7 @@ impl ScrollableController {
         self.child_position =
             PxPosition::from_f32_xy(self.child_position_f32.0, self.child_position_f32.1);
         if !self.has_pending_animation_frame() {
-            self.last_frame_nanos = None;
+            self.last_frame = None;
             self.animation_position = (target_x as f64, target_y as f64);
         }
         if old != self.child_position {
@@ -695,18 +697,10 @@ impl BuildModifierNode for ScrollBuild {
         let tap_recognizer = context.state(TapRecognizer::default);
         let scroll_recognizer = context.state(ScrollRecognizer::default);
         if controller.with(|c| c.has_pending_animation_frame()) {
-            context.launch(async move {
-                loop {
-                    let frame_nanos = tessera_ui::next_frame().await;
-                    let pending = controller.with_mut(|c| {
-                        c.update_scroll_position(frame_nanos, DEFAULT_SCROLL_SMOOTHING);
-                        c.has_pending_animation_frame()
-                    });
-                    if !pending {
-                        break;
-                    }
-                }
-            });
+            context.launch(run_frames(controller, |c, now| {
+                c.update_scroll_position(now, DEFAULT_SCROLL_SMOOTHING);
+                c.has_pending_animation_frame()
+            }));
         }
         let has_override = controller.with(|c| c.override_child_size.is_some());
         let nested_scroll_connection = context.nested_scroll_parent();
@@ -1111,7 +1105,7 @@ impl PointerInputModifierNode for ScrollbarWheelModifierNode {
                     if !consumption.child.is_zero() && self.behavior == ScrollBarBehavior::AutoHide
                     {
                         self.scrollbar_controller.with_mut(|state| {
-                            state.last_scroll_activity_frame_nanos = Some(current_frame_nanos());
+                            state.scroll_activity = state.scroll_activity.wrapping_add(1);
                             state.should_be_visible = true;
                         });
                     }
@@ -1180,8 +1174,6 @@ impl PointerInputModifierNode for ScrollableViewportPointerModifierNode {
             input.cursor_position_rel,
             input.computed_data,
             input.local_to_window,
-            current_frame_time().unwrap_or_else(Instant::now),
-            current_frame_nanos(),
         );
     }
 }
@@ -1264,12 +1256,17 @@ impl ScrollableViewportPointerModifierNode {
         cursor_position_rel: Option<PxPosition>,
         computed_data: ComputedData,
         transform: tessera_ui::LocalToWindow,
-        now: Instant,
-        frame_nanos: u64,
     ) {
         if pass != tessera_ui::PointerEventPass::Main {
             return;
         }
+        // Inertia advances with the latest pointer sample or, between samples,
+        // with the latest frame observed by the scroll animation task.
+        let now = changes
+            .iter()
+            .map(|change| change.timestamp)
+            .max()
+            .max(self.controller.with(|c| c.last_frame));
         let connection = self
             .nested_scroll_connection
             .as_ref()
@@ -1293,11 +1290,13 @@ impl ScrollableViewportPointerModifierNode {
                     c.cancel_inertia();
                     c.target_position_f32 = c.child_position_f32;
                     c.target_position = c.child_position;
-                    c.velocity_tracker = Some(FoundationVelocityTracker::new(
-                        tap_result.press_timestamp.unwrap_or(now),
-                        SCROLL_VELOCITY_SAMPLE_WINDOW,
-                        SCROLL_VELOCITY_IDLE_CUTOFF,
-                    ));
+                    c.velocity_tracker = tap_result.press_timestamp.or(now).map(|start| {
+                        FoundationVelocityTracker::new(
+                            start,
+                            SCROLL_VELOCITY_SAMPLE_WINDOW,
+                            SCROLL_VELOCITY_IDLE_CUTOFF,
+                        )
+                    });
                 });
             }
 
@@ -1336,15 +1335,15 @@ impl ScrollableViewportPointerModifierNode {
                         {
                             if self.vertical {
                                 self.scrollbar_state_v.with_mut(|scrollbar_controller| {
-                                    scrollbar_controller.last_scroll_activity_frame_nanos =
-                                        Some(frame_nanos);
+                                    scrollbar_controller.scroll_activity =
+                                        scrollbar_controller.scroll_activity.wrapping_add(1);
                                     scrollbar_controller.should_be_visible = true;
                                 });
                             }
                             if self.horizontal {
                                 self.scrollbar_state_h.with_mut(|scrollbar_controller| {
-                                    scrollbar_controller.last_scroll_activity_frame_nanos =
-                                        Some(frame_nanos);
+                                    scrollbar_controller.scroll_activity =
+                                        scrollbar_controller.scroll_activity.wrapping_add(1);
                                     scrollbar_controller.should_be_visible = true;
                                 });
                             }
@@ -1403,7 +1402,9 @@ impl ScrollableViewportPointerModifierNode {
                 }
             }
         }
-        if self.controller.with(|c| c.active_inertia.is_some()) {
+        if let Some(now) = now
+            && self.controller.with(|c| c.active_inertia.is_some())
+        {
             self.advance_inertia(now, &computed_data, transform);
         }
     }
@@ -1437,29 +1438,10 @@ fn scrollable_viewport(
     let scroll_recognizer = remember(ScrollRecognizer::default);
     if controller.with(|c| c.has_pending_animation_frame()) {
         let smoothing = scroll_smoothing;
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let has_pending_animation_frame = controller.with_mut(|c| {
-                    c.update_scroll_position(frame_nanos, smoothing);
-                    c.has_pending_animation_frame()
-                });
-                if has_pending_animation_frame {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(controller, move |c, now| {
+            c.update_scroll_position(now, smoothing);
+            c.has_pending_animation_frame()
+        }));
     }
     let has_override = controller.with(|c| c.override_child_size.is_some());
     let nested_scroll_connection = NestedScrollConnection::nearest();
@@ -1611,6 +1593,7 @@ fn constrain_position(
 #[cfg(test)]
 mod scroll_tests {
     use super::*;
+    use crate::animation::test_instant;
     fn controller() -> ScrollableController {
         let mut controller = ScrollableController::new();
         controller.child_size = ComputedData {
@@ -1629,9 +1612,9 @@ mod scroll_tests {
         scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -200.5));
         scroll.animation_position.1 = -200.500_000_001;
         scroll.set_target_position(PxPosition::from_f32_xy(0.0, -300.75));
-        let now = Instant::now();
+        let now = test_instant(0);
         scroll.start_inertia(now, ScrollVelocity::new(0.0, -120.5));
-        scroll.last_frame_nanos = Some(16_000_000);
+        scroll.last_frame = Some(test_instant(16_000_000));
         let animation = scroll.animation_position;
         let inertia = scroll.active_inertia;
         let viewport = scroll.visible_size;
@@ -1649,7 +1632,7 @@ mod scroll_tests {
         assert_eq!(scroll.target_position().y, -300.75);
         assert_eq!(scroll.active_inertia, inertia);
         assert_eq!(scroll.inertia_last_tick, Some(now));
-        assert_eq!(scroll.last_frame_nanos, Some(16_000_000));
+        assert_eq!(scroll.last_frame, Some(test_instant(16_000_000)));
         assert!(scroll.has_pending_animation_frame());
     }
 
@@ -1658,7 +1641,7 @@ mod scroll_tests {
         let mut scroll = controller();
         scroll.set_scroll_position(PxPosition::from_f32_xy(-12.25, -1500.5));
         scroll.set_target_position(PxPosition::from_f32_xy(-30.75, -1900.25));
-        let now = Instant::now();
+        let now = test_instant(0);
         scroll.start_inertia(now, ScrollVelocity::new(-40.0, -120.5));
         scroll.override_child_size(ComputedData {
             width: Px(100),
@@ -1709,12 +1692,12 @@ mod scroll_tests {
     fn smoothing_does_not_snap_when_one_frame_rounds_to_same_pixel() {
         let mut controller = controller();
         controller.set_target_position(PxPosition::new(Px(0), Px(-100)));
-        controller.last_frame_nanos = Some(0);
-        controller.update_scroll_position(1_000_000, 0.99);
+        controller.last_frame = Some(test_instant(0));
+        controller.update_scroll_position(test_instant(1_000_000), 0.99);
         assert!(controller.child_position_f32.1 > -1.0);
         assert!(controller.has_pending_animation_frame());
         for frame in 1..2000 {
-            controller.update_scroll_position(frame * 16_666_667, 0.99);
+            controller.update_scroll_position(test_instant(frame * 16_666_667), 0.99);
         }
         assert!(!controller.has_pending_animation_frame());
         assert_eq!(controller.child_position.y, -100.0);
@@ -1725,13 +1708,13 @@ mod scroll_tests {
         let mut original = controller();
         original.set_scroll_position(PxPosition::from_f32_xy(-100.25, -200.5));
         original.set_target_position(PxPosition::from_f32_xy(-300.25, -500.5));
-        original.update_scroll_position(16_666_667, 0.75);
+        original.update_scroll_position(test_instant(16_666_667), 0.75);
         let mut translated = original.clone();
         let delta = PxPosition::new(Px(-80), Px(-120));
         translated.translate_scroll_position(delta);
         for frame in 2..100 {
-            original.update_scroll_position(frame * 16_666_667, 0.75);
-            translated.update_scroll_position(frame * 16_666_667, 0.75);
+            original.update_scroll_position(test_instant(frame * 16_666_667), 0.75);
+            translated.update_scroll_position(test_instant(frame * 16_666_667), 0.75);
             let expected = original.child_position() + delta;
             let actual = translated.child_position();
             assert!((actual.x - expected.x).abs() < 0.0001);
@@ -1755,12 +1738,12 @@ mod scroll_tests {
         let mut original = controller();
         original.set_scroll_position(PxPosition::from_f32_xy(-100.25, -200.5));
         original.set_target_position(PxPosition::from_f32_xy(-300.25, -500.5));
-        original.update_scroll_position(16_666_667, 0.75);
-        let now = Instant::now();
+        original.update_scroll_position(test_instant(16_666_667), 0.75);
+        let now = test_instant(0);
         original.start_inertia(now, ScrollVelocity::new(120.0, -240.0));
         let mut scaled = original.clone();
         scaled.update_density(original.density * 1.5);
-        assert_eq!(scaled.last_frame_nanos, original.last_frame_nanos);
+        assert_eq!(scaled.last_frame, original.last_frame);
         assert_eq!(scaled.inertia_last_tick, Some(now));
         assert_eq!(
             scaled.target_position(),
@@ -1791,7 +1774,7 @@ mod scroll_tests {
             let target = PxPosition::from_f32_xy(-765_576.0, -1_251_004.0);
             controller.set_target_position(target);
             for frame in 1..2000 {
-                controller.update_scroll_position(frame * 16_666_667, smoothing);
+                controller.update_scroll_position(test_instant(frame * 16_666_667), smoothing);
             }
             assert_eq!(controller.child_position(), target);
             assert!(!controller.has_pending_animation_frame());
@@ -1821,7 +1804,7 @@ mod scroll_tests {
     fn touch_and_programmatic_position_interrupt_inertia() {
         let mut controller = controller();
         let viewport = controller.visible_size;
-        let now = Instant::now();
+        let now = test_instant(0);
         controller.start_inertia(now, ScrollVelocity::new(0.0, -1000.0));
         controller.apply_input_delta(
             ScrollDelta::new(0.0, -2.0),
@@ -1839,7 +1822,7 @@ mod scroll_tests {
     #[test]
     fn holding_still_does_not_start_inertia_and_release_has_no_velocity() {
         let mut controller = controller();
-        let now = Instant::now();
+        let now = test_instant(0);
         controller.push_touch_delta(now, 0.0, -10.0);
         controller.push_touch_delta(now + Duration::from_millis(10), 0.0, -10.0);
         assert!(controller.active_inertia.is_none());
@@ -1852,7 +1835,7 @@ mod scroll_tests {
 
     #[test]
     fn fling_launch_threshold_and_cap_use_the_same_logical_speed_at_each_density() {
-        let start = Instant::now();
+        let start = test_instant(0);
         let sample = start + Duration::from_millis(10);
         for density in [1.0, 3.0] {
             let mut controller = controller();
@@ -1890,7 +1873,10 @@ mod scroll_tests {
             steps += 1;
             for _ in 0..30 {
                 frame += 1;
-                controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+                controller.update_scroll_position(
+                    test_instant(frame * 16_666_667),
+                    DEFAULT_SCROLL_SMOOTHING,
+                );
             }
         }
         assert_eq!(
@@ -1918,7 +1904,8 @@ mod scroll_tests {
             false,
         );
         for frame in 1..=60u64 {
-            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+            controller
+                .update_scroll_position(test_instant(frame * 16_666_667), DEFAULT_SCROLL_SMOOTHING);
         }
         assert_eq!(
             controller.child_position.y, 0.0,
@@ -1946,7 +1933,8 @@ mod scroll_tests {
 
         let mut travelled = Vec::new();
         for frame in 1..=4u64 {
-            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+            controller
+                .update_scroll_position(test_instant(frame * 16_666_667), DEFAULT_SCROLL_SMOOTHING);
             travelled.push(controller.child_position.y);
         }
         // Each frame covers less than the whole step and moves forwards.
@@ -1961,7 +1949,8 @@ mod scroll_tests {
         );
 
         for frame in 5..=60u64 {
-            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+            controller
+                .update_scroll_position(test_instant(frame * 16_666_667), DEFAULT_SCROLL_SMOOTHING);
         }
         assert_eq!(controller.child_position.y, -120.0);
         assert!(!controller.has_pending_animation_frame());
@@ -2004,7 +1993,8 @@ mod scroll_tests {
         let mut frame = 0u64;
         for _ in 0..40 {
             frame += 1;
-            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+            controller
+                .update_scroll_position(test_instant(frame * 16_666_667), DEFAULT_SCROLL_SMOOTHING);
         }
         assert!(controller.is_positioned());
         assert_eq!(controller.child_position.y, -500.0);
@@ -2018,7 +2008,8 @@ mod scroll_tests {
         );
         for _ in 0..40 {
             frame += 1;
-            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+            controller
+                .update_scroll_position(test_instant(frame * 16_666_667), DEFAULT_SCROLL_SMOOTHING);
         }
         assert_eq!(controller.child_position(), PxPosition::ZERO);
         assert!(

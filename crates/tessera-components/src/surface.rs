@@ -15,19 +15,20 @@ use tessera_ui::{
     FocusProperties, FocusRequester, LayoutResult, MeasurementError, Modifier, PointerInput,
     PointerInputModifierNode, Px, PxPosition, PxSize, RenderSlot, SemanticsModifierNode, State,
     accesskit::{Role, Toggled},
-    current_frame_nanos,
+    launch_once,
     layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context, with_frame_time,
 };
 
 use crate::{
     RippleProps,
     alignment::Alignment,
+    animation::run_frames,
     modifier::{ModifierExt as _, ShadowArgs, apply_combined_clickable_modifier},
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_inside_bounds,
-    ripple_state::{RippleSpec, RippleState},
+    ripple_state::{RippleAnimation, RippleSpec, RippleState},
     shape_def::{ResolvedShape, RoundedCorner, Shape},
     theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for},
 };
@@ -244,7 +245,10 @@ impl SurfaceInputOwner {
         if let Some(state) = self.ripple
             && state.is_alive()
         {
-            state.with_mut(RippleState::release);
+            state.with_mut(|state| {
+                state.release();
+                state.cancel_animation();
+            });
         }
         if let Some(state) = self.tap
             && state.is_alive()
@@ -326,21 +330,8 @@ fn apply_tonal_elevation_to_style(
     }
 }
 
-fn build_ripple_props(
-    args: &SurfaceResolvedArgs,
-    ripple_state: Option<State<RippleState>>,
-    frame_nanos: u64,
-) -> RippleProps {
-    if !args.show_ripple {
-        return RippleProps::default();
-    }
-    let Some(ripple_state) = ripple_state else {
-        return RippleProps::default();
-    };
-
-    if let Some(animation) =
-        ripple_state.with(|state| state.animation_snapshot_at_frame_nanos(frame_nanos))
-    {
+fn build_ripple_props(args: &SurfaceResolvedArgs, animation: RippleAnimation) -> RippleProps {
+    if args.show_ripple {
         return RippleProps {
             center: [animation.center[0] - 0.5, animation.center[1] - 0.5],
             bounded: args.ripple_bounded,
@@ -584,7 +575,7 @@ struct SurfaceLayout {
     ripple_state: Option<State<RippleState>>,
     scheme: MaterialColorScheme,
     absolute_tonal_elevation: Dp,
-    ripple_frame_nanos: Option<u64>,
+    ripple: Option<RippleAnimation>,
     focus_visible: bool,
 }
 
@@ -608,7 +599,7 @@ impl PartialEq for SurfaceLayout {
         self.args == other.args
             && self.interaction_state == other.interaction_state
             && self.ripple_state == other.ripple_state
-            && self.ripple_frame_nanos == other.ripple_frame_nanos
+            && self.ripple == other.ripple
             && self.focus_visible == other.focus_visible
             && self.scheme == other.scheme
             && self.absolute_tonal_elevation == other.absolute_tonal_elevation
@@ -790,10 +781,8 @@ impl tessera_ui::DrawModifierNode for SurfaceForeground {
         };
         let mut ripple = if policy.args.enabled {
             policy
-                .ripple_frame_nanos
-                .map(|frame_nanos| {
-                    build_ripple_props(&policy.args, policy.ripple_state, frame_nanos)
-                })
+                .ripple
+                .map(|animation| build_ripple_props(&policy.args, animation))
                 .unwrap_or_default()
         } else {
             RippleProps::default()
@@ -950,38 +939,13 @@ fn surface_content(
     let clickable = surface.on_click.is_some() || surface.on_long_click.is_some();
     let interactive = surface.enabled && clickable;
 
-    let mut ripple_frame_nanos = None;
+    let mut ripple = None;
     if surface.show_ripple
         && let Some(ripple_state) = ripple_state
     {
-        let frame_nanos = current_frame_nanos();
-        let has_active_ripple = ripple_state.with(|state| {
-            state
-                .animation_snapshot_at_frame_nanos(frame_nanos)
-                .is_some()
-        });
-        if has_active_ripple {
-            ripple_frame_nanos = Some(frame_nanos);
-            // Rebuilds this component on every animated frame.
-            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-            let _ = frame_clock.get();
-            tessera_ui::launch_once(async move {
-                let step = move |frame_nanos: u64| {
-                    let has_active_ripple = ripple_state.with(|state| {
-                        state
-                            .animation_snapshot_at_frame_nanos(frame_nanos)
-                            .is_some()
-                    });
-                    if has_active_ripple { true } else { false }
-                };
-                loop {
-                    let now = tessera_ui::next_frame().await;
-                    frame_clock.set(now);
-                    if !step(now) {
-                        break;
-                    }
-                }
-            });
+        ripple = ripple_state.with(RippleState::animation);
+        if ripple.is_some() {
+            launch_once(run_frames(ripple_state, RippleState::advance));
         }
     }
 
@@ -1007,7 +971,7 @@ fn surface_content(
         ripple_state,
         scheme,
         absolute_tonal_elevation,
-        ripple_frame_nanos,
+        ripple,
         focus_visible,
     };
     let current_context = (absolute_tonal_elevation, content_color, policy.args.child);
@@ -1246,29 +1210,19 @@ pub fn surface(
         }
         if state.with(LongPressRecognizer::needs_frame) {
             let callback = resolved.on_long_click.expect("long click handler");
-            // Rebuilds this component on every animated frame.
-            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-            let _ = frame_clock.get();
-            tessera_ui::launch_once(async move {
-                let step = move |frame: u64| {
+            launch_once(async move {
+                loop {
+                    let triggered = with_frame_time(|now| {
+                        state.is_alive() && state.with_mut(|recognizer| recognizer.advance(now))
+                    })
+                    .await;
                     if !state.is_alive() {
-                        return false;
+                        break;
                     }
-                    let triggered =
-                        state.with_mut(|recognizer| recognizer.advance_frame_nanos(frame));
                     if triggered {
                         callback.call();
                     }
-                    if state.with(LongPressRecognizer::needs_frame) {
-                        true
-                    } else {
-                        false
-                    }
-                };
-                loop {
-                    let now = tessera_ui::next_frame().await;
-                    frame_clock.set(now);
-                    if !step(now) {
+                    if !state.with(LongPressRecognizer::needs_frame) {
                         break;
                     }
                 }
@@ -1314,7 +1268,7 @@ pub fn surface(
             let spec = ripple_spec;
             move |ctx: PointerEventContext| {
                 state.with_mut(|s| {
-                    s.start_animation_with_spec(ctx.normalized_pos, ctx.size, spec);
+                    s.start_animation_with_spec(ctx.normalized_pos, ctx.size, spec, ctx.timestamp);
                 });
             }
         });
@@ -1541,7 +1495,7 @@ mod tests {
             },
             interaction_state: None,
             ripple_state: None,
-            ripple_frame_nanos: None,
+            ripple: None,
             focus_visible: false,
             scheme: MaterialColorScheme::default(),
             absolute_tonal_elevation: Dp(0.0),

@@ -8,7 +8,7 @@ use tessera_foundation::modifier::{ModifierExt as _, Padding};
 use tessera_ui::{
     Color, Dp, FocusScopeNode, Modifier, RenderSlot,
     accesskit::Role,
-    current_frame_nanos,
+    launch,
     layout::{Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera, use_context,
@@ -16,13 +16,14 @@ use tessera_ui::{
 
 use crate::{
     alignment::CrossAxisAlignment,
+    animation::animate_to,
     column::column,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
     theme::{MaterialColorScheme, MaterialTheme},
 };
 
-use super::motion::{MenuShapeHover, MenuShapeMotion, advance};
+use super::motion::{MenuShapeHover, MenuShapeMotion};
 
 /// Color emphasis for vertical menus and their items.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -195,26 +196,14 @@ pub fn menu_group(
     let children = children.unwrap_or_else(RenderSlot::empty);
     let modifier = modifier.unwrap_or_default();
     let focus_scope = remember(FocusScopeNode::new).get();
-    let frame = current_frame_nanos();
-    let motion = remember(|| MenuShapeMotion::new(position, frame));
+    let motion = remember(|| MenuShapeMotion::new(position));
     let focused = focus_scope.has_focus();
-    if shape.is_none() && motion.with(|motion| motion.needs_update(position, focused)) {
-        motion.with_mut(|motion| motion.update(position, focused, frame));
-    }
-    if shape.is_none() && !motion.with(MenuShapeMotion::is_idle) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| advance(motion, frame);
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+    if shape.is_none() {
+        let hovered = motion.with(MenuShapeMotion::hovered);
+        launch(
+            (position, focused, hovered),
+            animate_to(motion, (position, focused)),
+        );
     }
     let mut modifier = modifier.focus_scope(Some(focus_scope));
     if shape.is_none() {

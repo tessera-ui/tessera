@@ -311,7 +311,7 @@ pub(crate) fn run_ready(queue: &crate::dispatcher::DispatchQueue) {
     poll_batch(&tasks, &tasks.ready, |keys| queue.take_ready(keys));
 }
 
-/// Resumes the tasks waiting in [`next_frame`] for the current frame.
+/// Resumes the tasks waiting in [`with_frame_time`] for the current frame.
 pub(crate) fn resume_frame_waiters() {
     let tasks = crate::local_runtime_resource::<UiTasks>();
     tasks.frames_resumed.set(tasks.frames_resumed.get() + 1);
@@ -348,18 +348,25 @@ pub(crate) fn frame_waiters_resumed_last_frame() -> usize {
         .get()
 }
 
-/// Waits for the next frame and returns its timestamp in nanoseconds.
+/// Waits for the next frame and runs `frame` with its time.
 ///
-/// Await it in a UI task, such as one started by [`crate::launch`]; each frame
-/// resumes waiting tasks after delivering queued results and before the build.
-/// Drive animation by awaiting it in a loop and updating state from the
-/// timestamp.
+/// This is the only way UI code observes time: builds, controllers, and input
+/// handlers do not read a clock. Await it in a UI task, such as one started by
+/// [`crate::launch`]. Each frame resumes waiting tasks after delivering queued
+/// results and before the build, so state written by `frame` appears in that
+/// frame. Every call waits for a new frame, and all tasks resumed by one frame
+/// receive the same time. Animate by awaiting it in a loop that records the
+/// first frame as the start time, writes state from each later frame, and
+/// breaks when the motion settles.
 ///
 /// # Panics
 ///
 /// Panics when polled outside a UI task.
-pub fn next_frame() -> impl Future<Output = u64> {
-    NextFrame { since: None }
+pub fn with_frame_time<R>(
+    frame: impl FnOnce(crate::time::Instant) -> R,
+) -> impl Future<Output = R> {
+    let next = NextFrame { since: None };
+    async move { frame(next.await) }
 }
 
 struct NextFrame {
@@ -367,18 +374,18 @@ struct NextFrame {
 }
 
 impl Future for NextFrame {
-    type Output = u64;
+    type Output = crate::time::Instant;
 
-    fn poll(mut self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<u64> {
+    fn poll(mut self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<Self::Output> {
         let tasks = crate::local_runtime_resource::<UiTasks>();
         let resumed = tasks.frames_resumed.get();
         match self.since {
-            Some(since) if resumed > since => Poll::Ready(crate::current_frame_nanos()),
+            Some(since) if resumed > since => Poll::Ready(crate::runtime::frame_time()),
             Some(_) => Poll::Pending,
             None => {
                 let task = CURRENT_TASK
                     .with(Cell::get)
-                    .expect("next_frame must be awaited in a UI task");
+                    .expect("with_frame_time must be awaited in a UI task");
                 self.since = Some(resumed);
                 let mut waiters = tasks.frame_waiters.borrow_mut();
                 if waiters.is_empty() {

@@ -10,7 +10,7 @@ use tessera_ui::{
     PointerChange, PressKeyEventType, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent,
     ScrollEventSource, State,
     accesskit::{Action, Node, NodeId, Role},
-    current_frame_time, remember, scaled_box,
+    remember, scaled_box,
     scroll::platform_scroll_config,
     tessera,
     testing::UiTest,
@@ -265,7 +265,7 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                 let wheel_ticks = (40.0 / platform_scroll_config().wheel_line_step.0) as f32;
                 renderer.inject_pointer(
                     PointerChange::new(
-                        current_frame_time().unwrap(),
+                        renderer.frame_origin() + renderer.frame_time(),
                         MOUSE_POINTER_ID,
                         CursorEventContent::Scroll(ScrollEventContent {
                             delta_x: if horizontal { -wheel_ticks } else { 0.0 },

@@ -11,13 +11,14 @@ use tessera_ui::{
     LayoutResult, MeasurementError, Modifier, PointerEventPass, PointerId, PointerInput,
     PointerInputModifierNode, PressKeyEventType, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
-    current_frame_nanos,
+    launch_once,
     layout::{MeasureScope, Stack, layout},
     modifier::ModifierCapabilityExt as _,
     remember, tessera, use_context,
 };
 
 use crate::{
+    animation::run_frames,
     modifier::ModifierExt as _,
     padding_utils::remove_padding_from_constraint,
     pipelines::{
@@ -184,6 +185,7 @@ impl PointerInputModifierNode for GlassFeedbackPointer {
                                 position.x / size.width.to_f32().max(1.0),
                                 position.y / size.height.to_f32().max(1.0),
                             ],
+                            change.timestamp,
                         );
                     }
                 }
@@ -200,10 +202,14 @@ impl PointerInputModifierNode for GlassFeedbackPointer {
     }
 }
 
-fn start_glass_feedback(state: State<RippleState>, center: [f32; 2]) {
+fn start_glass_feedback(
+    state: State<RippleState>,
+    center: [f32; 2],
+    timestamp: tessera_ui::time::Instant,
+) {
     state.with_mut(|ripple| {
         ripple.set_pressed(true);
-        ripple.start_animation(center);
+        ripple.start_animation(center, timestamp);
     });
 }
 
@@ -328,7 +334,7 @@ pub fn fluid_glass(
     if let Some(on_click) = on_click {
         let press_handler = ripple_state.map(|state| {
             move |ctx: PointerEventContext| {
-                start_glass_feedback(state, ctx.normalized_pos);
+                start_glass_feedback(state, ctx.normalized_pos, ctx.timestamp);
             }
         });
         let release_handler = ripple_state.map(|state| {
@@ -429,33 +435,10 @@ fn fluid_glass_inner(
             0.0
         };
     }
-    let frame_nanos = current_frame_nanos();
-    if let Some((progress, center)) = ripple_state.as_ref().and_then(|state| {
-        state.with_mut(|ripple| {
-            ripple
-                .animation_at_frame_nanos(frame_nanos)
-                .map(|animation| (animation.progress, animation.center))
-        })
-    }) {
-        if let Some(ripple_state) = ripple_state {
-            // Rebuilds this component on every animated frame.
-            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-            let _ = frame_clock.get();
-            tessera_ui::launch_once(async move {
-                let step = move |frame_nanos: u64| {
-                    let has_active_ripple = ripple_state
-                        .with_mut(|ripple| ripple.animation_at_frame_nanos(frame_nanos).is_some());
-                    if has_active_ripple { true } else { false }
-                };
-                loop {
-                    let now = tessera_ui::next_frame().await;
-                    frame_clock.set(now);
-                    if !step(now) {
-                        break;
-                    }
-                }
-            });
-        }
+    if let Some(ripple_state) = ripple_state
+        && let Some((progress, center)) = ripple_state.with(RippleState::get_animation_progress)
+    {
+        launch_once(run_frames(ripple_state, RippleState::advance));
 
         render.ripple_center = Some(center);
         render.ripple_radius = Some(progress);

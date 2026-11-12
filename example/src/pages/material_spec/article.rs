@@ -21,7 +21,8 @@ use tessera_components::{
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Callback, Dp, LayoutCoordinates, Modifier, Px, PxPosition, RenderSlot, State, accesskit::Role,
-    current_frame_nanos, focus, modifier::FocusModifierExt as _, remember, tessera, use_context,
+    focus, launch, modifier::FocusModifierExt as _, remember, tessera, use_context,
+    with_frame_time,
 };
 
 use crate::res::I18N;
@@ -482,48 +483,38 @@ fn article_tab_row(
     });
     let navigation = remember(ArticleNavigationState::default);
     sync_article_navigation(navigation, available, selected.get());
-    let now = current_frame_nanos();
     let targets = ARTICLE_TAB_TITLES.map(|title| if selected.get() == title { 1.0 } else { 0.0 });
-    let motions =
-        remember(|| targets.map(|target| article_tab_visual::SelectionMotion::new(target, now)));
-    if motions.with(|motions| {
-        motions
-            .iter()
-            .zip(targets)
-            .any(|(motion, target)| motion.target() != target)
-    }) {
-        motions.with_mut(|motions| {
-            for (motion, target) in motions.iter_mut().zip(targets) {
-                motion.retarget(target, now);
-            }
+    let motions = remember(|| targets.map(article_tab_visual::SelectionMotion::new));
+    launch(targets, async move {
+        let settled = motions.with(|motions| {
+            motions
+                .iter()
+                .zip(targets)
+                .all(|(motion, target)| motion.target() == target && !motion.is_running())
         });
-    }
-    if motions.with(|motions| motions.iter().any(|motion| motion.is_running())) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
+        if settled {
+            return;
+        }
+        let mut retarget = true;
+        loop {
+            let running = with_frame_time(|now| {
                 motions.with_mut(|motions| {
-                    for motion in motions.iter_mut().filter(|motion| motion.is_running()) {
-                        motion.advance(frame);
+                    for (motion, target) in motions.iter_mut().zip(targets) {
+                        if retarget {
+                            motion.retarget(target, now);
+                        }
+                        motion.advance(now);
                     }
-                });
-                if motions.with(|motions| motions.iter().any(|motion| motion.is_running())) {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
+                    motions.iter().any(|motion| motion.is_running())
+                })
+            })
+            .await;
+            retarget = false;
+            if !running {
+                break;
             }
-        });
-    }
+        }
+    });
     let progress = motions.with(|motions| motions.map(|motion| motion.value()));
     let full_width = article_tab_width(width.get(), pinned.get());
     let minimums = article_tab_minimums(contents);

@@ -4,10 +4,12 @@
 //!
 //! Distinguish the current action group while moving between related menus.
 
-use tessera_ui::{Dp, MOUSE_POINTER_ID, PointerInput, PointerInputModifierNode, State};
+use tessera_ui::{
+    Dp, MOUSE_POINTER_ID, PointerInput, PointerInputModifierNode, State, time::Instant,
+};
 
 use crate::{
-    animation::Animatable,
+    animation::{Animatable, FrameDelta, Motion},
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -25,7 +27,7 @@ pub(super) fn resting_corners(position: MenuPosition) -> [f32; 4] {
 pub(super) struct MenuShapeMotion {
     corners: [Animatable; 4],
     target: [f32; 4],
-    frame_nanos: u64,
+    delta: FrameDelta,
     hovered: bool,
     mouse: bool,
     focused: bool,
@@ -33,12 +35,12 @@ pub(super) struct MenuShapeMotion {
 }
 
 impl MenuShapeMotion {
-    pub fn new(position: MenuPosition, frame_nanos: u64) -> Self {
+    pub fn new(position: MenuPosition) -> Self {
         let target = resting_corners(position);
         Self {
             corners: target.map(|value| Animatable::spring(value, 800.0_f32.sqrt(), 0.6)),
             target,
-            frame_nanos,
+            delta: FrameDelta::default(),
             hovered: false,
             mouse: true,
             focused: false,
@@ -54,14 +56,18 @@ impl MenuShapeMotion {
         }
     }
 
-    pub fn needs_update(&self, position: MenuPosition, focused: bool) -> bool {
+    fn needs_update(&self, position: MenuPosition, focused: bool) -> bool {
         self.focused != focused
             || self.target != self.target(position, focused)
             || (!self.activated && (self.hovered || focused))
     }
 
-    pub fn update(&mut self, position: MenuPosition, focused: bool, frame_nanos: u64) {
-        self.advance(frame_nanos);
+    /// Returns whether the pointer currently hovers the menu container.
+    pub fn hovered(&self) -> bool {
+        self.hovered
+    }
+
+    fn update(&mut self, position: MenuPosition, focused: bool) {
         self.focused = focused;
         self.activated |= self.hovered || focused;
         self.target = self.target(position, focused);
@@ -70,17 +76,7 @@ impl MenuShapeMotion {
         }
     }
 
-    pub fn advance(&mut self, frame_nanos: u64) {
-        if frame_nanos > self.frame_nanos {
-            let dt = (frame_nanos - self.frame_nanos) as f32 / 1_000_000_000.0;
-            for corner in &mut self.corners {
-                corner.tick(dt);
-            }
-            self.frame_nanos = frame_nanos;
-        }
-    }
-
-    pub fn is_idle(&self) -> bool {
+    fn is_idle(&self) -> bool {
         self.corners.iter().all(Animatable::is_idle)
     }
 
@@ -97,9 +93,25 @@ impl MenuShapeMotion {
     }
 }
 
-pub(super) fn advance(motion: State<MenuShapeMotion>, frame_nanos: u64) -> bool {
-    motion.with_mut(|motion| motion.advance(frame_nanos));
-    !motion.with(MenuShapeMotion::is_idle)
+impl Motion for MenuShapeMotion {
+    type Target = (MenuPosition, bool);
+
+    fn is_settled_at(&self, &(position, focused): &Self::Target) -> bool {
+        !self.needs_update(position, focused) && self.is_idle()
+    }
+
+    fn retarget(&mut self, (position, focused): Self::Target, now: Instant) {
+        self.advance(now);
+        self.update(position, focused);
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        let dt = self.delta.step(now);
+        for corner in &mut self.corners {
+            corner.tick(dt);
+        }
+        !self.is_idle()
+    }
 }
 
 pub(super) struct MenuShapeHover {

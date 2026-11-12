@@ -327,6 +327,12 @@ impl HeadlessRenderer {
         self.frame_index
     }
 
+    // Injected input is handled by the next frame, so it carries that frame's
+    // time to stay consistent with the synthetic frame clock.
+    fn input_instant(&self) -> Instant {
+        self.frame_origin + Duration::from_nanos(self.current_frame_nanos) + self.frame_time
+    }
+
     /// Returns the work performed by the most recently rendered frame.
     pub fn diagnostics(&self) -> crate::component_tree::LayoutFrameDiagnostics {
         let _session = self.session.enter();
@@ -349,9 +355,10 @@ impl HeadlessRenderer {
     /// Moves the given pointer to `position`.
     pub fn pointer_move(&mut self, pointer_id: PointerId, position: PxPosition) {
         let _session = self.session.enter();
+        let timestamp = self.input_instant();
         self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange::new(
-            Instant::now(),
+            timestamp,
             pointer_id,
             CursorEventContent::Moved(position),
             GestureState::TapCandidate,
@@ -366,9 +373,10 @@ impl HeadlessRenderer {
         button: PressKeyEventType,
     ) {
         let _session = self.session.enter();
+        let timestamp = self.input_instant();
         self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange::new(
-            Instant::now(),
+            timestamp,
             pointer_id,
             CursorEventContent::Pressed(button),
             GestureState::TapCandidate,
@@ -383,9 +391,10 @@ impl HeadlessRenderer {
         button: PressKeyEventType,
     ) {
         let _session = self.session.enter();
+        let timestamp = self.input_instant();
         self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange::new(
-            Instant::now(),
+            timestamp,
             pointer_id,
             CursorEventContent::Released(button),
             GestureState::TapCandidate,
@@ -401,9 +410,10 @@ impl HeadlessRenderer {
         delta_y: f32,
     ) {
         let _session = self.session.enter();
+        let timestamp = self.input_instant();
         self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange::new(
-            Instant::now(),
+            timestamp,
             pointer_id,
             CursorEventContent::Scroll(ScrollEventContent {
                 delta_x,
@@ -445,13 +455,14 @@ impl HeadlessRenderer {
     pub fn inject_key_event(&mut self, event: impl Into<crate::KeyboardEvent>) {
         let _session = self.session.enter();
         let event = event.into();
+        let timestamp = self.input_instant();
         TesseraRuntime::with_mut(|runtime| {
             runtime
                 .component_tree
                 .focus_owner_mut()
-                .record_keyboard_input(event.state, Instant::now())
+                .record_keyboard_input(event.state, timestamp)
         });
-        self.keyboard.push_event(event);
+        self.keyboard.push_event_at(event, timestamp);
     }
 
     /// Queues a non-repeating press of a named key for the next frame.
@@ -799,16 +810,11 @@ impl HeadlessRenderer {
     /// Render another frame to publish resulting state and focus changes.
     pub fn dispatch_accessibility_action(&mut self, request: accesskit::ActionRequest) -> bool {
         let _session = self.session.enter();
+        let timestamp = self.input_instant();
         let handled = TesseraRuntime::with_mut(|runtime| {
             let (tree, metadatas, focus_owner) =
                 runtime.component_tree.accessibility_dispatch_context();
-            crate::accessibility::dispatch_action(
-                tree,
-                metadatas,
-                focus_owner,
-                request,
-                Instant::now(),
-            )
+            crate::accessibility::dispatch_action(tree, metadatas, focus_owner, request, timestamp)
         });
         flush_pending_focus_callbacks();
         handled

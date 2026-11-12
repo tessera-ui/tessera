@@ -9,7 +9,7 @@ use std::any::TypeId;
 use tessera_foundation::modifier::InteractionState;
 use tessera_ui::{
     ParentDataModifierNode, PointerEventPass, PointerInput, PointerInputModifierNode, Px, State,
-    current_frame_nanos, modifier::ParentDataMap,
+    modifier::ParentDataMap, time::Instant,
 };
 
 use crate::animation::material_motion::{Scalar, Spec};
@@ -34,38 +34,40 @@ impl Default for PressWidthMotion {
 }
 
 impl PressWidthMotion {
-    pub fn update(&mut self, pressed: bool, enabled: bool, frame: u64) {
-        self.advance(frame);
+    pub fn update(&mut self, pressed: bool, enabled: bool) {
         if !enabled {
             *self = Self::default();
             return;
         }
         self.enabled = true;
         if pressed && !self.pressed {
-            self.scalar.retarget(1.0, Spec::ButtonGroupPress, frame);
+            self.scalar.request_retarget(1.0, Spec::ButtonGroupPress);
             self.completing = true;
         }
         self.pressed = pressed;
-        self.finish_press(frame);
+        self.finish_press();
     }
 
-    pub fn pulse(&mut self, frame: u64) {
-        self.advance(frame);
+    pub fn pulse(&mut self) {
         if self.enabled && !self.pressed {
-            self.scalar.retarget(1.0, Spec::ButtonGroupPress, frame);
+            self.scalar.request_retarget(1.0, Spec::ButtonGroupPress);
             self.completing = true;
         }
     }
 
-    pub fn advance(&mut self, frame: u64) {
-        self.scalar.advance(frame);
-        self.finish_press(frame);
+    /// Moves to `now` and returns whether the motion is still running.
+    pub fn advance(&mut self, now: Instant) -> bool {
+        self.scalar.advance(now);
+        self.finish_press();
+        // Applies a release requested by this frame's value at the same time.
+        self.scalar.advance(now);
+        self.is_animating()
     }
 
-    fn finish_press(&mut self, frame: u64) {
+    fn finish_press(&mut self) {
         if !self.pressed && self.completing && self.scalar.value >= 0.75 {
             self.completing = false;
-            self.scalar.retarget(0.0, Spec::ButtonGroupPress, frame);
+            self.scalar.request_retarget(0.0, Spec::ButtonGroupPress);
         }
     }
 
@@ -92,7 +94,6 @@ impl PointerInputModifierNode for WidthObserver {
         next.update(
             self.presented_pressed || self.interaction.with(InteractionState::is_pressed),
             next.enabled,
-            current_frame_nanos(),
         );
         if next != self.motion.get() {
             self.motion.set(next);

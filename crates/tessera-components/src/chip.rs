@@ -7,14 +7,14 @@ use tessera_foundation::modifier::{InteractionState, ModifierExt as _, Padding};
 use tessera_ui::{
     Callback, Color, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     accesskit::{Role, Toggled},
-    current_frame_nanos,
+    launch,
     layout::{MeasureScope, Stack, layout},
     provide_context, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
-    animation::shape_motion::ShapeMotion,
+    animation::{Motion, animate_to, shape_motion::ShapeMotion},
     boxed::boxed,
     icon::icon,
     image::image,
@@ -28,7 +28,7 @@ use crate::{
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
-use motion::{Elevation, Interaction};
+use motion::{Elevation, ElevationTarget, Interaction};
 
 mod motion;
 
@@ -607,39 +607,16 @@ pub fn chip(
     } else {
         Dp::ZERO
     };
-    let elevation = remember(|| Elevation::new(target_elevation));
-    let mut next = elevation.get();
-    next.update(
-        target_elevation,
+    let elevation_target = ElevationTarget {
+        elevation: target_elevation,
         interaction,
-        args.enabled,
-        current_frame_nanos(),
-    );
-    if next != elevation.get() {
-        elevation.set(next);
+        enabled: args.enabled,
+    };
+    let elevation = remember(|| Elevation::new(target_elevation));
+    if !args.enabled && !elevation.with(|motion| motion.is_settled_at(&elevation_target)) {
+        elevation.set(Elevation::new(target_elevation));
     }
-    if next.is_animating() {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |now: u64| {
-                let mut next = elevation.get();
-                next.advance(now);
-                if next != elevation.get() {
-                    elevation.set(next);
-                }
-                if next.is_animating() { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    launch(elevation_target, animate_to(elevation, elevation_target));
     let shadow_elevation = elevation.get().value();
     let target_shape = args.shape.unwrap_or_else(|| {
         if !selectable || args.shape_style == ChipShapeStyle::Standard {
@@ -653,40 +630,14 @@ pub fn chip(
         }
     });
     let shape_motion = remember(|| ShapeMotion::new(target_shape));
-    let mut next = shape_motion.get();
-    next.retarget(
-        target_shape,
-        args.enabled
-            && args.shape.is_none()
-            && selectable
-            && args.shape_style == ChipShapeStyle::Expressive,
-        current_frame_nanos(),
-    );
-    if next != shape_motion.get() {
-        shape_motion.set(next);
+    let animate_shape = args.enabled
+        && args.shape.is_none()
+        && selectable
+        && args.shape_style == ChipShapeStyle::Expressive;
+    if !animate_shape && !shape_motion.with(|motion| motion.is_settled_at(&target_shape)) {
+        shape_motion.with_mut(|motion| motion.snap(target_shape));
     }
-    if next.is_animating() {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |now: u64| {
-                let mut next = shape_motion.get();
-                next.advance(now);
-                if next != shape_motion.get() {
-                    shape_motion.set(next);
-                }
-                if next.is_animating() { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    launch(target_shape, animate_to(shape_motion, target_shape));
     let shape = shape_motion.get().shape();
     let avatar = if variant == ChipVariant::Input {
         args.avatar

@@ -2445,7 +2445,7 @@ mod presentation_regressions {
                     crop(&focused, 1),
                     "actual focus and presentation share the native focused appearance"
                 );
-                renderer.frames(4);
+                renderer.frames(6);
                 let blink_off = renderer.read_pixels();
                 assert_ne!(
                     crop(&blink_off, 0),

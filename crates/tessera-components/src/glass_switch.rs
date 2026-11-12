@@ -10,13 +10,14 @@ use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition,
     accesskit::Role,
-    current_frame_nanos,
+    launch_once,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     remember, tessera,
+    time::Instant,
 };
 
 use crate::{
-    animation,
+    animation::{self, run_frames},
     fluid_glass::{GlassBorder, fluid_glass},
     modifier::ModifierExt as _,
     shape_def::Shape,
@@ -28,7 +29,9 @@ const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 struct GlassSwitchMotion {
     checked: bool,
     progress: f32,
-    last_toggle_frame_nanos: Option<u64>,
+    animating: bool,
+    // The first frame that observes a toggle starts its animation.
+    animation_start: Option<Instant>,
 }
 
 impl GlassSwitchMotion {
@@ -36,7 +39,8 @@ impl GlassSwitchMotion {
         Self {
             checked: initial_state,
             progress: if initial_state { 1.0 } else { 0.0 },
-            last_toggle_frame_nanos: None,
+            animating: false,
+            animation_start: None,
         }
     }
 
@@ -46,25 +50,25 @@ impl GlassSwitchMotion {
 
     fn toggle(&mut self) {
         self.checked = !self.checked;
-        self.last_toggle_frame_nanos = Some(current_frame_nanos());
+        self.animating = true;
+        self.animation_start = None;
     }
 
-    fn update_progress(&mut self, frame_nanos: u64) {
-        if let Some(start_frame_nanos) = self.last_toggle_frame_nanos {
-            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-            let fraction = if animation_nanos == 0 {
-                1.0
-            } else {
-                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
-            };
+    fn update_progress(&mut self, now: Instant) -> bool {
+        if self.animating {
+            let start = *self.animation_start.get_or_insert(now);
+            let fraction = (now.saturating_duration_since(start).as_secs_f32()
+                / ANIMATION_DURATION.as_secs_f32())
+            .min(1.0);
             let target = if self.checked { 1.0 } else { 0.0 };
             self.progress = target * fraction + (1.0 - fraction) * (1.0 - target);
             if fraction >= 1.0 {
-                self.last_toggle_frame_nanos = None;
+                self.animating = false;
+                self.animation_start = None;
                 self.progress = target;
             }
         }
+        self.animating
     }
 
     fn animation_progress(&self) -> f32 {
@@ -72,7 +76,7 @@ impl GlassSwitchMotion {
     }
 
     fn is_animating(&self) -> bool {
-        self.last_toggle_frame_nanos.is_some()
+        self.animating
     }
 }
 
@@ -193,25 +197,7 @@ pub fn glass_switch(
     let thumb_px = thumb_dp.to_px();
 
     if controller.with(|c| c.is_animating()) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating = controller.with_mut(|controller| {
-                    controller.update_progress(frame_nanos);
-                    controller.is_animating()
-                });
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(controller, GlassSwitchMotion::update_progress));
     }
     let progress = controller.with(|c| c.animation_progress());
     let track_color = interpolate_color(track_off_color, track_on_color, progress);

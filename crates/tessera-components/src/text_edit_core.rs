@@ -13,8 +13,7 @@ use glyphon::{
 use tessera_platform::clipboard;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Dp, FocusRequester, LayoutResult, MeasurementError, Px,
-    PxPosition, State, current_frame_nanos, layout::MeasureScope, remember, tessera, time::Instant,
-    winit,
+    PxPosition, State, launch_once, layout::MeasureScope, remember, tessera, time::Instant, winit,
 };
 use winit::keyboard::NamedKey;
 
@@ -1812,8 +1811,7 @@ impl TextLayoutState {
 pub struct TextEditorController {
     fonts: Option<u64>,
     line_height: Px,
-    blink_start_frame_nanos: u64,
-    current_frame_nanos: u64,
+    blink_epoch: u64,
     focus_handler: FocusRequester,
     edit_state: TextEditState,
     selection_state: TextSelectionState,
@@ -2007,7 +2005,6 @@ impl TextEditorController {
     pub fn with_selection_color(size: Dp, line_height: Option<Dp>, selection_color: Color) -> Self {
         let final_line_height = line_height.unwrap_or(Dp(size.0 * 1.2));
         let line_height_px: Px = final_line_height.into();
-        let frame_nanos = current_frame_nanos();
         let mut buffer = glyphon::Buffer::new(
             &mut shaping_fonts(),
             glyphon::Metrics::new(size.to_pixels_f32(), line_height_px.to_f32()),
@@ -2020,8 +2017,7 @@ impl TextEditorController {
         Self {
             line_height: line_height_px,
             fonts: None,
-            blink_start_frame_nanos: frame_nanos,
-            current_frame_nanos: frame_nanos,
+            blink_epoch: 0,
             focus_handler: FocusRequester::new(),
             edit_state: TextEditState {
                 editor,
@@ -2162,27 +2158,14 @@ impl TextEditorController {
         result
     }
 
-    // Returns the cursor blink start timestamp.
-    fn blink_start_frame_nanos(&self) -> u64 {
-        self.blink_start_frame_nanos
-    }
-
-    // Returns the latest frame timestamp observed by this controller.
-    #[cfg(test)]
-    fn current_frame_nanos(&self) -> u64 {
-        self.current_frame_nanos
-    }
-
-    // Updates the latest frame timestamp used by cursor blink rendering.
-    #[cfg(test)]
-    fn update_frame_nanos(&mut self, frame_nanos: u64) {
-        self.current_frame_nanos = frame_nanos;
+    // Counts caret blink restarts; the blink task restarts its phase on the
+    // first frame that observes a new value.
+    fn blink_epoch(&self) -> u64 {
+        self.blink_epoch
     }
 
     fn reset_cursor_blink(&mut self) {
-        let frame_nanos = self.current_frame_nanos.max(current_frame_nanos());
-        self.blink_start_frame_nanos = frame_nanos;
-        self.current_frame_nanos = frame_nanos;
+        self.blink_epoch = self.blink_epoch.wrapping_add(1);
     }
 
     /// Returns the current selection highlight color.
@@ -3590,9 +3573,9 @@ impl tessera_ui::DrawModifierNode for TextEditDraw {
             cursor_visible,
             text_data,
         ) = self.controller.with(|c| {
-            let (blink_start, visible) = self.blink.get();
+            let (blink_epoch, visible) = self.blink.get();
             let cursor_visible = if focused {
-                blink_start != c.blink_start_frame_nanos() || visible
+                blink_epoch != c.blink_epoch() || visible
             } else {
                 self.presentation_focused
             };
@@ -3648,7 +3631,7 @@ pub fn text_edit_core(
         controller,
         layout_version,
     };
-    let initial_blink = (controller.with(|c| c.blink_start_frame_nanos()), true);
+    let initial_blink = (controller.with(|c| c.blink_epoch()), true);
     let blink = remember(|| initial_blink);
     let draw = TextEditDraw {
         controller,
@@ -3660,33 +3643,30 @@ pub fn text_edit_core(
         .child(move || {
             let focused = controller.with(|c| c.focus_handler().is_focused());
             if focused {
-                // Rebuilds this component on every animated frame.
-                let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-                let _ = frame_clock.get();
-                tessera_ui::launch_once(async move {
-                    let step = move |frame_nanos: u64| {
-                        let (is_focused, blink_start) = controller.with(|controller| {
+                launch_once(async move {
+                    let mut phase: Option<(u64, Instant)> = None;
+                    loop {
+                        let now = tessera_ui::with_frame_time(|now| now).await;
+                        let (is_focused, epoch) = controller.with(|controller| {
                             (
                                 controller.focus_handler().is_focused(),
-                                controller.blink_start_frame_nanos(),
+                                controller.blink_epoch(),
                             )
                         });
                         if !is_focused {
-                            return false;
+                            break;
                         }
-                        let visible =
-                            frame_nanos.saturating_sub(blink_start) % 1_000_000_000 < 500_000_000;
-                        let next = (blink_start, visible);
+                        let start = match phase {
+                            Some((phase_epoch, start)) if phase_epoch == epoch => start,
+                            _ => {
+                                phase = Some((epoch, now));
+                                now
+                            }
+                        };
+                        let elapsed = now.saturating_duration_since(start).as_nanos();
+                        let next = (epoch, elapsed % 1_000_000_000 < 500_000_000);
                         if blink.get() != next {
                             blink.set(next);
-                        }
-                        true
-                    };
-                    loop {
-                        let now = tessera_ui::next_frame().await;
-                        frame_clock.set(now);
-                        if !step(now) {
-                            break;
                         }
                     }
                 });
@@ -4705,13 +4685,11 @@ mod tests {
         let runtime = tessera_ui::RuntimeSession::new();
         let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
-        controller.update_frame_nanos(123);
-        controller.blink_start_frame_nanos = 0;
+        let epoch = controller.blink_epoch();
 
         controller.set_text_and_selection("hello!", TextSelection::collapsed(6));
 
-        assert_eq!(controller.blink_start_frame_nanos(), 123);
-        assert_eq!(controller.current_frame_nanos(), 123);
+        assert_ne!(controller.blink_epoch(), epoch);
     }
 
     #[test]

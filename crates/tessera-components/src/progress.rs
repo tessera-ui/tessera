@@ -3,14 +3,16 @@
 //! ## Usage
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
+use std::time::Duration;
+
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
     ParentConstraint, Px, PxPosition, State,
     accesskit::Role,
-    current_frame_nanos,
+    launch_once,
     layout::{MeasureScope, Stack, layout},
-    remember, tessera, use_context,
+    remember, tessera, use_context, with_frame_time,
 };
 
 use crate::{
@@ -201,8 +203,7 @@ struct CircularProgressLayout {
     track_color: Color,
     stroke_cap: ProgressStrokeCap,
     gap_size: Dp,
-    animation_start_nanos: u64,
-    frame_tick: State<u64>,
+    elapsed: State<Duration>,
 }
 
 impl tessera_ui::LayoutPolicy for CircularProgressLayout {
@@ -250,11 +251,7 @@ impl tessera_ui::DrawModifierNode for CircularProgressLayout {
             };
             (270.0, progress * 360.0)
         } else {
-            let elapsed_ms = self
-                .frame_tick
-                .get()
-                .saturating_sub(self.animation_start_nanos) as f32
-                / 1_000_000.0;
+            let elapsed_ms = self.elapsed.get().as_secs_f32() * 1000.0;
             let cycle_ms = elapsed_ms % 6000.0;
             let rotation =
                 (cycle_ms / 6000.0) * 1080.0 + circular_additional_rotation_degrees(cycle_ms);
@@ -342,10 +339,24 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
-fn linear_cycle_progress(start_nanos: u64, frame_nanos: u64, duration_ms: u32) -> f32 {
-    let elapsed_ms = frame_nanos.saturating_sub(start_nanos) / 1_000_000;
-    let duration_ms = duration_ms.max(1) as u64;
+fn linear_cycle_progress(elapsed: Duration, duration_ms: u32) -> f32 {
+    let elapsed_ms = elapsed.as_millis();
+    let duration_ms = u128::from(duration_ms.max(1));
     (elapsed_ms % duration_ms) as f32 / duration_ms as f32
+}
+
+/// Publishes the time spent indeterminate while `active` holds, resuming from
+/// the previously published value.
+async fn track_indeterminate_time(active: State<bool>, elapsed: State<Duration>) {
+    let mut origin = None;
+    loop {
+        let now = with_frame_time(|now| now).await;
+        if !active.get() {
+            break;
+        }
+        let origin = *origin.get_or_insert_with(|| now.checked_sub(elapsed.get()).unwrap_or(now));
+        elapsed.set(now.saturating_duration_since(origin));
+    }
 }
 
 fn keyframe_0_to_1(
@@ -529,31 +540,12 @@ pub fn linear_progress_indicator(
     let draw_stop_indicator = draw_stop_indicator.unwrap_or(true);
 
     layout(Stack).modifier(modifier).child(move || {
-        let animation_start = remember(current_frame_nanos);
-        let frame_tick = remember(current_frame_nanos);
+        let elapsed = remember(|| Duration::ZERO);
         let should_receive_frames = remember(|| progress.is_none());
         should_receive_frames.set(progress.is_none());
 
         if should_receive_frames.get() {
-            // Rebuilds this component on every animated frame.
-            let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-            let _ = frame_clock.get();
-            tessera_ui::launch_once(async move {
-                let step = move |frame_nanos: u64| {
-                    if !should_receive_frames.get() {
-                        return false;
-                    }
-                    frame_tick.set(frame_nanos);
-                    true
-                };
-                loop {
-                    let now = tessera_ui::next_frame().await;
-                    frame_clock.set(now);
-                    if !step(now) {
-                        break;
-                    }
-                }
-            });
+            launch_once(track_indeterminate_time(should_receive_frames, elapsed));
         }
 
         let segment_shape = if stroke_cap == ProgressStrokeCap::Butt {
@@ -586,11 +578,7 @@ pub fn linear_progress_indicator(
         let animation_cycle = if progress.is_some() {
             None
         } else {
-            Some(linear_cycle_progress(
-                animation_start.get(),
-                frame_tick.get(),
-                1750,
-            ))
+            Some(linear_cycle_progress(elapsed.get(), 1750))
         };
 
         tessera_ui::layout::layout(LinearProgressLayout {
@@ -729,31 +717,12 @@ pub fn circular_progress_indicator(
     let track_color = track_color.unwrap_or(scheme.secondary_container);
     let stroke_cap = stroke_cap.unwrap_or_default();
     let gap_size = gap_size.unwrap_or(ProgressIndicatorDefaults::CIRCULAR_INDICATOR_TRACK_GAP_SIZE);
-    let animation_start = remember(current_frame_nanos);
-    let frame_tick = remember(current_frame_nanos);
+    let elapsed = remember(|| Duration::ZERO);
     let should_receive_frames = remember(|| progress.is_none());
     should_receive_frames.set(progress.is_none());
 
     if should_receive_frames.get() {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                if !should_receive_frames.get() {
-                    return false;
-                }
-                frame_tick.set(frame_nanos);
-                true
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(track_indeterminate_time(should_receive_frames, elapsed));
     }
 
     let mut semantics = SemanticsArgs {
@@ -780,8 +749,7 @@ pub fn circular_progress_indicator(
         track_color,
         stroke_cap,
         gap_size,
-        animation_start_nanos: animation_start.get(),
-        frame_tick,
+        elapsed,
     };
     tessera_ui::layout::layout(policy.clone())
         .modifier(Modifier::new().semantics(semantics))

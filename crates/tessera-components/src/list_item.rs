@@ -6,13 +6,13 @@
 
 use tessera_foundation::modifier::{InteractionState, ModifierExt as _, Padding};
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State, current_frame_nanos,
+    Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State, launch,
     modifier::ModifierCapabilityExt as _, provide_context, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    animation::shape_motion::ShapeMotion,
+    animation::{Motion, animate_to, shape_motion::ShapeMotion},
     boxed::boxed,
     icon::IconSize,
     shape_def::{RoundedCorner, Shape},
@@ -439,11 +439,10 @@ pub fn list_item(
         shapes.shape
     };
     let motion = remember(|| ShapeMotion::new(target));
-    let mut next = motion.get();
-    next.retarget(target, enabled, current_frame_nanos());
-    if next != motion.get() {
-        motion.set(next);
+    if !enabled && !motion.with(|motion| motion.is_settled_at(&target)) {
+        motion.with_mut(|motion| motion.snap(target));
     }
+    launch(target, animate_to(motion, target));
     let content_padding = content_padding.unwrap_or(ListItemDefaults::CONTENT_PADDING);
     let tonal_elevation = tonal_elevation.unwrap_or(ListItemDefaults::TONAL_ELEVATION);
     let shadow_elevation = shadow_elevation.unwrap_or(ListItemDefaults::SHADOW_ELEVATION);
@@ -462,42 +461,7 @@ pub fn list_item(
         colors.trailing_color(enabled, selected, dragged),
     ];
     let color_motion = remember(|| color_motion::ListColorsMotion::new(target_colors));
-    let mut next_colors = color_motion.get();
-    next_colors.retarget(target_colors, current_frame_nanos());
-    if next_colors != color_motion.get() {
-        color_motion.set(next_colors);
-    }
-    if next.is_animating() || next_colors.is_animating() {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                let mut next = motion.get();
-                next.advance(frame);
-                if next != motion.get() {
-                    motion.set(next);
-                }
-                let mut next_colors = color_motion.get();
-                next_colors.advance(frame);
-                if next_colors != color_motion.get() {
-                    color_motion.set(next_colors);
-                }
-                if next.is_animating() || next_colors.is_animating() {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    launch(target_colors, animate_to(color_motion, target_colors));
     let [
         container_color,
         headline_color,
@@ -505,7 +469,7 @@ pub fn list_item(
         supporting_color,
         leading_color,
         trailing_color,
-    ] = next_colors.value();
+    ] = color_motion.with(|motion| motion.value());
 
     let accessibility_label = accessibility_label
         .or_else(|| (content.is_none() && !headline.is_empty()).then(|| headline.clone()));

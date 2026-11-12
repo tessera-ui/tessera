@@ -4,7 +4,7 @@
 //!
 //! Browse photos, media, and featured content in a scrollable collection.
 
-use std::{fmt, sync::Arc};
+use std::{fmt, sync::Arc, time::Duration};
 
 use tessera_foundation::{
     gesture::{DragAxis, DragRecognizer, DragSettings},
@@ -18,17 +18,19 @@ use tessera_ui::{
     RenderSlotWith, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     dp::scale_factor,
-    key,
+    key, launch_once,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember,
     render::{ClipRegion, ClipShape},
     scroll::normalize_platform_scroll_delta,
-    tessera, winit,
+    tessera,
+    time::Instant,
+    winit, with_frame_time,
 };
 
 use crate::{
-    animation::Animatable,
+    animation::{Animatable, run_frames},
     shape_def::{ResolvedShape, RoundedCorner, Shape},
 };
 
@@ -156,9 +158,9 @@ pub struct CarouselController {
     pending: Option<(usize, bool)>,
     dragging: bool,
     drag_velocity: f32,
-    last_input: Option<u64>,
-    last_frame: Option<u64>,
-    wheel_idle: Option<u64>,
+    last_input: Option<Instant>,
+    last_frame: Option<Instant>,
+    wheel_idle: Option<Instant>,
 }
 
 impl Default for CarouselController {
@@ -231,19 +233,12 @@ impl CarouselController {
     }
 
     fn request(&mut self, item: usize, animate: bool) {
-        let now = if animate {
-            tessera_ui::current_frame_nanos()
-        } else {
-            0
-        };
-        self.request_at(item, animate, now);
-    }
-
-    fn request_at(&mut self, item: usize, animate: bool, now: u64) {
         self.dragging = false;
         self.free_velocity = 0.0;
         self.wheel_idle = None;
-        self.last_frame = animate.then_some(now);
+        if !self.needs_frame() {
+            self.last_frame = None;
+        }
         self.current_item = self
             .config
             .map(|config| item.min(config.count.saturating_sub(1)))
@@ -350,13 +345,12 @@ impl CarouselController {
         self.last_input = None;
     }
 
-    fn end_drag(&mut self, behavior: CarouselFlingBehavior, now: u64, cancelled: bool) {
+    fn end_drag(&mut self, behavior: CarouselFlingBehavior, now: Option<Instant>, cancelled: bool) {
         self.dragging = false;
         let velocity = if cancelled
-            || self
-                .last_input
-                .is_none_or(|last| now.saturating_sub(last) > 100_000_000)
-        {
+            || self.last_input.zip(now).is_none_or(|(last, now)| {
+                now.saturating_duration_since(last) > Duration::from_millis(100)
+            }) {
             0.0
         } else {
             self.drag_velocity
@@ -365,7 +359,7 @@ impl CarouselController {
         match behavior {
             CarouselFlingBehavior::Free => {
                 self.free_velocity = velocity;
-                self.last_frame = Some(now);
+                self.last_frame = None;
             }
             _ => {
                 let current = self.nearest(self.motion.value());
@@ -382,7 +376,7 @@ impl CarouselController {
                     };
                 }
                 self.motion = self.motion.with_velocity(velocity);
-                self.request_at(target, true, now);
+                self.request(target, true);
             }
         }
     }
@@ -394,10 +388,16 @@ impl CarouselController {
                 || self.wheel_idle.is_some())
     }
 
-    fn tick(&mut self, now: u64) {
+    /// Advances to `now` and returns whether another frame is needed.
+    fn tick(&mut self, now: Instant) -> bool {
+        self.advance(now);
+        self.needs_frame()
+    }
+
+    fn advance(&mut self, now: Instant) {
         let dt = self
             .last_frame
-            .map(|last| now.saturating_sub(last) as f32 * 1.0e-9)
+            .map(|last| now.saturating_duration_since(last).as_secs_f32())
             .unwrap_or(1.0 / 60.0)
             .clamp(0.0, 0.05);
         self.last_frame = Some(now);
@@ -409,11 +409,11 @@ impl CarouselController {
         }
         if self
             .wheel_idle
-            .is_some_and(|last| now.saturating_sub(last) >= 120_000_000)
+            .is_some_and(|last| now.saturating_duration_since(last) >= Duration::from_millis(120))
         {
             self.wheel_idle = None;
             if self.behavior != CarouselFlingBehavior::Free {
-                self.request_at(self.nearest(self.motion.value()), true, now);
+                self.request(self.nearest(self.motion.value()), true);
             }
         }
         if self.free_velocity.abs() > 0.1 {
@@ -681,7 +681,7 @@ impl PointerInputModifierNode for CarouselInput {
                 && point.x < input.computed_data.width.to_f32()
                 && point.y < input.computed_data.height.to_f32()
         });
-        let now = tessera_ui::current_frame_nanos();
+        let now = input.pointer_changes.last().map(|change| change.timestamp);
         if inside {
             for change in input.pointer_changes.iter_mut() {
                 if change.is_consumed() {
@@ -711,7 +711,7 @@ impl PointerInputModifierNode for CarouselInput {
                             state.free_velocity = 0.0;
                             let moved = state.move_by(if self.reverse { delta } else { -delta });
                             if moved && self.behavior != CarouselFlingBehavior::Free {
-                                state.wheel_idle = Some(now);
+                                state.wheel_idle = Some(change.timestamp);
                             }
                             moved
                         });
@@ -751,7 +751,8 @@ impl PointerInputModifierNode for CarouselInput {
                 } * if self.reverse { 1.0 } else { -1.0 };
                 let dt = state
                     .last_input
-                    .map(|last| now.saturating_sub(last) as f32 * 1.0e-9)
+                    .zip(now)
+                    .map(|(last, now)| now.saturating_duration_since(last).as_secs_f32())
                     .unwrap_or(1.0 / 60.0)
                     .clamp(0.004, 0.1);
                 let window = input
@@ -759,7 +760,7 @@ impl PointerInputModifierNode for CarouselInput {
                     .map_vector(PxPosition::from_f32_xy(delta, delta));
                 let window_delta = if self.vertical { window.y } else { window.x };
                 state.drag_velocity = state.drag_velocity * 0.6 + window_delta / dt * 0.4;
-                state.last_input = Some(now);
+                state.last_input = now.or(state.last_input);
                 state.move_by(delta);
             });
         }
@@ -1128,24 +1129,13 @@ pub fn carousel(
         }
     } else if navigation.pending.get().is_some() {
         tessera_ui::focus::defer_keyboard_until_layout();
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |_: u64| {
-                if navigation.finish(controller.with(|state| !state.needs_frame())) {
-                    false
-                } else {
-                    tessera_ui::focus::defer_keyboard_until_layout();
-                    true
-                }
-            };
+        launch_once(async move {
             loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
+                with_frame_time(|_| ()).await;
+                if navigation.finish(controller.with(|state| !state.needs_frame())) {
                     break;
                 }
+                tessera_ui::focus::defer_keyboard_until_layout();
             }
         });
     }
@@ -1165,26 +1155,7 @@ pub fn carousel(
         }));
     }
     if controller.with(CarouselController::needs_frame) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |now: u64| {
-                controller.with_mut(|state| state.tick(now));
-                if controller.with(CarouselController::needs_frame) {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(controller, CarouselController::tick));
     }
     let density = scale_factor() as f32;
     let min_small = finite_dp(min_small_item_width.unwrap_or(Dp(40.0)), 40.0).max(1.0);
@@ -1382,6 +1353,7 @@ mod tests {
     use tessera_ui::{Color, MOUSE_POINTER_ID, PressKeyEventType, testing::UiTest};
 
     use crate::{
+        animation::test_instant as at,
         boxed::boxed,
         button::button,
         column::column,
@@ -1432,9 +1404,9 @@ mod tests {
     }
 
     fn settle(state: &mut CarouselController) {
-        let start = state.last_frame.unwrap_or(0);
+        let start = state.last_frame.unwrap_or(at(0));
         for frame in 1..=240 {
-            state.tick(start + frame * 16_666_667);
+            state.tick(start + Duration::from_nanos(frame * 16_666_667));
         }
         assert!(
             !state.needs_frame(),
@@ -1521,7 +1493,7 @@ mod tests {
             state.move_by(40.0);
             assert_eq!(state.current_item(), 0);
             assert!(state.navigation_required(0));
-            state.request_at(0, true, 0);
+            state.request(0, true);
             settle(&mut state);
             assert_eq!(state.motion.value(), 0.0);
             assert!(!state.navigation_required(0));
@@ -1535,7 +1507,7 @@ mod tests {
         state.move_by(-40.0);
         assert_eq!(state.current_item(), 2);
         assert!(state.navigation_required(2));
-        state.request_at(2, true, 0);
+        state.request(2, true);
         settle(&mut state);
         assert_eq!(state.motion.value(), end);
         assert!(!state.navigation_required(2));
@@ -1548,7 +1520,7 @@ mod tests {
         let mut state = CarouselController::default();
         state.configure(configuration(CarouselVariant::MultiBrowse, 100));
         state.animate_to_item(90);
-        state.tick(16_666_667);
+        state.tick(at(16_666_667));
         let partial = state.motion.value();
         assert!(partial > 0.0);
         state.animate_to_item(2);
@@ -1577,8 +1549,8 @@ mod tests {
         free.configure(configuration(CarouselVariant::Uncontained, 100));
         free.move_by(53.25);
         free.drag_velocity = 400.0;
-        free.last_input = Some(1);
-        free.end_drag(CarouselFlingBehavior::Free, 1, false);
+        free.last_input = Some(at(1));
+        free.end_drag(CarouselFlingBehavior::Free, Some(at(1)), false);
         settle(&mut free);
         let snap = free
             .strategy
@@ -1591,8 +1563,8 @@ mod tests {
         single.configure(configuration(CarouselVariant::MultiBrowse, 100));
         single.move_by(30.0);
         single.drag_velocity = 4000.0;
-        single.last_input = Some(1);
-        single.end_drag(CarouselFlingBehavior::SingleAdvance, 1, false);
+        single.last_input = Some(at(1));
+        single.end_drag(CarouselFlingBehavior::SingleAdvance, Some(at(1)), false);
         assert_eq!(single.current_item(), 1);
         settle(&mut single);
         assert_eq!(single.current_item(), 1);
@@ -1603,7 +1575,7 @@ mod tests {
         let mut state = CarouselController::default();
         state.configure(configuration(CarouselVariant::MultiBrowse, 10));
         state.move_by(53.25);
-        state.wheel_idle = Some(0);
+        state.wheel_idle = Some(at(0));
         state.behavior = CarouselFlingBehavior::Free;
         settle(&mut state);
         assert_eq!(state.motion.value(), 53.25);

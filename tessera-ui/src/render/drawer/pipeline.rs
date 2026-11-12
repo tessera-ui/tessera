@@ -173,7 +173,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
                     phase = "draw",
                     commands = commands.len(),
                     elapsed_us = timing.elapsed().as_micros(),
-                    frame_nanos = crate::current_frame_nanos(),
+                    frame_nanos = crate::runtime::frame_nanos_since_origin(),
                     "pipeline_cpu"
                 );
             }

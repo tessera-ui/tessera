@@ -4,6 +4,10 @@
 //!
 //! Preserve motion timing and velocity across interrupted state changes.
 
+use std::time::Duration;
+
+use tessera_ui::time::Instant;
+
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Spec {
     Spatial,
@@ -34,11 +38,19 @@ pub(crate) struct Scalar {
     target: f64,
     origin: f64,
     origin_velocity: f64,
-    start: u64,
-    sampled: u64,
-    pub(crate) duration_millis: u64,
+    start: Option<Instant>,
+    sampled: Option<Instant>,
+    pub(crate) duration: Duration,
     spec: Spec,
     active: bool,
+    request: Option<Request>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct Request {
+    target: f64,
+    spec: Spec,
+    restart: bool,
 }
 
 impl Scalar {
@@ -49,11 +61,12 @@ impl Scalar {
             target: value,
             origin: value,
             origin_velocity: 0.0,
-            start: 0,
-            sampled: 0,
-            duration_millis: 0,
+            start: None,
+            sampled: None,
+            duration: Duration::ZERO,
             spec: Spec::Spatial,
             active: false,
+            request: None,
         }
     }
 
@@ -61,15 +74,38 @@ impl Scalar {
         *self = Self::new(value);
     }
 
-    pub fn retarget(&mut self, target: f64, spec: Spec, frame: u64) {
+    /// Retargets the motion at the next [`Self::advance`].
+    ///
+    /// Use it where no frame time is available, such as in input handlers.
+    pub fn request_retarget(&mut self, target: f64, spec: Spec) {
+        self.request = Some(Request {
+            target,
+            spec,
+            restart: false,
+        });
+    }
+
+    /// Starts toward `target` from the current value and velocity at the next
+    /// [`Self::advance`].
+    pub fn request_start(&mut self, target: f64, spec: Spec) {
+        self.request = Some(Request {
+            target,
+            spec,
+            restart: true,
+        });
+    }
+
+    pub fn retarget(&mut self, target: f64, spec: Spec, now: Instant) {
+        self.request = None;
         if self.target == target && (self.spec == spec || !self.active) {
             return;
         }
-        self.start_to(target, spec, frame);
+        self.start_to(target, spec, now);
     }
 
-    pub(crate) fn start_to(&mut self, target: f64, spec: Spec, frame: u64) {
-        self.advance(frame);
+    pub(crate) fn start_to(&mut self, target: f64, spec: Spec, now: Instant) {
+        self.request = None;
+        self.advance(now);
         self.origin = self.value;
         self.origin_velocity = if spec == Spec::Removal {
             0.0
@@ -79,15 +115,16 @@ impl Scalar {
         self.velocity = self.origin_velocity;
         self.target = target;
         self.spec = spec;
-        self.start = frame.max(self.sampled);
-        self.sampled = self.start;
-        self.duration_millis = self.duration();
+        let start = self.sampled.map_or(now, |sampled| now.max(sampled));
+        self.start = Some(start);
+        self.sampled = Some(start);
+        self.duration = self.settling_duration();
         self.active = self.value != target || self.velocity != 0.0;
     }
 
-    fn duration(&self) -> u64 {
+    fn settling_duration(&self) -> Duration {
         if self.spec == Spec::Removal {
-            return 100;
+            return Duration::from_millis(100);
         }
         let displacement = self.origin - self.target;
         let (stiffness, damping) = self.spec.spring();
@@ -107,7 +144,7 @@ impl Scalar {
             };
             let mut left = if value(peak).abs() > 0.01 { peak } else { 0.0 };
             if value(left).abs() <= 0.01 {
-                return 0;
+                return Duration::ZERO;
             }
             let zero = -displacement / coefficient;
             let mut right = if left == 0.0 && zero > 0.0 {
@@ -131,16 +168,27 @@ impl Scalar {
             }
             right
         };
-        (seconds * 1000.0) as u64
+        Duration::from_millis((seconds * 1000.0) as u64)
     }
 
-    pub fn advance(&mut self, frame: u64) {
+    pub fn advance(&mut self, now: Instant) {
+        if let Some(request) = self.request.take() {
+            if request.restart {
+                self.start_to(request.target, request.spec, now);
+            } else {
+                self.retarget(request.target, request.spec, now);
+            }
+        }
         if !self.active {
             return;
         }
-        self.sampled = frame.max(self.sampled);
-        let elapsed = self.sampled.saturating_sub(self.start);
-        if elapsed / 1_000_000 >= self.duration_millis {
+        let (Some(start), Some(sampled)) = (self.start, self.sampled) else {
+            return;
+        };
+        let sampled = now.max(sampled);
+        self.sampled = Some(sampled);
+        let elapsed = sampled.saturating_duration_since(start);
+        if elapsed >= self.duration {
             self.value = self.target;
             self.velocity = 0.0;
             self.active = false;
@@ -150,7 +198,7 @@ impl Scalar {
             return;
         }
         let (stiffness, damping) = self.spec.spring();
-        let seconds = (elapsed / 1_000_000) as f64 / 1000.0;
+        let seconds = elapsed.as_secs_f64();
         let omega = stiffness.sqrt();
         let displacement = self.origin - self.target;
         let decay = omega * damping;
@@ -171,7 +219,8 @@ impl Scalar {
         self.velocity = envelope * velocity;
     }
 
+    /// Returns whether the motion runs or has a pending request.
     pub fn is_animating(&self) -> bool {
-        self.active
+        self.active || self.request.is_some()
     }
 }

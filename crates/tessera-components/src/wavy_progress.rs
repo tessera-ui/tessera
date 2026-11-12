@@ -13,11 +13,12 @@ mod tests;
 
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, accesskit::Role,
-    current_frame_nanos, layout::MeasureScope, remember, tessera, use_context,
+    Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, accesskit::Role, launch,
+    layout::MeasureScope, remember, tessera, time::Instant, use_context,
 };
 
 use crate::{
+    animation::{Motion as FrameMotion, animate_to},
     progress::{ProgressStrokeCap, cubic_bezier_easing},
     theme::MaterialTheme,
 };
@@ -199,33 +200,8 @@ pub fn circular_wavy_progress_indicator(
         paused: paused.unwrap_or(false),
         circular: true,
     };
-    let now = current_frame_nanos();
-    let clock = remember(|| Clock::new(motion, now));
-    if clock.with(|clock| clock.motion != motion) {
-        clock.with_mut(|clock| clock.configure(motion, now));
-    }
-    if clock.with(Clock::needs_frames) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                clock.with_mut(|clock| clock.advance(frame));
-                if clock.with(Clock::needs_frames) {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    let clock = remember(|| Clock::new(motion));
+    launch(motion, animate_to(clock, motion));
     let cache = remember(Cache::default).get();
     let clock = clock.get();
     let (fraction, rotation) = progress
@@ -311,18 +287,18 @@ struct Motion {
 struct Clock {
     motion: Motion,
     elapsed: u64,
-    frame: u64,
+    last_frame: Option<Instant>,
     phase: f64,
     amplitude_origin: f32,
     amplitude_start: u64,
 }
 
 impl Clock {
-    fn new(motion: Motion, frame: u64) -> Self {
+    fn new(motion: Motion) -> Self {
         Self {
             motion,
             elapsed: 0,
-            frame,
+            last_frame: None,
             phase: 0.0,
             amplitude_origin: motion.amplitude,
             amplitude_start: 0,
@@ -351,8 +327,10 @@ impl Clock {
                 || (self.amplitude() > 0.0 && self.motion.period_nanos.is_some()))
     }
 
-    fn advance(&mut self, frame: u64) {
-        let delta = frame.saturating_sub(self.frame);
+    fn tick(&mut self, now: Instant) {
+        let delta = self.last_frame.map_or(0, |last| {
+            u64::try_from(now.saturating_duration_since(last).as_nanos()).unwrap_or(u64::MAX)
+        });
         if !self.motion.paused
             && (!self.motion.circular || self.amplitude() > 0.0)
             && let Some(period) = self.motion.period_nanos
@@ -365,11 +343,11 @@ impl Clock {
         if self.needs_frames() {
             self.elapsed = self.elapsed.saturating_add(delta);
         }
-        self.frame = frame;
+        self.last_frame = Some(now);
     }
 
-    fn configure(&mut self, motion: Motion, frame: u64) {
-        self.advance(frame);
+    fn configure(&mut self, motion: Motion, now: Instant) {
+        self.tick(now);
         if motion.amplitude != self.motion.amplitude {
             self.amplitude_origin = if motion.paused {
                 motion.amplitude
@@ -382,6 +360,23 @@ impl Clock {
             self.phase = 0.0;
         }
         self.motion = motion;
+    }
+}
+
+impl FrameMotion for Clock {
+    type Target = Motion;
+
+    fn is_settled_at(&self, target: &Motion) -> bool {
+        self.motion == *target && !self.needs_frames()
+    }
+
+    fn retarget(&mut self, target: Motion, now: Instant) {
+        self.configure(target, now);
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        self.tick(now);
+        self.needs_frames()
     }
 }
 
@@ -518,33 +513,8 @@ pub fn linear_wavy_progress_indicator(
         paused: paused.unwrap_or(false),
         circular: false,
     };
-    let now = current_frame_nanos();
-    let clock = remember(|| Clock::new(motion, now));
-    if clock.with(|clock| clock.motion != motion) {
-        clock.with_mut(|clock| clock.configure(motion, now));
-    }
-    if clock.with(Clock::needs_frames) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                clock.with_mut(|clock| clock.advance(frame));
-                if clock.with(Clock::needs_frames) {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    let clock = remember(|| Clock::new(motion));
+    launch(motion, animate_to(clock, motion));
     let clock = clock.get();
     let fractions = progress
         .map(|progress| [[0.0, progress], [0.0, 0.0]])

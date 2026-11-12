@@ -14,11 +14,9 @@ use tessera_foundation::{
 use tessera_ui::{
     Callback, CursorEventContent, Dp, Modifier, PointerEventPass, PointerInput,
     PointerInputModifierNode, PressKeyEventType, PxPosition, RenderSlot, State,
-    current_frame_nanos, current_frame_time,
     layout::{Stack, layout},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
-    time::Instant,
 };
 
 use crate::{
@@ -60,7 +58,6 @@ impl SheetPointerGesture {
     }
 
     fn preview(&mut self, input: &mut PointerInput<'_>) -> GestureEnd {
-        let now = current_frame_time().unwrap_or_else(Instant::now);
         let within = input
             .cursor_position_rel
             .map(|p| is_position_inside_bounds(input.computed_data, p))
@@ -81,7 +78,7 @@ impl SheetPointerGesture {
                 self.pointer = Some(change.pointer_id);
                 self.claimed = false;
                 self.velocity = Some(ScrollVelocityTracker::new(
-                    now,
+                    change.timestamp,
                     Duration::from_millis(90),
                     Duration::from_millis(65),
                 ));
@@ -98,6 +95,7 @@ impl SheetPointerGesture {
             .pointer_changes
             .iter_mut()
             .find(|change| Some(change.pointer_id) == self.pointer);
+        let now = sample.as_ref().map(|change| change.timestamp);
         let result = self.recognizer.update(
             PointerEventPass::Main,
             sample.map(std::slice::from_mut).unwrap_or(&mut []),
@@ -112,7 +110,8 @@ impl SheetPointerGesture {
                 velocity: self
                     .velocity
                     .take()
-                    .and_then(|mut v| v.resolve(now))
+                    .zip(now)
+                    .and_then(|(mut v, now)| v.resolve(now))
                     .map(|v| input.local_delta(v.x, 0.0).0)
                     .unwrap_or(0.0),
             };
@@ -124,17 +123,17 @@ impl SheetPointerGesture {
     }
 
     fn main(&mut self, input: &mut PointerInput<'_>) -> Option<(bool, f32)> {
-        let moved = input.pointer_changes.iter().any(|c| {
-            !c.is_consumed()
+        let now = input.pointer_changes.iter().rev().find_map(|c| {
+            (!c.is_consumed()
                 && Some(c.pointer_id) == self.pointer
-                && matches!(c.content, CursorEventContent::Moved(_))
-        });
-        if !moved || (!self.claimed && !self.pending_motion) {
+                && matches!(c.content, CursorEventContent::Moved(_)))
+            .then_some(c.timestamp)
+        })?;
+        if !self.claimed && !self.pending_motion {
             return None;
         }
         let started = !self.claimed;
         self.claimed = true;
-        let now = current_frame_time().unwrap_or_else(Instant::now);
         if let Some(velocity) = &mut self.velocity {
             let window = input
                 .local_to_window
@@ -162,8 +161,7 @@ impl PointerInputModifierNode for SheetPointerNode {
         if input.pass == PointerEventPass::Initial {
             let end = self.gesture.with_mut(|gesture| gesture.preview(&mut input));
             if end.cancelled {
-                self.controller
-                    .with_mut(|c| c.drag.settle(current_frame_nanos()));
+                self.controller.with_mut(SideSheetController::settle_drag);
             }
             if end.released
                 && self
@@ -178,7 +176,7 @@ impl PointerInputModifierNode for SheetPointerNode {
             {
                 self.controller.with_mut(|controller| {
                     if started {
-                        controller.drag.grab(current_frame_nanos());
+                        controller.grab();
                     }
                     controller.apply_drag_delta(delta, self.position.get());
                 });

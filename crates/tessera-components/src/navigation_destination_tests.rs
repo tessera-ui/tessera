@@ -165,8 +165,8 @@ fn rail_badge_moves_from_icon_overlap_to_trailing_label_without_changing_target_
     assert_eq!(badge.y.0, icon.y.0 - 2);
     let options = options_probe.get().expect("mounted destination options");
     options.with_mut(|options| options.expanded = true);
-    session.frames(1);
-    let expanded = session.advance(std::time::Duration::from_nanos(383_333_333));
+    session.frames(2);
+    let expanded = session.advance(std::time::Duration::from_nanos(366_666_666));
     expanded.node("rail").size(220, 300);
     let icon = expanded.node("rail-icon").bounds();
     let badge = expanded.node("rail-badge").bounds();
@@ -221,8 +221,8 @@ fn expanded_rail_wraps_large_labels_before_the_badge_and_grows_the_item() {
         options.scale = 2.0;
         options.label = "Saved messages".into();
     });
-    session.frames(1);
-    let large = session.advance(std::time::Duration::from_nanos(383_333_333));
+    session.frames(2);
+    let large = session.advance(std::time::Duration::from_nanos(366_666_666));
     let icon = large.node("rail-icon").bounds();
     let badge = large.node("rail-badge").bounds();
     assert!(badge.x.0 > icon.x.0 + icon.width.0 + 8);

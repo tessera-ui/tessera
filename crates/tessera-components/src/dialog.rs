@@ -10,15 +10,22 @@ use tessera_ui::{
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
     RenderSlotWith, State,
     accesskit::Role,
-    current_frame_nanos,
+    launch,
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    provide_context, remember, remember_with_key, tessera, use_context, winit,
+    provide_context, remember, remember_with_key,
+    system_back::SystemBackEvent,
+    tessera,
+    time::Instant,
+    use_context, winit,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    animation::visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
+    animation::{
+        Motion, run_frames,
+        visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
+    },
     app_bar::top_app_bar,
     boxed::boxed,
     button::button,
@@ -109,6 +116,7 @@ pub(crate) fn register_dialog_accessibility(
 pub struct DialogController {
     is_open: bool,
     motion: VisibilityMotion,
+    requests: u32,
 }
 
 impl DialogController {
@@ -117,22 +125,25 @@ impl DialogController {
         Self {
             is_open: initial_open,
             motion: VisibilityMotion::new(initial_open, false),
+            requests: 0,
         }
     }
 
     /// Opens the dialog, starting the animation if necessary.
     pub fn open(&mut self) {
         if !self.is_open {
-            self.motion.retarget(true, current_frame_nanos());
+            self.motion.request(true);
             self.is_open = true;
+            self.requests = self.requests.wrapping_add(1);
         }
     }
 
     /// Closes the dialog, starting the closing animation if necessary.
     pub fn close(&mut self) {
         if self.is_open {
-            self.motion.retarget(false, current_frame_nanos());
+            self.motion.request(false);
             self.is_open = false;
+            self.requests = self.requests.wrapping_add(1);
         }
     }
 
@@ -141,12 +152,21 @@ impl DialogController {
         self.is_open
     }
 
+    fn advance(&mut self, now: Instant) -> bool {
+        self.motion.advance(now)
+    }
+
+    fn preview_back(&mut self, event: SystemBackEvent) {
+        self.motion.preview_back(event);
+        self.requests = self.requests.wrapping_add(1);
+    }
+
     fn is_animating(&self) -> bool {
-        self.motion.sample(current_frame_nanos()).active
+        self.motion.sample().active
     }
 
     fn snapshot(&self) -> (bool, VisibilitySample) {
-        (self.is_open, self.motion.sample(current_frame_nanos()))
+        (self.is_open, self.motion.sample())
     }
 }
 
@@ -448,23 +468,10 @@ fn dialog_provider_render(
 
     let is_animating = controller.with(|c| c.is_animating());
     if is_animating {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating =
-                    controller.with(|controller| controller.motion.sample(frame_nanos).active);
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch(
+            controller.with(|c| c.requests),
+            run_frames(controller, DialogController::advance),
+        );
     }
 
     let focus_scope = remember(FocusScopeNode::new).get();
@@ -474,9 +481,7 @@ fn dialog_provider_render(
     layout(Stack).modifier(modifier).child(move || {
         overlay_background(main_content, visible);
         modal_back_handler(is_open, on_close_request).on_preview(move |event| {
-            controller.with_mut(|controller| {
-                controller.motion.preview_back(event, current_frame_nanos());
-            });
+            controller.with_mut(|controller| controller.preview_back(event));
         });
         if is_open || is_animating {
             let content_alpha = visibility.opacity;

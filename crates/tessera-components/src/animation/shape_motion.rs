@@ -5,10 +5,13 @@
 //! Preserve corner geometry and velocity while interaction or selection
 //! changes.
 
-use tessera_ui::Dp;
+use tessera_ui::{Dp, time::Instant};
 
 use crate::{
-    animation::material_motion::{Scalar, Spec},
+    animation::{
+        Motion,
+        material_motion::{Scalar, Spec},
+    },
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -37,19 +40,19 @@ impl CornerMotion {
         }
     }
 
-    fn retarget(&mut self, target: Self, frame: u64) {
+    fn retarget(&mut self, target: Self, now: Instant) {
         self.fraction
-            .retarget(target.fraction.value, Spec::FastSpatial, frame);
+            .retarget(target.fraction.value, Spec::FastSpatial, now);
         self.radius
-            .retarget(target.radius.value, Spec::FastSpatial, frame);
+            .retarget(target.radius.value, Spec::FastSpatial, now);
         self.curvature
-            .retarget(target.curvature.value, Spec::FastSpatial, frame);
+            .retarget(target.curvature.value, Spec::FastSpatial, now);
     }
 
-    fn advance(&mut self, frame: u64) {
-        self.fraction.advance(frame);
-        self.radius.advance(frame);
-        self.curvature.advance(frame);
+    fn advance(&mut self, now: Instant) {
+        self.fraction.advance(now);
+        self.radius.advance(now);
+        self.curvature.advance(now);
     }
 
     fn is_animating(self) -> bool {
@@ -85,31 +88,8 @@ impl ShapeMotion {
         Self { target, corners }
     }
 
-    pub fn retarget(&mut self, target: Shape, animate: bool, frame: u64) {
-        self.advance(frame);
-        if !animate {
-            *self = Self::new(target);
-        } else if self.target != target {
-            let next = Self::new(target);
-            if let (Some(current), Some(next)) = (&mut self.corners, next.corners) {
-                for (corner, target) in current.iter_mut().zip(next) {
-                    corner.retarget(target, frame);
-                }
-                self.target = target;
-            } else {
-                // Ellipses cannot be represented as size-relative rounded
-                // corners.
-                *self = next;
-            }
-        }
-    }
-
-    pub fn advance(&mut self, frame: u64) {
-        if let Some(corners) = &mut self.corners {
-            for corner in corners {
-                corner.advance(frame);
-            }
-        }
+    pub fn snap(&mut self, target: Shape) {
+        *self = Self::new(target);
     }
 
     pub fn is_animating(self) -> bool {
@@ -134,8 +114,44 @@ impl ShapeMotion {
     }
 }
 
+impl Motion for ShapeMotion {
+    type Target = Shape;
+
+    fn is_settled_at(&self, target: &Shape) -> bool {
+        self.target == *target && !self.is_animating()
+    }
+
+    fn retarget(&mut self, target: Shape, now: Instant) {
+        self.advance(now);
+        if self.target != target {
+            let next = Self::new(target);
+            if let (Some(current), Some(next)) = (&mut self.corners, next.corners) {
+                for (corner, target) in current.iter_mut().zip(next) {
+                    corner.retarget(target, now);
+                }
+                self.target = target;
+            } else {
+                // Ellipses cannot be represented as size-relative rounded
+                // corners.
+                *self = next;
+            }
+        }
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        if let Some(corners) = &mut self.corners {
+            for corner in corners {
+                corner.advance(now);
+            }
+        }
+        self.is_animating()
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::animation::test_instant as at;
+
     use super::*;
 
     #[test]
@@ -150,8 +166,8 @@ mod tests {
             }
         };
         let mut motion = ShapeMotion::new(rounded(12.0));
-        motion.retarget(Shape::CAPSULE, true, 0);
-        motion.advance(75_000_000);
+        motion.retarget(Shape::CAPSULE, at(0));
+        motion.advance(at(75_000_000));
         let corner = match motion.shape() {
             Shape::RoundedRectangle { top_left, .. } => top_left,
             _ => unreachable!(),
@@ -161,7 +177,7 @@ mod tests {
             .0;
         assert!((radius - 15.3076).abs() < 0.001);
         let before = motion.corners.expect("corners");
-        motion.retarget(rounded(8.0), true, 75_000_000);
+        motion.retarget(rounded(8.0), at(75_000_000));
         assert_eq!(
             motion.corners.expect("corners")[0].fraction.velocity,
             before[0].fraction.velocity
@@ -175,9 +191,9 @@ mod tests {
                 bottom_left: corner,
             }
         );
-        motion.advance(1_000_000_000);
+        motion.advance(at(1_000_000_000));
         assert!(!motion.is_animating());
-        motion.retarget(Shape::CAPSULE, false, 1_000_000_000);
+        motion.snap(Shape::CAPSULE);
         let corner = match motion.shape() {
             Shape::RoundedRectangle { top_left, .. } => top_left,
             _ => unreachable!(),
@@ -189,7 +205,7 @@ mod tests {
             20.0
         );
         assert!(!motion.is_animating());
-        motion.retarget(Shape::Ellipse, true, 1_000_000_000);
+        motion.retarget(Shape::Ellipse, at(1_000_000_000));
         assert_eq!(motion.shape(), Shape::Ellipse);
         let asymmetric = Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(Dp(40.0), 3.0),
@@ -197,7 +213,7 @@ mod tests {
             bottom_right: RoundedCorner::ZERO,
             bottom_left: RoundedCorner::ZERO,
         };
-        motion.retarget(asymmetric, false, 1_000_000_000);
+        motion.snap(asymmetric);
         assert_eq!(motion.shape(), asymmetric);
     }
 }

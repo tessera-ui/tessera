@@ -15,13 +15,15 @@ use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
     Px, PxPosition, State,
     accesskit::{Role, Toggled},
-    current_frame_nanos,
+    launch_once,
     layout::{MeasureScope, PlacementResult, PlacementScope},
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
-    animation,
+    animation::{self, run_frames},
     fluid_glass::fluid_glass,
     modifier::ModifierExt as _,
     shape_def::Shape,
@@ -60,15 +62,17 @@ impl FluidSwitchDefaults {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+// Transitions without a start begin on the first frame that observes them.
 struct SpringTransition {
-    start_frame_nanos: u64,
+    start: Option<Instant>,
     from: f32,
     to: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct TravelTransition {
-    start_frame_nanos: u64,
+    start: Option<Instant>,
+    delay: Duration,
     from: f32,
     to: f32,
 }
@@ -109,26 +113,26 @@ impl FluidSwitchState {
     }
 
     fn press(&mut self) {
-        self.retarget_expansion(1.0, current_frame_nanos());
+        self.retarget_expansion(1.0, None);
     }
 
     fn release(&mut self) {
-        self.retarget_expansion(0.0, current_frame_nanos());
+        self.retarget_expansion(0.0, None);
     }
 
-    fn toggle_at(&mut self, frame_nanos: u64) {
-        self.update(frame_nanos);
+    fn toggle(&mut self) {
         self.checked = !self.checked;
-        self.retarget_expansion(1.0, frame_nanos);
+        self.retarget_expansion(1.0, None);
 
-        let travel_delay = if self.expansion_progress >= TRAVEL_WITHOUT_DELAY_EXPANSION {
-            0
+        let delay = if self.expansion_progress >= TRAVEL_WITHOUT_DELAY_EXPANSION {
+            Duration::ZERO
         } else {
-            duration_nanos(EXPAND_BEFORE_TRAVEL_DURATION)
+            EXPAND_BEFORE_TRAVEL_DURATION
         };
 
         self.travel_transition = Some(TravelTransition {
-            start_frame_nanos: frame_nanos.saturating_add(travel_delay),
+            start: None,
+            delay,
             from: self.travel_progress,
             to: if self.checked { 1.0 } else { 0.0 },
         });
@@ -136,57 +140,58 @@ impl FluidSwitchState {
 
     fn animate_to_checked(&mut self, checked: bool) {
         if self.checked != checked {
-            self.toggle_at(current_frame_nanos());
+            self.toggle();
         }
     }
 
-    fn update(&mut self, frame_nanos: u64) {
-        self.update_expansion(frame_nanos);
-        self.update_travel(frame_nanos);
+    fn update(&mut self, now: Instant) -> bool {
+        self.update_expansion(now);
+        self.update_travel(now);
+        self.is_animating()
     }
 
-    fn update_expansion(&mut self, frame_nanos: u64) {
-        let Some(transition) = self.expansion_transition else {
+    fn update_expansion(&mut self, now: Instant) {
+        let Some(transition) = &mut self.expansion_transition else {
             return;
         };
-        let elapsed = frame_nanos.saturating_sub(transition.start_frame_nanos);
-        let duration = duration_nanos(SPRING_DURATION);
-        if elapsed >= duration {
+        let start = *transition.start.get_or_insert(now);
+        let transition = *transition;
+        let elapsed = now.saturating_duration_since(start);
+        if elapsed >= SPRING_DURATION {
             self.expansion_progress = transition.to;
             self.expansion_transition = None;
             return;
         }
 
-        let fraction = elapsed as f32 / duration as f32;
+        let fraction = elapsed.as_secs_f32() / SPRING_DURATION.as_secs_f32();
         let spring = spring_progress(fraction);
         self.expansion_progress = transition.from + (transition.to - transition.from) * spring;
     }
 
-    fn update_travel(&mut self, frame_nanos: u64) {
-        let Some(transition) = self.travel_transition else {
+    fn update_travel(&mut self, now: Instant) {
+        let Some(transition) = &mut self.travel_transition else {
             return;
         };
+        let start = *transition.start.get_or_insert(now);
+        let transition = *transition;
 
-        if frame_nanos < transition.start_frame_nanos {
+        let elapsed = now.saturating_duration_since(start);
+        let Some(elapsed) = elapsed.checked_sub(transition.delay) else {
             self.travel_progress = transition.from;
             return;
-        }
-
-        let elapsed = frame_nanos.saturating_sub(transition.start_frame_nanos);
-        let duration = duration_nanos(TRAVEL_DURATION);
-        if elapsed >= duration {
+        };
+        if elapsed >= TRAVEL_DURATION {
             self.travel_progress = transition.to;
             self.travel_transition = None;
-            self.retarget_expansion(0.0, frame_nanos);
+            self.retarget_expansion(0.0, Some(now));
             return;
         }
 
-        let fraction = elapsed as f32 / duration as f32;
+        let fraction = elapsed.as_secs_f32() / TRAVEL_DURATION.as_secs_f32();
         self.travel_progress = transition.from + (transition.to - transition.from) * fraction;
     }
 
-    fn retarget_expansion(&mut self, target: f32, frame_nanos: u64) {
-        self.update_expansion(frame_nanos);
+    fn retarget_expansion(&mut self, target: f32, start: Option<Instant>) {
         let current = self.expansion_progress;
         if (current - target).abs() <= f32::EPSILON {
             self.expansion_progress = target;
@@ -195,21 +200,16 @@ impl FluidSwitchState {
         }
 
         self.expansion_transition = Some(SpringTransition {
-            start_frame_nanos: frame_nanos,
+            start,
             from: current,
             to: target,
         });
     }
 }
-
 impl Default for FluidSwitchState {
     fn default() -> Self {
         Self::new(false)
     }
-}
-
-fn duration_nanos(duration: Duration) -> u64 {
-    duration.as_nanos().min(u64::MAX as u128) as u64
 }
 
 fn spring_progress(progress: f32) -> f32 {
@@ -263,13 +263,6 @@ fn resolve_track_outline_color(
     let off = scheme.outline_variant.with_alpha(0.22);
     let on = accent_color.with_alpha(0.7);
     off.lerp(&on, progress)
-}
-
-fn update_state_for_frame(state: State<FluidSwitchState>, frame_nanos: u64) -> bool {
-    state.with_mut(|state| {
-        state.update(frame_nanos);
-        state.is_animating()
-    })
 }
 
 /// # fluid_switch
@@ -423,27 +416,8 @@ fn fluid_switch_content(
         });
     }
 
-    let should_continue = update_state_for_frame(state, current_frame_nanos());
-    if should_continue {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                if update_state_for_frame(state, frame_nanos) {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+    if state.with(FluidSwitchState::is_animating) {
+        launch_once(run_frames(state, FluidSwitchState::update));
     }
 
     let lens_width = lerp_dp(
@@ -586,6 +560,7 @@ mod tests {
     use tessera_ui::tessera;
 
     use crate::{
+        animation::test_instant,
         fluid_switch::{
             EXPAND_BEFORE_TRAVEL_DURATION, FluidSwitchDefaults, FluidSwitchState, LENS_TEST_TAG,
             SPRING_DURATION, TRAVEL_DURATION, fluid_switch_content,
@@ -599,13 +574,9 @@ mod tests {
         let started = tessera_ui::remember(|| false);
 
         if !started.get() {
-            state.with_mut(|state| state.toggle_at(0));
+            state.with_mut(|state| state.toggle());
             started.set(true);
         }
-
-        state.with_mut(|state| {
-            state.update(tessera_ui::current_frame_nanos());
-        });
 
         material_theme()
             .theme(MaterialTheme::default)
@@ -622,36 +593,39 @@ mod tests {
     fn fluid_switch_state_delays_travel_until_lens_expands() {
         let mut state = FluidSwitchState::new(false);
 
-        state.toggle_at(0);
+        state.toggle();
+        state.update(test_instant(0));
 
         assert!(state.is_checked());
         assert!(state.is_animating());
         assert_eq!(state.travel_progress(), 0.0);
 
         let delay_nanos = EXPAND_BEFORE_TRAVEL_DURATION.as_nanos() as u64;
-        state.update(delay_nanos - 1);
+        state.update(test_instant(delay_nanos - 1));
         assert_eq!(state.travel_progress(), 0.0);
         assert!(state.expansion_progress() > 0.0);
 
-        state.update(delay_nanos + (TRAVEL_DURATION.as_nanos() / 2) as u64);
+        state.update(test_instant(
+            delay_nanos + (TRAVEL_DURATION.as_nanos() / 2) as u64,
+        ));
         let mid = state.travel_progress();
         assert!(mid > 0.0 && mid < 1.0, "mid travel progress was {mid}");
 
-        state.update(delay_nanos + TRAVEL_DURATION.as_nanos() as u64);
+        state.update(test_instant(
+            delay_nanos + TRAVEL_DURATION.as_nanos() as u64,
+        ));
         assert_eq!(state.travel_progress(), 1.0);
         assert!(state.expansion_progress() > 0.0);
 
-        state.update(
+        state.update(test_instant(
             delay_nanos + TRAVEL_DURATION.as_nanos() as u64 + SPRING_DURATION.as_nanos() as u64,
-        );
+        ));
         assert_eq!(state.expansion_progress(), 0.0);
         assert!(!state.is_animating());
     }
 
     #[test]
     fn fluid_switch_state_ignores_redundant_animate_target() {
-        let runtime = tessera_ui::RuntimeSession::new();
-        let _scope = runtime.enter();
         let mut state = FluidSwitchState::new(false);
 
         state.animate_to_checked(false);
@@ -671,6 +645,7 @@ mod tests {
             .viewport(200, 100)
             .content(animated_lens_probe);
         ui.frame().node(LENS_TEST_TAG).size(54, 32);
+        ui.frames(1).node(LENS_TEST_TAG).size(54, 32);
         ui.advance(EXPAND_BEFORE_TRAVEL_DURATION)
             .node(LENS_TEST_TAG)
             .size(75, 44);

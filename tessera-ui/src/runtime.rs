@@ -1358,7 +1358,6 @@ pub(crate) fn has_ready_build_invalidations() -> bool {
 struct FrameClockTracker {
     frame_origin: Option<Instant>,
     current_frame_time: Option<Instant>,
-    current_frame_nanos: u64,
     previous_frame_time: Option<Instant>,
     frame_delta: Duration,
 }
@@ -1373,13 +1372,9 @@ fn with_frame_clock_tracker_mut<R>(f: impl FnOnce(&mut FrameClockTracker) -> R) 
 
 pub(crate) fn begin_frame_clock(now: Instant) {
     with_frame_clock_tracker_mut(|tracker| {
-        let frame_origin = *tracker.frame_origin.get_or_insert(now);
+        tracker.frame_origin.get_or_insert(now);
         tracker.previous_frame_time = tracker.current_frame_time;
         tracker.current_frame_time = Some(now);
-        tracker.current_frame_nanos = now
-            .saturating_duration_since(frame_origin)
-            .as_nanos()
-            .min(u64::MAX as u128) as u64;
         tracker.frame_delta = tracker
             .previous_frame_time
             .map(|previous| now.saturating_duration_since(previous))
@@ -1432,16 +1427,22 @@ pub(crate) fn tick_frame_clock() {
     });
 }
 
-/// Returns the timestamp of the current frame, if available.
-///
-/// The value is set by the renderer at frame begin.
-pub fn current_frame_time() -> Option<Instant> {
-    with_frame_clock_tracker(|tracker| tracker.current_frame_time)
+/// Returns the time of the current frame, or the current time before the
+/// first frame.
+pub(crate) fn frame_time() -> Instant {
+    with_frame_clock_tracker(|tracker| tracker.current_frame_time).unwrap_or_else(Instant::now)
 }
 
-/// Returns the current frame timestamp in nanoseconds from runtime origin.
-pub fn current_frame_nanos() -> u64 {
-    with_frame_clock_tracker(|tracker| tracker.current_frame_nanos)
+/// Nanoseconds since the first frame, for diagnostics.
+pub(crate) fn frame_nanos_since_origin() -> u64 {
+    with_frame_clock_tracker(|tracker| {
+        tracker
+            .current_frame_time
+            .zip(tracker.frame_origin)
+            .map_or(0, |(time, origin)| {
+                time.saturating_duration_since(origin).as_nanos() as u64
+            })
+    })
 }
 
 /// Returns the elapsed time since the previous frame.
@@ -5133,7 +5134,7 @@ mod tests {
         begin_recompose_slot_epoch();
         {
             let _node_guard = push_current_node(root_node, 9101, "root");
-            let _ = remember(|| current_frame_nanos());
+            let _ = remember(|| 0u64);
             let shifted = remember(|| 99u32);
             assert_eq!(shifted.get(), 99);
         }

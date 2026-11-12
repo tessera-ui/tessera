@@ -531,22 +531,24 @@ fn controlled_selection_resolves_each_variant_and_disabled_outline() {
 
 #[test]
 fn shape_motion_settles_without_bounce() {
+    use crate::animation::{Motion as _, test_instant as at};
+
     for size in SIZES {
         for shape in [IconButtonShape::Round, IconButtonShape::Square] {
             let start = IconButtonCorner::new(size, shape, false, false);
             let pressed = IconButtonCorner::new(size, shape, false, true);
-            let mut motion = IconButtonMotion::new(start, 0);
-            motion.retarget(pressed, 0);
-            motion.advance(33_333_334);
-            motion.retarget(start, 33_333_334);
+            let mut motion = IconButtonMotion::new(start);
+            motion.retarget(pressed, at(0));
+            motion.advance(at(33_333_334));
+            motion.retarget(start, at(33_333_334));
             for frame in 3..150 {
-                motion.advance(frame * 16_666_667);
+                motion.advance(at(frame * 16_666_667));
             }
             assert!(motion.is_idle());
             let checked = IconButtonCorner::new(size, shape, true, false);
-            motion.retarget(checked, 2_500_000_000);
+            motion.retarget(checked, at(2_500_000_000));
             for frame in 151..300 {
-                motion.advance(frame * 16_666_667);
+                motion.advance(at(frame * 16_666_667));
                 assert!((0.0..=0.5).contains(&motion.fraction.value()));
                 assert!((0.0..=size.square_radius().0 as f32).contains(&motion.radius.value()));
             }

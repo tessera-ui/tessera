@@ -6,7 +6,6 @@ use tessera_ui::{
     CursorEventContent, GestureState, MOUSE_POINTER_ID, PlacementModifierNode, PointerChange,
     PressKeyEventType, PxPosition, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
     accesskit::{Node, Role, Toggled},
-    current_frame_time,
     modifier::ModifierCapabilityExt as _,
     testing::{TestProbe, UiTest},
 };
@@ -98,7 +97,7 @@ fn renderer(scene: usize, samples: u32) -> UiTest<'static> {
     renderer.frames(16);
     renderer.inject_pointer(
         PointerChange::new(
-            current_frame_time().unwrap(),
+            renderer.frame_origin() + renderer.frame_time(),
             MOUSE_POINTER_ID,
             CursorEventContent::Scroll(ScrollEventContent {
                 delta_x: 0.0,

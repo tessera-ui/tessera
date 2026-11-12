@@ -20,8 +20,8 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_i18n::{I18n, langid};
 use tessera_shard::{RouterController, RouterDestination, shard_home};
 use tessera_ui::{
-    Asset, Color, Dp, Modifier, RenderSlotWith, State, WindowInsets, current_frame_nanos, remember,
-    tessera, use_context,
+    Asset, Color, Dp, Modifier, RenderSlotWith, State, WindowInsets, launch, remember, tessera,
+    use_context, with_frame_time,
 };
 
 use crate::{
@@ -263,14 +263,6 @@ fn nav_item<D: RouterDestination + Clone + PartialEq>(
     }
 }
 
-#[derive(Clone, Copy)]
-struct NavigationFade {
-    from: f32,
-    value: f32,
-    target: f32,
-    started: u64,
-}
-
 #[tessera]
 pub(crate) fn navigation_button(
     router: State<RouterController>,
@@ -278,50 +270,31 @@ pub(crate) fn navigation_button(
 ) {
     let back = router.with(current_article).is_some();
     let target = if back { 1.0 } else { 0.0 };
-    let frame = current_frame_nanos();
-    let fade = remember(|| NavigationFade {
-        from: target,
-        value: target,
-        target,
-        started: frame,
-    });
-    if fade.with(|fade| fade.target != target) {
-        fade.with_mut(|fade| {
-            fade.from = fade.value;
-            fade.target = target;
-            fade.started = frame;
-        });
-    }
-    if fade.with(|fade| fade.value != fade.target) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                fade.with_mut(|fade| {
-                    let t =
-                        (frame.saturating_sub(fade.started) as f32 / 200_000_000.0).clamp(0.0, 1.0);
-                    let eased = t * t * (3.0 - 2.0 * t);
-                    fade.value = fade.from + (fade.target - fade.from) * eased;
-                    if t == 1.0 {
-                        fade.value = fade.target;
-                    }
-                });
-                if fade.with(|fade| fade.value == fade.target) {
-                    false
+    let fade = remember(|| target);
+    launch(back, async move {
+        if fade.get() == target {
+            return;
+        }
+        let from = fade.get();
+        let mut start = None;
+        loop {
+            let done = with_frame_time(|now| {
+                let start = *start.get_or_insert(now);
+                let t = (now.saturating_duration_since(start).as_secs_f32() / 0.2).clamp(0.0, 1.0);
+                let eased = t * t * (3.0 - 2.0 * t);
+                fade.set(if t == 1.0 {
+                    target
                 } else {
-                    true
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
+                    from + (target - from) * eased
+                });
+                t == 1.0
+            })
+            .await;
+            if done {
+                break;
             }
-        });
-    }
+        }
+    });
     let color = use_context::<MaterialTheme>()
         .unwrap()
         .get()
@@ -355,10 +328,10 @@ pub(crate) fn navigation_button(
                 });
             icon()
                 .painter(filled::MENU_OPEN_SVG)
-                .tint(color.with_alpha(1.0 - fade.with(|fade| fade.value)));
+                .tint(color.with_alpha(1.0 - fade.get()));
             icon()
                 .painter(filled::ARROW_BACK_SVG)
-                .tint(color.with_alpha(fade.with(|fade| fade.value)));
+                .tint(color.with_alpha(fade.get()));
         });
 }
 
@@ -501,7 +474,8 @@ mod tests {
         );
         assert!(session.accessibility_action(directory, Action::Click));
         session.advance(std::time::Duration::from_millis(1_000));
-        session.advance(std::time::Duration::from_millis(1_000));
+        session.advance(std::time::Duration::from_millis(500));
+        session.advance(std::time::Duration::from_millis(500));
         let article = click_action(
             &session.inspect_accessibility().unwrap(),
             "Open Button groups specifications",
@@ -550,7 +524,8 @@ mod tests {
                 .with_mut(|router| router.replace(GlassComponentsPageDestination {}));
         });
         session.advance(std::time::Duration::from_millis(1_000));
-        session.advance(std::time::Duration::from_millis(1_000));
+        session.advance(std::time::Duration::from_millis(500));
+        session.advance(std::time::Duration::from_millis(500));
         let language = session.run(|| {
             I18N.format(
                 "ui-switch-language",

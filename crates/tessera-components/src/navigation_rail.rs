@@ -17,16 +17,18 @@ use tessera_ui::{
     FocusScopeNode, FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     PxSize, RenderSlot, State,
     accesskit::Role,
-    current_frame_nanos,
+    launch, launch_once,
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    provide_context, remember, tessera, use_context,
+    provide_context, remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     animation::{
-        self, SelectionAnimation,
+        self, Motion, SelectionAnimation, animate_to, run_frames,
         visibility_motion::{VisibilityMotion, modal_back_handler},
     },
     badge::BadgeDefaults,
@@ -583,7 +585,7 @@ fn navigation_rail_item_view(
                 } else {
                     (ctx.normalized_pos, ripple_size)
                 };
-                state.start_animation_with_spec(position, size, spec);
+                state.start_animation_with_spec(position, size, spec, ctx.timestamp);
             });
         }
     };
@@ -701,33 +703,8 @@ pub fn navigation_rail_item(
     // Each item owns its own selection animation, keyed by call position, so
     // there is no shared index registry that could drift across rebuilds.
     let animation = remember(|| SelectionAnimation::new(selected));
-    let frame_nanos = current_frame_nanos();
-    animation.with_mut(|state| state.set_selected(selected));
-    let selection_fraction = animation.with_mut(|state| {
-        state.update(frame_nanos);
-        state.progress()
-    });
-    if animation.with(|state| state.is_animating()) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating = animation.with_mut(|state| {
-                    state.update(frame_nanos);
-                    state.is_animating()
-                });
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    launch(selected, animate_to(animation, selected));
+    let selection_fraction = animation.with(SelectionAnimation::progress);
 
     let item_spacing = composition.item_spacing;
     layout(Stack)
@@ -794,33 +771,8 @@ pub fn navigation_rail(
         .get()
         .color_scheme;
     let controller = remember(NavigationRailExpansion::default);
-    let frame_nanos = current_frame_nanos();
-    controller.with_mut(|c| c.set_expanded(expanded));
-    let expand_fraction = controller.with_mut(|c| {
-        c.update(frame_nanos);
-        c.expand_fraction()
-    });
-    if controller.with(|c| c.is_animating()) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame_nanos: u64| {
-                let is_animating = controller.with_mut(|c| {
-                    c.update(frame_nanos);
-                    c.is_animating()
-                });
-                if is_animating { true } else { false }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    launch(expanded, animate_to(controller, expanded));
+    let expand_fraction = controller.with(NavigationRailExpansion::expand_fraction);
 
     let icon_position = if expand_fraction >= 0.5 {
         NavigationRailIconPosition::Start
@@ -987,27 +939,9 @@ pub fn modal_navigation_rail(
         was_open.set(is_open);
         back_motion.set(VisibilityMotion::new(true, true));
     }
-    let back = back_motion.get().sample(current_frame_nanos());
+    let back = back_motion.with(VisibilityMotion::sample);
     if back.active {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                if back_motion.with(|motion| motion.sample(frame).active) {
-                    true
-                } else {
-                    false
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
+        launch_once(run_frames(back_motion, VisibilityMotion::advance));
     }
     let modifier = modal_focus_modifier(Modifier::new(), focus, is_open, scope);
     tessera_ui::layout::layout(ModalNavigationRailLayout)
@@ -1015,7 +949,7 @@ pub fn modal_navigation_rail(
         .child(move || {
             overlay_background(main_content, is_open);
             modal_back_handler(is_open, on_close_request).on_preview(move |event| {
-                back_motion.with_mut(|motion| motion.preview_back(event, current_frame_nanos()));
+                back_motion.with_mut(|motion| motion.preview_back(event));
             });
             if is_open {
                 surface()
@@ -1142,52 +1076,57 @@ impl tessera_ui::LayoutPolicy for ModalNavigationRailLayout {
 }
 
 /// Expansion animation state for the navigation rail container.
-#[derive(Clone, PartialEq, Default)]
+#[derive(Clone, PartialEq)]
 struct NavigationRailExpansion {
     expanded: bool,
-    start_frame_nanos: Option<u64>,
+    started: Option<Instant>,
+    progress: f32,
+}
+
+impl Default for NavigationRailExpansion {
+    fn default() -> Self {
+        Self {
+            expanded: false,
+            started: None,
+            progress: 1.0,
+        }
+    }
 }
 
 impl NavigationRailExpansion {
-    fn set_expanded(&mut self, expanded: bool) {
-        if self.expanded != expanded {
-            self.expanded = expanded;
-            self.start_frame_nanos = Some(current_frame_nanos());
-        }
-    }
-
-    fn update(&mut self, frame_nanos: u64) {
-        if let Some(start_frame_nanos) = self.start_frame_nanos {
-            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-            if elapsed_nanos >= animation_nanos {
-                self.start_frame_nanos = None;
-            }
-        }
-    }
-
     fn expand_fraction(&self) -> f32 {
-        let raw = match self.start_frame_nanos {
-            None => 1.0,
-            Some(start_frame_nanos) => {
-                let elapsed_nanos = current_frame_nanos().saturating_sub(start_frame_nanos);
-                let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-                if elapsed_nanos >= animation_nanos {
-                    1.0
-                } else {
-                    elapsed_nanos as f32 / animation_nanos as f32
-                }
-            }
-        };
-        let eased = animation::easing(raw);
+        let eased = animation::easing(self.progress);
         if self.expanded { eased } else { 1.0 - eased }
-    }
-
-    fn is_animating(&self) -> bool {
-        self.start_frame_nanos.is_some()
     }
 }
 
+impl Motion for NavigationRailExpansion {
+    type Target = bool;
+
+    fn is_settled_at(&self, expanded: &bool) -> bool {
+        self.expanded == *expanded && self.started.is_none()
+    }
+
+    fn retarget(&mut self, expanded: bool, now: Instant) {
+        if self.expanded != expanded {
+            self.expanded = expanded;
+            self.started = Some(now);
+            self.progress = 0.0;
+        }
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        if let Some(started) = self.started {
+            self.progress = (now.saturating_duration_since(started).as_secs_f32()
+                / ANIMATION_DURATION.as_secs_f32())
+            .min(1.0);
+            if self.progress >= 1.0 {
+                self.started = None;
+            }
+        }
+        self.started.is_some()
+    }
+}
 #[cfg(test)]
 mod tests {
     use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};

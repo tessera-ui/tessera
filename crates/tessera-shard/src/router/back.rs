@@ -2,14 +2,15 @@ use std::rc::Rc;
 
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Dp, ModelStore, Modifier, PointerInput,
-    PointerInputModifierNode, PxPosition, SemanticsModifierNode, State, current_frame_nanos, focus,
-    key, launch_once,
+    PointerInputModifierNode, PxPosition, SemanticsModifierNode, State, focus, key, launch_once,
     layout::Stack,
     layout::layout,
     modifier::{ModifierCapabilityExt as _, PlacementModifierNode},
-    next_frame, provide_context, remember,
+    provide_context, remember,
     system_back::{BackPreviewScope, BackSwipeEdge, SystemBackEvent, system_back_handler},
-    tessera, use_context,
+    tessera,
+    time::Instant,
+    use_context, with_frame_time,
 };
 
 use crate::{RouterController, RouterDestination};
@@ -19,7 +20,8 @@ struct Preview {
     route_id: u64,
     edge: BackSwipeEdge,
     progress: f32,
-    restoring: Option<(u64, f32)>,
+    // The restoration starts on the first frame that observes it.
+    restoring: Option<(Option<Instant>, f32)>,
 }
 
 #[tessera]
@@ -54,7 +56,7 @@ pub(super) fn route_display(controller: State<RouterController>) {
             SystemBackEvent::Cancelled => {
                 preview.with_mut(|preview| {
                     if let Some(preview) = preview {
-                        preview.restoring = Some((current_frame_nanos(), preview.progress));
+                        preview.restoring = Some((None, preview.progress));
                     }
                 });
             }
@@ -75,20 +77,25 @@ pub(super) fn route_display(controller: State<RouterController>) {
     if gesture.is_some_and(|gesture| gesture.restoring.is_some()) {
         launch_once(async move {
             loop {
-                let now = next_frame().await;
-                let restoring = preview.with_mut(|preview| {
-                    if let Some(active) = preview
-                        && let Some((start, progress)) = active.restoring
-                    {
-                        let remaining = 1.0 - now.saturating_sub(start) as f32 / 160_000_000.0;
-                        if remaining > 0.0 {
-                            active.progress = progress * remaining;
-                            return true;
+                let restoring = with_frame_time(|now| {
+                    preview.with_mut(|preview| {
+                        if let Some(active) = preview
+                            && let Some((start, progress)) = &mut active.restoring
+                        {
+                            let start = *start.get_or_insert(now);
+                            let progress = *progress;
+                            let remaining =
+                                1.0 - now.saturating_duration_since(start).as_secs_f32() / 0.16;
+                            if remaining > 0.0 {
+                                active.progress = progress * remaining;
+                                return true;
+                            }
                         }
-                    }
-                    *preview = None;
-                    false
-                });
+                        *preview = None;
+                        false
+                    })
+                })
+                .await;
                 if !restoring {
                     break;
                 }

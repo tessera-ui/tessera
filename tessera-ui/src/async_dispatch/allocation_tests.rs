@@ -50,7 +50,7 @@ fn frame_waits_resume_every_frame_without_allocating() {
         let counter = Rc::clone(&frames);
         let task = super::spawn_local(async move {
             loop {
-                super::next_frame().await;
+                super::with_frame_time(|_| ()).await;
                 counter.set(counter.get() + 1);
             }
         });

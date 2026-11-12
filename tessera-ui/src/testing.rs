@@ -214,6 +214,11 @@ impl<'a> UiTest<'a> {
         self.time
     }
 
+    /// Returns the instant at virtual time zero, for timestamping injected input.
+    pub fn frame_origin(&self) -> Instant {
+        self.frame_origin
+    }
+
     /// Runs frames until no frame task or invalidated UI work remains.
     ///
     /// Panics if the UI has not settled after 1,000 frames.
@@ -377,13 +382,14 @@ impl<'a> UiTest<'a> {
     pub fn inject_key_event(&mut self, event: impl Into<crate::KeyboardEvent>) {
         let _session = self.session.enter();
         let event = event.into();
+        let timestamp = self.frame_origin + self.time;
         TesseraRuntime::with_mut(|runtime| {
             runtime
                 .component_tree
                 .focus_owner_mut()
-                .record_keyboard_input(event.state, self.frame_origin + self.time);
+                .record_keyboard_input(event.state, timestamp);
         });
-        self.keyboard.push_event(event);
+        self.keyboard.push_event_at(event, timestamp);
     }
 
     /// Queues a named key press.
@@ -1104,7 +1110,7 @@ mod tests {
         LayoutModifierChild, LayoutModifierInput, LayoutPolicy, LayoutResult, Modifier,
         NoopDrawModifier, PlacementModifierNode, Px, PxPosition, RenderSlot, SemanticsModifierNode,
         State, StatefulLayoutPolicy, component_tree::NodeRole, launch_once, layout::MeasureScope,
-        next_frame, remember, runtime::TesseraRuntime, tessera,
+        remember, runtime::TesseraRuntime, tessera,
     };
 
     use super::{UiTest, reset_runtime_for_layout_test};
@@ -1223,7 +1229,9 @@ mod tests {
         let _ = frame.get();
         launch_once(async move {
             loop {
-                frame.set(next_frame().await);
+                frame.set(
+                    crate::with_frame_time(|_| crate::runtime::frame_nanos_since_origin()).await,
+                );
             }
         });
         crate::layout::layout(MeasureOnlyWidthPolicy { width }).modifier(
@@ -1804,11 +1812,10 @@ mod tests {
     fn animated_layout_sample() {
         let offset = remember(|| 0_i32);
 
-        // Rebuilds this component on every animated frame.
-        let frame_clock = crate::remember(crate::current_frame_nanos);
-        let _ = frame_clock.get();
         crate::launch_once(async move {
-            let step = move |frame_nanos| {
+            loop {
+                let frame_nanos =
+                    crate::with_frame_time(|_| crate::runtime::frame_nanos_since_origin()).await;
                 let next_offset = if frame_nanos >= 200_000_000 {
                     100
                 } else if frame_nanos >= 100_000_000 {
@@ -1818,15 +1825,6 @@ mod tests {
                 };
                 offset.set(next_offset);
                 if frame_nanos >= 200_000_000 {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = crate::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
                     break;
                 }
             }
@@ -1844,11 +1842,10 @@ mod tests {
     fn animated_modifier_layout_sample() {
         let width = remember(|| 20_i32);
 
-        // Rebuilds this component on every animated frame.
-        let frame_clock = crate::remember(crate::current_frame_nanos);
-        let _ = frame_clock.get();
         crate::launch_once(async move {
-            let step = move |frame_nanos| {
+            loop {
+                let frame_nanos =
+                    crate::with_frame_time(|_| crate::runtime::frame_nanos_since_origin()).await;
                 let next_width = if frame_nanos >= 200_000_000 {
                     100
                 } else if frame_nanos >= 100_000_000 {
@@ -1858,15 +1855,6 @@ mod tests {
                 };
                 width.set(next_width);
                 if frame_nanos >= 200_000_000 {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = crate::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
                     break;
                 }
             }
@@ -1893,11 +1881,10 @@ mod tests {
     fn animated_offset_modifier_sample() {
         let x = remember(|| 0_i32);
 
-        // Rebuilds this component on every animated frame.
-        let frame_clock = crate::remember(crate::current_frame_nanos);
-        let _ = frame_clock.get();
         crate::launch_once(async move {
-            let step = move |frame_nanos| {
+            loop {
+                let frame_nanos =
+                    crate::with_frame_time(|_| crate::runtime::frame_nanos_since_origin()).await;
                 let next_x = if frame_nanos >= 200_000_000 {
                     100
                 } else if frame_nanos >= 100_000_000 {
@@ -1907,15 +1894,6 @@ mod tests {
                 };
                 x.set(next_x);
                 if frame_nanos >= 200_000_000 {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = crate::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
                     break;
                 }
             }
@@ -1991,11 +1969,10 @@ mod tests {
     fn animated_nested_slot_sample() {
         let width = remember(|| 20_i32);
 
-        // Rebuilds this component on every animated frame.
-        let frame_clock = crate::remember(crate::current_frame_nanos);
-        let _ = frame_clock.get();
         crate::launch_once(async move {
-            let step = move |frame_nanos| {
+            loop {
+                let frame_nanos =
+                    crate::with_frame_time(|_| crate::runtime::frame_nanos_since_origin()).await;
                 let next_width = if frame_nanos >= 200_000_000 {
                     100
                 } else if frame_nanos >= 100_000_000 {
@@ -2005,15 +1982,6 @@ mod tests {
                 };
                 width.set(next_width);
                 if frame_nanos >= 200_000_000 {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = crate::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
                     break;
                 }
             }

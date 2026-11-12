@@ -2041,6 +2041,7 @@ impl ComponentTree {
             metadatas: &self.metadatas,
             keyboard_events: &mut events,
             modifiers: queued.modifiers,
+            timestamp: queued.timestamp,
             ime_client: self.focus_owner.active_handle_id(),
             window_requests,
             focus_owner: &mut self.focus_owner,
@@ -3353,6 +3354,7 @@ struct KeyboardInputDispatchContext<'a> {
     metadatas: &'a ComponentNodeMetaDatas,
     keyboard_events: &'a mut Vec<crate::KeyboardEvent>,
     modifiers: winit::keyboard::ModifiersState,
+    timestamp: crate::time::Instant,
     ime_client: Option<FocusHandleId>,
     window_requests: &'a mut WindowRequests,
     focus_owner: &'a mut FocusOwner,
@@ -3400,6 +3402,7 @@ fn run_keyboard_input_for_node<F>(
         computed_data: node_computed_data,
         keyboard_events: dispatch_ctx.keyboard_events,
         key_modifiers: dispatch_ctx.modifiers,
+        timestamp: dispatch_ctx.timestamp,
         ime_request: &mut dispatch_ctx.window_requests.ime_request,
     };
     dispatch(input);

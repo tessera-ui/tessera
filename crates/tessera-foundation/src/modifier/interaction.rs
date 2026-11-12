@@ -8,7 +8,7 @@
 use tessera_ui::{
     BuildModifierNode, Callback, CallbackWith, FocusProperties, FocusRequester, Modifier,
     ModifierBuildContext, PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, State,
-    accesskit, modifier::ModifierCapabilityExt as _,
+    accesskit, modifier::ModifierCapabilityExt as _, time::Instant,
 };
 
 use crate::gesture::{DragAxis, DragRecognizer, DragSettings, LongPressRecognizer, TapRecognizer};
@@ -20,6 +20,8 @@ pub struct PointerEventContext {
     pub normalized_pos: [f32; 2],
     /// The element size in pixels.
     pub size: PxSize,
+    /// When the pointer event that triggered the callback occurred.
+    pub timestamp: Instant,
 }
 
 type PressCallback = CallbackWith<PointerEventContext, ()>;

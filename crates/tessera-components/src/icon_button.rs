@@ -8,12 +8,14 @@ use tessera_foundation::modifier::{InteractionState, InteractionVisualState, Mod
 use tessera_ui::{
     Callback, Color, Dp, Modifier, State,
     accesskit::{Role, Toggled},
-    current_frame_nanos, remember, tessera, use_context,
+    launch, remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    animation::Animatable,
+    animation::{Animatable, FrameDelta, Motion, animate_to},
     boxed::boxed,
     painter::Painter,
     shape_def::{RoundedCorner, Shape},
@@ -204,32 +206,38 @@ struct IconButtonMotion {
     fraction: Animatable,
     radius: Animatable,
     target: IconButtonCorner,
-    frame_nanos: u64,
+    delta: FrameDelta,
 }
 
-impl IconButtonMotion {
-    fn new(target: IconButtonCorner, frame_nanos: u64) -> Self {
-        Self {
-            fraction: Animatable::spring(target.fraction, 40.0, 1.0),
-            radius: Animatable::spring(target.radius, 40.0, 1.0),
-            target,
-            frame_nanos,
-        }
+impl Motion for IconButtonMotion {
+    type Target = IconButtonCorner;
+
+    fn is_settled_at(&self, target: &IconButtonCorner) -> bool {
+        self.target == *target && self.is_idle()
     }
 
-    fn retarget(&mut self, target: IconButtonCorner, frame_nanos: u64) {
-        self.advance(frame_nanos);
+    fn retarget(&mut self, target: IconButtonCorner, now: Instant) {
+        self.advance(now);
         self.fraction.set_target(target.fraction);
         self.radius.set_target(target.radius);
         self.target = target;
     }
 
-    fn advance(&mut self, frame_nanos: u64) {
-        if frame_nanos > self.frame_nanos {
-            let dt = (frame_nanos - self.frame_nanos) as f32 / 1_000_000_000.0;
-            self.fraction.tick(dt);
-            self.radius.tick(dt);
-            self.frame_nanos = frame_nanos;
+    fn advance(&mut self, now: Instant) -> bool {
+        let dt = self.delta.step(now);
+        self.fraction.tick(dt);
+        self.radius.tick(dt);
+        !self.is_idle()
+    }
+}
+
+impl IconButtonMotion {
+    fn new(target: IconButtonCorner) -> Self {
+        Self {
+            fraction: Animatable::spring(target.fraction, 40.0, 1.0),
+            radius: Animatable::spring(target.radius, 40.0, 1.0),
+            target,
+            delta: FrameDelta::default(),
         }
     }
 
@@ -438,38 +446,11 @@ pub fn icon_button(
             visual.is_pressed(),
         )
     };
-    let frame = current_frame_nanos();
-    let motion = remember(|| IconButtonMotion::new(target, frame));
-    if shape.is_some() {
-        if !motion.with(IconButtonMotion::is_idle) || motion.with(|motion| motion.target) != target
-        {
-            motion.set(IconButtonMotion::new(target, frame));
-        }
-    } else if motion.with(|motion| motion.target) != target {
-        motion.with_mut(|motion| motion.retarget(target, frame));
+    let motion = remember(|| IconButtonMotion::new(target));
+    if shape.is_some() && !motion.with(|motion| motion.is_settled_at(&target)) {
+        motion.set(IconButtonMotion::new(target));
     }
-    if !motion.with(IconButtonMotion::is_idle) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                motion.with_mut(|motion| motion.advance(frame));
-                if motion.with(IconButtonMotion::is_idle) {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    launch(target, animate_to(motion, target));
     let inherited = if color_style.unwrap_or_default() == IconButtonColorStyle::Inherited {
         Some(
             use_context::<ContentColor>()

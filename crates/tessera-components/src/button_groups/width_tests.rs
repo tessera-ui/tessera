@@ -229,7 +229,7 @@ fn check_press_widths(samples: u32) {
 
         renderer.pointer_press(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
-        renderer.frames(2);
+        renderer.frames(3);
         assert_ne!(
             nodes(&renderer, 0).1.bounds().unwrap().width(),
             base[0],
@@ -240,7 +240,7 @@ fn check_press_widths(samples: u32) {
         assert_eq!(clicks.get(), 3);
         let target_node = nodes(&renderer, 0).0;
         assert!(renderer.accessibility_action(target_node, Action::Click));
-        renderer.frames(2);
+        renderer.frames(3);
         assert_ne!(
             nodes(&renderer, 0).1.bounds().unwrap().width(),
             base[0],

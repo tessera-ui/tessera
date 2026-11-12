@@ -182,8 +182,8 @@ fn reset(
 }
 
 fn touch(renderer: &mut UiTest, content: CursorEventContent, state: GestureState) {
-    let timestamp = tessera_ui::current_frame_time().expect("frame timestamp")
-        + Duration::from_nanos(16_666_667);
+    let timestamp =
+        renderer.frame_origin() + renderer.frame_time() + Duration::from_nanos(16_666_667);
     renderer.inject_pointer(
         PointerChange::new(timestamp, MOUSE_POINTER_ID, content, state)
             .with_position(PxPosition::from_f32_xy(300.0, 500.0)),

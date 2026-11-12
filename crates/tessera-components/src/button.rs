@@ -11,14 +11,16 @@ use tessera_ui::{
     Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::{Role, Toggled},
     context::provide_context,
-    current_frame_nanos,
+    launch,
     layout::{MeasureScope, Stack, layout},
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    animation::Animatable,
+    animation::{Animatable, Motion, animate_to},
     boxed::boxed,
     icon::IconSize,
     shape_def::{RoundedCorner, Shape},
@@ -223,7 +225,7 @@ struct ButtonMotion {
     elevation: Animatable,
     outline: Animatable,
     target: ButtonMotionTarget,
-    frame_nanos: u64,
+    last_frame: Option<Instant>,
 }
 
 impl ButtonMotion {
@@ -235,44 +237,14 @@ impl ButtonMotion {
         }
     }
 
-    fn new(target: ButtonMotionTarget, frame_nanos: u64) -> Self {
+    fn new(target: ButtonMotionTarget) -> Self {
         Self {
             fraction: Self::spatial(target.fraction, target.toggle),
             radius: Self::spatial(target.radius, target.toggle),
             elevation: Animatable::spring(target.elevation, 40.0, 1.0),
             outline: Self::spatial(target.outline, true),
             target,
-            frame_nanos,
-        }
-    }
-
-    fn retarget(&mut self, target: ButtonMotionTarget, frame_nanos: u64) {
-        self.advance(frame_nanos);
-        if target.toggle != self.target.toggle {
-            self.fraction = Self::spatial(self.fraction.value(), target.toggle)
-                .with_velocity(self.fraction.velocity());
-            self.radius = Self::spatial(self.radius.value(), target.toggle)
-                .with_velocity(self.radius.velocity());
-        }
-        self.fraction.set_target(target.fraction);
-        self.radius.set_target(target.radius);
-        self.elevation.set_target(target.elevation);
-        if target.toggle {
-            self.outline.set_target(target.outline);
-        } else {
-            self.outline = Self::spatial(target.outline, true);
-        }
-        self.target = target;
-    }
-
-    fn advance(&mut self, frame_nanos: u64) {
-        if frame_nanos > self.frame_nanos {
-            let dt = (frame_nanos - self.frame_nanos) as f32 / 1_000_000_000.0;
-            self.fraction.tick(dt);
-            self.radius.tick(dt);
-            self.elevation.tick(dt);
-            self.outline.tick(dt);
-            self.frame_nanos = frame_nanos;
+            last_frame: None,
         }
     }
 
@@ -292,6 +264,46 @@ impl ButtonMotion {
             bottom_right: corner,
             bottom_left: corner,
         }
+    }
+}
+
+impl Motion for ButtonMotion {
+    type Target = ButtonMotionTarget;
+
+    fn is_settled_at(&self, target: &ButtonMotionTarget) -> bool {
+        self.target == *target && self.is_idle()
+    }
+
+    fn retarget(&mut self, target: ButtonMotionTarget, now: Instant) {
+        self.advance(now);
+        if target.toggle != self.target.toggle {
+            self.fraction = Self::spatial(self.fraction.value(), target.toggle)
+                .with_velocity(self.fraction.velocity());
+            self.radius = Self::spatial(self.radius.value(), target.toggle)
+                .with_velocity(self.radius.velocity());
+        }
+        self.fraction.set_target(target.fraction);
+        self.radius.set_target(target.radius);
+        self.elevation.set_target(target.elevation);
+        if target.toggle {
+            self.outline.set_target(target.outline);
+        } else {
+            self.outline = Self::spatial(target.outline, true);
+        }
+        self.target = target;
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        let last = self.last_frame.map_or(now, |last| last.max(now));
+        if let Some(previous) = self.last_frame {
+            let dt = last.saturating_duration_since(previous).as_secs_f32();
+            self.fraction.tick(dt);
+            self.radius.tick(dt);
+            self.elevation.tick(dt);
+            self.outline.tick(dt);
+        }
+        self.last_frame = Some(last);
+        !self.is_idle()
     }
 }
 
@@ -572,33 +584,8 @@ pub fn button(
         outline: border_width.unwrap_or(default_border_width).0 as f32,
         toggle: selected.is_some(),
     };
-    let frame = current_frame_nanos();
-    let motion = remember(|| ButtonMotion::new(target, frame));
-    if motion.with(|motion| motion.target) != target {
-        motion.with_mut(|motion| motion.retarget(target, frame));
-    }
-    if !motion.with(ButtonMotion::is_idle) {
-        // Rebuilds this component on every animated frame.
-        let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-        let _ = frame_clock.get();
-        tessera_ui::launch_once(async move {
-            let step = move |frame: u64| {
-                motion.with_mut(|motion| motion.advance(frame));
-                if motion.with(ButtonMotion::is_idle) {
-                    false
-                } else {
-                    true
-                }
-            };
-            loop {
-                let now = tessera_ui::next_frame().await;
-                frame_clock.set(now);
-                if !step(now) {
-                    break;
-                }
-            }
-        });
-    }
+    let motion = remember(|| ButtonMotion::new(target));
+    launch(target, animate_to(motion, target));
     let container_color = color.unwrap_or(default_container_color);
     let content_color = content_color
         .or_else(|| color.and_then(|color| content_color_for(color, &scheme)))
@@ -1303,6 +1290,8 @@ mod tests {
     fn shape_motion_keeps_velocity_and_resolves_against_actual_bounds() {
         use tessera_ui::{Px, PxSize};
 
+        use crate::animation::{Motion as _, test_instant as at};
+
         for size in SIZES {
             for style in [ButtonShape::Round, ButtonShape::Square] {
                 let (fraction, radius) = ButtonMotionTarget::corner(size, style, false, false);
@@ -1313,7 +1302,7 @@ mod tests {
                     outline: 1.0,
                     toggle: false,
                 };
-                let mut motion = ButtonMotion::new(target, 0);
+                let mut motion = ButtonMotion::new(target);
                 let (fraction, radius) = ButtonMotionTarget::corner(size, style, false, true);
                 motion.retarget(
                     ButtonMotionTarget {
@@ -1321,17 +1310,17 @@ mod tests {
                         radius,
                         ..target
                     },
-                    0,
+                    at(0),
                 );
-                motion.advance(33_333_334);
+                motion.advance(at(33_333_334));
                 assert!(!motion.is_idle());
                 let value = motion.fraction.value();
                 let velocity = motion.fraction.velocity();
-                motion.retarget(target, 33_333_334);
+                motion.retarget(target, at(33_333_334));
                 assert_eq!(motion.fraction.value(), value);
                 assert_eq!(motion.fraction.velocity(), velocity);
                 for frame in 3..150 {
-                    motion.advance(frame * 16_666_667);
+                    motion.advance(at(frame * 16_666_667));
                 }
                 assert!(motion.is_idle());
                 for height in [16, 40, 200] {
@@ -1356,10 +1345,10 @@ mod tests {
                         toggle: true,
                         ..target
                     },
-                    2_500_000_000,
+                    at(2_500_000_000),
                 );
                 for frame in 151..300 {
-                    motion.advance(frame * 16_666_667);
+                    motion.advance(at(frame * 16_666_667));
                 }
                 assert!(motion.is_idle());
                 assert_eq!(

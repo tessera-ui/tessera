@@ -8,9 +8,13 @@ use tessera_ui::{
     Callback, CallbackWith,
     system_back::{SystemBackEvent, system_back_handler},
     tessera,
+    time::Instant,
 };
 
-use super::material_motion::{Scalar, Spec};
+use super::{
+    Motion,
+    material_motion::{Scalar, Spec},
+};
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct VisibilityMotion {
@@ -38,25 +42,28 @@ impl VisibilityMotion {
         }
     }
 
-    pub fn retarget(&mut self, open: bool, frame: u64) {
-        self.back_start = None;
-        let target = f64::from(open);
-        self.position.retarget(
-            target,
-            if self.spatial {
-                Spec::Spatial
-            } else {
-                Spec::Effects
-            },
-            frame,
-        );
-        self.opacity.retarget(target, Spec::Effects, frame);
+    fn spec(&self) -> Spec {
+        if self.spatial {
+            Spec::Spatial
+        } else {
+            Spec::Effects
+        }
     }
 
-    pub fn preview_back(&mut self, event: SystemBackEvent, frame: u64) {
+    /// Retargets the motion at the next [`Motion::advance`].
+    pub fn request(&mut self, open: bool) {
+        self.back_start = None;
+        let target = f64::from(open);
+        self.position.request_retarget(target, self.spec());
+        self.opacity.request_retarget(target, Spec::Effects);
+    }
+
+    /// Follows a predictive back gesture; a finished gesture requests the open
+    /// state again.
+    pub fn preview_back(&mut self, event: SystemBackEvent) {
         match event {
             SystemBackEvent::Started(_) => {
-                let start = self.sample(frame);
+                let start = self.sample();
                 self.position.snap(f64::from(start.position));
                 self.opacity.snap(f64::from(start.opacity));
                 self.back_start = Some((start.position, start.opacity));
@@ -70,22 +77,40 @@ impl VisibilityMotion {
             }
             SystemBackEvent::Cancelled | SystemBackEvent::Committed => {
                 if self.back_start.is_some() {
-                    self.retarget(true, frame);
+                    self.request(true);
                 }
             }
         }
     }
 
-    pub fn sample(self, frame: u64) -> VisibilitySample {
-        let mut position = self.position;
-        let mut opacity = self.opacity;
-        position.advance(frame);
-        opacity.advance(frame);
+    pub fn sample(&self) -> VisibilitySample {
         VisibilitySample {
-            position: position.value.clamp(0.0, 1.0) as f32,
-            opacity: opacity.value.clamp(0.0, 1.0) as f32,
-            active: position.is_animating() || opacity.is_animating(),
+            position: self.position.value.clamp(0.0, 1.0) as f32,
+            opacity: self.opacity.value.clamp(0.0, 1.0) as f32,
+            active: self.position.is_animating() || self.opacity.is_animating(),
         }
+    }
+}
+
+impl Motion for VisibilityMotion {
+    type Target = bool;
+
+    fn is_settled_at(&self, open: &bool) -> bool {
+        let target = f64::from(*open);
+        !self.sample().active && self.position.value == target && self.opacity.value == target
+    }
+
+    fn retarget(&mut self, open: bool, now: Instant) {
+        self.back_start = None;
+        let target = f64::from(open);
+        self.position.retarget(target, self.spec(), now);
+        self.opacity.retarget(target, Spec::Effects, now);
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        self.position.advance(now);
+        self.opacity.advance(now);
+        self.sample().active
     }
 }
 
@@ -107,26 +132,31 @@ pub(crate) fn modal_back_handler(
 
 #[cfg(test)]
 mod tests {
+    use crate::animation::{Motion, test_instant as at};
+
     use super::VisibilityMotion;
 
     #[test]
     fn reversal_samples_current_values_and_preserves_incoming_velocities() {
         let mut motion = VisibilityMotion::new(false, true);
-        motion.retarget(true, 0);
-        let before = motion.sample(100_000_000);
+        motion.retarget(true, at(0));
+        motion.advance(at(100_000_000));
+        let before = motion.sample();
         assert!((before.position - 0.65983106).abs() < 0.000001);
         assert!((before.opacity - 0.9084218).abs() < 0.000001);
-        motion.retarget(false, 100_000_000);
-        let after = motion.sample(100_000_000);
+        motion.retarget(false, at(100_000_000));
+        let after = motion.sample();
         assert_eq!(after.position, before.position);
         assert_eq!(after.opacity, before.opacity);
         assert!((motion.position.velocity - 6.2883265905).abs() < 0.000001);
         assert!((motion.opacity.velocity - 2.9305022222).abs() < 0.000001);
-        let closing = motion.sample(130_000_000);
-        motion.retarget(true, 130_000_000);
-        assert_eq!(motion.sample(130_000_000).position, closing.position);
-        assert_eq!(motion.sample(130_000_000).opacity, closing.opacity);
-        let settled = motion.sample(2_000_000_000);
+        motion.advance(at(130_000_000));
+        let closing = motion.sample();
+        motion.retarget(true, at(130_000_000));
+        assert_eq!(motion.sample().position, closing.position);
+        assert_eq!(motion.sample().opacity, closing.opacity);
+        assert!(!motion.advance(at(2_000_000_000)));
+        let settled = motion.sample();
         assert_eq!(
             (settled.position, settled.opacity, settled.active),
             (1.0, 1.0, false)
@@ -136,19 +166,23 @@ mod tests {
     #[test]
     fn effects_initial_states_redundant_targets_and_same_frame_reversal_settle() {
         let mut initial = VisibilityMotion::new(true, false);
-        assert!(!initial.sample(0).active);
-        initial.retarget(false, 0);
-        initial.retarget(true, 0);
-        assert!(!initial.sample(0).active);
+        assert!(initial.is_settled_at(&true));
+        initial.retarget(false, at(0));
+        initial.retarget(true, at(0));
+        assert!(!initial.sample().active);
+        assert!(initial.is_settled_at(&true));
         let mut motion = VisibilityMotion::new(false, false);
-        motion.retarget(true, 0);
-        motion.retarget(true, 50_000_000);
-        assert!((motion.sample(100_000_000).opacity - 0.9084218).abs() < 0.000001);
-        motion.retarget(false, 100_000_000);
-        let settled = motion.sample(2_000_000_000);
+        motion.retarget(true, at(0));
+        motion.retarget(true, at(50_000_000));
+        motion.advance(at(100_000_000));
+        assert!((motion.sample().opacity - 0.9084218).abs() < 0.000001);
+        motion.retarget(false, at(100_000_000));
+        motion.advance(at(2_000_000_000));
+        let settled = motion.sample();
         assert_eq!(
             (settled.position, settled.opacity, settled.active),
             (0.0, 0.0, false)
         );
+        assert!(motion.is_settled_at(&false));
     }
 }

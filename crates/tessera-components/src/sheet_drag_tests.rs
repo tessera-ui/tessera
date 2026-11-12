@@ -269,7 +269,7 @@ fn check(samples: u32) {
             );
             assert_reused_measurements(&renderer, kind);
             connection(&observed).pre_fling(ScrollVelocity::ZERO);
-            renderer.frames(1);
+            renderer.frames(3);
             let after_release = displacement(kind, origin, bounds(&renderer));
             assert!(
                 after_release > 0.0 && after_release < short as f64 * scale,
@@ -294,7 +294,7 @@ fn check(samples: u32) {
                     CursorEventContent::Cancelled(PressKeyEventType::Left),
                     GestureState::TapCandidate,
                 ));
-                renderer.frames(2);
+                renderer.frames(3);
                 let cancelled_offset = displacement(kind, origin, bounds(&renderer));
                 assert!(cancelled_offset > 0.0 && cancelled_offset < 36.0 * scale);
                 renderer.frames(80);
@@ -315,7 +315,7 @@ fn check(samples: u32) {
             renderer.frames(1);
             let dragged = bounds(&renderer);
             connection(&observed).pre_fling(ScrollVelocity::ZERO);
-            renderer.frames(1);
+            renderer.frames(3);
             assert_eq!(
                 observed.get().closes,
                 1,
@@ -497,7 +497,7 @@ fn check(samples: u32) {
                 let end = drag_handle(&mut renderer, scale);
                 renderer.frames(10);
                 renderer.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Left);
-                renderer.frames(2);
+                renderer.frames(3);
                 assert_eq!(observed.get().closes, 3);
                 let released = displacement(kind, origin, bounds(&renderer));
                 assert!(released > 0.0 && released < 36.0 * scale);

@@ -7,7 +7,7 @@
 
 use std::time::Duration;
 
-use tessera_ui::{Dp, PxSize, current_frame_nanos, time::Instant};
+use tessera_ui::{Dp, PxSize, time::Instant};
 
 use crate::theme::MaterialAlpha;
 
@@ -50,45 +50,34 @@ pub struct RippleAnimation {
 
 #[derive(Clone, PartialEq, Copy, Debug)]
 struct RippleAnimationState {
-    start_instant: Instant,
-    start_frame_nanos: u64,
+    start: Instant,
+    progress: f32,
     center: [f32; 2],
     max_radius: f32,
 }
 
 impl RippleAnimationState {
-    fn animation_at_instant(self, now: Instant) -> Option<RippleAnimation> {
-        let elapsed_nanos = now
-            .saturating_duration_since(self.start_instant)
-            .as_nanos()
-            .min(u64::MAX as u128) as u64;
-        self.animation_from_elapsed_nanos(elapsed_nanos)
-    }
-
-    fn animation_at_frame_nanos(self, frame_nanos: u64) -> Option<RippleAnimation> {
-        let elapsed_nanos = frame_nanos.saturating_sub(self.start_frame_nanos);
-        self.animation_from_elapsed_nanos(elapsed_nanos)
-    }
-
-    fn animation_from_elapsed_nanos(self, elapsed_nanos: u64) -> Option<RippleAnimation> {
-        let duration_nanos = RippleState::ANIMATION_DURATION
-            .as_nanos()
-            .min(u64::MAX as u128) as u64;
-        let progress = (elapsed_nanos as f32 / duration_nanos as f32).clamp(0.0, 1.0);
-        if progress >= 1.0 {
-            return None;
+    fn new(center: [f32; 2], max_radius: f32, start: Instant) -> Self {
+        Self {
+            start,
+            progress: 0.0,
+            center,
+            max_radius,
         }
+    }
 
+    fn snapshot(self) -> RippleAnimation {
+        let progress = self.progress;
         let eased = ease_out_cubic(progress);
         let radius = self.max_radius * eased;
         let alpha = MaterialAlpha::PRESSED * (1.0 - progress);
 
-        Some(RippleAnimation {
+        RippleAnimation {
             progress,
             center: self.center,
             radius,
             alpha,
-        })
+        }
     }
 }
 
@@ -145,33 +134,32 @@ impl RippleState {
     ///
     /// * `click_pos` - The normalized `[x, y]` position in 0.0..=1.0 where the
     ///   ripple originates.
+    /// * `timestamp` - When the triggering input event occurred; the ripple
+    ///   progresses from this time.
     ///
     /// # Example
     /// ```
     /// use tessera_components::ripple_state::RippleState;
-    /// let session = tessera_ui::RuntimeSession::new();
-    /// let _scope = session.enter();
     /// let mut state = RippleState::new();
-    /// state.start_animation([0.5, 0.5]);
+    /// state.start_animation([0.5, 0.5], tessera_ui::time::Instant::now());
     /// ```
-    pub fn start_animation(&mut self, click_pos: [f32; 2]) {
-        let now = Instant::now();
-        self.animation = Some(RippleAnimationState {
-            start_instant: now,
-            start_frame_nanos: current_frame_nanos(),
-            center: [click_pos[0].clamp(0.0, 1.0), click_pos[1].clamp(0.0, 1.0)],
-            max_radius: 1.0,
-        });
+    pub fn start_animation(&mut self, click_pos: [f32; 2], timestamp: Instant) {
+        self.animation = Some(RippleAnimationState::new(
+            [click_pos[0].clamp(0.0, 1.0), click_pos[1].clamp(0.0, 1.0)],
+            1.0,
+            timestamp,
+        ));
     }
 
-    /// Starts a ripple animation using the provided size and spec.
+    /// Starts a ripple animation using the provided size and spec at the input
+    /// event `timestamp`.
     pub fn start_animation_with_spec(
         &mut self,
         click_pos: [f32; 2],
         size: PxSize,
         spec: RippleSpec,
+        timestamp: Instant,
     ) {
-        let now = Instant::now();
         let size = [size.width.to_f32(), size.height.to_f32()];
         let center = if spec.bounded { click_pos } else { [0.5, 0.5] };
 
@@ -182,12 +170,7 @@ impl RippleState {
             max_distance_to_corners(center, size) / min_dimension
         };
 
-        self.animation = Some(RippleAnimationState {
-            start_instant: now,
-            start_frame_nanos: current_frame_nanos(),
-            center,
-            max_radius,
-        });
+        self.animation = Some(RippleAnimationState::new(center, max_radius, timestamp));
     }
 
     /// Marks the ripple as no longer pressed.
@@ -200,50 +183,29 @@ impl RippleState {
         self.is_pressed = pressed;
     }
 
-    /// Returns the current ripple animation snapshot.
-    pub fn animation(&mut self) -> Option<RippleAnimation> {
-        self.animation_at_frame_nanos(current_frame_nanos())
+    // Drops a ripple whose frame task stops with its removed owner.
+    pub(crate) fn cancel_animation(&mut self) {
+        self.animation = None;
     }
 
-    /// Returns a read-only snapshot of the current ripple animation.
-    pub fn animation_snapshot(&self) -> Option<RippleAnimation> {
-        self.animation_snapshot_at_frame_nanos(current_frame_nanos())
+    /// Returns the running ripple animation, if any.
+    pub fn animation(&self) -> Option<RippleAnimation> {
+        self.animation.map(RippleAnimationState::snapshot)
     }
 
-    /// Returns a read-only animation snapshot at `now`.
-    pub fn animation_snapshot_at(&self, now: Instant) -> Option<RippleAnimation> {
-        self.animation
-            .and_then(|state| state.animation_at_instant(now))
-    }
-
-    /// Returns the current ripple animation snapshot at `now`.
-    pub fn animation_at(&mut self, now: Instant) -> Option<RippleAnimation> {
-        let state = self.animation?;
-        match state.animation_at_instant(now) {
-            Some(animation) => Some(animation),
-            None => {
-                self.animation = None;
-                None
-            }
+    /// Advances the running ripple to the frame time `now` and returns
+    /// whether it is still running.
+    pub fn advance(&mut self, now: Instant) -> bool {
+        let Some(state) = &mut self.animation else {
+            return false;
+        };
+        let elapsed = now.saturating_duration_since(state.start);
+        state.progress = elapsed.as_secs_f32() / Self::ANIMATION_DURATION.as_secs_f32();
+        if state.progress >= 1.0 {
+            self.animation = None;
+            return false;
         }
-    }
-
-    /// Returns a read-only animation snapshot at `frame_nanos`.
-    pub fn animation_snapshot_at_frame_nanos(&self, frame_nanos: u64) -> Option<RippleAnimation> {
-        self.animation
-            .and_then(|state| state.animation_at_frame_nanos(frame_nanos))
-    }
-
-    /// Returns the current ripple animation snapshot at `frame_nanos`.
-    pub fn animation_at_frame_nanos(&mut self, frame_nanos: u64) -> Option<RippleAnimation> {
-        let state = self.animation?;
-        match state.animation_at_frame_nanos(frame_nanos) {
-            Some(animation) => Some(animation),
-            None => {
-                self.animation = None;
-                None
-            }
-        }
+        true
     }
 
     /// Returns the current progress of the ripple animation and the origin
@@ -260,15 +222,13 @@ impl RippleState {
     ///
     /// ```
     /// use tessera_components::ripple_state::RippleState;
-    /// let session = tessera_ui::RuntimeSession::new();
-    /// let _scope = session.enter();
     /// let mut state = RippleState::new();
-    /// state.start_animation([0.5, 0.5]);
+    /// state.start_animation([0.5, 0.5], tessera_ui::time::Instant::now());
     /// let (progress, center) = state.get_animation_progress().expect("active ripple");
     /// assert_eq!(progress, 0.0);
     /// assert_eq!(center, [0.5, 0.5]);
     /// ```
-    pub fn get_animation_progress(&mut self) -> Option<(f32, [f32; 2])> {
+    pub fn get_animation_progress(&self) -> Option<(f32, [f32; 2])> {
         self.animation()
             .map(|animation| (animation.progress, animation.center))
     }

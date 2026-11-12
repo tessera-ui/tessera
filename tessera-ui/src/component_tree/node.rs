@@ -753,6 +753,8 @@ pub struct KeyboardInput<'a> {
     pub keyboard_events: &'a mut Vec<crate::KeyboardEvent>,
     /// The current state of the keyboard modifiers at the time of the event.
     pub key_modifiers: winit::keyboard::ModifiersState,
+    /// When the window or synthetic input source delivered the keyboard event.
+    pub timestamp: crate::time::Instant,
     pub(crate) ime_request: &'a mut Option<ImeRequest>,
 }
 

@@ -662,7 +662,7 @@ mod tests {
     impl Drop for ObserveClockOnDrop {
         fn drop(&mut self) {
             self.0
-                .with_mut(|values| values.push(crate::current_frame_nanos()));
+                .with_mut(|values| values.push(crate::runtime::frame_nanos_since_origin()));
         }
     }
 
@@ -672,8 +672,8 @@ mod tests {
         if active.get() {
             let capture = ObserveClockOnDrop(output.clone());
             crate::launch_once(async move {
-                let nanos = crate::next_frame().await;
-                assert_eq!(crate::current_frame_nanos(), nanos);
+                let nanos =
+                    crate::with_frame_time(|_| crate::runtime::frame_nanos_since_origin()).await;
                 let _capture = capture;
                 output.with_mut(|values| values.push(nanos));
                 active.set(false);
@@ -700,7 +700,7 @@ mod tests {
         crate::launch_once(async move {
             let _capture = capture;
             loop {
-                crate::next_frame().await;
+                crate::with_frame_time(|_| ()).await;
             }
         });
     }
@@ -881,7 +881,9 @@ mod tests {
             let output = self.0.clone();
             context.launch(async move {
                 loop {
-                    let nanos = crate::next_frame().await;
+                    let nanos =
+                        crate::with_frame_time(|_| crate::runtime::frame_nanos_since_origin())
+                            .await;
                     output.with_mut(|values| values.push(nanos));
                 }
             });

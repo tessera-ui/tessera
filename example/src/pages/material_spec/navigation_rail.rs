@@ -2821,7 +2821,7 @@ mod tests {
         for expanded in [false, true] {
             expanded_state.set(expanded);
             scroll.with_mut(|scroll| scroll.set_scroll_position(PxPosition::ZERO));
-            session.frames(1);
+            session.frames(2);
             let before = session.advance(Duration::from_millis(400));
             before
                 .node("scrolling-rail")

@@ -149,20 +149,25 @@ fn search_results(query: String, results: State<Vec<String>>) {
 }
 ```
 
-UI tasks drive animation by awaiting `next_frame()`, which resumes them once
-per frame with its timestamp, after queued results and before the build:
+Time is observed only through `with_frame_time(|now| ...)`. Builds, controllers,
+and input handlers do not read a clock; input handlers use event timestamps.
+Awaiting `with_frame_time` in a UI task resumes it on the next frame, after
+queued results and before the build, and runs the closure with that frame's
+`Instant`. Key the task by the animation target so that a new target restarts
+the motion from its current value on the following frame:
 
 ```rust
-if motion.with(Motion::is_animating) {
-    launch_once(async move {
-        loop {
-            let now = next_frame().await;
-            if !motion.with_mut(|motion| motion.advance(now)) {
-                break;
-            }
+launch(target, async move {
+    loop {
+        let running = with_frame_time(|now| {
+            motion.with_mut(|motion| motion.advance_toward(target, now))
+        })
+        .await;
+        if !running {
+            break;
         }
-    });
-}
+    }
+});
 ```
 
 Cancellation stops a future at its next suspension point; it cannot interrupt

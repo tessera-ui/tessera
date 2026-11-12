@@ -4,7 +4,7 @@
 //!
 //! Return released sheets smoothly to their anchors at any display density.
 
-use tessera_ui::Dp;
+use tessera_ui::{Dp, time::Instant};
 
 use super::material_motion::{Scalar, Spec};
 
@@ -26,30 +26,32 @@ impl SheetDrag {
         self.extent
     }
 
-    pub fn set_extent(&mut self, extent: f64, frame: u64) {
+    pub fn set_extent(&mut self, extent: f64) {
         self.extent = extent.max(0.0);
-        self.offset.advance(frame);
         if self.offset.value > self.extent {
             self.offset.snap(self.extent);
         }
     }
 
-    pub fn sample(&self, frame: u64) -> (f32, bool) {
-        let mut offset = self.offset;
-        offset.advance(frame);
-        (
-            Dp(offset.value.max(0.0)).to_pixels_f32(),
-            offset.is_animating(),
-        )
+    pub fn offset(&self) -> f32 {
+        Dp(self.offset.value.max(0.0)).to_pixels_f32()
     }
 
-    pub fn grab(&mut self, frame: u64) {
-        self.offset.advance(frame);
+    pub fn is_animating(&self) -> bool {
+        self.offset.is_animating()
+    }
+
+    /// Moves to `now` and returns whether the offset is still settling.
+    pub fn advance(&mut self, now: Instant) -> bool {
+        self.offset.advance(now);
+        self.offset.is_animating()
+    }
+
+    pub fn grab(&mut self) {
         self.offset.snap(self.offset.value.max(0.0));
     }
 
-    pub fn apply_delta(&mut self, pixels: f32, frame: u64) -> f32 {
-        self.offset.advance(frame);
+    pub fn apply_delta(&mut self, pixels: f32) -> f32 {
         let before = self.offset.value.max(0.0);
         let limit = if self.extent > 0.0 {
             self.extent
@@ -61,12 +63,13 @@ impl SheetDrag {
         Dp(after - before).to_pixels_f32()
     }
 
-    pub fn settle(&mut self, frame: u64) {
-        self.offset.retarget(0.0, Spec::Spatial, frame);
+    pub fn settle(&mut self) {
+        self.offset.request_retarget(0.0, Spec::Spatial);
     }
 
-    pub fn release(&mut self, frame: u64, velocity: f32, distance: f64, speed: f64) -> bool {
-        self.offset.advance(frame);
+    /// Returns whether a release at `velocity` should dismiss the sheet and
+    /// settles the offset from that velocity.
+    pub fn release(&mut self, velocity: f32, distance: f64, speed: f64) -> bool {
         let velocity = Dp::from_pixels_f32(velocity).0;
         let close = if velocity.abs() >= speed {
             velocity > 0.0
@@ -74,7 +77,7 @@ impl SheetDrag {
             self.offset.value >= distance
         };
         self.offset.velocity = velocity;
-        self.offset.start_to(0.0, Spec::Spatial, frame);
+        self.offset.request_start(0.0, Spec::Spatial);
         close
     }
 }

@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, time::Duration};
 
 use tessera_components::{
     column::column, lazy_list::lazy_column, row::row, slider::slider, spacer::spacer, text::text,
@@ -7,12 +7,12 @@ use tessera_components::{
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_shard::shard;
 use tessera_ui::{
-    Dp, EntryRegistry, Modifier, State, TesseraPackage,
+    Dp, EntryRegistry, Modifier, State, TesseraPackage, launch_once,
     layout::layout,
     px::{Px, PxRect, PxSize},
     remember,
     render::{DrawCommand, DrawContext, DrawablePipeline, PipelineContext, RenderModule},
-    tessera, use_context, wgpu,
+    tessera, use_context, wgpu, with_frame_time,
 };
 
 use crate::res::I18N;
@@ -116,27 +116,21 @@ pub fn custom_shader_page() {
 
 #[tessera]
 fn raymarch_canvas(modifier: Modifier, time_scale_state: State<f32>) {
-    let frame_nanos_state = remember(|| 0_u64);
+    let elapsed = remember(|| Duration::ZERO);
 
-    // Rebuilds this component on every animated frame.
-    let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
-    let _ = frame_clock.get();
-    tessera_ui::launch_once(async move {
-        let step = move |frame_nanos: u64| {
-            frame_nanos_state.set(frame_nanos);
-            true
-        };
+    launch_once(async move {
+        let mut start = None;
         loop {
-            let now = tessera_ui::next_frame().await;
-            frame_clock.set(now);
-            if !step(now) {
-                break;
-            }
+            with_frame_time(|now| {
+                let start = *start.get_or_insert(now);
+                elapsed.set(now.saturating_duration_since(start));
+            })
+            .await;
         }
     });
 
     let time_scale = 0.2 + time_scale_state.get().clamp(0.0, 1.0) * 2.8;
-    let elapsed_seconds = frame_nanos_state.get() as f32 / 1_000_000_000.0;
+    let elapsed_seconds = elapsed.get().as_secs_f32();
     let time_seconds = elapsed_seconds * time_scale;
     let camera_position = CAMERA_POSITION;
     let (camera_forward, camera_right, camera_up) =

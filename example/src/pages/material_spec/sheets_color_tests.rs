@@ -3,7 +3,7 @@ use tessera_ui::{
     Color, CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PressKeyEventType,
     ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
     accesskit::{Node, Role},
-    current_frame_time, scaled_box,
+    scaled_box,
     testing::{TestProbe, UiTest},
 };
 
@@ -366,7 +366,7 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
             renderer.frames(16);
             renderer.inject_pointer(
                 PointerChange::new(
-                    current_frame_time().unwrap(),
+                    renderer.frame_origin() + renderer.frame_time(),
                     MOUSE_POINTER_ID,
                     CursorEventContent::Scroll(ScrollEventContent {
                         delta_x: 0.0,

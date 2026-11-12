@@ -221,7 +221,7 @@ fn check(samples: u32) {
             PxPosition::from_f32_xy(primary.x + scale as f32, primary.y),
         );
         renderer.frames(1);
-        renderer.frames(8);
+        renderer.frames(7);
         assert_eq!(observed_events.with(|events| events.longs), 0);
         renderer.frames(1);
         assert_eq!(
@@ -362,7 +362,7 @@ fn check(samples: u32) {
                 .get()
                 .ripple
                 .unwrap()
-                .with(|state| state.animation_snapshot())
+                .with(|state| state.animation())
                 .is_none(),
             "unmount must release externally owned ripple state"
         );

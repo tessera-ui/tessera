@@ -4,7 +4,7 @@ use tessera_components::{
     shape_def::Shape,
 };
 use tessera_foundation::modifier::ModifierExt as _;
-use tessera_ui::{Asset, Color, Dp, Modifier};
+use tessera_ui::{Asset, Color, Dp, Modifier, time::Instant};
 
 use super::srgb;
 
@@ -57,24 +57,24 @@ pub(super) struct SelectionMotion {
     from: f32,
     value: f32,
     target: f32,
-    started: u64,
+    started: Option<Instant>,
 }
 
 impl SelectionMotion {
-    pub(super) fn new(target: f32, now: u64) -> Self {
+    pub(super) fn new(target: f32) -> Self {
         Self {
             from: target,
             value: target,
             target,
-            started: now,
+            started: None,
         }
     }
 
-    pub(super) fn retarget(&mut self, target: f32, now: u64) {
+    pub(super) fn retarget(&mut self, target: f32, now: Instant) {
         if target != self.target {
             self.from = self.value;
             self.target = target;
-            self.started = now;
+            self.started = Some(now);
         }
     }
 
@@ -88,8 +88,10 @@ impl SelectionMotion {
         self.value != self.target
     }
 
-    pub(super) fn advance(&mut self, now: u64) {
-        let progress = (now.saturating_sub(self.started) as f32 / 200_000_000.0).clamp(0.0, 1.0);
+    pub(super) fn advance(&mut self, now: Instant) {
+        let progress = self.started.map_or(1.0, |started| {
+            (now.saturating_duration_since(started).as_secs_f32() / 0.2).clamp(0.0, 1.0)
+        });
         if progress == 1.0 {
             self.value = self.target;
             return;

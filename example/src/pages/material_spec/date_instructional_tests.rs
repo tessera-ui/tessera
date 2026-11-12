@@ -591,7 +591,7 @@ fn select_editor_line_with_pointer(renderer: &mut UiTest, editor: &str) {
     );
     renderer.pointer_move(MOUSE_POINTER_ID, pointer);
     renderer.frames(1);
-    let base = tessera_ui::current_frame_time().unwrap();
+    let base = renderer.frame_origin() + renderer.frame_time();
     for (milliseconds, content) in [
         (0, CursorEventContent::Pressed(PressKeyEventType::Left)),
         (10, CursorEventContent::Released(PressKeyEventType::Left)),

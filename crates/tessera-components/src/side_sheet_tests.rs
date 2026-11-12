@@ -173,8 +173,10 @@ fn modal_sheet_previews_back_without_closing_until_commit() {
     assert!(session.run(|| open.with(SideSheetController::is_open)));
 
     session.dispatch_system_back(SystemBackEvent::Cancelled);
+    session.advance(Duration::from_millis(16));
+    session.advance(Duration::from_millis(16));
     let restored = session
-        .advance(Duration::from_millis(984))
+        .advance(Duration::from_millis(952))
         .node("sheet")
         .bounds();
     assert_eq!(restored, initial);
