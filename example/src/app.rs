@@ -380,8 +380,8 @@ pub(crate) fn app_fixture(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        accesskit::{Action, ActionRequest, Role, TreeId},
-        testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
+        accesskit::{Action, Role},
+        testing::{TestProbe, UiTest},
     };
 
     use super::*;
@@ -389,25 +389,20 @@ mod tests {
     fn click_action(
         snapshot: &tessera_ui::testing::AccessibilitySnapshot,
         label: &str,
-    ) -> ActionRequest {
-        let (id, _) = snapshot
+    ) -> tessera_ui::accesskit::NodeId {
+        snapshot
             .nodes()
             .iter()
             .find(|(_, node)| crate::has_label(node, label) && node.supports_action(Action::Click))
-            .unwrap_or_else(|| panic!("missing action {label}"));
-        ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node: *id,
-            data: None,
-        }
+            .unwrap_or_else(|| panic!("missing action {label}"))
+            .0
     }
 
     #[cfg(not(target_family = "wasm"))]
     #[test]
     #[ignore = "requires a native GPU adapter for pointer-driven app navigation"]
     fn leaving_material_directory_through_the_app_drawer_keeps_destinations_live() {
-        fn click(renderer: &mut tessera_ui::headless::HeadlessRenderer, label: &str) {
+        fn click(renderer: &mut tessera_ui::testing::UiTest, label: &str) {
             let snapshot = renderer.inspect_accessibility().unwrap();
             let (_, node) = snapshot
                 .reading_order()
@@ -433,8 +428,8 @@ mod tests {
                 point,
                 tessera_ui::PressKeyEventType::Left,
             );
-            renderer.render_frames(1);
-            renderer.render_frames(24);
+            renderer.frames(1);
+            renderer.frames(24);
         }
 
         for sample_count in [1, 4] {
@@ -447,20 +442,12 @@ mod tests {
             registry.register_package(crate::pages::custom_shader::CustomShaderPackage);
             let navigation = TestProbe::default();
             let observed = navigation.clone();
-            let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
-                Box::new(move || {
-                    app_fixture(observed.clone());
-                }),
-                registry.finish(),
-                tessera_ui::headless::HeadlessConfig {
-                    width: 1200,
-                    height: 800,
-                    sample_count,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(8);
+            let mut renderer = tessera_ui::testing::UiTest::new()
+                .viewport(1200, 800)
+                .samples(sample_count)
+                .rendered(registry.finish())
+                .content(move || app_fixture(observed.clone()));
+            renderer.frames(8);
             let handles = navigation.get().unwrap();
             for label in [
                 "Home",
@@ -490,7 +477,6 @@ mod tests {
                 assert!(
                     renderer
                         .read_pixels()
-                        .unwrap()
                         .chunks_exact(4)
                         .any(|pixel| pixel[3] > 0)
                 );
@@ -503,25 +489,25 @@ mod tests {
         use tessera_ui::system_back::{BackSwipeEdge, SystemBackEvent};
 
         let navigation = TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test(|| app_fixture(navigation.clone())).viewport_px(1200, 1600),
-        );
+        let mut session = UiTest::new()
+            .content(|| app_fixture(navigation.clone()))
+            .viewport(1200, 1600);
         session.run(|| tessera_ui::EntryRegistry::new().register_package(crate::res::i18n()));
-        pump_layout_test_session(&mut session, 0);
+        session.frame();
         let router = navigation.get().unwrap().router;
         let directory = click_action(
             &session.inspect_accessibility().unwrap(),
             "Material components",
         );
-        assert!(session.dispatch_accessibility_action(directory));
-        pump_layout_test_session(&mut session, 1_000_000_000);
-        pump_layout_test_session(&mut session, 2_000_000_000);
+        assert!(session.accessibility_action(directory, Action::Click));
+        session.advance(std::time::Duration::from_millis(1_000));
+        session.advance(std::time::Duration::from_millis(1_000));
         let article = click_action(
             &session.inspect_accessibility().unwrap(),
             "Open Button groups specifications",
         );
-        assert!(session.dispatch_accessibility_action(article));
-        pump_layout_test_session(&mut session, 2_100_000_000);
+        assert!(session.accessibility_action(article, Action::Click));
+        session.advance(std::time::Duration::from_millis(100));
         assert!(session.run(|| router.with(current_article).is_some()));
 
         session.dispatch_system_back(SystemBackEvent::Started(BackSwipeEdge::Left));
@@ -529,15 +515,15 @@ mod tests {
             progress: 0.5,
             edge: BackSwipeEdge::Left,
         });
-        let preview = pump_layout_test_session(&mut session, 2_200_000_000);
+        let preview = session.advance(std::time::Duration::from_millis(100));
         assert!(preview.node("component-article-18").bounds().x.0 > 0);
         assert!(session.run(|| router.with(current_article).is_some()));
         session.dispatch_system_back(SystemBackEvent::Cancelled);
-        pump_layout_test_session(&mut session, 2_400_000_000);
+        session.advance(std::time::Duration::from_millis(200));
         assert!(session.run(|| router.with(current_article).is_some()));
 
         session.dispatch_system_back(SystemBackEvent::Committed);
-        pump_layout_test_session(&mut session, 2_500_000_000);
+        session.advance(std::time::Duration::from_millis(100));
         assert!(session.run(|| {
             router.with(RouterController::current_is::<MaterialComponentsPageDestination>)
         }));
@@ -545,17 +531,17 @@ mod tests {
             &session.inspect_accessibility().unwrap(),
             "Open Button groups specifications",
         );
-        assert!(session.dispatch_accessibility_action(article));
+        assert!(session.accessibility_action(article, Action::Click));
     }
 
     #[test]
     fn language_switch_preserves_route_and_edited_control_state_in_both_directions() {
         let navigation = TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test(|| app_fixture(navigation.clone())).viewport_px(1200, 1600),
-        );
+        let mut session = UiTest::new()
+            .content(|| app_fixture(navigation.clone()))
+            .viewport(1200, 1600);
         session.run(|| tessera_ui::EntryRegistry::new().register_package(crate::res::i18n()));
-        pump_layout_test_session(&mut session, 0);
+        session.frame();
         let handles = navigation.get().unwrap();
         session.run(|| {
             handles.directory.with_mut(SideSheetController::close);
@@ -563,8 +549,8 @@ mod tests {
                 .router
                 .with_mut(|router| router.replace(GlassComponentsPageDestination {}));
         });
-        pump_layout_test_session(&mut session, 1_000_000_000);
-        pump_layout_test_session(&mut session, 2_000_000_000);
+        session.advance(std::time::Duration::from_millis(1_000));
+        session.advance(std::time::Duration::from_millis(1_000));
         let language = session.run(|| {
             I18N.format(
                 "ui-switch-language",
@@ -586,21 +572,15 @@ mod tests {
             .find(&blur_override, Role::Switch)
             .expect("glass blur override after navigation")
             .0;
-        let action = |target_node, action| ActionRequest {
-            action,
-            target_tree: TreeId::ROOT,
-            target_node,
-            data: None,
-        };
-        assert!(session.dispatch_accessibility_action(action(blur_override, Action::Click)));
-        pump_layout_test_session(&mut session, 2_016_666_667);
+        assert!(session.accessibility_action(blur_override, Action::Click));
+        session.frames(1);
         let accessibility = session.inspect_accessibility().unwrap();
         let (slider, initial_value) = accessibility
             .find(&blur_radius, Role::Slider)
             .map(|(id, node)| (id, node.numeric_value().unwrap()))
             .expect("glass blur slider after enabling the override");
-        assert!(session.dispatch_accessibility_action(action(slider, Action::Increment)));
-        pump_layout_test_session(&mut session, 2_033_333_334);
+        assert!(session.accessibility_action(slider, Action::Increment));
+        session.frames(1);
         let accessibility = session.inspect_accessibility().unwrap();
         let value = accessibility
             .nodes()
@@ -619,9 +599,9 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let english = labels(&accessibility);
-        for (index, timestamp) in [2_050_000_001, 2_066_666_668].into_iter().enumerate() {
-            assert!(session.dispatch_accessibility_action(action(language, Action::Click)));
-            pump_layout_test_session(&mut session, timestamp);
+        for index in 0..2 {
+            assert!(session.accessibility_action(language, Action::Click));
+            session.frames(1);
             assert!(session.run(|| {
                 handles
                     .router
@@ -647,9 +627,9 @@ mod tests {
             }
         }
         for _ in 0..2 {
-            assert!(session.dispatch_accessibility_action(action(language, Action::Click)));
+            assert!(session.accessibility_action(language, Action::Click));
         }
-        pump_layout_test_session(&mut session, 2_083_333_335);
+        session.frames(1);
         assert_eq!(labels(&session.inspect_accessibility().unwrap()), english);
     }
 }

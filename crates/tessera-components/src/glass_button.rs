@@ -88,7 +88,7 @@ impl GlassButtonBuilder {
 ///         });
 /// }
 ///
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn glass_button(

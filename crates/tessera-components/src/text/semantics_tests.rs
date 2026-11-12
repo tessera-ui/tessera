@@ -8,9 +8,8 @@ use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Modifier, State,
     accesskit::{Node, NodeId, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
-    testing::TestProbe,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{column::column, text::text};
@@ -78,7 +77,7 @@ fn fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
     });
 }
 
-fn named(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn named(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -91,26 +90,18 @@ fn named(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
 fn check(samples: u32) {
     let probe = TestProbe::<Option<State<bool>>>::default();
     let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            fixture().probe(probe.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 480,
-            height: 240,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(3);
+    let mut renderer = UiTest::new()
+        .viewport(480, 240)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture().probe(probe.clone()));
+    renderer.frames(3);
     let heading_id = named(&renderer, "Caller heading").0;
     let plain_id = named(&renderer, "Plain text").0;
-    let initial_pixels = renderer.read_pixels().unwrap();
+    let initial_pixels = renderer.read_pixels();
     for changed in [false, true, false] {
         observed.get().unwrap().set(changed);
-        renderer.render_frames(3);
+        renderer.frames(3);
         let (id, heading) = named(
             &renderer,
             if changed {
@@ -162,7 +153,7 @@ fn check(samples: u32) {
         assert!(option.is_disabled());
         assert!(named(&renderer, "Hidden text").1.is_hidden());
     }
-    assert_eq!(renderer.read_pixels().unwrap(), initial_pixels);
+    assert_eq!(renderer.read_pixels(), initial_pixels);
 }
 
 #[test]

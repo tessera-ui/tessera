@@ -7,9 +7,9 @@
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier, State,
-    accesskit::{Action, ActionRequest, Live, Node, NodeId, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Live, Node, NodeId, Role},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{button::button, column::column, text::text, theme::material_theme};
@@ -63,7 +63,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -73,44 +73,30 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
     (id, node.clone())
 }
 
-fn action(renderer: &mut HeadlessRenderer, target: NodeId, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: target,
-        data: None,
-    }));
-    renderer.render_frames(2);
+fn action(renderer: &mut UiTest, target: NodeId, action: Action) {
+    assert!(renderer.accessibility_action(target, action));
+    renderer.frames(2);
 }
 
 fn check(samples: u32) {
     for scale in [1.0, 1.5] {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new({
-                let observed = observed.clone();
-                move || fixture(observed.clone())
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 800,
-                height: 420,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(3);
+        let mut renderer = UiTest::new()
+            .viewport(800, 420)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(observed.clone()));
+        renderer.frames(3);
         let task = node(&renderer, "Current task", Role::Button).0;
         action(&mut renderer, task, Action::Focus);
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, task);
         let settings = observed.get().settings.unwrap();
         settings.with_mut(|s| s.visible = true);
-        renderer.render_frames(3);
+        renderer.frames(3);
         for stacked in [false, true] {
             settings.with_mut(|s| s.stacked = stacked);
-            renderer.render_frames(3);
+            renderer.frames(3);
             let (_, status) = node(&renderer, "Changes saved", Role::Status);
             assert_eq!(status.live(), Some(Live::Polite));
             assert!(!status.supports_action(Action::Focus));
@@ -124,7 +110,7 @@ fn check(samples: u32) {
         assert_eq!(settings.get().actions, 2);
         assert_eq!(settings.get().dismissals, 2);
         settings.with_mut(|s| s.dismiss_label = Some("Close notification".into()));
-        renderer.render_frames(3);
+        renderer.frames(3);
         let dismiss = node(&renderer, "Close notification", Role::Button).0;
         action(&mut renderer, dismiss, Action::Click);
         assert_eq!(settings.get().dismissals, 3);
@@ -179,18 +165,12 @@ mod escape {
 
     #[test]
     fn escape_adapter_dismisses_only_on_pressed_escape() {
-        use tessera_ui::testing::{
-            layout_test, pump_layout_test_session, start_layout_test_session,
-        };
+        use tessera_ui::testing::UiTest;
         let observed = TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
-                let observed = observed.clone();
-                move || escape_fixture(observed.clone())
-            })
-            .viewport_px(200, 100),
-        );
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| escape_fixture(observed.clone()))
+            .viewport(200, 100);
+        session.frame();
         let dismissals = observed.get().dismissals.unwrap();
         let dismiss = observed.get().dismiss.unwrap();
         assert!(!dismiss_key(

@@ -145,7 +145,7 @@ impl tessera_ui::LayoutPolicy for RowLayout {
 ///     text("Last");
 /// });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn row(
@@ -528,30 +528,22 @@ mod tests {
 
     #[test]
     fn row_allocates_remaining_width_to_weighted_child() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 60),
-            content: {
-                row_layout_case();
-            },
-            expect: {
-                node("row_fixed").position(0, 0).size(20, 10);
-                node("row_weighted_content").position(20, 0).size(80, 10);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(120, 60)
+            .content(row_layout_case)
+            .frame();
+        layout.node("row_fixed").rect(0, 0, 20, 10);
+        layout.node("row_weighted_content").rect(20, 0, 80, 10);
     }
 
     #[test]
     fn row_honors_main_and_cross_axis_alignment() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 60),
-            content: {
-                row_alignment_case();
-            },
-            expect: {
-                node("row_center_first").position(35, 20).size(20, 10);
-                node("row_center_second").position(55, 18).size(10, 12);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(120, 60)
+            .content(row_alignment_case)
+            .frame();
+        layout.node("row_center_first").rect(35, 20, 20, 10);
+        layout.node("row_center_second").rect(55, 18, 10, 12);
     }
 
     #[tessera]
@@ -584,27 +576,23 @@ mod tests {
 
     #[test]
     fn unweighted_children_receive_only_the_remaining_row_width() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 60),
-            content: { constrained_unweighted_case(false); },
-            expect: {
-                node("reserved").position(0, 0).size(20, 10);
-                node("remaining").position(20, 0).size(80, 10);
-                node("exhausted").position(100, 0).size(0, 10);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(120, 60)
+            .content(|| constrained_unweighted_case(false))
+            .frame();
+        layout.node("reserved").rect(0, 0, 20, 10);
+        layout.node("remaining").rect(20, 0, 80, 10);
+        layout.node("exhausted").rect(100, 0, 0, 10);
     }
 
     #[test]
     fn unweighted_children_cannot_overallocate_before_weighted_children() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 60),
-            content: { constrained_unweighted_case(true); },
-            expect: {
-                node("reserved").position(0, 0).size(20, 10);
-                node("remaining").position(20, 0).size(80, 10);
-                node("exhausted").position(100, 0).size(0, 10);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(120, 60)
+            .content(|| constrained_unweighted_case(true))
+            .frame();
+        layout.node("reserved").rect(0, 0, 20, 10);
+        layout.node("remaining").rect(20, 0, 80, 10);
+        layout.node("exhausted").rect(100, 0, 0, 10);
     }
 }

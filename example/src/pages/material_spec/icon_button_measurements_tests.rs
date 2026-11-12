@@ -1,11 +1,9 @@
-use std::time::Duration;
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     tessera,
+    testing::UiTest,
 };
 
 #[tessera]
@@ -23,7 +21,7 @@ fn fixture(scene: usize) {
     });
 }
 
-fn control(renderer: &HeadlessRenderer, label: &str) -> Node {
+fn control(renderer: &UiTest, label: &str) -> Node {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -38,25 +36,15 @@ fn control(renderer: &HeadlessRenderer, label: &str) -> Node {
 #[ignore = "requires a native GPU adapter for actual measurement diagrams"]
 fn measurement_diagrams_preserve_native_sizes_expanded_targets_and_clicks_after_resize() {
     for scene in 0..3 {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(scene);
-            }),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1024,
-                height: 1400,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let mut renderer = UiTest::new()
+            .viewport(1024, 1400)
+            .rendered(crate::TestPipelines)
+            .content(move || fixture(scene));
         for width in [1024, 390, 1024] {
             renderer.resize(width, 1400);
-            renderer.render_frames(16);
+            renderer.frames(16);
             let scale = f64::from(width) / if scene == 1 { 676.0 } else { 1024.0 };
-            let pixels = renderer.read_pixels().unwrap();
+            let pixels = renderer.read_pixels();
             let pixel = |x: f64, y: f64| -> [u8; 3] {
                 let offset = ((y.floor() as u32 * width + x.floor() as u32) * 4) as usize;
                 pixels[offset..offset + 3].try_into().unwrap()
@@ -139,7 +127,7 @@ fn measurement_diagrams_preserve_native_sizes_expanded_targets_and_clicks_after_
             renderer.pointer_move(MOUSE_POINTER_ID, position);
             renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_ne!(
                 control(&renderer, name).description(),
                 before.description(),

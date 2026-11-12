@@ -9,10 +9,7 @@ use std::time::Duration;
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier,
-    PressKeyEventType, Px, PxPosition,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    layout::MeasureScope,
-    tessera,
+    PressKeyEventType, Px, PxPosition, layout::MeasureScope, tessera, testing::UiTest,
 };
 
 use crate::{button::button, theme::material_theme};
@@ -52,9 +49,9 @@ fn fixture(clicks: tessera_ui::testing::TestProbe<usize>) {
     });
 }
 
-fn assert_retained_frames(renderer: &mut HeadlessRenderer, frames: u32) {
+fn assert_retained_frames(renderer: &mut UiTest, frames: u32) {
     for _ in 0..frames {
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(
             renderer
                 .work()
@@ -74,27 +71,20 @@ fn assert_retained_frames(renderer: &mut HeadlessRenderer, frames: u32) {
 
 fn check_stationary_ripple(samples: u32) {
     let clicks = tessera_ui::testing::TestProbe::new(0usize);
-    let observed = clicks.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 240,
-            height: 120,
-            sample_count: samples,
-            frame_time: Duration::from_millis(20),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.step_frame();
+    let mut renderer = UiTest::new()
+        .viewport(240, 120)
+        .samples(samples)
+        .frame_step(Duration::from_millis(20))
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(clicks.clone()));
+    renderer.frames(1);
     assert!(
         renderer
             .work()
             .executed::<ContentMeasure>(tessera_ui::testing::WorkPhase::Measure)
             > 0
     );
-    renderer.render_frames(4);
+    renderer.frames(4);
     let (_, node) = renderer
         .accessibility_snapshot()
         .unwrap()
@@ -110,8 +100,8 @@ fn check_stationary_ripple(samples: u32) {
     renderer.pointer_move(MOUSE_POINTER_ID, center);
     renderer.pointer_press(MOUSE_POINTER_ID, center, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, center, PressKeyEventType::Left);
-    renderer.render_frames(40);
-    let baseline = renderer.read_pixels().unwrap();
+    renderer.frames(40);
+    let baseline = renderer.read_pixels();
     let builds = renderer
         .work_totals()
         .count("retained_content", tessera_ui::testing::WorkPhase::Build);
@@ -120,21 +110,21 @@ fn check_stationary_ripple(samples: u32) {
         renderer.pointer_press(MOUSE_POINTER_ID, center, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, center, PressKeyEventType::Left);
         assert_retained_frames(&mut renderer, 2);
-        let early = renderer.read_pixels().unwrap();
+        let early = renderer.read_pixels();
         assert!(early != baseline, "click must paint a visible ripple");
         assert_retained_frames(&mut renderer, 4);
-        let later = renderer.read_pixels().unwrap();
+        let later = renderer.read_pixels();
         assert!(
             later != early,
             "ripple pixels must advance while the pointer and application state are unchanged"
         );
         assert_retained_frames(&mut renderer, 20);
         assert!(
-            renderer.read_pixels().unwrap() == baseline,
+            renderer.read_pixels() == baseline,
             "the final frame must clear the ripple without another input event"
         );
         assert_retained_frames(&mut renderer, 10);
-        assert!(renderer.read_pixels().unwrap() == baseline);
+        assert!(renderer.read_pixels() == baseline);
         assert_eq!(clicks.get(), click);
         assert_eq!(
             renderer

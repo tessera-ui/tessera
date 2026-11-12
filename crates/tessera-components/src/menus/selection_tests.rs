@@ -1,9 +1,9 @@
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Modifier,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Role, Toggled},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{surface::surface, theme::material_theme};
@@ -60,7 +60,7 @@ fn fixture() {
     });
 }
 
-fn item(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn item(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .expect("menu semantics")
@@ -70,32 +70,20 @@ fn item(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
         .unwrap_or_else(|| panic!("missing {role:?} {label}"))
 }
 
-fn action(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
+fn action(renderer: &mut UiTest, label: &str, role: Role, action: Action) {
     let target_node = item(renderer, label, role).0;
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node,
-        data: None,
-    }));
-    renderer.render_frames(8);
+    assert!(renderer.accessibility_action(target_node, action));
+    renderer.frames(8);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn explicit_menu_selection_roles_preserve_independent_checkbox_actions() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 600,
-            height: 600,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .expect("native menu renderer");
-    renderer.render_frames(20);
+    let mut renderer = UiTest::new()
+        .viewport(600, 600)
+        .rendered(crate::TesseraComponents)
+        .content(fixture);
+    renderer.frames(20);
     let generic = item(&renderer, "Visual selection action", Role::MenuItem).1;
     assert_eq!(generic.toggled(), None);
     assert_eq!(generic.is_selected(), None);

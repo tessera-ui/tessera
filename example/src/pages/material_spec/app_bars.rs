@@ -1,8 +1,8 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     app_bar::{
-        AppBarScrollBehavior, AppBarScrollController, AppBarTitleAlignment, TopAppBarVariant, app_bar,
-        app_bar_scroll_provider, top_app_bar,
+        AppBarScrollBehavior, AppBarScrollController, AppBarTitleAlignment, TopAppBarVariant,
+        app_bar, app_bar_scroll_provider, top_app_bar,
     },
     boxed::boxed,
     button::button,
@@ -3441,9 +3441,7 @@ fn app_annotations(geometry: State<Geometry>, measurements: bool, variant: TopAp
 mod tests {
 
     use tessera_ui::{
-        MOUSE_POINTER_ID, PressKeyEventType, PxPosition, PxRect,
-        headless::{HeadlessConfig, HeadlessRenderer},
-        scaled_box,
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition, PxRect, scaled_box, testing::UiTest,
     };
 
     use super::*;
@@ -3529,32 +3527,23 @@ mod tests {
         });
     }
 
-    fn renderer(case: Case) -> (HeadlessRenderer, State<Geometry>) {
+    fn renderer(case: Case) -> (UiTest<'static>, State<Geometry>) {
         let geometry = tessera_ui::testing::TestProbe::default();
         let observed = geometry.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(case, observed.clone());
-            }),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1200,
-                height: 800,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .expect("native app bar figures");
-        renderer.render_frames(6);
+        let mut renderer = UiTest::new()
+            .viewport(1200, 800)
+            .rendered(crate::TestPipelines)
+            .content(move || fixture(case, observed.clone()));
+        renderer.frames(6);
         (renderer, geometry.get().expect("mounted app bar geometry"))
     }
 
-    fn click(renderer: &mut HeadlessRenderer, bounds: PxRect) {
+    fn click(renderer: &mut UiTest, bounds: PxRect) {
         let position = PxPosition::new(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
         renderer.pointer_move(MOUSE_POINTER_ID, position);
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
     }
 
     #[test]
@@ -3737,11 +3726,7 @@ mod tests {
         }
     }
 
-    fn find_bounds(
-        renderer: &HeadlessRenderer,
-        role: Option<Role>,
-        label: &str,
-    ) -> Option<[f64; 4]> {
+    fn find_bounds(renderer: &UiTest, role: Option<Role>, label: &str) -> Option<[f64; 4]> {
         renderer
             .accessibility_snapshot()
             .expect("app bar semantics")
@@ -3754,7 +3739,7 @@ mod tests {
             .map(|rect| [rect.x0, rect.y0, rect.x1, rect.y1])
     }
 
-    fn click_at(renderer: &mut HeadlessRenderer, bounds: [f64; 4]) {
+    fn click_at(renderer: &mut UiTest, bounds: [f64; 4]) {
         let position = PxPosition::from_f32_xy(
             ((bounds[0] + bounds[2]) * 0.5) as f32,
             ((bounds[1] + bounds[3]) * 0.5) as f32,
@@ -3762,7 +3747,7 @@ mod tests {
         renderer.pointer_move(MOUSE_POINTER_ID, position);
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
     }
 
     #[test]
@@ -3786,7 +3771,7 @@ mod tests {
         let (renderer, geometry_state) = renderer(Case::SearchColor);
         let geometry = geometry_state.get();
         let field = *geometry.get("search").expect("native search field");
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let at = |x: i32, y: i32| {
             let index = (y as usize * 1200 + x as usize) * 4;
             [pixels[index], pixels[index + 1], pixels[index + 2]]
@@ -3828,7 +3813,7 @@ mod tests {
     #[ignore = "Requires a GPU adapter for the real component pipelines"]
     fn hiding_app_bar_hides_on_scroll_up_and_returns_on_scroll_down() {
         let (mut renderer, _geometry_state) = renderer(Case::Hiding);
-        let height = |renderer: &HeadlessRenderer| {
+        let height = |renderer: &UiTest| {
             find_bounds(renderer, None, "Hiding app bar bar").map_or(0.0, |rect| rect[3] - rect[1])
         };
         assert_eq!(height(&renderer), 64.0);
@@ -3839,10 +3824,10 @@ mod tests {
             (content[1] + 120.0) as f32,
         );
         renderer.pointer_scroll(MOUSE_POINTER_ID, point, 0.0, -200.0);
-        renderer.render_frames(60);
+        renderer.frames(60);
         assert_eq!(height(&renderer), 0.0, "scrolling content up hides the bar");
         renderer.pointer_scroll(MOUSE_POINTER_ID, point, 0.0, 120.0);
-        renderer.render_frames(60);
+        renderer.frames(60);
         assert_eq!(
             height(&renderer),
             64.0,

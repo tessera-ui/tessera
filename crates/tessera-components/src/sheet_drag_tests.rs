@@ -9,11 +9,8 @@ use std::time::Duration;
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier, PointerChange,
-    PressKeyEventType, PxPosition, ScrollEventSource, State,
-    accesskit::Role,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    time::Instant,
+    PressKeyEventType, PxPosition, ScrollEventSource, State, accesskit::Role, remember, tessera,
+    testing::UiTest, time::Instant,
 };
 
 use crate::{
@@ -153,7 +150,7 @@ fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>)
     });
 }
 
-fn bounds(renderer: &HeadlessRenderer) -> tessera_ui::accesskit::Rect {
+fn bounds(renderer: &UiTest) -> tessera_ui::accesskit::Rect {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -190,7 +187,7 @@ fn connection(observed: &tessera_ui::testing::TestProbe<FixtureHandles>) -> Nest
     observed.get().connection.unwrap()
 }
 
-fn assert_reused_measurements(renderer: &HeadlessRenderer, kind: Kind) {
+fn assert_reused_measurements(renderer: &UiTest, kind: Kind) {
     assert!(
         renderer
             .work()
@@ -202,7 +199,7 @@ fn assert_reused_measurements(renderer: &HeadlessRenderer, kind: Kind) {
     );
 }
 
-fn drag_handle(renderer: &mut HeadlessRenderer, scale: f64) -> PxPosition {
+fn drag_handle(renderer: &mut UiTest, scale: f64) -> PxPosition {
     let handle = renderer
         .accessibility_snapshot()
         .unwrap()
@@ -219,15 +216,15 @@ fn drag_handle(renderer: &mut HeadlessRenderer, scale: f64) -> PxPosition {
     );
     renderer.pointer_move(MOUSE_POINTER_ID, start);
     renderer.pointer_press(MOUSE_POINTER_ID, start, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_move(
         MOUSE_POINTER_ID,
         PxPosition::from_f32_xy(start.x, start.y + 4.0 * scale as f32),
     );
-    renderer.step_frame();
+    renderer.frames(1);
     let end = PxPosition::from_f32_xy(start.x, start.y + 40.0 * scale as f32);
     renderer.pointer_move(MOUSE_POINTER_ID, end);
-    renderer.render_frames(2);
+    renderer.frames(2);
     end
 }
 
@@ -241,25 +238,16 @@ fn check(samples: u32) {
     ] {
         for scale in [1.0, 1.5] {
             let observed = tessera_ui::testing::TestProbe::default();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new({
-                    let observed = observed.clone();
-                    move || fixture(kind, observed.clone())
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 800,
-                    height: 600,
-                    scale_factor: scale,
-                    sample_count: samples,
-                    frame_time: Duration::from_millis(10),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(10);
+            let mut renderer = UiTest::new()
+                .viewport(800, 600)
+                .scale_factor(scale)
+                .samples(samples)
+                .frame_step(Duration::from_millis(10))
+                .rendered(crate::TesseraComponents)
+                .content(|| fixture(kind, observed.clone()));
+            renderer.frames(10);
             let origin = bounds(&renderer);
-            let baseline = renderer.read_pixels().unwrap();
+            let baseline = renderer.read_pixels();
             assert_reused_measurements(&renderer, kind);
             let short = if matches!(kind, Kind::Bottom) {
                 40.0
@@ -275,23 +263,23 @@ fn check(samples: u32) {
                 ),
                 delta
             );
-            renderer.step_frame();
+            renderer.frames(1);
             assert!(
                 (displacement(kind, origin, bounds(&renderer)) - short as f64 * scale).abs() < 0.01
             );
             assert_reused_measurements(&renderer, kind);
             connection(&observed).pre_fling(ScrollVelocity::ZERO);
-            renderer.step_frame();
+            renderer.frames(1);
             let after_release = displacement(kind, origin, bounds(&renderer));
             assert!(
                 after_release > 0.0 && after_release < short as f64 * scale,
                 "{kind:?}: release must animate rather than snap"
             );
             assert_reused_measurements(&renderer, kind);
-            renderer.render_frames(80);
+            renderer.frames(80);
             assert_eq!(observed.get().closes, 0);
             assert_eq!(bounds(&renderer), origin);
-            assert!(renderer.read_pixels().unwrap() == baseline);
+            assert!(renderer.read_pixels() == baseline);
 
             if matches!(kind, Kind::Bottom) {
                 drag_handle(&mut renderer, scale);
@@ -306,10 +294,10 @@ fn check(samples: u32) {
                     CursorEventContent::Cancelled(PressKeyEventType::Left),
                     GestureState::TapCandidate,
                 ));
-                renderer.render_frames(2);
+                renderer.frames(2);
                 let cancelled_offset = displacement(kind, origin, bounds(&renderer));
                 assert!(cancelled_offset > 0.0 && cancelled_offset < 36.0 * scale);
-                renderer.render_frames(80);
+                renderer.frames(80);
                 assert_eq!(observed.get().closes, 0);
                 assert_eq!(bounds(&renderer), origin);
             }
@@ -324,34 +312,34 @@ fn check(samples: u32) {
                 scroll(kind, long * scale as f32),
                 ScrollEventSource::Touch,
             );
-            renderer.step_frame();
+            renderer.frames(1);
             let dragged = bounds(&renderer);
             connection(&observed).pre_fling(ScrollVelocity::ZERO);
-            renderer.step_frame();
+            renderer.frames(1);
             assert_eq!(
                 observed.get().closes,
                 1,
                 "{kind:?}: dismissal threshold must follow density/extent"
             );
             assert!(displacement(kind, dragged, bounds(&renderer)).abs() < 32.0 * scale);
-            renderer.render_frames(5);
+            renderer.frames(5);
             let closing = bounds(&renderer);
             observed.get().open.unwrap().set(true);
-            renderer.step_frame();
+            renderer.frames(1);
             assert!(
                 displacement(kind, closing, bounds(&renderer)).abs() < 32.0 * scale,
                 "{kind:?}: reopening must preserve drag displacement"
             );
-            renderer.render_frames(80);
+            renderer.frames(80);
             assert_eq!(bounds(&renderer), origin);
-            assert!(renderer.read_pixels().unwrap() == baseline);
+            assert!(renderer.read_pixels() == baseline);
 
             connection(&observed).post_scroll(
                 ScrollDelta::ZERO,
                 scroll(kind, 8.0 * scale as f32),
                 ScrollEventSource::Touch,
             );
-            renderer.step_frame();
+            renderer.frames(1);
             let speed = if matches!(kind, Kind::Bottom) {
                 150.0
             } else {
@@ -359,13 +347,13 @@ fn check(samples: u32) {
             } * scale as f32;
             let velocity = scroll(kind, speed);
             connection(&observed).pre_fling(ScrollVelocity::new(velocity.x, velocity.y));
-            renderer.step_frame();
+            renderer.frames(1);
             assert_eq!(
                 observed.get().closes,
                 2,
                 "{kind:?}: fast outward flings must dismiss"
             );
-            renderer.render_frames(80);
+            renderer.frames(80);
             assert!(
                 !renderer
                     .accessibility_snapshot()
@@ -375,23 +363,23 @@ fn check(samples: u32) {
                     .any(|(_, n)| n.role() == Role::Dialog)
             );
             observed.get().open.unwrap().set(true);
-            renderer.render_frames(80);
-            assert!(renderer.read_pixels().unwrap() == baseline);
+            renderer.frames(80);
+            assert!(renderer.read_pixels() == baseline);
 
             connection(&observed).post_scroll(
                 ScrollDelta::ZERO,
                 scroll(kind, long * scale as f32),
                 ScrollEventSource::Touch,
             );
-            renderer.step_frame();
+            renderer.frames(1);
             connection(&observed).pre_fling(ScrollVelocity::new(-velocity.x, -velocity.y));
-            renderer.render_frames(80);
+            renderer.frames(80);
             assert_eq!(
                 observed.get().closes,
                 2,
                 "{kind:?}: fast inward flings must return to the open anchor"
             );
-            assert!(renderer.read_pixels().unwrap() == baseline);
+            assert!(renderer.read_pixels() == baseline);
 
             observed.get().accept_close.unwrap().set(false);
             connection(&observed).post_scroll(
@@ -399,28 +387,28 @@ fn check(samples: u32) {
                 scroll(kind, long * scale as f32),
                 ScrollEventSource::Touch,
             );
-            renderer.step_frame();
+            renderer.frames(1);
             connection(&observed).pre_fling(ScrollVelocity::ZERO);
-            renderer.render_frames(80);
+            renderer.frames(80);
             assert_eq!(observed.get().closes, 3);
             assert!(observed.get().open.unwrap().get());
             assert!(
-                renderer.read_pixels().unwrap() == baseline,
+                renderer.read_pixels() == baseline,
                 "{kind:?}: a declined dismissal must settle back"
             );
             if !matches!(kind, Kind::Bottom) {
                 observed.get().accept_close.unwrap().set(true);
                 renderer.resize(320, 600);
-                renderer.render_frames(10);
+                renderer.frames(10);
                 let narrow = bounds(&renderer);
                 connection(&observed).post_scroll(
                     ScrollDelta::ZERO,
                     scroll(kind, 90.0 * scale as f32),
                     ScrollEventSource::Touch,
                 );
-                renderer.step_frame();
+                renderer.frames(1);
                 connection(&observed).pre_fling(ScrollVelocity::ZERO);
-                renderer.render_frames(80);
+                renderer.frames(80);
                 assert_eq!(observed.get().closes, 3);
                 assert_eq!(bounds(&renderer), narrow);
                 connection(&observed).post_scroll(
@@ -428,9 +416,9 @@ fn check(samples: u32) {
                     scroll(kind, 180.0 * scale as f32),
                     ScrollEventSource::Touch,
                 );
-                renderer.step_frame();
+                renderer.frames(1);
                 connection(&observed).pre_fling(ScrollVelocity::ZERO);
-                renderer.render_frames(80);
+                renderer.frames(80);
                 assert_eq!(
                     observed.get().closes,
                     4,
@@ -445,7 +433,7 @@ fn check(samples: u32) {
                 };
                 observed.get().edge.unwrap().set(edge);
                 observed.get().open.unwrap().set(true);
-                renderer.render_frames(80);
+                renderer.frames(80);
                 let flipped = bounds(&renderer);
                 let delta = scroll(reversed, 20.0 * scale as f32);
                 assert_eq!(
@@ -456,13 +444,13 @@ fn check(samples: u32) {
                     ),
                     delta
                 );
-                renderer.step_frame();
+                renderer.frames(1);
                 assert!(
                     (displacement(reversed, flipped, bounds(&renderer)) - 20.0 * scale).abs()
                         < 0.01
                 );
                 connection(&observed).pre_fling(ScrollVelocity::ZERO);
-                renderer.render_frames(80);
+                renderer.frames(80);
                 assert_eq!(observed.get().closes, 4);
                 assert_eq!(bounds(&renderer), flipped);
             } else {
@@ -470,7 +458,7 @@ fn check(samples: u32) {
                 for width in [600.0, 700.0] {
                     let width = (width * scale) as u32;
                     renderer.resize(width, 600);
-                    renderer.step_frame();
+                    renderer.frames(1);
                     assert!(
                         renderer
                             .work()
@@ -478,52 +466,52 @@ fn check(samples: u32) {
                             .any(|work| work.target.ends_with("bottom_sheet::BottomSheetLayout")),
                         "resizing across the sheet width limit must update constraints"
                     );
-                    renderer.render_frames(10);
+                    renderer.frames(10);
                     let resized = bounds(&renderer);
                     assert_eq!(resized.width(), origin.width());
                     assert_eq!(resized.height(), origin.height());
                     assert_eq!(resized.y1, origin.y1);
                     assert!((resized.x0 - (f64::from(width) - resized.width()) / 2.0).abs() < 0.01);
-                    let resized_pixels = renderer.read_pixels().unwrap();
+                    let resized_pixels = renderer.read_pixels();
                     connection(&observed).post_scroll(
                         ScrollDelta::ZERO,
                         scroll(kind, 20.0 * scale as f32),
                         ScrollEventSource::Touch,
                     );
-                    renderer.step_frame();
+                    renderer.frames(1);
                     assert!(
                         (displacement(kind, resized, bounds(&renderer)) - 20.0 * scale).abs()
                             < 0.01
                     );
                     assert_reused_measurements(&renderer, kind);
                     connection(&observed).pre_fling(ScrollVelocity::ZERO);
-                    renderer.render_frames(80);
+                    renderer.frames(80);
                     assert_eq!(bounds(&renderer), resized);
                     assert_eq!(observed.get().closes, 3);
-                    assert!(renderer.read_pixels().unwrap() == resized_pixels);
+                    assert!(renderer.read_pixels() == resized_pixels);
                 }
                 renderer.resize(800, 600);
-                renderer.render_frames(10);
+                renderer.frames(10);
                 assert_eq!(bounds(&renderer), origin);
-                assert!(renderer.read_pixels().unwrap() == baseline);
+                assert!(renderer.read_pixels() == baseline);
                 let end = drag_handle(&mut renderer, scale);
-                renderer.render_frames(10);
+                renderer.frames(10);
                 renderer.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Left);
-                renderer.render_frames(2);
+                renderer.frames(2);
                 assert_eq!(observed.get().closes, 3);
                 let released = displacement(kind, origin, bounds(&renderer));
                 assert!(released > 0.0 && released < 36.0 * scale);
-                renderer.render_frames(80);
-                assert!(renderer.read_pixels().unwrap() == baseline);
+                renderer.frames(80);
+                assert!(renderer.read_pixels() == baseline);
                 let end = drag_handle(&mut renderer, scale);
                 renderer.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Left);
-                renderer.render_frames(2);
+                renderer.frames(2);
                 assert_eq!(
                     observed.get().closes,
                     4,
                     "a fast handle fling must dismiss below the distance threshold"
                 );
-                renderer.render_frames(80);
+                renderer.frames(80);
                 assert!(!observed.get().open.unwrap().get());
             }
         }

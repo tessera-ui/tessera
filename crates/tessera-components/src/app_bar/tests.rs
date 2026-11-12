@@ -1,9 +1,8 @@
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, State,
     accesskit::{Rect, Role},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember,
+    focus, remember,
+    testing::UiTest,
 };
 
 use crate::{icon_button::IconButtonColorStyle, painter::Painter, theme::material_theme};
@@ -112,7 +111,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn bounds(renderer: &HeadlessRenderer, label: &str, role: Role) -> Rect {
+fn bounds(renderer: &UiTest, label: &str, role: Role) -> Rect {
     let nodes = renderer.accessibility_snapshot().expect("tree").nodes;
     nodes
         .iter()
@@ -131,7 +130,7 @@ fn bounds(renderer: &HeadlessRenderer, label: &str, role: Role) -> Rect {
         .expect("bounds")
 }
 
-fn toolbar(renderer: &HeadlessRenderer) -> Rect {
+fn toolbar(renderer: &UiTest) -> Rect {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -148,16 +147,16 @@ fn near(actual: f64, expected: f64) {
     assert!((actual - expected).abs() <= 1.0, "{actual} != {expected}");
 }
 
-fn icon_color(renderer: &HeadlessRenderer, label: &str, expected: [u8; 3]) {
+fn icon_color(renderer: &UiTest, label: &str, expected: [u8; 3]) {
     let bounds = bounds(renderer, label, Role::Button);
     let x = ((bounds.x0 + bounds.x1) / 2.0) as usize;
     let y = ((bounds.y0 + bounds.y1) / 2.0) as usize;
     let offset = (y * renderer.physical_size().width as usize + x) * 4;
-    let pixels = renderer.read_pixels().expect("pixels");
+    let pixels = renderer.read_pixels();
     assert_eq!(&pixels[offset..offset + 3], &expected);
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str) {
+fn click(renderer: &mut UiTest, label: &str) {
     let bounds = bounds(renderer, label, Role::Button);
     let position = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
@@ -165,27 +164,20 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
     );
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
 fn check_bar(samples: u32) {
     let observed = tessera_ui::testing::TestProbe::default();
-    let fixture_observed = observed.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(fixture_observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 540,
-            height: 600,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(540, 600)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(8);
     let settings = observed.get().settings.expect("settings");
     let clicks = observed.get().clicks.expect("clicks");
     let published = renderer.accessibility_snapshot().expect("tree");
@@ -219,11 +211,11 @@ fn check_bar(samples: u32) {
     icon_color(&renderer, "Action 0", [0, 255, 0]);
 
     settings.with_mut(|values| values.alignment = AppBarTitleAlignment::Center);
-    renderer.render_frames(5);
+    renderer.frames(5);
     let title = bounds(&renderer, "Inbox", Role::Label);
     near((title.x0 + title.x1) / 2.0, 270.0);
     settings.with_mut(|values| values.actions = 4);
-    renderer.render_frames(5);
+    renderer.frames(5);
     let title = bounds(&renderer, "Inbox", Role::Label);
     assert!(title.x0 >= bounds(&renderer, "Back", Role::Button).x1);
     assert!(title.x1 <= bounds(&renderer, "Action 0", Role::Button).x0);
@@ -238,7 +230,7 @@ fn check_bar(samples: u32) {
             values.subtitle = None;
             values.actions = 2;
         });
-        renderer.render_frames(5);
+        renderer.frames(5);
         near(toolbar(&renderer).y1, without);
         let title = bounds(&renderer, "Inbox", Role::Label);
         near(title.y1 - title.y0, title_height);
@@ -246,7 +238,7 @@ fn check_bar(samples: u32) {
             near(title.y0, 96.0);
         }
         settings.with_mut(|values| values.subtitle = Some("3 unread".to_owned()));
-        renderer.render_frames(5);
+        renderer.frames(5);
         near(toolbar(&renderer).y1, with);
         let title = bounds(&renderer, "Inbox", Role::Label);
         let subtitle = bounds(&renderer, "3 unread", Role::Label);
@@ -258,7 +250,7 @@ fn check_bar(samples: u32) {
         );
     }
     settings.with_mut(|values| values.changed_colors = true);
-    renderer.render_frames(5);
+    renderer.frames(5);
     icon_color(&renderer, "Back", [255, 0, 0]);
     icon_color(&renderer, "Action 0", [0, 0, 255]);
     click(&mut renderer, "Back");
@@ -276,7 +268,7 @@ fn check_bar(samples: u32) {
             values.alignment = AppBarTitleAlignment::Center;
             values.subtitle = Some("Brand subtitle".to_owned());
         });
-        renderer.render_frames(5);
+        renderer.frames(5);
         let brand = bounds(&renderer, "Brand", Role::Image);
         near(brand.width(), 120.0);
         near(brand.height(), 36.0);
@@ -301,7 +293,7 @@ fn check_bar(samples: u32) {
         values.subtitle = None;
         values.variant = TopAppBarVariant::Small;
     });
-    renderer.render_frames(5);
+    renderer.frames(5);
     near(bounds(&renderer, "Inbox", Role::Label).x0, 24.0);
     settings.with_mut(|values| {
         values.title = "A longer screen title that wraps on narrow windows".to_owned();
@@ -309,7 +301,7 @@ fn check_bar(samples: u32) {
         values.actions = 0;
     });
     renderer.resize(240, 600);
-    renderer.render_frames(5);
+    renderer.frames(5);
     let title = bounds(
         &renderer,
         "A longer screen title that wraps on narrow windows",
@@ -319,7 +311,7 @@ fn check_bar(samples: u32) {
     assert!(title.y1 - title.y0 > 54.0);
     near(toolbar(&renderer).y1 - title.y1, 18.0);
     settings.with_mut(|values| values.variant = TopAppBarVariant::Small);
-    renderer.render_frames(5);
+    renderer.frames(5);
     let title = bounds(
         &renderer,
         "A longer screen title that wraps on narrow windows",
@@ -333,14 +325,14 @@ fn check_bar(samples: u32) {
     focus::clear_focus(true);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(530.0, 590.0));
     renderer.resize(540, 600);
-    renderer.render_frames(90);
-    let pixels = renderer.read_pixels().expect("settled pixels");
+    renderer.frames(90);
+    let pixels = renderer.read_pixels();
     renderer.resize(1, 1);
-    renderer.render_frames(3);
+    renderer.frames(3);
     renderer.resize(540, 600);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert!(
-        renderer.read_pixels().expect("restored pixels") == pixels,
+        renderer.read_pixels() == pixels,
         "resize restores the complete app bar"
     );
 }

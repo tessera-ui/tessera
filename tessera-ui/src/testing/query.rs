@@ -33,12 +33,14 @@ pub fn visible_text(text: &str) -> String {
 }
 
 /// Component geometry and semantics captured from a completed frame.
+#[derive(Clone)]
 pub struct ComponentSnapshot {
     session: RuntimeSessionId,
     nodes: Vec<ComponentSnapshotNode>,
 }
 
 /// One component's observed output in a snapshot.
+#[derive(Clone)]
 pub struct ComponentSnapshotNode {
     id: NodeId,
     parent: Option<NodeId>,
@@ -304,10 +306,8 @@ mod tests {
 
     use crate::{
         AccessibilityActionHandler, ComputedData, Constraint, LayoutPolicy, LayoutResult,
-        MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode,
-        layout::MeasureScope,
-        tessera,
-        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+        MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, layout::MeasureScope,
+        tessera, testing::UiTest,
     };
 
     struct Target(&'static str, Role);
@@ -350,8 +350,8 @@ mod tests {
 
     #[test]
     fn queries_preserve_fractional_layout_and_published_semantic_ancestry() {
-        let mut session = start_layout_test_session(layout_test(query_figure));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(query_figure);
+        session.frame();
         let components = ComponentSnapshot::capture();
         let target = components.tagged("target");
         let bounds = target.bounds().expect("test fixture provides bounds");

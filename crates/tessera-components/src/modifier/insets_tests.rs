@@ -1,9 +1,8 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, Insets, Modifier, State, WindowInsets, WindowInsetsController, remember, tessera,
-    testing::{
-        TestProbe, WorkPhase, layout_test, pump_layout_test_session, start_layout_test_session,
-    },
+    testing::WorkPhase,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::boxed::boxed;
@@ -73,38 +72,35 @@ fn fixture(observed: TestProbe<Option<Handles>>) {
 #[test]
 fn nested_insets_preserve_consumption_through_cached_layout_and_live_updates() {
     let observed = TestProbe::default();
-    let mut session = start_layout_test_session(
-        layout_test({
-            let observed = observed.clone();
-            move || {
-                fixture(observed.clone());
-            }
+    let mut session = UiTest::new()
+        .content(|| {
+            fixture(observed.clone());
         })
-        .viewport_px(300, 300),
-    );
-    let first = pump_layout_test_session(&mut session, 0);
-    first.node("leaf").position(5, 30).size(10, 10);
+        .viewport(300, 300);
+    let first = session.frame();
+    first.node("leaf").rect(5, 30, 10, 10);
     first.node("keyboard").size(200, 60);
     let handles = observed.get().unwrap();
     session.run(|| handles.top.set(Dp(20.0)));
-    pump_layout_test_session(&mut session, 1)
+    session
+        .advance(std::time::Duration::from_nanos(1))
         .node("leaf")
         .position(5, 30);
     session.run(|| handles.height.set(Dp(12.0)));
-    pump_layout_test_session(&mut session, 2)
+    session
+        .advance(std::time::Duration::from_nanos(1))
         .node("leaf")
-        .position(5, 30)
-        .size(10, 12);
+        .rect(5, 30, 10, 12);
     session.run(|| {
         handles.insets.set(
             Insets::new(Dp(5.0), Dp(50.0), Dp(7.0), Dp(20.0)),
             Insets::bottom(Dp(100.0)),
         )
     });
-    let changed = pump_layout_test_session(&mut session, 3);
-    changed.node("leaf").position(5, 50).size(10, 12);
+    let changed = session.advance(std::time::Duration::from_nanos(1));
+    changed.node("leaf").rect(5, 50, 10, 12);
     changed.node("keyboard").size(200, 80);
     assert_eq!(session.work().phase(WorkPhase::Build).count(), 0);
-    pump_layout_test_session(&mut session, 4);
+    session.advance(std::time::Duration::from_nanos(1));
     assert_eq!(session.work().phase(WorkPhase::Measure).count(), 0);
 }

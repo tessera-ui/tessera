@@ -498,7 +498,7 @@ fn stop_indicator_bounds(width: Px, height: Px) -> (PxPosition, Px) {
 /// linear_progress_indicator().progress(0.75);
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn linear_progress_indicator(
@@ -705,7 +705,7 @@ pub(crate) fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// circular_progress_indicator().progress(0.6);
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn circular_progress_indicator(
@@ -820,7 +820,7 @@ pub fn circular_progress_indicator(
 /// progress().value(0.75);
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn progress(
@@ -851,10 +851,8 @@ mod tests {
     use std::time::Duration;
 
     use tessera_ui::{
-        Color, State,
-        headless::{HeadlessConfig, HeadlessRenderer},
-        remember, tessera,
-        testing::TestProbe,
+        Color, State, remember, tessera,
+        testing::{TestProbe, UiTest},
     };
 
     use crate::theme::material_theme;
@@ -893,24 +891,16 @@ mod tests {
                 for linear in [false, true] {
                     let probe = TestProbe::default();
                     let observed = probe.clone();
-                    let mut renderer = HeadlessRenderer::new(
-                        Box::new(move || {
-                            animated_fixture(linear, probe.clone());
-                        }),
-                        vec![Box::new(crate::TesseraComponents)],
-                        HeadlessConfig {
-                            width: 256,
-                            height: 80,
-                            frame_time: Duration::from_millis(250),
-                            ..Default::default()
-                        },
-                    )
-                    .expect("renderer");
-                    renderer.render_frames(1);
-                    let first = renderer.read_pixels().expect("first pose");
+                    let mut renderer = UiTest::new()
+                        .viewport(256, 80)
+                        .frame_step(Duration::from_millis(250))
+                        .rendered(crate::TesseraComponents)
+                        .content(move || animated_fixture(linear, probe.clone()));
+                    renderer.frames(1);
+                    let first = renderer.read_pixels();
                     assert!(first.chunks_exact(4).any(|pixel| pixel[3] > 0));
-                    renderer.render_frames(2);
-                    let moving = renderer.read_pixels().expect("later pose");
+                    renderer.frames(2);
+                    let moving = renderer.read_pixels();
                     assert!(
                         first
                             .chunks_exact(4)
@@ -919,14 +909,10 @@ mod tests {
                         "indeterminate progress must subscribe to frame changes, linear={linear}"
                     );
                     observed.get().unwrap().set(true);
-                    renderer.render_frames(2);
-                    let stopped = renderer.read_pixels().expect("determinate pose");
-                    renderer.render_frames(4);
-                    crate::test_utils::assert_pixels_near(
-                        &stopped,
-                        &renderer.read_pixels().expect("retained determinate pose"),
-                        256,
-                    );
+                    renderer.frames(2);
+                    let stopped = renderer.read_pixels();
+                    renderer.frames(4);
+                    crate::test_utils::assert_pixels_near(&stopped, &renderer.read_pixels(), 256);
                 }
             },
         );

@@ -283,11 +283,7 @@ pub(super) fn labeling() {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use tessera_components::theme::material_theme;
-    use tessera_ui::{
-        MOUSE_POINTER_ID, PressKeyEventType,
-        accesskit::Toggled,
-        headless::{HeadlessConfig, HeadlessRenderer},
-    };
+    use tessera_ui::{MOUSE_POINTER_ID, PressKeyEventType, accesskit::Toggled, testing::UiTest};
 
     use super::*;
 
@@ -296,7 +292,7 @@ mod tests {
         material_theme().child(state_selection);
     }
 
-    fn click(renderer: &mut HeadlessRenderer, label: &str) {
+    fn click(renderer: &mut UiTest, label: &str) {
         let snapshot = renderer.accessibility_snapshot().unwrap();
         let node = snapshot
             .nodes
@@ -311,24 +307,17 @@ mod tests {
         renderer.pointer_move(MOUSE_POINTER_ID, position);
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(20);
+        renderer.frames(20);
     }
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn state_dropdown_updates_trigger_and_retains_selected_state_after_reopening() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 650,
-                height: 440,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(20);
+        let mut renderer = UiTest::new()
+            .viewport(650, 440)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(20);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         assert!(
             snapshot

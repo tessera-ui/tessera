@@ -7,12 +7,12 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
+    accesskit::{Action, Node, NodeId, Orientation, Role, Toggled},
     focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    layout::{Stack, layout},
+    layout::Stack,
+    layout::layout,
     remember, tessera,
-    testing::TestProbe,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -29,7 +29,7 @@ use crate::{
 };
 
 use super::{
-    ButtonGroupsSelectionMode, ButtonGroupsSize, ButtonGroupsController, ButtonGroupsStyle,
+    ButtonGroupsController, ButtonGroupsSelectionMode, ButtonGroupsSize, ButtonGroupsStyle,
     button_groups,
 };
 
@@ -177,7 +177,7 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
         });
 }
 
-fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
+fn rect(renderer: &UiTest, key: &str) -> [i64; 4] {
     let snapshot = renderer.snapshot();
     let mut pending = vec![&snapshot["root"]];
     while let Some(node) = pending.pop() {
@@ -194,7 +194,7 @@ fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
     panic!("missing {key}");
 }
 
-fn button(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn button(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     let snapshot = renderer.accessibility_snapshot().unwrap();
     let mut id = snapshot
         .nodes
@@ -220,24 +220,19 @@ fn button(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
     }
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str) {
+fn click(renderer: &mut UiTest, label: &str) {
     assert!(action(renderer, label, Action::Click));
-    renderer.render_frames(45);
+    renderer.frames(45);
 }
 
-fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) -> bool {
+fn action(renderer: &mut UiTest, label: &str, action: Action) -> bool {
     let target_node = button(renderer, label).0;
-    renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node,
-        data: None,
-    })
+    renderer.accessibility_action(target_node, action)
 }
 
-fn pixel(renderer: &HeadlessRenderer, x: i64, y: i64) -> [u8; 4] {
+fn pixel(renderer: &UiTest, x: i64, y: i64) -> [u8; 4] {
     let offset = ((y as u32 * renderer.physical_size().width + x as u32) * 4) as usize;
-    renderer.read_pixels().unwrap()[offset..offset + 4]
+    renderer.read_pixels()[offset..offset + 4]
         .try_into()
         .unwrap()
 }
@@ -246,25 +241,17 @@ fn check_group_metrics(samples: u32) {
     for scale in [1.0, 1.5] {
         let probe = TestProbe::default();
         let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(probe.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 1800,
-                height: 1200,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(10);
+        let mut renderer = UiTest::new()
+            .viewport(1800, 1200)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(move || fixture(probe.clone()));
+        renderer.frames(10);
         let settings = observed.get().settings.unwrap();
         for reverse in [false, true, false] {
             settings.with_mut(|value| value.reverse_sizes = reverse);
-            renderer.render_frames(45);
+            renderer.frames(45);
             for index in 0..5 {
                 let preset = if reverse { 4 - index } else { index };
                 let height = [32.0_f64, 40.0, 56.0, 96.0, 136.0][preset];
@@ -298,7 +285,7 @@ fn check_group_metrics(samples: u32) {
                 );
                 let first = bounds[0];
                 let y = first.y0 as i64 + ((height.max(48.0) - height) * scale / 2.0) as i64;
-                let pixels = renderer.read_pixels().unwrap();
+                let pixels = renderer.read_pixels();
                 let x = ((first.x0 + first.x1) / 2.0) as usize;
                 let rows: Vec<_> = (first.y0 as usize..first.y1 as usize)
                     .filter(|row| {
@@ -377,19 +364,19 @@ fn check_group_metrics(samples: u32) {
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::False));
         assert_eq!(button(&renderer, "G1 1").1.toggled(), Some(Toggled::True));
         settings.with_mut(|value| value.multiple = true);
-        renderer.render_frames(5);
+        renderer.frames(5);
         click(&mut renderer, "G1 0");
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::True));
         assert_eq!(button(&renderer, "G1 1").1.toggled(), Some(Toggled::True));
         settings.with_mut(|value| value.multiple = false);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::True));
         assert_eq!(button(&renderer, "G1 1").1.toggled(), Some(Toggled::False));
         click(&mut renderer, "G1 0");
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::False));
         for width in [181.0, 0.0, 800.0] {
             settings.with_mut(|value| value.width = Dp(width));
-            renderer.render_frames(8);
+            renderer.frames(8);
             for index in 0..5 {
                 let first = button(&renderer, &format!("G{index} 0"))
                     .1
@@ -406,7 +393,7 @@ fn check_group_metrics(samples: u32) {
         }
         click(&mut renderer, "G1 2");
         settings.with_mut(|value| value.items = 2);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert!(
             !renderer
                 .accessibility_snapshot()
@@ -416,7 +403,7 @@ fn check_group_metrics(samples: u32) {
                 .any(|(_, node)| node.label() == Some("G1 2"))
         );
         settings.with_mut(|value| value.items = 3);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(
             button(&renderer, "G1 2").1.toggled(),
             Some(Toggled::False),
@@ -425,11 +412,11 @@ fn check_group_metrics(samples: u32) {
         assert_eq!(settings.get().calls, 7);
         let controller = observed.get().groups[1].unwrap();
         controller.with_mut(|value| value.set_selected(1, true));
-        renderer.render_frames(45);
+        renderer.frames(45);
         assert_eq!(button(&renderer, "G1 1").1.toggled(), Some(Toggled::True));
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::False));
         controller.with_mut(ButtonGroupsController::clear);
-        renderer.render_frames(45);
+        renderer.frames(45);
         assert_eq!(button(&renderer, "G1 1").1.toggled(), Some(Toggled::False));
         assert_eq!(
             settings.get().calls,
@@ -451,7 +438,7 @@ fn check_group_metrics(samples: u32) {
             assert!(pixel(&renderer, corner_x, corner_y)[1] > HALF_COVERAGE);
             renderer.pointer_move(MOUSE_POINTER_ID, point);
             renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-            renderer.render_frames(30);
+            renderer.frames(30);
             assert!(
                 pixel(&renderer, corner_x, corner_y)[1] < HALF_COVERAGE,
                 "press must reduce the inner corner for preset {index}"
@@ -463,7 +450,7 @@ fn check_group_metrics(samples: u32) {
                 "press does not activate selection"
             );
             renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-            renderer.render_frames(45);
+            renderer.frames(45);
             let selected = button(&renderer, &label);
             assert_eq!(selected.0, target.0);
             assert_eq!(selected.1.bounds(), Some(bounds));
@@ -488,7 +475,7 @@ fn check_group_metrics(samples: u32) {
                 .collect::<Vec<_>>()
         );
         settings.with_mut(|value| value.disabled_middle = true);
-        renderer.render_frames(8);
+        renderer.frames(8);
         let disabled = button(&renderer, "G1 1").1;
         assert!(disabled.is_disabled());
         assert_eq!(disabled.toggled(), Some(Toggled::True));
@@ -503,13 +490,13 @@ fn check_group_metrics(samples: u32) {
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(45);
+        renderer.frames(45);
         assert_eq!(settings.get().calls, 12);
         assert!(controller.with(|state| state.is_selected(1)));
         assert!(action(&mut renderer, "G1 0", Action::Focus));
-        renderer.render_frames(5);
+        renderer.frames(5);
         focus::request_move_focus(FocusDirection::Right);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
             button(&renderer, "G1 2").0
@@ -520,16 +507,16 @@ fn check_group_metrics(samples: u32) {
             "focus movement must not select a choice"
         );
         assert!(action(&mut renderer, "G1 0", Action::Focus));
-        renderer.render_frames(5);
+        renderer.frames(5);
         focus::request_move_focus(FocusDirection::Next);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
             button(&renderer, "G1 2").0
         );
         settings.with_mut(|value| value.required = true);
         controller.with_mut(ButtonGroupsController::clear);
-        renderer.render_frames(45);
+        renderer.frames(45);
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::True));
         click(&mut renderer, "G1 0");
         assert_eq!(
@@ -538,7 +525,7 @@ fn check_group_metrics(samples: u32) {
             "the last required selection is retained"
         );
         settings.with_mut(|value| value.multiple = true);
-        renderer.render_frames(5);
+        renderer.frames(5);
         click(&mut renderer, "G1 2");
         click(&mut renderer, "G1 0");
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::False));
@@ -546,7 +533,7 @@ fn check_group_metrics(samples: u32) {
         click(&mut renderer, "G1 2");
         assert_eq!(settings.get().calls, 14);
         settings.with_mut(|value| value.required = false);
-        renderer.render_frames(5);
+        renderer.frames(5);
         click(&mut renderer, "G1 2");
         assert_eq!(button(&renderer, "G1 2").1.toggled(), Some(Toggled::False));
         assert_eq!(settings.get().calls, 15);
@@ -554,7 +541,7 @@ fn check_group_metrics(samples: u32) {
             value.required = true;
             value.disabled_all = true;
         });
-        renderer.render_frames(8);
+        renderer.frames(8);
         for item in 0..3 {
             assert!(button(&renderer, &format!("G1 {item}")).1.is_disabled());
             assert!(!controller.with(|state| state.is_selected(item)));
@@ -564,11 +551,11 @@ fn check_group_metrics(samples: u32) {
             value.disabled_middle = false;
             value.enabled = false;
         });
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert!(button(&renderer, "G1 0").1.is_disabled());
         assert!(!action(&mut renderer, "G1 0", Action::Click));
         settings.with_mut(|value| value.enabled = true);
-        renderer.render_frames(45);
+        renderer.frames(45);
         assert!(!button(&renderer, "G1 0").1.is_disabled());
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::True));
         assert_eq!(settings.get().calls, 15);
@@ -582,7 +569,7 @@ fn check_group_metrics(samples: u32) {
         for controller in observed.get().groups.into_iter().flatten() {
             controller.with_mut(ButtonGroupsController::clear);
         }
-        renderer.render_frames(45);
+        renderer.frames(45);
         for (index, before) in before.iter().enumerate() {
             let label = format!("G{index} 0");
             let square = button(&renderer, &label);
@@ -612,7 +599,7 @@ fn check_group_metrics(samples: u32) {
             }
             click(&mut renderer, &label);
             focus::clear_focus(true);
-            renderer.render_frames(1);
+            renderer.frames(1);
             let selected = button(&renderer, &label);
             assert_eq!(selected.0, before.0);
             assert_eq!(selected.1.bounds(), before.1.bounds());
@@ -624,7 +611,7 @@ fn check_group_metrics(samples: u32) {
         }
         assert_eq!(settings.get().calls, 20);
         settings.with_mut(|value| value.square = false);
-        renderer.render_frames(45);
+        renderer.frames(45);
         for (index, before) in before.iter().enumerate() {
             let selected = button(&renderer, &format!("G{index} 0"));
             assert_eq!(selected.0, before.0);
@@ -635,7 +622,7 @@ fn check_group_metrics(samples: u32) {
             controller.with_mut(ButtonGroupsController::clear);
         }
         settings.with_mut(|value| value.square = true);
-        renderer.render_frames(45);
+        renderer.frames(45);
         let first = button(&renderer, "G1 0");
         let bounds = first.1.bounds().unwrap();
         let center = PxPosition::from_f32_xy(
@@ -650,7 +637,7 @@ fn check_group_metrics(samples: u32) {
         assert!(pixel(&renderer, inner_x, inner_y)[1] > HALF_COVERAGE);
         renderer.pointer_move(MOUSE_POINTER_ID, center);
         renderer.pointer_press(MOUSE_POINTER_ID, center, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert!(
             pixel(&renderer, outer_x, outer_y)[1] < HALF_COVERAGE,
             "square outer corner remains square while pressed"
@@ -661,7 +648,7 @@ fn check_group_metrics(samples: u32) {
         );
         assert_eq!(settings.get().calls, 20);
         renderer.pointer_release(MOUSE_POINTER_ID, center, PressKeyEventType::Left);
-        renderer.render_frames(45);
+        renderer.frames(45);
         assert_eq!(button(&renderer, "G1 0").0, first.0);
         assert_eq!(button(&renderer, "G1 0").1.bounds(), first.1.bounds());
         assert_eq!(button(&renderer, "G1 0").1.toggled(), Some(Toggled::True));
@@ -671,20 +658,20 @@ fn check_group_metrics(samples: u32) {
             .map(|index| button(&renderer, &format!("G{index} 0")).0)
             .collect();
         assert!(action(&mut renderer, "G1 0", Action::Focus));
-        renderer.step_frame();
+        renderer.frames(1);
         let focus_before = renderer.accessibility_snapshot().unwrap().focus;
         for controller in observed.get().groups.into_iter().flatten() {
             controller.with_mut(ButtonGroupsController::clear);
         }
         settings.with_mut(|value| value.connected = false);
-        renderer.render_frames(45);
+        renderer.frames(45);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
             focus_before,
             "style changes must preserve focus"
         );
         focus::clear_focus(true);
-        renderer.step_frame();
+        renderer.frames(1);
         for index in 0..5 {
             let label = format!("G{index} 0");
             let before = button(&renderer, &label);
@@ -703,7 +690,7 @@ fn check_group_metrics(samples: u32) {
             );
             click(&mut renderer, &label);
             focus::clear_focus(true);
-            renderer.step_frame();
+            renderer.frames(1);
             let selected = button(&renderer, &label);
             let bounds = selected.1.bounds().unwrap();
             assert_eq!(selected.0, before.0);
@@ -718,7 +705,7 @@ fn check_group_metrics(samples: u32) {
             .map(|index| button(&renderer, &format!("G{index} 0")))
             .collect();
         settings.with_mut(|value| value.square = false);
-        renderer.render_frames(45);
+        renderer.frames(45);
         for (index, before) in before.iter().enumerate() {
             let selected = button(&renderer, &format!("G{index} 0"));
             assert_eq!(selected.0, before.0);

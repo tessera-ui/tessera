@@ -1,10 +1,8 @@
-use std::time::Duration;
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, NodeId, Toggled},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    testing::UiTest,
 };
 
 use super::*;
@@ -37,24 +35,16 @@ fn selection_fixture() {
     });
 }
 
-fn renderer<Output: 'static>(fixture: fn() -> Output) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1024,
-            height: 1000,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(6);
+fn renderer<Output: 'static>(fixture: fn() -> Output) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(1024, 1000)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(6);
     renderer
 }
 
-fn labeled(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn labeled(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -64,7 +54,7 @@ fn labeled(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .unwrap_or_else(|| panic!("missing {label}"))
 }
 
-fn click(renderer: &mut HeadlessRenderer, bounds: tessera_ui::accesskit::Rect) {
+fn click(renderer: &mut UiTest, bounds: tessera_ui::accesskit::Rect) {
     let position = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) * 0.5) as f32,
         ((bounds.y0 + bounds.y1) * 0.5) as f32,
@@ -72,7 +62,7 @@ fn click(renderer: &mut HeadlessRenderer, bounds: tessera_ui::accesskit::Rect) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(5);
+    renderer.frames(5);
 }
 
 #[test]

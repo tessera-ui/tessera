@@ -388,7 +388,7 @@ impl SwitchMotion {
 ///         switch(checked.get()).on_toggle(move |value| checked.set(value));
 ///     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn switch(

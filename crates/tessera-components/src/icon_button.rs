@@ -383,7 +383,7 @@ fn resolve_colors(
 ///             .on_click(move || selected.set(!selected.get()));
 ///     });
 /// }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn icon_button(

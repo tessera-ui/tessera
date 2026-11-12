@@ -117,7 +117,7 @@ impl tessera_ui::LayoutPolicy for GlassProgressFillLayout {
 /// // Render a progress bar at 75% completion.
 /// glass_progress().value(0.75);
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn glass_progress(
@@ -181,7 +181,7 @@ impl tessera_ui::LayoutPolicy for GlassProgressLayout {
 
 #[cfg(test)]
 mod tests {
-    use tessera_ui::testing::{layout_test, pump_layout_test_session, start_layout_test_session};
+    use tessera_ui::testing::UiTest;
 
     use crate::{column::column, glass_slider::glass_slider};
 
@@ -205,13 +205,10 @@ mod tests {
     #[test]
     fn glass_controls_measure_their_painted_fill_from_clamped_progress() {
         for (value, width) in [(-0.5, 0), (0.25, 50), (0.75, 150), (1.5, 200)] {
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    controls(value);
-                })
-                .viewport_px(220, 60),
-            );
-            pump_layout_test_session(&mut session, 0);
+            let mut session = UiTest::new()
+                .content(move || controls(value))
+                .viewport(220, 60);
+            session.frame();
             let snapshot = session.inspect_components();
             let sizes: Vec<_> = snapshot
                 .nodes()

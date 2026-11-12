@@ -387,7 +387,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 ///     });
 /// #     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn dialog_provider(
@@ -572,7 +572,7 @@ fn dialog_provider_render(
 ///         assert!(!open.with(DialogController::is_open));
 ///     });
 /// }
-/// # tessera_ui::testing::layout_test(example).run();
+/// # tessera_ui::testing::UiTest::new().content(example).frame();
 /// ```
 #[tessera]
 pub fn full_screen_dialog(
@@ -686,7 +686,7 @@ pub fn full_screen_dialog(
 ///     });
 /// #     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn basic_dialog(

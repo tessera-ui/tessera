@@ -5,11 +5,7 @@
 //! Preserve contact artwork when input chips change state or density.
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-use tessera_ui::{
-    Color, Dp, Modifier, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-};
+use tessera_ui::{Color, Dp, Modifier, State, remember, tessera, testing::UiTest};
 
 use crate::{
     column::column,
@@ -106,8 +102,8 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     });
 }
 
-fn pixel(renderer: &HeadlessRenderer, x: i64, y: i64, color: [u8; 3]) {
-    let pixels = renderer.read_pixels().unwrap();
+fn pixel(renderer: &UiTest, x: i64, y: i64, color: [u8; 3]) {
+    let pixels = renderer.read_pixels();
     let offset = ((y as u32 * renderer.physical_size().width + x as u32) * 4) as usize;
     let actual = &pixels[offset..offset + 3];
     assert!(
@@ -119,20 +115,13 @@ fn pixel(renderer: &HeadlessRenderer, x: i64, y: i64, color: [u8; 3]) {
 fn check_avatars(samples: u32) {
     for scale in [1.0, 1.25, 1.5, 2.0] {
         let probe = tessera_ui::testing::TestProbe::default();
-        let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || fixture(observed.clone())),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 440,
-                height: 200,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(5);
+        let mut renderer = UiTest::new()
+            .viewport(440, 200)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(probe.clone()));
+        renderer.frames(5);
         let settings = probe.get().unwrap();
         let px = |dp: i64| (dp as f64 * scale) as i64;
         for source in 0..3 {
@@ -142,7 +131,7 @@ fn check_avatars(samples: u32) {
                     disabled,
                     ..Default::default()
                 });
-                renderer.render_frames(5);
+                renderer.frames(5);
                 let [x, y, width, height] = rect(&renderer, "avatar_chip");
                 let label = rect(&renderer, "Avatar label");
                 assert_eq!(height, px(48));
@@ -167,7 +156,7 @@ fn check_avatars(samples: u32) {
             selected: true,
             ..Default::default()
         });
-        renderer.render_frames(5);
+        renderer.frames(5);
         let [x, y, width, _] = rect(&renderer, "avatar_chip");
         let label = rect(&renderer, "Avatar label");
         assert_eq!(label[0] - x, px(36));
@@ -179,13 +168,13 @@ fn check_avatars(samples: u32) {
                 assist,
                 ..Default::default()
             });
-            renderer.render_frames(5);
+            renderer.frames(5);
             let outer = rect(&renderer, "avatar_chip");
             let label = rect(&renderer, "Avatar label");
             assert_eq!(label[0] - outer[0], px(34));
         }
         settings.set(Settings::default());
-        renderer.render_frames(5);
+        renderer.frames(5);
         let [x, y, _, _] = rect(&renderer, "avatar_chip");
         assert_eq!(rect(&renderer, "Avatar label")[0] - x, px(36));
         pixel(&renderer, x + px(16), y + px(24), [255, 0, 0]);

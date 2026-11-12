@@ -1970,7 +1970,8 @@ impl TextEditorController {
     }
 
     fn sync_scroll_state_from_editor(&mut self) {
-        self.scroll_controller.sync_from_edit_state(&self.edit_state);
+        self.scroll_controller
+            .sync_from_edit_state(&self.edit_state);
     }
 
     #[cfg(test)]
@@ -2268,7 +2269,8 @@ impl TextEditorController {
         self.edit_state.set_wrap(wrap);
         if single_line {
             self.scroll_controller.reset_vertical();
-            self.edit_state.set_scroll(self.scroll_controller.as_scroll());
+            self.edit_state
+                .set_scroll(self.scroll_controller.as_scroll());
         }
         if !single_line {
             self.sync_scroll_state_from_editor();
@@ -3706,12 +3708,7 @@ mod tests {
 
     mod layout_reuse {
 
-        use tessera_ui::{
-            Dp, State,
-            layout::layout,
-            remember, tessera,
-            testing::{layout_test, pump_layout_test_session, start_layout_test_session},
-        };
+        use tessera_ui::{Dp, State, layout::layout, remember, tessera, testing::UiTest};
 
         use super::super::{
             DisplayTransform, TextEditorController, TransformedText, text_edit_core,
@@ -3813,15 +3810,11 @@ mod tests {
 
             let probe = Probe::default();
             let output = probe.clone();
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    intrinsic_editor_probe(output.clone());
-                })
-                .viewport_px(400, 200),
-            );
-            for frame in 0..4 {
-                pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
+            let mut session = UiTest::new()
+                .content(move || intrinsic_editor_probe(output.clone()))
+                .viewport(400, 200);
+            session.frame();
+            session.frames(3);
             let controller = probe.controller.get().unwrap();
             let normal = TextConstraint {
                 max_width: Some(200.0),
@@ -3841,9 +3834,7 @@ mod tests {
             });
             assert!(before.2.is_some());
             probe.enabled.get().unwrap().set(true);
-            for frame in 4..8 {
-                pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
+            session.frames(4);
             let after = controller.with(|controller| {
                 (
                     controller.text_cache_key(),
@@ -3862,17 +3853,13 @@ mod tests {
             let narrow = probe.size.get().unwrap();
             assert!(narrow.height > Px(before.1[1] as i32));
             probe.width.get().unwrap().set(80);
-            for frame in 8..11 {
-                pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
+            session.frames(3);
             assert!(
                 probe.size.get().unwrap().height < narrow.height,
                 "a wider intrinsic constraint must reshape wrapped content"
             );
             controller.with_mut(|controller| controller.set_text("hi"));
-            for frame in 11..14 {
-                pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
+            session.frames(3);
             let short = probe.size.get().unwrap();
             assert!(short.height < narrow.height);
             controller.with_mut(|controller| {
@@ -3882,16 +3869,12 @@ mod tests {
                     ..Default::default()
                 })
             });
-            for frame in 14..17 {
-                pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
+            session.frames(3);
             assert!(probe.size.get().unwrap().height >= Px(44));
             assert!(probe.size.get().unwrap().height > short.height);
             controller
                 .with_mut(|controller| controller.set_display_transform(probe.transform.get()));
-            for frame in 17..20 {
-                pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
+            session.frames(3);
             assert_eq!(
                 probe.size.get().unwrap().width,
                 CURSOR_WIDTH.to_px(),
@@ -3911,22 +3894,16 @@ mod tests {
                     (Some(200.0), Some(80.0))
                 );
             });
-            let settled = session
-                .work_totals()
-                .count(
+            let settled = session.work_totals().count(
+                "editor_cache_contents",
+                tessera_ui::testing::WorkPhase::Build,
+            );
+            session.frames(8);
+            assert_eq!(
+                session.work_totals().count(
                     "editor_cache_contents",
                     tessera_ui::testing::WorkPhase::Build,
-                );
-            for frame in 20..28 {
-                pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
-            assert_eq!(
-                session
-                    .work_totals()
-                    .count(
-                        "editor_cache_contents",
-                        tessera_ui::testing::WorkPhase::Build,
-                    ),
+                ),
                 settled,
                 "a cached intrinsic probe must not perpetually invalidate editor readers"
             );
@@ -3935,32 +3912,21 @@ mod tests {
         #[test]
         fn cached_text_measurement_stops_rebuilding_without_edits() {
             let probe = Probe::default();
-            let output = probe.clone();
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    editor_cache_probe(output.clone());
-                })
-                .viewport_px(400, 100),
+            let mut session = UiTest::new()
+                .content(|| editor_cache_probe(probe.clone()))
+                .viewport(400, 100);
+            session.frame();
+            session.frames(3);
+            let settled_builds = session.work_totals().count(
+                "editor_cache_contents",
+                tessera_ui::testing::WorkPhase::Build,
             );
-            for frame in 0..4 {
-                let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
-            let settled_builds = session
-                .work_totals()
-                .count(
+            session.frames(8);
+            assert_eq!(
+                session.work_totals().count(
                     "editor_cache_contents",
                     tessera_ui::testing::WorkPhase::Build,
-                );
-            for frame in 4..12 {
-                let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
-            assert_eq!(
-                session
-                    .work_totals()
-                    .count(
-                        "editor_cache_contents",
-                        tessera_ui::testing::WorkPhase::Build,
-                    ),
+                ),
                 settled_builds
             );
 
@@ -3968,17 +3934,12 @@ mod tests {
             let initial_width =
                 controller.with(|c| c.current_text_data().unwrap().measure_info().size[0]);
             controller.with_mut(|c| c.set_text("a much longer value"));
-            for frame in 12..16 {
-                let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
+            session.frames(4);
             assert!(
-                session
-                    .work_totals()
-                    .count(
-                        "editor_cache_contents",
-                        tessera_ui::testing::WorkPhase::Build,
-                    )
-                    > settled_builds
+                session.work_totals().count(
+                    "editor_cache_contents",
+                    tessera_ui::testing::WorkPhase::Build,
+                ) > settled_builds
             );
             assert!(
                 controller.with(|c| c.current_text_data().unwrap().measure_info().size[0])
@@ -4074,7 +4035,9 @@ mod tests {
                     .is_none()
             );
         }
-        tessera_ui::testing::layout_test(snapshot_contract).run();
+        tessera_ui::testing::UiTest::new()
+            .content(snapshot_contract)
+            .frame();
     }
 
     fn controller_with_text(text: &str) -> TextEditorController {

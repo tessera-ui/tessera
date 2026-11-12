@@ -3410,9 +3410,8 @@ mod tests {
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
-        accesskit::{Action, ActionRequest, Node, NodeId, Toggled, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
-        testing::layout_test,
+        accesskit::{Action, Node, NodeId, Toggled},
+        testing::UiTest,
     };
 
     use super::*;
@@ -3448,9 +3447,10 @@ mod tests {
             Variant::Vertical,
             Variant::WithFab,
         ] {
-            let snapshot = layout_test(move || compact_figure_fixture(variant))
-                .viewport_px(320, 600)
-                .run();
+            let snapshot = UiTest::new()
+                .content(move || compact_figure_fixture(variant))
+                .viewport(320, 600)
+                .frame();
             let figure = snapshot.node("spec-toolbar-figure").bounds();
             let mut tags = vec![
                 "spec-toolbar-container",
@@ -3494,7 +3494,10 @@ mod tests {
     #[test]
     fn baseline_bottom_bar_reference_preserves_80dp_and_action_fab_insets() {
         for width in [320, 720] {
-            let snapshot = layout_test(baseline_fixture).viewport_px(width, 400).run();
+            let snapshot = UiTest::new()
+                .content(baseline_fixture)
+                .viewport(width, 400)
+                .frame();
             let bar = snapshot.node("baseline-bottom-bar").bounds();
             let first = snapshot.node("baseline-action-0").bounds();
             let fab = snapshot.node("baseline-fab").bounds();
@@ -3522,7 +3525,7 @@ mod tests {
         });
     }
 
-    fn action_node(renderer: &HeadlessRenderer, label: &str) -> Option<(NodeId, Node)> {
+    fn action_node(renderer: &UiTest, label: &str) -> Option<(NodeId, Node)> {
         renderer
             .accessibility_snapshot()?
             .nodes
@@ -3530,32 +3533,20 @@ mod tests {
             .find(|(_, node)| crate::has_label(&node, label))
     }
 
-    fn dispatch(renderer: &mut HeadlessRenderer, label: &str, action: Action) {
+    fn dispatch(renderer: &mut UiTest, label: &str, action: Action) {
         let (target_node, _) = action_node(renderer, label).expect("toolbar action");
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action,
-            target_tree: TreeId::ROOT,
-            target_node,
-            data: None,
-        }));
-        renderer.render_frames(8);
+        assert!(renderer.accessibility_action(target_node, action));
+        renderer.frames(8);
     }
 
     #[test]
     #[ignore = "Requires a native GPU adapter for toolbar actions and focus routing"]
     fn collapsing_toolbar_preserves_toggle_state_without_activating_on_focus() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(collapse_fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 600,
-                height: 360,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .expect("native toolbar renderer");
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(600, 360)
+            .rendered(crate::TestPipelines)
+            .content(collapse_fixture);
+        renderer.frames(8);
         let (_, toolbar) = action_node(&renderer, "Floating editing actions").unwrap();
         assert_eq!(toolbar.role(), Role::Toolbar);
         assert!(!toolbar.supports_action(Action::Click));
@@ -3595,9 +3586,10 @@ mod tests {
             (Variant::Vertical, true, 64, 220, 4),
             (Variant::Docked, true, 600, 64, 4),
         ] {
-            let snapshot = layout_test(move || fixture(variant, expanded))
-                .viewport_px(600, 400)
-                .run();
+            let snapshot = UiTest::new()
+                .content(move || fixture(variant, expanded))
+                .viewport(600, 400)
+                .frame();
             snapshot
                 .node("spec-toolbar-container")
                 .size(expected_width, expected_height);
@@ -3646,8 +3638,8 @@ mod tests {
     }
 
     fn settled(scene: Scene, width: u32, height: u32) -> tessera_ui::testing::LayoutSnapshot {
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            layout_test(move || {
+        let mut session = UiTest::new()
+            .content(move || {
                 material_theme().child(move || {
                     column()
                         .modifier(Modifier::new().fill_max_width())
@@ -3662,14 +3654,11 @@ mod tests {
                                 docked_layout_figure(layout);
                             }
                         });
-                });
+                })
             })
-            .viewport_px(width, height),
-        );
-        for frame in 0..3 {
-            tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_000_000);
-        }
-        tessera_ui::testing::pump_layout_test_session(&mut session, 48_000_000)
+            .viewport(width, height);
+        session.frame();
+        session.frames(3)
     }
 
     #[test]

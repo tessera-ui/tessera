@@ -11,9 +11,9 @@ use tessera_ui::{
     CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier, PlacementModifierNode,
     PointerChange, PressKeyEventType, PxPosition, State,
     accesskit::{Node, NodeId, Rect, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
+    testing::UiTest,
     testing::WorkPhase,
     time::Instant,
 };
@@ -142,29 +142,22 @@ fn renderer<Output: 'static>(
     entry: fn(tessera_ui::testing::TestProbe<FixtureHandles>) -> Output,
     samples: u32,
     observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
-) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
+) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(600, 400)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content({
             let observed = observed.clone();
             move || {
                 entry(observed.clone());
             }
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 600,
-            height: 400,
-            sample_count: samples,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .expect("Native GPU adapter");
-    renderer.render_frames(8);
+        });
+    renderer.frames(8);
     renderer
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .expect("Accessibility tree")
@@ -174,19 +167,19 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
         .expect("Native overlay control")
 }
 
-fn click(renderer: &mut HeadlessRenderer, bounds: Rect) {
+fn click(renderer: &mut UiTest, bounds: Rect) {
     let point = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) * 0.5) as f32,
         ((bounds.y0 + bounds.y1) * 0.5) as f32,
     );
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(6);
+    renderer.frames(6);
 }
 
-fn menu_bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
+fn menu_bounds(renderer: &UiTest, label: &str) -> Rect {
     let update = renderer
         .accessibility_snapshot()
         .expect("Accessibility tree");
@@ -220,7 +213,7 @@ fn scaled_tooltip_keeps_fractional_anchor_reflows_and_accepts_real_action_click(
                     .tooltip
                     .expect("Tooltip controller")
                     .with_mut(TooltipController::show);
-                renderer.render_frames(8);
+                renderer.frames(8);
                 let (anchor, popup) = (
                     window_bounds(&renderer, "Precise anchor", Role::Button),
                     window_bounds(&renderer, "Precise tooltip", Role::Dialog),
@@ -244,14 +237,14 @@ fn scaled_tooltip_keeps_fractional_anchor_reflows_and_accepts_real_action_click(
                 );
                 assert_eq!(popup.width, 240.0);
                 observed.get().shift.expect("anchor translation").set(12.0);
-                renderer.step_frame();
+                renderer.frames(1);
                 let moved = window_bounds(&renderer, "Precise tooltip", Role::Dialog);
                 assert_eq!(moved.x, popup.x + 12.0);
                 assert_eq!(moved.y, popup.y);
                 assert_placement_only(&renderer);
 
                 renderer.resize(200, 400);
-                renderer.render_frames(8);
+                renderer.frames(8);
                 let popup = window_bounds(&renderer, "Precise tooltip", Role::Dialog);
                 assert!(popup.x >= 8.0 && popup.x + popup.width <= 192.0);
                 let action = node(&renderer, "Accept precise tooltip", Role::Button)
@@ -287,7 +280,7 @@ fn scaled_submenu_uses_exact_anchor_edge_reflows_and_accepts_real_action_click()
                     .menu
                     .expect("Menu controller")
                     .with_mut(MenuController::open);
-                renderer.render_frames(8);
+                renderer.frames(8);
                 let parent = node(&renderer, "Share precise link", Role::MenuItem)
                     .1
                     .bounds()
@@ -299,19 +292,19 @@ fn scaled_submenu_uses_exact_anchor_edge_reflows_and_accepts_real_action_click()
                     popup.x0, parent.x1,
                     "Submenu begins at the exact physical parent edge"
                 );
-                renderer.render_frames(20);
+                renderer.frames(20);
                 observed
                     .get()
                     .shift
                     .expect("submenu anchor translation")
                     .set(12.0);
-                renderer.step_frame();
+                renderer.frames(1);
                 let moved = menu_bounds(&renderer, "Copy precise link");
                 assert_eq!(moved.x0, popup.x0 + 7.5);
                 assert_eq!(moved.y0, popup.y0);
                 assert_placement_only(&renderer);
                 renderer.resize(200, 400);
-                renderer.render_frames(8);
+                renderer.frames(8);
                 let popup = menu_bounds(&renderer, "Copy precise link");
                 assert!(popup.x0 >= 0.0 && popup.x1 <= 200.0);
                 let action = node(&renderer, "Copy precise link", Role::MenuItem)
@@ -347,7 +340,7 @@ fn scaled_tooltip_touch_slop_uses_window_samples_after_ancestor_translation() {
                     anchor.y + anchor.height * 0.5,
                 );
                 renderer.pointer_press(7, press, PressKeyEventType::Left);
-                renderer.step_frame();
+                renderer.frames(1);
                 assert!(
                     !observed
                         .get()
@@ -361,11 +354,11 @@ fn scaled_tooltip_touch_slop_uses_window_samples_after_ancestor_translation() {
                         .shift
                         .expect("Ancestor placement state")
                         .set(translation);
-                    renderer.render_frames(4);
+                    renderer.frames(4);
                 }
                 let moved = press + PxPosition::from_f32_xy(movement, 0.0);
                 renderer.pointer_move(7, moved);
-                renderer.render_frames(40);
+                renderer.frames(40);
                 assert!(
                     observed
                         .get()
@@ -375,7 +368,7 @@ fn scaled_tooltip_touch_slop_uses_window_samples_after_ancestor_translation() {
                     "A physical move below 8px or an ancestor translation must preserve held touch: movement={movement}, translation={translation}"
                 );
                 renderer.pointer_release(7, moved, PressKeyEventType::Left);
-                renderer.render_frames(4);
+                renderer.frames(4);
             }
         },
     );
@@ -413,7 +406,7 @@ fn text_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn timed_click(renderer: &mut HeadlessRenderer, point: PxPosition, timestamp: Instant) {
+fn timed_click(renderer: &mut UiTest, point: PxPosition, timestamp: Instant) {
     renderer.inject_pointer(
         PointerChange::new(
             timestamp,
@@ -423,7 +416,7 @@ fn timed_click(renderer: &mut HeadlessRenderer, point: PxPosition, timestamp: In
         )
         .with_position(point),
     );
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.inject_pointer(
         PointerChange::new(
             timestamp + Duration::from_millis(1),
@@ -433,7 +426,7 @@ fn timed_click(renderer: &mut HeadlessRenderer, point: PxPosition, timestamp: In
         )
         .with_position(point),
     );
-    renderer.render_frames(2);
+    renderer.frames(2);
 }
 
 #[test]
@@ -470,7 +463,7 @@ fn scaled_editor_multi_click_uses_window_history_and_keeps_local_selection_geome
                         .shift
                         .expect("Ancestor placement state")
                         .set(translation);
-                    renderer.render_frames(4);
+                    renderer.frames(4);
                 }
                 timed_click(
                     &mut renderer,
@@ -487,7 +480,7 @@ fn scaled_editor_multi_click_uses_window_history_and_keeps_local_selection_geome
     );
 }
 
-fn window_bounds(renderer: &HeadlessRenderer, label: &str, role: Role) -> tessera_ui::FloatRect {
+fn window_bounds(renderer: &UiTest, label: &str, role: Role) -> tessera_ui::FloatRect {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -505,7 +498,7 @@ fn window_bounds(renderer: &HeadlessRenderer, label: &str, role: Role) -> tesser
     }
 }
 
-fn assert_placement_only(renderer: &HeadlessRenderer) {
+fn assert_placement_only(renderer: &UiTest) {
     let phases = renderer.work().executions();
     assert!(phases.iter().any(|entry| entry.phase == WorkPhase::Place));
     assert!(phases.iter().all(

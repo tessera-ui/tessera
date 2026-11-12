@@ -619,7 +619,7 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 ///     });
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn menu_provider(
@@ -1181,7 +1181,7 @@ impl Default for MenuItemConfig {
 ///     });
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn menu_item(
@@ -1664,15 +1664,10 @@ fn menu_item_inner(args: Option<MenuItemConfig>) {
 #[cfg(test)]
 mod tests {
     use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
+    use tessera_ui::testing::UiTest;
     use tessera_ui::{
-        CursorEventContent, Dp, GestureState, LayoutCoordinates, Modifier, PointerChange,
-        PressKeyEventType, Px, PxPosition, State,
-        modifier::FocusModifierExt as _,
-        remember, scaled_box, tessera,
-        testing::{
-            LayoutSnapshot, layout_test, pump_layout_test_session,
-            pump_layout_test_session_with_input, start_layout_test_session,
-        },
+        Dp, LayoutCoordinates, Modifier, Px, PxPosition, State, modifier::FocusModifierExt as _,
+        remember, scaled_box, tessera, testing::LayoutSnapshot,
     };
 
     use crate::{button::button, column::column, spacer::spacer, theme::material_theme};
@@ -1736,30 +1731,18 @@ mod tests {
     #[ignore = "requires a native GPU adapter"]
     fn gpu_menu_prefix_matching_moves_focus_skips_disabled_items_and_cleans_removed_items() {
         use tessera_ui::{
-            accesskit::{Action, ActionRequest, Role, TreeId},
-            headless::{HeadlessConfig, HeadlessRenderer},
+            accesskit::{Action, Role},
+            testing::UiTest,
         };
 
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new({
-                let observed = observed.clone();
-                move || {
-                    typeahead_fixture(observed.clone());
-                }
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 600,
-                height: 400,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(6);
+        let mut renderer = UiTest::new()
+            .viewport(600, 400)
+            .rendered(crate::TesseraComponents)
+            .content(|| typeahead_fixture(observed.clone()));
+        renderer.frames(6);
         let registry = observed.get().typeahead.unwrap();
-        let focused = |renderer: &HeadlessRenderer| {
+        let focused = |renderer: &UiTest| {
             let tree = renderer.accessibility_snapshot().unwrap();
             tree.nodes
                 .iter()
@@ -1777,7 +1760,7 @@ mod tests {
             ("d", 6_000_000_000, "Delete"),
         ] {
             assert!(super::typeahead::type_text(registry, text, time));
-            renderer.render_frames(2);
+            renderer.frames(2);
             assert_eq!(
                 focused(&renderer).as_deref(),
                 Some(expected),
@@ -1785,9 +1768,9 @@ mod tests {
             );
         }
         observed.get().remove_delete.unwrap().set(true);
-        renderer.render_frames(3);
+        renderer.frames(3);
         super::typeahead::type_text(registry, "d", 8_000_000_000);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_eq!(focused(&renderer).as_deref(), Some("Duplicate"));
         let tree = renderer.accessibility_snapshot().unwrap();
         let share = tree
@@ -1796,23 +1779,18 @@ mod tests {
             .find(|(_, node)| node.role() == Role::MenuItem && node.label() == Some("Share"))
             .unwrap()
             .0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_node: share,
-            target_tree: TreeId::ROOT,
-            data: None,
-        }));
-        renderer.render_frames(6);
+        assert!(renderer.accessibility_action(share, Action::Click));
+        renderer.frames(6);
         let child = observed.get().child_typeahead.unwrap();
         super::typeahead::type_text(child, "s", 0);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_eq!(focused(&renderer).as_deref(), Some("Send"));
         observed
             .get()
             .controller
             .unwrap()
             .with_mut(MenuController::close);
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert!(!registry.is_alive());
         assert!(!child.is_alive());
     }
@@ -1884,43 +1862,21 @@ mod tests {
             (true, true, true),
         ] {
             let observed = tessera_ui::testing::TestProbe::default();
-            let mut session = start_layout_test_session(
-                layout_test({
-                    let observed = observed.clone();
-                    move || {
-                        menu_background_fixture(close_on_background, observed.clone());
-                    }
-                })
-                .viewport_px(400, 300),
-            );
-            let _ = pump_layout_test_session(&mut session, 0);
+            let mut session = UiTest::new()
+                .content(|| menu_background_fixture(close_on_background, observed.clone()))
+                .viewport(400, 300);
+            session.frame();
             let controller = observed.get().controller.expect("controller");
             controller.with_mut(|menu| {
                 menu.open_at(MenuAnchor::at(PxPosition::new(Px(10), Px(10))));
             });
-            let opened = pump_layout_test_session(&mut session, 16_666_667);
+            let opened = session.frames(1);
             let bounds = opened.node("menu_background_content").bounds();
-            let now = tessera_ui::time::Instant::now();
-            let cursor = Some(if click_inside {
+            session.click_at(if click_inside {
                 PxPosition::new(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
             } else {
                 PxPosition::new(Px(350), Px(250))
             });
-            for (index, content) in [
-                CursorEventContent::Pressed(PressKeyEventType::Left),
-                CursorEventContent::Released(PressKeyEventType::Left),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                let change = PointerChange::new(now, 1, content, GestureState::TapCandidate);
-                let _ = pump_layout_test_session_with_input(
-                    &mut session,
-                    33_333_334 + index as u64 * 16_666_667,
-                    vec![change],
-                    cursor,
-                );
-            }
             assert_eq!(
                 controller.with(MenuController::is_open),
                 expected_open,
@@ -1933,21 +1889,17 @@ mod tests {
     #[test]
     fn menu_provider_renders_menu_items_after_controller_opens() {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
-                let observed = observed.clone();
-                move || menu_controller_fixture(observed.clone())
-            })
-            .viewport_px(400, 300),
-        );
-        let _ = pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| menu_controller_fixture(observed.clone()))
+            .viewport(400, 300);
+        session.frame();
 
         let controller = observed.get().controller.expect("controller");
         controller.with_mut(|menu| {
             menu.open_at(MenuAnchor::at(PxPosition::new(Px(10), Px(10))));
         });
 
-        let opened: LayoutSnapshot = pump_layout_test_session(&mut session, 16_666_667);
+        let opened: LayoutSnapshot = session.frames(1);
         opened.node("menu_content_tag").exists();
     }
 
@@ -1996,47 +1948,35 @@ mod tests {
     #[test]
     fn window_anchor_follows_trigger_geometry_through_ancestor_transforms() {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
-                let observed = observed.clone();
-                move || {
-                    window_anchor_fixture(observed.clone());
-                }
+        let mut session = UiTest::new()
+            .content(|| {
+                window_anchor_fixture(observed.clone());
             })
-            .viewport_px(400, 300),
-        );
-        pump_layout_test_session(&mut session, 0)
-            .node("anchored-menu")
-            .position(32, 53);
+            .viewport(400, 300);
+        session.frame().node("anchored-menu").position(32, 53);
         observed.get().expect("trigger position").set(Dp(100.0));
-        pump_layout_test_session(&mut session, 16_666_667)
-            .node("anchored-menu")
-            .position(62, 53);
+        session.frames(1).node("anchored-menu").position(62, 53);
     }
 
     #[test]
     fn menu_visibility_preserves_main_content_state() {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
-                let observed = observed.clone();
-                move || menu_controller_fixture(observed.clone())
-            })
-            .viewport_px(400, 300),
-        );
-        let _ = pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| menu_controller_fixture(observed.clone()))
+            .viewport(400, 300);
+        session.frame();
         let main_state = observed.get().main_state.expect("main_state");
         main_state.set(7);
         let controller = observed.get().controller.expect("controller");
         controller.with_mut(|menu| {
             menu.open_at(MenuAnchor::at(PxPosition::new(Px(10), Px(10))));
         });
-        let _ = pump_layout_test_session(&mut session, 16_666_667);
+        session.frames(1);
         assert!(observed.get().main_state.unwrap() == main_state);
         assert_eq!(main_state.get(), 7);
 
         controller.with_mut(MenuController::close);
-        let _ = pump_layout_test_session(&mut session, 33_333_334);
+        session.frames(1);
         assert!(observed.get().main_state.unwrap() == main_state);
         assert_eq!(main_state.get(), 7);
     }

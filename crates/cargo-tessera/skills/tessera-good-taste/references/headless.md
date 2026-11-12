@@ -40,10 +40,12 @@ Set `TESSERA_HEADLESS_SCALE_FACTOR` before starting the supervisor for DPI cases
 Each render advances the virtual clock by the configured frame step. See
 [CLI tools](tooling.md) for profiling capture and analysis.
 
-For in-process Rust tests, enable `testing` alongside `headless` and use
-`EntryPoint::into_headless` to exercise registered packages. Give each fixture
-explicit props and `TestProbe` observations. Query actual component coordinates
-with `inspect_components()` and published semantics with `inspect_accessibility()`.
+For in-process Rust tests, enable `testing` and use `testing::UiTest`.
+`UiTest::new().content(fixture)` runs layout-only frames; add `headless` and call
+`rendered(modules)` to render on the GPU. Advance virtual time with `frames(n)`,
+`advance(duration)`, or `settle()`. Give each fixture explicit props and
+`TestProbe` observations. Query actual component coordinates with `frame().node(tag)`
+or `inspect_components()` and published semantics with `inspect_accessibility()`.
 Use `work()` for executed phases and frame-clock and graphics diagnostics for
 scheduling and resource observations. Inject named keyboard input with `press_key`;
 use pixels and input for rendering and interaction assertions.

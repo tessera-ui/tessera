@@ -36,7 +36,7 @@ use crate::router::{RouterController, RouterDestination, back::route_display};
 ///     shard_home().root(HomePageDestination {});
 /// }
 ///
-/// tessera_ui::testing::layout_test(app).run();
+/// tessera_ui::testing::UiTest::new().content(app).frame();
 /// ```
 #[tessera]
 pub fn shard_home(

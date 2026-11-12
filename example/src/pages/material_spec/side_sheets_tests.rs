@@ -1,16 +1,10 @@
 use tessera_components::theme::material_theme;
-use tessera_ui::{
-    accesskit::Role,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    testing::{layout_test, pump_layout_test_session, start_layout_test_session},
-};
+use tessera_ui::{accesskit::Role, testing::UiTest};
 
 use super::{
     figures::{self, measurement_tag},
     *,
 };
-
-const FRAME: u64 = 16_666_667;
 
 #[tessera]
 fn measurement_fixture(modal: bool) {
@@ -42,15 +36,11 @@ fn glyph_center(rect: tessera_ui::PxRect) -> (i32, i32) {
 fn measurement_figures_place_real_header_glyphs_at_the_official_insets() {
     for modal in [false, true] {
         for (width, sheet_width) in [(720, 400), (320, 256)] {
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    measurement_fixture(modal);
-                })
-                .viewport_px(width, 800),
-            );
-            pump_layout_test_session(&mut session, 0);
-            pump_layout_test_session(&mut session, FRAME);
-            let snapshot = pump_layout_test_session(&mut session, FRAME * 2);
+            let mut session = UiTest::new()
+                .content(move || measurement_fixture(modal))
+                .viewport(width, 800);
+            session.frame();
+            let snapshot = session.frames(2);
             let tag = |name| measurement_tag(modal, name);
             snapshot.node(&tag("figure")).size(width as i32, 480);
             snapshot.node(&tag("container")).size(sheet_width, 384);
@@ -85,11 +75,10 @@ fn measurement_figures_place_real_header_glyphs_at_the_official_insets() {
 #[test]
 fn anatomy_figures_number_every_legend_entry() {
     for modal in [false, true] {
-        let snapshot = layout_test(move || {
-            anatomy_fixture(modal);
-        })
-        .viewport_px(1000, 900)
-        .run();
+        let snapshot = UiTest::new()
+            .content(move || anatomy_fixture(modal))
+            .viewport(1000, 900)
+            .frame();
         let count = figures::anatomy_legend(modal).len();
         let mut previous = None;
         for number in 1..=count {
@@ -109,22 +98,10 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
     let (width, height) = (907, 871);
     let navigation = tessera_ui::testing::TestProbe::default();
     let observed = navigation.clone();
-    let mut session = start_layout_test_session(
-        layout_test(move || {
-            crate::app::app_fixture(observed.clone());
-        })
-        .viewport_px(width, height),
-    );
-    let mut frame = 0;
-    let mut pump = |session: &mut _, frames: u64| {
-        let mut snapshot = None;
-        for _ in 0..frames {
-            snapshot = Some(pump_layout_test_session(session, frame));
-            frame += FRAME;
-        }
-        snapshot.unwrap()
-    };
-    pump(&mut session, 2);
+    let mut session = UiTest::new()
+        .content(move || crate::app::app_fixture(observed.clone()))
+        .viewport(width, height);
+    session.frames(2);
     let navigation = navigation.get().expect("mounted app navigation");
     navigation.router.with_mut(|router| {
         router.reset(
@@ -139,7 +116,7 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
             },
         );
     });
-    pump(&mut session, 2);
+    session.frames(2);
     let live = navigation.sessions.expect("root app sessions").side_sheet;
     assert!(live.route_active());
     assert!(
@@ -147,10 +124,10 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
         "the article must not open its modal over the open directory sheet"
     );
     navigation.directory.with_mut(|directory| directory.close());
-    pump(&mut session, 40);
+    session.frames(40);
     assert!(live.can_open());
     live.open.with_mut(SideSheetController::open);
-    let snapshot = pump(&mut session, 40);
+    let snapshot = session.frames(40);
     let sheet = snapshot.node("side-sheet-live-content").bounds();
     assert_eq!(sheet.y.0, 0, "the live modal must start above the app bar");
     assert_eq!(sheet.height.0, height as i32);
@@ -159,7 +136,7 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
     navigation
         .router
         .with_mut(tessera_shard::RouterController::pop);
-    pump(&mut session, 2);
+    session.frames(2);
     assert!(
         !live.open.with(SideSheetController::is_open),
         "leaving the article must close the root modal"
@@ -172,20 +149,11 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
 fn measurement_figures_publish_real_headlines_content_and_controls_in_both_variants() {
     for modal in [false, true] {
         for width in [720, 320] {
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || {
-                    measurement_fixture(modal);
-                }),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width,
-                    height: 800,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(8);
+            let mut renderer = UiTest::new()
+                .viewport(width, 800)
+                .rendered(crate::TestPipelines)
+                .content(move || measurement_fixture(modal));
+            renderer.frames(8);
             let snapshot = renderer.accessibility_snapshot().unwrap();
             for label in ["Headline", "Labels", "Events", "Personal", "Projects"] {
                 assert!(

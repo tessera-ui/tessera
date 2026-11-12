@@ -4,10 +4,7 @@
 //!
 //! Keep threshold, reversal and custom indicator behavior on real scroll input.
 
-use tessera_ui::{
-    PxPosition,
-    headless::{HeadlessConfig, HeadlessRenderer},
-};
+use tessera_ui::{PxPosition, testing::UiTest};
 
 use crate::{
     modifier::ModifierExt as _, scrollable::ScrollableController, text::text, theme::material_theme,
@@ -59,46 +56,36 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn drag(renderer: &mut HeadlessRenderer, positions: &[f32]) {
+fn drag(renderer: &mut UiTest, positions: &[f32]) {
     let point = |y| PxPosition::from_f32_xy(150.0, y);
     renderer.touch_start(1, point(30.0));
-    renderer.step_frame();
+    renderer.frames(1);
     for &y in positions {
         renderer.touch_move(1, point(y));
-        renderer.step_frame();
+        renderer.frames(1);
     }
     renderer.touch_end(1);
-    renderer.render_frames(32);
+    renderer.frames(32);
 }
 
 #[test]
 #[ignore = "Requires a native GPU adapter"]
 fn native_pull_refresh_uses_scroll_threshold_and_reversal_with_custom_indicator() {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 400,
-            height: 400,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(400, 400)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(8);
     let requests = observed.get().requests.unwrap();
     let controller = observed.get().controller.unwrap();
     renderer.touch_start(2, PxPosition::from_f32_xy(150.0, 30.0));
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.touch_move(2, PxPosition::from_f32_xy(150.0, 260.0));
-    renderer.step_frame();
+    renderer.frames(1);
     assert!(controller.with(PullRefreshController::progress) > 1.0);
     renderer.touch_cancel(2);
-    renderer.render_frames(48);
+    renderer.frames(48);
     assert_eq!(requests.get(), 0, "a cancelled contact must not refresh");
     assert_eq!(
         controller.with(PullRefreshController::position),
@@ -136,7 +123,7 @@ fn native_pull_refresh_uses_scroll_threshold_and_reversal_with_custom_indicator(
     drag(&mut renderer, &[60.0, 270.0]);
     assert_eq!(requests.get(), 1, "a running refresh rejects another pull");
     controller.with_mut(|controller| controller.set_refreshing(false));
-    renderer.render_frames(48);
+    renderer.frames(48);
     assert!(!controller.with(PullRefreshController::refreshing));
     assert_eq!(controller.with(PullRefreshController::position), Px(0));
 }

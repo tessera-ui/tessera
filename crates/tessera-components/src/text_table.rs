@@ -137,7 +137,7 @@ impl From<TextStyle> for ShapingStyleKey {
 ///     };
 ///     text_table(vec![heading, value]).columns(1);
 /// }
-/// # tessera_ui::testing::layout_test(comparison).run();
+/// # tessera_ui::testing::UiTest::new().content(comparison).frame();
 /// ```
 #[tessera]
 pub fn text_table(

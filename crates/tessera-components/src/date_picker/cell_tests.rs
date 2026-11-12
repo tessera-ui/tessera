@@ -1,8 +1,7 @@
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-    accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
-    testing::text_matches,
+    accesskit::{Action, Node, NodeId},
+    testing::{UiTest, text_matches},
 };
 
 use crate::{column::column, row::row, theme::material_theme};
@@ -77,7 +76,7 @@ fn fixture(output: tessera_ui::testing::TestProbe<Option<State<Selection>>>) {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -89,18 +88,13 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .unwrap_or_else(|| panic!("missing actual calendar cell {label}"))
 }
 
-fn action(renderer: &mut HeadlessRenderer, id: NodeId, action: Action) -> bool {
-    let result = renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: id,
-        data: None,
-    });
-    renderer.render_frames(4);
+fn action(renderer: &mut UiTest, id: NodeId, action: Action) -> bool {
+    let result = renderer.accessibility_action(id, action);
+    renderer.frames(4);
     result
 }
 
-fn pointer_click(renderer: &mut HeadlessRenderer, label: &str) {
+fn pointer_click(renderer: &mut UiTest, label: &str) {
     let bounds = node(renderer, label).1.bounds().unwrap();
     let point = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
@@ -109,7 +103,7 @@ fn pointer_click(renderer: &mut HeadlessRenderer, label: &str) {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
 #[test]
@@ -119,19 +113,11 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
         "date_picker::cell::tests::authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state",
         || {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || fixture(probe.clone())),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 400,
-                    height: 200,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(5);
+            let mut renderer = UiTest::new()
+                .viewport(400, 200)
+                .rendered(crate::TesseraComponents)
+                .content(|| fixture(output.clone()));
+            renderer.frames(5);
             let (first, day) = node(&renderer, "August 17, 2025");
             assert_eq!(day.bounds().unwrap().width(), 48.0);
             assert_eq!(day.bounds().unwrap().height(), 48.0);
@@ -190,7 +176,7 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
             assert_ne!(renderer.accessibility_snapshot().unwrap().focus, preview);
             let preview_bounds = node(&renderer, "August 20, 2025").1.bounds().unwrap();
             let root_focus = renderer.accessibility_snapshot().unwrap().focus;
-            let preview_pixels = renderer.read_pixels().unwrap();
+            let preview_pixels = renderer.read_pixels();
             let preview_ring = (40 * 400 + preview_bounds.x0 as usize) * 4;
             renderer.pointer_move(
                 MOUSE_POINTER_ID,
@@ -199,8 +185,8 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
                     (preview_bounds.y0 + 24.0) as f32,
                 ),
             );
-            renderer.render_frames(4);
-            let hover_pixels = renderer.read_pixels().unwrap();
+            renderer.frames(4);
+            let hover_pixels = renderer.read_pixels();
             assert_ne!(
                 &preview_pixels[preview_ring..preview_ring + 3],
                 &hover_pixels[preview_ring..preview_ring + 3],
@@ -208,16 +194,16 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
             );
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, root_focus);
             renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(380.0, 180.0));
-            renderer.render_frames(4);
+            renderer.frames(4);
             let actions = output.get().unwrap().with(|selection| selection.actions);
-            let before = renderer.read_pixels().unwrap();
+            let before = renderer.read_pixels();
             assert!(action(&mut renderer, first, Action::Focus));
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, first);
             assert_eq!(
                 output.get().unwrap().with(|selection| selection.actions),
                 actions
             );
-            let after = renderer.read_pixels().unwrap();
+            let after = renderer.read_pixels();
             let left_ring = ((40 * 400 + 16) * 4)..((40 * 400 + 18) * 4);
             assert_ne!(&before[left_ring.clone()], &after[left_ring]);
             pointer_click(&mut renderer, "August 18, 2025");

@@ -9,11 +9,9 @@ use std::time::Duration;
 use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::TestProbe,
+    accesskit::Action,
+    focus, remember, tessera,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -169,43 +167,28 @@ fn fixture(probe: TestProbe<FixtureHandles>, events: TestProbe<Events>) {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
-        .unwrap()
-}
-
-fn center(renderer: &HeadlessRenderer, label: &str) -> PxPosition {
-    let bounds = node(renderer, label).1.bounds().unwrap();
+fn center(renderer: &UiTest, label: &str) -> PxPosition {
+    let bounds = renderer.accessibility_node(label).1.bounds().unwrap();
     PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
         ((bounds.y0 + bounds.y1) / 2.0) as f32,
     )
 }
 
-fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) -> bool {
-    let id = node(renderer, label).0;
-    renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: id,
-        data: None,
-    })
+fn action(renderer: &mut UiTest, label: &str, action: Action) -> bool {
+    let id = renderer.accessibility_node(label).0;
+    renderer.accessibility_action(id, action)
 }
 
-fn press(renderer: &mut HeadlessRenderer, point: PxPosition) {
+fn press(renderer: &mut UiTest, point: PxPosition) {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
 }
 
-fn release(renderer: &mut HeadlessRenderer, point: PxPosition) {
+fn release(renderer: &mut UiTest, point: PxPosition) {
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(3);
+    renderer.frames(3);
 }
 
 fn check(samples: u32) {
@@ -214,48 +197,40 @@ fn check(samples: u32) {
         let observed = probe.clone();
         let events = TestProbe::<Events>::default();
         let observed_events = events.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(probe.clone(), events.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: (480.0 * scale) as u32,
-                height: (400.0 * scale) as u32,
-                scale_factor: scale,
-                sample_count: samples,
-                frame_time: Duration::from_millis(50),
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let mut renderer = UiTest::new()
+            .viewport((480.0 * scale) as u32, (400.0 * scale) as u32)
+            .scale_factor(scale)
+            .samples(samples)
+            .frame_step(Duration::from_millis(50))
+            .rendered(crate::TesseraComponents)
+            .content(move || fixture(probe.clone(), events.clone()));
         let outside = PxPosition::from_f32_xy((470.0 * scale) as f32, (390.0 * scale) as f32);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        renderer.render_frames(4);
-        let baseline = renderer.read_pixels().unwrap();
+        renderer.frames(4);
+        let baseline = renderer.read_pixels();
         let settings = observed.get().settings.unwrap();
         let primary = center(&renderer, "Primary target");
         press(&mut renderer, primary);
         release(&mut renderer, primary);
         assert_eq!(observed_events.with(|events| events.selections), 1);
         settings.with_mut(|s| s.selected = false);
-        renderer.render_frames(3);
+        renderer.frames(3);
         press(&mut renderer, primary);
         renderer.pointer_move(
             MOUSE_POINTER_ID,
             PxPosition::from_f32_xy(primary.x + scale as f32, primary.y),
         );
-        renderer.step_frame();
-        renderer.render_frames(8);
+        renderer.frames(1);
+        renderer.frames(8);
         assert_eq!(observed_events.with(|events| events.longs), 0);
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(
             observed_events.with(|events| events.longs),
             1,
             "a hold with sub-slop jitter must fire at its frame deadline"
         );
         assert!(settings.get().selected);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_eq!(observed_events.with(|events| events.longs), 1);
         release(&mut renderer, primary);
         assert_eq!(
@@ -269,7 +244,7 @@ fn check(samples: u32) {
         assert_eq!(observed_events.with(|events| events.selections), 2);
         assert!(!settings.get().selected);
         let only = center(&renderer, "Long-only target");
-        let only_node = node(&renderer, "Long-only target").1;
+        let only_node = renderer.accessibility_node("Long-only target").1;
         assert!(only_node.supports_action(Action::ShowContextMenu));
         assert!(only_node.supports_action(Action::Focus));
         assert!(!only_node.supports_action(Action::Click));
@@ -281,28 +256,32 @@ fn check(samples: u32) {
             "Long-only target",
             Action::ShowContextMenu
         ));
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_eq!(observed_events.with(|events| events.only_longs), 1);
         let child = center(&renderer, "Child target");
         press(&mut renderer, child);
-        renderer.render_frames(12);
+        renderer.frames(12);
         release(&mut renderer, child);
         assert_eq!(observed_events.with(|events| events.child_clicks), 1);
         assert_eq!(observed_events.with(|events| events.parent_clicks), 0);
         assert_eq!(observed_events.with(|events| events.parent_longs), 0);
-        let bounds = node(&renderer, "Parent target").1.bounds().unwrap();
+        let bounds = renderer
+            .accessibility_node("Parent target")
+            .1
+            .bounds()
+            .unwrap();
         let parent = PxPosition::from_f32_xy(
             (bounds.x1 - 8.0 * scale) as f32,
             ((bounds.y0 + bounds.y1) / 2.0) as f32,
         );
         press(&mut renderer, parent);
-        renderer.render_frames(12);
+        renderer.frames(12);
         release(&mut renderer, parent);
         assert_eq!(observed_events.with(|events| events.parent_longs), 1);
         assert_eq!(observed_events.with(|events| events.parent_clicks), 0);
         let direct = center(&renderer, "Surface target");
         press(&mut renderer, direct);
-        renderer.render_frames(12);
+        renderer.frames(12);
         release(&mut renderer, direct);
         assert_eq!(observed_events.with(|events| events.surface_longs), 1);
         assert_eq!(observed_events.with(|events| events.surface_clicks), 0);
@@ -311,27 +290,27 @@ fn check(samples: u32) {
             MOUSE_POINTER_ID,
             PxPosition::from_f32_xy(direct.x + 40.0 * scale as f32, direct.y),
         );
-        renderer.render_frames(12);
+        renderer.frames(12);
         release(&mut renderer, direct);
         assert_eq!(observed_events.with(|events| events.surface_longs), 1);
         assert_eq!(observed_events.with(|events| events.surface_clicks), 0);
         press(&mut renderer, direct);
         renderer.pointer_scroll(MOUSE_POINTER_ID, direct, 0.0, -40.0);
-        renderer.render_frames(12);
+        renderer.frames(12);
         release(&mut renderer, direct);
         assert_eq!(observed_events.with(|events| events.surface_longs), 1);
         assert_eq!(observed_events.with(|events| events.surface_clicks), 0);
         press(&mut renderer, direct);
-        renderer.render_frames(3);
+        renderer.frames(3);
         focus::clear_focus(true);
-        renderer.render_frames(12);
+        renderer.frames(12);
         release(&mut renderer, direct);
         assert_eq!(observed_events.with(|events| events.surface_longs), 1);
         assert_eq!(observed_events.with(|events| events.surface_clicks), 0);
         press(&mut renderer, direct);
-        renderer.render_frames(3);
+        renderer.frames(3);
         settings.with_mut(|s| s.enabled = false);
-        renderer.render_frames(12);
+        renderer.frames(12);
         release(&mut renderer, direct);
         assert_eq!(observed_events.with(|events| events.surface_longs), 1);
         assert!(!action(
@@ -340,11 +319,11 @@ fn check(samples: u32) {
             Action::ShowContextMenu
         ));
         settings.with_mut(|s| s.enabled = true);
-        renderer.render_frames(3);
+        renderer.frames(3);
         press(&mut renderer, only);
-        renderer.render_frames(3);
+        renderer.frames(3);
         settings.with_mut(|s| s.handlers = false);
-        renderer.render_frames(12);
+        renderer.frames(12);
         release(&mut renderer, only);
         assert_eq!(observed_events.with(|events| events.only_longs), 1);
         settings.with_mut(|s| {
@@ -354,9 +333,9 @@ fn check(samples: u32) {
         });
         focus::clear_focus(true);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        renderer.render_frames(40);
+        renderer.frames(40);
         assert!(
-            renderer.read_pixels().unwrap() == baseline,
+            renderer.read_pixels() == baseline,
             "cancelled and removed handlers must restore idle feedback"
         );
         let direct = center(&renderer, "Surface target");
@@ -369,7 +348,7 @@ fn check(samples: u32) {
                 .with(InteractionState::is_pressed)
         );
         settings.with_mut(|s| s.show_surface = false);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert!(
             !observed
                 .get()
@@ -390,9 +369,9 @@ fn check(samples: u32) {
         settings.with_mut(|s| s.show_surface = true);
         focus::clear_focus(true);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        renderer.render_frames(40);
+        renderer.frames(40);
         assert!(
-            renderer.read_pixels().unwrap() == baseline,
+            renderer.read_pixels() == baseline,
             "remount must restore idle feedback"
         );
     }

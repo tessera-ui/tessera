@@ -8,8 +8,8 @@ use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     Dp, Modifier, State,
     accesskit::{Node, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{column::column, theme::material_theme};
@@ -61,7 +61,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
+fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -74,25 +74,16 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
 fn check(samples: u32) {
     for scale in [1.0, 1.25, 1.5, 2.0] {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new({
-                let observed = observed.clone();
-                move || fixture(observed.clone())
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 800,
-                height: 600,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(800, 600)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(observed.clone()));
+        renderer.frames(4);
         let settings = observed.get().settings.unwrap();
         let initial = settings.get();
-        let baseline = renderer.read_pixels().unwrap();
+        let baseline = renderer.read_pixels();
         for (message, text_height, height) in
             [("Saved", 20.0, 48.0), ("Saved\nto library", 40.0, 68.0)]
         {
@@ -103,7 +94,7 @@ fn check(samples: u32) {
                     s.dismiss = dismiss;
                     s.stacked = false;
                 });
-                renderer.render_frames(4);
+                renderer.frames(4);
                 let bounds = node(&renderer, "Notification", Role::Group)
                     .bounds()
                     .unwrap();
@@ -138,7 +129,7 @@ fn check(samples: u32) {
             s.width = 200.0;
             s.message = "Saved to your library with all changes".into();
         });
-        renderer.render_frames(4);
+        renderer.frames(4);
         let text = node(&renderer, &settings.get().message, Role::Status)
             .bounds()
             .unwrap();
@@ -153,7 +144,7 @@ fn check(samples: u32) {
             s.action = Some("Undo".into());
             s.stacked = true;
         });
-        renderer.render_frames(4);
+        renderer.frames(4);
         let bounds = node(&renderer, "Notification", Role::Group)
             .bounds()
             .unwrap();
@@ -167,7 +158,7 @@ fn check(samples: u32) {
             s.width = 200.0;
             s.action = Some("Restore the previous changes".into());
         });
-        renderer.render_frames(4);
+        renderer.frames(4);
         let bounds = node(&renderer, "Notification", Role::Group)
             .bounds()
             .unwrap();
@@ -178,13 +169,13 @@ fn check(samples: u32) {
         assert!(action.y0 >= text.y1);
         settings.set(initial.clone());
         settings.with_mut(|s| s.padding = Some(super::SnackbarDefaults::CONTENT_PADDING));
-        renderer.render_frames(4);
-        assert!(renderer.read_pixels().unwrap() == baseline);
+        renderer.frames(4);
+        assert!(renderer.read_pixels() == baseline);
         settings.with_mut(|s| s.width = 0.0);
-        renderer.render_frames(3);
+        renderer.frames(3);
         settings.set(initial);
-        renderer.render_frames(5);
-        assert!(renderer.read_pixels().unwrap() == baseline);
+        renderer.frames(5);
+        assert!(renderer.read_pixels() == baseline);
     }
 }
 

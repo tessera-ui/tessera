@@ -1127,7 +1127,11 @@ fn standard_content(open: State<SideSheetController>) {
 }
 
 #[tessera]
-fn behavior(modal_open: State<SideSheetController>, notice: State<String>, session: Option<LiveSideSheetSession>) {
+fn behavior(
+    modal_open: State<SideSheetController>,
+    notice: State<String>,
+    session: Option<LiveSideSheetSession>,
+) {
     prose("ui-side-sheets-can-vertically-scroll-independent-of-the-rest-of-the-ui");
     gap(Dp(12.0));
     prose(
@@ -1265,7 +1269,11 @@ fn labeling() {
 }
 
 #[tessera]
-fn sheet_content(modal_open: State<SideSheetController>, filters: State<[bool; 5]>, notice: State<String>) {
+fn sheet_content(
+    modal_open: State<SideSheetController>,
+    filters: State<[bool; 5]>,
+    notice: State<String>,
+) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
         .modifier(

@@ -1,15 +1,12 @@
-use std::time::Duration;
-
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FloatRect, LayoutCoordinates, MOUSE_POINTER_ID, Modifier, PressKeyEventType, Px,
     PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    accesskit::{Action, Node, NodeId, Role},
     focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
-    testing::text_matches,
+    testing::{UiTest, text_matches},
     winit::event::Ime,
 };
 
@@ -23,7 +20,7 @@ use crate::{
     text_field::text_field,
     text_input::TextInputController,
     theme::material_theme,
-    time_picker::{TimePickerDisplayMode, TimePickerController, time_picker},
+    time_picker::{TimePickerController, TimePickerDisplayMode, time_picker},
 };
 
 #[derive(Clone, Copy, Default)]
@@ -124,29 +121,22 @@ fn renderer<Output: 'static>(
     entry: fn(tessera_ui::testing::TestProbe<FixtureHandles>) -> Output,
     samples: u32,
     observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
-) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
+) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(300, 360)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content({
             let observed = observed.clone();
             move || {
                 entry(observed.clone());
             }
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 300,
-            height: 360,
-            sample_count: samples,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+        });
+    renderer.frames(8);
     renderer
 }
 
-fn coordinates(renderer: &HeadlessRenderer, name: &str) -> LayoutCoordinates {
+fn coordinates(renderer: &UiTest, name: &str) -> LayoutCoordinates {
     renderer
         .inspect_components()
         .find_tag(name)
@@ -155,7 +145,7 @@ fn coordinates(renderer: &HeadlessRenderer, name: &str) -> LayoutCoordinates {
         .expect("control geometry")
 }
 
-fn control(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn control(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -165,18 +155,18 @@ fn control(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Nod
         .unwrap_or_else(|| panic!("missing native {label} {role:?}"))
 }
 
-fn click(renderer: &mut HeadlessRenderer, position: PxPosition) {
+fn click(renderer: &mut UiTest, position: PxPosition) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
 fn pixel(pixels: &[u8], x: usize, y: usize) -> [u8; 4] {
     pixels[(y * 300 + x) * 4..][..4].try_into().unwrap()
 }
 
-fn save_pixels(renderer: &HeadlessRenderer, pixels: &[u8], name: &str, samples: u32) {
+fn save_pixels(renderer: &UiTest, pixels: &[u8], name: &str, samples: u32) {
     if let Some(directory) = std::env::var_os("TESSERA_SCALE_QA_DIR") {
         let directory = std::path::PathBuf::from(directory);
         std::fs::create_dir_all(&directory).unwrap();
@@ -223,7 +213,7 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                 let editor_bounds = node.bounds().unwrap();
                 assert_eq!(editor_bounds.x0 - f64::from(field.window_bounds().x), 32.5);
                 assert!(editor_bounds.x1 <= 160.25 && editor_bounds.y1 <= 55.5);
-                let pixels = renderer.read_pixels().unwrap();
+                let pixels = renderer.read_pixels();
                 save_pixels(&renderer, &pixels, "scaled-field-initial", samples);
                 let background = pixel(&pixels, 2, 2);
                 let label = control(&renderer, "Label", Role::Label).1.bounds().unwrap();
@@ -246,7 +236,7 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                 );
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, input);
                 renderer.inject_ime_event(Ime::Commit("!".into()));
-                renderer.render_frames(4);
+                renderer.frames(4);
                 assert_eq!(
                     observed.get().editor.unwrap().with(|editor| editor.text()),
                     "Input!"
@@ -259,12 +249,12 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                 );
                 save_pixels(
                     &renderer,
-                    &renderer.read_pixels().unwrap(),
+                    &renderer.read_pixels(),
                     "scaled-field-focused",
                     samples,
                 );
                 focus::clear_focus(true);
-                renderer.render_frames(4);
+                renderer.frames(4);
                 assert!(
                     !observed
                         .get()
@@ -284,7 +274,7 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                 );
                 focus::clear_focus(true);
                 observed.get().clipped.unwrap().set(true);
-                renderer.render_frames(4);
+                renderer.frames(4);
                 assert!(
                     !observed
                         .get()
@@ -331,17 +321,16 @@ fn scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state(
                 let (digit, node) = control(&renderer, "Hour 3 of 12", Role::Button);
                 let bounds = node.bounds().unwrap();
                 assert_eq!((bounds.width(), bounds.height()), (30.0, 30.0));
-                let before = renderer.read_pixels().unwrap();
+                let before = renderer.read_pixels();
                 save_pixels(&renderer, &before, "scaled-time-before", samples);
-                assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                    action: Action::Focus,
-                    target_tree: TreeId::ROOT,
-                    target_node: digit,
-                    data: None,
-                }));
-                renderer.render_frames(3);
+                assert!(renderer.accessibility_action(digit, Action::Focus));
+                renderer.frames(3);
                 assert_eq!(
-                    observed.get().time.unwrap().with(TimePickerController::hour),
+                    observed
+                        .get()
+                        .time
+                        .unwrap()
+                        .with(TimePickerController::hour),
                     10,
                     "accessibility focus must not activate a clock digit"
                 );
@@ -352,12 +341,23 @@ fn scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state(
                         ((bounds.y0 + bounds.y1) * 0.5) as f32,
                     ),
                 );
-                assert_eq!(observed.get().time.unwrap().with(TimePickerController::hour), 3);
                 assert_eq!(
-                    observed.get().time.unwrap().with(TimePickerController::minute),
+                    observed
+                        .get()
+                        .time
+                        .unwrap()
+                        .with(TimePickerController::hour),
+                    3
+                );
+                assert_eq!(
+                    observed
+                        .get()
+                        .time
+                        .unwrap()
+                        .with(TimePickerController::minute),
                     8
                 );
-                let after = renderer.read_pixels().unwrap();
+                let after = renderer.read_pixels();
                 save_pixels(&renderer, &after, "scaled-time-after", samples);
                 let changed = (dial.y0.ceil() as usize..dial.y1.floor() as usize).any(|y| {
                     (dial.x0.ceil() as usize..dial.x1.floor() as usize)

@@ -1,18 +1,18 @@
-use std::time::Duration;
-
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Rect as AccessRect},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    testing::UiTest,
 };
 
 use super::*;
 
 fn renderer(
     selection: Option<tessera_ui::testing::TestProbe<Option<State<usize>>>>,
-) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
+) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(600, 480)
+        .rendered(crate::TestPipelines)
+        .content(move || {
             material_theme().child({
                 let selection = selection.clone();
                 move || {
@@ -30,23 +30,13 @@ fn renderer(
                         }
                     });
                 }
-            });
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 600,
-            height: 480,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+            })
+        });
+    renderer.frames(8);
     renderer
 }
 
-fn node(renderer: &HeadlessRenderer, matches: impl Fn(&Node) -> bool) -> Option<Node> {
+fn node(renderer: &UiTest, matches: impl Fn(&Node) -> bool) -> Option<Node> {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -56,7 +46,7 @@ fn node(renderer: &HeadlessRenderer, matches: impl Fn(&Node) -> bool) -> Option<
         .find(|node| matches(node))
 }
 
-fn tab_bounds(renderer: &HeadlessRenderer, label: &str) -> AccessRect {
+fn tab_bounds(renderer: &UiTest, label: &str) -> AccessRect {
     node(renderer, |node| {
         node.role() == Role::Tab && crate::has_label(&node, label)
     })
@@ -72,31 +62,31 @@ fn center(bounds: AccessRect) -> PxPosition {
     )
 }
 
-fn click(renderer: &mut HeadlessRenderer, position: PxPosition) {
+fn click(renderer: &mut UiTest, position: PxPosition) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
-    renderer.render_frames(2);
+    renderer.frames(2);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(2);
+    renderer.frames(2);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(8);
+    renderer.frames(8);
 }
 
-fn swipe(renderer: &mut HeadlessRenderer, from: PxPosition, dx: f32) {
+fn swipe(renderer: &mut UiTest, from: PxPosition, dx: f32) {
     renderer.pointer_move(MOUSE_POINTER_ID, from);
-    renderer.render_frames(2);
+    renderer.frames(2);
     renderer.pointer_press(MOUSE_POINTER_ID, from, PressKeyEventType::Left);
-    renderer.render_frames(1);
+    renderer.frames(1);
     let mut last = from;
     for step in 1..=8 {
         last = PxPosition::from_f32_xy(from.x + dx * step as f32 / 8.0, from.y);
         renderer.pointer_move(MOUSE_POINTER_ID, last);
-        renderer.render_frames(1);
+        renderer.frames(1);
     }
     renderer.pointer_release(MOUSE_POINTER_ID, last, PressKeyEventType::Left);
-    renderer.render_frames(8);
+    renderer.frames(8);
 }
 
-fn panel_center(renderer: &HeadlessRenderer) -> PxPosition {
+fn panel_center(renderer: &UiTest) -> PxPosition {
     center(
         node(renderer, |node| node.role() == Role::TabPanel)
             .expect("swipe content panel must be published")

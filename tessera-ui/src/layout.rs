@@ -811,11 +811,12 @@ impl RenderMetadataMut<'_> {
         let size = self
             .computed_data()
             .expect("shape clipping requires measured bounds");
-        self.metadata.set_clip_region(Some(crate::render::ClipRegion {
-            position: self.draw_bounds.position,
-            size: [size.width.to_f32(), size.height.to_f32()],
-            shape,
-        }));
+        self.metadata
+            .set_clip_region(Some(crate::render::ClipRegion {
+                position: self.draw_bounds.position,
+                size: [size.width.to_f32(), size.height.to_f32()],
+                shape,
+            }));
     }
 
     /// Clips content to a fractional shape relative to the current drawing

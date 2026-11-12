@@ -265,7 +265,7 @@ impl CheckmarkState {
 /// # fn demo() {
 /// #     tessera_components::theme::material_theme().child(|| { checkbox_demo(); });
 /// # }
-/// # tessera_ui::testing::layout_test(demo).run();
+/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn checkbox(
@@ -468,8 +468,7 @@ fn checkbox_inner(
     if colors.with(|colors| colors.target != target) {
         colors.with_mut(|colors| colors.retarget(target, frame));
     }
-    if controller.with(CheckboxMotion::is_animating) || colors.with(ColorsMotion::is_animating)
-    {
+    if controller.with(CheckboxMotion::is_animating) || colors.with(ColorsMotion::is_animating) {
         // Rebuilds this component on every animated frame.
         let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
         let _ = frame_clock.get();

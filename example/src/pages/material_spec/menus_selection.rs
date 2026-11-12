@@ -210,8 +210,8 @@ fn selection_column(multiple: bool) {
 mod tests {
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::{Action, ActionRequest, Node, NodeId, Toggled, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
+        accesskit::{Action, Node, NodeId, Toggled},
+        testing::UiTest,
     };
 
     use super::*;
@@ -222,7 +222,7 @@ mod tests {
         tessera_components::theme::material_theme().child(selection_figure);
     }
 
-    fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+    fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
         let snapshot = renderer
             .inspect_accessibility()
             .expect("accessibility tree");
@@ -232,7 +232,7 @@ mod tests {
         (id, node.clone())
     }
 
-    fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+    fn click(renderer: &mut UiTest, label: &str, role: Role) {
         let bounds = node(renderer, label, role).1.bounds().unwrap();
         let point = PxPosition::from_f32_xy(
             ((bounds.x0 + bounds.x1) * 0.5) as f32,
@@ -241,10 +241,10 @@ mod tests {
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(6);
+        renderer.frames(6);
     }
 
-    fn value(renderer: &HeadlessRenderer, label: &str) -> String {
+    fn value(renderer: &UiTest, label: &str) -> String {
         node(renderer, label, Role::TextInput)
             .1
             .value()
@@ -252,7 +252,7 @@ mod tests {
             .to_owned()
     }
 
-    fn items_in_reading_order(renderer: &HeadlessRenderer, label: &str, role: Role) -> Vec<Node> {
+    fn items_in_reading_order(renderer: &UiTest, label: &str, role: Role) -> Vec<Node> {
         let snapshot = renderer
             .inspect_accessibility()
             .expect("accessibility tree");
@@ -267,7 +267,7 @@ mod tests {
             .collect()
     }
 
-    fn save(renderer: &HeadlessRenderer, name: &str) {
+    fn save(renderer: &UiTest, name: &str) {
         if let Some(directory) = std::env::var_os("TESSERA_MENU_QA_DIR") {
             let directory = std::path::PathBuf::from(directory);
             std::fs::create_dir_all(&directory).unwrap();
@@ -276,7 +276,7 @@ mod tests {
                 directory.join(format!("{name}.png")),
                 size.width,
                 size.height,
-                &renderer.read_pixels().unwrap(),
+                &renderer.read_pixels(),
             )
             .unwrap();
         }
@@ -285,18 +285,11 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter for menu selection and scaled geometry"]
     fn diet_choices_keep_radio_and_checkbox_state_independent_and_scale_as_one_figure() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 676,
-                height: 418,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(676, 418)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(8);
         save(&renderer, "menu-diet-initial-canonical");
         for (role, count, label) in [
             (Role::MenuItemRadio, 1, "Single selection menu"),
@@ -340,19 +333,14 @@ mod tests {
         );
         assert_eq!(value(&renderer, "Single selection Diet"), "Vegan");
         let kosher = node(&renderer, "Kosher", Role::MenuItemCheckBox).0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Focus,
-            target_tree: TreeId::ROOT,
-            target_node: kosher,
-            data: None,
-        }));
-        renderer.render_frames(4);
+        assert!(renderer.accessibility_action(kosher, Action::Focus));
+        renderer.frames(4);
         assert_eq!(
             value(&renderer, "Multiple selection Diet"),
             "Gluten-free, Vegan"
         );
         renderer.resize(338, 418);
-        renderer.render_frames(8);
+        renderer.frames(8);
         let field = node(&renderer, "Single selection Diet field", Role::Group)
             .1
             .bounds()

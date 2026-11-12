@@ -245,7 +245,7 @@ enum SearchBarLayoutKind {
 ///             .content(|| {});
 ///     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn search_bar(
@@ -392,7 +392,7 @@ fn resolve_search_bar(
 ///             .content(|| {});
 ///     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn docked_search_bar(
@@ -891,12 +891,8 @@ fn sync_query(
 mod tests {
     use tessera_foundation::modifier::ModifierExt as _;
     use tessera_ui::{
-        CursorEventContent, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
-        PxPosition, State, remember, tessera,
-        testing::{
-            TestProbe, layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-            start_layout_test_session,
-        },
+        Modifier, Px, PxPosition, State, remember, tessera,
+        testing::{TestProbe, UiTest},
     };
 
     use crate::{spacer::spacer, theme::material_theme};
@@ -956,29 +952,25 @@ mod tests {
 
     #[test]
     fn search_measures_multiple_trailing_actions_without_clipping_their_layout() {
-        let snapshot = layout_test(|| multiple_search_actions_fixture())
-            .viewport_px(400, 100)
-            .run();
-        snapshot
-            .node("first-search-action")
-            .position(300, 4)
-            .size(48, 48);
-        snapshot
-            .node("second-search-action")
-            .position(348, 4)
-            .size(48, 48);
+        let snapshot = UiTest::new()
+            .content(|| multiple_search_actions_fixture())
+            .viewport(400, 100)
+            .frame();
+        snapshot.node("first-search-action").rect(300, 4, 48, 48);
+        snapshot.node("second-search-action").rect(348, 4, 48, 48);
     }
 
     #[test]
     fn contained_search_removes_divider_geometry_while_divided_search_preserves_it() {
         for (show_divider, content_y) in [(None, 75), (Some(true), 75), (Some(false), 74)] {
-            let snapshot = layout_test(|| {
-                search_fixture()
-                    .active(true)
-                    .show_divider_optional(show_divider);
-            })
-            .viewport_px(400, 300)
-            .run();
+            let snapshot = UiTest::new()
+                .content(|| {
+                    search_fixture()
+                        .active(true)
+                        .show_divider_optional(show_divider)
+                })
+                .viewport(400, 300)
+                .frame();
             assert_eq!(snapshot.node("search-results").bounds().y, Px(content_y));
             snapshot.node("search-results").size(368, 40);
         }
@@ -988,37 +980,16 @@ mod tests {
     fn clicking_search_field_opens_results_through_the_controller() {
         for (active, expected) in [(None, true), (Some(false), true), (Some(true), true)] {
             let probe = TestProbe::default();
-            let mut session = start_layout_test_session(
-                layout_test(|| {
+            let mut session = UiTest::new()
+                .content(|| {
                     search_fixture()
                         .active_optional(active)
-                        .probe(probe.clone());
+                        .probe(probe.clone())
                 })
-                .viewport_px(400, 300),
-            );
-            let _ = pump_layout_test_session(&mut session, 0);
-            let now = tessera_ui::time::Instant::now();
-            let cursor = Some(PxPosition::new(Px(100), Px(28)));
-            for (index, content) in [
-                CursorEventContent::Pressed(PressKeyEventType::Left),
-                CursorEventContent::Released(PressKeyEventType::Left),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                let _ = pump_layout_test_session_with_input(
-                    &mut session,
-                    16_666_667 * (index as u64 + 1),
-                    vec![PointerChange::new(
-                        now,
-                        1,
-                        content,
-                        GestureState::TapCandidate,
-                    )],
-                    cursor,
-                );
-            }
-            let _ = pump_layout_test_session(&mut session, 50_000_001);
+                .viewport(400, 300);
+            session.frame();
+            session.click_at(PxPosition::new(Px(100), Px(28)));
+            session.frames(1);
             let controller = probe.get().unwrap();
             assert_eq!(
                 controller.with(SearchBarController::is_active),

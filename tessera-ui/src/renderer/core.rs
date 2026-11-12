@@ -12,8 +12,8 @@ use winit::window::Window;
 use crate::{
     pipeline_cache::save_cache,
     render::{
-        ComputablePipeline, ComputeCommand, ComputePipelineRegistry, DrawCommand,
-        DrawablePipeline, drawer::Drawer,
+        ComputablePipeline, ComputeCommand, ComputePipelineRegistry, DrawCommand, DrawablePipeline,
+        drawer::Drawer,
     },
 };
 

@@ -172,9 +172,7 @@ impl PlacementModifierNode for RouteOffset {
 
 #[cfg(test)]
 mod tests {
-    use tessera_ui::testing::{
-        TestProbe, layout_test, pump_layout_test_session, start_layout_test_session,
-    };
+    use tessera_ui::testing::{TestProbe, UiTest};
 
     use super::*;
     use crate::{shard, shard_home};
@@ -234,12 +232,9 @@ mod tests {
     fn predictive_back_previews_previous_route_state_and_only_pops_on_commit() {
         let observed = TestProbe::default();
         let stack = TestProbe::default();
-        let probe = observed.clone();
         let controller = stack.clone();
-        let mut session = start_layout_test_session(layout_test(move || {
-            fixture(probe.clone(), controller.clone());
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| fixture(observed.clone(), controller.clone()));
+        session.frame();
         let controller = stack.get().expect("mounted controller");
         assert_eq!(observed.take(), vec![(2, 20)]);
 
@@ -252,16 +247,16 @@ mod tests {
         ] {
             session.dispatch_system_back(event);
         }
-        pump_layout_test_session(&mut session, 16_000_000);
+        session.advance(std::time::Duration::from_millis(16));
         assert!(observed.take().contains(&(1, 10)));
         assert_eq!(session.run(|| controller.with(RouterController::len)), 2);
         session.dispatch_system_back(SystemBackEvent::Cancelled);
-        pump_layout_test_session(&mut session, 32_000_000);
-        pump_layout_test_session(&mut session, 224_000_000);
+        session.advance(std::time::Duration::from_millis(16));
+        session.advance(std::time::Duration::from_millis(192));
         assert_eq!(session.run(|| controller.with(RouterController::len)), 2);
 
         session.dispatch_system_back(SystemBackEvent::Committed);
-        pump_layout_test_session(&mut session, 240_000_000);
+        session.advance(std::time::Duration::from_millis(16));
         assert_eq!(session.run(|| controller.with(RouterController::len)), 1);
         session.dispatch_system_back(SystemBackEvent::Committed);
         assert_eq!(session.run(|| controller.with(RouterController::len)), 1);

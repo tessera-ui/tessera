@@ -226,7 +226,7 @@ fn process_pointer_gestures(
 ///     assert_eq!(slider_value.get(), 0.5);
 /// }
 ///
-/// # tessera_ui::testing::layout_test(demo).run();
+/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn glass_slider(

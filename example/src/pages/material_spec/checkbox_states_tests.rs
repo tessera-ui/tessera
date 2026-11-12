@@ -1,8 +1,8 @@
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-    accesskit::{Action, ActionRequest, Invalid, Node, Role, Toggled, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Invalid, Node, Role, Toggled},
     tessera,
+    testing::UiTest,
 };
 
 #[tessera]
@@ -15,7 +15,7 @@ fn fixture() {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> Node {
+fn node(renderer: &UiTest, label: &str) -> Node {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -26,7 +26,7 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> Node {
         .1
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str) {
+fn click(renderer: &mut UiTest, label: &str) {
     let bounds = node(renderer, label).bounds().unwrap();
     let position = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) * 0.5) as f32,
@@ -35,17 +35,17 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(60);
+    renderer.frames(60);
 }
 
-fn save_pixels(renderer: &HeadlessRenderer, name: &str) {
+fn save_pixels(renderer: &UiTest, name: &str) {
     if let Some(directory) = std::env::var_os("TESSERA_MENU_QA_DIR") {
         let size = renderer.physical_size();
         tessera_ui::headless::write_png_file(
             std::path::PathBuf::from(directory).join(name),
             size.width,
             size.height,
-            &renderer.read_pixels().unwrap(),
+            &renderer.read_pixels(),
         )
         .unwrap();
     }
@@ -54,18 +54,11 @@ fn save_pixels(renderer: &HeadlessRenderer, name: &str) {
 #[test]
 #[ignore = "requires a native GPU adapter for checkbox state illustrations"]
 fn checkbox_states_preserve_sixty_native_controls_error_mixed_and_scaled_pointer_actions() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1024,
-            height: 1700,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(1024, 1700)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(8);
     save_pixels(&renderer, "checkbox-states-canonical-1024.png");
     let tree = renderer.accessibility_snapshot().unwrap();
     let controls = tree
@@ -128,13 +121,8 @@ fn checkbox_states_preserve_sixty_native_controls_error_mixed_and_scaled_pointer
         .into_iter()
         .find(|(_, node)| crate::has_label(&node, "Light Focused error mixed checkbox state"))
         .unwrap();
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Focus,
-        target_tree: TreeId::ROOT,
-        target_node: id,
-        data: None
-    }));
-    renderer.render_frames(4);
+    assert!(renderer.accessibility_action(id, Action::Focus));
+    renderer.frames(4);
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
     assert_eq!(
         node(&renderer, "Light Focused error mixed checkbox state").toggled(),
@@ -145,7 +133,7 @@ fn checkbox_states_preserve_sixty_native_controls_error_mixed_and_scaled_pointer
         Some(Invalid::True)
     );
     renderer.resize(512, 1700);
-    renderer.render_frames(8);
+    renderer.frames(8);
     save_pixels(&renderer, "checkbox-states-narrow-512.png");
     let narrow = node(&renderer, "Light Enabled selected checkbox state")
         .bounds()

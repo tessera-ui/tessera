@@ -1821,9 +1821,7 @@ mod tests {
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
-        MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::{Action, ActionRequest, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Action, testing::UiTest,
     };
 
     use super::*;
@@ -1870,19 +1868,11 @@ mod tests {
     fn disabled_carousel_preview_blocks_activation_and_scrolling() {
         for enabled in [false, true] {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || fixture(CarouselVariant::MultiBrowse, enabled, probe.clone())),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 800,
-                    height: 600,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .expect("headless carousel renderer");
-            renderer.render_frames(8);
+            let mut renderer = UiTest::new()
+                .viewport(800, 600)
+                .rendered(crate::TestPipelines)
+                .content(|| fixture(CarouselVariant::MultiBrowse, enabled, output.clone()));
+            renderer.frames(8);
             let tree = renderer
                 .accessibility_snapshot()
                 .expect("carousel semantics");
@@ -1899,12 +1889,12 @@ mod tests {
             );
             renderer.pointer_move(MOUSE_POINTER_ID, point);
             renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-            renderer.step_frame();
+            renderer.frames(1);
             renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(output.get().unwrap().2.get(), usize::from(enabled));
             renderer.pointer_scroll(MOUSE_POINTER_ID, point, -120.0, 0.0);
-            renderer.render_frames(120);
+            renderer.frames(120);
             let offset = output
                 .get()
                 .unwrap()
@@ -1939,19 +1929,11 @@ mod tests {
     #[ignore = "Requires a GPU adapter for real carousel measurement annotations and actions"]
     fn measurement_annotations_follow_collection_edges_and_end_inspection_action() {
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || measurement_fixture(probe.clone())),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 800,
-                height: 700,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .expect("measurement renderer");
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(800, 700)
+            .rendered(crate::TestPipelines)
+            .content(|| measurement_fixture(output.clone()));
+        renderer.frames(8);
         let geometry = output.get().unwrap().0;
         assert_eq!(collection_edge_padding(&geometry.get()), [16.0, 0.0]);
         let tree = renderer.accessibility_snapshot().unwrap();
@@ -1972,13 +1954,8 @@ mod tests {
             .find(|(_, node)| crate::has_label(&node, "Inspect collection end"))
             .unwrap()
             .0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node,
-            data: None
-        }));
-        renderer.render_frames(8);
+        assert!(renderer.accessibility_action(target_node, Action::Click));
+        renderer.frames(8);
         assert_eq!(
             output
                 .get()
@@ -2046,19 +2023,11 @@ mod tests {
     fn live_carousel_figures_keep_horizontal_and_portrait_viewports() {
         for variant in VARIANTS {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || fixture(variant, true, probe.clone())),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 800,
-                    height: 600,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .expect("headless carousel renderer");
-            renderer.render_frames(4);
+            let mut renderer = UiTest::new()
+                .viewport(800, 600)
+                .rendered(crate::TestPipelines)
+                .content(|| fixture(variant, true, output.clone()));
+            renderer.frames(4);
             let snapshot = renderer
                 .accessibility_snapshot()
                 .expect("published carousel");
@@ -2110,7 +2079,7 @@ mod tests {
             }
             for target in [5, 0, 3] {
                 controller.with_mut(|controller| controller.jump_to_item(target));
-                renderer.render_frames(8);
+                renderer.frames(8);
                 let values = geometry.get();
                 let container = values.get("container").expect("container geometry");
                 if variant == CarouselVariant::MultiBrowse {
@@ -2198,18 +2167,11 @@ mod tests {
     #[test]
     #[ignore = "Requires a GPU adapter for the real carousel header and full-screen page"]
     fn header_arrow_replaces_show_all_and_opens_a_page_with_the_same_header() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(header_fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 800,
-                height: 700,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .expect("header renderer");
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(800, 700)
+            .rendered(crate::TestPipelines)
+            .content(header_fixture);
+        renderer.frames(8);
         let tree = renderer.accessibility_snapshot().expect("header tree");
         assert!(
             labeled(&tree, "Show all carousel items").is_none(),
@@ -2233,13 +2195,8 @@ mod tests {
             arrow.y1 <= first.y0,
             "the arrow stays outside the carousel container: {arrow:?} vs {first:?}"
         );
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node: arrow_id,
-            data: None
-        }));
-        renderer.render_frames(12);
+        assert!(renderer.accessibility_action(arrow_id, Action::Click));
+        renderer.frames(12);
         let tree = renderer.accessibility_snapshot().expect("all items tree");
         assert!(
             tree.nodes
@@ -2258,13 +2215,8 @@ mod tests {
         );
         assert!(labeled(&tree, "Open collection 6 of 6").is_some());
         let (back, _) = labeled(&tree, "Back to carousel").expect("back control");
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node: back,
-            data: None
-        }));
-        renderer.render_frames(24);
+        assert!(renderer.accessibility_action(back, Action::Click));
+        renderer.frames(24);
         let tree = renderer.accessibility_snapshot().expect("restored tree");
         assert!(labeled(&tree, "Back to carousel").is_none());
         assert!(labeled(&tree, "Show all Recent collections").is_some());

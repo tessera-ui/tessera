@@ -722,10 +722,7 @@ impl tessera_ui::LayoutPolicy for NavigationBarLayout {
 #[cfg(test)]
 mod tests {
     use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-    use tessera_ui::{
-        CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
-        PxPosition, remember, tessera,
-    };
+    use tessera_ui::{Dp, Modifier, Px, PxPosition, remember, tessera};
 
     use crate::{
         column::column,
@@ -781,66 +778,20 @@ mod tests {
 
     #[test]
     fn clicking_middle_item_selects_middle_item() {
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                navigation_bar_click_probe();
-            })
-            .viewport_px(300, 200),
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+        let mut session = tessera_ui::testing::UiTest::new()
+            .content(navigation_bar_click_probe)
+            .viewport(300, 200);
+        session.frame();
 
         // Three equal items span the 300px viewport, so the middle item covers
         // x in [100, 200] and its center is at x = 150.
-        let now = tessera_ui::time::Instant::now();
-        let cursor = Some(PxPosition::new(Px::new(150), Px::new(40)));
-
+        let position = PxPosition::new(Px::new(150), Px::new(40));
         // Move the pointer over the middle item first so it rebuilds in
         // isolation inside `lazy_column`; the per-item selection must still
         // resolve to the middle destination after the click.
-        let moved = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Moved(PxPosition::new(Px::new(150), Px::new(40))),
-            GestureState::TapCandidate,
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            16_666_667,
-            vec![moved],
-            cursor,
-        );
-
-        let press = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            33_333_334,
-            vec![press],
-            cursor,
-        );
-        let release = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Released(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let mut snapshot = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            50_000_001,
-            vec![release],
-            cursor,
-        );
-        for frame in 3..40u64 {
-            snapshot = tessera_ui::testing::pump_layout_test_session(
-                &mut session,
-                50_000_001 + 16_666_667 * (frame - 2),
-            );
-        }
-
-        snapshot.node("nav-search-active").exists();
+        session.pointer_move(tessera_ui::MOUSE_POINTER_ID, position);
+        session.frames(1);
+        session.click_at(position);
+        session.frames(37).node("nav-search-active").exists();
     }
 }

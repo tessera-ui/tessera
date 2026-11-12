@@ -16,7 +16,8 @@ use tessera_components::{
     row::row,
     shape_def::{RoundedCorner, Shape},
     snackbar::{
-        SnackbarData, SnackbarDuration, SnackbarHostController, SnackbarRequest, snackbar, snackbar_host,
+        SnackbarData, SnackbarDuration, SnackbarHostController, SnackbarRequest, snackbar,
+        snackbar_host,
     },
     spacer::spacer,
     surface::surface,
@@ -2904,10 +2905,9 @@ fn connector() {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod anatomy_tests {
     use super::*;
-    use std::time::Duration;
     use tessera_ui::{
         accesskit::{Node, NodeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
+        testing::UiTest,
     };
     #[tessera]
     fn fixture() {
@@ -2917,7 +2917,7 @@ mod anatomy_tests {
             });
         });
     }
-    fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+    fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
         let snapshot = renderer
             .inspect_accessibility()
             .expect("accessibility tree");
@@ -2929,19 +2929,11 @@ mod anatomy_tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn snackbar_spec_anatomy_numbers_container_close_action_and_text_like_material() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 400,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(5);
+        let mut renderer = UiTest::new()
+            .viewport(900, 400)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(5);
         let message = node(&renderer, "Single-line snackbar with action", Role::Status)
             .1
             .bounds()

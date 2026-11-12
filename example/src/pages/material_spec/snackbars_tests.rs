@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Role},
+    testing::UiTest,
 };
 
 use super::*;
@@ -14,7 +14,7 @@ fn fixture() {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -24,17 +24,12 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
     (id, node.clone())
 }
 
-fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: node(renderer, label, Role::Button).0,
-        data: None,
-    }));
-    renderer.render_frames(2);
+fn action(renderer: &mut UiTest, label: &str, action: Action) {
+    assert!(renderer.accessibility_action(node(renderer, label, Role::Button).0, action));
+    renderer.frames(2);
 }
 
-fn assert_message(renderer: &HeadlessRenderer, message: &str) {
+fn assert_message(renderer: &UiTest, message: &str) {
     let snapshot = renderer.accessibility_snapshot().unwrap();
     let statuses: Vec<_> = snapshot
         .nodes
@@ -49,19 +44,12 @@ fn assert_message(renderer: &HeadlessRenderer, message: &str) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn queued_article_message_only_timeout_advances_to_persistent_action_without_moving_focus() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 900,
-            height: 500,
-            sample_count: 1,
-            frame_time: Duration::from_millis(100),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(3);
+    let mut renderer = UiTest::new()
+        .viewport(900, 500)
+        .frame_step(Duration::from_millis(100))
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(3);
     assert_message(&renderer, "Photo saved");
     action(&mut renderer, "Next snackbar action", Action::Click);
     action(&mut renderer, "Next snackbar dismiss", Action::Click);
@@ -69,7 +57,7 @@ fn queued_article_message_only_timeout_advances_to_persistent_action_without_mov
     action(&mut renderer, "Enqueue snackbar", Action::Click);
     action(&mut renderer, "Enqueue snackbar", Action::Focus);
     let origin = node(&renderer, "Enqueue snackbar", Role::Button).0;
-    renderer.render_frames(50);
+    renderer.frames(50);
     assert_message(&renderer, "Photo saved");
     node(&renderer, "Undo", Role::Button);
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
@@ -79,15 +67,15 @@ fn queued_article_message_only_timeout_advances_to_persistent_action_without_mov
     action(&mut renderer, "Next snackbar action", Action::Click);
     action(&mut renderer, "Next snackbar two lines", Action::Click);
     action(&mut renderer, "Enqueue snackbar", Action::Click);
-    renderer.render_frames(20);
+    renderer.frames(20);
     assert_message(&renderer, "Your photo was saved.\nIt is ready to share.");
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
 
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_message(&renderer, "Photo saved");
     node(&renderer, "Undo", Role::Button);
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
-    renderer.render_frames(120);
+    renderer.frames(120);
     assert_message(&renderer, "Photo saved");
     action(&mut renderer, "Undo", Action::Click);
     node(&renderer, "Snackbar visible: false", Role::Label);
@@ -115,20 +103,13 @@ fn inline_feedback_fixture() {
     });
 }
 
-fn renderer<Output: 'static>(root: fn() -> Output) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(root),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 900,
-            height: 1400,
-            sample_count: 1,
-            frame_time: Duration::from_millis(100),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(3);
+fn renderer<Output: 'static>(root: fn() -> Output) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(900, 1400)
+        .frame_step(Duration::from_millis(100))
+        .rendered(crate::TestPipelines)
+        .content(root);
+    renderer.frames(3);
     renderer
 }
 
@@ -155,7 +136,7 @@ fn inline_feedback_keeps_saved_label_after_message_only_snackbar_times_out() {
     action(&mut renderer, "Save", Action::Click);
     assert_message(&renderer, "All changes saved");
     node(&renderer, "Saved", Role::Button);
-    renderer.render_frames(60);
+    renderer.frames(60);
     assert!(
         renderer
             .accessibility_snapshot()

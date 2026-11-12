@@ -2,9 +2,8 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Rect, Role},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
+    focus, remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -92,7 +91,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         });
 }
 
-fn bounds(renderer: &HeadlessRenderer, label: &str) -> Option<Rect> {
+fn bounds(renderer: &UiTest, label: &str) -> Option<Rect> {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -102,7 +101,7 @@ fn bounds(renderer: &HeadlessRenderer, label: &str) -> Option<Rect> {
         .and_then(|(_, node)| node.bounds())
 }
 
-fn point(renderer: &HeadlessRenderer, label: &str) -> PxPosition {
+fn point(renderer: &UiTest, label: &str) -> PxPosition {
     let bounds = bounds(renderer, label).unwrap_or_else(|| panic!("missing {label}"));
     PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
@@ -110,12 +109,12 @@ fn point(renderer: &HeadlessRenderer, label: &str) -> PxPosition {
     )
 }
 
-fn hover(renderer: &mut HeadlessRenderer, label: &str) {
+fn hover(renderer: &mut UiTest, label: &str) {
     renderer.pointer_move(MOUSE_POINTER_ID, point(renderer, label));
-    renderer.step_frame();
+    renderer.frames(1);
 }
 
-fn focus(renderer: &HeadlessRenderer, label: &str) {
+fn focus(renderer: &UiTest, label: &str) {
     let tree = renderer.accessibility_snapshot().expect("tree");
     assert_eq!(
         tree.nodes
@@ -128,39 +127,30 @@ fn focus(renderer: &HeadlessRenderer, label: &str) {
     );
 }
 
-fn corner(renderer: &mut HeadlessRenderer, bounds: Rect) -> u8 {
+fn corner(renderer: &mut UiTest, bounds: Rect) -> u8 {
     let width = renderer.physical_size().width as usize;
     let x = (bounds.x0 + 6.0) as usize;
     let y = (bounds.y0 + 6.0) as usize;
-    renderer.read_pixels().expect("pixels")[(y * width + x) * 4]
+    renderer.read_pixels()[(y * width + x) * 4]
 }
 
 fn check_motion(samples: u32) {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 1500,
-            height: 1000,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(4);
-    let background = renderer.read_pixels().expect("background");
+    let mut renderer = UiTest::new()
+        .viewport(1500, 1000)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(4);
+    let background = renderer.read_pixels();
     observed.get().root.expect("root").with_mut(|root| {
         root.open_at(MenuAnchor::from_dp(
             (Dp(80.0), Dp(80.0)),
             (Dp(20.0), Dp(20.0)),
         ))
     });
-    renderer.render_frames(4);
+    renderer.frames(4);
     let first = bounds(&renderer, "First group").expect("first group");
     assert!(
         corner(&mut renderer, first) > 200,
@@ -168,7 +158,7 @@ fn check_motion(samples: u32) {
     );
     hover(&mut renderer, "Other");
     focus(&renderer, "Other");
-    renderer.render_frames(60);
+    renderer.frames(60);
     assert!(
         corner(&mut renderer, first) < 150,
         "previous group contracts to 8dp corners"
@@ -179,9 +169,9 @@ fn check_motion(samples: u32) {
         "shape changes preserve group geometry"
     );
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(1450.0, 950.0));
-    renderer.step_frame();
+    renderer.frames(1);
     assert!(focus::move_focus(FocusDirection::Up));
-    renderer.render_frames(60);
+    renderer.frames(60);
     focus(&renderer, "Share");
     assert!(
         corner(&mut renderer, first) > 200,
@@ -189,45 +179,45 @@ fn check_motion(samples: u32) {
     );
 
     hover(&mut renderer, "Share");
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(
         bounds(&renderer, "Copy").is_none(),
         "short pointer crossings do not open a branch"
     );
     assert!(focus::move_focus(FocusDirection::Down));
-    renderer.render_frames(20);
+    renderer.frames(20);
     focus(&renderer, "Other");
     assert!(
         bounds(&renderer, "Copy").is_none(),
         "keyboard navigation cancels pending pointer intent"
     );
     hover(&mut renderer, "Share");
-    renderer.render_frames(3);
+    renderer.frames(3);
     observed.get().enabled.expect("enabled").set(false);
-    renderer.render_frames(20);
+    renderer.frames(20);
     assert!(bounds(&renderer, "Copy").is_none());
     observed.get().enabled.expect("enabled").set(true);
-    renderer.render_frames(20);
+    renderer.frames(20);
     assert!(
         bounds(&renderer, "Copy").is_none(),
         "reenabling a stationary source cannot replay an old hover intent"
     );
     hover(&mut renderer, "Share");
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert!(
         bounds(&renderer, "Copy").is_some(),
         "dwell opens the submenu"
     );
     hover(&mut renderer, "More");
-    renderer.render_frames(3);
+    renderer.frames(3);
     hover(&mut renderer, "Copy");
-    renderer.render_frames(20);
+    renderer.frames(20);
     assert!(
         bounds(&renderer, "Export").is_none(),
         "leaving a source cancels its pending open"
     );
     hover(&mut renderer, "More");
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert!(bounds(&renderer, "Export").is_some());
     let menus = renderer
         .accessibility_snapshot()
@@ -239,44 +229,44 @@ fn check_motion(samples: u32) {
         .collect::<Vec<_>>();
     let child = menus[1];
     hover(&mut renderer, "Export");
-    renderer.render_frames(60);
+    renderer.frames(60);
     focus(&renderer, "Export");
     assert!(
         corner(&mut renderer, child) < 150,
         "inactive child panel contracts when moving to its descendant"
     );
-    let settled = renderer.read_pixels().expect("settled");
-    renderer.render_frames(30);
-    assert!(renderer.read_pixels().expect("idle") == settled);
+    let settled = renderer.read_pixels();
+    renderer.frames(30);
+    assert!(renderer.read_pixels() == settled);
 
     renderer.resize(585, 1000);
-    renderer.render_frames(8);
+    renderer.frames(8);
     hover(&mut renderer, "Export");
-    renderer.render_frames(20);
+    renderer.frames(20);
     focus(&renderer, "Export");
     assert!(
         bounds(&renderer, "Copy").is_some(),
         "covered parent items cannot close the active overlay"
     );
     renderer.resize(1500, 1000);
-    renderer.render_frames(8);
+    renderer.frames(8);
     hover(&mut renderer, "Other");
-    renderer.render_frames(3);
+    renderer.frames(3);
     hover(&mut renderer, "Export");
-    renderer.render_frames(20);
+    renderer.frames(20);
     assert!(
         bounds(&renderer, "Export").is_some(),
         "crossing an ancestor item on the way to a child keeps the branch"
     );
     hover(&mut renderer, "Other");
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert!(
         bounds(&renderer, "Copy").is_none(),
         "dwelling on a leaf closes obsolete descendants"
     );
     focus(&renderer, "Other");
     renderer.pointer_move(MOUSE_POINTER_ID + 1, point(&renderer, "Share"));
-    renderer.render_frames(20);
+    renderer.frames(20);
     focus(&renderer, "Other");
     assert!(
         bounds(&renderer, "Copy").is_none(),
@@ -288,17 +278,17 @@ fn check_motion(samples: u32) {
         .fixed
         .expect("fixed")
         .set(Some(Shape::rounded_rectangle(Dp(24.0))));
-    renderer.render_frames(60);
+    renderer.frames(60);
     hover(&mut renderer, "Share");
-    renderer.render_frames(3);
+    renderer.frames(3);
     hover(&mut renderer, "Other");
-    renderer.render_frames(60);
+    renderer.frames(60);
     assert!(
         corner(&mut renderer, first) > 200,
         "an explicit shape remains fixed after leaving the group"
     );
     observed.get().fixed.expect("fixed").set(None);
-    renderer.render_frames(60);
+    renderer.frames(60);
     assert!(corner(&mut renderer, first) < 150);
     assert_eq!(
         observed.get().actions.expect("actions").get(),
@@ -306,15 +296,15 @@ fn check_motion(samples: u32) {
         "hover never invokes an action"
     );
     hover(&mut renderer, "Share");
-    renderer.render_frames(12);
+    renderer.frames(12);
     let copy = point(&renderer, "Copy");
     renderer.pointer_move(MOUSE_POINTER_ID, copy);
     renderer.pointer_press(MOUSE_POINTER_ID, copy, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, copy, PressKeyEventType::Left);
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(observed.get().actions.expect("actions").get(), 1);
-    assert!(renderer.read_pixels().expect("dismissed") == background);
+    assert!(renderer.read_pixels() == background);
 }
 
 #[test]

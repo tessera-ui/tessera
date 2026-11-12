@@ -10,9 +10,8 @@ use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, Dp, Modifier, State,
     accesskit::{Node, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
-    testing::{TestProbe, layout_test},
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -66,9 +65,10 @@ fn dialog_action_fixture() {
 #[test]
 fn dialog_actions_wrap_when_the_row_cannot_fit() {
     for (width, should_wrap) in [(340, true), (800, false)] {
-        let snapshot = layout_test(dialog_action_fixture)
-            .viewport_px(width, 500)
-            .run();
+        let snapshot = UiTest::new()
+            .content(dialog_action_fixture)
+            .viewport(width, 500)
+            .frame();
         let dismiss = snapshot.node("dismiss").bounds();
         let confirm = snapshot.node("confirm").bounds();
         if should_wrap {
@@ -146,7 +146,7 @@ fn dialog_accessibility_fixture(observed: TestProbe<Option<State<(u8, bool)>>>) 
     });
 }
 
-fn dialog_node(renderer: &HeadlessRenderer) -> Node {
+fn dialog_node(renderer: &UiTest) -> Node {
     let nodes = renderer.accessibility_snapshot().unwrap().nodes;
     let mut dialogs = nodes
         .into_iter()
@@ -167,22 +167,12 @@ fn standard_dialog_content_names_and_describes_the_modal_across_updates() {
         "dialog::action_tests::standard_dialog_content_names_and_describes_the_modal_across_updates",
         || {
             let observed = TestProbe::default();
-            let fixture_observed = observed.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || {
-                    dialog_accessibility_fixture(fixture_observed.clone());
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 600,
-                    height: 500,
-                    sample_count: 1,
-                    frame_time: Duration::from_millis(20),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(4);
+            let mut renderer = UiTest::new()
+                .viewport(600, 500)
+                .frame_step(Duration::from_millis(20))
+                .rendered(crate::TesseraComponents)
+                .content(|| dialog_accessibility_fixture(observed.clone()));
+            renderer.frames(4);
             let settings = observed.get().unwrap();
             for (variant, label, description) in [
                 (0, Some("Initial title"), Some("Initial message")),
@@ -194,19 +184,19 @@ fn standard_dialog_content_names_and_describes_the_modal_across_updates() {
                 (6, Some("Pick time"), None),
             ] {
                 settings.set((variant, false));
-                renderer.render_frames(4);
+                renderer.frames(4);
                 let dialog = dialog_node(&renderer);
                 assert_eq!(dialog.label(), label);
                 assert_eq!(dialog.description(), description);
                 assert_eq!(dialog.role(), Role::AlertDialog);
             }
             settings.set((0, true));
-            renderer.render_frames(4);
+            renderer.frames(4);
             let dialog = dialog_node(&renderer);
             assert_eq!(dialog.label(), Some("Explicit title"));
             assert_eq!(dialog.description(), Some("Explicit description"));
             settings.set((1, true));
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(dialog_node(&renderer).label(), Some("Explicit title"));
         },
     );

@@ -1,9 +1,7 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Color, Dp, Modifier, Px, PxPosition, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    modifier::ModifierCapabilityExt as _,
-    remember, tessera,
+    Color, Dp, Modifier, Px, PxPosition, State, modifier::ModifierCapabilityExt as _, remember,
+    tessera, testing::UiTest,
 };
 
 use crate::{
@@ -56,17 +54,11 @@ fn layout_build_feedback_presents_current_pixels_without_replaying_input() {
         || {
             let presses = tessera_ui::testing::TestProbe::default();
             let observed = presses.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || layout_feedback_pixels_fixture(presses.clone())),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 64,
-                    height: 64,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.step_frame();
+            let mut renderer = UiTest::new()
+                .viewport(64, 64)
+                .rendered(crate::TesseraComponents)
+                .content(move || layout_feedback_pixels_fixture(presses.clone()));
+            renderer.frames(1);
             assert_eq!(pixel(&renderer, 8, 24), [255, 0, 0, 255]);
             assert_eq!(pixel(&renderer, 20, 24), [255, 255, 255, 255]);
             renderer.pointer_press(
@@ -74,7 +66,7 @@ fn layout_build_feedback_presents_current_pixels_without_replaying_input() {
                 PxPosition::from_f32_xy(8.0, 8.0),
                 tessera_ui::PressKeyEventType::Left,
             );
-            renderer.step_frame();
+            renderer.frames(1);
             assert_eq!(observed.get(), 1);
             assert_eq!(pixel(&renderer, 20, 24), [255, 0, 0, 255]);
             assert_eq!(pixel(&renderer, 28, 24), [255, 255, 255, 255]);
@@ -167,28 +159,18 @@ fn clipped_translation_updates_visible_scene_branches_and_reveals_retained_pixel
         "layout_flex::drawing_tests::clipped_translation_updates_visible_scene_branches_and_reveals_retained_pixels",
         || {
             let observed = tessera_ui::testing::TestProbe::default();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new({
-                    let observed = observed.clone();
-                    move || clipped_scene_fixture(observed.clone())
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 80,
-                    height: 80,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(3);
+            let mut renderer = UiTest::new()
+                .viewport(80, 80)
+                .rendered(crate::TesseraComponents)
+                .content(|| clipped_scene_fixture(observed.clone()));
+            renderer.frames(3);
             assert_eq!(pixel(&renderer, 4, 4), [255, 0, 0, 255]);
             observed
                 .get()
                 .clipped_offset
                 .unwrap()
                 .set(PxPosition::from_f32_xy(0.0, -4.0));
-            renderer.step_frame();
+            renderer.frames(1);
             assert!(
                 renderer.diagnostics().scene_nodes_updated < 100,
                 "A small scroll must not rebuild the scene for every fully clipped retained row: {:?}",
@@ -202,7 +184,7 @@ fn clipped_translation_updates_visible_scene_branches_and_reveals_retained_pixel
                 .clipped_offset
                 .unwrap()
                 .set(PxPosition::from_f32_xy(0.0, -2016.0));
-            renderer.step_frame();
+            renderer.frames(1);
             assert_eq!(pixel(&renderer, 4, 4), [255, 0, 0, 255]);
             assert_eq!(pixel(&renderer, 4, 20), [0, 0, 255, 255]);
             renderer.pointer_press(
@@ -210,14 +192,14 @@ fn clipped_translation_updates_visible_scene_branches_and_reveals_retained_pixel
                 PxPosition::from_f32_xy(4.0, 4.0),
                 tessera_ui::PressKeyEventType::Left,
             );
-            renderer.step_frame();
+            renderer.frames(1);
             assert_eq!(observed.get().clipped_hit, Some(126));
             renderer.pointer_release(
                 tessera_ui::MOUSE_POINTER_ID,
                 PxPosition::from_f32_xy(4.0, 4.0),
                 tessera_ui::PressKeyEventType::Left,
             );
-            renderer.step_frame();
+            renderer.frames(1);
             let semantics = renderer.accessibility_snapshot().unwrap();
             let last = semantics
                 .nodes
@@ -226,7 +208,7 @@ fn clipped_translation_updates_visible_scene_branches_and_reveals_retained_pixel
                 .unwrap();
             assert_eq!(last.1.bounds().unwrap().y0, 16.0);
             observed.get().clipped_offset.unwrap().set(PxPosition::ZERO);
-            renderer.step_frame();
+            renderer.frames(1);
             assert_eq!(pixel(&renderer, 4, 4), [255, 0, 0, 255]);
             assert_eq!(pixel(&renderer, 4, 20), [0, 0, 255, 255]);
             renderer.pointer_press(
@@ -234,7 +216,7 @@ fn clipped_translation_updates_visible_scene_branches_and_reveals_retained_pixel
                 PxPosition::from_f32_xy(4.0, 4.0),
                 tessera_ui::PressKeyEventType::Left,
             );
-            renderer.step_frame();
+            renderer.frames(1);
             assert_eq!(observed.get().clipped_hit, Some(0));
         },
     );
@@ -287,8 +269,8 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn pixel(renderer: &HeadlessRenderer, x: usize, y: usize) -> [u8; 4] {
-    let pixels = renderer.read_pixels().expect("GPU readback");
+fn pixel(renderer: &UiTest, x: usize, y: usize) -> [u8; 4] {
+    let pixels = renderer.read_pixels();
     let offset = (y * renderer.physical_size().width as usize + x) * 4;
     pixels[offset..offset + 4].try_into().unwrap()
 }
@@ -300,23 +282,11 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
         "layout_flex::drawing_tests::full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies",
         || {
             let observed = tessera_ui::testing::TestProbe::default();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new({
-                    let observed = observed.clone();
-                    move || {
-                        fixture(observed.clone());
-                    }
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 1040,
-                    height: 32,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .expect("offscreen renderer");
-            renderer.step_frame();
+            let mut renderer = UiTest::new()
+                .viewport(1040, 32)
+                .rendered(crate::TesseraComponents)
+                .content(|| fixture(observed.clone()));
+            renderer.frames(1);
             assert_eq!(pixel(&renderer, 2, 2), [255, 0, 0, 255]);
             assert!(
                 renderer
@@ -327,7 +297,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
                     .any(|(_, node)| node.label() == Some("Tile 127"))
             );
             let inputs = observed.get().inputs.unwrap();
-            renderer.step_frame();
+            renderer.frames(1);
             let idle = renderer.diagnostics();
             assert_eq!(
                 renderer
@@ -340,7 +310,10 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             assert!(idle.geometry_nodes_visited <= 2);
             assert_eq!(idle.measure_dirty_children_checked, 0);
             assert_eq!(
-                renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
+                renderer
+                    .work()
+                    .phase(tessera_ui::testing::WorkPhase::Paint)
+                    .count(),
                 0
             );
             assert_eq!(idle.scene_nodes_updated, 0);
@@ -349,19 +322,22 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             assert_eq!(idle.accessibility_nodes_updated, 0);
 
             observed.get().wake.unwrap().set(1);
-            renderer.step_frame();
+            renderer.frames(1);
             assert_eq!(
                 renderer.diagnostics().pointer_nodes_dispatched,
                 1,
                 "an off-hover state reader must receive input without waking unrelated handlers"
             );
             assert_eq!(
-                renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
+                renderer
+                    .work()
+                    .phase(tessera_ui::testing::WorkPhase::Paint)
+                    .count(),
                 0
             );
 
             inputs.with_mut(|inputs| inputs.color = Color::BLUE);
-            renderer.step_frame();
+            renderer.frames(1);
             let paint = renderer.diagnostics();
             assert_eq!(
                 renderer
@@ -379,7 +355,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             assert_eq!(pixel(&renderer, 10, 2), [255, 0, 0, 255]);
 
             inputs.with_mut(|inputs| inputs.offset = Dp(4.0));
-            renderer.step_frame();
+            renderer.frames(1);
             let moved = renderer.diagnostics();
             assert_eq!(
                 renderer
@@ -394,7 +370,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             assert_ne!(pixel(&renderer, 2, 2), [0, 0, 255, 255]);
 
             renderer.pointer_move(tessera_ui::MOUSE_POINTER_ID, PxPosition::new(Px(6), Px(2)));
-            renderer.step_frame();
+            renderer.frames(1);
             assert!(observed.get().first_hovered);
             assert!(renderer.diagnostics().pointer_nodes_dispatched < 4);
             assert!(renderer.diagnostics().pointer_hit_test_candidates < 64);
@@ -402,7 +378,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
                 tessera_ui::MOUSE_POINTER_ID,
                 PxPosition::new(Px(700), Px(2)),
             );
-            renderer.step_frame();
+            renderer.frames(1);
             assert!(
                 !observed.get().first_hovered,
                 "the previous hover target must receive its exit"
@@ -413,7 +389,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
                 inputs.offset = Dp::ZERO;
                 inputs.width = Dp(12.0);
             });
-            renderer.step_frame();
+            renderer.frames(1);
             assert!(
                 renderer
                     .work()

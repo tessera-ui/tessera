@@ -352,13 +352,7 @@ pub fn extended_floating_action_button(
 
 #[cfg(test)]
 mod tests {
-    use tessera_ui::{
-        CursorEventContent, GestureState, PointerChange, PressKeyEventType, State,
-        testing::{
-            layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-            start_layout_test_session,
-        },
-    };
+    use tessera_ui::{State, testing::UiTest};
 
     use crate::{
         boxed::boxed, column::column, material_icons::filled, spacer::spacer, theme::material_theme,
@@ -453,11 +447,10 @@ mod tests {
             ),
             (ExtendedFloatingActionButtonSize::Large, 188, 96, 28, 80, 36),
         ] {
-            let snapshot = layout_test(move || {
-                geometry_fixture(size);
-            })
-            .viewport_px(500, 400)
-            .run();
+            let snapshot = UiTest::new()
+                .content(move || geometry_fixture(size))
+                .viewport(500, 400)
+                .frame();
             snapshot.node("geometry").size(width, height);
             snapshot.node("icon").size(icon_size, icon_size);
             assert_eq!(snapshot.node("icon").bounds().x, Px::new(icon_x));
@@ -472,22 +465,20 @@ mod tests {
             (ExtendedFloatingActionButtonSize::Medium, 80),
             (ExtendedFloatingActionButtonSize::Large, 96),
         ] {
-            let snapshot = layout_test(move || {
-                fixture(size, false, true, true);
-            })
-            .viewport_px(500, 400)
-            .run();
+            let snapshot = UiTest::new()
+                .content(move || fixture(size, false, true, true))
+                .viewport(500, 400)
+                .frame();
             snapshot.node("fab").size(side, side);
         }
     }
 
     #[test]
     fn label_only_buttons_remain_expanded_without_an_icon() {
-        let snapshot = layout_test(|| {
-            fixture(ExtendedFloatingActionButtonSize::Small, false, false, true);
-        })
-        .viewport_px(500, 400)
-        .run();
+        let snapshot = UiTest::new()
+            .content(|| fixture(ExtendedFloatingActionButtonSize::Small, false, false, true))
+            .viewport(500, 400)
+            .frame();
         let bounds = snapshot.node("fab").bounds();
         assert!(bounds.width > Px::new(56));
         assert_eq!(bounds.height, Px::new(56));
@@ -497,16 +488,13 @@ mod tests {
     fn changing_size_and_label_updates_retained_content() {
         let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
 
-        let mut session = start_layout_test_session(
-            layout_test(|| {
+        let mut session = UiTest::new()
+            .content(|| {
                 fixture(ExtendedFloatingActionButtonSize::Small, true, true, true)
-                    .probe(probe.clone());
+                    .probe(probe.clone())
             })
-            .viewport_px(500, 400),
-        );
-        let before = pump_layout_test_session(&mut session, 0)
-            .node("fab")
-            .bounds();
+            .viewport(500, 400);
+        let before = session.frame().node("fab").bounds();
         probe
             .get()
             .config
@@ -515,9 +503,7 @@ mod tests {
                 config.size = ExtendedFloatingActionButtonSize::Medium;
                 config.label = "Create a document".into();
             });
-        let after = pump_layout_test_session(&mut session, 16_666_667)
-            .node("fab")
-            .bounds();
+        let after = session.frames(1).node("fab").bounds();
         assert!(after.width > before.width);
         assert_eq!(after.height, Px::new(80));
     }
@@ -527,41 +513,20 @@ mod tests {
         let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
 
         for enabled in [true, false] {
-            let mut session = start_layout_test_session(
-                layout_test(|| {
+            let mut session = UiTest::new()
+                .content(|| {
                     fixture(ExtendedFloatingActionButtonSize::Small, true, true, enabled)
-                        .probe(probe.clone());
+                        .probe(probe.clone())
                 })
-                .viewport_px(500, 400),
-            );
-            let initial = pump_layout_test_session(&mut session, 0)
-                .node("fab")
-                .bounds();
-            let cursor = Some(PxPosition::from_f32_xy(
+                .viewport(500, 400);
+            let initial = session.frame().node("fab").bounds();
+            session.click_at(PxPosition::from_f32_xy(
                 initial.x.to_f32() + 28.0,
                 initial.y.to_f32() + 28.0,
             ));
-            for (index, event) in [
-                CursorEventContent::Pressed(PressKeyEventType::Left),
-                CursorEventContent::Released(PressKeyEventType::Left),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                pump_layout_test_session_with_input(
-                    &mut session,
-                    (index as u64 + 1) * 16_666_667,
-                    vec![PointerChange::new(
-                        tessera_ui::time::Instant::now(),
-                        1,
-                        event,
-                        GestureState::TapCandidate,
-                    )],
-                    cursor,
-                );
-            }
-            pump_layout_test_session(&mut session, 50_000_000);
-            let intermediate = pump_layout_test_session(&mut session, 83_333_333)
+            session.frames(1);
+            let intermediate = session
+                .advance(std::time::Duration::from_nanos(33_333_333))
                 .node("fab")
                 .bounds();
             if enabled {
@@ -572,10 +537,7 @@ mod tests {
                 assert!(probe.get().expanded.expect("fixture state").get());
                 assert_eq!(intermediate.width, initial.width);
             }
-            let mut final_snapshot = pump_layout_test_session(&mut session, 100_000_000);
-            for frame in 7..120 {
-                final_snapshot = pump_layout_test_session(&mut session, frame * 16_666_667);
-            }
+            let final_snapshot = session.frames(114);
             assert_eq!(
                 final_snapshot.node("fab").bounds().width,
                 if enabled { Px::new(56) } else { initial.width }
@@ -604,32 +566,25 @@ mod tests {
     #[ignore = "Requires a native GPU adapter"]
     fn rendered_labels_restore_after_a_full_collapse_and_expansion() {
         let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
-        let observed = probe.clone();
 
-        use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
+        use tessera_ui::testing::UiTest;
 
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
+        let mut renderer = UiTest::new()
+            .viewport(500, 400)
+            .rendered(crate::TesseraComponents)
+            .content(|| {
                 fixture(ExtendedFloatingActionButtonSize::Small, true, true, true)
-                    .probe(observed.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 500,
-                height: 400,
-                ..Default::default()
-            },
-        )
-        .expect("headless GPU renderer");
-        renderer.render_frames(3);
-        let expanded = renderer.read_pixels().expect("expanded pixels");
+                    .probe(probe.clone())
+            });
+        renderer.frames(3);
+        let expanded = renderer.read_pixels();
         probe.get().expanded.expect("fixture state").set(false);
-        renderer.render_frames(120);
-        let collapsed = renderer.read_pixels().expect("collapsed pixels");
+        renderer.frames(120);
+        let collapsed = renderer.read_pixels();
         assert_ne!(expanded, collapsed);
         probe.get().expanded.expect("fixture state").set(true);
-        renderer.render_frames(120);
-        let restored = renderer.read_pixels().expect("restored pixels");
+        renderer.frames(120);
+        let restored = renderer.read_pixels();
         crate::test_utils::assert_pixels_near(&expanded, &restored, 500);
     }
 }

@@ -1,8 +1,7 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, layout::MeasureScope, tessera,
-    testing::layout_test,
+    MeasurementError, Modifier, Px, PxPosition, layout::MeasureScope, tessera, testing::UiTest,
 };
 
 use super::{horizontal_divider, vertical_divider};
@@ -108,11 +107,10 @@ fn divider_clamps_thickness_and_resolves_bounded_and_unbounded_lengths() {
                     } else {
                         Constraint::new(axis, thickness_axis)
                     };
-                    let snapshot = layout_test(move || {
-                        fixture(constraint, vertical, thickness, false);
-                    })
-                    .viewport_px(120, 120)
-                    .run();
+                    let snapshot = UiTest::new()
+                        .content(move || fixture(constraint, vertical, thickness, false))
+                        .viewport(120, 120)
+                        .frame();
                     let (width, height) = if vertical {
                         (expected, length)
                     } else {
@@ -121,20 +119,21 @@ fn divider_clamps_thickness_and_resolves_bounded_and_unbounded_lengths() {
                     snapshot.node("divider").position(0, 0).size(width, height);
                 }
             }
-            let snapshot = layout_test(|| {
-                fixture(
-                    Constraint::new(
-                        AxisConstraint::at_most(Px(80)),
-                        AxisConstraint::at_most(Px(20)),
-                    ),
-                    false,
-                    Dp(2.0),
-                    true,
-                );
-            })
-            .viewport_px(120, 120)
-            .run();
-            snapshot.node("divider").position(0, 0).size(80, 2);
+            let snapshot = UiTest::new()
+                .content(|| {
+                    fixture(
+                        Constraint::new(
+                            AxisConstraint::at_most(Px(80)),
+                            AxisConstraint::at_most(Px(20)),
+                        ),
+                        false,
+                        Dp(2.0),
+                        true,
+                    )
+                })
+                .viewport(120, 120)
+                .frame();
+            snapshot.node("divider").rect(0, 0, 80, 2);
         },
     );
 }

@@ -4,16 +4,13 @@
 //!
 //! Reserve a visible track before long specification content is measured.
 
-use std::{env, process::Command, time::Duration};
+use std::{env, process::Command};
 
 use tessera_components::{boxed::boxed, scrollable::ScrollableController, theme::material_theme};
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
-    Dp, LayoutCoordinates, Modifier,
-    accesskit::Role,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    modifier::FocusModifierExt as _,
-    remember, tessera,
+    Dp, LayoutCoordinates, Modifier, accesskit::Role, modifier::FocusModifierExt as _, remember,
+    tessera, testing::UiTest,
 };
 
 use super::spec_scroll_viewport;
@@ -67,23 +64,15 @@ fn gallery_track_reserves_exact_width_on_first_frame_and_after_resize() {
     {
         let geometry = tessera_ui::testing::TestProbe::default();
         let output = geometry.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || fixture(output.clone())),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 907,
-                height: 320,
-                scale_factor: density,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(1);
+        let mut renderer = UiTest::new()
+            .viewport(907, 320)
+            .scale_factor(density)
+            .rendered(crate::TestPipelines)
+            .content(move || fixture(output.clone()));
+        renderer.frames(1);
         let first = geometry.with(|values| values[0]);
         assert_eq!(first.local_size.width.0, initial_width);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert!(geometry.with(|values| {
             values
                 .iter()
@@ -105,12 +94,12 @@ fn gallery_track_reserves_exact_width_on_first_frame_and_after_resize() {
         );
         geometry.with_mut(Vec::clear);
         renderer.resize(600, 240);
-        renderer.render_frames(1);
+        renderer.frames(1);
         assert_eq!(
             geometry.with(|values| values[0].local_size.width.0),
             resized_width
         );
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert!(geometry.with(|values| {
             values
                 .iter()

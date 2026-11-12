@@ -9,11 +9,9 @@ use std::sync::Arc;
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::TestProbe,
+    accesskit::{Action, Node, NodeId, Role, Toggled},
+    focus, remember, tessera,
+    testing::{TestProbe, UiTest},
     use_context,
 };
 
@@ -115,7 +113,7 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
         });
 }
 
-fn node(renderer: &HeadlessRenderer) -> (NodeId, Node) {
+fn node(renderer: &UiTest) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -125,13 +123,8 @@ fn node(renderer: &HeadlessRenderer) -> (NodeId, Node) {
         .expect("switch semantics")
 }
 
-fn action(renderer: &mut HeadlessRenderer, action: Action) -> bool {
-    renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: node(renderer).0,
-        data: None,
-    })
+fn action(renderer: &mut UiTest, action: Action) -> bool {
+    renderer.accessibility_action(node(renderer).0, action)
 }
 
 fn encoded(color: Color) -> [u8; 4] {
@@ -154,8 +147,8 @@ fn composite(ink: Color, background: Color, alpha: f32) -> Color {
     )
 }
 
-fn assert_pixel(renderer: &HeadlessRenderer, x: u32, y: u32, color: Color, context: &str) {
-    let pixels = renderer.read_pixels().unwrap();
+fn assert_pixel(renderer: &UiTest, x: u32, y: u32, color: Color, context: &str) {
+    let pixels = renderer.read_pixels();
     let offset = ((y * renderer.physical_size().width + x) * 4) as usize;
     let actual: [u8; 4] = pixels[offset..offset + 4].try_into().unwrap();
     let expected = encoded(color);
@@ -171,21 +164,13 @@ fn assert_pixel(renderer: &HeadlessRenderer, x: u32, y: u32, color: Color, conte
 fn check_states(samples: u32) {
     let probe = TestProbe::<Option<State<Settings>>>::default();
     let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            fixture().probe(probe.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 200,
-            height: 140,
-            scale_factor: 2.0,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(30);
+    let mut renderer = UiTest::new()
+        .viewport(200, 140)
+        .scale_factor(2.0)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture().probe(probe.clone()));
+    renderer.frames(30);
     let settings = observed.get().unwrap();
     let palettes = palettes();
     let identity = node(&renderer).0;
@@ -201,7 +186,7 @@ fn check_states(samples: u32) {
                 });
                 focus::clear_focus(true);
                 renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(190.0, 130.0));
-                renderer.render_frames(30);
+                renderer.frames(30);
                 let (id, control) = node(&renderer);
                 assert_eq!(id, identity);
                 assert_eq!(control.role(), Role::Switch);
@@ -268,7 +253,7 @@ fn check_states(samples: u32) {
                 if !disabled {
                     renderer
                         .pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(x as f32, 48.0));
-                    renderer.render_frames(30);
+                    renderer.frames(30);
                     let active = if checked {
                         scheme.primary_container
                     } else {
@@ -292,7 +277,7 @@ fn check_states(samples: u32) {
                         PxPosition::from_f32_xy(x as f32, 48.0),
                         PressKeyEventType::Left,
                     );
-                    renderer.render_frames(30);
+                    renderer.frames(30);
                     assert_pixel(&renderer, x, 62, active, "pressed thumb");
                     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(190.0, 130.0));
                     renderer.pointer_release(
@@ -300,9 +285,9 @@ fn check_states(samples: u32) {
                         PxPosition::from_f32_xy(190.0, 130.0),
                         PressKeyEventType::Left,
                     );
-                    renderer.render_frames(30);
+                    renderer.frames(30);
                     assert!(action(&mut renderer, Action::Focus));
-                    renderer.render_frames(30);
+                    renderer.frames(30);
                     assert_pixel(&renderer, x, 62, active, "focused thumb");
                     assert_pixel(
                         &renderer,
@@ -319,7 +304,7 @@ fn check_states(samples: u32) {
                         "focus layer role",
                     );
                     settings.with_mut(|value| value.custom = true);
-                    renderer.render_frames(30);
+                    renderer.frames(30);
                     assert_pixel(&renderer, x, 62, Color::GREEN, "custom focused thumb");
                 }
                 assert_eq!(settings.get().activations, 0);
@@ -339,7 +324,7 @@ fn check_states(samples: u32) {
                     ..Default::default()
                 });
                 renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(190.0, 130.0));
-                renderer.render_frames(30);
+                renderer.frames(30);
                 let x = if checked { 72 } else { 32 };
                 let thumb = if checked {
                     scheme.on_primary
@@ -375,7 +360,7 @@ fn check_states(samples: u32) {
             ..Default::default()
         });
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(190.0, 130.0));
-        renderer.render_frames(30);
+        renderer.frames(30);
         let scheme = &palettes[0].color_scheme;
         assert_eq!(settings.get().activations, 0);
         assert_pixel(
@@ -406,7 +391,7 @@ fn check_states(samples: u32) {
             );
         }
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(72.0, 48.0));
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_pixel(
             &renderer,
             52,
@@ -415,7 +400,7 @@ fn check_states(samples: u32) {
             "live hover overrides presented focus",
         );
         settings.with_mut(|value| value.disabled = true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_pixel(
             &renderer,
             52,
@@ -435,7 +420,7 @@ fn check_states(samples: u32) {
                 disabled,
                 ..Default::default()
             });
-            renderer.render_frames(30);
+            renderer.frames(30);
             let (_, control) = node(&renderer);
             assert_eq!(control.role(), Role::Switch);
             assert_eq!(

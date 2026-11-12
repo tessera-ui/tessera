@@ -1,15 +1,9 @@
 use crate::{
-    ComputedData, Constraint, CursorEventContent, GestureState, LayoutCoordinates, LayoutPolicy,
-    LayoutResult, Modifier, PointerChange, PointerEventPass, PointerInput,
-    PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent,
-    ScrollEventSource, State,
+    ComputedData, Constraint, CursorEventContent, LayoutCoordinates, LayoutPolicy, LayoutResult,
+    Modifier, PointerEventPass, PointerInput, PointerInputModifierNode, Px, PxPosition, State,
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    testing::{
-        layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-        start_layout_test_session,
-    },
-    time::Instant,
+    testing::UiTest,
 };
 
 use super::{FloatRect, scaled_box};
@@ -110,10 +104,10 @@ fn size_only_observer_fixture(probe: GeometryProbe) {
 fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_unplacement() {
     let probe = GeometryProbe::default();
     probe.visible_bounds.with_mut(Vec::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| size_only_observer_fixture(probe.clone())).viewport_px(160, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| size_only_observer_fixture(probe.clone()))
+        .viewport(160, 100);
+    session.frame();
     assert_eq!(
         probe.visible_bounds.with(|items| items.clone()),
         vec![Some(FloatRect {
@@ -123,14 +117,14 @@ fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_un
             height: 35.0,
         })]
     );
-    pump_layout_test_session(&mut session, 16_666_667);
+    session.frames(1);
     assert_eq!(probe.visible_bounds.with(Vec::len), 1);
     probe
         .parent_offset
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(128.5, 0.0));
-    pump_layout_test_session(&mut session, 33_333_334);
+    session.frames(1);
     assert_eq!(
         probe
             .visible_bounds
@@ -147,7 +141,7 @@ fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_un
         .get()
         .expect("test fixture entry exists")
         .set(false);
-    pump_layout_test_session(&mut session, 50_000_001);
+    session.frames(1);
     assert_eq!(
         probe
             .visible_bounds
@@ -159,7 +153,7 @@ fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_un
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 66_666_668);
+    session.frames(1);
     assert_eq!(
         probe
             .visible_bounds
@@ -178,10 +172,10 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
     let probe = GeometryProbe::default();
     probe.sizes.with_mut(Vec::clear);
     probe.late_sizes.with_mut(Vec::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| size_only_observer_fixture(probe.clone())).viewport_px(300, 200),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| size_only_observer_fixture(probe.clone()))
+        .viewport(300, 200);
+    session.frame();
     assert_eq!(
         probe.sizes.with(|sizes| sizes.clone()),
         vec![crate::PxSize::new(Px(150), Px(35))]
@@ -191,26 +185,20 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(128.5, -0.25));
-    pump_layout_test_session(&mut session, 16_666_667);
-    assert!(
-        session
-            .diagnostics()
-            .expect("test fixture provides diagnostics")
-            .geometry_nodes_updated
-            > 0
-    );
+    session.frames(1);
+    assert!(session.diagnostics().geometry_nodes_updated > 0);
     probe
         .child_offset
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(3.75, 4.0));
-    pump_layout_test_session(&mut session, 33_333_334);
+    session.frames(1);
     probe
         .outer_scale
         .get()
         .expect("test fixture entry exists")
         .set(0.625);
-    pump_layout_test_session(&mut session, 50_000_001);
+    session.frames(1);
     assert_eq!(probe.sizes.with(Vec::len), 1);
     probe
         .content_size
@@ -220,7 +208,7 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
             width: Px(220),
             height: Px(55),
         });
-    pump_layout_test_session(&mut session, 66_666_668);
+    session.frames(1);
     assert_eq!(
         probe
             .sizes
@@ -233,7 +221,7 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
         .get()
         .expect("test fixture entry exists")
         .set(false);
-    pump_layout_test_session(&mut session, 83_333_335);
+    session.frames(1);
     probe
         .content_size
         .get()
@@ -242,14 +230,14 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
             width: Px(250),
             height: Px(60),
         });
-    pump_layout_test_session(&mut session, 100_000_002);
+    session.frames(1);
     assert_eq!(probe.sizes.with(Vec::len), 2);
     probe
         .observer_visible
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 116_666_669);
+    session.frames(1);
     assert_eq!(probe.sizes.with(Vec::len), 3);
     assert_eq!(
         probe
@@ -262,7 +250,7 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 133_333_336);
+    session.frames(1);
     assert_eq!(probe.sizes.with(Vec::len), 3);
     assert_eq!(
         probe.late_sizes.with(|sizes| sizes.clone()),
@@ -273,7 +261,7 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
         .get()
         .expect("test fixture entry exists")
         .set(false);
-    pump_layout_test_session(&mut session, 150_000_003);
+    session.frames(1);
     probe
         .content_size
         .get()
@@ -282,7 +270,7 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
             width: Px(310),
             height: Px(70),
         });
-    pump_layout_test_session(&mut session, 166_666_670);
+    session.frames(1);
     assert_eq!(probe.sizes.with(Vec::len), 3);
     assert_eq!(probe.late_sizes.with(Vec::len), 1);
     probe
@@ -290,7 +278,7 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 183_333_337);
+    session.frames(1);
     assert_eq!(probe.sizes.with(Vec::len), 4);
     assert_eq!(
         probe
@@ -303,13 +291,13 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
         .get()
         .expect("test fixture entry exists")
         .set(false);
-    pump_layout_test_session(&mut session, 200_000_004);
+    session.frames(1);
     probe
         .parent_offset
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::ZERO);
-    pump_layout_test_session(&mut session, 216_666_671);
+    session.frames(1);
     assert_eq!(probe.sizes.with(Vec::len), 4);
     assert_eq!(probe.late_sizes.with(Vec::len), 2);
     probe
@@ -317,13 +305,13 @@ fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_n
         .get()
         .expect("test fixture entry exists")
         .set(false);
-    pump_layout_test_session(&mut session, 233_333_338);
+    session.frames(1);
     probe
         .observer_visible
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 250_000_005);
+    session.frames(1);
     assert_eq!(probe.sizes.with(Vec::len), 5);
     assert_eq!(
         probe
@@ -425,10 +413,10 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
     let probe = GeometryProbe::default();
     probe.space_rects.with_mut(Vec::clear);
     probe.coordinates.with_mut(Vec::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| relative_observer_fixture(probe.clone())).viewport_px(1000, 800),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| relative_observer_fixture(probe.clone()))
+        .viewport(1000, 800);
+    session.frame();
     let expected = FloatRect {
         x: 18.0625,
         y: 35.5,
@@ -445,7 +433,7 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
             .get()
             .expect("test fixture entry exists")
             .set(PxPosition::from_f32_xy(65536.25 * frame as f32, -0.5));
-        pump_layout_test_session(&mut session, frame * 16_666_667);
+        session.frames(1);
     }
     assert_eq!(probe.space_rects.with(Vec::len), 1);
     assert_eq!(probe.coordinates.with(Vec::len), 6);
@@ -454,14 +442,14 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         .get()
         .expect("test fixture entry exists")
         .set(0.75);
-    pump_layout_test_session(&mut session, 100_000_000);
+    session.frames(1);
     assert_eq!(probe.space_rects.with(Vec::len), 1);
     probe
         .inner_scale
         .get()
         .expect("test fixture entry exists")
         .set(0.5);
-    pump_layout_test_session(&mut session, 116_666_667);
+    session.frames(1);
     assert_eq!(
         probe
             .space_rects
@@ -478,7 +466,7 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(3.75, 4.0));
-    pump_layout_test_session(&mut session, 133_333_334);
+    session.frames(1);
     assert_eq!(
         probe
             .space_rects
@@ -498,7 +486,7 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
             width: Px(120),
             height: Px(40),
         });
-    pump_layout_test_session(&mut session, 150_000_001);
+    session.frames(1);
     let resized = FloatRect {
         x: 17.25,
         y: 32.75,
@@ -517,20 +505,20 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         .get()
         .expect("test fixture entry exists")
         .set(false);
-    pump_layout_test_session(&mut session, 166_666_668);
+    session.frames(1);
     probe
         .parent_offset
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::ZERO);
-    pump_layout_test_session(&mut session, 183_333_335);
+    session.frames(1);
     assert_eq!(probe.space_rects.with(Vec::len), count);
     probe
         .observer_visible
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 200_000_002);
+    session.frames(1);
     assert_eq!(probe.space_rects.with(Vec::len), count + 1);
     assert_eq!(
         probe
@@ -543,7 +531,7 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         .get()
         .expect("test fixture entry exists")
         .set(false);
-    pump_layout_test_session(&mut session, 216_666_669);
+    session.frames(1);
     assert_eq!(probe.space_rects.with(Vec::len), count + 2);
     assert_eq!(
         probe
@@ -559,7 +547,7 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 233_333_336);
+    session.frames(1);
     assert_eq!(probe.space_rects.with(Vec::len), count + 3);
     assert_eq!(
         probe
@@ -572,7 +560,7 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 250_000_003);
+    session.frames(1);
     assert_eq!(probe.space_rects.with(Vec::len), count + 4);
     assert_eq!(
         probe
@@ -590,7 +578,7 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         .get()
         .expect("test fixture entry exists")
         .set(false);
-    pump_layout_test_session(&mut session, 266_666_670);
+    session.frames(1);
     assert_eq!(probe.space_rects.with(Vec::len), count + 5);
     assert_eq!(
         probe
@@ -609,7 +597,7 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(-128.0, 0.0));
-    pump_layout_test_session(&mut session, 283_333_337);
+    session.frames(1);
     assert_eq!(probe.coordinates.with(Vec::len), window_count);
     assert_eq!(probe.space_rects.with(Vec::len), count + 6);
     assert_eq!(
@@ -679,24 +667,12 @@ fn observer_follow_fixture(probe: GeometryProbe) {
 #[test]
 fn geometry_observer_updates_settle_placement_before_the_frame_snapshot() {
     let probe = GeometryProbe::default();
-    let mut session = start_layout_test_session(
-        layout_test(|| observer_follow_fixture(probe.clone())).viewport_px(300, 200),
-    );
-    pump_layout_test_session(&mut session, 0);
-    assert!(
-        session
-            .diagnostics()
-            .expect("test fixture provides diagnostics")
-            .cache_miss_no_entry
-            > 0
-    );
-    assert_eq!(
-        session
-            .diagnostics()
-            .expect("test fixture provides diagnostics")
-            .pointer_nodes_dispatched,
-        2
-    );
+    let mut session = UiTest::new()
+        .content(|| observer_follow_fixture(probe.clone()))
+        .viewport(300, 200);
+    session.frame();
+    assert!(session.diagnostics().cache_miss_no_entry > 0);
+    assert_eq!(session.diagnostics().pointer_nodes_dispatched, 2);
     let before = session.inspect_components();
     assert_eq!(
         before
@@ -711,21 +687,9 @@ fn geometry_observer_updates_settle_placement_before_the_frame_snapshot() {
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(12.0, 2.0));
-    pump_layout_test_session(&mut session, 1);
-    assert_eq!(
-        session
-            .diagnostics()
-            .expect("test fixture provides diagnostics")
-            .pointer_nodes_dispatched,
-        2
-    );
-    assert_eq!(
-        session
-            .diagnostics()
-            .expect("test fixture provides diagnostics")
-            .cache_miss_no_entry,
-        0
-    );
+    session.advance(std::time::Duration::from_nanos(1));
+    assert_eq!(session.diagnostics().pointer_nodes_dispatched, 2);
+    assert_eq!(session.diagnostics().cache_miss_no_entry, 0);
     let after = session.inspect_components();
     let bounds = after
         .tagged("geometry-child")
@@ -744,21 +708,9 @@ fn geometry_observer_updates_settle_placement_before_the_frame_snapshot() {
             .executed::<SizeOnlyContent>(crate::work::WorkPhase::Measure),
         0
     );
-    pump_layout_test_session(&mut session, 2);
-    assert_eq!(
-        session
-            .diagnostics()
-            .expect("test fixture provides diagnostics")
-            .pointer_nodes_dispatched,
-        0
-    );
-    assert_eq!(
-        session
-            .diagnostics()
-            .expect("test fixture provides diagnostics")
-            .cache_miss_no_entry,
-        0
-    );
+    session.advance(std::time::Duration::from_nanos(1));
+    assert_eq!(session.diagnostics().pointer_nodes_dispatched, 0);
+    assert_eq!(session.diagnostics().cache_miss_no_entry, 0);
     assert_eq!(
         session
             .work()
@@ -790,17 +742,11 @@ fn inherited_translation_fixture(probe: GeometryProbe) {
 fn inherited_translation_reuses_local_placement_and_preserves_fractional_observers() {
     let probe = GeometryProbe::default();
     probe.coordinates.with_mut(Vec::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| inherited_translation_fixture(probe.clone())).viewport_px(300, 200),
-    );
-    pump_layout_test_session(&mut session, 0);
-    assert_eq!(
-        session
-            .diagnostics()
-            .expect("test fixture provides diagnostics")
-            .pointer_nodes_updated,
-        0
-    );
+    let mut session = UiTest::new()
+        .content(|| inherited_translation_fixture(probe.clone()))
+        .viewport(300, 200);
+    session.frame();
+    assert_eq!(session.diagnostics().pointer_nodes_updated, 0);
     let snapshot = session.run(crate::testing::ComponentSnapshot::capture);
     let child = snapshot.tagged("geometry-child").instance_id();
     assert!(
@@ -816,12 +762,9 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
             .get()
             .expect("test fixture entry exists")
             .set(PxPosition::from_f32_xy(-0.5, offset));
-        pump_layout_test_session(&mut session, frame * 16_666_667);
+        session.frames(1);
         assert_eq!(
-            session
-                .diagnostics()
-                .expect("test fixture provides diagnostics")
-                .pointer_nodes_updated,
+            session.diagnostics().pointer_nodes_updated,
             0,
             "moving decorative layouts must not update the pointer index"
         );
@@ -845,7 +788,7 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(3.75, 4.0));
-    pump_layout_test_session(&mut session, 700_000_000);
+    session.frames(1);
     assert!(
         session
             .work()
@@ -900,10 +843,10 @@ fn hidden_position_observer_fixture(probe: GeometryProbe) {
 fn position_observer_resumes_after_hidden_ancestor_moves() {
     let probe = GeometryProbe::default();
     probe.coordinates.with_mut(Vec::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| hidden_position_observer_fixture(probe.clone())).viewport_px(300, 200),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| hidden_position_observer_fixture(probe.clone()))
+        .viewport(300, 200);
+    session.frame();
     assert_eq!(probe.coordinates.with(Vec::len), 1);
     probe
         .observer_visible
@@ -915,21 +858,21 @@ fn position_observer_resumes_after_hidden_ancestor_moves() {
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(0.0, 41.25));
-    pump_layout_test_session(&mut session, 16_666_667);
+    session.frames(1);
     assert_eq!(probe.coordinates.with(Vec::len), 1);
     probe
         .parent_offset
         .get()
         .expect("test fixture entry exists")
         .set(PxPosition::from_f32_xy(0.0, 80.5));
-    pump_layout_test_session(&mut session, 33_333_334);
+    session.frames(1);
     assert_eq!(probe.coordinates.with(Vec::len), 1);
     probe
         .observer_visible
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 50_000_001);
+    session.frames(1);
     let coordinates = probe.coordinates.with(|items| {
         assert_eq!(items.len(), 2);
         items[1]
@@ -1053,25 +996,22 @@ fn dynamic_scale_input_fixture(probe: GeometryProbe) {
 fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_units() {
     let probe = GeometryProbe::default();
     {
-        let mut previous = start_layout_test_session(
-            layout_test(|| dynamic_scale_input_fixture(probe.clone())).viewport_px(300, 200),
-        );
-        pump_layout_test_session(&mut previous, 0);
+        let mut previous = UiTest::new()
+            .content(|| dynamic_scale_input_fixture(probe.clone()))
+            .viewport(300, 200);
+        previous.frame();
     }
     probe.input.with_mut(Vec::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| dynamic_scale_input_fixture(probe.clone())).viewport_px(300, 200),
-    );
-    pump_layout_test_session(&mut session, 0);
-    for (index, (width, scale, x, y, local_delta)) in [
+    let mut session = UiTest::new()
+        .content(|| dynamic_scale_input_fixture(probe.clone()))
+        .viewport(300, 200);
+    session.frame();
+    for (width, scale, x, y, local_delta) in [
         (200, 1.0, 50.25, 44.5, 24.0),
         (300, 1.5, 70.25, 56.5, 16.0),
         (100, 0.5, 30.25, 32.5, 48.0),
         (200, 1.0, 50.25, 44.5, 24.0),
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    ] {
         probe
             .content_size
             .get()
@@ -1080,30 +1020,11 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
                 width: Px(width),
                 height: Px(80),
             });
-        let frame = (index as u64 * 4 + 1) * 16_666_667;
-        pump_layout_test_session(&mut session, frame);
-        pump_layout_test_session(&mut session, frame + 16_666_667);
-        pump_layout_test_session(&mut session, frame + 33_333_334);
+        session.frames(3);
         probe.input.with_mut(Vec::clear);
         let position = PxPosition::from_f32_xy(x, y);
-        let scroll = PointerChange::new(
-            Instant::now(),
-            crate::MOUSE_POINTER_ID,
-            CursorEventContent::Scroll(ScrollEventContent {
-                delta_x: 0.0,
-                delta_y: 24.0,
-                unit: ScrollDeltaUnit::Pixel,
-                source: ScrollEventSource::Wheel,
-            }),
-            GestureState::default(),
-        )
-        .with_position(position);
-        pump_layout_test_session_with_input(
-            &mut session,
-            frame + 50_000_001,
-            vec![scroll],
-            Some(position),
-        );
+        session.pointer_scroll(crate::MOUSE_POINTER_ID, position, 0.0, 24.0);
+        session.frames(1);
         let samples = probe.input.with(Clone::clone);
         assert_eq!(samples.len(), 1, "Input delivery at scale {scale}");
         assert!(!samples[0].4, "Scaling cannot make precise input discrete");
@@ -1146,13 +1067,10 @@ fn scaled_layout_keeps_local_dimensions_maps_actual_input_and_returns_window_scr
     let probe = GeometryProbe::default();
     probe.coordinates.with_mut(Vec::clear);
     probe.input.with_mut(Vec::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| {
-            scale_fixture(probe.clone());
-        })
-        .viewport_px(300, 200),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| scale_fixture(probe.clone()))
+        .viewport(300, 200);
+    session.frame();
     let coordinates = probe
         .coordinates
         .with(|items| *items.last().expect("Layout observer must run"));
@@ -1168,26 +1086,15 @@ fn scaled_layout_keeps_local_dimensions_maps_actual_input_and_returns_window_scr
         }
     );
     let observed = probe.coordinates.with(Vec::len);
-    pump_layout_test_session(&mut session, 1);
+    session.advance(std::time::Duration::from_nanos(1));
     assert_eq!(
         probe.coordinates.with(Vec::len),
         observed,
         "An idle frame must not republish unchanged geometry"
     );
     let position = PxPosition::from_f32_xy(40.25, 35.5);
-    let scroll = PointerChange::new(
-        Instant::now(),
-        crate::MOUSE_POINTER_ID,
-        CursorEventContent::Scroll(ScrollEventContent {
-            delta_x: 0.0,
-            delta_y: 40.0,
-            unit: ScrollDeltaUnit::Pixel,
-            source: ScrollEventSource::Wheel,
-        }),
-        GestureState::default(),
-    )
-    .with_position(position);
-    pump_layout_test_session_with_input(&mut session, 16_000_000, vec![scroll], Some(position));
+    session.pointer_scroll(crate::MOUSE_POINTER_ID, position, 0.0, 40.0);
+    session.frames(1);
     let samples = probe.input.with(Clone::clone);
     let child = samples
         .iter()

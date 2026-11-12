@@ -2,11 +2,8 @@ use std::time::Duration;
 
 use tessera_ui::{
     CursorEventContent, FocusDirection, GestureState, MOUSE_POINTER_ID, PointerChange,
-    PressKeyEventType, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
-    accesskit::Role,
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember,
+    PressKeyEventType, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource, accesskit::Role,
+    focus, remember, testing::UiTest,
 };
 
 use crate::{
@@ -107,7 +104,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         });
 }
 
-fn height(renderer: &HeadlessRenderer) -> f64 {
+fn height(renderer: &UiTest) -> f64 {
     let bounds = renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -121,7 +118,7 @@ fn height(renderer: &HeadlessRenderer) -> f64 {
     bounds.y1 - bounds.y0
 }
 
-fn labels(renderer: &HeadlessRenderer) -> usize {
+fn labels(renderer: &UiTest) -> usize {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -131,7 +128,7 @@ fn labels(renderer: &HeadlessRenderer) -> usize {
         .count()
 }
 
-fn focused_label(renderer: &HeadlessRenderer) -> Option<String> {
+fn focused_label(renderer: &UiTest) -> Option<String> {
     let tree = renderer.accessibility_snapshot().expect("tree");
     tree.nodes
         .iter()
@@ -139,24 +136,24 @@ fn focused_label(renderer: &HeadlessRenderer) -> Option<String> {
         .and_then(|(_, node)| node.label().map(str::to_owned))
 }
 
-fn background(renderer: &HeadlessRenderer, color: [u8; 3]) {
-    let pixels = renderer.read_pixels().expect("pixels");
+fn background(renderer: &UiTest, color: [u8; 3]) {
+    let pixels = renderer.read_pixels();
     let index = (5 * renderer.physical_size().width as usize + 500) * 4;
     assert_eq!(&pixels[index..index + 3], &color);
 }
 
-fn wheel(renderer: &mut HeadlessRenderer, delta: f32) {
+fn wheel(renderer: &mut UiTest, delta: f32) {
     renderer.pointer_scroll(
         MOUSE_POINTER_ID,
         PxPosition::from_f32_xy(300.0, 500.0),
         0.0,
         delta,
     );
-    renderer.render_frames(3);
+    renderer.frames(3);
 }
 
 fn reset(
-    renderer: &mut HeadlessRenderer,
+    renderer: &mut UiTest,
     behavior: AppBarScrollBehavior,
     snap: bool,
     observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
@@ -181,55 +178,48 @@ fn reset(
         .content
         .expect("content")
         .with_mut(|controller| controller.set_scroll_position(PxPosition::ZERO));
-    renderer.render_frames(8);
+    renderer.frames(8);
 }
 
-fn touch(renderer: &mut HeadlessRenderer, content: CursorEventContent, state: GestureState) {
+fn touch(renderer: &mut UiTest, content: CursorEventContent, state: GestureState) {
     let timestamp = tessera_ui::current_frame_time().expect("frame timestamp")
         + Duration::from_nanos(16_666_667);
     renderer.inject_pointer(
         PointerChange::new(timestamp, MOUSE_POINTER_ID, content, state)
             .with_position(PxPosition::from_f32_xy(300.0, 500.0)),
     );
-    renderer.step_frame();
+    renderer.frames(1);
 }
 
 fn check_scrolling(samples: u32) {
     let observed = tessera_ui::testing::TestProbe::default();
     let fixture_observed = observed.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(fixture_observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 600,
-            height: 900,
-            scale_factor: 1.5,
-            sample_count: samples,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(600, 900)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture(fixture_observed.clone()));
+    renderer.frames(8);
     let bar = observed.get().bar.expect("bar");
     let content = observed.get().content.expect("content");
     assert_eq!(height(&renderer), 228.0);
     assert_eq!(labels(&renderer), 1);
-    let baseline = renderer.read_pixels().expect("baseline");
+    let baseline = renderer.read_pixels();
     wheel(&mut renderer, -30.0);
     assert!((height(&renderer) - 198.0).abs() <= 1.0);
     assert_eq!(content.with(ScrollableController::target_position).y, 0.0);
     assert_eq!(labels(&renderer), 1);
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(height(&renderer), 228.0);
     assert!(!bar.with(AppBarScrollController::is_animating));
     assert!(
-        renderer.read_pixels().expect("restored") == baseline,
+        renderer.read_pixels() == baseline,
         "a short wheel gesture snaps back to the original pixels"
     );
 
     wheel(&mut renderer, -180.0);
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(height(&renderer), 96.0);
     assert_eq!(labels(&renderer), 1);
     assert!(content.with(ScrollableController::target_position).y <= -47.0);
@@ -241,7 +231,7 @@ fn check_scrolling(samples: u32) {
         "reverse scrolling inside the content retains the compact header"
     );
     wheel(&mut renderer, 1000.0);
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(height(&renderer), 228.0);
     background(&renderer, [255, 255, 255]);
 
@@ -252,7 +242,7 @@ fn check_scrolling(samples: u32) {
         &observed,
     );
     wheel(&mut renderer, -300.0);
-    renderer.render_frames(40);
+    renderer.frames(40);
     let child = content.with(ScrollableController::target_position);
     assert!(child.y < 0.0);
     wheel(&mut renderer, 24.0);
@@ -266,11 +256,11 @@ fn check_scrolling(samples: u32) {
 
     reset(&mut renderer, AppBarScrollBehavior::Pinned, true, &observed);
     wheel(&mut renderer, -60.0);
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(height(&renderer), 228.0);
     background(&renderer, [255, 0, 0]);
     content.with_mut(|controller| controller.set_scroll_position(PxPosition::ZERO));
-    renderer.render_frames(90);
+    renderer.frames(90);
     background(&renderer, [255, 255, 255]);
     assert!(!bar.with(AppBarScrollController::is_animating));
 
@@ -285,7 +275,7 @@ fn check_scrolling(samples: u32) {
         .settings
         .expect("settings")
         .with_mut(|settings| settings.enabled = false);
-    renderer.render_frames(3);
+    renderer.frames(3);
     wheel(&mut renderer, -50.0);
     assert_eq!(height(&renderer), 228.0);
     assert!(content.with(ScrollableController::target_position).y < 0.0);
@@ -311,7 +301,7 @@ fn check_scrolling(samples: u32) {
         }),
         GestureState::Dragged,
     );
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_eq!(
         height(&renderer),
         198.0,
@@ -322,7 +312,7 @@ fn check_scrolling(samples: u32) {
         CursorEventContent::Released(PressKeyEventType::Left),
         GestureState::Dragged,
     );
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(
         height(&renderer),
         228.0,
@@ -334,15 +324,15 @@ fn check_scrolling(samples: u32) {
         PxPosition::from_f32_xy(300.0, 200.0),
         PressKeyEventType::Left,
     );
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(300.0, 20.0));
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(
         MOUSE_POINTER_ID,
         PxPosition::from_f32_xy(300.0, 20.0),
         PressKeyEventType::Left,
     );
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(
         height(&renderer),
         96.0,
@@ -380,7 +370,7 @@ fn check_scrolling(samples: u32) {
         CursorEventContent::Released(PressKeyEventType::Left),
         GestureState::Dragged,
     );
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert_eq!(
         bar.with(AppBarScrollController::collapsed_fraction),
         1.0,
@@ -391,12 +381,12 @@ fn check_scrolling(samples: u32) {
         after_fling < 0.0,
         "remaining fling movement reaches the content"
     );
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert!(
         content.with(ScrollableController::target_position).y < after_fling,
         "fractional inertia steps continue after header collapse"
     );
-    renderer.render_frames(180);
+    renderer.frames(180);
     assert!(!bar.with(AppBarScrollController::is_animating));
 
     reset(
@@ -410,7 +400,7 @@ fn check_scrolling(samples: u32) {
         .settings
         .expect("settings")
         .with_mut(|settings| settings.variant = TopAppBarVariant::Small);
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert_eq!(height(&renderer), 96.0);
     wheel(&mut renderer, -150.0);
     assert_eq!(height(&renderer), 0.0);
@@ -425,11 +415,11 @@ fn check_scrolling(samples: u32) {
     );
     focus::clear_focus(true);
     focus::request_move_focus(FocusDirection::Next);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert_eq!(focused_label(&renderer).as_deref(), Some("Content action"));
     assert_eq!(height(&renderer), 0.0);
     focus::request_move_focus(FocusDirection::Previous);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert_eq!(focused_label(&renderer).as_deref(), Some("Content action"));
     assert_eq!(height(&renderer), 0.0);
     wheel(&mut renderer, 150.0);
@@ -437,16 +427,16 @@ fn check_scrolling(samples: u32) {
     assert_eq!(labels(&renderer), 1);
     focus::clear_focus(true);
     focus::request_move_focus(FocusDirection::Next);
-    renderer.render_frames(8);
+    renderer.frames(8);
     let first = focused_label(&renderer);
     focus::request_move_focus(FocusDirection::Next);
-    renderer.render_frames(8);
+    renderer.frames(8);
     let second = focused_label(&renderer);
     let visible_targets = [first.as_deref(), second.as_deref()];
     assert!(visible_targets.contains(&Some("Back")));
     assert!(visible_targets.contains(&Some("Content action")));
     focus::request_move_focus(FocusDirection::Previous);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert_eq!(focused_label(&renderer), first);
     focus::clear_focus(true);
 
@@ -457,15 +447,15 @@ fn check_scrolling(samples: u32) {
         &observed,
     );
     renderer.resize(1, 1);
-    renderer.render_frames(3);
+    renderer.frames(3);
     renderer.resize(600, 900);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert!(
-        renderer.read_pixels().expect("resized") == baseline,
+        renderer.read_pixels() == baseline,
         "nested-scroll geometry and pixels recover after collapse-sized viewports"
     );
     for _ in 0..12 {
-        renderer.step_frame();
+        renderer.frames(1);
         let clock = renderer.frame_clock_diagnostics();
         assert_eq!(clock.resumed_tasks, 0, "the provider stops ticking at rest");
         assert_eq!(

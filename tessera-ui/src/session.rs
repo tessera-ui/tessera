@@ -532,7 +532,7 @@ mod tests {
 
     use crate::{
         State, remember,
-        testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
+        testing::{TestProbe, UiTest},
     };
 
     use super::{RuntimeSession, local_runtime_resource};
@@ -547,11 +547,8 @@ mod tests {
     #[test]
     fn states_access_their_own_session_and_sessions_release_their_resources() {
         let output = TestProbe::default();
-        let mut first = start_layout_test_session(layout_test({
-            let output = output.clone();
-            move || observed_state(output.clone())
-        }));
-        pump_layout_test_session(&mut first, 0);
+        let mut first = UiTest::new().content(|| observed_state(output.clone()));
+        first.frame();
         let state = output.get().expect("test fixture entry exists");
         let resource = first.run(local_runtime_resource::<Cell<usize>>);
         let weak = Rc::downgrade(&resource);
@@ -570,7 +567,7 @@ mod tests {
             assert_eq!(state.get(), 7);
             state.set(9);
         });
-        pump_layout_test_session(&mut first, 1);
+        first.advance(std::time::Duration::from_nanos(1));
         assert_eq!(
             first
                 .work()
@@ -687,16 +684,13 @@ mod tests {
     #[test]
     fn frame_tasks_and_finished_captures_read_the_clock_of_their_frame() {
         let output = TestProbe::default();
-        let mut session = start_layout_test_session(layout_test({
-            let output = output.clone();
-            move || clock_probe(output.clone())
-        }));
-        pump_layout_test_session(&mut session, 0);
-        pump_layout_test_session(&mut session, 10);
+        let mut session = UiTest::new().content(|| clock_probe(output.clone()));
+        session.frame();
+        session.advance(std::time::Duration::from_nanos(10));
         assert_eq!(output.get(), [10, 10]);
         assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 1);
         assert_eq!(session.frame_clock_diagnostics().waiting_tasks, 0);
-        pump_layout_test_session(&mut session, 20);
+        session.advance(std::time::Duration::from_nanos(10));
         assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 0);
     }
 
@@ -714,12 +708,9 @@ mod tests {
     #[test]
     fn shutdown_drops_clock_captures_while_the_owning_clock_remains_available() {
         let output = TestProbe::default();
-        let mut session = start_layout_test_session(layout_test({
-            let output = output.clone();
-            move || persistent_clock_probe(output.clone())
-        }));
-        pump_layout_test_session(&mut session, 0);
-        pump_layout_test_session(&mut session, 17);
+        let mut session = UiTest::new().content(|| persistent_clock_probe(output.clone()));
+        session.frame();
+        session.advance(std::time::Duration::from_nanos(17));
         output.take();
         drop(session);
         assert_eq!(output.get(), [17]);
@@ -728,15 +719,12 @@ mod tests {
     #[test]
     fn conditional_state_writes_preserve_idle_frames_and_replay_changed_readers() {
         let output = TestProbe::default();
-        let mut session = start_layout_test_session(layout_test({
-            let output = output.clone();
-            move || observed_state(output.clone())
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| observed_state(output.clone()));
+        session.frame();
         let state = output.get().expect("test fixture entry exists");
         assert!(!state.set_if_changed(7));
         assert!(!crate::runtime::has_pending_build_invalidations());
-        pump_layout_test_session(&mut session, 1);
+        session.advance(std::time::Duration::from_nanos(1));
         assert_eq!(
             session
                 .work()
@@ -745,7 +733,7 @@ mod tests {
         );
         assert!(state.set_if_changed(9));
         assert!(crate::runtime::has_pending_build_invalidations());
-        pump_layout_test_session(&mut session, 2);
+        session.advance(std::time::Duration::from_nanos(1));
         assert_eq!(state.get(), 9);
         assert_eq!(
             session
@@ -767,11 +755,8 @@ mod tests {
         let owner = crate::runtime::ModelScope::new();
         let value = owner.own_state(7usize);
         let output = TestProbe::new(0usize);
-        let mut session = start_layout_test_session(layout_test({
-            let output = output.clone();
-            move || owned_state_reader(value, output.clone())
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| owned_state_reader(value, output.clone()));
+        session.frame();
         assert_eq!(output.get(), 7);
         let target = crate::dispatcher::register_current();
         assert!(
@@ -782,7 +767,7 @@ mod tests {
             .expect("join succeeds in the test fixture")
         );
         assert_eq!(output.get(), 7);
-        pump_layout_test_session(&mut session, 1);
+        session.advance(std::time::Duration::from_nanos(1));
         assert_eq!(output.get(), 11);
         assert_eq!(
             session
@@ -860,28 +845,26 @@ mod tests {
         });
         assert!(output.with(Vec::is_empty));
         drop(unused);
-        let mut session = start_layout_test_session(layout_test({
-            let output = output.clone();
-            move || modifier_owner_fixture(visible, extra, output.clone())
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session =
+            UiTest::new().content(|| modifier_owner_fixture(visible, extra, output.clone()));
+        session.frame();
         let original = output.take();
         assert_eq!(original.len(), 2);
         assert!(original[0] != original[1]);
         original[0].set(8);
-        for (frame, enabled) in [(1, false), (2, true), (3, false), (4, true)] {
+        for enabled in [false, true, false, true] {
             extra.set(enabled);
-            pump_layout_test_session(&mut session, frame);
+            session.frames(1);
             assert!(output.take() == original);
             assert_eq!(original[0].get(), 8);
             assert_eq!(original[1].get(), 3);
         }
         visible.set(false);
-        pump_layout_test_session(&mut session, 5);
+        session.frames(1);
         assert!(original.iter().all(|state| !state.is_alive()));
         assert!(output.with(Vec::is_empty));
         visible.set(true);
-        pump_layout_test_session(&mut session, 6);
+        session.advance(std::time::Duration::from_nanos(1));
         let replacement = output.take();
         assert_eq!(replacement.len(), 2);
         assert!(replacement[0] != original[0]);
@@ -923,19 +906,16 @@ mod tests {
         let owner = crate::runtime::ModelScope::new();
         let visible = owner.own_state(true);
         let output = TestProbe::default();
-        let mut session = start_layout_test_session(layout_test({
-            let output = output.clone();
-            move || clock_modifier_fixture(visible, output.clone())
-        }));
-        pump_layout_test_session(&mut session, 0);
-        pump_layout_test_session(&mut session, 1);
+        let mut session = UiTest::new().content(|| clock_modifier_fixture(visible, output.clone()));
+        session.frame();
+        session.advance(std::time::Duration::from_nanos(1));
         assert_eq!(output.get(), [1]);
         assert_eq!(session.frame_clock_diagnostics().waiting_tasks, 1);
         visible.set(false);
-        pump_layout_test_session(&mut session, 2);
+        session.advance(std::time::Duration::from_nanos(1));
         assert_eq!(output.get(), [1, 2]);
         assert_eq!(session.frame_clock_diagnostics().waiting_tasks, 0);
-        pump_layout_test_session(&mut session, 3);
+        session.advance(std::time::Duration::from_nanos(1));
         assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 0);
         assert_eq!(output.get(), [1, 2]);
     }

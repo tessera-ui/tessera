@@ -7,11 +7,9 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::TestProbe,
+    accesskit::{Action, NodeId, Role, Toggled},
+    focus, remember, tessera,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{column::column, theme::material_theme};
@@ -80,27 +78,18 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
-        .unwrap()
-}
-
-fn action(renderer: &mut HeadlessRenderer, index: usize, action: Action) -> bool {
-    renderer.dispatch_accessibility_action(ActionRequest {
+fn action(renderer: &mut UiTest, index: usize, action: Action) -> bool {
+    renderer.accessibility_action(
+        renderer
+            .accessibility_node(&format!("Selection {}", index + 1))
+            .0,
         action,
-        target_tree: TreeId::ROOT,
-        target_node: node(renderer, &format!("Selection {}", index + 1)).0,
-        data: None,
-    })
+    )
 }
 
-fn tap(renderer: &mut HeadlessRenderer, index: usize) {
-    let bounds = node(renderer, &format!("Selection {}", index + 1))
+fn tap(renderer: &mut UiTest, index: usize) {
+    let bounds = renderer
+        .accessibility_node(&format!("Selection {}", index + 1))
         .1
         .bounds()
         .unwrap();
@@ -111,17 +100,17 @@ fn tap(renderer: &mut HeadlessRenderer, index: usize) {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
-fn verify(renderer: &HeadlessRenderer, settings: &Settings, ids: &[NodeId; 3]) {
+fn verify(renderer: &UiTest, settings: &Settings, ids: &[NodeId; 3]) {
     let role = match settings.mode {
         ListItemSelectionMode::Action => Role::ListItem,
         ListItemSelectionMode::Single => Role::RadioButton,
         ListItemSelectionMode::Multiple => Role::CheckBox,
     };
     for (index, id) in ids.iter().enumerate() {
-        let (actual_id, node) = node(renderer, &format!("Selection {}", index + 1));
+        let (actual_id, node) = renderer.accessibility_node(&format!("Selection {}", index + 1));
         assert_eq!(actual_id, *id);
         assert_eq!(node.role(), role);
         assert_eq!(node.tooltip(), Some("Choice tooltip"));
@@ -148,7 +137,7 @@ fn verify(renderer: &HeadlessRenderer, settings: &Settings, ids: &[NodeId; 3]) {
             }
         }
     }
-    let read_only = node(renderer, "Read-only selection").1;
+    let read_only = renderer.accessibility_node("Read-only selection").1;
     assert!(!read_only.supports_action(Action::Click));
     assert!(!read_only.supports_action(Action::Focus));
     assert_eq!(read_only.role(), role);
@@ -158,21 +147,13 @@ fn check(samples: u32) {
     for scale in [1.0, 1.5] {
         let probe = TestProbe::<Option<State<Settings>>>::default();
         let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture().probe(probe.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 600,
-                height: 540,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(600, 540)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(move || fixture().probe(probe.clone()));
+        renderer.frames(4);
         assert!(
             renderer
                 .work_totals()
@@ -180,8 +161,11 @@ fn check(samples: u32) {
                 > 0
         );
         let settings = observed.get().unwrap();
-        let ids =
-            std::array::from_fn(|index| node(&renderer, &format!("Selection {}", index + 1)).0);
+        let ids = std::array::from_fn(|index| {
+            renderer
+                .accessibility_node(&format!("Selection {}", index + 1))
+                .0
+        });
         verify(&renderer, &settings.get(), &ids);
         tap(&mut renderer, 0);
         assert_eq!(settings.get().selected, [true, false, false]);
@@ -189,13 +173,13 @@ fn check(samples: u32) {
         assert_eq!(settings.get().selected, [false; 3]);
         assert_eq!(settings.get().requests, [(0, true), (0, false)]);
         settings.with_mut(|s| s.selected[1] = true);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert!(action(&mut renderer, 1, Action::Click));
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(settings.get().requests.last(), Some(&(1, false)));
         assert_eq!(settings.get().actions, 0);
         settings.with_mut(|s| s.mode = ListItemSelectionMode::Single);
-        renderer.render_frames(3);
+        renderer.frames(3);
         tap(&mut renderer, 1);
         assert_eq!(settings.get().selected, [false, true, false]);
         tap(&mut renderer, 2);
@@ -204,24 +188,24 @@ fn check(samples: u32) {
         assert_eq!(settings.get().requests.last(), Some(&(2, true)));
         verify(&renderer, &settings.get(), &ids);
         assert!(action(&mut renderer, 0, Action::Focus));
-        renderer.render_frames(3);
+        renderer.frames(3);
         focus::request_move_focus(FocusDirection::Next);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, ids[1]);
         settings.with_mut(|s| {
             s.mode = ListItemSelectionMode::Multiple;
             s.selected = [false; 3];
             s.accept = false;
         });
-        renderer.render_frames(3);
+        renderer.frames(3);
         for _ in 0..2 {
             assert!(action(&mut renderer, 0, Action::Click));
-            renderer.render_frames(3);
+            renderer.frames(3);
             assert_eq!(settings.get().requests.last(), Some(&(0, true)));
             assert_eq!(settings.get().selected, [false; 3]);
         }
         settings.with_mut(|s| s.mode = ListItemSelectionMode::Action);
-        renderer.render_frames(3);
+        renderer.frames(3);
         let request_count = settings.get().requests.len();
         tap(&mut renderer, 2);
         assert_eq!(settings.get().actions, 1);
@@ -232,7 +216,7 @@ fn check(samples: u32) {
             s.selected[2] = true;
             s.enabled = false;
         });
-        renderer.render_frames(3);
+        renderer.frames(3);
         verify(&renderer, &settings.get(), &ids);
         assert!(!action(&mut renderer, 2, Action::Click));
         assert!(!action(&mut renderer, 2, Action::Focus));
@@ -243,12 +227,12 @@ fn check(samples: u32) {
             s.mode = ListItemSelectionMode::Single;
             s.enabled = true;
         });
-        renderer.render_frames(90);
+        renderer.frames(90);
         verify(&renderer, &settings.get(), &ids);
         let builds = renderer
             .work_totals()
             .count("list_item", tessera_ui::testing::WorkPhase::Build);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(
             renderer
                 .work_totals()

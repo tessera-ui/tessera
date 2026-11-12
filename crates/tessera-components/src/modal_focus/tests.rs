@@ -9,10 +9,9 @@ use std::time::Duration;
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
+    accesskit::{Action, Node, NodeId, Role},
+    focus, remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -107,20 +106,12 @@ fn basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible() {
         "modal_focus::tests::basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible",
         || {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || long_dialog_fixture(probe.clone())),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 640,
-                    height: 360,
-                    sample_count: 1,
-                    frame_time: Duration::from_millis(20),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(4);
+            let mut renderer = UiTest::new()
+                .viewport(640, 360)
+                .frame_step(Duration::from_millis(20))
+                .rendered(crate::TesseraComponents)
+                .content(|| long_dialog_fixture(output.clone()));
+            renderer.frames(4);
             let dialog = labeled_node(&renderer, "Long message", Role::Dialog)
                 .1
                 .bounds()
@@ -156,7 +147,7 @@ fn basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible() {
                 0.0,
                 -36.0,
             );
-            renderer.render_frames(4);
+            renderer.frames(4);
             let shifted = labeled_node(&renderer, "Message line 03", Role::Label)
                 .1
                 .bounds()
@@ -182,7 +173,7 @@ fn basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible() {
                 0.0,
                 -10_000.0,
             );
-            renderer.render_frames(24);
+            renderer.frames(24);
             let last = labeled_node(&renderer, "Message line 29", Role::Label)
                 .1
                 .bounds()
@@ -377,11 +368,11 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     labeled_node(renderer, label, Role::Button)
 }
 
-fn labeled_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn labeled_node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -391,24 +382,19 @@ fn labeled_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId
         .unwrap_or_else(|| panic!("Missing {role:?} {label}"))
 }
 
-fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: node(renderer, label).0,
-        data: None,
-    }));
-    renderer.render_frames(24);
+fn action(renderer: &mut UiTest, label: &str, action: Action) {
+    assert!(renderer.accessibility_action(node(renderer, label).0, action));
+    renderer.frames(24);
 }
 
-fn tap(renderer: &mut HeadlessRenderer, point: PxPosition) {
+fn tap(renderer: &mut UiTest, point: PxPosition) {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(24);
+    renderer.frames(24);
 }
 
-fn open(renderer: &mut HeadlessRenderer, kind: Kind, settings: State<Settings>) {
+fn open(renderer: &mut UiTest, kind: Kind, settings: State<Settings>) {
     let origin = node(renderer, "Open modal").0;
     let other = node(renderer, "Other task").0;
     let bounds = node(renderer, "Open modal").1.bounds().unwrap();
@@ -451,21 +437,14 @@ fn check(samples: u32) {
     ] {
         for scale in [1.0, 1.5] {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || fixture(kind, probe.clone())),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 960,
-                    height: 480,
-                    scale_factor: scale,
-                    sample_count: samples,
-                    frame_time: Duration::from_millis(20),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(4);
+            let mut renderer = UiTest::new()
+                .viewport(960, 480)
+                .scale_factor(scale)
+                .samples(samples)
+                .frame_step(Duration::from_millis(20))
+                .rendered(crate::TesseraComponents)
+                .content(|| fixture(kind, output.clone()));
+            renderer.frames(4);
             let settings = output.get().unwrap();
             let origin = node(&renderer, "Open modal").0;
             let other_id = node(&renderer, "Other task").0;
@@ -513,19 +492,14 @@ fn check(samples: u32) {
                 );
                 for action in [Action::Click, Action::Focus] {
                     assert!(
-                        !renderer.dispatch_accessibility_action(ActionRequest {
-                            action,
-                            target_tree: TreeId::ROOT,
-                            target_node: other_id,
-                            data: None,
-                        }),
+                        !renderer.accessibility_action(other_id, action),
                         "{kind:?}: stale background action must be rejected"
                     );
                 }
                 assert_eq!(settings.get().background_actions, 0);
             }
             settings.with_mut(|s| s.label = "Updated purpose".to_string());
-            renderer.render_frames(3);
+            renderer.frames(3);
             let updated = renderer.accessibility_snapshot().unwrap();
             assert_eq!(
                 updated
@@ -539,19 +513,19 @@ fn check(samples: u32) {
                 "{kind:?}: accessible names must update without replacing the dialog"
             );
             settings.with_mut(|s| s.label = "Example modal".to_string());
-            renderer.render_frames(3);
+            renderer.frames(3);
             if matches!(kind, Kind::StandardSheet) {
                 action(&mut renderer, "First action", Action::Click);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
                 open(&mut renderer, kind, output.get().unwrap());
                 assert!(focus::request_move_focus(FocusDirection::Previous));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
                     node(&renderer, "Other task").0
                 );
                 assert!(focus::request_move_focus(FocusDirection::Next));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
                     node(&renderer, "First action").0
@@ -568,7 +542,7 @@ fn check(samples: u32) {
                 assert!(settings.get().open.get());
                 let other = node(&renderer, "Other task").0;
                 renderer.run(|| settings.with(|s| s.open).set(false));
-                renderer.render_frames(24);
+                renderer.frames(24);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, other);
                 continue;
             }
@@ -588,7 +562,7 @@ fn check(samples: u32) {
             };
             for (direction, label) in traversal {
                 assert!(focus::request_move_focus(direction));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
                     node(&renderer, label).0,
@@ -621,22 +595,22 @@ fn check(samples: u32) {
             let empty_focus = renderer.accessibility_snapshot().unwrap().focus;
             for direction in [FocusDirection::Next, FocusDirection::Previous] {
                 assert!(focus::request_move_focus(direction));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
                     empty_focus
                 );
             }
             settings.with_mut(|s| s.actions = true);
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert!(focus::request_move_focus(FocusDirection::Next));
-            renderer.render_frames(3);
+            renderer.frames(3);
             assert_eq!(
                 renderer.accessibility_snapshot().unwrap().focus,
                 node(&renderer, "First action").0
             );
             renderer.run(|| settings.with(|s| s.open).set(false));
-            renderer.render_frames(24);
+            renderer.frames(24);
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
             let other = node(&renderer, "Other task").0;
             for remove in [false, true] {
@@ -646,14 +620,14 @@ fn check(samples: u32) {
                     s.origin_enabled = false;
                     s.show_origin = !remove;
                 });
-                renderer.render_frames(24);
+                renderer.frames(24);
                 assert_ne!(renderer.accessibility_snapshot().unwrap().focus, origin);
                 action(&mut renderer, "Other task", Action::Focus);
                 settings.with_mut(|s| {
                     s.origin_enabled = true;
                     s.show_origin = true;
                 });
-                renderer.render_frames(4);
+                renderer.frames(4);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, other);
             }
         }
@@ -666,20 +640,14 @@ fn check_full_screen(samples: u32) {
         for width in [390, 960] {
             let output = tessera_ui::testing::TestProbe::default();
             let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || fixture(kind, probe.clone())),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width,
-                    height: 640,
-                    scale_factor: scale,
-                    sample_count: samples,
-                    frame_time: Duration::from_millis(20),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(4);
+            let mut renderer = UiTest::new()
+                .viewport(width, 640)
+                .scale_factor(scale)
+                .samples(samples)
+                .frame_step(Duration::from_millis(20))
+                .rendered(crate::TesseraComponents)
+                .content(move || fixture(kind, probe.clone()));
+            renderer.frames(4);
             let origin = node(&renderer, "Open modal").0;
             let settings = output.get().unwrap();
             open(&mut renderer, kind, output.get().unwrap());
@@ -704,13 +672,13 @@ fn check_full_screen(samples: u32) {
             assert!(first.y0 >= 88.0 * scale);
             for label in ["Save", "First action", "Second action", "Close dialog"] {
                 assert!(focus::request_move_focus(FocusDirection::Next));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
                     node(&renderer, label).0
                 );
             }
-            let pixels = renderer.read_pixels().unwrap();
+            let pixels = renderer.read_pixels();
             let pixel = |x: usize, y: usize| {
                 &pixels[(y * width as usize + x) * 4..(y * width as usize + x) * 4 + 4]
             };
@@ -728,12 +696,12 @@ fn check_full_screen(samples: u32) {
                 "blank full-screen content must not dismiss the modal"
             );
             action(&mut renderer, "Save", Action::Click);
-            renderer.render_frames(24);
+            renderer.frames(24);
             assert_eq!(settings.get().confirmed, 1);
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
             open(&mut renderer, kind, output.get().unwrap());
             action(&mut renderer, "Close dialog", Action::Click);
-            renderer.render_frames(24);
+            renderer.frames(24);
             assert!(!settings.get().open.get());
             assert_eq!(settings.get().confirmed, 1);
             assert_eq!(settings.get().background_actions, 0);
@@ -750,34 +718,28 @@ fn check_full_screen(samples: u32) {
                 "omitting the confirm callback must omit its action"
             );
             assert!(focus::request_move_focus(FocusDirection::Next));
-            renderer.render_frames(3);
+            renderer.frames(3);
             assert_eq!(
                 renderer.accessibility_snapshot().unwrap().focus,
                 node(&renderer, "Close dialog").0
             );
             action(&mut renderer, "Close dialog", Action::Click);
-            renderer.render_frames(24);
+            renderer.frames(24);
             assert_eq!(settings.get().confirmed, 1);
         }
     }
     let kind = Kind::BasicDialog;
     let output = tessera_ui::testing::TestProbe::default();
     let probe = output.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(kind, probe.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 960,
-            height: 640,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(960, 640)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture(kind, probe.clone()));
+    renderer.frames(4);
     let settings = output.get().unwrap();
     renderer.run(|| settings.with(|s| s.open).set(true));
-    renderer.render_frames(24);
+    renderer.frames(24);
     assert_eq!(
         labeled_node(&renderer, "Basic dialog", Role::Dialog)
             .1
@@ -788,7 +750,7 @@ fn check_full_screen(samples: u32) {
         "minimum basic dialog width includes its content padding"
     );
     settings.with_mut(|settings| settings.long_content = true);
-    renderer.render_frames(5);
+    renderer.frames(5);
     let width = labeled_node(&renderer, "Basic dialog", Role::Dialog)
         .1
         .bounds()
@@ -808,20 +770,12 @@ fn explicit_alert_dialog_role_preserves_modal_controls_and_focus_restoration() {
         || {
             let kind = Kind::Dialog;
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || fixture(kind, probe.clone())),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 640,
-                    height: 360,
-                    sample_count: 1,
-                    frame_time: Duration::from_millis(20),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(4);
+            let mut renderer = UiTest::new()
+                .viewport(640, 360)
+                .frame_step(Duration::from_millis(20))
+                .rendered(crate::TesseraComponents)
+                .content(|| fixture(kind, output.clone()));
+            renderer.frames(4);
             let state = output.get().unwrap();
             state.with_mut(|state| state.role = DialogRole::AlertDialog);
             let origin = node(&renderer, "Open modal").0;
@@ -833,7 +787,7 @@ fn explicit_alert_dialog_role_preserves_modal_controls_and_focus_restoration() {
                 node(&renderer, "First action").0
             );
             state.with_mut(|state| state.label = "Updated alert".to_owned());
-            renderer.render_frames(3);
+            renderer.frames(3);
             assert_eq!(
                 labeled_node(&renderer, "Updated alert", Role::AlertDialog).0,
                 id

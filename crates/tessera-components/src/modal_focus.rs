@@ -22,11 +22,7 @@ pub(crate) fn modal_focus_modifier(
     scope: FocusScopeNode,
 ) -> Modifier {
     if state.with(|state| state.visible != visible) {
-        let origin = if visible {
-            focus::save_focus()
-        } else {
-            None
-        };
+        let origin = if visible { focus::save_focus() } else { None };
         let restore = !visible && scope.has_focus();
         state.with_mut(|state| {
             state.visible = visible;

@@ -818,12 +818,11 @@ fn readable_badge_navigation() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod form_article_tests {
-    use std::time::Duration;
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
-        accesskit::{Action, ActionRequest, NodeId, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
+        accesskit::{Action, NodeId},
+        testing::UiTest,
     };
 
     use super::*;
@@ -842,7 +841,7 @@ mod form_article_tests {
             }
         });
     }
-    fn activate(renderer: &mut HeadlessRenderer, label: &str, role: Role) -> NodeId {
+    fn activate(renderer: &mut UiTest, label: &str, role: Role) -> NodeId {
         let id = renderer
             .accessibility_snapshot()
             .unwrap()
@@ -852,17 +851,12 @@ mod form_article_tests {
             .unwrap_or_else(|| panic!("missing {label} {role:?}"))
             .0;
         for action in [Action::Focus, Action::Click] {
-            assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                action,
-                target_tree: TreeId::ROOT,
-                target_node: id,
-                data: None
-            }));
-            renderer.render_frames(4);
+            assert!(renderer.accessibility_action(id, action));
+            renderer.frames(4);
         }
         id
     }
-    fn contains(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
+    fn contains(renderer: &UiTest, label: &str, role: Role) -> bool {
         renderer
             .accessibility_snapshot()
             .unwrap()
@@ -918,21 +912,11 @@ mod form_article_tests {
                 ],
             ),
         ] {
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || {
-                    fixture(kind);
-                }),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 900,
-                    height: 8000,
-                    sample_count: 1,
-                    frame_time: Duration::from_nanos(16_666_667),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(5);
+            let mut renderer = UiTest::new()
+                .viewport(900, 8000)
+                .rendered(crate::TestPipelines)
+                .content(move || fixture(kind));
+            renderer.frames(5);
             for tab in ["Overview", "Specs", "Guidelines", "Accessibility"] {
                 assert!(contains(&renderer, tab, Role::Tab));
             }
@@ -966,7 +950,7 @@ mod form_article_tests {
                     for section in &expected {
                         activate(&mut renderer, tab, Role::Tab);
                         activate(&mut renderer, section, Role::Link);
-                        renderer.render_frames(12);
+                        renderer.frames(12);
                         let snapshot = renderer.accessibility_snapshot().unwrap();
                         let heading = snapshot
                             .nodes

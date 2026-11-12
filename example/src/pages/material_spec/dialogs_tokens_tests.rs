@@ -1,14 +1,12 @@
-use std::time::Duration;
-
 use tessera_components::{
     alignment::Alignment, boxed::boxed, column::column, theme::material_theme,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Role, Toggled},
     tessera,
+    testing::UiTest,
 };
 
 use super::tokens;
@@ -27,24 +25,19 @@ fn fixture() {
     });
 }
 
-fn nodes(renderer: &HeadlessRenderer) -> Vec<(NodeId, Node)> {
+fn nodes(renderer: &UiTest) -> Vec<(NodeId, Node)> {
     renderer
         .accessibility_snapshot()
         .expect("dialog token semantics")
         .nodes
 }
 
-fn activate(renderer: &mut HeadlessRenderer, target_node: NodeId) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Click,
-        target_tree: TreeId::ROOT,
-        target_node,
-        data: None,
-    }));
-    renderer.render_frames(6);
+fn activate(renderer: &mut UiTest, target_node: NodeId) {
+    assert!(renderer.accessibility_action(target_node, Action::Click));
+    renderer.frames(6);
 }
 
-fn click_button(renderer: &mut HeadlessRenderer, label: &str) {
+fn click_button(renderer: &mut UiTest, label: &str) {
     let target = nodes(renderer)
         .into_iter()
         .find(|(_, node)| node.role() == Role::Button && crate::has_label(&node, label))
@@ -53,7 +46,7 @@ fn click_button(renderer: &mut HeadlessRenderer, label: &str) {
     activate(renderer, target);
 }
 
-fn contains_text(renderer: &HeadlessRenderer, expected: &str) -> bool {
+fn contains_text(renderer: &UiTest, expected: &str) -> bool {
     nodes(renderer).iter().any(|(_, node)| {
         node.label()
             .map(crate::visible_text)
@@ -62,14 +55,14 @@ fn contains_text(renderer: &HeadlessRenderer, expected: &str) -> bool {
     })
 }
 
-fn menu_options(renderer: &HeadlessRenderer) -> Vec<(NodeId, Node)> {
+fn menu_options(renderer: &UiTest) -> Vec<(NodeId, Node)> {
     nodes(renderer)
         .into_iter()
         .filter(|(_, node)| node.role() == Role::MenuItemRadio)
         .collect()
 }
 
-fn select(renderer: &mut HeadlessRenderer, label: &str) {
+fn select(renderer: &mut UiTest, label: &str) {
     click_button(renderer, "Dialog token set selector");
     let options = menu_options(renderer);
     assert_eq!(options.len(), 2, "both dialog token sets are offered");
@@ -88,19 +81,11 @@ fn select(renderer: &mut HeadlessRenderer, label: &str) {
 #[test]
 #[ignore = "Requires a native GPU adapter for actual token menus, tables and accordion controls"]
 fn dialog_token_sets_switch_variants_and_accordion_controls_reveal_their_own_rows() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1100,
-            height: 2400,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .expect("native dialog token renderer");
-    renderer.render_frames(6);
+    let mut renderer = UiTest::new()
+        .viewport(1100, 2400)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(6);
 
     assert!(
         !contains_text(&renderer, "Dialog container color"),

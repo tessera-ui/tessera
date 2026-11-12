@@ -1,14 +1,10 @@
-use std::time::Duration;
-
 use tessera_components::{column::column, scrollable::ScrollableController};
 use tessera_ui::{
     Color, CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PressKeyEventType,
     ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
     accesskit::{Node, Role},
-    current_frame_time,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    scaled_box,
-    testing::TestProbe,
+    current_frame_time, scaled_box,
+    testing::{TestProbe, UiTest},
 };
 
 use super::*;
@@ -19,7 +15,7 @@ struct FixtureHandles {
     notice: Option<State<String>>,
 }
 
-fn geometry(renderer: &HeadlessRenderer, dark: bool) -> PreciseGeometry {
+fn geometry(renderer: &UiTest, dark: bool) -> PreciseGeometry {
     let snapshot = renderer.inspect_components();
     [
         "figure",
@@ -95,22 +91,13 @@ struct CloseReference {
 }
 
 fn calibrate_close(samples: u32, modal: bool, width: u32, scale: f32) -> CloseReference {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            close_calibration_fixture(scale, modal);
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width,
-            height: 1000,
-            sample_count: samples,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .expect("Native GPU adapter for independent icon calibration");
-    renderer.render_frames(8);
-    let pixels = renderer.read_pixels().unwrap();
+    let mut renderer = UiTest::new()
+        .viewport(width, 1000)
+        .samples(samples)
+        .rendered(crate::TestPipelines)
+        .content(move || close_calibration_fixture(scale, modal));
+    renderer.frames(8);
+    let pixels = renderer.read_pixels();
     let mut ink = [Vec::new(), Vec::new()];
     for dark in [false, true] {
         let bounds = node(
@@ -188,7 +175,7 @@ fn fixture(side: bool, modal: bool, probe: TestProbe<FixtureHandles>) {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
+fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -216,13 +203,8 @@ fn color_bytes(color: Color) -> [u8; 4] {
     ]
 }
 
-fn assert_pixels(
-    renderer: &HeadlessRenderer,
-    side: bool,
-    modal: bool,
-    close: Option<&CloseReference>,
-) {
-    let pixels = renderer.read_pixels().unwrap();
+fn assert_pixels(renderer: &UiTest, side: bool, modal: bool, close: Option<&CloseReference>) {
+    let pixels = renderer.read_pixels();
     let width = renderer.physical_size().width as usize;
     let light = geometry(renderer, false)["figure"];
     let dark = geometry(renderer, true)["figure"];
@@ -325,7 +307,7 @@ fn assert_pixels(
     }
 }
 
-fn assert_geometry(renderer: &HeadlessRenderer, side: bool, scale: f32) {
+fn assert_geometry(renderer: &UiTest, side: bool, scale: f32) {
     for dark in [false, true] {
         let values = geometry(renderer, dark);
         let root = values["figure"];
@@ -376,21 +358,12 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
                     calibrate_close(samples, modal, 512, 0.5),
                 ]
             });
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || {
-                    fixture(side, modal, probe.clone());
-                }),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 640,
-                    height: 1000,
-                    sample_count: samples,
-                    frame_time: Duration::from_nanos(16_666_667),
-                    ..Default::default()
-                },
-            )
-            .expect("Native GPU adapter");
-            renderer.render_frames(16);
+            let mut renderer = UiTest::new()
+                .viewport(640, 1000)
+                .samples(samples)
+                .rendered(crate::TestPipelines)
+                .content(move || fixture(side, modal, probe.clone()));
+            renderer.frames(16);
             renderer.inject_pointer(
                 PointerChange::new(
                     current_frame_time().unwrap(),
@@ -405,7 +378,7 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
                 )
                 .with_position(PxPosition::from_f32_xy(40.0, 100.0)),
             );
-            renderer.render_frames(120);
+            renderer.frames(120);
             assert_eq!(
                 observed
                     .get()
@@ -422,7 +395,7 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
                 close_references.as_ref().map(|values| &values[0]),
             );
             renderer.resize(512, 1000);
-            renderer.render_frames(16);
+            renderer.frames(16);
             assert_geometry(&renderer, side, 0.5);
             assert_pixels(
                 &renderer,
@@ -448,7 +421,7 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
                     renderer.pointer_move(MOUSE_POINTER_ID, point);
                     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
                     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-                    renderer.render_frames(4);
+                    renderer.frames(4);
                     assert_eq!(
                         I18N.text(observed.get().notice.unwrap().get()),
                         "Sheet close action selected"

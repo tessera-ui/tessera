@@ -2,7 +2,7 @@ use tessera_components::{scrollable::ScrollableController, theme::material_theme
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role, Toggled},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    testing::UiTest,
 };
 
 use super::*;
@@ -38,7 +38,7 @@ fn fixture(
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
+fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -49,7 +49,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .clone()
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str) {
+fn click(renderer: &mut UiTest, label: &str) {
     let bounds = node(renderer, label, Role::Button).bounds().unwrap();
     let point = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) * 0.5) as f32,
@@ -57,9 +57,9 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
     );
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(2);
+    renderer.frames(2);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(20);
+    renderer.frames(20);
 }
 
 #[test]
@@ -68,28 +68,19 @@ fn contextual_actions_and_annotations_survive_scaled_resize_and_scroll() {
     for scene in 0..4 {
         let scroll = tessera_ui::testing::TestProbe::default();
         let observed = scroll.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(scene, observed.clone());
-            }),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 676,
-                height: 520,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(16);
+        let mut renderer = UiTest::new()
+            .viewport(676, 520)
+            .rendered(crate::TestPipelines)
+            .content(move || fixture(scene, observed.clone()));
+        renderer.frames(16);
         for width in [676, 390, 1024] {
             renderer.resize(width, 720);
-            renderer.render_frames(16);
+            renderer.frames(16);
             scroll
                 .get()
                 .unwrap()
                 .with_mut(|scroll| scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -24.0)));
-            renderer.render_frames(16);
+            renderer.frames(16);
             let scale = f64::from(width) / 676.0;
             if scene == 0 || scene == 2 {
                 let favorite = node(&renderer, "Add to favorites", Role::Button);
@@ -171,7 +162,7 @@ fn contextual_actions_and_annotations_survive_scaled_resize_and_scroll() {
                 }
             }
             if scene == 2 || scene == 3 {
-                let pixels = renderer.read_pixels().unwrap();
+                let pixels = renderer.read_pixels();
                 let y = 8.0 + (if scene == 2 { 250.0 } else { 280.0 }) * scale;
                 let sample = |x: f64| {
                     let offset =

@@ -3,11 +3,11 @@ use tessera_ui::{
     Color, ComputedData, Constraint, Dp, DrawModifierContent, DrawModifierContext,
     DrawModifierNode, LayoutModifier, LayoutModifierChild, LayoutModifierInput, LayoutPolicy,
     LayoutResult, MeasurementError, Modifier, PxPosition, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
-    testing::{TestProbe, WorkPhase},
+    testing::WorkPhase,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -74,61 +74,53 @@ fn padded_text_fixture(probe: TestProbe<FixtureHandles>) {
 fn check_padded_drawing(samples: u32) {
     let probe = TestProbe::default();
     let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            padded_text_fixture(probe.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 480,
-            height: 240,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(4);
-    let reference = renderer.read_pixels().expect("nested reference");
+    let mut renderer = UiTest::new()
+        .viewport(480, 240)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || padded_text_fixture(probe.clone()));
+    renderer.frames(4);
+    let reference = renderer.read_pixels();
     let direct = observed.get().direct.expect("direct state");
     direct.set(true);
-    renderer.render_frames(4);
-    let actual = renderer.read_pixels().expect("direct modifiers");
+    renderer.frames(4);
+    let actual = renderer.read_pixels();
     assert!(
         reference == actual,
         "layout and draw modifier order must match equivalent nested containers"
     );
-    renderer.render_frames(5);
-    assert!(actual == renderer.read_pixels().expect("cached direct drawing"));
+    renderer.frames(5);
+    assert!(actual == renderer.read_pixels());
 
     observed.get().inset.expect("padding state").set(Dp(25.0));
     observed.get().ink.expect("ink state").set(Color::WHITE);
-    renderer.render_frames(4);
-    let changed = renderer.read_pixels().expect("changed direct drawing");
+    renderer.frames(4);
+    let changed = renderer.read_pixels();
     direct.set(false);
-    renderer.render_frames(4);
-    assert!(changed == renderer.read_pixels().expect("changed reference"));
+    renderer.frames(4);
+    assert!(changed == renderer.read_pixels());
     observed.get().inset.expect("padding state").set(Dp(12.0));
     observed.get().ink.expect("ink state").set(Color::BLACK);
-    renderer.render_frames(4);
-    assert!(reference == renderer.read_pixels().expect("restored reference"));
+    renderer.frames(4);
+    assert!(reference == renderer.read_pixels());
     direct.set(true);
-    renderer.render_frames(4);
-    assert!(reference == renderer.read_pixels().expect("restored direct drawing"));
+    renderer.frames(4);
+    assert!(reference == renderer.read_pixels());
     for width in [120, 1, 480] {
         renderer.resize(width, 240);
-        renderer.render_frames(4);
-        let direct_pixels = renderer.read_pixels().expect("resized direct drawing");
+        renderer.frames(4);
+        let direct_pixels = renderer.read_pixels();
         direct.set(false);
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert!(
-            direct_pixels == renderer.read_pixels().expect("resized reference"),
+            direct_pixels == renderer.read_pixels(),
             "drawing layers must recover at viewport width {width}"
         );
         direct.set(true);
-        renderer.render_frames(4);
+        renderer.frames(4);
     }
-    assert!(reference == renderer.read_pixels().expect("restored viewport"));
+    assert!(reference == renderer.read_pixels());
 }
 
 #[test]
@@ -229,9 +221,9 @@ fn placement_fixture(probe: TestProbe<FixtureHandles>) {
         });
 }
 
-fn retained_layout_frames(renderer: &mut HeadlessRenderer, count: usize) {
+fn retained_layout_frames(renderer: &mut UiTest, count: usize) {
     for _ in 0..count {
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure), 0);
     }
 }
@@ -239,40 +231,32 @@ fn retained_layout_frames(renderer: &mut HeadlessRenderer, count: usize) {
 fn check_placement_only_drawing() {
     let probe = TestProbe::default();
     let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            placement_fixture(probe.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 240,
-            height: 180,
-            scale_factor: 1.5,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(1);
+    let mut renderer = UiTest::new()
+        .viewport(240, 180)
+        .scale_factor(1.5)
+        .rendered(crate::TesseraComponents)
+        .content(move || placement_fixture(probe.clone()));
+    renderer.frames(1);
     assert!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure) > 0);
     retained_layout_frames(&mut renderer, 3);
-    let original = renderer.read_pixels().expect("original content");
+    let original = renderer.read_pixels();
     let pixel = |pixels: &[u8], x: usize, y: usize| pixels[(y * 240 + x) * 4..][..3].to_vec();
     assert_eq!(pixel(&original, 2, 14), [255, 0, 0]);
     assert_eq!(pixel(&original, 62, 14), [255, 255, 255]);
     observed.get().shift.expect("offset state").set(Dp(12.0));
     retained_layout_frames(&mut renderer, 4);
-    let shifted = renderer.read_pixels().expect("shifted content");
+    let shifted = renderer.read_pixels();
     assert_eq!(pixel(&shifted, 2, 14), [255, 255, 255]);
     assert_eq!(pixel(&shifted, 20, 14), [255, 0, 0]);
     assert_eq!(pixel(&shifted, 80, 14), [255, 255, 255]);
     observed.get().placed.expect("placement state").set(false);
     retained_layout_frames(&mut renderer, 4);
-    let hidden = renderer.read_pixels().expect("unplaced content");
+    let hidden = renderer.read_pixels();
     assert_eq!(pixel(&hidden, 20, 14), [255, 255, 255]);
     observed.get().placed.expect("placement state").set(true);
     observed.get().shift.expect("offset state").set(Dp::ZERO);
     retained_layout_frames(&mut renderer, 4);
-    assert!(original == renderer.read_pixels().expect("restored content"));
+    assert!(original == renderer.read_pixels());
 }
 
 #[test]
@@ -320,20 +304,12 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
         || {
             let probe = TestProbe::default();
             let observed = probe.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || {
-                    paint_state_fixture(probe.clone());
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 64,
-                    height: 48,
-                    ..Default::default()
-                },
-            )
-            .expect("renderer");
-            renderer.render_frames(1);
-            let reference = renderer.read_pixels().expect("red frame");
+            let mut renderer = UiTest::new()
+                .viewport(64, 48)
+                .rendered(crate::TesseraComponents)
+                .content(move || paint_state_fixture(probe.clone()));
+            renderer.frames(1);
+            let reference = renderer.read_pixels();
             let pixel = (12 * 64 + 16) * 4;
             assert_eq!(&reference[pixel..pixel + 4], &[255, 0, 0, 255]);
             assert!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure) > 0);
@@ -348,14 +324,14 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
                 .count("paint_state_fixture", tessera_ui::testing::WorkPhase::Build);
             assert!(builds > 0);
             retained_paint_frames(&mut renderer, 3);
-            assert!(reference == renderer.read_pixels().expect("retained red frame"));
+            assert!(reference == renderer.read_pixels());
             observed
                 .get()
                 .ink
                 .expect("ink state")
                 .set(Color::new(0.0, 0.0, 1.0, 1.0));
-            renderer.render_frames(1);
-            let changed = renderer.read_pixels().expect("blue frame");
+            renderer.frames(1);
+            let changed = renderer.read_pixels();
             assert_eq!(&changed[pixel..pixel + 4], &[0, 0, 255, 255]);
             assert_eq!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure), 0);
             assert_eq!(
@@ -371,7 +347,7 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
                 1
             );
             retained_paint_frames(&mut renderer, 3);
-            assert!(changed == renderer.read_pixels().expect("retained blue frame"));
+            assert!(changed == renderer.read_pixels());
             assert_eq!(
                 renderer
                     .work()
@@ -382,9 +358,9 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
     );
 }
 
-fn retained_paint_frames(renderer: &mut HeadlessRenderer, count: usize) {
+fn retained_paint_frames(renderer: &mut UiTest, count: usize) {
     for _ in 0..count {
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure), 0);
         assert_eq!(
             renderer

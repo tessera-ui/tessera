@@ -7,11 +7,9 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::TestProbe,
+    accesskit::Action,
+    focus, remember, tessera,
+    testing::{TestProbe, UiTest},
     use_context,
 };
 
@@ -137,11 +135,11 @@ fn reference_shape(radius: i32) -> Shape {
     }
 }
 
-fn bounds(renderer: &HeadlessRenderer, index: usize) -> [i64; 4] {
+fn bounds(renderer: &UiTest, index: usize) -> [i64; 4] {
     bounds_label(renderer, &format!("Item {index}"))
 }
 
-fn bounds_label(renderer: &HeadlessRenderer, label: &str) -> [i64; 4] {
+fn bounds_label(renderer: &UiTest, label: &str) -> [i64; 4] {
     let snapshot = renderer.accessibility_snapshot().unwrap();
     let node = &snapshot
         .nodes
@@ -158,12 +156,12 @@ fn bounds_label(renderer: &HeadlessRenderer, label: &str) -> [i64; 4] {
     ]
 }
 
-fn patch(renderer: &HeadlessRenderer, index: usize, bottom: bool, scale: f64) -> Vec<u8> {
+fn patch(renderer: &UiTest, index: usize, bottom: bool, scale: f64) -> Vec<u8> {
     patch_label(renderer, &format!("Item {index}"), bottom, scale)
 }
 
-fn patch_label(renderer: &HeadlessRenderer, label: &str, bottom: bool, scale: f64) -> Vec<u8> {
-    let pixels = renderer.read_pixels().unwrap();
+fn patch_label(renderer: &UiTest, label: &str, bottom: bool, scale: f64) -> Vec<u8> {
+    let pixels = renderer.read_pixels();
     let [x, y, _, height] = bounds_label(renderer, label);
     let mut result = Vec::new();
     for dy in 0..(16.0 * scale) as i64 {
@@ -220,21 +218,13 @@ fn check(samples: u32) {
         let clicks_observed = clicks.clone();
         let probe = TestProbe::default();
         let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(probe.clone(), clicks.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 320,
-                height: 1000,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(320, 1000)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(move || fixture(probe.clone(), clicks.clone()));
+        renderer.frames(8);
         assert!(
             renderer
                 .work_totals()
@@ -269,7 +259,7 @@ fn check(samples: u32) {
         let idle = renderer
             .work_totals()
             .count("list_item", tessera_ui::testing::WorkPhase::Build);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(
             renderer
                 .work_totals()
@@ -279,7 +269,7 @@ fn check(samples: u32) {
         let [x, y, width, height] = bounds(&renderer, 0);
         let point = PxPosition::from_f32_xy((x + width / 2) as f32, (y + height / 2) as f32);
         renderer.pointer_move(MOUSE_POINTER_ID, point);
-        renderer.render_frames(60);
+        renderer.frames(60);
         let hover = patch(&renderer, 0, true, scale);
         equal_feedback_patch(
             &hover,
@@ -287,15 +277,15 @@ fn check(samples: u32) {
         );
         assert!(ink(&hover) < ink(&inner) && ink(&hover) > ink(&upper));
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(3);
+        renderer.frames(3);
         let moving = patch(&renderer, 0, true, scale);
         assert_ne!(moving, hover);
-        renderer.render_frames(60);
+        renderer.frames(60);
         equal_feedback_patch(&patch(&renderer, 0, true, scale), &upper);
         let held = renderer
             .work_totals()
             .count("list_item", tessera_ui::testing::WorkPhase::Build);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(
             renderer
                 .work_totals()
@@ -304,18 +294,18 @@ fn check(samples: u32) {
         );
         focus::clear_focus(true);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         assert_eq!(clicks_observed.get(), 1);
         equal_patch(&patch(&renderer, 0, true, scale), &hover);
         let outside = PxPosition::from_f32_xy(300.0, 780.0);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
         focus::clear_focus(true);
-        renderer.render_frames(60);
+        renderer.frames(60);
         equal_patch(&patch(&renderer, 0, true, scale), &inner);
         let resting = renderer
             .work_totals()
             .count("list_item", tessera_ui::testing::WorkPhase::Build);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(
             renderer
                 .work_totals()
@@ -327,7 +317,7 @@ fn check(samples: u32) {
                 value.selected = field == 0;
                 value.dragged = field == 1;
             });
-            renderer.render_frames(60);
+            renderer.frames(60);
             equal_patch(&patch(&renderer, 0, true, scale), &upper);
         }
         settings.with_mut(|value| {
@@ -335,29 +325,29 @@ fn check(samples: u32) {
             value.dragged = false;
             value.position = ListItemPosition::Last;
         });
-        renderer.render_frames(60);
+        renderer.frames(60);
         equal_patch(&patch(&renderer, 0, false, scale), &inner);
         equal_patch(&patch(&renderer, 0, true, scale), &upper);
         settings.with_mut(|value| {
             value.position = ListItemPosition::First;
             value.selected = false;
         });
-        renderer.render_frames(60);
+        renderer.frames(60);
         settings.with_mut(|value| value.selected = true);
-        renderer.render_frames(3);
+        renderer.frames(3);
         settings.with_mut(|value| value.selected = false);
-        renderer.render_frames(60);
+        renderer.frames(60);
         equal_patch(&patch(&renderer, 0, true, scale), &inner);
         settings.with_mut(|value| {
             value.custom = true;
             value.selected = true;
         });
-        renderer.render_frames(60);
+        renderer.frames(60);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         assert!(ink(&patch(&renderer, 0, true, scale)) > ink(&inner));
         settings.with_mut(|value| value.enabled = false);
-        renderer.render_frames(2);
+        renderer.frames(2);
         equal_patch(&patch(&renderer, 0, true, scale), &upper);
         renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
         settings.with_mut(|value| {
@@ -365,12 +355,12 @@ fn check(samples: u32) {
             value.fixed = true;
         });
         renderer.pointer_move(MOUSE_POINTER_ID, point);
-        renderer.render_frames(60);
+        renderer.frames(60);
         let fixed = patch(&renderer, 0, true, scale);
         equal_feedback_patch(&fixed, &patch_label(&renderer, "Reference 0", false, scale));
         assert!(ink(&fixed) > ink(&inner));
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         equal_feedback_patch(&patch(&renderer, 0, true, scale), &fixed);
         renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
@@ -380,7 +370,7 @@ fn check(samples: u32) {
             value.custom = false;
             value.selected = false;
         });
-        renderer.render_frames(60);
+        renderer.frames(60);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         let id = snapshot
             .nodes
@@ -388,16 +378,11 @@ fn check(samples: u32) {
             .find(|(_, node)| node.label() == Some("Item 0"))
             .unwrap()
             .0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Focus,
-            target_tree: TreeId::ROOT,
-            target_node: id,
-            data: None
-        }));
-        renderer.render_frames(60);
+        assert!(renderer.accessibility_action(id, Action::Focus));
+        renderer.frames(60);
         equal_feedback_patch(&patch(&renderer, 0, true, scale), &upper);
         focus::clear_focus(true);
-        renderer.render_frames(60);
+        renderer.frames(60);
         equal_patch(&patch(&renderer, 0, true, scale), &inner);
     }
 }

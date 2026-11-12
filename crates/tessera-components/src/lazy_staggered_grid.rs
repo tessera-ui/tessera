@@ -126,7 +126,7 @@ impl LazyStaggeredGridContent {
 ///     });
 /// }
 ///
-/// let snapshot = tessera_ui::testing::layout_test(demo).run();
+/// let snapshot = tessera_ui::testing::UiTest::new().content(demo).frame();
 /// for index in 0..4 {
 ///     snapshot.node(&format!("tile-{index}")).exists();
 /// }
@@ -319,7 +319,7 @@ fn lazy_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs, axis: LazyAxis) {
 ///     });
 /// }
 ///
-/// let snapshot = tessera_ui::testing::layout_test(demo).run();
+/// let snapshot = tessera_ui::testing::UiTest::new().content(demo).frame();
 /// for index in 0..3 {
 ///     snapshot.node(&format!("tile-{index}")).exists();
 /// }
@@ -1454,74 +1454,67 @@ mod tests {
 
     #[test]
     fn lazy_vertical_staggered_positions_items_in_shortest_lanes() {
-        tessera_ui::assert_layout! {
-            viewport: (80, 80),
-            content: {
-                lazy_vertical_staggered_layout_case();
-            },
-            expect: {
-                node("lazy_staggered_v_first").position(4, 4).size(10, 10);
-                node("lazy_staggered_v_second").position(32, 4).size(12, 8);
-                node("lazy_staggered_v_third").position(32, 15).size(11, 12);
-                node("lazy_staggered_v_fourth").position(4, 17).size(9, 9);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(80, 80)
+            .content(lazy_vertical_staggered_layout_case)
+            .frame();
+        layout.node("lazy_staggered_v_first").rect(4, 4, 10, 10);
+        layout.node("lazy_staggered_v_second").rect(32, 4, 12, 8);
+        layout.node("lazy_staggered_v_third").rect(32, 15, 11, 12);
+        layout.node("lazy_staggered_v_fourth").rect(4, 17, 9, 9);
     }
 
     #[test]
     fn lazy_horizontal_staggered_positions_items_in_shortest_lanes() {
-        tessera_ui::assert_layout! {
-            viewport: (90, 50),
-            content: {
-                lazy_horizontal_staggered_layout_case();
-            },
-            expect: {
-                node("lazy_staggered_h_first").position(4, 4).size(20, 10);
-                node("lazy_staggered_h_second").position(4, 22).size(15, 12);
-                node("lazy_staggered_h_third").position(22, 22).size(18, 8);
-                node("lazy_staggered_h_fourth").position(27, 4).size(16, 9);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(90, 50)
+            .content(lazy_horizontal_staggered_layout_case)
+            .frame();
+        layout.node("lazy_staggered_h_first").rect(4, 4, 20, 10);
+        layout.node("lazy_staggered_h_second").rect(4, 22, 15, 12);
+        layout.node("lazy_staggered_h_third").rect(22, 22, 18, 8);
+        layout.node("lazy_staggered_h_fourth").rect(27, 4, 16, 9);
     }
 
     #[test]
     fn lazy_vertical_staggered_scroll_repositions_visible_items() {
-        tessera_ui::assert_layout! {
-            viewport: (80, 80),
-            content: {
-                lazy_vertical_staggered_scrolled_layout_case();
-            },
-            expect: {
-                node("lazy_staggered_scroll_first").position(4, -1).size(10, 10);
-                node("lazy_staggered_scroll_second").position(32, -1).size(12, 8);
-                node("lazy_staggered_scroll_third").position(32, 10).size(11, 12);
-                node("lazy_staggered_scroll_fourth").position(4, 12).size(9, 9);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(80, 80)
+            .content(lazy_vertical_staggered_scrolled_layout_case)
+            .frame();
+        layout
+            .node("lazy_staggered_scroll_first")
+            .rect(4, -1, 10, 10);
+        layout
+            .node("lazy_staggered_scroll_second")
+            .rect(32, -1, 12, 8);
+        layout
+            .node("lazy_staggered_scroll_third")
+            .rect(32, 10, 11, 12);
+        layout
+            .node("lazy_staggered_scroll_fourth")
+            .rect(4, 12, 9, 9);
     }
 
     #[test]
     fn lazy_vertical_staggered_does_not_rebuild_visible_items_when_scroll_stays_in_same_window() {
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                lazy_vertical_staggered_stable_visible_items_case();
-            })
-            .viewport_px(80, 60),
-        );
+        let mut session = tessera_ui::testing::UiTest::new()
+            .content(lazy_vertical_staggered_stable_visible_items_case)
+            .viewport(80, 60);
 
-        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+        session.frame();
         let first_builds = session
             .work()
             .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert!(first_builds > 0);
 
-        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667);
+        session.frames(1);
         let second_builds = session
             .work()
             .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert_eq!(second_builds, 0);
 
-        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
+        session.frames(1);
         let third_builds = session
             .work()
             .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);

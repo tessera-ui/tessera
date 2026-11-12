@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use tessera_ui::{
     Color, State,
-    accesskit::{Action, ActionRequest, Toggled, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Toggled},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -66,9 +66,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
         });
 }
 
-fn selection(
-    renderer: &HeadlessRenderer,
-) -> (tessera_ui::accesskit::NodeId, tessera_ui::accesskit::Node) {
+fn selection(renderer: &UiTest) -> (tessera_ui::accesskit::NodeId, tessera_ui::accesskit::Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -78,48 +76,41 @@ fn selection(
         .unwrap()
 }
 
-fn fill(renderer: &HeadlessRenderer) -> [u8; 4] {
+fn fill(renderer: &UiTest) -> [u8; 4] {
     let bounds = selection(renderer).1.bounds().unwrap();
     let x = ((bounds.x0 + bounds.x1) / 2.0) as u32 + 8;
     let y = ((bounds.y0 + bounds.y1) / 2.0) as u32 + 8;
     let offset = ((y * renderer.physical_size().width + x) * 4) as usize;
-    renderer.read_pixels().unwrap()[offset..offset + 4]
+    renderer.read_pixels()[offset..offset + 4]
         .try_into()
         .unwrap()
 }
 
 fn check_motion(samples: u32) {
     let probe = tessera_ui::testing::TestProbe::default();
-    let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 160,
-            height: 160,
-            scale_factor: 2.0,
-            sample_count: samples,
-            frame_time: Duration::from_millis(10),
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(30);
+    let mut renderer = UiTest::new()
+        .viewport(160, 160)
+        .scale_factor(2.0)
+        .samples(samples)
+        .frame_step(Duration::from_millis(10))
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    renderer.frames(30);
     let settings = probe.get().settings.unwrap();
     settings.with_mut(|value| value.checked = true);
-    renderer.step_frame();
+    renderer.frames(1);
     assert_eq!(selection(&renderer).1.toggled(), Some(Toggled::True));
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert!(renderer.frame_clock_diagnostics().resumed_tasks > 0);
     let alpha = fill(&renderer)[3];
     assert!((145..=158).contains(&alpha), "50ms fill alpha: {alpha}");
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert!((225..=240).contains(&fill(&renderer)[3]));
-    renderer.render_frames(100);
+    renderer.frames(100);
     assert_eq!(fill(&renderer), [255, 0, 0, 255]);
-    renderer.render_frames(3);
+    renderer.frames(3);
     for _ in 0..30 {
-        renderer.step_frame();
+        renderer.frames(1);
         let clock = renderer.frame_clock_diagnostics();
         assert_eq!(
             clock.resumed_tasks, 0,
@@ -128,33 +119,27 @@ fn check_motion(samples: u32) {
         assert_eq!(clock.waiting_tasks, 0);
     }
 
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Click,
-        target_tree: TreeId::ROOT,
-        target_node: selection(&renderer).0,
-        data: None,
-    }));
-    renderer.render_frames(8);
+    assert!(renderer.accessibility_action(selection(&renderer).0, Action::Click));
+    renderer.frames(8);
     assert_eq!(settings.get().activations, 1);
     assert_eq!(selection(&renderer).1.toggled(), Some(Toggled::False));
     assert!(
         fill(&renderer)[3] < 100,
         "removal uses the faster color effect"
     );
-    renderer.render_frames(2);
-    renderer.render_frames(30);
+    renderer.frames(2);
+    renderer.frames(30);
     settings.with_mut(|value| value.mixed = true);
-    renderer.step_frame();
-    renderer.render_frames(40);
-    let dash_pixels = renderer.read_pixels().unwrap();
+    renderer.frames(1);
+    renderer.frames(40);
+    let dash_pixels = renderer.read_pixels();
     settings.with_mut(|value| {
         value.mixed = false;
         value.checked = true;
     });
-    renderer.step_frame();
-    renderer.render_frames(5);
+    renderer.frames(6);
     assert_ne!(
-        renderer.read_pixels().unwrap(),
+        renderer.read_pixels(),
         dash_pixels,
         "the morph must reach the draw pipeline"
     );
@@ -162,27 +147,22 @@ fn check_motion(samples: u32) {
         value.mixed = true;
         value.checked = false;
     });
-    renderer.step_frame();
-    renderer.render_frames(40);
+    renderer.frames(1);
+    renderer.frames(40);
     assert_eq!(
-        renderer.read_pixels().unwrap(),
+        renderer.read_pixels(),
         dash_pixels,
         "reversing the morph must restore the dash pixels"
     );
     settings.with_mut(|value| value.disabled = true);
-    renderer.step_frame();
+    renderer.frames(1);
     let disabled = fill(&renderer);
     assert!(disabled[0] < 5 && disabled[1] < 5 && disabled[2] > 150);
     assert!(
         (95..=99).contains(&disabled[3]),
         "disabled fill snaps: {disabled:?}"
     );
-    assert!(!renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Click,
-        target_tree: TreeId::ROOT,
-        target_node: selection(&renderer).0,
-        data: None,
-    }));
+    assert!(!renderer.accessibility_action(selection(&renderer).0, Action::Click));
     assert_eq!(settings.get().activations, 1);
 }
 

@@ -54,7 +54,7 @@
 //! text_input();
 //! #     });
 //! # }
-//! # tessera_ui::testing::layout_test(component).run();
+//! # tessera_ui::testing::UiTest::new().content(component).frame();
 //! ```
 #![deny(
     missing_docs,

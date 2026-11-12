@@ -1768,13 +1768,10 @@ mod tests {
             "lazy_list::tests::viewport_cap_limits_initial_item_construction_on_both_axes",
             || {
                 for horizontal in [false, true] {
-                    let mut session = tessera_ui::testing::start_layout_test_session(
-                        tessera_ui::testing::layout_test(move || {
-                            capped_list_fixture(horizontal);
-                        })
-                        .viewport_px(360, 360),
-                    );
-                    let snapshot = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+                    let mut session = tessera_ui::testing::UiTest::new()
+                        .content(move || capped_list_fixture(horizontal))
+                        .viewport(360, 360);
+                    let snapshot = session.frame();
                     snapshot.node("capped_0").exists();
                     snapshot.node("capped_1").exists();
                     assert_eq!(
@@ -1834,14 +1831,10 @@ mod tests {
     fn check_programmatic_position(horizontal: bool) {
         tessera_ui::dp::set_scale_factor(1.0);
         let observed = tessera_ui::testing::TestProbe::default();
-        let fixture_observed = observed.clone();
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(move || {
-                programmatic_list_fixture(horizontal, fixture_observed.clone());
-            })
-            .viewport_px(120, 120),
-        );
-        tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+        let mut session = tessera_ui::testing::UiTest::new()
+            .content(|| programmatic_list_fixture(horizontal, observed.clone()))
+            .viewport(120, 120);
+        session.frame();
         let controller = observed.get().programmatic_list.expect("controller");
         controller.with_mut(|controller| {
             controller.scroll_to(
@@ -1849,12 +1842,12 @@ mod tests {
                 if horizontal { Dp::ZERO } else { Dp(80.0) },
             )
         });
-        tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667);
-        let snapshot = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
+        session.frames(1);
+        let snapshot = session.frames(1);
         snapshot.node("programmatic_4").position(0, 0);
         controller.with_mut(|controller| controller.scroll_to(Dp::ZERO, Dp::ZERO));
-        tessera_ui::testing::pump_layout_test_session(&mut session, 50_000_001);
-        let snapshot = tessera_ui::testing::pump_layout_test_session(&mut session, 66_666_668);
+        session.frames(1);
+        let snapshot = session.frames(1);
         snapshot.node("programmatic_0").position(0, 0);
     }
 
@@ -1914,23 +1907,14 @@ mod tests {
                 tessera_ui::dp::set_scale_factor(1.0);
                 for horizontal in [false, true] {
                     let observed = tessera_ui::testing::TestProbe::default();
-                    let fixture_observed = observed.clone();
-                    let mut session = tessera_ui::testing::start_layout_test_session(
-                        tessera_ui::testing::layout_test(move || {
-                            replaceable_list_fixture(horizontal, fixture_observed.clone());
-                        })
-                        .viewport_px(120, 120),
-                    );
-                    tessera_ui::testing::pump_layout_test_session(&mut session, 0);
-                    let mut time = 0;
+                    let mut session = tessera_ui::testing::UiTest::new()
+                        .content(|| replaceable_list_fixture(horizontal, observed.clone()))
+                        .viewport(120, 120);
+                    session.frame();
                     for generation in 1..=4 {
                         let previous = observed.get().replaced_list.unwrap();
                         observed.get().list_generation.unwrap().set(generation);
-                        time += 16_666_667;
-                        tessera_ui::testing::pump_layout_test_session(&mut session, time);
-                        time += 16_666_667;
-                        let snapshot =
-                            tessera_ui::testing::pump_layout_test_session(&mut session, time);
+                        let snapshot = session.frames(2);
                         assert!(
                             !previous.is_alive(),
                             "the old keyed controller was actually released"
@@ -1948,18 +1932,10 @@ mod tests {
                                 if horizontal { Dp::ZERO } else { Dp(80.0) },
                             )
                         });
-                        time += 16_666_667;
-                        tessera_ui::testing::pump_layout_test_session(&mut session, time);
-                        time += 16_666_667;
-                        let snapshot =
-                            tessera_ui::testing::pump_layout_test_session(&mut session, time);
+                        let snapshot = session.frames(2);
                         snapshot.node("replacement_4").position(0, 0);
                         current.with_mut(|controller| controller.scroll_to(Dp::ZERO, Dp::ZERO));
-                        time += 16_666_667;
-                        tessera_ui::testing::pump_layout_test_session(&mut session, time);
-                        time += 16_666_667;
-                        let snapshot =
-                            tessera_ui::testing::pump_layout_test_session(&mut session, time);
+                        let snapshot = session.frames(2);
                         snapshot.node("replacement_0").position(0, 0);
                     }
                 }
@@ -2054,18 +2030,12 @@ mod tests {
                         [(false, false), (true, false), (false, true), (true, true)]
                     {
                         let observed = tessera_ui::testing::TestProbe::default();
-                        let fixture_observed = observed.clone();
-                        let mut session = tessera_ui::testing::start_layout_test_session(
-                            tessera_ui::testing::layout_test(move || {
-                                responsive_anchor_fixture(
-                                    horizontal,
-                                    tall,
-                                    fixture_observed.clone(),
-                                );
+                        let mut session = tessera_ui::testing::UiTest::new()
+                            .content(|| {
+                                responsive_anchor_fixture(horizontal, tall, observed.clone())
                             })
-                            .viewport_px(800, 800),
-                        );
-                        tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+                            .viewport(800, 800);
+                        session.frame();
                         let controller = observed.get().programmatic_list.expect("list controller");
                         let offset = if tall { Dp(60.0) } else { Dp(180.0) };
                         controller.with_mut(|controller| {
@@ -2076,7 +2046,6 @@ mod tests {
                         });
                         let cross = observed.get().responsive_cross.expect("cross-axis state");
                         let main_span = observed.get().responsive_main.expect("main-axis state");
-                        let mut frame = 1;
                         for (width, span) in [
                             (300.0, 120.0),
                             (150.0, 60.0),
@@ -2091,11 +2060,8 @@ mod tests {
                             let position = Dp(if tall { -60.0 } else { 20.0 }).to_px().0;
                             let cross_size = Dp(width).to_px().0;
                             for _ in 0..4 {
-                                let snapshot = tessera_ui::testing::pump_layout_test_session(
-                                    &mut session,
-                                    frame * 16_666_667,
-                                );
-                                snapshot
+                                session
+                                    .frames(1)
                                     .node(if tall { "responsive_0" } else { "responsive_5" })
                                     .position(
                                         if horizontal { position } else { 0 },
@@ -2105,7 +2071,6 @@ mod tests {
                                         if horizontal { main } else { cross_size },
                                         if horizontal { cross_size } else { main },
                                     );
-                                frame += 1;
                             }
                         }
                     }
@@ -2179,19 +2144,11 @@ mod tests {
                 for horizontal in [false, true] {
                     tessera_ui::dp::set_scale_factor(1.0);
                     let observed = tessera_ui::testing::TestProbe::default();
-                    let fixture_observed = observed.clone();
-                    let mut session = tessera_ui::testing::start_layout_test_session(
-                        tessera_ui::testing::layout_test(move || {
-                            density_scroll_fixture(horizontal, fixture_observed.clone());
-                        })
-                        .viewport_px(400, 400),
-                    );
-                    for frame in 0..4 {
-                        tessera_ui::testing::pump_layout_test_session(
-                            &mut session,
-                            frame * 16_666_667,
-                        );
-                    }
+                    let mut session = tessera_ui::testing::UiTest::new()
+                        .content(|| density_scroll_fixture(horizontal, observed.clone()))
+                        .viewport(400, 400);
+                    session.frame();
+                    session.frames(3);
                     let controller = observed.get().programmatic_list.expect("controller");
                     let offset = if horizontal { Dp(104.0) } else { Dp(204.0) };
                     controller.with_mut(|controller| {
@@ -2200,7 +2157,6 @@ mod tests {
                             if horizontal { Dp::ZERO } else { offset },
                         )
                     });
-                    let mut frame = 4;
                     for density in [1.0, 1.25, 1.5, 2.0, 1.0] {
                         tessera_ui::dp::set_scale_factor(density);
                         if density == 1.5 {
@@ -2212,18 +2168,14 @@ mod tests {
                             });
                         }
                         for _ in 0..4 {
-                            let snapshot = tessera_ui::testing::pump_layout_test_session(
-                                &mut session,
-                                frame * 16_666_667,
-                            );
-                            snapshot
+                            session
+                                .frames(1)
                                 .node("density_5")
                                 .position(
                                     Dp(if horizontal { 20.0 } else { 4.0 }).to_px().0,
                                     Dp(if horizontal { 4.0 } else { 20.0 }).to_px().0,
                                 )
                                 .size(Dp(20.0).to_px().0, Dp(40.0).to_px().0);
-                            frame += 1;
                         }
                     }
                 }
@@ -2234,32 +2186,23 @@ mod tests {
     #[test]
     fn collapsed_cross_axis_preserves_usable_measurements() {
         let observed = tessera_ui::testing::TestProbe::default();
-        let fixture_observed = observed.clone();
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(move || {
-                collapsed_viewport_fixture(fixture_observed.clone());
-            })
-            .viewport_px(300, 240),
-        );
-        for frame in 0..8 {
-            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
+        let mut session = tessera_ui::testing::UiTest::new()
+            .content(|| collapsed_viewport_fixture(observed.clone()))
+            .viewport(300, 240);
+        session.frame();
+        session.frames(7);
         let controller = observed.get().collapsed_list.expect("list controller");
         let before = controller.with(|state| state.cache.measured_main.clone());
         assert!(before.iter().all(Option::is_some));
         let width = observed.get().collapsed_width.expect("viewport width");
         width.set(Dp(0.0));
-        for frame in 8..12 {
-            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
+        session.frames(4);
         assert_eq!(
             controller.with(|state| state.cache.measured_main.clone()),
             before
         );
         width.set(Dp(300.0));
-        for frame in 12..16 {
-            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
+        session.frames(4);
         assert_eq!(
             controller.with(|state| state.cache.measured_main.clone()),
             before
@@ -2345,25 +2288,15 @@ mod tests {
             || {
                 tessera_ui::dp::set_scale_factor(1.0);
                 let observed = tessera_ui::testing::TestProbe::default();
-                let fixture_observed = observed.clone();
-                let mut session = tessera_ui::testing::start_layout_test_session(
-                    tessera_ui::testing::layout_test(move || {
-                        changing_estimate_fixture(fixture_observed.clone());
-                    })
-                    .viewport_px(200, 240),
-                );
-                let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+                let mut session = tessera_ui::testing::UiTest::new()
+                    .content(|| changing_estimate_fixture(observed.clone()))
+                    .viewport(200, 240);
+                session.frame();
                 let estimate = observed.get().estimate.expect("estimate state");
-                for (frame, (density, value)) in [(1.0, 20.0), (1.5, 140.0), (1.0, 60.0)]
-                    .into_iter()
-                    .enumerate()
-                {
+                for (density, value) in [(1.0, 20.0), (1.5, 140.0), (1.0, 60.0)] {
                     tessera_ui::dp::set_scale_factor(density);
                     estimate.set(Dp(value));
-                    let snapshot = tessera_ui::testing::pump_layout_test_session(
-                        &mut session,
-                        (frame as u64 + 1) * 16_666_667,
-                    );
+                    let snapshot = session.frames(1);
                     for index in 0..4 {
                         snapshot
                             .node(&format!("estimate_{index}"))
@@ -2656,105 +2589,101 @@ mod tests {
 
     #[test]
     fn lazy_column_positions_items_with_padding_and_spacing() {
-        tessera_ui::assert_layout! {
-            viewport: (80, 60),
-            content: {
-                material_theme().child(|| { lazy_column_layout_case(); });
-            },
-            expect: {
-                node("lazy_column_first").position(4, 4).size(20, 10);
-                node("lazy_column_second").position(4, 17).size(18, 12);
-                node("lazy_column_third").position(4, 32).size(16, 8);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(80, 60)
+            .content(|| {
+                material_theme().child(|| {
+                    lazy_column_layout_case();
+                })
+            })
+            .frame();
+        layout.node("lazy_column_first").rect(4, 4, 20, 10);
+        layout.node("lazy_column_second").rect(4, 17, 18, 12);
+        layout.node("lazy_column_third").rect(4, 32, 16, 8);
     }
 
     #[test]
     fn lazy_row_positions_items_with_padding_and_spacing() {
-        tessera_ui::assert_layout! {
-            viewport: (90, 40),
-            content: {
-                material_theme().child(|| { lazy_row_layout_case(); });
-            },
-            expect: {
-                node("lazy_row_first").position(4, 4).size(20, 10);
-                node("lazy_row_second").position(27, 4).size(15, 12);
-                node("lazy_row_third").position(45, 4).size(18, 8);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(90, 40)
+            .content(|| {
+                material_theme().child(|| {
+                    lazy_row_layout_case();
+                })
+            })
+            .frame();
+        layout.node("lazy_row_first").rect(4, 4, 20, 10);
+        layout.node("lazy_row_second").rect(27, 4, 15, 12);
+        layout.node("lazy_row_third").rect(45, 4, 18, 8);
     }
 
     #[test]
     fn lazy_column_scroll_offset_repositions_visible_items() {
-        tessera_ui::assert_layout! {
-            viewport: (80, 60),
-            content: {
-                material_theme().child(|| { lazy_column_scrolled_layout_case(); });
-            },
-            expect: {
-                node("lazy_column_scrolled_first").position(4, -1).size(20, 10);
-                node("lazy_column_scrolled_second").position(4, 12).size(18, 12);
-                node("lazy_column_scrolled_third").position(4, 27).size(16, 8);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(80, 60)
+            .content(|| {
+                material_theme().child(|| {
+                    lazy_column_scrolled_layout_case();
+                })
+            })
+            .frame();
+        layout
+            .node("lazy_column_scrolled_first")
+            .rect(4, -1, 20, 10);
+        layout
+            .node("lazy_column_scrolled_second")
+            .rect(4, 12, 18, 12);
+        layout.node("lazy_column_scrolled_third").rect(4, 27, 16, 8);
     }
 
     #[test]
     fn lazy_column_sticky_header_stays_pinned_to_padding() {
-        tessera_ui::assert_layout! {
-            viewport: (80, 50),
-            content: {
-                material_theme().child(|| { lazy_column_sticky_layout_case(); });
-            },
-            expect: {
-                node("lazy_column_sticky_header").position(4, 4).size(20, 10);
-                node("lazy_column_sticky_body").position(4, 11).size(18, 12);
-                node("lazy_column_sticky_tail").position(4, 26).size(16, 8);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(80, 50)
+            .content(|| {
+                material_theme().child(|| {
+                    lazy_column_sticky_layout_case();
+                })
+            })
+            .frame();
+        layout.node("lazy_column_sticky_header").rect(4, 4, 20, 10);
+        layout.node("lazy_column_sticky_body").rect(4, 11, 18, 12);
+        layout.node("lazy_column_sticky_tail").rect(4, 26, 16, 8);
     }
 
     #[test]
     fn lazy_column_non_stretch_cross_axis_does_not_force_exact_parent_width() {
-        tessera_ui::assert_layout! {
-            viewport: (80, 60),
-            content: {
-                material_theme().child(|| { lazy_column_non_stretch_cross_axis_case(); });
-            },
-            expect: {
-                node("lazy_column_non_stretch").position(4, 4).size(20, 10);
-            }
-        }
+        tessera_ui::testing::UiTest::new()
+            .viewport(80, 60)
+            .content(|| {
+                material_theme().child(|| {
+                    lazy_column_non_stretch_cross_axis_case();
+                })
+            })
+            .frame()
+            .node("lazy_column_non_stretch")
+            .rect(4, 4, 20, 10);
     }
 
     #[test]
     fn lazy_column_rebuilds_visible_items_when_item_slot_updates() {
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                lazy_column_stable_visible_items_case();
-            })
-            .viewport_px(80, 60),
-        );
+        let mut session = tessera_ui::testing::UiTest::new()
+            .content(lazy_column_stable_visible_items_case)
+            .viewport(80, 60);
 
-        tessera_ui::testing::pump_layout_test_session(&mut session, 0)
-            .node("stable_visible_item_0")
-            .width(20);
+        session.frame().node("stable_visible_item_0").width(20);
         let first_builds = session
             .work()
             .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert!(first_builds > 0);
 
-        tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667)
-            .node("stable_visible_item_0")
-            .width(22);
+        session.frames(1).node("stable_visible_item_0").width(22);
         let second_builds = session
             .work()
             .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert!(second_builds > 0);
 
-        tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334)
-            .node("stable_visible_item_0")
-            .width(24);
+        session.frames(1).node("stable_visible_item_0").width(24);
         let third_builds = session
             .work()
             .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);

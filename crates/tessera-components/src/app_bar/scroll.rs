@@ -309,7 +309,7 @@ impl AppBarScrollController {
 /// # fn app() {
 /// #     tessera_components::theme::material_theme().child(|| screen());
 /// # }
-/// # tessera_ui::testing::layout_test(app).run();
+/// # tessera_ui::testing::UiTest::new().content(app).frame();
 /// ```
 #[tessera]
 pub fn app_bar_scroll_provider(

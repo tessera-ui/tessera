@@ -1632,13 +1632,9 @@ fn keyboard() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::time::Duration;
 
     use tessera_components::theme::material_theme;
-    use tessera_ui::{
-        MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        headless::{HeadlessConfig, HeadlessRenderer},
-    };
+    use tessera_ui::{MOUSE_POINTER_ID, PressKeyEventType, PxPosition, testing::UiTest};
 
     use super::*;
 
@@ -1649,7 +1645,7 @@ mod tests {
         });
     }
 
-    fn click(renderer: &mut HeadlessRenderer, label: &str) {
+    fn click(renderer: &mut UiTest, label: &str) {
         let node = renderer
             .accessibility_snapshot()
             .unwrap()
@@ -1666,25 +1662,17 @@ mod tests {
         renderer.pointer_move(MOUSE_POINTER_ID, position);
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(20);
+        renderer.frames(20);
     }
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn contextual_menu_executes_action_and_closes_its_popup() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 600,
-                height: 500,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(600, 500)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(4);
         click(&mut renderer, "Open menu");
         assert!(
             renderer

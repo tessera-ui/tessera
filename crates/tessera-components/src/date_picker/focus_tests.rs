@@ -1,7 +1,6 @@
 use tessera_ui::{
-    accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
-    testing::text_matches,
+    accesskit::{Action, Node, NodeId},
+    testing::{UiTest, text_matches},
 };
 
 use crate::{column::column, theme::material_theme};
@@ -11,7 +10,9 @@ use super::*;
 #[tessera]
 fn fixture(
     year: bool,
-    output: tessera_ui::testing::TestProbe<Option<(State<DatePickerController>, State<DatePickerView>)>>,
+    output: tessera_ui::testing::TestProbe<
+        Option<(State<DatePickerController>, State<DatePickerView>)>,
+    >,
 ) {
     let state = remember(|| {
         DatePickerController::new(
@@ -41,7 +42,7 @@ fn fixture(
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -51,14 +52,9 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .unwrap_or_else(|| panic!("missing calendar choice {label}"))
 }
 
-fn action(renderer: &mut HeadlessRenderer, id: NodeId, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: id,
-        data: None,
-    }));
-    renderer.render_frames(4);
+fn action(renderer: &mut UiTest, id: NodeId, action: Action) {
+    assert!(renderer.accessibility_action(id, action));
+    renderer.frames(4);
 }
 
 fn focus_outline_changes(
@@ -89,19 +85,11 @@ fn focus_outline_changes(
 
 fn check_focus(year: bool) {
     let output = tessera_ui::testing::TestProbe::default();
-    let probe = output.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(year, probe.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 400,
-            height: 650,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(5);
+    let mut renderer = UiTest::new()
+        .viewport(400, 650)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(year, output.clone()));
+    renderer.frames(5);
     let label = if year { "2025" } else { "August 17, 2025" };
     let (id, choice) = node(&renderer, label);
     let bounds = choice.bounds().unwrap();
@@ -119,12 +107,20 @@ fn check_focus(year: bool) {
         id,
         "the fixture must start without focus on the target choice"
     );
-    let before = renderer.read_pixels().unwrap();
-    let selected = output.get().unwrap().0.with(DatePickerController::selected_date);
+    let before = renderer.read_pixels();
+    let selected = output
+        .get()
+        .unwrap()
+        .0
+        .with(DatePickerController::selected_date);
     action(&mut renderer, id, Action::Focus);
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
     assert_eq!(
-        output.get().unwrap().0.with(DatePickerController::selected_date),
+        output
+            .get()
+            .unwrap()
+            .0
+            .with(DatePickerController::selected_date),
         selected
     );
     assert_eq!(
@@ -136,7 +132,7 @@ fn check_focus(year: bool) {
         }
     );
     assert_eq!(node(&renderer, label).1.bounds(), Some(bounds));
-    let after = renderer.read_pixels().unwrap();
+    let after = renderer.read_pixels();
     let changed = focus_outline_changes(&before, &after, 400, body);
     assert!(
         changed > 40,
@@ -155,12 +151,20 @@ fn check_focus(year: bool) {
         );
         assert_eq!(output.get().unwrap().1.get(), DatePickerView::Calendar);
         assert_eq!(
-            output.get().unwrap().0.with(DatePickerController::selected_date),
+            output
+                .get()
+                .unwrap()
+                .0
+                .with(DatePickerController::selected_date),
             selected
         );
     } else {
         assert_eq!(
-            output.get().unwrap().0.with(DatePickerController::selected_date),
+            output
+                .get()
+                .unwrap()
+                .0
+                .with(DatePickerController::selected_date),
             CalendarDate::new(2025, 8, 19)
         );
     }

@@ -172,7 +172,7 @@ fn corners(top: f64, bottom: f64) -> Shape {
 ///             });
 ///     });
 /// }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn menu_group(

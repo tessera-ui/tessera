@@ -2,8 +2,8 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Rect, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -127,7 +127,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn bounds(renderer: &HeadlessRenderer, role: Role, label: Option<&str>) -> Rect {
+fn bounds(renderer: &UiTest, role: Role, label: Option<&str>) -> Rect {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -148,23 +148,14 @@ fn pixel(pixels: &[u8], x: f64, y: f64) -> u8 {
 
 fn check_shadows(samples: u32) {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 900,
-            height: 900,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(4);
-    let background = renderer.read_pixels().expect("background");
+    let mut renderer = UiTest::new()
+        .viewport(900, 900)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(4);
+    let background = renderer.read_pixels();
     let controller = observed.get().controller.expect("controller");
     let grouped = observed.get().grouped.expect("grouped");
     for is_grouped in [true, false] {
@@ -175,8 +166,8 @@ fn check_shadows(samples: u32) {
                 (Dp(80.0), Dp(40.0)),
             ));
         });
-        renderer.render_frames(6);
-        let pixels = renderer.read_pixels().expect("shadows");
+        renderer.frames(6);
+        let pixels = renderer.read_pixels();
         let panel = bounds(&renderer, Role::Menu, None);
         let first = if is_grouped {
             bounds(&renderer, Role::Group, Some("First group"))
@@ -213,11 +204,11 @@ fn check_shadows(samples: u32) {
             ) < 253,
             "the ambient shadow must spread beyond the narrow key shadow"
         );
-        renderer.render_frames(8);
-        assert_eq!(renderer.read_pixels().expect("cached shadows"), pixels);
+        renderer.frames(8);
+        assert_eq!(renderer.read_pixels(), pixels);
         controller.with_mut(MenuController::close);
-        renderer.render_frames(4);
-        assert_eq!(renderer.read_pixels().expect("dismissed"), background);
+        renderer.frames(4);
+        assert_eq!(renderer.read_pixels(), background);
     }
 
     grouped.set(true);
@@ -228,7 +219,7 @@ fn check_shadows(samples: u32) {
             (Dp(80.0), Dp(40.0)),
         ));
     });
-    renderer.render_frames(6);
+    renderer.frames(6);
     let panel = bounds(&renderer, Role::Menu, None);
     assert_eq!(
         panel.y1 - panel.y0,
@@ -240,13 +231,13 @@ fn check_shadows(samples: u32) {
         ((panel.y0 + panel.y1) / 2.0) as f32,
     );
     renderer.pointer_scroll(MOUSE_POINTER_ID, center, 0.0, -2000.0);
-    renderer.render_frames(90);
+    renderer.frames(90);
     let last = bounds(&renderer, Role::Group, Some("Last group"));
     assert!(
         last.y0 >= panel.y0 && last.y1 <= panel.y1 + 1.0,
         "last group must scroll into view: {last:?}, {panel:?}"
     );
-    let pixels = renderer.read_pixels().expect("scrolled");
+    let pixels = renderer.read_pixels();
     assert_eq!(
         pixel(&pixels, center.x.into(), panel.y1 + 3.0),
         255,
@@ -259,18 +250,15 @@ fn check_shadows(samples: u32) {
     let outside =
         PxPosition::from_f32_xy((panel.x0 - 2.0) as f32, ((last.y0 + last.y1) / 2.0) as f32);
     renderer.pointer_press(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert!(
         !controller.with(MenuController::is_open),
         "shadow pixels do not enlarge the menu's click target"
     );
     assert_eq!(observed.get().actions.expect("actions").get(), 0);
-    assert_eq!(
-        renderer.read_pixels().expect("dismissed after scrolling"),
-        background
-    );
+    assert_eq!(renderer.read_pixels(), background);
 }
 
 #[test]
@@ -309,22 +297,13 @@ fn inside_group(rect: Rect, index: usize, x: f64, y: f64) -> bool {
 
 fn check_corner_shadows(samples: u32) {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 900,
-            height: 900,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(900, 900)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(4);
     observed
         .get()
         .controller
@@ -335,19 +314,19 @@ fn check_corner_shadows(samples: u32) {
                 (Dp(80.0), Dp(40.0)),
             ));
         });
-    renderer.render_frames(8);
+    renderer.frames(8);
     let rects = vec![
         bounds(&renderer, Role::Group, Some("First group")),
         bounds(&renderer, Role::Group, Some("Last group")),
     ];
-    let actual = renderer.read_pixels().expect("menu corners");
+    let actual = renderer.read_pixels();
     observed
         .get()
         .reference
         .expect("reference")
         .set(Some(rects.clone()));
-    renderer.render_frames(8);
-    let reference = renderer.read_pixels().expect("unclipped surfaces");
+    renderer.frames(8);
+    let reference = renderer.read_pixels();
     for (index, rect) in rects.iter().enumerate() {
         assert_eq!(
             bounds(&renderer, Role::Group, Some(&format!("Reference {index}"))),

@@ -7,10 +7,10 @@
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Invalid, Node, NodeId, Role, Toggled, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera, use_context,
+    accesskit::{Action, Invalid, Role, Toggled},
+    focus, remember, tessera,
+    testing::UiTest,
+    use_context,
 };
 
 use crate::{
@@ -92,23 +92,6 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
         });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
-        .unwrap()
-}
-
-fn pixel(renderer: &HeadlessRenderer, x: u32, y: u32) -> [u8; 4] {
-    let offset = ((y * renderer.physical_size().width + x) * 4) as usize;
-    renderer.read_pixels().unwrap()[offset..offset + 4]
-        .try_into()
-        .unwrap()
-}
-
 fn encoded(color: Color, background: Color) -> [u8; 4] {
     let channel = |value: f32| {
         let encoded = if value <= 0.0031308 {
@@ -136,35 +119,23 @@ fn assert_color(actual: [u8; 4], expected: [u8; 4], context: &str) {
     );
 }
 
-fn action(renderer: &mut HeadlessRenderer, action: Action) -> bool {
-    renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: node(renderer, "Selection").0,
-        data: None,
-    })
+fn action(renderer: &mut UiTest, action: Action) -> bool {
+    renderer.accessibility_action(renderer.accessibility_node("Selection").0, action)
 }
 
 fn check_states(samples: u32) {
     let palettes = palettes();
     let probe = tessera_ui::testing::TestProbe::default();
-    let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 200,
-            height: 160,
-            scale_factor: 2.0,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(30);
+    let mut renderer = UiTest::new()
+        .viewport(200, 160)
+        .scale_factor(2.0)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    renderer.frames(30);
     let settings = probe.get().unwrap();
-    let identity = node(&renderer, "Selection").0;
-    let bounds = node(&renderer, "Selection").1.bounds().unwrap();
+    let identity = renderer.accessibility_node("Selection").0;
+    let bounds = renderer.accessibility_node("Selection").1.bounds().unwrap();
     assert_eq!((bounds.x1 - bounds.x0, bounds.y1 - bounds.y0), (96.0, 96.0));
     let cx = ((bounds.x0 + bounds.x1) / 2.0) as u32;
     let cy = ((bounds.y0 + bounds.y1) / 2.0) as u32;
@@ -183,8 +154,8 @@ fn check_states(samples: u32) {
                         ..Default::default()
                     });
                     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(190.0, 150.0));
-                    renderer.render_frames(30);
-                    let (id, control) = node(&renderer, "Selection");
+                    renderer.frames(30);
+                    let (id, control) = renderer.accessibility_node("Selection");
                     assert_eq!(id, identity);
                     assert_eq!(control.toggled(), Some(selection));
                     assert_eq!(control.invalid(), error.then_some(Invalid::True));
@@ -202,12 +173,12 @@ fn check_states(samples: u32) {
                         scheme.on_surface_variant
                     };
                     assert_color(
-                        pixel(&renderer, cx - 16, cy),
+                        renderer.pixel(cx - 16, cy),
                         encoded(ink, scheme.surface),
                         "outline/container role",
                     );
                     assert_color(
-                        pixel(&renderer, cx + 8, cy + 8),
+                        renderer.pixel(cx + 8, cy + 8),
                         encoded(
                             if active { ink } else { Color::TRANSPARENT },
                             scheme.surface,
@@ -228,7 +199,7 @@ fn check_states(samples: u32) {
                             (cx - 3, cy + 5)
                         };
                         assert_color(
-                            pixel(&renderer, x, y),
+                            renderer.pixel(x, y),
                             encoded(icon, scheme.surface),
                             "selected icon role",
                         );
@@ -243,16 +214,16 @@ fn check_states(samples: u32) {
             ..Default::default()
         });
         renderer.pointer_move(MOUSE_POINTER_ID, point);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_color(
-            pixel(&renderer, cx - 16, cy),
+            renderer.pixel(cx - 16, cy),
             encoded(scheme.error, scheme.surface),
             "error hover",
         );
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_color(
-            pixel(&renderer, cx - 16, cy),
+            renderer.pixel(cx - 16, cy),
             encoded(scheme.error, scheme.surface),
             "error press",
         );
@@ -262,34 +233,34 @@ fn check_states(samples: u32) {
             PxPosition::from_f32_xy(190.0, 150.0),
             PressKeyEventType::Left,
         );
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert!(action(&mut renderer, Action::Focus));
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_color(
-            pixel(&renderer, cx + 47, cy),
+            renderer.pixel(cx + 47, cy),
             encoded(scheme.secondary, scheme.surface),
             "actual focus paints the existing circular native focus indicator",
         );
         assert_color(
-            pixel(&renderer, cx - 16, cy),
+            renderer.pixel(cx - 16, cy),
             encoded(scheme.error, scheme.surface),
             "error focus",
         );
         assert!(action(&mut renderer, Action::Click));
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_eq!(settings.get().activations, 1);
         assert_eq!(
-            node(&renderer, "Selection").1.invalid(),
+            renderer.accessibility_node("Selection").1.invalid(),
             Some(Invalid::True)
         );
         settings.with_mut(|value| {
             value.error = false;
             value.generic_invalid = true;
         });
-        renderer.render_frames(30);
-        assert_eq!(node(&renderer, "Selection").1.invalid(), None);
+        renderer.frames(30);
+        assert_eq!(renderer.accessibility_node("Selection").1.invalid(), None);
         assert_eq!(
-            node(&renderer, "Custom validation").1.invalid(),
+            renderer.accessibility_node("Custom validation").1.invalid(),
             Some(Invalid::Spelling)
         );
         settings.with_mut(|value| {
@@ -297,27 +268,30 @@ fn check_states(samples: u32) {
             value.custom = true;
             value.generic_invalid = false;
         });
-        renderer.render_frames(30);
-        assert_eq!(node(&renderer, "Custom validation").1.invalid(), None);
+        renderer.frames(30);
+        assert_eq!(
+            renderer.accessibility_node("Custom validation").1.invalid(),
+            None
+        );
         assert_color(
-            pixel(&renderer, cx + 8, cy + 8),
+            renderer.pixel(cx + 8, cy + 8),
             encoded(CUSTOM_FILL, scheme.surface),
             "custom checked color overrides error",
         );
         assert_color(
-            pixel(&renderer, cx - 3, cy + 5),
+            renderer.pixel(cx - 3, cy + 5),
             encoded(CUSTOM_ICON, scheme.surface),
             "custom icon overrides error",
         );
         settings.with_mut(|value| value.checked = false);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_color(
-            pixel(&renderer, cx - 16, cy),
+            renderer.pixel(cx - 16, cy),
             encoded(Color::GREEN, scheme.surface),
             "custom focused outline overrides error",
         );
         settings.with_mut(|value| value.disabled = true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert!(!action(&mut renderer, Action::Click));
         assert_eq!(settings.get().activations, 1);
         focus::clear_focus(true);
@@ -334,14 +308,14 @@ fn check_states(samples: u32) {
             ..Default::default()
         });
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(190.0, 150.0));
-        renderer.render_frames(30);
+        renderer.frames(30);
         let scheme = &palettes[0].color_scheme;
         assert_eq!(
-            node(&renderer, "Selection").1.invalid(),
+            renderer.accessibility_node("Selection").1.invalid(),
             Some(Invalid::True)
         );
         assert_color(
-            pixel(&renderer, cx + 47, cy),
+            renderer.pixel(cx + 47, cy),
             encoded(
                 if presentation == InteractionVisualState::Focus {
                     scheme.secondary
@@ -357,16 +331,16 @@ fn check_states(samples: u32) {
             MOUSE_POINTER_ID,
             PxPosition::from_f32_xy(cx as f32, cy as f32),
         );
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_color(
-            pixel(&renderer, cx + 47, cy),
+            renderer.pixel(cx + 47, cy),
             encoded(scheme.surface, scheme.surface),
             "live hover wins over preview focus",
         );
         settings.with_mut(|value| value.disabled = true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_color(
-            pixel(&renderer, cx + 47, cy),
+            renderer.pixel(cx + 47, cy),
             encoded(scheme.surface, scheme.surface),
             "disabled suppresses preview focus",
         );

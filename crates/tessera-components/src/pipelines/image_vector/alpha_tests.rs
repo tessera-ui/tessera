@@ -1,9 +1,7 @@
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
-    Color, Dp, Modifier, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::TestProbe,
+    Color, Dp, Modifier, State, remember, tessera,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -91,21 +89,13 @@ fn translucent_atlas_reuse_preserves_alpha_and_releases_sizes_after_retention() 
             for samples in [1, 4] {
                 let probe = TestProbe::default();
                 let observed = probe.clone();
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(move || {
-                        fixture(probe.clone());
-                    }),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width: 176,
-                        height: 128,
-                        sample_count: samples,
-                        ..Default::default()
-                    },
-                )
-                .expect("Native GPU adapter");
-                renderer.render_frames(4);
-                let initial = renderer.read_pixels().unwrap();
+                let mut renderer = UiTest::new()
+                    .viewport(176, 128)
+                    .samples(samples)
+                    .rendered(crate::TesseraComponents)
+                    .content(move || fixture(probe.clone()));
+                renderer.frames(4);
+                let initial = renderer.read_pixels();
                 assert!(
                     renderer
                         .frame_graphics_work()
@@ -129,16 +119,16 @@ fn translucent_atlas_reuse_preserves_alpha_and_releases_sizes_after_retention() 
                         "MSAA{samples} pixel{x}: {actual:?}, expected {expected:?}"
                     );
                 }
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(
-                    renderer.read_pixels().unwrap(),
+                    renderer.read_pixels(),
                     initial,
                     "Atlas cache-hit output must preserve alpha"
                 );
                 for inverted in [false, true, false] {
                     observed.get().inverted.unwrap().set(inverted);
-                    renderer.render_frames(1);
-                    let pixels = renderer.read_pixels().unwrap();
+                    renderer.frames(1);
+                    let pixels = renderer.read_pixels();
                     assert!(
                         renderer
                             .frame_graphics_work()
@@ -165,7 +155,7 @@ fn translucent_atlas_reuse_preserves_alpha_and_releases_sizes_after_retention() 
                     }
                 }
                 observed.get().count.unwrap().set(1);
-                renderer.render_frames(1);
+                renderer.frames(1);
                 assert!(
                     renderer
                         .frame_graphics_work()
@@ -173,11 +163,11 @@ fn translucent_atlas_reuse_preserves_alpha_and_releases_sizes_after_retention() 
                         .buffer_uploads
                         <= 1
                 );
-                let shrunk = renderer.read_pixels().unwrap();
+                let shrunk = renderer.read_pixels();
                 assert_eq!(&shrunk[(108 * 176 + 156) * 4..][..4], &[255, 255, 255, 255]);
                 observed.get().count.unwrap().set(65);
-                renderer.render_frames(1);
-                assert_eq!(renderer.read_pixels().unwrap(), initial);
+                renderer.frames(1);
+                assert_eq!(renderer.read_pixels(), initial);
                 let baseline = renderer.resource_snapshot().unwrap();
                 for index in 0..24 {
                     observed
@@ -185,11 +175,11 @@ fn translucent_atlas_reuse_preserves_alpha_and_releases_sizes_after_retention() 
                         .size
                         .unwrap()
                         .set(512.0 + index as f64 * 16.0);
-                    renderer.render_frames(3);
+                    renderer.frames(3);
                 }
                 observed.get().size.unwrap().set(8.0);
-                renderer.render_frames(4);
-                assert_eq!(renderer.read_pixels().unwrap(), initial);
+                renderer.frames(4);
+                assert_eq!(renderer.read_pixels(), initial);
                 let retained = renderer.resource_snapshot().unwrap();
                 assert!(
                     retained["textures"].as_i64().unwrap() > baseline["textures"].as_i64().unwrap(),
@@ -201,7 +191,7 @@ fn translucent_atlas_reuse_preserves_alpha_and_releases_sizes_after_retention() 
                             + super::pipeline::ATLAS_CACHE_BYTES,
                     "dynamic sizes must obey the atlas byte budget: {baseline} -> {retained}"
                 );
-                renderer.render_frames(super::pipeline::RETAINED_FRAMES as u32);
+                renderer.frames(super::pipeline::RETAINED_FRAMES as u32);
                 let settled = renderer.resource_snapshot().unwrap();
                 if let (Some(initial), Some(current)) = (
                     baseline["texture_bytes"].as_u64(),

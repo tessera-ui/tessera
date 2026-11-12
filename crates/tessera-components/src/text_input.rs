@@ -345,7 +345,7 @@ impl Default for TextInputProps {
 /// text_input().padding(Dp(8.0)).initial_text("Hello World");
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 impl TextInputBuilder {
     /// Set a display-only transform with explicit offset mapping.
@@ -423,7 +423,7 @@ impl TextInputBuilder {
 /// text_input().padding(Dp(8.0)).initial_text("Hello World");
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn text_input(
@@ -1567,7 +1567,7 @@ impl TextInputBuilder {
     /// let args = text_input().simple();
     /// # });
     /// # }
-    /// # tessera_ui::testing::layout_test(component).run();
+    /// # tessera_ui::testing::UiTest::new().content(component).frame();
     /// ```
     pub fn simple(&self) -> Self {
         self.min_width(Dp(120.0))
@@ -1599,7 +1599,7 @@ impl TextInputBuilder {
     /// let args = text_input().outlined();
     /// # });
     /// # }
-    /// # tessera_ui::testing::layout_test(component).run();
+    /// # tessera_ui::testing::UiTest::new().content(component).frame();
     /// ```
     pub fn outlined(&self) -> Self {
         self.simple()
@@ -1624,7 +1624,7 @@ impl TextInputBuilder {
     /// let args = text_input().minimal();
     /// # });
     /// # }
-    /// # tessera_ui::testing::layout_test(component).run();
+    /// # tessera_ui::testing::UiTest::new().content(component).frame();
     /// ```
     pub fn minimal(&self) -> Self {
         self.min_width(Dp(120.0))
@@ -2549,14 +2549,7 @@ mod tests {
 
         use tessera_foundation::modifier::ModifierExt as _;
         use tessera_ui::{
-            CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
-            PxPosition, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource, State,
-            layout::layout,
-            remember, tessera,
-            testing::{
-                layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-                start_layout_test_session,
-            },
+            Dp, Modifier, Px, PxPosition, State, layout::layout, remember, tessera, testing::UiTest,
         };
 
         use crate::{
@@ -2629,8 +2622,8 @@ mod tests {
         fn scrolled_after_wheel(kind: ProbeKind, focus_first: bool) -> f32 {
             let output = tessera_ui::testing::TestProbe::default();
             let probe = output.clone();
-            let mut session = start_layout_test_session(
-                layout_test(move || match kind {
+            let mut session = UiTest::new()
+                .content(move || match kind {
                     ProbeKind::Plain => {
                         scroll_probe_plain(probe.clone());
                     }
@@ -2641,57 +2634,16 @@ mod tests {
                         scroll_probe_with_field(probe.clone());
                     }
                 })
-                .viewport_px(200, 100),
-            );
-            let _ = pump_layout_test_session(&mut session, 0);
+                .viewport(200, 100);
+            session.frame();
             let controller = output.get().expect("scrollable controller");
-            let cursor = Some(PxPosition::new(Px::new(100), Px::new(20)));
-
+            let position = PxPosition::new(Px::new(100), Px::new(20));
             if focus_first {
-                let press = PointerChange::new(
-                    tessera_ui::current_frame_time().unwrap(),
-                    1,
-                    CursorEventContent::Pressed(PressKeyEventType::Left),
-                    GestureState::TapCandidate,
-                );
-                let _ = pump_layout_test_session_with_input(
-                    &mut session,
-                    16_666_667,
-                    vec![press],
-                    cursor,
-                );
-                let release = PointerChange::new(
-                    tessera_ui::current_frame_time().unwrap(),
-                    1,
-                    CursorEventContent::Released(PressKeyEventType::Left),
-                    GestureState::TapCandidate,
-                );
-                let _ = pump_layout_test_session_with_input(
-                    &mut session,
-                    33_333_334,
-                    vec![release],
-                    cursor,
-                );
+                session.click_at(position);
             }
-
-            let scroll = PointerChange::new(
-                tessera_ui::current_frame_time().unwrap(),
-                1,
-                CursorEventContent::Scroll(ScrollEventContent {
-                    delta_x: 0.0,
-                    delta_y: -40.0,
-                    unit: ScrollDeltaUnit::Pixel,
-                    source: ScrollEventSource::Wheel,
-                }),
-                GestureState::TapCandidate,
-            );
-
-            let _ =
-                pump_layout_test_session_with_input(&mut session, 50_000_000, vec![scroll], cursor);
-
-            for frame in 4..40u64 {
-                let _ = pump_layout_test_session(&mut session, 16_666_667 * frame);
-            }
+            session.pointer_scroll(tessera_ui::MOUSE_POINTER_ID, position, 0.0, -40.0);
+            session.frames(1);
+            session.frames(36);
 
             controller.with(|c| c.child_position().y)
         }

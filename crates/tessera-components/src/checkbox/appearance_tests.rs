@@ -6,8 +6,7 @@
 
 use tessera_ui::{
     Color, Dp, FocusDirection, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State, focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
+    remember, tessera, testing::UiTest,
 };
 
 use crate::{
@@ -65,23 +64,16 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
 fn check_appearance(samples: u32) {
     for density in [2.0, 1.0, 1.25, 1.5] {
         let probe = tessera_ui::testing::TestProbe::default();
-        let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || fixture(observed.clone())),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 160,
-                height: 160,
-                scale_factor: density,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .expect("renderer");
-        renderer.render_frames(30);
+        let mut renderer = UiTest::new()
+            .viewport(160, 160)
+            .scale_factor(density)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(probe.clone()));
+        renderer.frames(30);
         let settings = probe.get().unwrap();
         settings.with_mut(|value| value.mixed = true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         let bounds = renderer
             .accessibility_snapshot()
             .unwrap()
@@ -100,7 +92,7 @@ fn check_appearance(samples: u32) {
         let cx = left + size / 2;
         let cy = top + size / 2;
         let width = renderer.physical_size().width;
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let bright_rows = (top..top + size)
             .filter(|y| pixels[((y * width + cx) * 4) as usize] > 220)
             .count();
@@ -125,8 +117,8 @@ fn check_appearance(samples: u32) {
                 value.mixed = false;
                 value.checked = true;
             });
-            renderer.render_frames(30);
-            let pixels = renderer.read_pixels().unwrap();
+            renderer.frames(30);
+            let pixels = renderer.read_pixels();
             let pixel = |x: u32, y: u32| pixels[((y * width + x) * 4) as usize];
             assert!(
                 pixel(cx - 3, cy + 5) > 220,
@@ -139,7 +131,7 @@ fn check_appearance(samples: u32) {
         }
         settings.set(Settings::default());
         focus::clear_focus(true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         let edge = (left + 1, cy);
         let is_color = |pixels: &[u8], channel: usize| {
             let start = ((edge.1 * width + edge.0) * 4) as usize;
@@ -148,7 +140,7 @@ fn check_appearance(samples: u32) {
                 && pixels[start + channel].saturating_sub(pixels[start + (channel + 1) % 3]) > 90
                 && pixels[start + channel].saturating_sub(pixels[start + (channel + 2) % 3]) > 90
         };
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let edge_offset = ((edge.1 * width + edge.0) * 4) as usize;
         assert!(
             is_color(&pixels, 0),
@@ -165,27 +157,21 @@ fn check_appearance(samples: u32) {
         }
         let point = PxPosition::from_f32_xy(cx as f32, cy as f32);
         renderer.pointer_move(MOUSE_POINTER_ID, point);
-        renderer.render_frames(30);
-        assert!(
-            is_color(&renderer.read_pixels().unwrap(), 2),
-            "hover outline"
-        );
+        renderer.frames(30);
+        assert!(is_color(&renderer.read_pixels(), 2), "hover outline");
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(30);
-        assert!(
-            is_color(&renderer.read_pixels().unwrap(), 2),
-            "pressed outline"
-        );
+        renderer.frames(30);
+        assert!(is_color(&renderer.read_pixels(), 2), "pressed outline");
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(150.0, 150.0));
         renderer.pointer_release(
             MOUSE_POINTER_ID,
             PxPosition::from_f32_xy(150.0, 150.0),
             PressKeyEventType::Left,
         );
-        renderer.render_frames(30);
+        renderer.frames(30);
         focus::clear_focus(true);
-        renderer.render_frames(30);
-        let pixels = renderer.read_pixels().unwrap();
+        renderer.frames(30);
+        let pixels = renderer.read_pixels();
         assert!(
             is_color(&pixels, 0),
             "restored outline at {density}: {:?}, focus {:?}",
@@ -193,22 +179,19 @@ fn check_appearance(samples: u32) {
             renderer.accessibility_snapshot().unwrap().focus,
         );
         focus::request_move_focus(FocusDirection::Next);
-        renderer.render_frames(30);
-        assert!(
-            is_color(&renderer.read_pixels().unwrap(), 2),
-            "focused outline"
-        );
+        renderer.frames(30);
+        assert!(is_color(&renderer.read_pixels(), 2), "focused outline");
         settings.with_mut(|value| value.custom = true);
-        renderer.render_frames(30);
-        let pixels = renderer.read_pixels().unwrap();
+        renderer.frames(30);
+        let pixels = renderer.read_pixels();
         assert!(
             is_color(&pixels, 1),
             "explicit outline color takes precedence at {density}: {:?}",
             &pixels[edge_offset..edge_offset + 4],
         );
         settings.with_mut(|value| value.tiny_stroke = true);
-        renderer.render_frames(30);
-        let pixels = renderer.read_pixels().unwrap();
+        renderer.frames(30);
+        let pixels = renderer.read_pixels();
         let painted_pixels = pixels.chunks_exact(4).filter(|pixel| pixel[3] > 20).count();
         assert!(
             painted_pixels < 40,

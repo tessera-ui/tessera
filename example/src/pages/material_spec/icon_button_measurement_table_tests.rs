@@ -1,11 +1,11 @@
-use std::{collections::BTreeMap, time::Duration};
+use std::collections::BTreeMap;
 
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     MOUSE_POINTER_ID, PxPosition,
     accesskit::{Node, NodeId, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     tessera,
+    testing::UiTest,
 };
 
 #[tessera]
@@ -13,7 +13,7 @@ fn fixture() {
     material_theme().child(super::figure);
 }
 
-fn snapshot(renderer: &HeadlessRenderer) -> BTreeMap<NodeId, Node> {
+fn snapshot(renderer: &UiTest) -> BTreeMap<NodeId, Node> {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -91,23 +91,15 @@ fn assert_wide_grid(nodes: &BTreeMap<NodeId, Node>) {
 #[test]
 #[ignore = "requires a native GPU adapter for actual corner-radius table layout and scrolling"]
 fn radius_table_preserves_native_grid_and_reveals_columns_with_horizontal_input_after_resize() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1024,
-            height: 400,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(16);
+    let mut renderer = UiTest::new()
+        .viewport(1024, 400)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(16);
     assert_wide_grid(&snapshot(&renderer));
 
     renderer.resize(390, 400);
-    renderer.render_frames(16);
+    renderer.frames(16);
     let before = snapshot(&renderer);
     assert_eq!(table(&before).row_count(), Some(4));
     let before_xs = header(&before, "XS").bounds().unwrap();
@@ -123,7 +115,7 @@ fn radius_table_preserves_native_grid_and_reveals_columns_with_horizontal_input_
         -226.0,
         0.0,
     );
-    renderer.render_frames(40);
+    renderer.frames(40);
     let after = snapshot(&renderer);
     let after_xs = header(&after, "XS").bounds().unwrap();
     let after_xl = header(&after, "XL").bounds().unwrap();
@@ -138,6 +130,6 @@ fn radius_table_preserves_native_grid_and_reveals_columns_with_horizontal_input_
     assert_eq!(after_xl.height(), 56.0);
 
     renderer.resize(1024, 400);
-    renderer.render_frames(16);
+    renderer.frames(16);
     assert_wide_grid(&snapshot(&renderer));
 }

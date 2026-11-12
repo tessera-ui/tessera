@@ -324,7 +324,11 @@ fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarController) ->
     }
 }
 
-fn handle_autohide_if_needed(args: &ScrollBarConfig, state: &ScrollBarController, frame_nanos: u64) {
+fn handle_autohide_if_needed(
+    args: &ScrollBarConfig,
+    state: &ScrollBarController,
+    frame_nanos: u64,
+) {
     if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
         let current = state.read();
         if current.should_be_visible
@@ -371,7 +375,11 @@ fn needs_scrollbar_frame_tick(
         )
 }
 
-fn mark_scroll_activity(state: &ScrollBarController, behavior: &ScrollBarBehavior, frame_nanos: u64) {
+fn mark_scroll_activity(
+    state: &ScrollBarController,
+    behavior: &ScrollBarBehavior,
+    frame_nanos: u64,
+) {
     if matches!(*behavior, ScrollBarBehavior::AutoHide) {
         state.with_mut(|state_guard| {
             state_guard.last_scroll_activity_frame_nanos = Some(frame_nanos);
@@ -691,7 +699,7 @@ fn handle_state(
 ///             .visible(Px(200));
 ///     });
 /// }
-/// # tessera_ui::testing::layout_test(tracked_content).run();
+/// # tessera_ui::testing::UiTest::new().content(tracked_content).frame();
 /// ```
 #[tessera]
 pub fn scrollbar_v(
@@ -769,7 +777,7 @@ pub fn scrollbar_v(
 ///             .visible(Px(200));
 ///     });
 /// }
-/// # tessera_ui::testing::layout_test(tracked_content).run();
+/// # tessera_ui::testing::UiTest::new().content(tracked_content).frame();
 /// ```
 #[tessera]
 pub fn scrollbar_h(

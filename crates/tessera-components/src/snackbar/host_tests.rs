@@ -10,14 +10,16 @@ use std::time::Duration;
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Role},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{button::button, column::column, text::text, theme::material_theme};
 
-use super::{SnackbarDuration, SnackbarHostController, SnackbarRequest, SnackbarResult, snackbar_host};
+use super::{
+    SnackbarDuration, SnackbarHostController, SnackbarRequest, SnackbarResult, snackbar_host,
+};
 
 #[derive(Clone, PartialEq)]
 struct Settings {
@@ -64,7 +66,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -74,18 +76,13 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
     (id, node.clone())
 }
 
-fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: node(renderer, label).0,
-        data: None,
-    }));
-    renderer.render_frames(3);
+fn action(renderer: &mut UiTest, label: &str, action: Action) {
+    assert!(renderer.accessibility_action(node(renderer, label).0, action));
+    renderer.frames(3);
 }
 
 fn show(
-    renderer: &mut HeadlessRenderer,
+    renderer: &mut UiTest,
     host: State<SnackbarHostController>,
     action_label: Option<&str>,
     duration: SnackbarDuration,
@@ -97,29 +94,20 @@ fn show(
         request.duration = Some(duration);
         host.show_snackbar(request);
     });
-    renderer.render_frames(3);
+    renderer.frames(3);
 }
 
 fn check(samples: u32) {
     for scale in [1.0, 1.5] {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new({
-                let observed = observed.clone();
-                move || fixture(observed.clone())
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 800,
-                height: 600,
-                scale_factor: scale,
-                sample_count: samples,
-                frame_time: Duration::from_millis(100),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(3);
+        let mut renderer = UiTest::new()
+            .viewport(800, 600)
+            .scale_factor(scale)
+            .samples(samples)
+            .frame_step(Duration::from_millis(100))
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(observed.clone()));
+        renderer.frames(3);
         let origin = node(&renderer, "Origin").0;
         let other = node(&renderer, "Other task").0;
         let host = observed.get().host.unwrap();
@@ -149,9 +137,9 @@ fn check(samples: u32) {
         );
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(1);
+        renderer.frames(1);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert!(!host.with(SnackbarHostController::is_showing));
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
 
@@ -159,7 +147,7 @@ fn check(samples: u32) {
         action(&mut renderer, "Dismiss", Action::Focus);
         action(&mut renderer, "Other task", Action::Focus);
         host.with_mut(SnackbarHostController::dismiss_current);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, other);
 
         action(&mut renderer, "Origin", Action::Focus);
@@ -185,7 +173,7 @@ fn check(samples: u32) {
 
         show(&mut renderer, host, None, SnackbarDuration::Short);
         action(&mut renderer, "Dismiss", Action::Focus);
-        renderer.render_frames(45);
+        renderer.frames(45);
         assert!(!host.with(SnackbarHostController::is_showing));
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
 
@@ -198,14 +186,14 @@ fn check(samples: u32) {
                 s.origin_enabled = false;
             });
             host.with_mut(SnackbarHostController::dismiss_current);
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_ne!(renderer.accessibility_snapshot().unwrap().focus, origin);
             action(&mut renderer, "Other task", Action::Focus);
             settings.with_mut(|s| {
                 s.show_origin = true;
                 s.origin_enabled = true;
             });
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, other);
         }
     }
@@ -250,21 +238,11 @@ fn custom_host_slot_renders_current_queued_message() {
         "snackbar::host_tests::custom_host_slot_renders_current_queued_message",
         || {
             let observed = tessera_ui::testing::TestProbe::default();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new({
-                    let observed = observed.clone();
-                    move || custom_slot_fixture(observed.clone())
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 400,
-                    height: 200,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(3);
+            let mut renderer = UiTest::new()
+                .viewport(400, 200)
+                .rendered(crate::TesseraComponents)
+                .content(|| custom_slot_fixture(observed.clone()));
+            renderer.frames(3);
             let host = observed.get().host.unwrap();
             for message in ["Saved", "Uploaded"] {
                 host.with_mut(|host| {
@@ -272,7 +250,7 @@ fn custom_host_slot_renders_current_queued_message() {
                     request.duration = Some(SnackbarDuration::Indefinite);
                     host.show_snackbar(request);
                 });
-                renderer.render_frames(3);
+                renderer.frames(3);
                 let label = format!("Custom notification: {message}");
                 assert!(
                     renderer
@@ -283,7 +261,7 @@ fn custom_host_slot_renders_current_queued_message() {
                         .any(|(_, node)| node.label() == Some(label.as_str()))
                 );
                 host.with_mut(SnackbarHostController::dismiss_current);
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert!(
                     !renderer
                         .accessibility_snapshot()

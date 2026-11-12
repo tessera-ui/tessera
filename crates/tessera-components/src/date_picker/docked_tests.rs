@@ -1,18 +1,16 @@
-use std::time::Duration;
-
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     State,
-    accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId},
     remember, tessera,
-    testing::text_matches,
+    testing::{UiTest, text_matches},
 };
 
 use crate::theme::material_theme;
 
 use super::{
-    CalendarDate, DatePickerController, DockedDatePickerView, Weekday, YearMonth, docked_date_picker,
+    CalendarDate, DatePickerController, DockedDatePickerView, Weekday, YearMonth,
+    docked_date_picker,
 };
 
 #[tessera]
@@ -54,7 +52,7 @@ fn fixture(
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -64,7 +62,7 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .unwrap_or_else(|| panic!("missing {label}"))
 }
 
-fn activate(renderer: &mut HeadlessRenderer, label: &str) {
+fn activate(renderer: &mut UiTest, label: &str) {
     let snapshot = renderer.accessibility_snapshot().unwrap();
     let target_node = snapshot
         .nodes
@@ -73,37 +71,23 @@ fn activate(renderer: &mut HeadlessRenderer, label: &str) {
         .unwrap_or_else(|| panic!("missing actionable {label}: {snapshot:#?}"))
         .0;
     assert!(
-        renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node,
-            data: None,
-        }),
+        renderer.accessibility_action(target_node, Action::Click),
         "failed to activate {label}: {:?}",
         node(renderer, label).1
     );
-    renderer.render_frames(3);
+    renderer.frames(3);
 }
 
 fn check_calendar() {
     let output = tessera_ui::testing::TestProbe::default();
-    let probe = output.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(probe.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 420,
-            height: 560,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(420, 560)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(output.clone()));
+    renderer.frames(4);
     let bounds = node(&renderer, "Docked calendar").1.bounds().unwrap();
     assert_eq!((bounds.width(), bounds.height()), (360.0, 428.0));
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let pixel = |x: usize, y: usize| {
         let x = bounds.x0 as usize + x;
         let y = bounds.y0 as usize + y;
@@ -171,9 +155,9 @@ fn check_calendar() {
     }
     let offset = output.get().unwrap().3;
     offset.set(tessera_ui::Dp(600.0));
-    renderer.render_frames(3);
+    renderer.frames(3);
     offset.set(tessera_ui::Dp::ZERO);
-    renderer.render_frames(3);
+    renderer.frames(3);
 
     let date_bounds = node(&renderer, "July 28, 2025").1.bounds().unwrap();
     let date_ink = |pixels: &[u8]| {
@@ -191,7 +175,7 @@ fn check_calendar() {
             })
             .count()
     };
-    assert!(date_ink(&renderer.read_pixels().unwrap()) > 4);
+    assert!(date_ink(&renderer.read_pixels()) > 4);
     renderer.pointer_move(
         tessera_ui::MOUSE_POINTER_ID,
         tessera_ui::PxPosition::from_f32_xy(
@@ -199,23 +183,23 @@ fn check_calendar() {
             (date_bounds.y0 + date_bounds.height() / 2.0) as f32,
         ),
     );
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert!(
-        date_ink(&renderer.read_pixels().unwrap()) > 4,
+        date_ink(&renderer.read_pixels()) > 4,
         "hover must retain the visible date caption"
     );
     renderer.pointer_move(
         tessera_ui::MOUSE_POINTER_ID,
         tessera_ui::PxPosition::from_f32_xy(410.0, 550.0),
     );
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert!(
-        date_ink(&renderer.read_pixels().unwrap()) > 4,
+        date_ink(&renderer.read_pixels()) > 4,
         "leaving hover must retain the visible date caption"
     );
 
     view.set(DockedDatePickerView::Year);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(
         renderer
             .accessibility_snapshot()

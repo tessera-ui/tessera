@@ -32,7 +32,7 @@ use crate::{
 
 use super::{
     CalendarDate, DATE_CELL_SIZE, DATE_COLUMNS, DATE_PICKER_MAX_WIDTH, DateGridLayout,
-    DatePickerDefaults, DatePickerDisplayMode, DatePickerController, Weekday, YearMonth,
+    DatePickerController, DatePickerDefaults, DatePickerDisplayMode, Weekday, YearMonth,
     build_month_grid, calendar_day, format_date_input, format_month_short_name, format_month_year,
     navigation::{CalendarFocus, CalendarKeyboard, CalendarOwner},
     parse_date_input, weekday_narrow_label, weekday_sequence,
@@ -287,7 +287,7 @@ fn date_key(date: CalendarDate) -> (i32, u8, u8) {
 /// assert!(!state.is_complete());
 /// assert!(state.select_date(day));
 /// assert!(state.is_complete());
-/// # tessera_ui::testing::layout_test(demo).run();
+/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn date_range_picker(
@@ -418,8 +418,9 @@ pub fn date_range_picker(
                                             I18N.text("md3-switch-to-range-calendar"),
                                         )
                                         .on_click(move || {
-                                            state
-                                                .with_mut(DateRangePickerController::toggle_display_mode)
+                                            state.with_mut(
+                                                DateRangePickerController::toggle_display_mode,
+                                            )
                                         });
                                 }
                             });

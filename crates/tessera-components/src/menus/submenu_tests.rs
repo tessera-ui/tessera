@@ -1,9 +1,9 @@
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, HasPopup, Node, NodeId, Rect, Role, Toggled, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, HasPopup, Node, NodeId, Rect, Role, Toggled},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -96,7 +96,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         });
 }
 
-fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
+fn bounds(renderer: &UiTest, label: &str) -> Rect {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -109,7 +109,7 @@ fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
         .expect("bounds")
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str) {
+fn click(renderer: &mut UiTest, label: &str) {
     let bounds = bounds(renderer, label);
     let point = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
@@ -118,16 +118,16 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
     click_point(renderer, point);
 }
 
-fn click_point(renderer: &mut HeadlessRenderer, point: PxPosition) {
+fn click_point(renderer: &mut UiTest, point: PxPosition) {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
 #[track_caller]
-fn assert_focus(renderer: &HeadlessRenderer, label: &str) {
+fn assert_focus(renderer: &UiTest, label: &str) {
     let tree = renderer.accessibility_snapshot().expect("tree");
     assert_eq!(
         tree.nodes
@@ -140,46 +140,31 @@ fn assert_focus(renderer: &HeadlessRenderer, label: &str) {
     );
 }
 
-fn open(
-    renderer: &mut HeadlessRenderer,
-    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
-    x: f64,
-) {
+fn open(renderer: &mut UiTest, observed: &tessera_ui::testing::TestProbe<FixtureHandles>, x: f64) {
     observed.get().root.expect("root").with_mut(|root| {
         root.open_at(MenuAnchor::from_dp((Dp(x), Dp(40.0)), (Dp(80.0), Dp(40.0))))
     });
-    renderer.render_frames(4);
+    renderer.frames(4);
     click(renderer, "Share");
 }
 
 fn check_submenu_chain(samples: u32) {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || {
-                fixture(observed.clone());
-            }
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 1000,
-            height: 700,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(3);
+    let mut renderer = UiTest::new()
+        .viewport(1000, 700)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(3);
     observed.get().root.expect("root").with_mut(|root| {
         root.open_at(MenuAnchor::from_dp(
             (Dp(40.0), Dp(40.0)),
             (Dp(80.0), Dp(40.0)),
         ))
     });
-    renderer.render_frames(4);
+    renderer.frames(4);
     let parent = bounds(&renderer, "Share");
-    let previous = renderer.read_pixels().expect("before submenu");
+    let previous = renderer.read_pixels();
     click(&mut renderer, "Share");
     let child = bounds(&renderer, "Copy link");
     assert!(
@@ -194,7 +179,7 @@ fn check_submenu_chain(samples: u32) {
     let pixel = (((second.y0 + second.y1) / 2.0).round() as usize * 1000
         + (second.x1 - 48.0).round() as usize)
         * 4;
-    let shown = renderer.read_pixels().expect("submenu pixels");
+    let shown = renderer.read_pixels();
     for (index, value) in [0.2_f32, 0.4, 0.6].into_iter().enumerate() {
         let encoded = (1.055 * value.powf(1.0 / 2.4) - 0.055) * 255.0;
         assert!(
@@ -204,7 +189,7 @@ fn check_submenu_chain(samples: u32) {
     }
     assert_ne!(&shown[pixel..pixel + 4], &previous[pixel..pixel + 4]);
     click(&mut renderer, "Copy link");
-    let restored = renderer.read_pixels().expect("closed pixels");
+    let restored = renderer.read_pixels();
     assert_eq!(
         &restored[pixel..pixel + 4],
         &previous[pixel..pixel + 4],
@@ -269,7 +254,7 @@ fn check_submenu_chain(samples: u32) {
     );
     click(&mut renderer, "More options");
     renderer.resize(390, 640);
-    renderer.render_frames(5);
+    renderer.frames(5);
     let narrow = bounds(&renderer, "Export link");
     assert!(
         narrow.x0 >= 0.0 && narrow.x1 <= 390.0 && narrow.y0 >= 0.0 && narrow.y1 <= 640.0,
@@ -286,7 +271,7 @@ fn check_submenu_chain(samples: u32) {
     );
 
     renderer.resize(1000, 700);
-    renderer.render_frames(3);
+    renderer.frames(3);
     for disable in [false, true] {
         for _ in 0..3 {
             open(&mut renderer, &observed, 40.0);
@@ -296,7 +281,7 @@ fn check_submenu_chain(samples: u32) {
             } else {
                 observed.get().show.expect("show").set(false);
             }
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert!(
                 observed
                     .get()
@@ -312,14 +297,14 @@ fn check_submenu_chain(samples: u32) {
             assert_focus(&renderer, "Other action");
             observed.get().show.expect("show").set(true);
             observed.get().enabled.expect("enabled").set(true);
-            renderer.render_frames(3);
+            renderer.frames(3);
             assert_focus(&renderer, "Other action");
             observed
                 .get()
                 .root
                 .expect("root")
                 .with_mut(MenuController::close);
-            renderer.render_frames(4);
+            renderer.frames(4);
         }
     }
     open(&mut renderer, &observed, 40.0);
@@ -328,7 +313,7 @@ fn check_submenu_chain(samples: u32) {
         .root
         .expect("root")
         .with_mut(MenuController::close);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_focus(&renderer, "Menu trigger");
     open(&mut renderer, &observed, 40.0);
     observed
@@ -341,7 +326,7 @@ fn check_submenu_chain(samples: u32) {
         .root
         .expect("root")
         .with_mut(MenuController::close);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_focus(&renderer, "External action");
 }
 
@@ -396,21 +381,11 @@ fn gpu_submenu_disclosure_remains_visible_with_custom_trailing_content() {
         "menus::submenu_tests::gpu_submenu_disclosure_remains_visible_with_custom_trailing_content",
         || {
             let observed = tessera_ui::testing::TestProbe::default();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new({
-                    let observed = observed.clone();
-                    move || disclosure_fixture(observed.clone())
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 400,
-                    height: 300,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(30);
+            let mut renderer = UiTest::new()
+                .viewport(400, 300)
+                .rendered(crate::TesseraComponents)
+                .content(|| disclosure_fixture(observed.clone()));
+            renderer.frames(30);
             let item = bounds(&renderer, "Share");
             let crop = |pixels: Vec<u8>| {
                 let mut region = Vec::new();
@@ -422,15 +397,15 @@ fn gpu_submenu_disclosure_remains_visible_with_custom_trailing_content() {
                 }
                 region
             };
-            let initial = crop(renderer.read_pixels().unwrap());
+            let initial = crop(renderer.read_pixels());
             assert!(
                 initial.chunks_exact(4).any(|pixel| pixel != &initial[..4]),
                 "the disclosure region must contain painted arrow pixels"
             );
             for variant in [1, 2] {
                 observed.get().trailing.unwrap().set(variant);
-                renderer.render_frames(30);
-                let changed = crop(renderer.read_pixels().unwrap());
+                renderer.frames(30);
+                let changed = crop(renderer.read_pixels());
                 assert_eq!(
                     initial, changed,
                     "trailing content must not replace the arrow"
@@ -470,7 +445,7 @@ fn checked_branch_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandle
     });
 }
 
-fn checked_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn checked_node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -480,15 +455,10 @@ fn checked_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId
         .unwrap_or_else(|| panic!("missing {role:?} {label}"))
 }
 
-fn checked_action(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
+fn checked_action(renderer: &mut UiTest, label: &str, role: Role, action: Action) {
     let target_node = checked_node(renderer, label, role).0;
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node,
-        data: None,
-    }));
-    renderer.render_frames(12);
+    assert!(renderer.accessibility_action(target_node, action));
+    renderer.frames(12);
 }
 
 #[test]
@@ -498,21 +468,11 @@ fn gpu_checkable_branches_preserve_controlled_state_and_expand_before_leaf_activ
         "menus::submenu_tests::gpu_checkable_branches_preserve_controlled_state_and_expand_before_leaf_activation",
         || {
             let observed = tessera_ui::testing::TestProbe::default();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new({
-                    let observed = observed.clone();
-                    move || checked_branch_fixture(observed.clone())
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 700,
-                    height: 300,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(4);
+            let mut renderer = UiTest::new()
+                .viewport(700, 300)
+                .rendered(crate::TesseraComponents)
+                .content(|| checked_branch_fixture(observed.clone()));
+            renderer.frames(4);
             let controller = observed.get().checked_root.unwrap();
             let config = observed.get().checked_config.unwrap();
             let calls = observed.get().checked_calls.unwrap();
@@ -524,7 +484,7 @@ fn gpu_checkable_branches_preserve_controlled_state_and_expand_before_leaf_activ
                 for selected in [false, true] {
                     config.set((mode, selected));
                     controller.with_mut(MenuController::open);
-                    renderer.render_frames(12);
+                    renderer.frames(12);
                     let checked = if selected {
                         Toggled::True
                     } else {
@@ -571,13 +531,13 @@ fn gpu_checkable_branches_preserve_controlled_state_and_expand_before_leaf_activ
                     assert!(!controller.with(MenuController::is_open));
                     assert_eq!(config.get(), (mode, selected));
                     controller.with_mut(MenuController::open);
-                    renderer.render_frames(12);
+                    renderer.frames(12);
                     let reopened = checked_node(&renderer, "Checked branch", role).1;
                     assert_eq!(reopened.toggled(), Some(checked));
                     assert_eq!(reopened.is_expanded(), Some(false));
                     assert_eq!(calls.get(), (0, completed_leaves));
                     controller.with_mut(MenuController::close);
-                    renderer.render_frames(12);
+                    renderer.frames(12);
                 }
             }
         },

@@ -1,23 +1,25 @@
-//! Headless layout testing helpers for Tessera UI.
+//! Headless UI testing for Tessera.
 //!
 //! ## Usage
 //!
-//! Assert positions and sizes of tagged nodes without creating a real renderer.
+//! Drive components frame by frame and assert layout, semantics, input, and pixels.
 
 use std::{collections::BTreeSet, time::Duration};
 
 use crate::{
     Px, PxPosition, PxRect, PxSize,
+    accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
     build_tree::build_component_tree,
     component_tree::{ComputeMode, ComputeParams, clear_layout_snapshots},
     context::reset_context_read_dependencies,
     cursor::PointerChange,
     focus::flush_pending_focus_callbacks,
     runtime::{
-        TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
-        release_retired_replay_snapshots, reset_build_invalidations, reset_focus_read_dependencies,
-        reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
-        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_clock,
+        ModelScope, TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles,
+        clear_redraw_waker, release_retired_replay_snapshots, reset_build_invalidations,
+        reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
+        reset_render_slot_read_dependencies, reset_state_read_dependencies,
+        take_layout_dirty_nodes, tick_frame_clock,
     },
     time::Instant,
 };
@@ -35,319 +37,658 @@ pub use query::{
     AccessibilitySnapshot, ComponentSnapshot, ComponentSnapshotNode, text_matches, visible_text,
 };
 
-/// Create a headless layout test harness for the provided component content.
-pub fn layout_test<F, Output>(content: F) -> LayoutTestHarness<impl Fn()>
-where
-    F: Fn() -> Output,
-{
-    LayoutTestHarness {
-        content: move || {
-            content();
-        },
-        viewport: (800, 600),
-        scale_factor: crate::dp::scale_factor(),
-    }
-}
-
-/// Runs a component through build and layout without a real renderer.
-pub struct LayoutTestHarness<F>
-where
-    F: Fn(),
-{
-    content: F,
-    viewport: (u32, u32),
-    scale_factor: f64,
-}
-
-impl<F> LayoutTestHarness<F>
-where
-    F: Fn(),
-{
-    /// Sets the density used by this fixture's independent runtime session.
-    pub fn scale_factor(mut self, factor: f64) -> Self {
-        assert!(
-            factor.is_finite() && factor > 0.0,
-            "test density must be finite and positive"
-        );
-        self.scale_factor = factor;
-        self
-    }
-
-    /// Set the test viewport size in physical pixels.
-    pub fn viewport_px(mut self, width: u32, height: u32) -> Self {
-        self.viewport = (width, height);
-        self
-    }
-
-    /// Execute build and layout, then capture a snapshot for assertions.
-    pub fn run(self) -> LayoutSnapshot {
-        let mut session = start_layout_test_session(self);
-        pump_layout_test_session(&mut session, 0)
-    }
-}
-
-/// A headless Tessera layout test session that can be advanced frame by frame.
+/// A deterministic UI test with session-owned state and a virtual clock.
 ///
-/// Build the harness with [`layout_test`], open a session with
-/// [`start_layout_test_session`], then step frames with
-/// [`pump_layout_test_session`] to assert snapshots or observe side effects
-/// between frames.
-pub struct LayoutTestSession<F>
-where
-    F: Fn(),
-{
-    content: F,
+/// Tests start layout-only with an 800 by 600 viewport at the current density.
+/// Configure the viewport, density, frame step, and optional GPU rendering
+/// before [`UiTest::content`], then step frames and assert the results.
+///
+/// ```
+/// use tessera_ui::testing::UiTest;
+///
+/// let layout = UiTest::new().viewport(200, 100).content(|| {}).frame();
+/// layout.node("root").rect(0, 0, 200, 100);
+/// ```
+pub struct UiTest<'a> {
+    owner: ModelScope,
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    renderer: Option<Box<crate::headless::HeadlessRenderer>>,
+    content: Box<dyn Fn() + 'a>,
     session: crate::RuntimeSession,
     viewport: (u32, u32),
+    samples: u32,
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    format: wgpu::TextureFormat,
+    frame_step: Duration,
     frame_origin: Instant,
-    current_frame_nanos: u64,
-    diagnostics: Option<LayoutFrameDiagnostics>,
+    time: Duration,
+    cursor: crate::cursor::CursorState,
+    keyboard: crate::keyboard_state::KeyboardState,
+    ime: crate::ImeState,
+    diagnostics: LayoutFrameDiagnostics,
     work: crate::work::FrameWork,
     work_totals: crate::work::WorkTotals,
     frame_clock_diagnostics: crate::runtime::FrameClockDiagnostics,
 }
 
-impl<F: Fn()> LayoutTestSession<F> {
-    /// Returns the runtime identity shared by this session's snapshots and diagnostics.
-    pub fn session_id(&self) -> crate::RuntimeSessionId {
-        self.session.identity()
+impl<'a> UiTest<'a> {
+    /// Creates a layout-only test.
+    pub fn new() -> Self {
+        let scale_factor = crate::dp::scale_factor();
+        let session = crate::RuntimeSession::for_root();
+        session.activate();
+        crate::dp::set_scale_factor(scale_factor);
+        reset_runtime_for_layout_test((800, 600));
+        Self {
+            owner: ModelScope::new(),
+            #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+            renderer: None,
+            content: Box::new(|| {}),
+            session,
+            viewport: (800, 600),
+            samples: 1,
+            #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+            format: crate::headless::HeadlessConfig::default().format,
+            frame_step: Duration::from_nanos(16_666_667),
+            frame_origin: Instant::now(),
+            time: Duration::ZERO,
+            cursor: Default::default(),
+            keyboard: Default::default(),
+            ime: Default::default(),
+            diagnostics: Default::default(),
+            work: Default::default(),
+            work_totals: Default::default(),
+            frame_clock_diagnostics: Default::default(),
+        }
     }
 
-    /// Runs state or controller operations in this fixture's runtime session.
+    /// Sets the viewport in physical pixels.
+    pub fn viewport(mut self, width: u32, height: u32) -> Self {
+        self.resize(width, height);
+        self
+    }
+
+    /// Sets the physical pixels per density-independent pixel.
+    pub fn scale_factor(self, factor: f64) -> Self {
+        assert!(
+            factor.is_finite() && factor > 0.0,
+            "test density must be finite and positive"
+        );
+        self.run(|| crate::dp::set_scale_factor(factor));
+        self
+    }
+
+    /// Sets the MSAA sample count used by a later [`UiTest::rendered`] call.
+    pub fn samples(mut self, samples: u32) -> Self {
+        self.samples = samples;
+        self
+    }
+
+    /// Sets the output texture format used by a later [`UiTest::rendered`] call.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn format(mut self, format: wgpu::TextureFormat) -> Self {
+        self.format = format;
+        self
+    }
+
+    /// Sets the virtual time advanced by [`UiTest::frames`]; defaults to 60 Hz.
+    pub fn frame_step(mut self, step: Duration) -> Self {
+        self.frame_step = step;
+        self
+    }
+
+    /// Renders frames on the GPU with the given pipelines.
+    ///
+    /// Call after [`UiTest::samples`] and [`UiTest::format`]. Panics when no adapter is available.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn rendered(mut self, module: impl crate::render::RenderModule + 'static) -> Self {
+        let config = crate::headless::HeadlessConfig {
+            width: self.viewport.0,
+            height: self.viewport.1,
+            scale_factor: self.run(crate::dp::scale_factor),
+            sample_count: self.samples,
+            format: self.format,
+            ..Default::default()
+        };
+        let renderer = crate::headless::HeadlessRenderer::new_in_session(
+            self.session.clone(),
+            Box::new(|| {}),
+            vec![Box::new(module)],
+            config,
+        )
+        .expect("UiTest rendered backend initialization failed");
+        self.frame_origin = renderer.frame_origin;
+        self.renderer = Some(Box::new(renderer));
+        self
+    }
+
+    /// Sets the UI built on each frame.
+    pub fn content<F, Output>(mut self, content: F) -> Self
+    where
+        F: Fn() -> Output + 'a,
+    {
+        self.content = Box::new(move || {
+            content();
+        });
+        self
+    }
+
+    /// Creates state whose lifetime is owned by this test.
+    pub fn state<T: 'static>(&self, value: T) -> crate::State<T> {
+        self.run(|| self.owner.own_state(value))
+    }
+
+    /// Runs work in this test's UI session.
     pub fn run<R>(&self, work: impl FnOnce() -> R) -> R {
         self.session.run(work)
     }
 
-    /// Delivers a system back event to this fixture's enabled back handler.
+    /// Returns this test's runtime identity.
+    pub fn session_id(&self) -> crate::RuntimeSessionId {
+        self.session.identity()
+    }
+
+    /// Runs one frame at the current test time and captures its layout.
+    pub fn frame(&mut self) -> LayoutSnapshot {
+        self.step();
+        self.run(LayoutSnapshot::capture)
+    }
+
+    /// Advances the clock by `duration` and runs one frame.
+    pub fn advance(&mut self, duration: Duration) -> LayoutSnapshot {
+        self.time += duration;
+        self.frame()
+    }
+
+    /// Runs `count` frames, advancing the clock by the frame step before each.
+    pub fn frames(&mut self, count: u32) -> LayoutSnapshot {
+        for _ in 0..count {
+            self.time += self.frame_step;
+            self.step();
+        }
+        self.run(LayoutSnapshot::capture)
+    }
+
+    /// Returns the elapsed virtual time.
+    pub fn frame_time(&self) -> Duration {
+        self.time
+    }
+
+    /// Runs frames until no frame task or invalidated UI work remains.
+    ///
+    /// Panics if the UI has not settled after 1,000 frames.
+    pub fn settle(&mut self) {
+        self.step();
+        for _ in 0..1_000 {
+            let idle = self.run(|| {
+                crate::runtime::frame_clock_diagnostics().waiting_tasks == 0
+                    && !crate::runtime::has_pending_build_invalidations()
+                    && !crate::runtime::has_pending_layout_invalidations()
+            });
+            if idle {
+                return;
+            }
+            self.time += self.frame_step;
+            self.step();
+        }
+        panic!("UiTest did not settle after 1,000 frames; frame tasks or UI invalidations remain");
+    }
+
+    /// Selects a node by test tag, component name, or semantic label.
+    ///
+    /// The returned chain can also [`click`](NodeAssert::click) the node.
+    pub fn node(&mut self, selector: &str) -> NodeAssert<'_> {
+        let snapshot = self.run(LayoutSnapshot::capture);
+        let _ = snapshot.resolve(selector);
+        NodeAssert {
+            snapshot: std::borrow::Cow::Owned(snapshot),
+            selector: selector.into(),
+            click: Some(Box::new(move |position| self.click_at(position))),
+        }
+    }
+
+    /// Presses and releases the mouse at `position`, running a frame after each.
+    pub fn click_at(&mut self, position: PxPosition) {
+        let button = crate::PressKeyEventType::Left;
+        self.pointer_press(crate::MOUSE_POINTER_ID, position, button);
+        self.frames(1);
+        self.pointer_release(crate::MOUSE_POINTER_ID, position, button);
+        self.frames(1);
+    }
+
+    /// Finds the first published accessibility node whose label matches `label`.
+    pub fn accessibility_node(&self, label: &str) -> (NodeId, Node) {
+        self.accessibility_snapshot()
+            .expect("accessibility tree")
+            .nodes
+            .into_iter()
+            .find(|(_, node)| text_matches(node.label(), label))
+            .unwrap_or_else(|| panic!("missing accessibility node {label:?}"))
+    }
+
+    /// Queues pointer input for the next frame.
+    pub fn inject_pointer(&mut self, change: PointerChange) {
+        if let Some(position) = change.position_snapshot() {
+            self.cursor
+                .update_pointer_position(change.pointer_id, position);
+        }
+        self.cursor.push_event(change);
+    }
+
+    fn pointer_change(
+        &mut self,
+        pointer: crate::PointerId,
+        position: PxPosition,
+        content: crate::CursorEventContent,
+    ) {
+        self.cursor.update_pointer_position(pointer, position);
+        self.cursor.push_event(PointerChange::new(
+            self.frame_origin + self.time,
+            pointer,
+            content,
+            crate::GestureState::TapCandidate,
+        ));
+    }
+
+    /// Moves a pointer to a window position.
+    pub fn pointer_move(&mut self, pointer: crate::PointerId, position: PxPosition) {
+        self.pointer_change(
+            pointer,
+            position,
+            crate::CursorEventContent::Moved(position),
+        );
+    }
+
+    /// Presses a pointer button at a window position.
+    pub fn pointer_press(
+        &mut self,
+        pointer: crate::PointerId,
+        position: PxPosition,
+        button: crate::PressKeyEventType,
+    ) {
+        self.pointer_change(
+            pointer,
+            position,
+            crate::CursorEventContent::Pressed(button),
+        );
+    }
+
+    /// Releases a pointer button at a window position.
+    pub fn pointer_release(
+        &mut self,
+        pointer: crate::PointerId,
+        position: PxPosition,
+        button: crate::PressKeyEventType,
+    ) {
+        self.pointer_change(
+            pointer,
+            position,
+            crate::CursorEventContent::Released(button),
+        );
+    }
+
+    /// Queues a mouse-wheel scroll in physical pixels.
+    pub fn pointer_scroll(
+        &mut self,
+        pointer: crate::PointerId,
+        position: PxPosition,
+        delta_x: f32,
+        delta_y: f32,
+    ) {
+        self.pointer_change(
+            pointer,
+            position,
+            crate::CursorEventContent::Scroll(crate::ScrollEventContent {
+                delta_x,
+                delta_y,
+                unit: crate::ScrollDeltaUnit::Pixel,
+                source: crate::ScrollEventSource::Wheel,
+            }),
+        );
+    }
+
+    /// Starts a touch contact.
+    pub fn touch_start(&mut self, touch: u64, position: PxPosition) {
+        let _session = self.session.enter();
+        self.cursor.handle_touch_start(touch, position);
+    }
+
+    /// Moves a touch contact, scrolling after touch slop is crossed.
+    pub fn touch_move(&mut self, touch: u64, position: PxPosition) {
+        let _session = self.session.enter();
+        if let Some(scroll) = self.cursor.handle_touch_move(touch, position) {
+            self.cursor.push_event(scroll);
+        }
+    }
+
+    /// Ends a touch contact.
+    pub fn touch_end(&mut self, touch: u64) {
+        let _session = self.session.enter();
+        self.cursor.handle_touch_end(touch);
+    }
+
+    /// Cancels a touch contact without producing a tap or fling.
+    pub fn touch_cancel(&mut self, touch: u64) {
+        let _session = self.session.enter();
+        self.cursor.handle_touch_cancel(touch);
+    }
+
+    /// Queues an owned or native keyboard sample.
+    pub fn inject_key_event(&mut self, event: impl Into<crate::KeyboardEvent>) {
+        let _session = self.session.enter();
+        let event = event.into();
+        TesseraRuntime::with_mut(|runtime| {
+            runtime
+                .component_tree
+                .focus_owner_mut()
+                .record_keyboard_input(event.state, self.frame_origin + self.time);
+        });
+        self.keyboard.push_event(event);
+    }
+
+    /// Queues a named key press.
+    pub fn press_key(&mut self, key: winit::keyboard::NamedKey) {
+        self.inject_key_event(crate::KeyboardEvent::named(
+            key,
+            winit::event::ElementState::Pressed,
+        ));
+    }
+
+    /// Sets modifiers captured by subsequent keyboard samples.
+    pub fn set_key_modifiers(&mut self, modifiers: winit::keyboard::ModifiersState) {
+        self.keyboard.update_modifiers(modifiers);
+    }
+
+    /// Queues an IME event.
+    pub fn inject_ime_event(&mut self, event: winit::event::Ime) {
+        let _session = self.session.enter();
+        self.ime.push_event_for(None, event);
+    }
+
+    /// Commits text through the focused editor's IME path.
+    pub fn inject_text(&mut self, text: &str) {
+        self.inject_ime_event(winit::event::Ime::Commit(text.into()));
+    }
+
+    /// Delivers a system back event.
     pub fn dispatch_system_back(&self, event: crate::system_back::SystemBackEvent) {
-        self.session.run(|| crate::system_back::dispatch(event));
+        self.run(|| crate::system_back::dispatch(event));
     }
 
-    /// Captures component geometry, labels, and test tags in this fixture.
+    /// Captures component geometry and semantic metadata.
     pub fn inspect_components(&self) -> ComponentSnapshot {
-        self.session.run(ComponentSnapshot::capture)
+        self.run(ComponentSnapshot::capture)
     }
 
-    /// Captures the published accessibility tree in this fixture.
+    /// Captures the complete published accessibility tree.
     pub fn inspect_accessibility(&self) -> Option<AccessibilitySnapshot> {
-        self.session.run(|| {
+        self.accessibility_snapshot()
+            .map(|tree| AccessibilitySnapshot::new(tree, self.session_id()))
+    }
+
+    /// Returns the complete AccessKit publication.
+    pub fn accessibility_snapshot(&self) -> Option<crate::accesskit::TreeUpdate> {
+        self.run(|| {
             TesseraRuntime::with_mut(|runtime| {
                 runtime.component_tree.accessibility_update(None, true)
             })
-            .map(|tree| AccessibilitySnapshot::new(tree, self.session.identity()))
         })
     }
 
-    /// Dispatches an action through the published accessibility target.
+    /// Dispatches an assistive-technology action to a published node.
     ///
-    /// Pump another frame to publish resulting state and focus changes.
-    pub fn dispatch_accessibility_action(
-        &mut self,
-        request: crate::accesskit::ActionRequest,
-    ) -> bool {
-        self.session.run(|| {
+    /// Returns whether a focus target or action handler received it. Run
+    /// another frame to publish resulting state and focus changes.
+    pub fn accessibility_action(&mut self, target: NodeId, action: Action) -> bool {
+        let request = ActionRequest {
+            action,
+            target_tree: TreeId::ROOT,
+            target_node: target,
+            data: None,
+        };
+        let timestamp = self.frame_origin + self.time;
+        self.run(|| {
             let handled = TesseraRuntime::with_mut(|runtime| {
                 let (tree, metadatas, focus_owner) =
                     runtime.component_tree.accessibility_dispatch_context();
-                crate::accessibility::dispatch_action(tree, metadatas, focus_owner, request)
+                crate::accessibility::dispatch_action(
+                    tree,
+                    metadatas,
+                    focus_owner,
+                    request,
+                    timestamp,
+                )
             });
-            crate::focus::flush_pending_focus_callbacks();
+            flush_pending_focus_callbacks();
             handled
         })
     }
 
-    /// Returns layout work recorded during the most recently pumped frame.
-    pub fn diagnostics(&self) -> Option<LayoutFrameDiagnostics> {
+    /// Returns layout diagnostics from the last frame.
+    pub fn diagnostics(&self) -> LayoutFrameDiagnostics {
         self.diagnostics
     }
 
-    /// Returns actual component, layout, and paint work in the last frame.
+    /// Returns executed work from the last frame.
     pub fn work(&self) -> &crate::work::FrameWork {
         &self.work
     }
 
-    /// Returns cumulative work for this fixture's lifetime.
+    /// Returns cumulative executed work.
     pub fn work_totals(&self) -> &crate::work::WorkTotals {
         &self.work_totals
     }
 
-    /// Returns frame-clock work and remaining subscriptions for the last frame.
+    /// Returns frame-clock activity from the last frame.
     pub fn frame_clock_diagnostics(&self) -> &crate::runtime::FrameClockDiagnostics {
         &self.frame_clock_diagnostics
     }
-}
 
-/// Starts a headless layout test session for `harness`.
-pub fn start_layout_test_session<F>(harness: LayoutTestHarness<F>) -> LayoutTestSession<F>
-where
-    F: Fn(),
-{
-    let session = crate::RuntimeSession::for_root();
-    session.activate();
-    crate::dp::set_scale_factor(harness.scale_factor);
-    reset_runtime_for_layout_test(harness.viewport);
-    LayoutTestSession {
-        content: harness.content,
-        session,
-        viewport: harness.viewport,
-        frame_origin: Instant::now(),
-        current_frame_nanos: 0,
-        diagnostics: None,
-        work: Default::default(),
-        work_totals: crate::work::WorkTotals::default(),
-        frame_clock_diagnostics: crate::runtime::FrameClockDiagnostics::default(),
-    }
-}
-
-/// Builds and lays out one frame at `frame_nanos`, returning a snapshot.
-pub fn pump_layout_test_session<F>(
-    session: &mut LayoutTestSession<F>,
-    frame_nanos: u64,
-) -> LayoutSnapshot
-where
-    F: Fn(),
-{
-    pump_layout_test_session_with_input(session, frame_nanos, Vec::new(), None)
-}
-
-/// Builds and lays out one frame while delivering pointer input to the tree.
-///
-/// `pointer_changes` and `cursor_position` are forwarded to the component tree
-/// before layout, mirroring one renderer frame with injected input.
-pub fn pump_layout_test_session_with_input<F>(
-    session: &mut LayoutTestSession<F>,
-    frame_nanos: u64,
-    pointer_changes: Vec<PointerChange>,
-    cursor_position: Option<PxPosition>,
-) -> LayoutSnapshot
-where
-    F: Fn(),
-{
-    let _session = session.session.enter();
-    crate::work::begin();
-    session.current_frame_nanos = frame_nanos;
-    let frame_time = session.frame_origin + Duration::from_nanos(frame_nanos);
-    begin_frame_clock(frame_time);
-    crate::runtime::begin_frame_build_invalidations();
-    #[cfg(not(target_family = "wasm"))]
-    crate::asset::settle();
-    // Match renderer frame order so frame callbacks update state before build.
-    tick_frame_clock();
-    let _ = build_component_tree(&session.content);
-
-    let screen_size = PxSize::new(
-        Px::new(session.viewport.0 as i32),
-        Px::new(session.viewport.1 as i32),
-    );
-
-    TesseraRuntime::with_mut(|runtime| runtime.component_tree.begin_frame_diagnostics());
-    let mut frame_diagnostics = LayoutFrameDiagnostics::default();
-    let mut pointer_changes = Some(pointer_changes);
-    for retry in 0..=crate::renderer::MAX_FRAME_SETTLING_RETRIES {
-        let layout_dirty_nodes = take_layout_dirty_nodes();
-        let diagnostics = TesseraRuntime::with_mut(|runtime| {
-            let (_graph, _requests, diagnostics, _record_cost, _move, _reveal, _keyboard) =
-                runtime.component_tree.compute(
-                    ComputeParams {
-                        screen_size,
-                        cursor_position,
-                        pointer_changes: pointer_changes.take().unwrap_or_default(),
-                        keyboard_events: Vec::new(),
-                        ime_events: Vec::new(),
-                        retry_focus_move: None,
-                        retry_focus_reveal: false,
-                        modifiers: winit::keyboard::ModifiersState::default(),
-                        layout_dirty_nodes,
-                    },
-                    ComputeMode::LayoutOnly,
-                );
-            diagnostics
-        });
-        frame_diagnostics.accumulate_pass(diagnostics);
-        flush_pending_focus_callbacks();
-        crate::component_tree::flush_pending_globally_positioned_callbacks();
-        if !crate::renderer::frame_settling_can_progress(false)
-            || retry == crate::renderer::MAX_FRAME_SETTLING_RETRIES
-        {
-            break;
-        }
-        if crate::runtime::has_ready_build_invalidations() {
-            let _ = build_component_tree(&session.content);
+    /// Changes the physical-pixel viewport.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.viewport = (width, height);
+        self.run(|| TesseraRuntime::with_mut(|runtime| runtime.window_size = [width, height]));
+        #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+        if let Some(renderer) = &mut self.renderer {
+            renderer.resize(width, height);
         }
     }
 
-    session.diagnostics = Some(frame_diagnostics);
-    session.work = crate::work::finish();
-    session.work_totals.record(&session.work);
-    session.frame_clock_diagnostics = crate::runtime::frame_clock_diagnostics();
-    #[cfg(not(target_family = "wasm"))]
-    if crate::asset::in_flight() {
-        drop(_session);
-        return pump_layout_test_session_with_input(
-            session,
-            frame_nanos,
-            Vec::new(),
-            cursor_position,
+    /// Returns the physical-pixel viewport.
+    pub fn physical_size(&self) -> winit::dpi::PhysicalSize<u32> {
+        winit::dpi::PhysicalSize::new(self.viewport.0, self.viewport.1)
+    }
+
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    fn renderer(&self) -> &crate::headless::HeadlessRenderer {
+        self.renderer
+            .as_deref()
+            .expect("this operation requires UiTest::rendered")
+    }
+
+    /// Reads tightly packed RGBA8 pixels from the rendered frame.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn read_pixels(&self) -> Vec<u8> {
+        self.renderer()
+            .read_pixels()
+            .expect("UiTest pixel readback failed")
+    }
+
+    /// Reads one RGBA8 pixel from the rendered frame.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {
+        let offset = ((y * self.viewport.0 + x) * 4) as usize;
+        self.read_pixels()[offset..offset + 4]
+            .try_into()
+            .expect("RGBA8 pixel")
+    }
+
+    /// Captures the rendered component tree as JSON.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn snapshot(&self) -> serde_json::Value {
+        self.renderer().snapshot()
+    }
+
+    /// Returns graphics operations from the last rendered frame.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn frame_graphics_work(&self) -> &crate::render::GraphicsWorkDiagnostics {
+        self.renderer().frame_graphics_work()
+    }
+
+    /// Returns cumulative graphics operations.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn graphics_work(&self) -> crate::render::GraphicsWorkDiagnostics {
+        self.renderer().graphics_work()
+    }
+
+    /// Waits for GPU completion and captures resource usage.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn resource_snapshot(&self) -> Result<serde_json::Value, wgpu::PollError> {
+        self.renderer().resource_snapshot()
+    }
+
+    /// Returns the GPU instance for lifetime and allocation observations.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    pub fn gpu_instance(&self) -> &wgpu::Instance {
+        self.renderer().gpu_instance()
+    }
+
+    fn step(&mut self) {
+        #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+        if let Some(renderer) = &mut self.renderer {
+            renderer.render_test_frame(
+                self.time,
+                &*self.content,
+                &mut self.cursor,
+                &mut self.keyboard,
+                &mut self.ime,
+            );
+            self.diagnostics = renderer.diagnostics();
+            self.work = renderer.work().clone();
+            self.work_totals = renderer.work_totals().clone();
+            self.frame_clock_diagnostics = renderer.frame_clock_diagnostics().clone();
+            return;
+        }
+        self.layout_frame();
+    }
+
+    fn layout_frame(&mut self) {
+        let session = self.session.enter();
+        crate::work::begin();
+        begin_frame_clock(self.frame_origin + self.time);
+        crate::runtime::begin_frame_build_invalidations();
+        #[cfg(not(target_family = "wasm"))]
+        crate::asset::settle();
+        // Match renderer frame order so frame callbacks update state before build.
+        tick_frame_clock();
+        let _ = build_component_tree(&self.content);
+
+        let screen_size = PxSize::new(
+            Px::new(self.viewport.0 as i32),
+            Px::new(self.viewport.1 as i32),
         );
+
+        TesseraRuntime::with_mut(|runtime| runtime.component_tree.begin_frame_diagnostics());
+        let mut frame_diagnostics = LayoutFrameDiagnostics::default();
+        let cursor_position = self.cursor.position();
+        let mut pointer_changes = Some(self.cursor.take_events());
+        let mut keyboard_events = Some(self.keyboard.take_events());
+        let mut ime_events = Some(self.ime.take_events());
+        let modifiers = self.keyboard.modifiers();
+        let mut retry_focus_move = None;
+        let mut retry_focus_reveal = false;
+        for retry in 0..=crate::renderer::MAX_FRAME_SETTLING_RETRIES {
+            let layout_dirty_nodes = take_layout_dirty_nodes();
+            let (diagnostics, next_move, next_reveal, next_keyboard) =
+                TesseraRuntime::with_mut(|runtime| {
+                    let (
+                        _graph,
+                        _requests,
+                        diagnostics,
+                        _record_cost,
+                        next_move,
+                        next_reveal,
+                        next_keyboard,
+                    ) = runtime.component_tree.compute(
+                        ComputeParams {
+                            screen_size,
+                            cursor_position,
+                            pointer_changes: pointer_changes.take().unwrap_or_default(),
+                            keyboard_events: keyboard_events.take().unwrap_or_default(),
+                            ime_events: ime_events.take().unwrap_or_default(),
+                            retry_focus_move,
+                            retry_focus_reveal,
+                            modifiers,
+                            layout_dirty_nodes,
+                        },
+                        ComputeMode::LayoutOnly,
+                    );
+                    (diagnostics, next_move, next_reveal, next_keyboard)
+                });
+            frame_diagnostics.accumulate_pass(diagnostics);
+            flush_pending_focus_callbacks();
+            crate::component_tree::flush_pending_globally_positioned_callbacks();
+            let next_keyboard = next_keyboard
+                || TesseraRuntime::with(|runtime| {
+                    runtime.component_tree.has_pending_focus_reveal()
+                });
+            let focus_retry = next_move.is_some() || next_reveal || next_keyboard;
+            if !focus_retry && !crate::renderer::frame_settling_can_progress(false) {
+                break;
+            }
+            if retry == crate::renderer::MAX_FRAME_SETTLING_RETRIES
+                || (focus_retry && !crate::renderer::frame_settling_can_progress(next_keyboard))
+            {
+                if next_reveal
+                    && (crate::runtime::has_pending_build_invalidations()
+                        || crate::runtime::has_pending_layout_invalidations())
+                {
+                    TesseraRuntime::with_mut(|runtime| {
+                        runtime
+                            .component_tree
+                            .focus_owner_mut()
+                            .retain_reveal_retry();
+                    });
+                }
+                break;
+            }
+            retry_focus_move = next_move;
+            retry_focus_reveal = next_reveal;
+            if focus_retry || crate::runtime::has_ready_build_invalidations() {
+                let _ = build_component_tree(&self.content);
+            }
+        }
+
+        self.diagnostics = frame_diagnostics;
+        self.work = crate::work::finish();
+        self.work_totals.record(&self.work);
+        self.frame_clock_diagnostics = crate::runtime::frame_clock_diagnostics();
+        #[cfg(not(target_family = "wasm"))]
+        if crate::asset::in_flight() {
+            drop(session);
+            return self.layout_frame();
+        }
+        self.cursor.frame_cleanup();
     }
-    LayoutSnapshot::capture()
 }
 
-/// Advances the session by `delta_nanos` and lays out the resulting frame.
-pub fn advance_layout_test_session_by_nanos<F>(
-    session: &mut LayoutTestSession<F>,
-    delta_nanos: u64,
-) -> LayoutSnapshot
-where
-    F: Fn(),
-{
-    pump_layout_test_session(
-        session,
-        session.current_frame_nanos.saturating_add(delta_nanos),
-    )
+impl Default for UiTest<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-/// Returns the `frame_nanos` of the session's most recent frame.
-pub fn current_layout_test_frame_nanos<F>(session: &LayoutTestSession<F>) -> u64
-where
-    F: Fn(),
-{
-    session.current_frame_nanos
-}
-
-/// Captured layout information for a single headless test run.
+/// Captured layout information for a single frame.
+#[derive(Clone)]
 pub struct LayoutSnapshot {
     components: ComponentSnapshot,
 }
 
 impl LayoutSnapshot {
     fn capture() -> Self {
-        let snapshot = Self {
+        Self {
             components: ComponentSnapshot::capture(),
-        };
-        assert!(
-            snapshot
-                .components
-                .nodes()
-                .first()
-                .is_some_and(|node| node.layout_coordinates().is_some()),
-            "layout test root node not found after layout"
-        );
-        let mut selectors = BTreeSet::new();
-        for selector in snapshot
-            .placed_nodes()
-            .filter_map(|node| node.semantics()?.key.as_deref())
-        {
-            assert_ne!(
-                selector, "root",
-                "`root` is reserved for the root node selector in layout tests"
-            );
-            assert!(
-                selectors.insert(selector),
-                "duplicate layout test selector `{selector}`"
-            );
         }
-        snapshot
     }
 
     fn placed_nodes(&self) -> impl Iterator<Item = &ComponentSnapshotNode> {
@@ -357,26 +698,36 @@ impl LayoutSnapshot {
             .filter(|node| node.layout_coordinates().is_some())
     }
 
-    /// Start an assertion chain for the given selector.
+    /// Starts an assertion chain for a node.
     ///
-    /// The selector `root` is reserved for the root node. Other selectors are
-    /// resolved from `SemanticsArgs::test_tag`.
+    /// `root` selects the root node. Other selectors match a test tag, then a
+    /// component function name, then a semantic label.
     pub fn node(&self, selector: &str) -> NodeAssert<'_> {
         let _ = self.resolve(selector);
         NodeAssert {
-            snapshot: self,
+            snapshot: std::borrow::Cow::Borrowed(self),
             selector: selector.to_string(),
+            click: None,
         }
     }
 
     fn resolve(&self, selector: &str) -> &ComponentSnapshotNode {
         if selector == "root" {
-            return &self.components.nodes()[0];
+            let root = &self.components.nodes()[0];
+            assert!(
+                root.layout_coordinates().is_some(),
+                "root node not placed after layout"
+            );
+            return root;
         }
-        if let Some(node) = self
-            .placed_nodes()
-            .find(|node| node.semantics().and_then(|value| value.key.as_deref()) == Some(selector))
-        {
+        let mut tagged = self.placed_nodes().filter(|node| {
+            node.semantics().and_then(|value| value.key.as_deref()) == Some(selector)
+        });
+        if let Some(node) = tagged.next() {
+            assert!(
+                tagged.next().is_none(),
+                "duplicate layout test selector `{selector}`"
+            );
             return node;
         }
         let mut named = self.placed_nodes().filter(|node| node.name() == selector);
@@ -385,6 +736,19 @@ impl LayoutSnapshot {
             assert_eq!(
                 count, 1,
                 "layout selector `{selector}` matched {count} nodes by function name; add a test_tag to disambiguate"
+            );
+            return node;
+        }
+        let mut labeled = self.placed_nodes().filter(|node| {
+            text_matches(
+                node.semantics().and_then(|value| value.label.as_deref()),
+                selector,
+            )
+        });
+        if let Some(node) = labeled.next() {
+            assert!(
+                labeled.next().is_none(),
+                "ambiguous semantic label `{selector}`"
             );
             return node;
         }
@@ -447,14 +811,29 @@ impl ComponentSnapshotNode {
 
 /// Fluent assertion chain for a selected layout node.
 pub struct NodeAssert<'a> {
-    snapshot: &'a LayoutSnapshot,
+    snapshot: std::borrow::Cow<'a, LayoutSnapshot>,
     selector: String,
+    click: Option<Box<dyn FnOnce(PxPosition) + 'a>>,
 }
 
 impl<'a> NodeAssert<'a> {
     /// Assert that the node exists.
     pub fn exists(self) -> Self {
         self
+    }
+
+    /// Clicks the center of a node selected through [`UiTest::node`].
+    pub fn click(mut self) {
+        let coordinates = self.current().layout_coordinates().expect("placed node");
+        let position = coordinates
+            .local_to_window
+            .map_point(PxPosition::from_f32_xy(
+                coordinates.local_size.width.raw() as f32 / 2.0,
+                coordinates.local_size.height.raw() as f32 / 2.0,
+            ));
+        self.click
+            .take()
+            .expect("select an interactive node with UiTest::node")(position);
     }
 
     /// Returns the node's bounds in physical pixels for geometry comparisons.
@@ -476,6 +855,11 @@ impl<'a> NodeAssert<'a> {
             node.y()
         );
         self
+    }
+
+    /// Assert the node position and size in physical pixels.
+    pub fn rect(self, x: i32, y: i32, width: i32, height: i32) -> Self {
+        self.position(x, y).size(width, height)
     }
 
     /// Assert the node size in physical pixels.
@@ -707,76 +1091,12 @@ fn reset_runtime_for_layout_test(viewport: (u32, u32)) {
     crate::runtime::reset_component_slots();
 }
 
-/// Assert layout relationships in a headless Tessera layout test.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __assert_layout_expect {
-    ($snapshot:ident,) => {};
-    (
-        $snapshot:ident,
-        node($selector:expr) $(.$method:ident($($args:tt)*))*;
-        $($rest:tt)*
-    ) => {
-        $snapshot.node($selector)$(.$method($($args)*))*;
-        $crate::__assert_layout_expect!($snapshot, $($rest)*);
-    };
-}
-
-/// Assert layout relationships across multiple animation frames.
-///
-/// Frames are listed as `frame_nanos => { assertions }`, separated by commas.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __assert_layout_frames {
-    ($session:ident) => {};
-    ($session:ident,) => {};
-    (
-        $session:ident,
-        $frame_nanos:tt => { $($expect:tt)* }
-        $(, $($rest:tt)*)?
-    ) => {{
-        let __tessera_layout_snapshot =
-            $crate::testing::pump_layout_test_session(&mut $session, $frame_nanos);
-        $crate::__assert_layout_expect!(__tessera_layout_snapshot, $($expect)*);
-        $crate::__assert_layout_frames!($session $(, $($rest)*)?);
-    }};
-}
-
-/// Assert layout relationships in a headless Tessera layout test.
-#[macro_export]
-macro_rules! assert_layout {
-    (
-        viewport: ($width:expr, $height:expr),
-        content: $content:block,
-        expect: {
-            $($frame_nanos:tt => { $($frame_expect:tt)* }),+ $(,)?
-        }
-    ) => {{
-        let mut __tessera_layout_session = $crate::testing::start_layout_test_session(
-            $crate::testing::layout_test(|| $content).viewport_px($width, $height)
-        );
-        $crate::__assert_layout_frames!(
-            __tessera_layout_session,
-            $($frame_nanos => { $($frame_expect)* }),+
-        );
-    }};
-    (
-        viewport: ($width:expr, $height:expr),
-        content: $content:block,
-        expect: { $($expect:tt)* }
-    ) => {{
-        let __tessera_layout_snapshot = $crate::testing::layout_test(|| $content)
-            .viewport_px($width, $height)
-            .run();
-        $crate::__assert_layout_expect!(__tessera_layout_snapshot, $($expect)*);
-    }};
-}
-
 #[cfg(test)]
 mod tests {
     use std::{
         num::NonZero,
         sync::atomic::{AtomicBool, Ordering},
+        time::Duration,
     };
 
     use crate::{
@@ -787,10 +1107,7 @@ mod tests {
         next_frame, remember, runtime::TesseraRuntime, tessera,
     };
 
-    use super::{
-        layout_test, pump_layout_test_session, reset_runtime_for_layout_test,
-        start_layout_test_session,
-    };
+    use super::{UiTest, reset_runtime_for_layout_test};
 
     #[derive(Clone, Default, PartialEq)]
     struct MeasureProbe {
@@ -852,14 +1169,14 @@ mod tests {
     #[test]
     fn dirty_siblings_share_transparent_ancestors_without_losing_measurement() {
         let probe = super::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test(|| dirty_siblings_fixture(probe.clone())).viewport_px(100, 100),
-        );
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| dirty_siblings_fixture(probe.clone()))
+            .viewport(100, 100);
+        session.frame();
         let snapshot = session.inspect_components();
         let instances = ["left", "right", "stable"].map(|tag| snapshot.tagged(tag).instance_id());
         probe.get().expect("test fixture entry exists").set(1);
-        pump_layout_test_session(&mut session, 16_000_000);
+        session.advance(Duration::from_millis(16));
         assert_eq!(
             instances.map(|instance| session
                 .work()
@@ -884,25 +1201,16 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = MeasureProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test(|| {
-                measure_only_width_fixture(probe.clone());
-            })
-            .viewport_px(200, 100),
-        );
-        pump_layout_test_session(&mut session, 0)
-            .node("measure-only")
-            .width(40);
+        let mut session = UiTest::new()
+            .content(|| measure_only_width_fixture(probe.clone()))
+            .viewport(200, 100);
+        session.frame().node("measure-only").width(40);
         let width = probe.width.get().expect("width state");
         width.set(80);
         assert!(!crate::runtime::has_pending_build_invalidations());
-        pump_layout_test_session(&mut session, 16_666_667)
-            .node("measure-only")
-            .width(80);
+        session.frames(1).node("measure-only").width(80);
         width.set(120);
-        pump_layout_test_session(&mut session, 33_333_334)
-            .node("measure-only")
-            .width(120);
+        session.frames(1).node("measure-only").width(120);
     }
 
     #[tessera]
@@ -937,22 +1245,16 @@ mod tests {
     #[test]
     fn layout_observer_build_updates_settle_before_the_frame_finishes() {
         let probe = MeasureProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test(|| layout_dependent_build_fixture(probe.clone())).viewport_px(200, 100),
-        );
-        pump_layout_test_session(&mut session, 0)
-            .node("layout-dependent-build")
-            .width(40);
+        let mut session = UiTest::new()
+            .content(|| layout_dependent_build_fixture(probe.clone()))
+            .viewport(200, 100);
+        session.frame().node("layout-dependent-build").width(40);
         let width = probe.width.get().expect("test fixture entry exists");
         session.run(|| width.set(80));
-        pump_layout_test_session(&mut session, 16_666_667)
-            .node("layout-dependent-build")
-            .width(80);
+        session.frames(1).node("layout-dependent-build").width(80);
         assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 1);
         assert!(!session.run(|| crate::renderer::frame_settling_can_progress(false)));
-        pump_layout_test_session(&mut session, 33_333_334)
-            .node("layout-dependent-build")
-            .width(80);
+        session.frames(1).node("layout-dependent-build").width(80);
         assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 1);
         assert!(!session.run(|| crate::renderer::frame_settling_can_progress(false)));
     }
@@ -974,10 +1276,10 @@ mod tests {
     #[test]
     fn nonconverging_layout_build_feedback_yields_at_the_frame_retry_limit() {
         let probe = super::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test(|| layout_feedback_fixture(probe.clone())).viewport_px(200, 100),
-        );
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| layout_feedback_fixture(probe.clone()))
+            .viewport(200, 100);
+        session.frame();
         let width = probe.get().expect("test fixture entry exists");
         assert_eq!(
             session.run(|| width.get()),
@@ -1035,12 +1337,10 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         let probe = MeasureProbe::default();
         for update_before_hiding in [false, true] {
-            let mut session = start_layout_test_session(
-                layout_test(|| retained_measure_fixture(probe.clone())).viewport_px(240, 100),
-            );
-            pump_layout_test_session(&mut session, 0)
-                .node("retained-measure")
-                .width(40);
+            let mut session = UiTest::new()
+                .content(|| retained_measure_fixture(probe.clone()))
+                .viewport(240, 100);
+            session.frame().node("retained-measure").width(40);
             probe
                 .visible
                 .get()
@@ -1053,7 +1353,7 @@ mod tests {
                     .expect("test fixture entry exists")
                     .set(80);
             }
-            pump_layout_test_session(&mut session, 16_666_667);
+            session.frames(1);
             if !update_before_hiding {
                 probe
                     .width
@@ -1061,13 +1361,10 @@ mod tests {
                     .expect("test fixture entry exists")
                     .set(80);
             }
-            pump_layout_test_session(&mut session, 33_333_334);
-            pump_layout_test_session(&mut session, 50_000_001);
+            session.frames(1);
+            session.frames(1);
             assert_eq!(
-                session
-                    .diagnostics()
-                    .expect("test fixture provides diagnostics")
-                    .measure_node_calls,
+                session.diagnostics().measure_node_calls,
                 1,
                 "an invalid unplaced subtree must not schedule repeated hidden measurements"
             );
@@ -1076,18 +1373,13 @@ mod tests {
                 .get()
                 .expect("test fixture entry exists")
                 .set(true);
-            pump_layout_test_session(&mut session, 66_666_668)
+            session
+                .frames(1)
                 .node("retained-measure")
                 .width(80)
                 .position(0, 0);
-            pump_layout_test_session(&mut session, 83_333_335);
-            assert_eq!(
-                session
-                    .diagnostics()
-                    .expect("test fixture provides diagnostics")
-                    .measure_node_calls,
-                1
-            );
+            session.frames(1);
+            assert_eq!(session.diagnostics().measure_node_calls, 1);
         }
     }
     #[derive(Clone, PartialEq)]
@@ -1148,21 +1440,17 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = PositionProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
-                let probe = probe.clone();
-                move || position_handler_fixture(probe.clone())
-            })
-            .viewport_px(200, 100),
-        );
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| position_handler_fixture(probe.clone()))
+            .viewport(200, 100);
+        session.frame();
         let counts = probe.counts.get().expect("counts");
         let attached = probe.attached.get().expect("attachment");
         let geometry_counts = probe.geometry_counts.get().expect("geometry counts");
         assert_eq!(geometry_counts.get(), (0, 0, 0));
         assert_eq!(counts.get(), (1, 0));
         attached.set(true);
-        pump_layout_test_session(&mut session, 16_666_667);
+        session.frames(1);
         assert_eq!(
             counts.get(),
             (1, 1),
@@ -1173,20 +1461,20 @@ mod tests {
             (1, 1, 1),
             "new observer kinds must receive unchanged valid geometry"
         );
-        pump_layout_test_session(&mut session, 33_333_334);
+        session.frames(1);
         assert_eq!(counts.get(), (1, 1), "idle layouts do not repeat callbacks");
         assert_eq!(geometry_counts.get(), (1, 1, 1));
         attached.set(false);
-        pump_layout_test_session(&mut session, 50_000_001);
+        session.frames(1);
         attached.set(true);
-        pump_layout_test_session(&mut session, 66_666_668);
+        session.frames(1);
         assert_eq!(
             counts.get(),
             (1, 2),
             "reattachment receives an initial rectangle"
         );
         probe.width.get().expect("width").set(80);
-        pump_layout_test_session(&mut session, 83_333_335);
+        session.frames(1);
         assert_eq!(
             counts.get(),
             (2, 3),
@@ -1197,7 +1485,7 @@ mod tests {
             (3, 3, 2),
             "size changes notify size observers while an unchanged transform remains quiet"
         );
-        pump_layout_test_session(&mut session, 100_000_002);
+        session.frames(1);
         assert_eq!(counts.get(), (2, 3));
         assert_eq!(geometry_counts.get(), (3, 3, 2));
     }
@@ -1255,24 +1543,20 @@ mod tests {
         let drops = super::TestProbe::new(0usize);
         let initial = drops.clone();
         let probe = ResourceProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
-                let probe = probe.clone();
-                move || remembered_resource_fixture(initial.clone(), probe.clone())
-            })
-            .viewport_px(20, 20),
-        );
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| remembered_resource_fixture(initial.clone(), probe.clone()))
+            .viewport(20, 20);
+        session.frame();
         let owner = probe.owner.get().expect("owner");
         probe.local.get().expect("local resource").set(false);
-        pump_layout_test_session(&mut session, 16_666_667);
+        session.frames(1);
         assert_eq!(
             owner.get(),
             1,
             "conditional remembered resources can update their owner during recycling"
         );
         probe.child.get().expect("child resource").set(false);
-        pump_layout_test_session(&mut session, 33_333_334);
+        session.frames(1);
         assert_eq!(
             owner.get(),
             2,
@@ -1281,7 +1565,7 @@ mod tests {
         assert_eq!(drops.get(), 2);
         probe.local.get().expect("local resource").set(true);
         probe.child.get().expect("child resource").set(true);
-        pump_layout_test_session(&mut session, 50_000_001);
+        session.frames(1);
         reset_runtime_for_layout_test((20, 20));
         assert!(!owner.is_alive());
         assert_eq!(
@@ -1292,13 +1576,12 @@ mod tests {
 
         let thread_drops = drops.clone();
         std::thread::spawn(move || {
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    remembered_resource_fixture(thread_drops.clone(), ResourceProbe::default());
+            let mut session = UiTest::new()
+                .content(|| {
+                    remembered_resource_fixture(thread_drops.clone(), ResourceProbe::default())
                 })
-                .viewport_px(20, 20),
-            );
-            pump_layout_test_session(&mut session, 0);
+                .viewport(20, 20);
+            session.frame();
         })
         .join()
         .expect("thread-local resource teardown must permit liveness checks");
@@ -1690,24 +1973,15 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = super::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test(|| nested_prop_slot_fixture(probe.clone())).viewport_px(200, 100),
-        );
-        pump_layout_test_session(&mut session, 0)
-            .node("deep-slot-value")
-            .size(20, 20);
+        let mut session = UiTest::new()
+            .content(|| nested_prop_slot_fixture(probe.clone()))
+            .viewport(200, 100);
+        session.frame().node("deep-slot-value").size(20, 20);
         probe.get().expect("test fixture entry exists").set(60);
-        pump_layout_test_session(&mut session, 16_666_667)
-            .node("deep-slot-value")
-            .size(60, 20);
-        pump_layout_test_session(&mut session, 33_333_334)
-            .node("deep-slot-value")
-            .size(60, 20);
+        session.frames(1).node("deep-slot-value").size(60, 20);
+        session.frames(1).node("deep-slot-value").size(60, 20);
         assert_eq!(
-            session
-                .diagnostics()
-                .expect("test fixture provides diagnostics")
-                .measure_node_calls,
+            session.diagnostics().measure_node_calls,
             1,
             "Completed slot updates must leave the following idle layout cached"
         );
@@ -1794,20 +2068,17 @@ mod tests {
     }
 
     #[test]
-    fn assert_layout_macro_smoke() {
+    fn ui_test_layout_assertions_smoke() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        crate::assert_layout! {
-            viewport: (800, 600),
-            content: {
-                sample_layout();
-            },
-            expect: {
-                node("root").size(800, 600).position(0, 0);
-                node("title").x(0).y(0).size(200, 40);
-                node("button").below("title").align_start_with("title").size(120, 32);
-            }
-        }
+        let layout = UiTest::new().content(sample_layout).frame();
+        layout.node("root").rect(0, 0, 800, 600);
+        layout.node("title").x(0).y(0).size(200, 40);
+        layout
+            .node("button")
+            .below("title")
+            .align_start_with("title")
+            .size(120, 32);
     }
 
     #[derive(Clone, Copy, PartialEq)]
@@ -1887,178 +2158,108 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         for intrinsic_first in [false, true] {
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    intrinsic_probe_fixture(intrinsic_first);
-                })
-                .viewport_px(200, 200),
-            );
-            for now in [0, 16_666_667, 33_333_334] {
-                let snapshot = pump_layout_test_session(&mut session, now);
-                snapshot.node("intrinsic-child").size(38, 42).position(7, 9);
+            let mut session = UiTest::new()
+                .content(move || intrinsic_probe_fixture(intrinsic_first))
+                .viewport(200, 200);
+            session.frame().node("intrinsic-child").rect(7, 9, 38, 42);
+            for _ in 0..2 {
+                session.frames(1).node("intrinsic-child").rect(7, 9, 38, 42);
             }
-            assert!(
-                session
-                    .diagnostics()
-                    .expect("diagnostics")
-                    .cache_hits_direct
-                    > 0
-            );
-            assert_eq!(
-                session
-                    .diagnostics()
-                    .expect("diagnostics")
-                    .cache_store_count,
-                0
-            );
+            assert!(session.diagnostics().cache_hits_direct > 0);
+            assert_eq!(session.diagnostics().cache_store_count, 0);
         }
     }
 
     #[test]
-    fn assert_layout_macro_pumps_animation_frames() {
+    fn ui_test_advances_animation_frames() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        crate::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                animated_layout_sample();
-            },
-            expect: {
-                0 => {
-                    node("moving").position(0, 0).size(20, 20);
-                },
-                100_000_000 => {
-                    node("moving").position(50, 0).size(20, 20);
-                },
-                200_000_000 => {
-                    node("moving").position(100, 0).size(20, 20);
-                }
-            }
-        }
+        let mut session = UiTest::new()
+            .content(animated_layout_sample)
+            .viewport(200, 100);
+
+        let first = session.frame();
+        first.node("moving").rect(0, 0, 20, 20);
+
+        let mid = session.advance(Duration::from_millis(100));
+        mid.node("moving").rect(50, 0, 20, 20);
+
+        let end = session.advance(Duration::from_millis(100));
+        end.node("moving").rect(100, 0, 20, 20);
+        assert_eq!(session.frame_time(), Duration::from_millis(200));
     }
 
     #[test]
-    fn layout_test_session_pumps_animation_frames() {
+    fn ui_test_advances_modifier_driven_animation_frames() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let mut session = crate::testing::start_layout_test_session(
-            crate::testing::layout_test(|| {
-                animated_layout_sample();
-            })
-            .viewport_px(200, 100),
-        );
-
-        let first = crate::testing::pump_layout_test_session(&mut session, 0);
-        first.node("moving").position(0, 0).size(20, 20);
-
-        let mid = crate::testing::advance_layout_test_session_by_nanos(&mut session, 100_000_000);
-        mid.node("moving").position(50, 0).size(20, 20);
-
-        let end = crate::testing::advance_layout_test_session_by_nanos(&mut session, 100_000_000);
-        end.node("moving").position(100, 0).size(20, 20);
-        assert_eq!(
-            crate::testing::current_layout_test_frame_nanos(&session),
-            200_000_000
-        );
+        let mut ui = UiTest::new()
+            .viewport(200, 100)
+            .content(animated_modifier_layout_sample);
+        ui.frame().node("modifier_box").size(20, 20);
+        ui.advance(Duration::from_millis(100))
+            .node("modifier_box")
+            .size(50, 20);
+        ui.advance(Duration::from_millis(100))
+            .node("modifier_box")
+            .size(100, 20);
     }
 
     #[test]
-    fn assert_layout_macro_pumps_modifier_driven_animation_frames() {
+    fn ui_test_advances_offset_modifier_frames() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        crate::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                animated_modifier_layout_sample();
-            },
-            expect: {
-                0 => {
-                    node("modifier_box").size(20, 20);
-                },
-                100_000_000 => {
-                    node("modifier_box").size(50, 20);
-                },
-                200_000_000 => {
-                    node("modifier_box").size(100, 20);
-                }
-            }
-        }
+        let mut ui = UiTest::new()
+            .viewport(200, 100)
+            .content(animated_offset_modifier_sample);
+        ui.frame().node("offset_box").rect(0, 0, 20, 20);
+        ui.advance(Duration::from_millis(100))
+            .node("offset_box")
+            .rect(50, 0, 20, 20);
+        ui.advance(Duration::from_millis(100))
+            .node("offset_box")
+            .rect(100, 0, 20, 20);
     }
 
     #[test]
-    fn assert_layout_macro_pumps_offset_modifier_frames() {
+    fn ui_test_advances_nested_slot_animation_frames() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        crate::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                animated_offset_modifier_sample();
-            },
-            expect: {
-                0 => {
-                    node("offset_box").position(0, 0).size(20, 20);
-                },
-                100_000_000 => {
-                    node("offset_box").position(50, 0).size(20, 20);
-                },
-                200_000_000 => {
-                    node("offset_box").position(100, 0).size(20, 20);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn assert_layout_macro_pumps_nested_slot_animation_frames() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        crate::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                animated_nested_slot_sample();
-            },
-            expect: {
-                0 => {
-                    node("nested_moving").size(20, 20);
-                },
-                100_000_000 => {
-                    node("nested_moving").size(50, 20);
-                },
-                200_000_000 => {
-                    node("nested_moving").size(100, 20);
-                }
-            }
-        }
+        let mut ui = UiTest::new()
+            .viewport(200, 100)
+            .content(animated_nested_slot_sample);
+        ui.frame().node("nested_moving").size(20, 20);
+        ui.advance(Duration::from_millis(100))
+            .node("nested_moving")
+            .size(50, 20);
+        ui.advance(Duration::from_millis(100))
+            .node("nested_moving")
+            .size(100, 20);
     }
 
     #[test]
     fn layout_modifier_order_follows_source_chain() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        crate::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                ordered_layout_modifier_sample();
-            },
-            expect: {
-                node("ordered_parent").position(0, 0).size(70, 40);
-                node("ordered_child").position(10, 10).size(50, 20);
-            }
-        }
+        let layout = UiTest::new()
+            .viewport(200, 100)
+            .content(ordered_layout_modifier_sample)
+            .frame();
+        layout.node("ordered_parent").rect(0, 0, 70, 40);
+        layout.node("ordered_child").rect(10, 10, 50, 20);
     }
 
     #[test]
     fn layout_replay_updates_size_without_allocating_a_second_node() {
         let width = super::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
+        let mut session = UiTest::new()
+            .content({
                 let width = width.clone();
                 move || {
                     explicit_layout_boundary_sample(width.clone());
                 }
             })
-            .viewport_px(100, 100),
-        );
+            .viewport(100, 100);
         let layout_id = || {
             TesseraRuntime::with(|runtime| {
                 let tree = runtime.component_tree.tree();
@@ -2075,12 +2276,14 @@ mod tests {
             })
         };
 
-        pump_layout_test_session(&mut session, 0)
+        session
+            .frame()
             .node("explicit_layout_boundary_sample")
             .size(24, 12);
         let initial = session.session.run(layout_id);
         width.get().expect("width state").set(36);
-        pump_layout_test_session(&mut session, 16_666_667)
+        session
+            .frames(1)
             .node("explicit_layout_boundary_sample")
             .size(36, 12);
         assert_eq!(session.session.run(layout_id), initial);
@@ -2145,21 +2348,16 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = super::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test(|| {
-                intrinsic_state_fixture(probe.clone());
-            })
-            .viewport_px(240, 100),
-        );
-        pump_layout_test_session(&mut session, 0)
-            .node("intrinsic-state")
-            .size(20, 20)
-            .position(40, 0);
+        let mut session = UiTest::new()
+            .content(|| intrinsic_state_fixture(probe.clone()))
+            .viewport(240, 100);
+        session.frame().node("intrinsic-state").rect(40, 0, 20, 20);
         let width = probe.get().expect("test fixture entry exists");
-        for (frame, value) in [(16_666_667, 70), (33_333_334, 30)] {
+        for value in [70, 30] {
             width.set(value);
             assert!(!crate::runtime::has_pending_build_invalidations());
-            pump_layout_test_session(&mut session, frame)
+            session
+                .frames(1)
                 .node("intrinsic-state")
                 .size(20, 20)
                 .position(value, 0);
@@ -2242,16 +2440,10 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         for transform in [false, true] {
             let probe = PhaseProbe::default();
-            let mut session = start_layout_test_session(
-                layout_test({
-                    let probe = probe.clone();
-                    move || placement_state_fixture(transform, probe.clone())
-                })
-                .viewport_px(240, 100),
-            );
-            pump_layout_test_session(&mut session, 0)
-                .node("phase-child")
-                .position(0, 0);
+            let mut session = UiTest::new()
+                .content(|| placement_state_fixture(transform, probe.clone()))
+                .viewport(240, 100);
+            session.frame().node("phase-child").position(0, 0);
             assert!(
                 session
                     .work()
@@ -2272,16 +2464,8 @@ mod tests {
                         > 0
                 );
             }
-            pump_layout_test_session(&mut session, 16_666_667)
-                .node("phase-child")
-                .position(0, 0);
-            assert_eq!(
-                session
-                    .diagnostics()
-                    .expect("test fixture provides diagnostics")
-                    .geometry_nodes_updated,
-                0
-            );
+            session.frames(1).node("phase-child").position(0, 0);
+            assert_eq!(session.diagnostics().geometry_nodes_updated, 0);
             assert_eq!(
                 session
                     .work()
@@ -2294,9 +2478,7 @@ mod tests {
                 .expect("test fixture entry exists")
                 .set(35);
             assert!(!crate::runtime::has_pending_build_invalidations());
-            pump_layout_test_session(&mut session, 33_333_334)
-                .node("phase-child")
-                .position(35, 0);
+            session.frames(1).node("phase-child").position(35, 0);
             assert_eq!(
                 session
                     .work()
@@ -2309,23 +2491,9 @@ mod tests {
                     .count("placement_state_fixture", crate::work::WorkPhase::Build),
                 0
             );
-            assert!(
-                session
-                    .diagnostics()
-                    .expect("test fixture provides diagnostics")
-                    .geometry_nodes_updated
-                    > 0
-            );
-            pump_layout_test_session(&mut session, 50_000_001)
-                .node("phase-child")
-                .position(35, 0);
-            assert_eq!(
-                session
-                    .diagnostics()
-                    .expect("test fixture provides diagnostics")
-                    .geometry_nodes_updated,
-                0
-            );
+            assert!(session.diagnostics().geometry_nodes_updated > 0);
+            session.frames(1).node("phase-child").position(35, 0);
+            assert_eq!(session.diagnostics().geometry_nodes_updated, 0);
         }
     }
 
@@ -2348,16 +2516,10 @@ mod tests {
         for transform in [false, true] {
             for update_before_hiding in [false, true] {
                 let probe = PhaseProbe::default();
-                let mut session = start_layout_test_session(
-                    layout_test({
-                        let probe = probe.clone();
-                        move || retained_phase_fixture(transform, probe.clone())
-                    })
-                    .viewport_px(240, 100),
-                );
-                pump_layout_test_session(&mut session, 0)
-                    .node("phase-child")
-                    .position(0, 0);
+                let mut session = UiTest::new()
+                    .content(|| retained_phase_fixture(transform, probe.clone()))
+                    .viewport(240, 100);
+                session.frame().node("phase-child").position(0, 0);
                 assert!(
                     session
                         .work()
@@ -2376,7 +2538,7 @@ mod tests {
                         .expect("test fixture entry exists")
                         .set(35);
                 }
-                pump_layout_test_session(&mut session, 16_666_667);
+                session.frames(1);
                 assert_eq!(
                     session
                         .work()
@@ -2390,35 +2552,27 @@ mod tests {
                         .expect("test fixture entry exists")
                         .set(35);
                 }
-                pump_layout_test_session(&mut session, 33_333_334);
+                session.frames(1);
                 assert_eq!(
                     session
                         .work()
                         .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure),
                     0
                 );
-                pump_layout_test_session(&mut session, 50_000_001);
+                session.frames(1);
                 assert_eq!(
                     session
                         .work()
                         .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure),
                     0
                 );
-                assert_eq!(
-                    session
-                        .diagnostics()
-                        .expect("test fixture provides diagnostics")
-                        .measure_node_calls,
-                    1
-                );
+                assert_eq!(session.diagnostics().measure_node_calls, 1);
                 probe
                     .visible
                     .get()
                     .expect("test fixture entry exists")
                     .set(true);
-                pump_layout_test_session(&mut session, 66_666_668)
-                    .node("phase-child")
-                    .position(35, 0);
+                session.frames(1).node("phase-child").position(35, 0);
                 assert_eq!(
                     session
                         .work()
@@ -2444,13 +2598,13 @@ mod tests {
     fn stable_frame_reuses_layout_cache_across_composition_boundaries() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let mut session = start_layout_test_session(
-            layout_test(|| nested_composition_layout_sample()).viewport_px(120, 80),
-        );
-        let _ = pump_layout_test_session(&mut session, 0);
-        let _ = pump_layout_test_session(&mut session, 16_666_667);
+        let mut session = UiTest::new()
+            .content(|| nested_composition_layout_sample())
+            .viewport(120, 80);
+        session.frame();
+        session.frames(1);
 
-        let diagnostics = session.diagnostics().expect("layout diagnostics");
+        let diagnostics = session.diagnostics();
         assert_eq!(
             diagnostics.geometry_nodes_updated, 0,
             "unchanged subtrees retain window geometry"
@@ -2509,17 +2663,14 @@ mod tests {
     #[test]
     fn measurement_local_policy_mutation_does_not_invalidate_a_semantics_only_replay() {
         let probe = super::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test(|| {
+        let mut session = UiTest::new()
+            .content(|| {
                 let probe = probe.clone();
                 crate::layout::layout(crate::layout::Stack)
                     .child(move || policy_snapshot_fixture(probe.clone()));
             })
-            .viewport_px(100, 100),
-        );
-        pump_layout_test_session(&mut session, 0)
-            .node("original")
-            .size(20, 10);
+            .viewport(100, 100);
+        session.frame().node("original").size(20, 10);
         assert!(
             session
                 .work()
@@ -2530,7 +2681,8 @@ mod tests {
         );
 
         probe.get().expect("test fixture entry exists").set(true);
-        pump_layout_test_session(&mut session, 16_000_000)
+        session
+            .advance(Duration::from_millis(16))
             .node("renamed")
             .size(20, 10);
         assert_eq!(
@@ -2562,12 +2714,13 @@ mod tests {
     fn saved_component_handles_keep_layout_order_through_cross_group_configuration_and_disposal() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let snapshot = layout_test(registered_handles_layout)
-            .viewport_px(100, 100)
-            .run();
-        snapshot.node("declared-first").size(10, 8).position(0, 0);
-        snapshot.node("declared-second").size(20, 12).position(0, 8);
-        snapshot.node("forgotten").size(5, 6).position(0, 20);
+        let snapshot = UiTest::new()
+            .content(registered_handles_layout)
+            .viewport(100, 100)
+            .frame();
+        snapshot.node("declared-first").rect(0, 0, 10, 8);
+        snapshot.node("declared-second").rect(0, 8, 20, 12);
+        snapshot.node("forgotten").rect(0, 20, 5, 6);
     }
 
     #[tessera]
@@ -2584,7 +2737,11 @@ mod tests {
             closed_slot_host().slot(|| panic!("unexpanded slot was invoked"));
             tagged_box().tag("visible".to_owned()).width(10).height(10);
         }
-        layout_test(fixture).run().node("visible").size(10, 10);
+        UiTest::new()
+            .content(fixture)
+            .frame()
+            .node("visible")
+            .size(10, 10);
     }
 
     #[tessera]
@@ -2609,10 +2766,10 @@ mod tests {
     fn controlled_slot_expansion_preserves_preceding_and_following_declaration_order() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        let snapshot = layout_test(interleaved_slot_fixture).run();
-        snapshot.node("before-slot").size(10, 8).position(0, 0);
-        snapshot.node("inside-slot").size(20, 12).position(0, 8);
-        snapshot.node("after-slot").size(5, 6).position(0, 20);
+        let snapshot = UiTest::new().content(interleaved_slot_fixture).frame();
+        snapshot.node("before-slot").rect(0, 0, 10, 8);
+        snapshot.node("inside-slot").rect(0, 8, 20, 12);
+        snapshot.node("after-slot").rect(0, 20, 5, 6);
     }
 
     #[derive(Clone, Default, PartialEq)]
@@ -2660,20 +2817,15 @@ mod tests {
         let probe = CommittedProbe::default();
         probe.last.set(None);
         probe.rejected.set(0);
-        let mut session =
-            start_layout_test_session(layout_test(|| committed_call_fixture(probe.clone())));
-        pump_layout_test_session(&mut session, 0)
-            .node("committed-call")
-            .size(10, 8);
+        let mut session = UiTest::new().content(|| committed_call_fixture(probe.clone()));
+        session.frame().node("committed-call").size(10, 8);
         assert_eq!(probe.rejected.get(), 1);
         probe
             .rebuild
             .get()
             .expect("test fixture entry exists")
             .set(1);
-        pump_layout_test_session(&mut session, 16_666_667)
-            .node("committed-call")
-            .size(11, 8);
+        session.frames(1).node("committed-call").size(11, 8);
         assert_eq!(probe.rejected.get(), 3);
         probe.last.set(None);
     }
@@ -2756,19 +2908,18 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = ContextProbe::default();
-        let mut session =
-            start_layout_test_session(layout_test(|| contextual_calls_fixture(probe.clone())));
-        let snapshot = pump_layout_test_session(&mut session, 0);
-        snapshot.node("context-first").size(17, 8).position(0, 0);
-        snapshot.node("context-second").size(18, 8).position(0, 8);
+        let mut session = UiTest::new().content(|| contextual_calls_fixture(probe.clone()));
+        let snapshot = session.frame();
+        snapshot.node("context-first").rect(0, 0, 17, 8);
+        snapshot.node("context-second").rect(0, 8, 18, 8);
         probe
             .reversed
             .get()
             .expect("test fixture entry exists")
             .set(true);
-        let snapshot = pump_layout_test_session(&mut session, 16_666_667);
-        snapshot.node("context-first").size(20, 8).position(0, 0);
-        snapshot.node("context-second").size(22, 8).position(0, 8);
+        let snapshot = session.frames(1);
+        snapshot.node("context-first").rect(0, 0, 20, 8);
+        snapshot.node("context-second").rect(0, 8, 22, 8);
         probe.owners.with(|owners| assert_eq!(owners.len(), 2));
     }
 
@@ -2792,7 +2943,7 @@ mod tests {
         let calls = super::TestProbe::new(0usize);
         let probe = super::TestProbe::default();
         let observed = calls.clone();
-        let mut session = start_layout_test_session(layout_test({
+        let mut session = UiTest::new().content({
             let probe = probe.clone();
             move || {
                 let calls = observed.clone();
@@ -2809,14 +2960,11 @@ mod tests {
                     probe.clone(),
                 );
             }
-        }));
-        for frame in 0..3 {
-            if frame > 0 {
-                probe.get().expect("test fixture entry exists").set(frame);
-            }
-            pump_layout_test_session(&mut session, frame as u64 * 16_666_667)
-                .node("root-prop-child")
-                .size(12, 8);
+        });
+        session.frame().node("root-prop-child").size(12, 8);
+        for value in 1..3 {
+            probe.get().expect("test fixture entry exists").set(value);
+            session.frames(1).node("root-prop-child").size(12, 8);
         }
         assert_eq!(calls.get(), 3);
     }
@@ -2848,15 +2996,10 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = super::TestProbe::default();
-        let mut session =
-            start_layout_test_session(layout_test(|| static_slot_choice_fixture(probe.clone())));
-        pump_layout_test_session(&mut session, 0)
-            .node("static-slot-a")
-            .size(10, 8);
+        let mut session = UiTest::new().content(|| static_slot_choice_fixture(probe.clone()));
+        session.frame().node("static-slot-a").size(10, 8);
         probe.get().expect("test fixture entry exists").set(true);
-        pump_layout_test_session(&mut session, 16_666_667)
-            .node("static-slot-b")
-            .size(20, 8);
+        session.frames(1).node("static-slot-b").size(20, 8);
     }
 
     #[tessera]
@@ -2876,8 +3019,9 @@ mod tests {
     fn required_unit_render_slot_accepts_a_component_entry_as_its_build_function() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        layout_test(|| required_unit_slot_probe(unit_slot_leaf))
-            .run()
+        UiTest::new()
+            .content(|| required_unit_slot_probe(unit_slot_leaf))
+            .frame()
             .node("required-unit-child")
             .size(9, 4);
     }

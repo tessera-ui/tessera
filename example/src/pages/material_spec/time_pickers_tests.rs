@@ -1,12 +1,10 @@
-use std::time::Duration;
-
 use tessera_components::{column::column, theme::material_theme};
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
-    accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Rect, Role},
     tessera,
+    testing::UiTest,
     winit::event::Ime,
 };
 
@@ -17,9 +15,11 @@ enum Scene {
     Configuration(bool, bool),
 }
 
-fn renderer(scene: Scene, width: u32) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
+fn renderer(scene: Scene, width: u32) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(width, 1400)
+        .rendered(crate::TestPipelines)
+        .content(move || {
             material_theme().child(move || {
                 column()
                     .modifier(Modifier::new().fill_max_size())
@@ -34,19 +34,9 @@ fn renderer(scene: Scene, width: u32) -> HeadlessRenderer {
                             super::time_configuration_pair(input, twenty_four);
                         }
                     });
-            });
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width,
-            height: 1400,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+            })
+        });
+    renderer.frames(4);
     renderer
 }
 
@@ -149,7 +139,7 @@ fn narrow_configuration_keeps_horizontal_dial_and_maps_pointer_selection() {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_eq!(
         node(&renderer, "Hour", Role::Button, Some(right)).1.value(),
         Some("03")
@@ -160,12 +150,7 @@ fn narrow_configuration_keeps_horizontal_dial_and_maps_pointer_selection() {
     );
 }
 
-fn node(
-    renderer: &HeadlessRenderer,
-    label: &str,
-    role: Role,
-    within: Option<Rect>,
-) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str, role: Role, within: Option<Rect>) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -186,14 +171,9 @@ fn node(
         .unwrap_or_else(|| panic!("missing {label} ({role:?}) inside {within:?}"))
 }
 
-fn action(renderer: &mut HeadlessRenderer, target_node: NodeId, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node,
-        data: None,
-    }));
-    renderer.render_frames(4);
+fn action(renderer: &mut UiTest, target_node: NodeId, action: Action) {
+    assert!(renderer.accessibility_action(target_node, action));
+    renderer.frames(4);
 }
 
 #[test]
@@ -289,7 +269,7 @@ fn time_color_pairs_keep_native_roles_aligned_and_selection_independent() {
                 .count(),
             expected * 2
         );
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         assert_ne!(
             &pixels[(20 * 1100 + 100) * 4..][..3],
             &pixels[(20 * 1100 + 650) * 4..][..3]
@@ -298,7 +278,7 @@ fn time_color_pairs_keep_native_roles_aligned_and_selection_independent() {
             let target = node(&renderer, "Hour", role, Some(left)).0;
             action(&mut renderer, target, Action::Focus);
             renderer.inject_ime_event(Ime::Commit("3".into()));
-            renderer.render_frames(4);
+            renderer.frames(4);
         } else {
             let target = node(&renderer, "Hour 3 of 12", Role::Button, Some(left)).0;
             action(&mut renderer, target, Action::Click);
@@ -373,7 +353,7 @@ fn time_configuration_pairs_keep_native_orientation_and_independent_lifetime() {
             let target = node(&renderer, "Hour", role, Some(left)).0;
             action(&mut renderer, target, Action::Focus);
             renderer.inject_ime_event(Ime::Commit("3".into()));
-            renderer.render_frames(4);
+            renderer.frames(4);
         } else {
             let target = node(
                 &renderer,
@@ -442,18 +422,11 @@ fn fixture() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn annotated_time_surface_paints_its_24dp_content_inset() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 900,
-            height: 800,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(900, 800)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(4);
     let snapshot = renderer.inspect_components();
     let container = snapshot
         .tagged("time-spec-container")
@@ -470,7 +443,7 @@ fn annotated_time_surface_paints_its_24dp_content_inset() {
     assert!((local_headline.x - 24.0).abs() <= 0.01);
     let container = container.window_bounds();
     assert!((container.width - 328.0 * 900.0 / 1024.0).abs() <= 0.01);
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let y = (container.y + container.height / 2.0) as usize;
     let pixel = |x: i32| &pixels[(y * 900 + x as usize) * 4..][..4];
     assert_ne!(

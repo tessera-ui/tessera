@@ -3233,15 +3233,17 @@ fn full_figure() {
                             }),
                     )
                     .children(move || {
-                        full_screen_dialog(Callback::new(move || visible.with_mut(DialogController::close)))
-                            .title(I18N.text("ui-new-event"))
-                            .on_confirm(move || {
-                                saved.set(true);
-                                visible.with_mut(DialogController::close);
-                            })
-                            .content(move || {
-                                event_form(draft);
-                            });
+                        full_screen_dialog(Callback::new(move || {
+                            visible.with_mut(DialogController::close)
+                        }))
+                        .title(I18N.text("ui-new-event"))
+                        .on_confirm(move || {
+                            saved.set(true);
+                            visible.with_mut(DialogController::close);
+                        })
+                        .content(move || {
+                            event_form(draft);
+                        });
                     });
             } else {
                 column().children(move || {

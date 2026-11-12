@@ -960,7 +960,7 @@ fn navigation_rail_content(
 ///             });
 ///     });
 /// }
-/// # tessera_ui::testing::layout_test(navigation).run();
+/// # tessera_ui::testing::UiTest::new().content(navigation).frame();
 /// ```
 #[tessera]
 pub fn modal_navigation_rail(
@@ -1191,10 +1191,7 @@ impl NavigationRailExpansion {
 #[cfg(test)]
 mod tests {
     use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-    use tessera_ui::{
-        CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
-        PxPosition, remember, tessera,
-    };
+    use tessera_ui::{Dp, Modifier, Px, PxPosition, remember, tessera};
 
     use crate::{
         column::column,
@@ -1247,65 +1244,19 @@ mod tests {
 
     #[test]
     fn clicking_middle_item_selects_middle_item() {
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                navigation_rail_click_probe();
-            })
-            .viewport_px(200, 400),
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+        let mut session = tessera_ui::testing::UiTest::new()
+            .content(navigation_rail_click_probe)
+            .viewport(200, 400);
+        session.frame();
 
-        let now = tessera_ui::time::Instant::now();
-        let cursor = Some(PxPosition::new(Px::new(48), Px::new(144)));
-
+        let position = PxPosition::new(Px::new(48), Px::new(144));
         // Move the pointer over the middle item first so it rebuilds in
         // isolation inside `lazy_column`; the per-item selection must still
         // resolve to the middle destination after the click.
-        let moved = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Moved(PxPosition::new(Px::new(48), Px::new(144))),
-            GestureState::TapCandidate,
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            16_666_667,
-            vec![moved],
-            cursor,
-        );
-
-        let press = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            33_333_334,
-            vec![press],
-            cursor,
-        );
-        let release = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Released(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let mut snapshot = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            50_000_001,
-            vec![release],
-            cursor,
-        );
-        for frame in 3..40u64 {
-            snapshot = tessera_ui::testing::pump_layout_test_session(
-                &mut session,
-                50_000_001 + 16_666_667 * (frame - 2),
-            );
-        }
-
-        snapshot.node("rail-search-active").exists();
+        session.pointer_move(tessera_ui::MOUSE_POINTER_ID, position);
+        session.frames(1);
+        session.click_at(position);
+        session.frames(37).node("rail-search-active").exists();
     }
 }
 
@@ -1314,8 +1265,8 @@ mod modal_tests {
 
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType,
-        accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
+        accesskit::{Action, Node, NodeId},
+        testing::UiTest,
         winit::{
             event::ElementState,
             keyboard::{KeyCode, PhysicalKey},
@@ -1373,7 +1324,7 @@ mod modal_tests {
         });
     }
 
-    fn node(renderer: &HeadlessRenderer, role: Role, label: &str) -> (NodeId, Node) {
+    fn node(renderer: &UiTest, role: Role, label: &str) -> (NodeId, Node) {
         renderer
             .accessibility_snapshot()
             .unwrap()
@@ -1385,31 +1336,20 @@ mod modal_tests {
             .unwrap_or_else(|| panic!("missing visible {role:?}: {label}"))
     }
 
-    fn action(renderer: &mut HeadlessRenderer, target: NodeId, action: Action) {
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action,
-            target_tree: TreeId::ROOT,
-            target_node: target,
-            data: None,
-        }));
-        renderer.render_frames(4);
+    fn action(renderer: &mut UiTest, target: NodeId, action: Action) {
+        assert!(renderer.accessibility_action(target, action));
+        renderer.frames(4);
     }
 
     #[test]
     fn escape_adapter_dismisses_only_pressed_escape() {
-        use tessera_ui::testing::{
-            layout_test, pump_layout_test_session, start_layout_test_session,
-        };
+        use tessera_ui::testing::UiTest;
 
         let output = tessera_ui::testing::TestProbe::default();
-        let observed = output.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || {
-                fixture(observed.clone());
-            })
-            .viewport_px(600, 480),
-        );
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| fixture(output.clone()))
+            .viewport(600, 480);
+        session.frame();
         let open = output.get().expect("mounted modal rail").0;
         let close = output.get().expect("mounted modal rail").2;
         open.set(true);
@@ -1440,21 +1380,11 @@ mod modal_tests {
             "navigation_rail::modal_tests::modal_scrim_destination_and_escape_adapter_restore_origin_without_focus_activation",
             || {
                 let output = tessera_ui::testing::TestProbe::default();
-                let observed = output.clone();
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(move || {
-                        fixture(observed.clone());
-                    }),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width: 600,
-                        height: 480,
-                        sample_count: 1,
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(4);
+                let mut renderer = UiTest::new()
+                    .viewport(600, 480)
+                    .rendered(crate::TesseraComponents)
+                    .content(|| fixture(output.clone()));
+                renderer.frames(4);
                 for dismiss in 0..3 {
                     let origin = node(&renderer, Role::Button, "Open rail").0;
                     action(&mut renderer, origin, Action::Focus);
@@ -1500,7 +1430,7 @@ mod modal_tests {
                             ));
                         }
                     }
-                    renderer.render_frames(6);
+                    renderer.frames(6);
                     assert!(!output.get().expect("mounted modal rail").0.get());
                     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
                     assert_eq!(

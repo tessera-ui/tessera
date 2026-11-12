@@ -6,10 +6,8 @@
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::Role,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera, use_context,
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State, accesskit::Role,
+    remember, tessera, testing::UiTest, use_context,
 };
 
 use crate::{
@@ -57,21 +55,17 @@ fn badge_slots_accept_empty_and_multiple_layout_children_and_keep_anchor_constra
     crate::test_utils::run_isolated_test(
         "badge::tests::badge_slots_accept_empty_and_multiple_layout_children_and_keep_anchor_constraints",
         || {
-            tessera_ui::assert_layout! {
-                viewport: (200, 120),
-                content: {
-                    layout_fixture();
-                },
-                expect: {
-                    node("group").position(0, 0).size(64, 48);
-                    node("anchor").position(20, 12).size(24, 24);
-                    node("detail").position(28, 20).size(8, 8);
-                    node("large").position(52, -2).size(16, 16);
-                    node("dot").position(52, -2).size(6, 6);
-                    node("empty").position(0, 48).size(0, 0);
-                    node("anchor_only").position(0, 48).size(24, 24);
-                }
-            }
+            let layout = tessera_ui::testing::UiTest::new()
+                .viewport(200, 120)
+                .content(layout_fixture)
+                .frame();
+            layout.node("group").rect(0, 0, 64, 48);
+            layout.node("anchor").rect(20, 12, 24, 24);
+            layout.node("detail").rect(28, 20, 8, 8);
+            layout.node("large").rect(52, -2, 16, 16);
+            layout.node("dot").rect(52, -2, 6, 6);
+            layout.node("empty").rect(0, 48, 0, 0);
+            layout.node("anchor_only").rect(0, 48, 24, 24);
         },
     );
 }
@@ -195,7 +189,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
         });
 }
 
-fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
+fn rect(renderer: &UiTest, key: &str) -> [i64; 4] {
     let snapshot = renderer.inspect_components();
     let node = snapshot
         .find_tag(key)
@@ -203,8 +197,8 @@ fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
     let bounds = node.bounds().expect("placed test target");
     [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value as i64)
 }
-fn assert_pixel(renderer: &HeadlessRenderer, x: i64, y: i64, color: Color) {
-    let pixels = renderer.read_pixels().unwrap();
+fn assert_pixel(renderer: &UiTest, x: i64, y: i64, color: Color) {
+    let pixels = renderer.read_pixels();
     let offset = ((y as u32 * renderer.physical_size().width + x as u32) * 4) as usize;
     let channel = |v: f32| {
         ((if v <= 0.0031308 {
@@ -239,20 +233,13 @@ fn check_rendering(samples: u32) {
 fn check_density(samples: u32, scale: f64, expected: [i64; 5]) {
     let [anchor, dot_size, vertical, line, large_line] = expected;
     let probe = tessera_ui::testing::TestProbe::default();
-    let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 240,
-            height: 240,
-            scale_factor: scale,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(5);
+    let mut renderer = UiTest::new()
+        .viewport(240, 240)
+        .scale_factor(scale)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    renderer.frames(5);
     let settings = probe.get().unwrap();
     let group = rect(&renderer, "group");
     assert_eq!((group[2], group[3]), (anchor, anchor));
@@ -289,7 +276,7 @@ fn check_density(samples: u32, scale: f64, expected: [i64; 5]) {
                 large_text,
                 ..Default::default()
             });
-            renderer.render_frames(5);
+            renderer.frames(5);
             assert_eq!(rect(&renderer, "group"), group);
             let badge = rect(&renderer, "badge");
             assert_eq!(badge[0] - group[0], anchor / 2);
@@ -335,7 +322,7 @@ fn check_density(samples: u32, scale: f64, expected: [i64; 5]) {
         count: true,
         ..Default::default()
     });
-    renderer.render_frames(5);
+    renderer.frames(5);
     let badge = rect(&renderer, "badge");
     let point = PxPosition::from_f32_xy(
         (badge[0] + badge[2] / 2) as f32,
@@ -343,7 +330,7 @@ fn check_density(samples: u32, scale: f64, expected: [i64; 5]) {
     );
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_eq!(
         settings.get().activations,
         1,

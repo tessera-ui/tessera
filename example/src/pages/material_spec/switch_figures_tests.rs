@@ -1,8 +1,8 @@
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role, Toggled},
-    headless::{HeadlessConfig, HeadlessRenderer},
     tessera,
+    testing::UiTest,
 };
 
 #[tessera]
@@ -25,7 +25,7 @@ fn configuration_fixture() {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
+fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -36,7 +36,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .clone()
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str) {
+fn click(renderer: &mut UiTest, label: &str) {
     let bounds = node(renderer, label, Role::Switch).bounds().unwrap();
     let position = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) * 0.5) as f32,
@@ -45,7 +45,7 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(60);
+    renderer.frames(60);
 }
 
 #[test]
@@ -53,26 +53,17 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
 fn switch_figures_preserve_native_parts_numbered_markers_and_independent_scaled_toggles() {
     for configuration in [false, true] {
         let width = if configuration { 676 } else { 1024 };
-        let mut renderer = HeadlessRenderer::new(
-            if configuration {
-                Box::new(|| {
+        let mut renderer = UiTest::new()
+            .viewport(width, 480)
+            .rendered(crate::TestPipelines)
+            .content(move || {
+                if configuration {
                     configuration_fixture();
-                })
-            } else {
-                Box::new(|| {
+                } else {
                     anatomy_fixture();
-                })
-            },
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width,
-                height: 480,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+                }
+            });
+        renderer.frames(8);
         let group = node(
             &renderer,
             if configuration {
@@ -160,7 +151,7 @@ fn switch_figures_preserve_native_parts_numbered_markers_and_independent_scaled_
             );
         }
         renderer.resize(width / 2, 480);
-        renderer.render_frames(8);
+        renderer.frames(8);
         let bounds = node(&renderer, first, Role::Switch).bounds().unwrap();
         assert_eq!(
             (bounds.x0, bounds.y0, bounds.width(), bounds.height()),

@@ -422,7 +422,7 @@ fn place_side_sheet_if_present(
 ///             .side_sheet_content(|| { /* side sheet content */ });
 ///     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn modal_side_sheet_provider(
@@ -486,7 +486,7 @@ pub fn modal_side_sheet_provider(
 ///             .side_sheet_content(|| { /* side sheet content */ });
 ///     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn standard_side_sheet_provider(

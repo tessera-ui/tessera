@@ -413,32 +413,30 @@ mod tests {
 
     #[test]
     fn scaffold_positions_top_bottom_and_content_slots() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 100),
-            content: {
-                scaffold_layout_case();
-            },
-            expect: {
-                node("scaffold_top").position(0, 0).size(100, 10);
-                node("scaffold_content").position(0, 10).size(20, 8);
-                node("scaffold_bottom").position(0, 68).size(100, 12);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(120, 100)
+            .content(scaffold_layout_case)
+            .frame();
+        layout.node("scaffold_top").rect(0, 0, 100, 10);
+        layout.node("scaffold_content").rect(0, 10, 20, 8);
+        layout.node("scaffold_bottom").rect(0, 68, 100, 12);
     }
 
     #[test]
     fn scaffold_positions_bars_and_content_inside_window_insets() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 100),
-            content: {
-                scaffold_layout_case()
-                    .insets(WindowInsets::Fixed(Insets::new(Dp::ZERO, Dp(10.0), Dp::ZERO, Dp(7.0))));
-            },
-            expect: {
-                node("scaffold_top").position(0, 10).size(100, 10);
-                node("scaffold_content").position(0, 20).size(20, 8);
-                node("scaffold_bottom").position(0, 61).size(100, 12);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(120, 100)
+            .content(|| {
+                scaffold_layout_case().insets(WindowInsets::Fixed(Insets::new(
+                    Dp::ZERO,
+                    Dp(10.0),
+                    Dp::ZERO,
+                    Dp(7.0),
+                )))
+            })
+            .frame();
+        layout.node("scaffold_top").rect(0, 10, 100, 10);
+        layout.node("scaffold_content").rect(0, 20, 20, 8);
+        layout.node("scaffold_bottom").rect(0, 61, 100, 12);
     }
 }

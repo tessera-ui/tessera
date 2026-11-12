@@ -263,7 +263,7 @@ impl FloatingActionButtonDefaults {
 /// #         });
 /// }
 ///
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn floating_action_button(

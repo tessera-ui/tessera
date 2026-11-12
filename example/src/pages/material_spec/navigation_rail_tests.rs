@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use tessera_ui::{
     Color,
-    accesskit::{Action, ActionRequest, Node, NodeId, Rect, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Rect},
+    testing::UiTest,
 };
 
 use super::*;
@@ -54,20 +54,12 @@ fn color_reference_fixture() {
     });
 }
 
-fn renderer<Output: 'static>(root: fn() -> Output, width: u32, height: u32) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(root),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width,
-            height,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .expect("native GPU adapter");
-    renderer.render_frames(6);
+fn renderer<Output: 'static>(root: fn() -> Output, width: u32, height: u32) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(width, height)
+        .rendered(crate::TestPipelines)
+        .content(root);
+    renderer.frames(6);
     renderer
 }
 
@@ -86,13 +78,13 @@ fn group(nodes: &[(NodeId, Node)], label: &str) -> Rect {
         .unwrap()
 }
 
-fn settled_reference_nodes(renderer: &mut HeadlessRenderer) -> Vec<(NodeId, Node)> {
-    let start = renderer.frame_index();
+fn settled_reference_nodes(renderer: &mut UiTest) -> Vec<(NodeId, Node)> {
+    let start = renderer.frame_time();
     let mut previous = None;
     let mut stable_frames = 0;
     let mut history = Vec::new();
     for _ in 0..60 {
-        renderer.step_frame();
+        renderer.frames(1);
         let nodes = renderer.accessibility_snapshot().unwrap().nodes;
         let mut geometry: Vec<_> = nodes
             .iter()
@@ -112,9 +104,9 @@ fn settled_reference_nodes(renderer: &mut HeadlessRenderer) -> Vec<(NodeId, Node
         } else {
             1
         };
-        history.push((renderer.frame_index(), geometry.clone()));
+        history.push((renderer.frame_time(), geometry.clone()));
         previous = Some(geometry);
-        let elapsed = Duration::from_nanos((renderer.frame_index() - start) * 16_666_667);
+        let elapsed = renderer.frame_time() - start;
         // The native rail's expansion transition lasts 300ms; its wrapper has
         // fixed width.
         if elapsed >= Duration::from_millis(300) && stable_frames >= 3 {
@@ -134,7 +126,7 @@ fn contains(outer: Rect, node: &Node) -> bool {
 #[ignore = "requires a native GPU adapter"]
 fn unmodified_dark_theme_surface_and_native_rail_preserve_chromatic_channels() {
     let renderer = renderer(unmodified_dark_surface_fixture, 256, 600);
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let patch = rgba(&pixels, 256, 48, 48);
     let native = rgba(&pixels, 256, 160, 520);
     assert_eq!(patch, [15, 13, 18, 255], "unmodified surface patch");
@@ -146,7 +138,7 @@ fn unmodified_dark_theme_surface_and_native_rail_preserve_chromatic_channels() {
 fn color_references_keep_independent_theme_backgrounds_containers_and_native_selection() {
     let mut renderer = renderer(color_reference_fixture, 1024, 1320);
     let nodes = settled_reference_nodes(&mut renderer);
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let mut targets = Vec::new();
     for (mode, background, container) in [
         ("Light", [253, 247, 254, 255], [242, 236, 245, 255]),
@@ -197,12 +189,7 @@ fn color_references_keep_independent_theme_backgrounds_containers_and_native_sel
     }
     for saved in targets {
         for action in [Action::Focus, Action::Click] {
-            assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                action,
-                target_tree: TreeId::ROOT,
-                target_node: saved,
-                data: None,
-            }));
+            assert!(renderer.accessibility_action(saved, action));
             let nodes = settled_reference_nodes(&mut renderer);
             let saved = nodes.iter().find(|(id, _)| *id == saved).unwrap();
             assert_eq!(

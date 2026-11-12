@@ -6,6 +6,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     num::NonZero,
     path::Path,
+    rc::Rc,
     time::Duration,
 };
 
@@ -159,14 +160,14 @@ impl Default for HeadlessConfig {
 pub struct HeadlessRenderer {
     session: crate::RuntimeSession,
     core: RenderCore,
-    entry: Box<dyn Fn()>,
+    entry: Rc<dyn Fn()>,
     cursor: CursorState,
     keyboard: KeyboardState,
     ime: ImeState,
     size: PxSize,
     physical_size: winit::dpi::PhysicalSize<u32>,
     frame_index: u64,
-    frame_origin: Instant,
+    pub(crate) frame_origin: Instant,
     current_frame_nanos: u64,
     frame_time: Duration,
     diagnostics: crate::component_tree::LayoutFrameDiagnostics,
@@ -250,6 +251,15 @@ impl HeadlessRenderer {
         config: HeadlessConfig,
     ) -> Result<Self, HeadlessError> {
         let session = crate::RuntimeSession::for_root();
+        Self::new_in_session(session, entry, modules, config)
+    }
+
+    pub(crate) fn new_in_session<Output: 'static>(
+        session: crate::RuntimeSession,
+        entry: Box<dyn Fn() -> Output>,
+        modules: Vec<Box<dyn RenderModule>>,
+        config: HeadlessConfig,
+    ) -> Result<Self, HeadlessError> {
         session.activate();
         let width = config.width.max(1);
         let height = config.height.max(1);
@@ -282,7 +292,7 @@ impl HeadlessRenderer {
         Ok(Self {
             session,
             core,
-            entry: Box::new(move || {
+            entry: Rc::new(move || {
                 entry();
             }),
             cursor: CursorState::default(),
@@ -473,6 +483,30 @@ impl HeadlessRenderer {
 
     /// Advances the virtual clock by one frame and renders it.
     pub fn step_frame(&mut self) {
+        let time = Duration::from_nanos(self.current_frame_nanos) + self.frame_time;
+        let entry = self.entry.clone();
+        self.render_frame_at(time, entry.as_ref());
+    }
+
+    #[cfg(any(test, feature = "testing"))]
+    pub(crate) fn render_test_frame(
+        &mut self,
+        time: Duration,
+        content: &dyn Fn(),
+        cursor: &mut CursorState,
+        keyboard: &mut KeyboardState,
+        ime: &mut ImeState,
+    ) {
+        std::mem::swap(&mut self.cursor, cursor);
+        std::mem::swap(&mut self.keyboard, keyboard);
+        std::mem::swap(&mut self.ime, ime);
+        self.render_frame_at(time, content);
+        std::mem::swap(&mut self.cursor, cursor);
+        std::mem::swap(&mut self.keyboard, keyboard);
+        std::mem::swap(&mut self.ime, ime);
+    }
+
+    pub(crate) fn render_frame_at(&mut self, time: Duration, content: &dyn Fn()) {
         let _session = self.session.enter();
         #[cfg(feature = "profiling")]
         let wait_timer = Instant::now();
@@ -488,10 +522,8 @@ impl HeadlessRenderer {
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.begin_frame_diagnostics());
         let graphics_before = self.graphics_work();
         crate::work::begin();
-        self.current_frame_nanos = self
-            .current_frame_nanos
-            .saturating_add(self.frame_time.as_nanos().min(u64::MAX as u128) as u64);
-        let frame_time = self.frame_origin + Duration::from_nanos(self.current_frame_nanos);
+        self.current_frame_nanos = time.as_nanos().min(u64::MAX as u128) as u64;
+        let frame_time = self.frame_origin + time;
         #[cfg(feature = "profiling")]
         if self.profile_summary {
             begin_frame_summary(self.frame_index);
@@ -507,7 +539,8 @@ impl HeadlessRenderer {
         // consumed by the current recomposition pass.
         tick_frame_clock();
 
-        let mut _build_tree_result = build_component_tree(&self.entry);
+        let entry = content;
+        let mut _build_tree_result = build_component_tree(&entry);
 
         #[cfg(feature = "profiling")]
         let initial_build_duration = _build_tree_result.duration();
@@ -574,7 +607,7 @@ impl HeadlessRenderer {
             retry_focus_move = next_move;
             retry_focus_reveal = next_reveal;
             if focus_retry || has_ready_build_invalidations() {
-                _build_tree_result.absorb_retry(build_component_tree(&self.entry));
+                _build_tree_result.absorb_retry(build_component_tree(&entry));
             }
         };
         self.diagnostics = _diagnostics;
@@ -769,7 +802,13 @@ impl HeadlessRenderer {
         let handled = TesseraRuntime::with_mut(|runtime| {
             let (tree, metadatas, focus_owner) =
                 runtime.component_tree.accessibility_dispatch_context();
-            crate::accessibility::dispatch_action(tree, metadatas, focus_owner, request)
+            crate::accessibility::dispatch_action(
+                tree,
+                metadatas,
+                focus_owner,
+                request,
+                Instant::now(),
+            )
         });
         flush_pending_focus_callbacks();
         handled

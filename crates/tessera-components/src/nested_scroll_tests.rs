@@ -57,19 +57,15 @@ fn connection_fixture(
 
 #[test]
 fn nested_scroll_consumption_and_fling_cross_each_providers_local_space_once() {
-    use tessera_ui::testing::{layout_test, pump_layout_test_session, start_layout_test_session};
+    use tessera_ui::testing::UiTest;
 
     let connection = TestProbe::default();
     let observed = TestProbe::default();
     let fixture_connection = connection.clone();
-    let fixture_observed = observed.clone();
-    let mut session = start_layout_test_session(
-        layout_test(move || {
-            connection_fixture(fixture_connection.clone(), fixture_observed.clone());
-        })
-        .viewport_px(100, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| connection_fixture(fixture_connection.clone(), observed.clone()))
+        .viewport(100, 100);
+    session.frame();
     let connection = connection.get().expect("Connection fixture");
     let transform = LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5)).unwrap();
     let scoped = connection.in_space(transform);
@@ -152,20 +148,18 @@ fn ancestor_fixture(
 
 #[test]
 fn changing_attached_scroll_ancestors_refreshes_retained_readers() {
-    use tessera_ui::testing::{layout_test, pump_layout_test_session, start_layout_test_session};
+    use tessera_ui::testing::UiTest;
 
     let observed = TestProbe::default();
     let mode = TestProbe::default();
-    let fixture_observed = observed.clone();
     let fixture_mode = mode.clone();
-    let mut session = start_layout_test_session(layout_test(move || {
-        ancestor_fixture(fixture_observed.clone(), fixture_mode.clone());
-    }));
-    pump_layout_test_session(&mut session, 0);
+    let mut session =
+        UiTest::new().content(|| ancestor_fixture(observed.clone(), fixture_mode.clone()));
+    session.frame();
     assert!(observed.get().is_none());
-    for (index, value) in [0_u8, 1, 2, 0].into_iter().enumerate() {
+    for value in [0_u8, 1, 2, 0] {
         session.run(|| mode.get().unwrap().set(value));
-        pump_layout_test_session(&mut session, (index as u64 + 1) * 16_666_667);
+        session.frames(1);
         session.run(|| {
             let actual = observed.get().map(|connection| {
                 connection

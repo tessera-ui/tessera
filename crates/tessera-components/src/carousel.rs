@@ -1379,10 +1379,7 @@ fn finite_dp(value: Dp, fallback: f32) -> f32 {
 #[cfg(test)]
 mod tests {
 
-    use tessera_ui::{
-        Color, MOUSE_POINTER_ID, PressKeyEventType,
-        headless::{HeadlessConfig, HeadlessRenderer},
-    };
+    use tessera_ui::{Color, MOUSE_POINTER_ID, PressKeyEventType, testing::UiTest};
 
     use crate::{
         boxed::boxed,
@@ -1745,36 +1742,27 @@ mod tests {
         });
     }
 
-    fn click(renderer: &mut HeadlessRenderer, point: [f32; 2]) {
+    fn click(renderer: &mut UiTest, point: [f32; 2]) {
         let point = PxPosition::from_f32_xy(point[0], point[1]);
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(3);
+        renderer.frames(3);
     }
 
     fn check_native_carousel(samples: u32) {
         let probe = Probe::default();
-        let output = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(output.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 500,
-                height: 300,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .expect("carousel renderer");
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(500, 300)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(probe.clone()));
+        renderer.frames(8);
         let controller = probe.controller.get().expect("controller");
         let settings = probe.settings.get().expect("settings");
         let activated = probe.activated.get().expect("activations");
-        let initial = renderer.read_pixels().expect("pixels");
+        let initial = renderer.read_pixels();
         if let Some(directory) = std::env::var_os("TESSERA_CAROUSEL_QA_DIR") {
             let directory = std::path::PathBuf::from(directory);
             std::fs::create_dir_all(&directory).expect("carousel QA directory");
@@ -1810,8 +1798,8 @@ mod tests {
             "masked images must preserve the full-width landmark position"
         );
         settings.with_mut(|settings| settings.dimmed = true);
-        renderer.render_frames(3);
-        let half = renderer.read_pixels().expect("half opacity");
+        renderer.frames(3);
+        let half = renderer.read_pixels();
         let color = pixel(&half, 93, 100);
         assert_eq!(color[0], 255);
         assert!(
@@ -1822,16 +1810,16 @@ mod tests {
         let original = raster.get();
         settings.with_mut(|settings| settings.dimmed = false);
         raster.set(ImageData::from_rgba(Arc::clone(&original.data), 8, 16));
-        renderer.render_frames(3);
-        let reshaped = renderer.read_pixels().expect("reshaped raster pixels");
+        renderer.frames(3);
+        let reshaped = renderer.read_pixels();
         assert_eq!(
             pixel(&reshaped, 93, 100),
             pixel(&reshaped, 113, 100),
             "reshaping shared pixels must use a texture with the new row dimensions"
         );
         raster.set(ImageData::from_rgba(vec![255, 0, 0, 128], 1, 1));
-        renderer.render_frames(3);
-        let translucent = renderer.read_pixels().expect("translucent image");
+        renderer.frames(3);
+        let translucent = renderer.read_pixels();
         let color = pixel(&translucent, 93, 100);
         assert_eq!(color[0], 255);
         assert!(
@@ -1839,7 +1827,7 @@ mod tests {
             "transparent images must blend in linear light: {color:?}"
         );
         raster.set(original);
-        renderer.render_frames(3);
+        renderer.frames(3);
         let tree = renderer
             .accessibility_snapshot()
             .expect("accessibility tree");
@@ -1878,7 +1866,7 @@ mod tests {
             "overlapping unmasked bounds must not steal the preceding item's click"
         );
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(490.0, 290.0));
-        renderer.render_frames(100);
+        renderer.frames(100);
         let focused = renderer.accessibility_snapshot().expect("focused tree");
         assert!(
             focused
@@ -1887,12 +1875,12 @@ mod tests {
                 .any(|(id, node)| *id == focused.focus && node.label() == Some("Item 0"))
         );
         assert!(
-            renderer.read_pixels().expect("focused image pixels") != initial,
+            renderer.read_pixels() != initial,
             "focus feedback must remain visible over opaque carousel images"
         );
         tessera_ui::focus::clear_focus(true);
-        renderer.render_frames(12);
-        assert!(renderer.read_pixels().expect("restored pixels") == initial);
+        renderer.frames(12);
+        assert!(renderer.read_pixels() == initial);
 
         let mut node = AccessibilityNode::new();
         let mut handler = None;
@@ -1904,25 +1892,25 @@ mod tests {
         }
         .apply(&mut node, &mut handler);
         handler.expect("scroll action")(Action::ScrollRight);
-        renderer.render_frames(120);
+        renderer.frames(120);
         assert_eq!(controller.with(CarouselController::current_item), 1);
         assert!(!controller.with(CarouselController::is_scrolling));
         controller.with_mut(|state| state.jump_to_item(0));
-        renderer.render_frames(3);
+        renderer.frames(3);
         let point = PxPosition::from_f32_xy(150.0, 100.0);
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         for x in [150.0, 120.0, 80.0, 40.0] {
             renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(x, 100.0));
-            renderer.step_frame();
+            renderer.frames(1);
         }
         renderer.pointer_release(
             MOUSE_POINTER_ID,
             PxPosition::from_f32_xy(40.0, 100.0),
             PressKeyEventType::Left,
         );
-        renderer.render_frames(160);
+        renderer.frames(160);
         assert_eq!(
             activated.get(),
             [0],
@@ -1943,7 +1931,7 @@ mod tests {
 
         settings.with_mut(|settings| settings.variant = CarouselVariant::Uncontained);
         controller.with_mut(|state| state.jump_to_item(2));
-        renderer.render_frames(5);
+        renderer.frames(5);
         let before = controller.with(|state| state.motion.value());
         renderer.pointer_scroll(
             MOUSE_POINTER_ID,
@@ -1951,7 +1939,7 @@ mod tests {
             -37.0,
             0.0,
         );
-        renderer.render_frames(100);
+        renderer.frames(100);
         let free = controller.with(|state| state.motion.value());
         assert!((free - before).abs() > 1.0);
         assert!(!controller.with(CarouselController::is_scrolling));
@@ -1972,7 +1960,7 @@ mod tests {
             0.0,
             -30.0,
         );
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(
             controller.with(|state| state.motion.value()),
             free,
@@ -1988,14 +1976,14 @@ mod tests {
         ] {
             settings.with_mut(|settings| settings.variant = variant);
             controller.with_mut(|state| state.jump_to_item(9));
-            renderer.render_frames(8);
-            let pixels = renderer.read_pixels().expect("variant pixels");
+            renderer.frames(8);
+            let pixels = renderer.read_pixels();
             assert!(pixels != initial);
             assert_eq!(controller.with(CarouselController::current_item), 9);
             if variant == CarouselVariant::UncontainedMultiAspectRatio {
                 controller.with_mut(|state| state.jump_to_item(0));
                 renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(490.0, 290.0));
-                renderer.render_frames(120);
+                renderer.frames(120);
                 assert_eq!(controller.with(|state| state.masks[0]), (0, 176.0, 320.0));
                 assert_eq!(controller.with(|state| state.masks[1].2), 101.25);
                 let first = CarouselItemInfo {
@@ -2010,23 +1998,23 @@ mod tests {
                 assert_eq!(second.full_width(), Dp(101.25));
                 assert_eq!(second.masked_width(), Dp(36.0));
                 controller.with_mut(|state| state.move_by(93.0));
-                renderer.render_frames(8);
+                renderer.frames(8);
                 assert_eq!(first.full_width(), Dp(320.0));
                 assert_eq!(first.masked_width(), Dp(243.0));
                 controller.with_mut(|state| state.jump_to_item(0));
-                renderer.render_frames(8);
-                let before = renderer.read_pixels().expect("mixed aspect pixels");
+                renderer.frames(8);
+                let before = renderer.read_pixels();
                 assert_eq!(pixel(&before, 240, 110), [0, 0, 255, 255]);
                 settings.with_mut(|settings| {
                     settings.ratios = [1.0, 16.0 / 9.0, 9.0 / 16.0, 3.0 / 4.0]
                 });
-                renderer.render_frames(8);
+                renderer.frames(8);
                 assert_eq!(controller.with(|state| state.masks[0].2), 180.0);
                 assert_eq!(controller.with(|state| state.masks[1].2), 320.0);
-                let changed = renderer.read_pixels().expect("changed aspect pixels");
+                let changed = renderer.read_pixels();
                 assert_eq!(pixel(&changed, 240, 110), [255, 0, 0, 255]);
                 settings.with_mut(|settings| settings.height = 120.0);
-                renderer.render_frames(8);
+                renderer.frames(8);
                 assert_eq!(controller.with(|state| state.masks[0].2), 120.0);
                 let tree = renderer
                     .accessibility_snapshot()
@@ -2041,13 +2029,10 @@ mod tests {
                     .expect("first item bounds");
                 assert_eq!(bounds.width(), 120.0);
                 assert_eq!(bounds.height(), 120.0);
-                let settled = renderer.read_pixels().expect("settled mixed aspect pixels");
-                renderer.render_frames(20);
+                let settled = renderer.read_pixels();
+                renderer.frames(20);
                 assert_eq!(controller.with(|state| state.masks[0].2), 120.0);
-                assert_eq!(
-                    renderer.read_pixels().expect("stable mixed aspect pixels"),
-                    settled
-                );
+                assert_eq!(renderer.read_pixels(), settled);
                 settings.with_mut(|settings| {
                     settings.height = 180.0;
                     settings.ratios = [16.0 / 9.0, 9.0 / 16.0, 1.0, 3.0 / 4.0];
@@ -2059,7 +2044,7 @@ mod tests {
                     vec![(9, 90.0, 180.0)]
                 );
                 controller.with_mut(|state| state.jump_to_item(3));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 let mut node = AccessibilityNode::new();
                 let mut handler = None;
                 CarouselSemantics {
@@ -2078,7 +2063,7 @@ mod tests {
                     0.0,
                     -140.0,
                 );
-                renderer.render_frames(120);
+                renderer.frames(120);
                 assert_eq!(controller.with(CarouselController::current_item), 4);
                 let offset = controller.with(|state| state.motion.value());
                 renderer.pointer_scroll(
@@ -2087,20 +2072,20 @@ mod tests {
                     -140.0,
                     0.0,
                 );
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(controller.with(|state| state.motion.value()), offset);
                 handler.expect("vertical scroll action")(Action::ScrollUp);
-                renderer.render_frames(120);
+                renderer.frames(120);
                 assert_eq!(controller.with(CarouselController::current_item), 3);
                 settings.with_mut(|settings| settings.reverse = true);
-                renderer.render_frames(3);
+                renderer.frames(3);
                 renderer.pointer_scroll(
                     MOUSE_POINTER_ID,
                     PxPosition::from_f32_xy(200.0, 100.0),
                     0.0,
                     140.0,
                 );
-                renderer.render_frames(120);
+                renderer.frames(120);
                 assert_eq!(controller.with(CarouselController::current_item), 4);
                 settings.with_mut(|settings| settings.reverse = false);
             }
@@ -2109,10 +2094,10 @@ mod tests {
             settings.count = 2;
             settings.reverse = true;
         });
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(controller.with(CarouselController::current_item), 1);
         settings.with_mut(|settings| settings.enabled = false);
-        renderer.render_frames(3);
+        renderer.frames(3);
         let before = controller.with(|state| state.motion.value());
         renderer.pointer_scroll(
             MOUSE_POINTER_ID,
@@ -2120,7 +2105,7 @@ mod tests {
             -50.0,
             0.0,
         );
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(controller.with(|state| state.motion.value()), before);
         let tree = renderer.accessibility_snapshot().expect("disabled tree");
         let gallery = tree
@@ -2131,9 +2116,9 @@ mod tests {
         assert!(!gallery.1.supports_action(Action::ScrollLeft));
         assert!(!gallery.1.supports_action(Action::ScrollRight));
         settings.with_mut(|settings| settings.count = 0);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert!(controller.with(|state| state.masks.is_empty()));
-        let empty = renderer.read_pixels().expect("empty pixels");
+        let empty = renderer.read_pixels();
         for y in 0..300 {
             for x in 0..500 {
                 let expected = if (10..390).contains(&x) && (20..200).contains(&y) {
@@ -2150,28 +2135,28 @@ mod tests {
             settings.reverse = false;
             settings.variant = CarouselVariant::MultiBrowse;
         });
-        renderer.render_frames(8);
-        assert!(renderer.read_pixels().expect("regrown pixels") == initial);
+        renderer.frames(8);
+        assert!(renderer.read_pixels() == initial);
         renderer.resize(640, 360);
-        renderer.render_frames(8);
-        let resized = renderer.read_pixels().expect("resized pixels");
+        renderer.frames(8);
+        let resized = renderer.read_pixels();
         for center in [103usize, 265, 362] {
             let offset = (100 * 640 + center - 10) * 4;
             assert_eq!(&resized[offset..offset + 4], [255, 0, 0, 255]);
         }
         renderer.resize(500, 300);
-        renderer.render_frames(8);
-        assert!(renderer.read_pixels().expect("restored viewport pixels") == initial);
+        renderer.frames(8);
+        assert!(renderer.read_pixels() == initial);
         controller.with_mut(|state| state.jump_to_item(3));
-        renderer.render_frames(8);
+        renderer.frames(8);
         tessera_ui::dp::set_scale_factor(1.5);
         renderer.resize(750, 450);
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(740.0, 440.0));
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(renderer.snapshot()["scale_factor"], 1.5);
         assert!(probe.controller.get() == Some(controller));
         assert_eq!(controller.with(CarouselController::current_item), 3);
-        let scaled = renderer.read_pixels().expect("density change pixels");
+        let scaled = renderer.read_pixels();
         for (_, center, width) in controller.with(|state| state.masks.clone()) {
             if width < 60.0 || center < 15.0 || center > 720.0 {
                 continue;
@@ -2182,7 +2167,7 @@ mod tests {
         }
         tessera_ui::dp::set_scale_factor(1.0);
         renderer.resize(390, 780);
-        renderer.render_frames(120);
+        renderer.frames(120);
         assert_eq!(controller.with(CarouselController::current_item), 3);
         let tree = renderer
             .accessibility_snapshot()
@@ -2194,16 +2179,16 @@ mod tests {
             .expect("following item must remain visible");
         let bounds = following.1.bounds().expect("following bounds");
         assert!(bounds.y0 >= 200.0 && bounds.y1 < 780.0);
-        let portrait = renderer.read_pixels().expect("portrait pixels");
+        let portrait = renderer.read_pixels();
         assert!((205..235).any(|y| {
             (5..180).any(|x| portrait[(y * 390 + x) * 4..(y * 390 + x) * 4 + 3] != [255, 255, 255])
         }));
         renderer.resize(500, 300);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(controller.with(CarouselController::current_item), 3);
         controller.with_mut(|state| state.jump_to_item(0));
-        renderer.render_frames(8);
-        assert!(renderer.read_pixels().expect("restored density pixels") == initial);
+        renderer.frames(8);
+        assert!(renderer.read_pixels() == initial);
         let uploads = renderer
             .graphics_work()
             .group("image_textures")
@@ -2215,7 +2200,7 @@ mod tests {
             original.height,
         ));
         settings.with_mut(|settings| settings.stress = true);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(
             renderer
                 .graphics_work()
@@ -2224,7 +2209,7 @@ mod tests {
             uploads,
             "independently decoded identical pixels reuse the existing texture"
         );
-        let repeated = renderer.read_pixels().expect("repeated image instances");
+        let repeated = renderer.read_pixels();
         for index in 0..40usize {
             let x = 10 + (index % 8) * 28;
             let y = 20 + (index / 8) * 28;
@@ -2243,7 +2228,7 @@ mod tests {
             .graphics_work()
             .group("image_textures")
             .texture_uploads;
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(
             renderer
                 .graphics_work()
@@ -2264,13 +2249,13 @@ mod tests {
             settings.stress = false;
             settings.count = 0;
         });
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert!(
             retired_pixels.upgrade().is_none(),
             "Unused image caches must release CPU pixels"
         );
         settings.with_mut(|settings| settings.stress = true);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(
             renderer
                 .graphics_work()
@@ -2279,7 +2264,7 @@ mod tests {
             uploads,
             "restoring live pixels reuses their texture"
         );
-        assert!(renderer.read_pixels().expect("restored cached image") == repeated);
+        assert!(renderer.read_pixels() == repeated);
         let allocations = renderer
             .graphics_work()
             .group("image_textures")
@@ -2291,7 +2276,7 @@ mod tests {
                 pixel.copy_from_slice(&[shade * 31, 0, 0, 255]);
             }
             raster.set(ImageData::from_rgba(pixels, 2048, 2048));
-            renderer.render_frames(2);
+            renderer.frames(2);
             if shade > 1 {
                 assert!(
                     retired_pixels.upgrade().is_none(),
@@ -2379,31 +2364,22 @@ mod tests {
     #[ignore = "Requires a native GPU adapter"]
     fn native_responsive_feed_keeps_following_items_visible_after_density_changes() {
         let probe = Probe::default();
-        let output = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                responsive_feed(output.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 1316,
-                height: 1307,
-                scale_factor: 1.5,
-                sample_count: 4,
-                ..Default::default()
-            },
-        )
-        .expect("responsive renderer");
-        renderer.render_frames(20);
+        let mut renderer = UiTest::new()
+            .viewport(1316, 1307)
+            .scale_factor(1.5)
+            .samples(4)
+            .rendered(crate::TesseraComponents)
+            .content(|| responsive_feed(probe.clone()));
+        renderer.frames(20);
         let controller = probe.controller.get().expect("responsive controller");
         controller.with_mut(|state| state.animate_to_item(4));
-        renderer.render_frames(120);
+        renderer.frames(120);
         tessera_ui::dp::set_scale_factor(1.0);
         renderer.resize(1, 780);
-        renderer.render_frames(2);
+        renderer.frames(2);
         renderer.resize(390, 780);
         for frame in 0..120 {
-            renderer.step_frame();
+            renderer.frames(1);
             assert_eq!(
                 controller.with(CarouselController::current_item),
                 4,
@@ -2442,7 +2418,7 @@ mod tests {
             following.y0 >= section.y1 + 24.0 && following.y1 <= 780.0,
             "section: {section:?}; following: {following:?}"
         );
-        let pixels = renderer.read_pixels().expect("responsive pixels");
+        let pixels = renderer.read_pixels();
         assert!(
             (following.y0.floor() as usize..following.y1.ceil() as usize).any(|y| {
                 (following.x0.floor() as usize..following.x1.ceil().min(390.0) as usize).any(|x| {
@@ -2455,7 +2431,7 @@ mod tests {
         );
         tessera_ui::dp::set_scale_factor(1.5);
         renderer.resize(1316, 1307);
-        renderer.render_frames(120);
+        renderer.frames(120);
         assert_eq!(controller.with(CarouselController::current_item), 4);
         tessera_ui::dp::set_scale_factor(1.0);
     }

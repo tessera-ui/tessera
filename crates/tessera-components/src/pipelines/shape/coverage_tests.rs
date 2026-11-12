@@ -7,10 +7,9 @@
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
-    testing::TestProbe,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{boxed::boxed, modifier::ModifierExt as _, shape_def::Shape};
@@ -95,20 +94,12 @@ fn damage_redraw_matches_a_fresh_target_and_skips_unaffected_shapes() {
             for sample_count in [1, 4] {
                 let probe = TestProbe::default();
                 let observed = probe.clone();
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(move || {
-                        damage_fixture(probe.clone());
-                    }),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width: 200,
-                        height: 128,
-                        sample_count,
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(3);
+                let mut renderer = UiTest::new()
+                    .viewport(200, 128)
+                    .samples(sample_count)
+                    .rendered(crate::TesseraComponents)
+                    .content(move || damage_fixture(probe.clone()));
+                renderer.frames(3);
                 assert_eq!(
                     renderer
                         .frame_graphics_work()
@@ -120,8 +111,8 @@ fn damage_redraw_matches_a_fresh_target_and_skips_unaffected_shapes() {
                 let handles = observed.get().unwrap();
                 for ink in [Color::BLACK.with_alpha(0.25), Color::WHITE, Color::BLACK] {
                     handles.color.set(ink);
-                    renderer.step_frame();
-                    let partial = renderer.read_pixels().unwrap();
+                    renderer.frames(1);
+                    let partial = renderer.read_pixels();
                     let partial_bytes = renderer
                         .frame_graphics_work()
                         .group("shape_batches")
@@ -129,10 +120,10 @@ fn damage_redraw_matches_a_fresh_target_and_skips_unaffected_shapes() {
                     assert!(partial_bytes > 0, "the changed patch must actually redraw");
                     // Recreating the target discards retained pixels and forces a full draw.
                     renderer.resize(200, 128);
-                    renderer.step_frame();
+                    renderer.frames(1);
                     assert_eq!(
                         partial,
-                        renderer.read_pixels().unwrap(),
+                        renderer.read_pixels(),
                         "fractional clips and translucent pixels match full rendering at MSAA{sample_count}"
                     );
                     assert!(
@@ -146,44 +137,36 @@ fn damage_redraw_matches_a_fresh_target_and_skips_unaffected_shapes() {
                 }
                 for position in [[Dp(35.5), Dp(40.25)], [Dp(-16.75), Dp(12.5)]] {
                     handles.position.set(position);
-                    renderer.step_frame();
-                    let moved = renderer.read_pixels().unwrap();
+                    renderer.frames(1);
+                    let moved = renderer.read_pixels();
                     renderer.resize(200, 128);
-                    renderer.step_frame();
+                    renderer.frames(1);
                     assert_eq!(
                         moved,
-                        renderer.read_pixels().unwrap(),
+                        renderer.read_pixels(),
                         "moving a clipped patch clears its old pixels at MSAA{sample_count}"
                     );
                 }
                 handles.visible.set(false);
-                renderer.step_frame();
-                let removed = renderer.read_pixels().unwrap();
+                renderer.frames(1);
+                let removed = renderer.read_pixels();
                 renderer.resize(200, 128);
-                renderer.step_frame();
+                renderer.frames(1);
                 assert_eq!(
                     removed,
-                    renderer.read_pixels().unwrap(),
+                    renderer.read_pixels(),
                     "removing a patch restores the underlying scene at MSAA{sample_count}"
                 );
                 handles.backdrop.set(false);
-                renderer.step_frame();
+                renderer.frames(1);
                 assert!(
-                    renderer
-                        .read_pixels()
-                        .unwrap()
-                        .iter()
-                        .all(|&channel| channel == 0),
+                    renderer.read_pixels().iter().all(|&channel| channel == 0),
                     "removing the last draws clears the retained target at MSAA{sample_count}"
                 );
                 renderer.resize(200, 128);
-                renderer.step_frame();
+                renderer.frames(1);
                 assert!(
-                    renderer
-                        .read_pixels()
-                        .unwrap()
-                        .iter()
-                        .all(|&channel| channel == 0),
+                    renderer.read_pixels().iter().all(|&channel| channel == 0),
                     "a fresh empty target is transparent at MSAA{sample_count}"
                 );
             }
@@ -198,36 +181,28 @@ fn resized_scene_uses_logical_viewport_for_fractional_clips() {
         "pipelines::shape::coverage_tests::resized_scene_uses_logical_viewport_for_fractional_clips",
         || {
             let create = |width, height, sample_count| {
-                HeadlessRenderer::new(
-                    Box::new(|| {
-                        damage_fixture(TestProbe::default());
-                    }),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width,
-                        height,
-                        sample_count,
-                        ..Default::default()
-                    },
-                )
-                .unwrap()
+                UiTest::new()
+                    .viewport(width, height)
+                    .samples(sample_count)
+                    .rendered(crate::TesseraComponents)
+                    .content(|| damage_fixture(TestProbe::default()))
             };
             for sample_count in [1, 4] {
                 let mut resized = create(200, 128, sample_count);
-                resized.render_frames(2);
+                resized.frames(2);
                 for (width, height) in [(201, 133), (251, 253), (129, 135), (385, 259), (83, 61)] {
                     resized.resize(width, height);
-                    resized.render_frames(2);
+                    resized.frames(2);
                     let mut exact = create(width, height, sample_count);
-                    exact.render_frames(2);
-                    let expected = exact.read_pixels().unwrap();
+                    exact.frames(2);
+                    let expected = exact.read_pixels();
                     assert!(
                         expected
                             .chunks_exact(4)
                             .any(|pixel| pixel == [0, 0, 0, 255])
                     );
                     assert_eq!(
-                        resized.read_pixels().unwrap(),
+                        resized.read_pixels(),
                         expected,
                         "resizing to {width}x{height} must preserve exact pixels at MSAA{sample_count}"
                     );
@@ -279,20 +254,12 @@ fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
             for sample_count in [1, 4] {
                 let probe = TestProbe::<Option<State<bool>>>::default();
                 let observed = probe.clone();
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(move || {
-                        batch_fixture().probe(probe.clone());
-                    }),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width: VIEWPORT_WIDTH,
-                        height: 24,
-                        sample_count,
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(1);
+                let mut renderer = UiTest::new()
+                    .viewport(VIEWPORT_WIDTH, 24)
+                    .samples(sample_count)
+                    .rendered(crate::TesseraComponents)
+                    .content(move || batch_fixture().probe(probe.clone()));
+                renderer.frames(1);
                 let uploads = renderer
                     .frame_graphics_work()
                     .group("shape_batches")
@@ -301,7 +268,7 @@ fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
                     uploads <= 2,
                     "batches must share frame uploads, got {uploads}"
                 );
-                let uniform = renderer.read_pixels().unwrap();
+                let uniform = renderer.read_pixels();
                 let first = pixel(&uniform, VIEWPORT_WIDTH, 10, 10);
                 assert_eq!(first[3], 255);
                 for index in 0..BATCH_COUNT {
@@ -312,8 +279,8 @@ fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
                     );
                 }
                 observed.get().unwrap().set(true);
-                renderer.render_frames(2);
-                let distinct = renderer.read_pixels().unwrap();
+                renderer.frames(2);
+                let distinct = renderer.read_pixels();
                 let mut previous_red = None;
                 for index in 0..BATCH_COUNT {
                     let actual = pixel(&distinct, VIEWPORT_WIDTH, 10 + index * 16, 10);
@@ -337,7 +304,7 @@ fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
                     .graphics_work()
                     .group("shape_batches")
                     .buffer_allocations;
-                renderer.render_frames(2);
+                renderer.frames(2);
                 assert_eq!(
                     renderer
                         .graphics_work()
@@ -346,7 +313,7 @@ fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
                     allocations,
                     "stable frame batches must reuse GPU buffers and bindings"
                 );
-                assert_eq!(renderer.read_pixels().unwrap(), distinct);
+                assert_eq!(renderer.read_pixels(), distinct);
             }
         },
     );
@@ -425,24 +392,18 @@ fn assert_white(pixels: &[u8], width: u32, x: usize, y: usize, samples: u32) {
 #[ignore = "requires a native GPU adapter supporting one and four samples"]
 fn native_borders_keep_fully_covered_pixels_opaque_at_integer_and_fractional_clipped_geometry() {
     for sample_count in [1, 4] {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 112,
-                height: 88,
-                sample_count,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
-        let pixels = renderer.read_pixels().unwrap();
+        let mut renderer = UiTest::new()
+            .viewport(112, 88)
+            .samples(sample_count)
+            .rendered(crate::TesseraComponents)
+            .content(fixture);
+        renderer.frames(8);
+        let pixels = renderer.read_pixels();
         let allocations = renderer
             .graphics_work()
             .group("shape_batches")
             .buffer_allocations;
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(
             renderer
                 .graphics_work()
@@ -452,7 +413,7 @@ fn native_borders_keep_fully_covered_pixels_opaque_at_integer_and_fractional_cli
             "warmed shape batches must reuse GPU buffers and bindings"
         );
         assert_eq!(
-            renderer.read_pixels().unwrap(),
+            renderer.read_pixels(),
             pixels,
             "reused batch slots must preserve fractional shape pixels"
         );

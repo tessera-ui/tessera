@@ -1,10 +1,7 @@
 use std::sync::LazyLock;
 
 use tessera_i18n::{Catalog, I18n, fluent_templates, langid};
-use tessera_ui::{
-    EntryRegistry, State, remember, tessera,
-    testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
-};
+use tessera_ui::{EntryRegistry, State, remember, tessera, testing::{TestProbe, UiTest}};
 
 fluent_templates::static_loader! {
     static LOCALES = {
@@ -38,29 +35,29 @@ fn reader(observation: Observation) {
 fn entry_locale_changes_recompose_readers_preserve_state_and_isolate_sessions() {
     let first = Observation::default();
     let second = Observation::default();
-    let mut session = start_layout_test_session(layout_test(|| reader(first.clone())));
+    let mut session = UiTest::new().content(|| reader(first.clone()));
     session.run(|| EntryRegistry::new().register_package(CATALOG.clone()));
-    pump_layout_test_session(&mut session, 0);
+    session.frame();
     let initial = first.output.get();
     let locale = first.i18n.get().unwrap();
     let counter = first.counter.get().unwrap();
-    let mut other = start_layout_test_session(layout_test(|| reader(second.clone())));
+    let mut other = UiTest::new().content(|| reader(second.clone()));
     other.run(|| EntryRegistry::new().register_package(CATALOG.clone()));
-    pump_layout_test_session(&mut other, 0);
+    other.frame();
     let other_initial = second.output.get();
     session.run(|| locale.set_locale(langid!("zh-CN")));
-    pump_layout_test_session(&mut session, 16_666_667);
+    session.frames(1);
     assert_ne!(first.output.get(), initial);
     assert!(first.counter.get().unwrap() == counter);
-    pump_layout_test_session(&mut other, 16_666_667);
+    other.frames(1);
     assert_eq!(second.output.get(), other_initial);
     assert_eq!(second.builds.get(), 1);
     let localized = first.output.get();
     let builds = first.builds.get();
     session.run(|| locale.set_locale(langid!("zh-CN")));
-    pump_layout_test_session(&mut session, 33_333_334);
+    session.frames(1);
     assert_eq!(first.builds.get(), builds);
     session.run(|| counter.set(7));
-    pump_layout_test_session(&mut session, 50_000_001);
+    session.frames(1);
     assert_ne!(first.output.get(), localized);
 }

@@ -2,21 +2,10 @@ use std::collections::BTreeMap;
 
 use crate::{
     AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, CursorEventContent,
-    FocusDirection, FocusRequester, FocusScopeNode, GestureState, LayoutPolicy, LayoutResult,
-    Modifier, PointerChange, PointerEventPass, PointerInput, PointerInputModifierNode,
-    PressKeyEventType, Px, PxPosition, SemanticsModifierNode, State,
-    accesskit::Role,
-    focus,
-    layout::MeasureScope,
-    modifier::FocusModifierExt as _,
-    remember,
-    runtime::TesseraRuntime,
-    tessera,
-    testing::{
-        layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-        start_layout_test_session,
-    },
-    time::Instant,
+    FocusDirection, FocusRequester, FocusScopeNode, LayoutPolicy, LayoutResult, Modifier,
+    PointerEventPass, PointerInput, PointerInputModifierNode, PressKeyEventType, Px, PxPosition,
+    SemanticsModifierNode, State, accesskit::Role, focus, layout::MeasureScope,
+    modifier::FocusModifierExt as _, remember, runtime::TesseraRuntime, tessera, testing::UiTest,
 };
 
 #[derive(Clone, Default, PartialEq)]
@@ -149,9 +138,7 @@ fn replay_fixture(count: usize, probe: ReplayProbe) {
     });
 }
 
-fn retained_node_ids(
-    session: &crate::testing::LayoutTestSession<impl Fn()>,
-) -> BTreeMap<String, crate::NodeId> {
+fn retained_node_ids(session: &crate::testing::UiTest) -> BTreeMap<String, crate::NodeId> {
     session
         .inspect_components()
         .nodes()
@@ -166,16 +153,12 @@ fn retained_node_ids(
 fn update_one_leaf(count: usize) -> (super::LayoutFrameDiagnostics, super::LayoutFrameDiagnostics) {
     let probe = ReplayProbe::default();
 
-    let mut session = start_layout_test_session(
-        layout_test({
-            let probe = probe.clone();
-            move || replay_fixture(count, probe.clone())
-        })
-        .viewport_px(100, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
-    let initial = session.diagnostics().expect("Initial frame diagnostics");
-    let edited_node = |session: &crate::testing::LayoutTestSession<_>| {
+    let mut session = UiTest::new()
+        .content(|| replay_fixture(count, probe.clone()))
+        .viewport(100, 100);
+    session.frame();
+    let initial = session.diagnostics();
+    let edited_node = |session: &crate::testing::UiTest| {
         session
             .inspect_components()
             .nodes()
@@ -198,8 +181,8 @@ fn update_one_leaf(count: usize) -> (super::LayoutFrameDiagnostics, super::Layou
         1
     );
     probe.version.get().expect("Version state").set(1);
-    pump_layout_test_session(&mut session, 16_000_000);
-    let updated = session.diagnostics().expect("Updated frame diagnostics");
+    session.advance(std::time::Duration::from_millis(16));
+    let updated = session.diagnostics();
     assert_eq!(updated.cache_miss_dirty_self, 1);
     assert_eq!(updated.cache_store_count, 0);
     assert_eq!(updated.geometry_nodes_updated, 0);
@@ -325,14 +308,10 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
     let probe = ReplayProbe::default();
 
     probe.hits.with_mut(Vec::clear);
-    let mut session = start_layout_test_session(
-        layout_test({
-            let probe = probe.clone();
-            move || nested_dirty_fixture(write_during_replay, backwards_write, probe.clone())
-        })
-        .viewport_px(100, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| nested_dirty_fixture(write_during_replay, backwards_write, probe.clone()))
+        .viewport(100, 100);
+    session.frame();
     let retained = TesseraRuntime::with(|runtime| {
         let key = runtime
             .component_tree
@@ -368,7 +347,7 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
             .expect("test fixture entry exists")
             .set(1);
     }
-    pump_layout_test_session(&mut session, 16_000_000);
+    session.advance(std::time::Duration::from_millis(16));
     assert_eq!(
         session
             .work_totals()
@@ -394,14 +373,8 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
         2
     );
     let position = PxPosition::from_f32_xy(10.0, 10.0);
-    let press = PointerChange::new(
-        Instant::now(),
-        crate::MOUSE_POINTER_ID,
-        CursorEventContent::Pressed(PressKeyEventType::Left),
-        GestureState::TapCandidate,
-    )
-    .with_position(position);
-    pump_layout_test_session_with_input(&mut session, 32_000_000, vec![press], Some(position));
+    session.pointer_press(crate::MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+    session.frames(1);
     assert_eq!(probe.hits.with(Clone::clone), [42]);
     if backwards_write {
         let labels = semantic_reading_order(&session);
@@ -440,10 +413,10 @@ fn a_later_replay_round_defers_writes_to_an_already_executed_boundary() {
 #[test]
 fn a_stale_invalidation_does_not_block_live_replay() {
     let probe = ReplayProbe::default();
-    let mut session = start_layout_test_session(
-        layout_test(|| replay_fixture(1, probe.clone())).viewport_px(100, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| replay_fixture(1, probe.clone()))
+        .viewport(100, 100);
+    session.frame();
     let retained = retained_node_ids(&session);
     assert!(!retained.is_empty());
 
@@ -453,7 +426,7 @@ fn a_stale_invalidation_does_not_block_live_replay() {
         .get()
         .expect("test fixture entry exists")
         .set(1);
-    pump_layout_test_session(&mut session, 16_666_667);
+    session.frames(1);
 
     assert!(
         semantic_reading_order(&session)
@@ -490,10 +463,10 @@ fn cyclic_replay_fixture(probe: ReplayProbe) {
 #[test]
 fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
     let probe = ReplayProbe::default();
-    let mut session = start_layout_test_session(
-        layout_test(|| cyclic_replay_fixture(probe.clone())).viewport_px(100, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| cyclic_replay_fixture(probe.clone()))
+        .viewport(100, 100);
+    session.frame();
     let peers: Vec<_> = session
         .work()
         .executions()
@@ -510,8 +483,8 @@ fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    for frame in 1..=3 {
-        pump_layout_test_session(&mut session, frame * 16_666_667);
+    for _ in 0..3 {
+        session.frames(1);
         assert_eq!(
             session
                 .work()
@@ -520,7 +493,9 @@ fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
         );
         for &peer in &peers {
             assert_eq!(
-                session.work().for_instance(peer, crate::work::WorkPhase::Build),
+                session
+                    .work()
+                    .for_instance(peer, crate::work::WorkPhase::Build),
                 1
             );
         }
@@ -594,14 +569,14 @@ fn placement_order_changes_update_retained_descendant_focus_traversal_without_re
     let probe = ReplayProbe::default();
 
     probe.requesters.with_mut(BTreeMap::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| placement_order_fixture(probe.clone())).viewport_px(100, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| placement_order_fixture(probe.clone()))
+        .viewport(100, 100);
+    session.frame();
     let (first, second) = probe.requesters.with(|items| (items[&0], items[&1]));
     assert!(focus::move_focus(FocusDirection::Next));
     assert!(first.is_focused());
-    pump_layout_test_session(&mut session, 8_000_000);
+    session.advance(std::time::Duration::from_millis(8));
     let before = session
         .work_totals()
         .count("ordered_branch", crate::work::WorkPhase::Build);
@@ -610,7 +585,7 @@ fn placement_order_changes_update_retained_descendant_focus_traversal_without_re
         .get()
         .expect("test fixture entry exists")
         .set(true);
-    pump_layout_test_session(&mut session, 16_000_000);
+    session.advance(std::time::Duration::from_millis(8));
     assert_eq!(
         session
             .work_totals()
@@ -622,7 +597,7 @@ fn placement_order_changes_update_retained_descendant_focus_traversal_without_re
     assert!(second.is_focused());
 }
 
-fn semantic_reading_order(session: &crate::testing::LayoutTestSession<impl Fn()>) -> Vec<String> {
+fn semantic_reading_order(session: &crate::testing::UiTest) -> Vec<String> {
     session
         .inspect_accessibility()
         .expect("Accessibility snapshot")
@@ -637,13 +612,10 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
 
     probe.requesters.with_mut(BTreeMap::clear);
     probe.hits.with_mut(Vec::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| {
-            ordered_fixture(probe.clone());
-        })
-        .viewport_px(100, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| ordered_fixture(probe.clone()))
+        .viewport(100, 100);
+    session.frame();
     assert_eq!(
         session
             .work_totals()
@@ -659,7 +631,7 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
     assert!(first.is_focused());
     // Focus changes invalidate their host replay boundary independently of
     // reorder.
-    pump_layout_test_session(&mut session, 8_000_000);
+    session.advance(std::time::Duration::from_millis(8));
     let retained = retained_node_ids(&session);
     let snapshot = session.inspect_components();
     let retained_instances =
@@ -668,7 +640,7 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
         .work_totals()
         .count("ordered_branch", crate::work::WorkPhase::Build);
     probe.reverse.get().expect("Reverse state").set(true);
-    pump_layout_test_session(&mut session, 16_000_000);
+    session.advance(std::time::Duration::from_millis(8));
     assert_eq!(
         retained_instances.map(|instance| session
             .work()
@@ -695,14 +667,8 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
         "Traversal must follow the new retained sibling order"
     );
     let position = PxPosition::from_f32_xy(10.0, 10.0);
-    let press = PointerChange::new(
-        Instant::now(),
-        crate::MOUSE_POINTER_ID,
-        CursorEventContent::Pressed(PressKeyEventType::Left),
-        GestureState::TapCandidate,
-    )
-    .with_position(position);
-    pump_layout_test_session_with_input(&mut session, 32_000_000, vec![press], Some(position));
+    session.pointer_press(crate::MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+    session.frames(1);
     assert_eq!(
         probe.hits.with(Clone::clone),
         [0],
@@ -729,15 +695,14 @@ fn optional_pointer_fixture(probe: ReplayProbe) {
 #[test]
 fn retained_layout_leaves_pointer_index_when_its_last_handler_is_removed() {
     let probe = ReplayProbe::default();
-    let mut session = start_layout_test_session(
-        layout_test(|| {
+    let mut session = UiTest::new()
+        .content(|| {
             let probe = probe.clone();
             crate::layout::layout(Overlap).child(move || optional_pointer_fixture(probe.clone()));
         })
-        .viewport_px(100, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
-    let layout_id = |session: &crate::testing::LayoutTestSession<_>| {
+        .viewport(100, 100);
+    session.frame();
+    let layout_id = |session: &crate::testing::UiTest| {
         session
             .inspect_components()
             .tagged("optional-pointer")
@@ -746,32 +711,15 @@ fn retained_layout_leaves_pointer_index_when_its_last_handler_is_removed() {
     let retained = layout_id(&session);
     let position = PxPosition::from_f32_xy(10.0, 10.0);
     let button = PressKeyEventType::Left;
-    for (frame, enabled, hits) in [(1, true, 1), (2, false, 1), (3, true, 2)] {
+    for (enabled, hits) in [(true, 1), (false, 1), (true, 2)] {
         probe
             .armed
             .get()
             .expect("test fixture entry exists")
             .set(enabled);
-        let timestamp = Instant::now();
-        let changes = [
-            CursorEventContent::Pressed(button),
-            CursorEventContent::Released(button),
-        ]
-        .map(|event| {
-            PointerChange::new(
-                timestamp,
-                crate::MOUSE_POINTER_ID,
-                event,
-                GestureState::TapCandidate,
-            )
-            .with_position(position)
-        });
-        pump_layout_test_session_with_input(
-            &mut session,
-            frame * 16_000_000,
-            changes.into(),
-            Some(position),
-        );
+        session.pointer_press(crate::MOUSE_POINTER_ID, position, button);
+        session.pointer_release(crate::MOUSE_POINTER_ID, position, button);
+        session.frames(1);
         assert_eq!(layout_id(&session), retained);
         assert_eq!(probe.hits.with(Vec::len), hits);
     }
@@ -807,10 +755,8 @@ fn conditional_description(probe: ReplayProbe) {
 #[test]
 fn rebuilding_a_layout_node_publishes_added_and_removed_semantics() {
     let probe = ReplayProbe::default();
-    let mut session = start_layout_test_session(layout_test(|| {
-        conditional_description(probe.clone());
-    }));
-    let description = |session: &crate::testing::LayoutTestSession<_>| {
+    let mut session = UiTest::new().content(|| conditional_description(probe.clone()));
+    let description = |session: &crate::testing::UiTest| {
         let components = session.inspect_components();
         let host = components
             .nodes()
@@ -822,7 +768,7 @@ fn rebuilding_a_layout_node_publishes_added_and_removed_semantics() {
             host.semantics().and_then(|node| node.tooltip.clone()),
         )
     };
-    let publishes_host = |session: &crate::testing::LayoutTestSession<_>| {
+    let publishes_host = |session: &crate::testing::UiTest| {
         session
             .inspect_accessibility()
             .expect("Published accessibility tree")
@@ -830,17 +776,17 @@ fn rebuilding_a_layout_node_publishes_added_and_removed_semantics() {
             .iter()
             .any(|(_, node)| node.label() == Some("Help host"))
     };
-    pump_layout_test_session(&mut session, 0);
+    session.frame();
     let (host, initial) = description(&session);
     assert_eq!(initial, None);
     assert!(!publishes_host(&session));
     let visible = probe.reverse.get().expect("Visibility state");
     visible.set(true);
-    pump_layout_test_session(&mut session, 16_000_000);
+    session.advance(std::time::Duration::from_millis(16));
     assert_eq!(description(&session), (host, Some("Help text".into())));
     assert!(publishes_host(&session));
     visible.set(false);
-    pump_layout_test_session(&mut session, 32_000_000);
+    session.advance(std::time::Duration::from_millis(16));
     assert_eq!(description(&session), (host, None));
     assert!(!publishes_host(&session));
 }
@@ -876,21 +822,18 @@ fn replay_refreshes_retained_descendants_when_semantic_and_focus_ancestry_change
     let probe = ReplayProbe::default();
 
     probe.requesters.with_mut(BTreeMap::clear);
-    let mut session = start_layout_test_session(
-        layout_test(|| {
-            scoped_fixture(probe.clone());
-        })
-        .viewport_px(100, 100),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| scoped_fixture(probe.clone()))
+        .viewport(100, 100);
+    session.frame();
     let requester = probe.requesters.with(|items| items[&0]);
     let (old_scope, new_scope) = probe.scopes.get().expect("Remembered focus scopes");
     requester.request_focus();
     assert!(old_scope.has_focus());
     assert!(!new_scope.has_focus());
     // Drain the focus host invalidation before changing its ancestor context.
-    pump_layout_test_session(&mut session, 8_000_000);
-    let scope_nodes = |session: &crate::testing::LayoutTestSession<_>| {
+    session.advance(std::time::Duration::from_millis(8));
+    let scope_nodes = |session: &crate::testing::UiTest| {
         session
             .inspect_components()
             .nodes()
@@ -910,7 +853,7 @@ fn replay_refreshes_retained_descendants_when_semantic_and_focus_ancestry_change
         .work_totals()
         .count("ordered_branch", crate::work::WorkPhase::Build);
     probe.reverse.get().expect("Changed state").set(true);
-    pump_layout_test_session(&mut session, 16_000_000);
+    session.advance(std::time::Duration::from_millis(8));
     assert_eq!(scope_nodes(&session), scope);
     assert_eq!(
         session

@@ -4,8 +4,8 @@ use tessera_components::theme::material_theme;
 use tessera_ui::{
     CursorEventContent, FocusDirection, GestureState, MOUSE_POINTER_ID, PointerChange,
     PressKeyEventType, PxPosition,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Role},
+    testing::UiTest,
 };
 
 use super::*;
@@ -21,19 +21,11 @@ fn fixture(kind: Illustration) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn responsive_formatting_figure_keeps_its_full_canvas_and_clickable_calendar() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture(Illustration::Formatting)),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 812,
-            height: 800,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(812, 800)
+        .rendered(crate::TestPipelines)
+        .content(|| fixture(Illustration::Formatting));
+    renderer.frames(8);
     let canvas = node(&renderer, "Deferred date formatting diagram", Role::Group)
         .1
         .bounds()
@@ -56,36 +48,28 @@ fn responsive_formatting_figure_keeps_its_full_canvas_and_clickable_calendar() {
         Some(Role::Button),
         Some("\n"),
     );
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert!(
         exists(&renderer, "Optional date selection", Role::Dialog),
         "Opening the real scaled calendar must survive a same-batch Enter"
     );
 }
 
-fn renderer(kind: Illustration) -> HeadlessRenderer {
+fn renderer(kind: Illustration) -> UiTest<'static> {
     let width = if kind == Illustration::EntryMethods {
         1353
     } else {
         1352
     };
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(kind)),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width,
-            height: 800,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(6);
+    let mut renderer = UiTest::new()
+        .viewport(width, 800)
+        .rendered(crate::TestPipelines)
+        .content(move || fixture(kind));
+    renderer.frames(6);
     let figure = field_bounds(&renderer, "figure");
     assert_eq!((figure.width, figure.height), (width as f32, 600.0));
     if matches!(kind, Illustration::EntryMethods | Illustration::Labels) {
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let pixel = |x: usize, y: usize| {
             let i = (y * width as usize + x) * 4;
             &pixels[i..i + 4]
@@ -134,7 +118,7 @@ fn renderer(kind: Illustration) -> HeadlessRenderer {
             format!("{:#?}", renderer.accessibility_snapshot()),
         )
         .unwrap();
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         tessera_ui::headless::write_png_file(
             path.join(name),
             width,
@@ -146,7 +130,7 @@ fn renderer(kind: Illustration) -> HeadlessRenderer {
     renderer
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -156,7 +140,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
     (id, node.clone())
 }
 
-fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
+fn exists(renderer: &UiTest, label: &str, role: Role) -> bool {
     renderer
         .inspect_accessibility()
         .expect("accessibility tree")
@@ -164,17 +148,12 @@ fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
         .is_some()
 }
 
-fn act(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: node(renderer, label, role).0,
-        data: None,
-    }));
-    renderer.render_frames(6);
+fn act(renderer: &mut UiTest, label: &str, role: Role, action: Action) {
+    assert!(renderer.accessibility_action(node(renderer, label, role).0, action));
+    renderer.frames(6);
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+fn click(renderer: &mut UiTest, label: &str, role: Role) {
     let bounds = node(renderer, label, role).1.bounds().unwrap();
     let pointer = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
@@ -183,10 +162,10 @@ fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
     renderer.pointer_move(MOUSE_POINTER_ID, pointer);
     renderer.pointer_press(MOUSE_POINTER_ID, pointer, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, pointer, PressKeyEventType::Left);
-    renderer.render_frames(8);
+    renderer.frames(8);
 }
 
-fn settle_background(renderer: &mut HeadlessRenderer, label: &str) {
+fn settle_background(renderer: &mut UiTest, label: &str) {
     for _ in 0..90 {
         let tree = renderer.accessibility_snapshot().unwrap();
         if !tree
@@ -197,7 +176,7 @@ fn settle_background(renderer: &mut HeadlessRenderer, label: &str) {
         {
             return;
         }
-        renderer.render_frames(1);
+        renderer.frames(1);
     }
     assert!(
         exists(renderer, label, Role::TextInput),
@@ -213,7 +192,7 @@ fn settle_background(renderer: &mut HeadlessRenderer, label: &str) {
     );
 }
 
-fn value(renderer: &HeadlessRenderer, label: &str) -> String {
+fn value(renderer: &UiTest, label: &str) -> String {
     node(renderer, label, Role::TextInput)
         .1
         .value()
@@ -221,7 +200,7 @@ fn value(renderer: &HeadlessRenderer, label: &str) -> String {
         .to_owned()
 }
 
-fn field_bounds(renderer: &HeadlessRenderer, name: &str) -> tessera_ui::FloatRect {
+fn field_bounds(renderer: &UiTest, name: &str) -> tessera_ui::FloatRect {
     renderer
         .inspect_components()
         .tagged(&format!("date-instruction-{name}"))
@@ -229,7 +208,7 @@ fn field_bounds(renderer: &HeadlessRenderer, name: &str) -> tessera_ui::FloatRec
         .unwrap()
 }
 
-fn assert_native_field(renderer: &HeadlessRenderer, name: &str, x: f32, y: f32) {
+fn assert_native_field(renderer: &UiTest, name: &str, x: f32, y: f32) {
     let bounds = field_bounds(renderer, name);
     assert_eq!(
         (bounds.x, bounds.y, bounds.width, bounds.height),
@@ -254,7 +233,7 @@ fn illustrated_entry_keeps_separate_native_stops_and_confirms_calendar_selection
     );
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, editor);
     focus::request_move_focus(FocusDirection::Next);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
         toggle,
@@ -276,7 +255,7 @@ fn illustrated_entry_keeps_separate_native_stops_and_confirms_calendar_selection
     assert_eq!(value(&renderer, "Entry methods date"), "08/18/2023");
     assert_native_field(&renderer, "field", 334.0, 244.0);
     renderer.resize(676, 800);
-    renderer.render_frames(6);
+    renderer.frames(6);
     let bounds = field_bounds(&renderer, "field");
     assert!((bounds.width - 684.0 * 676.0 / 1353.0).abs() < 0.01);
     click(
@@ -309,16 +288,16 @@ fn illustrated_date_input_formats_on_submission_or_focus_exit_and_preserves_inva
         Action::Focus,
     );
     renderer.inject_text("\n");
-    renderer.render_frames(6);
+    renderer.frames(6);
     assert_eq!(value(&renderer, "Unformatted date"), "08/17/2023");
     assert_eq!(value(&renderer, "Formatted date"), "08/17/2023");
     renderer.inject_text("9");
-    renderer.render_frames(6);
+    renderer.frames(6);
     let invalid = value(&renderer, "Unformatted date");
     assert_ne!(invalid, "08/17/2023");
     assert_eq!(value(&renderer, "Formatted date"), "08/17/2023");
     renderer.inject_text("\n");
-    renderer.render_frames(6);
+    renderer.frames(6);
     assert_eq!(value(&renderer, "Unformatted date"), invalid);
     assert_eq!(value(&renderer, "Formatted date"), "08/17/2023");
     assert_native_field(&renderer, "raw", 334.0, 124.0);
@@ -403,7 +382,7 @@ fn illustrated_clear_uses_native_day_selection_and_only_visible_focus_targets() 
     act(&mut renderer, "August 9, 2020", Role::Button, Action::Focus);
     for _ in 0..26 {
         focus::request_move_focus(FocusDirection::Next);
-        renderer.render_frames(2);
+        renderer.frames(2);
         let tree = renderer.accessibility_snapshot().unwrap();
         let focus = tree.focus;
         let bounds = tree
@@ -418,7 +397,7 @@ fn illustrated_clear_uses_native_day_selection_and_only_visible_focus_targets() 
         assert!(bounds.y0 >= 0.0 && bounds.y1 <= 504.0);
     }
     renderer.resize(676, 500);
-    renderer.render_frames(6);
+    renderer.frames(6);
     click(&mut renderer, "August 31, 2020", Role::Button);
     assert_eq!(
         node(&renderer, "August 31, 2020", Role::Button)
@@ -485,15 +464,15 @@ fn labeled_date_composite_keeps_editing_and_native_month_chooser_functional() {
     assert!(exists(&renderer, "Previous labeled month", Role::Button));
     act(&mut renderer, "Event date", Role::TextInput, Action::Focus);
     renderer.inject_text("9");
-    renderer.render_frames(4);
+    renderer.frames(4);
     let invalid = value(&renderer, "Event date");
     assert_ne!(invalid, "2023/08/17");
     renderer.inject_text("\n");
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_eq!(value(&renderer, "Event date"), invalid);
 }
 
-fn article_target(renderer: &HeadlessRenderer, label: &str, role: Option<Role>) -> Node {
+fn article_target(renderer: &UiTest, label: &str, role: Option<Role>) -> Node {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -521,11 +500,11 @@ fn article_target(renderer: &HeadlessRenderer, label: &str, role: Option<Role>) 
         .1
 }
 
-fn click_article_target(renderer: &mut HeadlessRenderer, label: &str, role: Option<Role>) {
+fn click_article_target(renderer: &mut UiTest, label: &str, role: Option<Role>) {
     input_article_target(renderer, label, role, None);
 }
 
-fn reveal_article_target(renderer: &mut HeadlessRenderer, label: &str, role: Option<Role>) -> Node {
+fn reveal_article_target(renderer: &mut UiTest, label: &str, role: Option<Role>) -> Node {
     let viewport = renderer.physical_size();
     for _ in 0..24 {
         let target = renderer
@@ -550,7 +529,7 @@ fn reveal_article_target(renderer: &mut HeadlessRenderer, label: &str, role: Opt
                     -1200.0
                 },
             );
-            renderer.render_frames(40);
+            renderer.frames(40);
             continue;
         };
         let bounds = target.bounds().unwrap();
@@ -564,13 +543,13 @@ fn reveal_article_target(renderer: &mut HeadlessRenderer, label: &str, role: Opt
             0.0,
             (f64::from(viewport.height) * 0.5 - center).clamp(-1200.0, 1200.0) as f32,
         );
-        renderer.render_frames(20);
+        renderer.frames(20);
     }
     panic!("real scroll did not reveal article target {label}");
 }
 
 fn input_article_target(
-    renderer: &mut HeadlessRenderer,
+    renderer: &mut UiTest,
     label: &str,
     role: Option<Role>,
     queued_ime: Option<&str>,
@@ -587,10 +566,10 @@ fn input_article_target(
     if let Some(text) = queued_ime {
         renderer.inject_text(text);
     }
-    renderer.render_frames(8);
+    renderer.frames(8);
 }
 
-fn assert_pointer_editor_focus(renderer: &HeadlessRenderer, editor: &str, context: &str) {
+fn assert_pointer_editor_focus(renderer: &UiTest, editor: &str, context: &str) {
     let tree = renderer.accessibility_snapshot().unwrap();
     let id = node(renderer, editor, Role::TextInput).0;
     assert_eq!(
@@ -603,7 +582,7 @@ fn assert_pointer_editor_focus(renderer: &HeadlessRenderer, editor: &str, contex
     );
 }
 
-fn select_editor_line_with_pointer(renderer: &mut HeadlessRenderer, editor: &str) {
+fn select_editor_line_with_pointer(renderer: &mut UiTest, editor: &str) {
     let target = reveal_article_target(renderer, editor, Some(Role::TextInput));
     let bounds = target.bounds().unwrap();
     let pointer = PxPosition::from_f32_xy(
@@ -611,7 +590,7 @@ fn select_editor_line_with_pointer(renderer: &mut HeadlessRenderer, editor: &str
         ((bounds.y0 + bounds.y1) * 0.5) as f32,
     );
     renderer.pointer_move(MOUSE_POINTER_ID, pointer);
-    renderer.render_frames(1);
+    renderer.frames(1);
     let base = tessera_ui::current_frame_time().unwrap();
     for (milliseconds, content) in [
         (0, CursorEventContent::Pressed(PressKeyEventType::Left)),
@@ -628,11 +607,11 @@ fn select_editor_line_with_pointer(renderer: &mut HeadlessRenderer, editor: &str
             GestureState::TapCandidate,
         ));
     }
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_pointer_editor_focus(renderer, editor, "native triple-click selection");
 }
 
-fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRenderer) {
+fn probe_article_editor_pointer_and_queued_commits(renderer: &mut UiTest) {
     let editor = "Entry methods date";
     input_article_target(renderer, editor, Some(Role::TextInput), None);
     assert_pointer_editor_focus(renderer, editor, "published text bounds center");
@@ -647,7 +626,7 @@ fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRender
     renderer.pointer_move(MOUSE_POINTER_ID, blank);
     renderer.pointer_press(MOUSE_POINTER_ID, blank, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, blank, PressKeyEventType::Left);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert_pointer_editor_focus(
         renderer,
         editor,
@@ -657,10 +636,10 @@ fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRender
     let mut prefix = String::new();
     for character in "08/18/2023".chars() {
         renderer.inject_text(&character.to_string());
-        renderer.render_frames(1);
+        renderer.frames(1);
         prefix.push(character);
         assert_pointer_editor_focus(renderer, editor, "during each individual IME commit");
-        renderer.render_frames(1);
+        renderer.frames(1);
         assert_eq!(
             value(renderer, editor),
             prefix,
@@ -672,8 +651,8 @@ fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRender
     for character in "08/19/2023".chars() {
         renderer.inject_text(&character.to_string());
     }
-    renderer.render_frames(1);
-    renderer.render_frames(1);
+    renderer.frames(1);
+    renderer.frames(1);
     assert_eq!(
         value(renderer, editor),
         "08/19/2023",
@@ -688,8 +667,8 @@ fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRender
     for chunk in ["08", "/17", "/20", "23"] {
         renderer.inject_text(chunk);
     }
-    renderer.render_frames(1);
-    renderer.render_frames(1);
+    renderer.frames(1);
+    renderer.frames(1);
     assert_eq!(
         value(renderer, editor),
         "08/17/2023",
@@ -699,13 +678,13 @@ fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRender
 }
 
 fn assert_article_modal(
-    renderer: &mut HeadlessRenderer,
+    renderer: &mut UiTest,
     label: &str,
     action: &str,
     before: &[u8],
     screenshot: &str,
 ) {
-    renderer.render_frames(30);
+    renderer.frames(30);
     let viewport = renderer.physical_size();
     let tree = renderer.accessibility_snapshot().unwrap();
     let (dialog_id, dialog_node) = tree
@@ -723,7 +702,7 @@ fn assert_article_modal(
                     std::path::PathBuf::from(directory).join(format!("missing-{screenshot}")),
                     renderer.physical_size().width,
                     renderer.physical_size().height,
-                    &renderer.read_pixels().unwrap(),
+                    &renderer.read_pixels(),
                 )
                 .unwrap();
             }
@@ -785,7 +764,7 @@ fn assert_article_modal(
         action_bounds.width() >= 48.0 && action_bounds.height() >= 48.0,
         "actual modal action needs a native 48px target: {action_bounds:?} inside {dialog:?}"
     );
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let outside_figure = (200 * viewport.width as usize + 4) * 4;
     assert!(
         (0..3).any(|channel| before[outside_figure + channel] as i16
@@ -810,19 +789,11 @@ fn assert_article_modal(
 #[ignore = "requires a native GPU adapter for actual app article modal routing"]
 fn real_date_article_routes_instructional_dialogs_above_scrolled_content_and_keeps_actions_visible()
 {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(crate::app::app),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 907,
-            height: 871,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(907, 871)
+        .rendered(crate::TestPipelines)
+        .content(crate::app::app);
+    renderer.frames(8);
     click_article_target(&mut renderer, "Material components", None);
     for _ in 0..90 {
         let tree = renderer.accessibility_snapshot().unwrap();
@@ -835,7 +806,7 @@ fn real_date_article_routes_instructional_dialogs_above_scrolled_content_and_kee
         {
             break;
         }
-        renderer.render_frames(1);
+        renderer.frames(1);
     }
     assert!(
         !renderer
@@ -880,7 +851,7 @@ fn real_date_article_routes_instructional_dialogs_above_scrolled_content_and_kee
             },
             "the actual route must start with its authored date entry example"
         );
-        let before = renderer.read_pixels().unwrap();
+        let before = renderer.read_pixels();
         if editor == "Unformatted date" {
             let canvas = article_target(
                 &renderer,
@@ -938,7 +909,7 @@ fn real_date_article_routes_instructional_dialogs_above_scrolled_content_and_kee
     }
     click_article_target(&mut renderer, "Labeling elements", Some(Role::Link));
     let original = value(&renderer, "Event date");
-    let before = renderer.read_pixels().unwrap();
+    let before = renderer.read_pixels();
     click_article_target(&mut renderer, "Choose labeled month", Some(Role::Button));
     click(&mut renderer, "Choose month", Role::Button);
     assert_article_modal(
@@ -953,7 +924,7 @@ fn real_date_article_routes_instructional_dialogs_above_scrolled_content_and_kee
         .bounds()
         .unwrap();
     renderer.resize(520, 871);
-    renderer.render_frames(8);
+    renderer.frames(8);
     let narrow = node(&renderer, "Labeled date calendar chooser", Role::Dialog)
         .1
         .bounds()

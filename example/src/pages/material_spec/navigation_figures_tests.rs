@@ -1,14 +1,12 @@
-use std::time::Duration;
-
 use tessera_components::{
     alignment::Alignment, boxed::boxed, column::column, theme::material_theme,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Role},
     tessera,
+    testing::UiTest,
 };
 
 use super::{baseline_figure, color_figure};
@@ -46,14 +44,14 @@ fn color_fixture(rail: bool) {
     });
 }
 
-fn nodes(renderer: &HeadlessRenderer) -> Vec<(NodeId, Node)> {
+fn nodes(renderer: &UiTest) -> Vec<(NodeId, Node)> {
     renderer
         .accessibility_snapshot()
         .expect("navigation figure semantics")
         .nodes
 }
 
-fn destination(renderer: &HeadlessRenderer, description: &str) -> (NodeId, Node) {
+fn destination(renderer: &UiTest, description: &str) -> (NodeId, Node) {
     nodes(renderer)
         .into_iter()
         .find(|(_, node)| {
@@ -62,17 +60,12 @@ fn destination(renderer: &HeadlessRenderer, description: &str) -> (NodeId, Node)
         .unwrap_or_else(|| panic!("missing navigation destination {description}"))
 }
 
-fn dispatch(renderer: &mut HeadlessRenderer, target_node: NodeId, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node,
-        data: None,
-    }));
-    renderer.render_frames(6);
+fn dispatch(renderer: &mut UiTest, target_node: NodeId, action: Action) {
+    assert!(renderer.accessibility_action(target_node, action));
+    renderer.frames(6);
 }
 
-fn assert_selection(renderer: &HeadlessRenderer, prefix: &str, selected: usize, count: usize) {
+fn assert_selection(renderer: &UiTest, prefix: &str, selected: usize, count: usize) {
     for index in 1..=count {
         let (_, node) = destination(renderer, &format!("{prefix} destination {index}"));
         assert_eq!(
@@ -88,7 +81,7 @@ fn assert_selection(renderer: &HeadlessRenderer, prefix: &str, selected: usize, 
     }
 }
 
-fn active_icon_marker(renderer: &HeadlessRenderer, prefix: &str) -> tessera_ui::accesskit::Rect {
+fn active_icon_marker(renderer: &UiTest, prefix: &str) -> tessera_ui::accesskit::Rect {
     let group = nodes(renderer)
         .into_iter()
         .find(|(_, node)| {
@@ -119,19 +112,11 @@ fn active_icon_marker(renderer: &HeadlessRenderer, prefix: &str) -> tessera_ui::
 #[ignore = "Requires a native GPU adapter for actual baseline navigation geometry and focus"]
 fn baseline_figures_keep_native_destination_dimensions_and_focus_without_selecting() {
     for rail in [false, true] {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || baseline_fixture(rail)),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1100,
-                height: 700,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .expect("native baseline navigation renderer");
-        renderer.render_frames(6);
+        let mut renderer = UiTest::new()
+            .viewport(1100, 700)
+            .rendered(crate::TestPipelines)
+            .content(move || baseline_fixture(rail));
+        renderer.frames(6);
         let prefix = if rail {
             "Baseline navigation rail"
         } else {
@@ -188,19 +173,11 @@ fn baseline_figures_keep_native_destination_dimensions_and_focus_without_selecti
 #[ignore = "Requires a native GPU adapter for actual navigation color figures and role annotations"]
 fn color_figures_publish_official_role_markers_and_independent_live_destination_selections() {
     for rail in [false, true] {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || color_fixture(rail)),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1100,
-                height: 1300,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .expect("native navigation color renderer");
-        renderer.render_frames(24);
+        let mut renderer = UiTest::new()
+            .viewport(1100, 1300)
+            .rendered(crate::TestPipelines)
+            .content(move || color_fixture(rail));
+        renderer.frames(24);
         let roles: &[&str] = if rail {
             &[
                 "Surface container (optional)",

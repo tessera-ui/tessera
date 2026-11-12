@@ -130,7 +130,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 ///
 /// }
 ///
-/// # tessera_ui::testing::layout_test(demo).run();
+/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn glass_switch(

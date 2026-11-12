@@ -10,10 +10,9 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FocusDirection, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
+    accesskit::{Action, Node, Role, Toggled},
+    focus, remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{column::column, radio_button::radio_button, switch::switch, theme::material_theme};
@@ -86,24 +85,9 @@ fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .expect("tree")
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
-        .unwrap_or_else(|| panic!("missing {label}"))
-}
-
-fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) -> bool {
-    let target_node = node(renderer, label).0;
-    renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node,
-        data: None,
-    })
+fn action(renderer: &mut UiTest, label: &str, action: Action) -> bool {
+    let target_node = renderer.accessibility_node(label).0;
+    renderer.accessibility_action(target_node, action)
 }
 
 fn center(node: &Node) -> PxPosition {
@@ -114,10 +98,10 @@ fn center(node: &Node) -> PxPosition {
     )
 }
 
-fn assert_values(renderer: &HeadlessRenderer, checked: bool) {
+fn assert_values(renderer: &UiTest, checked: bool) {
     for label in ["Checkbox", "Switch"] {
         assert_eq!(
-            node(renderer, label).1.toggled(),
+            renderer.accessibility_node(label).1.toggled(),
             Some(if checked {
                 Toggled::True
             } else {
@@ -130,31 +114,27 @@ fn assert_values(renderer: &HeadlessRenderer, checked: bool) {
 
 fn check_controls(samples: u32) {
     let probe = tessera_ui::testing::TestProbe::default();
-    let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 320,
-            height: 480,
-            scale_factor: 1.5,
-            sample_count: samples,
-            frame_time: Duration::from_millis(16),
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(12);
+    let mut renderer = UiTest::new()
+        .viewport(320, 480)
+        .scale_factor(1.5)
+        .samples(samples)
+        .frame_step(Duration::from_millis(16))
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    renderer.frames(12);
     let allocations = renderer
         .graphics_work()
         .group("checkmark_instances")
         .buffer_allocations;
-    let identities = [node(&renderer, "Checkbox").0, node(&renderer, "Switch").0];
+    let identities = [
+        renderer.accessibility_node("Checkbox").0,
+        renderer.accessibility_node("Switch").0,
+    ];
     for (label, role, description, width) in [
         ("Checkbox", Role::CheckBox, "Checkbox description", 72.0),
         ("Switch", Role::Switch, "Switch description", 78.0),
     ] {
-        let (_, control) = node(&renderer, label);
+        let (_, control) = renderer.accessibility_node(label);
         assert_eq!(control.role(), role);
         assert_eq!(control.description(), Some(description));
         assert!(control.is_disabled());
@@ -168,21 +148,21 @@ fn check_controls(samples: u32) {
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     }
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_values(&renderer, true);
     assert_eq!(probe.get().calls.unwrap().get(), [0, 0]);
     assert!(action(&mut renderer, "Before", Action::Focus));
     focus::request_move_focus(FocusDirection::Next);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
-        node(&renderer, "After").0
+        renderer.accessibility_node("After").0
     );
     probe.get().checked.unwrap().set(false);
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_values(&renderer, false);
     probe.get().enabled.unwrap().set(true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     for (requester, label) in probe
         .get()
         .requesters
@@ -191,10 +171,10 @@ fn check_controls(samples: u32) {
         .zip(["Checkbox", "Switch", "Before"])
     {
         requester.request_focus();
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
-            node(&renderer, label).0,
+            renderer.accessibility_node(label).0,
             "external focus must target the control semantics"
         );
         assert_eq!(
@@ -204,13 +184,13 @@ fn check_controls(samples: u32) {
         );
         assert_values(&renderer, false);
         assert_eq!(
-            node(&renderer, "Before").1.toggled(),
+            renderer.accessibility_node("Before").1.toggled(),
             Some(Toggled::False),
             "requesting radio focus must not select it"
         );
     }
     for (index, label) in ["Checkbox", "Switch"].into_iter().enumerate() {
-        let (id, control) = node(&renderer, label);
+        let (id, control) = renderer.accessibility_node(label);
         assert_eq!(id, identities[index]);
         assert!(!control.is_disabled());
         assert!(control.supports_action(Action::Click));
@@ -220,42 +200,42 @@ fn check_controls(samples: u32) {
             72.0
         );
     }
-    let point = center(&node(&renderer, "Checkbox").1);
+    let point = center(&renderer.accessibility_node("Checkbox").1);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_values(&renderer, true);
     assert_eq!(probe.get().calls.unwrap().get(), [1, 0]);
     assert!(action(&mut renderer, "Switch", Action::Click));
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_values(&renderer, false);
     assert_eq!(probe.get().calls.unwrap().get(), [1, 1]);
-    let point = center(&node(&renderer, "Switch").1);
+    let point = center(&renderer.accessibility_node("Switch").1);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     probe.get().enabled.unwrap().set(false);
-    renderer.render_frames(12);
+    renderer.frames(12);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_values(&renderer, false);
     assert_eq!(probe.get().calls.unwrap().get(), [1, 1]);
     probe.get().checked.unwrap().set(true);
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_values(&renderer, true);
     assert_eq!(probe.get().calls.unwrap().get(), [1, 1]);
     probe.get().enabled.unwrap().set(true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert!(action(&mut renderer, "Switch", Action::Click));
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_values(&renderer, false);
     assert_eq!(probe.get().calls.unwrap().get(), [1, 2]);
     probe.get().mixed.unwrap().set(true);
-    renderer.render_frames(30);
-    let (mixed_id, mixed_node) = node(&renderer, "Checkbox");
+    renderer.frames(30);
+    let (mixed_id, mixed_node) = renderer.accessibility_node("Checkbox");
     assert_eq!(mixed_id, identities[0]);
     assert_eq!(mixed_node.toggled(), Some(Toggled::Mixed));
     let point = center(&mixed_node);
-    let pixels = renderer.read_pixels().expect("mixed pixels");
+    let pixels = renderer.read_pixels();
     let pixel = |x: u32, y: u32| {
         let offset = ((y * renderer.physical_size().width + x) * 4) as usize;
         &pixels[offset..offset + 3]
@@ -274,55 +254,55 @@ fn check_controls(samples: u32) {
         "the dash must stay near the glyph center"
     );
     let mixed_green = pixel(x, y)[1];
-    let internal_center = center(&node(&renderer, "Internal mixed").1);
+    let internal_center = center(&renderer.accessibility_node("Internal mixed").1);
     let internal_ink = pixel(internal_center.x as u32, internal_center.y as u32);
     assert!(internal_ink[0] > internal_ink[1].saturating_add(80));
     assert!(internal_ink[0] > internal_ink[2].saturating_add(80));
     probe.get().enabled.unwrap().set(false);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_eq!(
-        node(&renderer, "Checkbox").1.toggled(),
+        renderer.accessibility_node("Checkbox").1.toggled(),
         Some(Toggled::Mixed)
     );
     assert!(!action(&mut renderer, "Checkbox", Action::Click));
     assert_eq!(probe.get().calls.unwrap().get(), [1, 2]);
     probe.get().enabled.unwrap().set(true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert!(action(&mut renderer, "Checkbox", Action::Click));
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_values(&renderer, true);
     assert!(!probe.get().mixed.unwrap().get());
     assert_eq!(probe.get().calls.unwrap().get(), [2, 2]);
-    let checked_pixels = renderer.read_pixels().expect("checked pixels");
+    let checked_pixels = renderer.read_pixels();
     let offset = ((y * renderer.physical_size().width + x + 4) * 4) as usize;
     assert!(
         checked_pixels[offset + 1].saturating_add(20) < mixed_green,
         "the selected glyph must morph from the dash to a checkmark"
     );
     probe.get().mixed.unwrap().set(true);
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_eq!(
-        node(&renderer, "Checkbox").1.toggled(),
+        renderer.accessibility_node("Checkbox").1.toggled(),
         Some(Toggled::Mixed)
     );
     assert!(action(&mut renderer, "Checkbox", Action::Click));
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_values(&renderer, true);
     assert_eq!(probe.get().calls.unwrap().get(), [3, 2]);
     assert_eq!(
-        node(&renderer, "Internal mixed").1.toggled(),
+        renderer.accessibility_node("Internal mixed").1.toggled(),
         Some(Toggled::Mixed)
     );
     assert!(action(&mut renderer, "Internal mixed", Action::Click));
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_eq!(
-        node(&renderer, "Internal mixed").1.toggled(),
+        renderer.accessibility_node("Internal mixed").1.toggled(),
         Some(Toggled::True)
     );
     assert!(action(&mut renderer, "Internal mixed", Action::Click));
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert_eq!(
-        node(&renderer, "Internal mixed").1.toggled(),
+        renderer.accessibility_node("Internal mixed").1.toggled(),
         Some(Toggled::False)
     );
     assert_eq!(

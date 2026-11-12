@@ -33,10 +33,9 @@ use crate::{
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::boxed::boxed;
-/// use tessera_components::flow_column::flow_column;
+/// use tessera_components::{boxed::boxed, flow_column::flow_column, modifier::ModifierExt as _};
 /// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-/// use tessera_ui::{Dp, Modifier, tessera, testing::layout_test};
+/// use tessera_ui::{Dp, Modifier, tessera, testing::UiTest};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -50,9 +49,9 @@ use crate::{
 ///     });
 /// }
 ///
-/// let snapshot = layout_test(demo).viewport_px(100, 50).run();
-/// snapshot.node("first").position(0, 0).size(10, 30);
-/// snapshot.node("second").position(10, 0).size(10, 30);
+/// let snapshot = UiTest::new().content(demo).viewport(100, 50).frame();
+/// snapshot.node("first").rect(0, 0, 10, 30);
+/// snapshot.node("second").rect(10, 0, 10, 30);
 /// ```
 #[tessera]
 pub fn flow_column(
@@ -161,17 +160,13 @@ mod tests {
 
     #[test]
     fn flow_column_wraps_children_across_columns() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 100),
-            content: {
-                flow_column_layout_case();
-            },
-            expect: {
-                node("flow_column_first").position(0, 0).size(20, 12);
-                node("flow_column_second").position(0, 15).size(25, 15);
-                node("flow_column_third").position(29, 0).size(18, 10);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(120, 100)
+            .content(flow_column_layout_case)
+            .frame();
+        layout.node("flow_column_first").rect(0, 0, 20, 12);
+        layout.node("flow_column_second").rect(0, 15, 25, 15);
+        layout.node("flow_column_third").rect(29, 0, 18, 10);
     }
 
     #[tessera]
@@ -209,15 +204,12 @@ mod tests {
 
     #[test]
     fn flow_column_center_measures_sized_child_intrinsically() {
-        tessera_ui::assert_layout! {
-            viewport: (100, 60),
-            content: {
-                flow_column_center_sized_case();
-            },
-            expect: {
-                node("flow_column_center_sized").position(0, 0).size(32, 4);
-            }
-        }
+        tessera_ui::testing::UiTest::new()
+            .viewport(100, 60)
+            .content(flow_column_center_sized_case)
+            .frame()
+            .node("flow_column_center_sized")
+            .rect(0, 0, 32, 4);
     }
     #[tessera]
     fn stretch_wrapped_case() {
@@ -247,14 +239,12 @@ mod tests {
 
     #[test]
     fn stretch_matches_the_cross_size_of_each_wrapped_column() {
-        tessera_ui::assert_layout! {
-            viewport: (100, 100),
-            content: { stretch_wrapped_case(); },
-            expect: {
-                node("stretch_0").position(0, 0).size(20, 30);
-                node("stretch_1").position(0, 35).size(20, 25);
-                node("stretch_2").position(24, 0).size(12, 20);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(100, 100)
+            .content(stretch_wrapped_case)
+            .frame();
+        layout.node("stretch_0").rect(0, 0, 20, 30);
+        layout.node("stretch_1").rect(0, 35, 20, 25);
+        layout.node("stretch_2").rect(24, 0, 12, 20);
     }
 }

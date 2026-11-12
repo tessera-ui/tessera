@@ -422,7 +422,7 @@ impl SplitTrailingButtonBuilder {
 ///             });
 ///     });
 /// }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn split_button_layout(
@@ -485,7 +485,7 @@ pub fn split_button_layout(
 ///     });
 ///     assert_eq!(activations.get(), 0);
 /// }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn split_leading_button(
@@ -568,7 +568,7 @@ pub fn split_leading_button(
 ///             });
 ///     });
 /// }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn split_trailing_button(
@@ -819,15 +819,11 @@ mod tests {
         let runtime = tessera_ui::RuntimeSession::new();
         let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
-        tessera_ui::assert_layout! {
-            viewport: (400, 200),
-            content: {
-                split_button_case();
-            },
-            expect: {
-                node("split-leading").height(136);
-                node("split-trailing").height(136);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(400, 200)
+            .content(split_button_case)
+            .frame();
+        layout.node("split-leading").height(136);
+        layout.node("split-trailing").height(136);
     }
 }

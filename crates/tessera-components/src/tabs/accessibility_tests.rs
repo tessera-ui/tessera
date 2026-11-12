@@ -9,11 +9,9 @@ use std::time::Duration;
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, FocusDirection, Modifier, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::TestProbe,
+    accesskit::{Action, Node, NodeId, Role},
+    focus, remember, tessera,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -125,17 +123,12 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
         });
 }
 
-fn action(renderer: &mut HeadlessRenderer, id: NodeId, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: id,
-        data: None,
-    }));
-    renderer.render_frames(12);
+fn action(renderer: &mut UiTest, id: NodeId, action: Action) {
+    assert!(renderer.accessibility_action(id, action));
+    renderer.frames(12);
 }
 
-fn focused(renderer: &HeadlessRenderer) -> Option<String> {
+fn focused(renderer: &UiTest) -> Option<String> {
     let tree = renderer.accessibility_snapshot().expect("tree");
     tree.nodes
         .iter()
@@ -143,9 +136,9 @@ fn focused(renderer: &HeadlessRenderer) -> Option<String> {
         .and_then(|(_, node)| node.label().map(str::to_owned))
 }
 
-fn move_focus(renderer: &mut HeadlessRenderer, direction: FocusDirection, label: &str) {
+fn move_focus(renderer: &mut UiTest, direction: FocusDirection, label: &str) {
     focus::request_move_focus(direction);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_eq!(focused(renderer).as_deref(), Some(label));
 }
 
@@ -161,13 +154,13 @@ fn red_pixels_on_row(pixels: &[u8], width: u32, y: u32, x0: u32, x1: u32) -> usi
         .count()
 }
 
-fn check_indicator(renderer: &mut HeadlessRenderer, label: &str, height: u32, rounded_top: bool) {
+fn check_indicator(renderer: &mut UiTest, label: &str, height: u32, rounded_top: bool) {
     let bounds = control(renderer, label, Role::Tab)
         .1
         .bounds()
         .expect("indicator tab");
     let size = renderer.physical_size();
-    let pixels = renderer.read_pixels().expect("indicator pixels");
+    let pixels = renderer.read_pixels();
     let x = ((bounds.x0 + bounds.x1) * 0.5) as u32;
     let bottom = bounds.y1 as u32;
     for y in bottom - height..bottom {
@@ -199,7 +192,7 @@ fn check_indicator(renderer: &mut HeadlessRenderer, label: &str, height: u32, ro
     }
 }
 
-fn control(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn control(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     let nodes = renderer.accessibility_snapshot().expect("tree").nodes;
     nodes
         .iter()
@@ -219,26 +212,18 @@ fn control(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Nod
 fn check_tabs(samples: u32) {
     let observed = TestProbe::default();
     let fixture_observed = observed.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            fixture(fixture_observed.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 900,
-            height: 600,
-            scale_factor: 1.5,
-            frame_time: if samples == 4 {
-                Duration::from_millis(50)
-            } else {
-                Duration::from_nanos(16_666_667)
-            },
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(12);
+    let mut renderer = UiTest::new()
+        .viewport(900, 600)
+        .scale_factor(1.5)
+        .samples(samples)
+        .frame_step(if samples == 4 {
+            Duration::from_millis(50)
+        } else {
+            Duration::from_nanos(16_666_667)
+        })
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture(fixture_observed.clone()));
+    renderer.frames(12);
     assert_eq!(
         control(&renderer, "Flights", Role::Tab).1.is_selected(),
         Some(true)
@@ -269,7 +254,7 @@ fn check_tabs(samples: u32) {
     }
     assert_eq!(edge, group.x1);
     check_indicator(&mut renderer, "Flights", 4, true);
-    let initial = renderer.read_pixels().expect("initial pixels");
+    let initial = renderer.read_pixels();
     let before = control(&renderer, "Before tabs", Role::Button).0;
     action(&mut renderer, before, Action::Focus);
     move_focus(&mut renderer, FocusDirection::Next, "Flights");
@@ -280,7 +265,7 @@ fn check_tabs(samples: u32) {
     assert_eq!(selected.get(), 0);
     assert_eq!(calls.get(), 0);
     assert_eq!(focused(&renderer).as_deref(), Some("Hotels"));
-    assert_ne!(renderer.read_pixels().expect("focus pixels"), initial);
+    assert_ne!(renderer.read_pixels(), initial);
     move_focus(&mut renderer, FocusDirection::Next, "After tabs");
     move_focus(&mut renderer, FocusDirection::Previous, "Flights");
     action(&mut renderer, hotels, Action::Click);
@@ -291,13 +276,13 @@ fn check_tabs(samples: u32) {
         control(&renderer, "Hotels", Role::Tab).1.is_selected(),
         Some(true)
     );
-    renderer.render_frames(90);
+    renderer.frames(90);
     check_indicator(&mut renderer, "Hotels", 4, true);
     config.with_mut(|config| {
         config.icons = true;
         config.variant = TabsVariant::Secondary;
     });
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(control(&renderer, "Hotels", Role::Tab).0, hotels);
     let bounds = control(&renderer, "Hotels", Role::Tab)
         .1
@@ -305,7 +290,7 @@ fn check_tabs(samples: u32) {
         .expect("icon bounds");
     assert_eq!(bounds.y1 - bounds.y0, 96.0);
     check_indicator(&mut renderer, "Hotels", 3, false);
-    let pixels = renderer.read_pixels().expect("secondary label pixels");
+    let pixels = renderer.read_pixels();
     let size = renderer.physical_size();
     assert!(
         (bounds.y0 as u32..bounds.y1 as u32 - 3).any(|y| {
@@ -317,7 +302,7 @@ fn check_tabs(samples: u32) {
         "secondary active labels use on-surface rather than primary"
     );
     config.with_mut(|config| config.middle_enabled = false);
-    renderer.render_frames(12);
+    renderer.frames(12);
     let node = control(&renderer, "Hotels", Role::Tab).1;
     assert!(node.is_disabled());
     assert!(!node.supports_action(Action::Focus));
@@ -330,10 +315,10 @@ fn check_tabs(samples: u32) {
         config.count = 5;
         config.scrollable = true;
     });
-    renderer.render_frames(90);
+    renderer.frames(90);
     let ferries = control(&renderer, "Ferries", Role::Tab).0;
     action(&mut renderer, ferries, Action::Focus);
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(focused(&renderer).as_deref(), Some("Ferries"));
     let bounds = control(&renderer, "Ferries", Role::Tab)
         .1
@@ -356,7 +341,7 @@ fn check_tabs(samples: u32) {
     );
     assert_eq!(selected.get(), 1);
     config.with_mut(|config| config.count = 3);
-    renderer.render_frames(20);
+    renderer.frames(20);
     assert_eq!(focused(&renderer).as_deref(), Some("Hotels"));
     assert_eq!(calls.get(), 1);
     renderer.resize(180, 600);
@@ -364,14 +349,14 @@ fn check_tabs(samples: u32) {
         config.scrollable = false;
         config.icons = false;
     });
-    renderer.render_frames(90);
+    renderer.frames(90);
     let node = control(&renderer, "Hotels", Role::Tab).1;
     let bounds = node.bounds().expect("narrow target");
     assert!(bounds.x1 - bounds.x0 >= 72.0);
     assert!(bounds.x0 >= 0.0 && bounds.x1 <= 180.0);
     assert_eq!(selected.get(), 1);
     config.with_mut(|config| config.controlled = true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     let flights = control(&renderer, "Flights", Role::Tab).0;
     action(&mut renderer, flights, Action::Click);
     assert_eq!(
@@ -404,7 +389,8 @@ fn gpu_tabs_semantics_focus_and_geometry() {
 fn named_nontext_tabs_fixture() {
     let selected = remember(|| 0usize);
     material_theme().child(move || {
-        tabs(selected.get()).on_select(move |index| selected.set(index))
+        tabs(selected.get())
+            .on_select(move |index| selected.set(index))
             .modifier(Modifier::new().width(Dp(360.0)))
             .content(|row| {
                 tab(row)
@@ -427,18 +413,11 @@ fn gpu_icon_only_and_custom_tabs_publish_the_authored_accessible_name() {
     crate::test_utils::run_isolated_test(
         "tabs::accessibility_tests::gpu_icon_only_and_custom_tabs_publish_the_authored_accessible_name",
         || {
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(named_nontext_tabs_fixture),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 500,
-                    height: 200,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(12);
+            let mut renderer = UiTest::new()
+                .viewport(500, 200)
+                .rendered(crate::TesseraComponents)
+                .content(named_nontext_tabs_fixture);
+            renderer.frames(12);
             let tree = renderer.accessibility_snapshot().unwrap();
             let names = tree
                 .nodes

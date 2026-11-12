@@ -1,7 +1,7 @@
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    testing::UiTest,
 };
 
 use super::*;
@@ -14,7 +14,7 @@ fn fixture() {
     });
 }
 
-fn choice(renderer: &HeadlessRenderer, group: &str, label: &str) -> Node {
+fn choice(renderer: &UiTest, group: &str, label: &str) -> Node {
     let snapshot = renderer.accessibility_snapshot().unwrap();
     let bounds = snapshot
         .nodes
@@ -41,7 +41,7 @@ fn choice(renderer: &HeadlessRenderer, group: &str, label: &str) -> Node {
         .1
 }
 
-fn click(renderer: &mut HeadlessRenderer, group: &str, label: &str) {
+fn click(renderer: &mut UiTest, group: &str, label: &str) {
     let bounds = choice(renderer, group, label).bounds().unwrap();
     let pointer = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
@@ -50,24 +50,17 @@ fn click(renderer: &mut HeadlessRenderer, group: &str, label: &str) {
     renderer.pointer_move(MOUSE_POINTER_ID, pointer);
     renderer.pointer_press(MOUSE_POINTER_ID, pointer, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, pointer, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter for the date States matrix"]
 fn states_matrix_preserves_themed_native_choices_and_scaled_pointer_input() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1024,
-            height: 1400,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(6);
+    let mut renderer = UiTest::new()
+        .viewport(1024, 1400)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(6);
     let snapshot = renderer.accessibility_snapshot().unwrap();
     for (dark, y, height) in [(false, 0.0, 624.0), (true, 624.0, 622.0)] {
         let name = format!("{} calendar states", if dark { "Dark" } else { "Light" });
@@ -109,7 +102,7 @@ fn states_matrix_preserves_themed_native_choices_and_scaled_pointer_input() {
         .bounds()
         .unwrap();
     assert_eq!(range_bounds.width(), 78.0);
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let background =
         (((range_bounds.y0 + 1.0) as usize * 1024 + (range_bounds.x0 + 1.0) as usize) * 4)..;
     for x in [range_bounds.x0 + 1.0, range_bounds.x1 - 2.0] {
@@ -140,7 +133,7 @@ fn states_matrix_preserves_themed_native_choices_and_scaled_pointer_input() {
         Some(false)
     );
     renderer.resize(512, 1400);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert_eq!(
         choice(&renderer, &light, label).bounds().unwrap().width(),
         24.0

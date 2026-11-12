@@ -271,9 +271,9 @@ impl BadgeDefaults {
 /// ## Examples
 ///
 /// ```rust
-/// tessera_ui::testing::layout_test(|| {
+/// tessera_ui::testing::UiTest::new().content(|| {
 ///     tessera_components::badge::badged_box();
-/// }).run();
+/// }).frame();
 /// ```
 #[tessera]
 pub fn badged_box(
@@ -320,7 +320,7 @@ pub fn badged_box(
 /// badge().content_color(Color::WHITE);
 /// #     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn badge(
@@ -377,7 +377,7 @@ pub fn badge(
 ///     .content(|| {});
 /// #     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn badge_with_content(

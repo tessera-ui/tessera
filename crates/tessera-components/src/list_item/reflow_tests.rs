@@ -8,9 +8,8 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, RenderSlot, State,
     accesskit::Node,
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
-    testing::TestProbe,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -109,7 +108,7 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
         });
 }
 
-fn entry(renderer: &HeadlessRenderer) -> Node {
+fn entry(renderer: &UiTest) -> Node {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -120,7 +119,7 @@ fn entry(renderer: &HeadlessRenderer) -> Node {
         .1
 }
 
-fn point(renderer: &HeadlessRenderer) -> PxPosition {
+fn point(renderer: &UiTest) -> PxPosition {
     let bounds = entry(renderer).bounds().unwrap();
     PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
@@ -128,46 +127,38 @@ fn point(renderer: &HeadlessRenderer) -> PxPosition {
     )
 }
 
-fn pixel(renderer: &HeadlessRenderer, point: PxPosition) -> [u8; 4] {
-    let pixels = renderer.read_pixels().unwrap();
+fn pixel(renderer: &UiTest, point: PxPosition) -> [u8; 4] {
+    let pixels = renderer.read_pixels();
     let offset = ((point.y as u32 * renderer.physical_size().width + point.x as u32) * 4) as usize;
     pixels[offset..offset + 4].try_into().unwrap()
 }
 
-fn tap(renderer: &mut HeadlessRenderer, point: PxPosition) {
+fn tap(renderer: &mut UiTest, point: PxPosition) {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(60);
+    renderer.frames(60);
 }
 
 fn check(samples: u32) {
     for scale in [1.0, 1.5] {
         let probe = TestProbe::default();
         let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(probe.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: (400.0 * scale) as u32,
-                height: (320.0 * scale) as u32,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport((400.0 * scale) as u32, (320.0 * scale) as u32)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(move || fixture(probe.clone()));
+        renderer.frames(8);
         let settings = observed.get().settings.unwrap();
         let controller = observed.get().scroll.unwrap();
         controller.with_mut(|c| c.scroll_to(Dp::ZERO, Dp(400.0)));
-        renderer.render_frames(12);
+        renderer.frames(12);
         let initial = entry(&renderer).bounds().unwrap();
         assert!((initial.y0 - 80.0 * scale).abs() <= 1.0);
         settings.with_mut(|s| s.expanded = true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         let expanded = entry(&renderer).bounds().unwrap();
         assert!(expanded.y1 - expanded.y0 > initial.y1 - initial.y0);
         assert!(expanded.y1 < renderer.physical_size().height as f64);
@@ -178,14 +169,14 @@ fn check(samples: u32) {
         assert_eq!(settings.get().calls, 1);
         assert_eq!(entry(&renderer).is_selected(), Some(true));
         settings.with_mut(|s| s.expanded = false);
-        renderer.render_frames(30);
+        renderer.frames(30);
         let current_point = point(&renderer);
         tap(&mut renderer, current_point);
         assert_eq!(settings.get().calls, 2);
         assert_eq!(entry(&renderer).is_selected(), Some(false));
         let previous_point = point(&renderer);
         controller.with_mut(|c| c.scroll_to(Dp::ZERO, Dp::ZERO));
-        renderer.render_frames(12);
+        renderer.frames(12);
         tap(&mut renderer, previous_point);
         assert_eq!(
             settings.get().calls,
@@ -193,7 +184,7 @@ fn check(samples: u32) {
             "old scrolled bounds must not receive clicks"
         );
         controller.with_mut(|c| c.scroll_to(Dp::ZERO, Dp(400.0)));
-        renderer.render_frames(12);
+        renderer.frames(12);
         let current_point = point(&renderer);
         tap(&mut renderer, current_point);
         assert_eq!(settings.get().calls, 3);

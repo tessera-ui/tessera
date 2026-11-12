@@ -7,11 +7,9 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::TestProbe,
+    accesskit::{Action, Orientation, Role, Toggled},
+    focus, remember, tessera,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -133,31 +131,20 @@ fn fixture(observed: TestProbe<Option<State<Settings>>>) {
         });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
-        .unwrap()
+fn action(renderer: &mut UiTest, label: &str, action: Action) -> bool {
+    renderer.accessibility_action(renderer.accessibility_node(label).0, action)
 }
 
-fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) -> bool {
-    renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: node(renderer, label).0,
-        data: None,
-    })
+fn bounds(renderer: &UiTest, label: &str) -> tessera_ui::accesskit::Rect {
+    renderer.accessibility_node(label).1.bounds().unwrap()
 }
 
-fn traverse(renderer: &mut HeadlessRenderer, direction: FocusDirection, label: &str) {
+fn traverse(renderer: &mut UiTest, direction: FocusDirection, label: &str) {
     focus::request_move_focus(direction);
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
-        node(renderer, label).0,
+        renderer.accessibility_node(label).0,
         "{direction:?} to {label}; nodes: {:?}",
         renderer
             .accessibility_snapshot()
@@ -169,7 +156,7 @@ fn traverse(renderer: &mut HeadlessRenderer, direction: FocusDirection, label: &
     );
 }
 
-fn text_rect(renderer: &HeadlessRenderer, label: &str) -> [f64; 4] {
+fn text_rect(renderer: &UiTest, label: &str) -> [f64; 4] {
     let bounds = renderer
         .inspect_components()
         .labeled(label)
@@ -178,15 +165,15 @@ fn text_rect(renderer: &HeadlessRenderer, label: &str) -> [f64; 4] {
     [bounds.x, bounds.y, bounds.width, bounds.height].map(f64::from)
 }
 
-fn text_height(renderer: &HeadlessRenderer, label: &str) -> f64 {
+fn text_height(renderer: &UiTest, label: &str) -> f64 {
     text_rect(renderer, label)[3]
 }
 
-fn indicator_ink(renderer: &HeadlessRenderer) -> usize {
-    let bounds = node(renderer, "Indicator").1.bounds().unwrap();
+fn indicator_ink(renderer: &UiTest) -> usize {
+    let bounds = bounds(&renderer, "Indicator");
     let center_x = ((bounds.x0 + bounds.x1) / 2.0) as u32;
     let center_y = ((bounds.y0 + bounds.y1) / 2.0) as u32;
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let width = renderer.physical_size().width;
     let mut count = 0;
     for y in center_y - 9..center_y + 9 {
@@ -210,25 +197,16 @@ fn check_segments(samples: u32) {
 
 fn check_segments_at_density(samples: u32, scale: f64) {
     let observed = TestProbe::default();
-    let fixture_observed = observed.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            fixture(fixture_observed.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 900,
-            height: 600,
-            scale_factor: scale,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(900, 600)
+        .scale_factor(scale)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(8);
     let settings = observed.get().unwrap();
-    let natural_width = node(&renderer, "Single Month").1.bounds().unwrap().x1;
-    let day = node(&renderer, "Single Day").1.bounds().unwrap();
+    let natural_width = bounds(&renderer, "Single Month").x1;
+    let day = bounds(&renderer, "Single Day");
     let label = text_rect(&renderer, "Day");
     assert!(
         (label[0] as f64 + label[2] as f64 / 2.0 - (day.x0 + day.x1) / 2.0).abs() <= 1.0,
@@ -255,7 +233,7 @@ fn check_segments_at_density(samples: u32, scale: f64) {
         ("Single Week", true),
         ("Single Month", false),
     ] {
-        let item = node(&renderer, label).1;
+        let item = renderer.accessibility_node(label).1;
         assert_eq!(item.role(), Role::RadioButton);
         assert_eq!(
             item.toggled(),
@@ -267,9 +245,12 @@ fn check_segments_at_density(samples: u32, scale: f64) {
         );
         assert!(item.supports_action(Action::Click));
     }
-    assert_eq!(node(&renderer, "Multi Italic").1.role(), Role::CheckBox);
     assert_eq!(
-        node(&renderer, "Multi Italic").1.toggled(),
+        renderer.accessibility_node("Multi Italic").1.role(),
+        Role::CheckBox
+    );
+    assert_eq!(
+        renderer.accessibility_node("Multi Italic").1.toggled(),
         Some(Toggled::True)
     );
     traverse(&mut renderer, FocusDirection::Next, "Single Week");
@@ -281,7 +262,7 @@ fn check_segments_at_density(samples: u32, scale: f64) {
     traverse(&mut renderer, FocusDirection::Right, "Single Month");
     assert_eq!(settings.get().selected, 2);
     assert_eq!(
-        node(&renderer, "Single Month").1.bounds().unwrap().x1,
+        bounds(&renderer, "Single Month").x1,
         natural_width,
         "selection preserves natural group width"
     );
@@ -297,28 +278,28 @@ fn check_segments_at_density(samples: u32, scale: f64) {
     traverse(&mut renderer, FocusDirection::Next, "Indicator");
     traverse(&mut renderer, FocusDirection::Next, "After");
     assert!(action(&mut renderer, "Multi Bold", Action::Click));
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert_eq!(settings.get().checked, [true, true]);
     assert!(action(&mut renderer, "Single Day", Action::Focus));
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert_eq!(settings.get().selected, 2, "explicit focus must not select");
-    let bounds = node(&renderer, "Single Day").1.bounds().unwrap();
+    let day = bounds(&renderer, "Single Day");
     let center = PxPosition::from_f32_xy(
-        ((bounds.x0 + bounds.x1) / 2.0) as f32,
-        ((bounds.y0 + bounds.y1) / 2.0) as f32,
+        ((day.x0 + day.x1) / 2.0) as f32,
+        ((day.y0 + day.y1) / 2.0) as f32,
     );
     renderer.pointer_press(MOUSE_POINTER_ID, center, PressKeyEventType::Left);
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert_eq!(
         settings.get().selected,
         2,
         "pointer press must wait for completion"
     );
     renderer.pointer_release(MOUSE_POINTER_ID, center, PressKeyEventType::Left);
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert_eq!(settings.get().selected, 0);
     assert_eq!(
-        node(&renderer, "Single Month").1.bounds().unwrap().x1,
+        bounds(&renderer, "Single Month").x1,
         natural_width,
         "deselection preserves natural group width"
     );
@@ -331,19 +312,19 @@ fn check_segments_at_density(samples: u32, scale: f64) {
         value.selected = 1;
         value.disabled = true;
     });
-    renderer.render_frames(5);
-    let disabled = node(&renderer, "Single Week").1;
+    renderer.frames(5);
+    let disabled = renderer.accessibility_node("Single Week").1;
     assert!(disabled.is_disabled());
     assert_eq!(disabled.toggled(), Some(Toggled::True));
     assert!(!disabled.supports_action(Action::Click));
     assert!(!action(&mut renderer, "Single Week", Action::Click));
     assert!(action(&mut renderer, "Single Day", Action::Focus));
-    renderer.render_frames(5);
+    renderer.frames(5);
     traverse(&mut renderer, FocusDirection::Right, "Single Month");
     assert_eq!(settings.get().selected, 2);
     assert_eq!(text_height(&renderer, "Month"), 20.0 * scale);
     settings.with_mut(|value| value.large = true);
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert_eq!(text_height(&renderer, "Month"), 28.0 * scale);
     settings.with_mut(|value| {
         value.large = false;
@@ -352,10 +333,10 @@ fn check_segments_at_density(samples: u32, scale: f64) {
     });
     for width in [181.0, 0.0, 360.0, 181.0, 360.0] {
         settings.with_mut(|value| value.width = Dp(width));
-        renderer.render_frames(5);
-        let day = node(&renderer, "Single Day").1.bounds().unwrap();
-        let week = node(&renderer, "Single Week").1.bounds().unwrap();
-        let month = node(&renderer, "Single Month").1.bounds().unwrap();
+        renderer.frames(5);
+        let day = bounds(&renderer, "Single Day");
+        let week = bounds(&renderer, "Single Week");
+        let month = bounds(&renderer, "Single Month");
         assert!(
             month.x1 == (width * scale).floor(),
             "segments overflow {width}: {month:?}"
@@ -374,14 +355,14 @@ fn check_segments_at_density(samples: u32, scale: f64) {
             settings.width = Dp(360.0);
             settings.natural = false;
         });
-        renderer.render_frames(5);
-        let target = node(&renderer, "Single Day").1.bounds().unwrap();
+        renderer.frames(5);
+        let target = bounds(&renderer, "Single Day");
         assert_eq!(
             target.height(),
             (48.0 * scale).floor(),
             "density preserves the interactive height"
         );
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let width = renderer.physical_size().width as usize;
         let background = &pixels[..4];
         let x = ((target.x0 + target.x1) * 0.5) as usize;

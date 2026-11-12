@@ -1,11 +1,8 @@
 use tessera_components::{side_sheet::SideSheetController, theme::material_theme};
 use tessera_ui::{
-    CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition,
+    PressKeyEventType, PxPosition,
     accesskit::{Node, Rect as AccessibleRect},
-    testing::{
-        layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-        start_layout_test_session,
-    },
+    testing::UiTest,
 };
 
 use super::*;
@@ -14,7 +11,11 @@ use super::*;
 fn fixture(
     host: (i32, i32),
     output: tessera_ui::testing::TestProbe<
-        Option<(State<usize>, State<SideSheetController>, State<ScrollableController>)>,
+        Option<(
+            State<usize>,
+            State<SideSheetController>,
+            State<ScrollableController>,
+        )>,
     >,
 ) {
     let selected = remember(|| 0usize);
@@ -58,12 +59,11 @@ fn fixture(
 fn live_drawer_fills_available_height_and_scrolls_to_an_activatable_last_destination() {
     for (width, height) in [(600, 240), (600, 720), (320, 240), (320, 720)] {
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || fixture((width, height), probe.clone())).viewport_px(800, 800),
-        );
-        pump_layout_test_session(&mut session, 0);
-        let before = pump_layout_test_session(&mut session, 1_000_000_000);
+        let mut session = UiTest::new()
+            .content(|| fixture((width, height), output.clone()))
+            .viewport(800, 800);
+        session.frame();
+        let before = session.advance(std::time::Duration::from_millis(1_000));
         before.node("drawer-host").size(width, height);
         before.node("live-drawer").size(width.min(360), height);
         before.node("drawer-personal").width(width.min(360) - 24);
@@ -74,34 +74,15 @@ fn live_drawer_fills_available_height_and_scrolls_to_an_activatable_last_destina
                 scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -240.0));
             });
         }
-        let after = pump_layout_test_session(&mut session, 1_016_666_667);
+        let after = session.frames(1);
         let bounds = after.node("drawer-personal").bounds();
         assert!(bounds.y.0 >= 0);
         assert!(bounds.y.0 + bounds.height.0 <= height);
-        let cursor = Some(PxPosition::from_f32_xy(
+        session.click_at(PxPosition::from_f32_xy(
             bounds.x.to_f32() + bounds.width.to_f32() * 0.5,
             bounds.y.to_f32() + bounds.height.to_f32() * 0.5,
         ));
-        for (index, content) in [
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            CursorEventContent::Released(PressKeyEventType::Left),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            pump_layout_test_session_with_input(
-                &mut session,
-                1_000_000_000 + (index as u64 + 2) * 16_666_667,
-                vec![PointerChange::new(
-                    tessera_ui::current_frame_time().unwrap(),
-                    1,
-                    content,
-                    GestureState::TapCandidate,
-                )],
-                cursor,
-            );
-        }
-        pump_layout_test_session(&mut session, 1_100_000_000);
+        session.frames(1);
         assert_eq!(output.get().unwrap().0.get(), 4);
         assert!(!output.get().unwrap().1.with(SideSheetController::is_open));
     }
@@ -162,14 +143,20 @@ enum Scene {
     Live(
         (i32, i32),
         tessera_ui::testing::TestProbe<
-            Option<(State<usize>, State<SideSheetController>, State<ScrollableController>)>,
+            Option<(
+                State<usize>,
+                State<SideSheetController>,
+                State<ScrollableController>,
+            )>,
         >,
     ),
 }
 
-fn gpu_renderer(scene: Scene, width: u32, height: u32) -> tessera_ui::headless::HeadlessRenderer {
-    let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
-        Box::new(move || match scene.clone() {
+fn gpu_renderer(scene: Scene, width: u32, height: u32) -> tessera_ui::testing::UiTest<'static> {
+    let mut renderer = tessera_ui::testing::UiTest::new()
+        .viewport(width, height)
+        .rendered(crate::TestPipelines)
+        .content(move || match scene.clone() {
             Scene::Native(width, mode, output) => {
                 native_figure_fixture(width, mode, output);
             }
@@ -179,30 +166,17 @@ fn gpu_renderer(scene: Scene, width: u32, height: u32) -> tessera_ui::headless::
             Scene::Live(viewport, output) => {
                 fixture(viewport, output);
             }
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        tessera_ui::headless::HeadlessConfig {
-            width,
-            height,
-            sample_count: 1,
-            frame_time: std::time::Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .expect("drawer reference renderer");
-    renderer.render_frames(6);
+        });
+    renderer.frames(6);
     renderer
 }
 
-fn settle_native_figure(
-    renderer: &mut tessera_ui::headless::HeadlessRenderer,
-    geometry: State<Geometry>,
-) {
+fn settle_native_figure(renderer: &mut tessera_ui::testing::UiTest, geometry: State<Geometry>) {
     let mut previous = None;
     let mut stable = 0;
     let mut history = Vec::new();
     for _ in 0..16 {
-        renderer.step_frame();
+        renderer.frames(1);
         let current = geometry.get();
         stable = if previous.as_ref() == Some(&current) {
             stable + 1
@@ -306,7 +280,7 @@ fn drawer_reference_rulers_measure_native_items_in_one_canonical_space() {
             let size = renderer.physical_size();
             assert!(right > left && right <= size.width as usize);
             assert!(bottom <= size.height as usize);
-            let pixels = renderer.read_pixels().unwrap();
+            let pixels = renderer.read_pixels();
             let pink_columns = (left..right)
                 .filter(|&x| {
                     (top..bottom).any(|y| {
@@ -400,10 +374,7 @@ fn figure_contains(outer: AccessibleRect, node: &Node) -> bool {
     })
 }
 
-fn visibility_group(
-    renderer: &tessera_ui::headless::HeadlessRenderer,
-    label: &str,
-) -> AccessibleRect {
+fn visibility_group(renderer: &tessera_ui::testing::UiTest, label: &str) -> AccessibleRect {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -417,7 +388,7 @@ fn visibility_group(
 }
 
 fn assert_visibility_panel(
-    renderer: &tessera_ui::headless::HeadlessRenderer,
+    renderer: &tessera_ui::testing::UiTest,
     width: u32,
     number: usize,
     shown: bool,
@@ -488,7 +459,7 @@ fn assert_visibility_panel(
 }
 
 fn tap_visibility_node(
-    renderer: &mut tessera_ui::headless::HeadlessRenderer,
+    renderer: &mut tessera_ui::testing::UiTest,
     label: &str,
     role: Role,
     within: Option<AccessibleRect>,
@@ -514,7 +485,7 @@ fn tap_visibility_node(
     renderer.pointer_move(tessera_ui::MOUSE_POINTER_ID, point);
     renderer.pointer_press(tessera_ui::MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(tessera_ui::MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(6);
+    renderer.frames(6);
 }
 
 #[test]
@@ -581,7 +552,7 @@ fn static_state_presentations_render_hover_focus_and_press_without_changing_sele
             .count(),
         4
     );
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let panel = |label: &str| {
         let bounds = tree
             .nodes
@@ -685,25 +656,16 @@ fn enter_cold_child(test: &str) -> bool {
 
 fn check_cold_specs_svg(count: usize) {
     let output = tessera_ui::testing::TestProbe::default();
-    let probe = output.clone();
-    let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
-        Box::new(move || cold_specs_fixture(count, probe.clone())),
-        vec![Box::new(crate::TestPipelines)],
-        tessera_ui::headless::HeadlessConfig {
-            width: 1024,
-            height: 1100,
-            sample_count: 1,
-            frame_time: std::time::Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .expect("cold drawer renderer");
+    let mut renderer = tessera_ui::testing::UiTest::new()
+        .viewport(1024, 1100)
+        .rendered(crate::TestPipelines)
+        .content(|| cold_specs_fixture(count, output.clone()));
     let mut previous = None;
     let mut stable = 0;
     let mut history = Vec::new();
     let mut settled = false;
     for _ in 0..16 {
-        renderer.step_frame();
+        renderer.frames(1);
         let current: Vec<_> =
             output.with(|geometries| geometries.iter().map(|geometry| geometry.get()).collect());
         let complete = current.len() == count
@@ -719,7 +681,7 @@ fn check_cold_specs_svg(count: usize) {
         } else {
             0
         };
-        history.push((renderer.frame_index(), current.clone()));
+        history.push((renderer.frame_time(), current.clone()));
         previous = Some(current);
         if stable == 3 {
             settled = true;
@@ -739,7 +701,7 @@ fn check_cold_specs_svg(count: usize) {
     canvases.sort_by(|left, right| left.y0.total_cmp(&right.y0));
     assert_eq!(canvases.len(), count);
     let geometries = output.get();
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     for (index, (canvas, geometry)) in canvases.into_iter().zip(geometries).enumerate() {
         let values = geometry.with(space_geometry);
         let container = values["container"];

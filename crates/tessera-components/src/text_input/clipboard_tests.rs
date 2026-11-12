@@ -2,8 +2,8 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier, State,
     clipboard::{ClipboardAction, ClipboardResponse, ClipboardWrite, request_clipboard_action},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -78,25 +78,19 @@ fn arrange(probe: &Probe, editor: State<TextInputController>) {
 fn check_edits() {
     let probe = Probe::default();
     let output = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(output.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 480,
-            height: 240,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(480, 240)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture(output.clone()));
+    renderer.frames(4);
     let editor = probe.editor.get().expect("editor");
     editor.with(|editor| editor.focus_handler().request_focus());
-    renderer.render_frames(4);
+    renderer.frames(4);
     renderer.inject_ime_event(tessera_ui::winit::event::Ime::Preedit(
         "ni".into(),
         Some((2, 2)),
     ));
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(editor.with(|editor| editor.composition().is_some()));
     assert!(editor.with(|editor| !editor.current_composition_rects().is_empty()));
     probe
@@ -104,22 +98,22 @@ fn check_edits() {
         .get()
         .expect("other")
         .with(|other| other.focus_handler().request_focus());
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(editor.with(|editor| editor.text()), "NI");
     assert!(editor.with(|editor| editor.composition().is_none()));
     assert!(editor.with(|editor| editor.current_composition_rects().is_empty()));
     editor.with(|editor| editor.focus_handler().request_focus());
-    renderer.render_frames(3);
+    renderer.frames(3);
     renderer.inject_ime_event(tessera_ui::winit::event::Ime::Preedit(
         "h".into(),
         Some((1, 1)),
     ));
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(editor.with(|editor| editor.text()), "NIH");
 
     arrange(&probe, editor);
     request(&probe, ClipboardAction::Copy);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(probe.handled.get());
     let write = probe.write.with_mut(Option::take).expect("copy write");
     assert_eq!(write.text(), "é🙂");
@@ -128,7 +122,7 @@ fn check_edits() {
     assert!(probe.changes.with(Vec::is_empty));
 
     request(&probe, ClipboardAction::Cut);
-    renderer.render_frames(3);
+    renderer.frames(3);
     probe
         .write
         .with_mut(Option::take)
@@ -138,7 +132,7 @@ fn check_edits() {
     assert!(probe.changes.with(Vec::is_empty));
 
     request(&probe, ClipboardAction::Cut);
-    renderer.render_frames(3);
+    renderer.frames(3);
     probe
         .write
         .with_mut(Option::take)
@@ -149,7 +143,7 @@ fn check_edits() {
 
     arrange(&probe, editor);
     request(&probe, ClipboardAction::Paste("xy\r\n".into()));
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(editor.with(|editor| editor.text()), "ABXYZ");
     assert_eq!(probe.changes.with(Clone::clone), ["abxyz"]);
     assert!(editor.with(|editor| editor.selection().is_collapsed()));
@@ -160,26 +154,26 @@ fn check_edits() {
 
     arrange(&probe, editor);
     request(&probe, ClipboardAction::Cut);
-    renderer.render_frames(3);
+    renderer.frames(3);
     let stale = probe.write.with_mut(Option::take).expect("pending cut");
     request(&probe, ClipboardAction::Paste("new".into()));
-    renderer.render_frames(3);
+    renderer.frames(3);
     stale.complete(true);
     assert_eq!(editor.with(|editor| editor.text()), "ABNEWZ");
     assert_eq!(probe.changes.with(Clone::clone), ["abnewz"]);
 
     probe.read_only.get().expect("read-only state").set(true);
-    renderer.render_frames(3);
+    renderer.frames(3);
     arrange(&probe, editor);
     request(&probe, ClipboardAction::Paste("replace".into()));
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(probe.handled.get());
     assert_eq!(editor.with(|editor| editor.text()), "abé🙂z");
     request(&probe, ClipboardAction::Cut);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(probe.write.with(Option::is_none));
     request(&probe, ClipboardAction::Copy);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(
         probe
             .write
@@ -190,9 +184,9 @@ fn check_edits() {
     );
 
     probe.enabled.get().expect("enabled state").set(false);
-    renderer.render_frames(3);
+    renderer.frames(3);
     request(&probe, ClipboardAction::Paste("disabled".into()));
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(!probe.handled.get());
     assert_eq!(editor.with(|editor| editor.text()), "abé🙂z");
 }

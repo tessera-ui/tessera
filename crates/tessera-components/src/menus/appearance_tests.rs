@@ -2,8 +2,8 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Node, Rect, Role, Toggled},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -120,7 +120,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
+fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -131,18 +131,18 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .1
 }
 
-fn click(renderer: &mut HeadlessRenderer, bounds: Rect) {
+fn click(renderer: &mut UiTest, bounds: Rect) {
     let point = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
         ((bounds.y0 + bounds.y1) / 2.0) as f32,
     );
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(2);
+    renderer.frames(2);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(480.0, 580.0));
-    renderer.render_frames(90);
+    renderer.frames(90);
 }
 
 fn assert_color(pixels: &[u8], width: usize, x: f64, y: f64, color: Color) {
@@ -169,24 +169,13 @@ fn assert_color(pixels: &[u8], width: usize, x: f64, y: f64, color: Color) {
 fn check_appearance(samples: u32) {
     let scale = 1.5;
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || {
-                fixture(observed.clone());
-            }
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 750,
-            height: 900,
-            scale_factor: scale,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(750, 900)
+        .scale_factor(scale)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(4);
     let settings = observed.get().settings.expect("settings");
     let first = node(&renderer, "Primary group", Role::Group)
         .bounds()
@@ -198,10 +187,10 @@ fn check_appearance(samples: u32) {
         MOUSE_POINTER_ID,
         PxPosition::from_f32_xy((last.x0 + 8.0) as f32, (last.y0 + 8.0) as f32),
     );
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(480.0, 580.0));
-    renderer.render_frames(90);
-    let initial = renderer.read_pixels().expect("pixels");
+    renderer.frames(90);
+    let initial = renderer.read_pixels();
     assert!(
         (last.y0 - first.y1 - 2.0 * scale).abs() <= 1.0,
         "group gap: {first:?}, {last:?}"
@@ -242,7 +231,7 @@ fn check_appearance(samples: u32) {
                 selected,
                 ..Settings::default()
             });
-            renderer.render_frames(3);
+            renderer.frames(3);
             let priority = node(&renderer, "Priority", Role::MenuItemRadio);
             assert_eq!(
                 priority.toggled(),
@@ -263,7 +252,7 @@ fn check_appearance(samples: u32) {
                 (MenuColorStyle::Vibrant, true) => VIBRANT_SELECTED,
             };
             assert_color(
-                &renderer.read_pixels().expect("pixels"),
+                &renderer.read_pixels(),
                 750,
                 bounds.x1 - 20.0 * scale,
                 (bounds.y0 + bounds.y1) / 2.0,
@@ -275,7 +264,7 @@ fn check_appearance(samples: u32) {
         width: 160.0,
         ..Settings::default()
     });
-    renderer.render_frames(3);
+    renderer.frames(3);
     let narrow = node(&renderer, "A long menu action that must wrap", Role::Label)
         .bounds()
         .expect("bounds");
@@ -291,9 +280,9 @@ fn check_appearance(samples: u32) {
         "narrow text cannot overlap shortcut"
     );
     settings.set(Settings::default());
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert!(
-        renderer.read_pixels().expect("restored pixels") == initial,
+        renderer.read_pixels() == initial,
         "restoring content and interaction state restores every pixel"
     );
     click(&mut renderer, bounds);
@@ -302,7 +291,7 @@ fn check_appearance(samples: u32) {
         "actual pointer toggles the controlled selection"
     );
     settings.with_mut(|value| value.enabled = false);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(
         node(&renderer, "Priority", Role::MenuItemRadio)
             .bounds()

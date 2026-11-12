@@ -1,10 +1,8 @@
-use std::time::Duration;
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-    accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId},
+    testing::UiTest,
 };
 
 use super::*;
@@ -16,7 +14,7 @@ fn fixture() {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -26,7 +24,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
     (id, node.clone())
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+fn click(renderer: &mut UiTest, label: &str, role: Role) {
     let bounds = node(renderer, label, role).1.bounds().unwrap();
     let position = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) * 0.5) as f32,
@@ -35,10 +33,10 @@ fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(3);
+    renderer.frames(3);
 }
 
-fn result_count(renderer: &HeadlessRenderer) -> usize {
+fn result_count(renderer: &UiTest) -> usize {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -51,19 +49,11 @@ fn result_count(renderer: &HeadlessRenderer) -> usize {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn divided_full_screen_configuration_filters_native_emails_and_preserves_activated_query() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 600,
-            height: 600,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(5);
+    let mut renderer = UiTest::new()
+        .viewport(600, 600)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(5);
     assert_eq!(
         node(&renderer, "Search your messages", Role::TextInput)
             .1
@@ -94,17 +84,12 @@ fn divided_full_screen_configuration_filters_native_emails_and_preserves_activat
     assert!(result.y0 >= query.y1);
     click(&mut renderer, "Clear search", Role::Button);
     let input = node(&renderer, "Search your messages", Role::TextInput).0;
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Focus,
-        target_tree: TreeId::ROOT,
-        target_node: input,
-        data: None,
-    }));
-    renderer.render_frames(2);
+    assert!(renderer.accessibility_action(input, Action::Focus));
+    renderer.frames(2);
     for character in "Movie".chars() {
         renderer.inject_text(&character.to_string());
     }
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(
         node(&renderer, "Search your messages", Role::TextInput)
             .1

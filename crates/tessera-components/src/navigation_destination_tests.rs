@@ -1,8 +1,5 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-use tessera_ui::{
-    Dp, Modifier, State, remember, tessera,
-    testing::{layout_test, pump_layout_test_session, start_layout_test_session},
-};
+use tessera_ui::{Dp, Modifier, State, remember, tessera, testing::UiTest};
 
 use crate::{
     badge::badge_with_content,
@@ -157,14 +154,10 @@ fn bar_fixture(options_probe: tessera_ui::testing::TestProbe<Option<State<Option
 #[test]
 fn rail_badge_moves_from_icon_overlap_to_trailing_label_without_changing_target_width() {
     let options_probe = tessera_ui::testing::TestProbe::default();
-    let observed = options_probe.clone();
-    let mut session = start_layout_test_session(
-        layout_test(move || {
-            rail_fixture(observed.clone());
-        })
-        .viewport_px(320, 400),
-    );
-    let collapsed = pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| rail_fixture(options_probe.clone()))
+        .viewport(320, 400);
+    let collapsed = session.frame();
     collapsed.node("rail").size(96, 300);
     let icon = collapsed.node("rail-icon").bounds();
     let badge = collapsed.node("rail-badge").bounds();
@@ -172,8 +165,8 @@ fn rail_badge_moves_from_icon_overlap_to_trailing_label_without_changing_target_
     assert_eq!(badge.y.0, icon.y.0 - 2);
     let options = options_probe.get().expect("mounted destination options");
     options.with_mut(|options| options.expanded = true);
-    pump_layout_test_session(&mut session, 16_666_667);
-    let expanded = pump_layout_test_session(&mut session, 400_000_000);
+    session.frames(1);
+    let expanded = session.advance(std::time::Duration::from_nanos(383_333_333));
     expanded.node("rail").size(220, 300);
     let icon = expanded.node("rail-icon").bounds();
     let badge = expanded.node("rail-badge").bounds();
@@ -188,18 +181,14 @@ fn rail_badge_moves_from_icon_overlap_to_trailing_label_without_changing_target_
 #[test]
 fn navigation_bar_grows_for_twice_sized_labels_and_keeps_icons_inside_one_shared_height() {
     let options_probe = tessera_ui::testing::TestProbe::default();
-    let observed = options_probe.clone();
-    let mut session = start_layout_test_session(
-        layout_test(move || {
-            bar_fixture(observed.clone());
-        })
-        .viewport_px(600, 400),
-    );
-    let normal = pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| bar_fixture(options_probe.clone()))
+        .viewport(600, 400);
+    let normal = session.frame();
     normal.node("bar").size(600, 64);
     let options = options_probe.get().expect("mounted destination options");
     options.with_mut(|options| options.scale = 2.0);
-    let large = pump_layout_test_session(&mut session, 16_666_667);
+    let large = session.frames(1);
     let bar = large.node("bar").bounds();
     assert!(
         bar.height.0 >= 80,
@@ -215,29 +204,25 @@ fn navigation_bar_grows_for_twice_sized_labels_and_keeps_icons_inside_one_shared
         large.node("bar-icon2").bounds().y
     );
     options.with_mut(|options| options.expanded = true);
-    let horizontal = pump_layout_test_session(&mut session, 33_333_334);
+    let horizontal = session.frames(1);
     assert!(horizontal.node("bar").bounds().height.0 >= 72);
 }
 
 #[test]
 fn expanded_rail_wraps_large_labels_before_the_badge_and_grows_the_item() {
     let options_probe = tessera_ui::testing::TestProbe::default();
-    let observed = options_probe.clone();
-    let mut session = start_layout_test_session(
-        layout_test(move || {
-            rail_fixture(observed.clone());
-        })
-        .viewport_px(320, 600),
-    );
-    pump_layout_test_session(&mut session, 0);
+    let mut session = UiTest::new()
+        .content(|| rail_fixture(options_probe.clone()))
+        .viewport(320, 600);
+    session.frame();
     let options = options_probe.get().expect("mounted destination options");
     options.with_mut(|options| {
         options.expanded = true;
         options.scale = 2.0;
         options.label = "Saved messages".into();
     });
-    pump_layout_test_session(&mut session, 16_666_667);
-    let large = pump_layout_test_session(&mut session, 400_000_000);
+    session.frames(1);
+    let large = session.advance(std::time::Duration::from_nanos(383_333_333));
     let icon = large.node("rail-icon").bounds();
     let badge = large.node("rail-badge").bounds();
     assert!(badge.x.0 > icon.x.0 + icon.width.0 + 8);
@@ -253,30 +238,18 @@ fn expanded_rail_wraps_large_labels_before_the_badge_and_grows_the_item() {
 #[ignore = "requires a native GPU adapter"]
 fn expanded_indicator_hugs_badged_content_while_the_full_target_activates_and_announces_count() {
     let options_probe = tessera_ui::testing::TestProbe::default();
-    let observed = options_probe.clone();
     use tessera_ui::{
-        MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::Role,
-        headless::{HeadlessConfig, HeadlessRenderer},
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Role, testing::UiTest,
     };
 
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            rail_fixture(observed.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 320,
-            height: 400,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(2);
+    let mut renderer = UiTest::new()
+        .viewport(320, 400)
+        .rendered(crate::TesseraComponents)
+        .content(|| rail_fixture(options_probe.clone()));
+    renderer.frames(2);
     let options = options_probe.get().expect("mounted destination options");
     options.with_mut(|options| options.expanded = true);
-    renderer.render_frames(30);
+    renderer.frames(30);
     let snapshot = renderer
         .accessibility_snapshot()
         .expect("rail accessibility tree");
@@ -292,7 +265,7 @@ fn expanded_indicator_hugs_badged_content_while_the_full_target_activates_and_an
     assert_eq!(target.description(), Some("3 unread messages"));
     let bounds = target.bounds().unwrap();
     assert_eq!(bounds.width(), 220.0);
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let pixel = |x: usize, y: usize| &pixels[(y * 320 + x) * 4..(y * 320 + x) * 4 + 4];
     let y = ((bounds.y0 + bounds.y1) * 0.5) as usize;
     assert_ne!(
@@ -305,7 +278,7 @@ fn expanded_indicator_hugs_badged_content_while_the_full_target_activates_and_an
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(2);
+    renderer.frames(2);
     assert_eq!(
         options.with(|options| options.activations),
         1,

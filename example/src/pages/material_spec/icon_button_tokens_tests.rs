@@ -2,8 +2,8 @@ use tessera_components::{column::column, theme::material_theme};
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role, Toggled},
-    headless::{HeadlessConfig, HeadlessRenderer},
     tessera,
+    testing::UiTest,
 };
 
 #[tessera]
@@ -13,7 +13,7 @@ fn fixture() {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, role: Role, label: &str) -> Node {
+fn node(renderer: &UiTest, role: Role, label: &str) -> Node {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -24,7 +24,7 @@ fn node(renderer: &HeadlessRenderer, role: Role, label: &str) -> Node {
         .1
 }
 
-fn click(renderer: &mut HeadlessRenderer, node: Node) {
+fn click(renderer: &mut UiTest, node: Node) {
     let bounds = node.bounds().unwrap();
     let point = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) * 0.5) as f32,
@@ -33,24 +33,17 @@ fn click(renderer: &mut HeadlessRenderer, node: Node) {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(20);
+    renderer.frames(20);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter for token menu selection and icon-button input"]
 fn token_sets_select_size_values_and_keep_the_preview_live() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 900,
-            height: 2000,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(20);
+    let mut renderer = UiTest::new()
+        .viewport(900, 2000)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(20);
     let selector = node(&renderer, Role::Button, "Show Extra large size tokens");
     click(&mut renderer, selector);
     assert_eq!(

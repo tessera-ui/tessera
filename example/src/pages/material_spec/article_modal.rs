@@ -86,12 +86,9 @@ pub(crate) fn hosted_dialog(
     if let Some(active) = modal_controller {
         if open.with(DialogController::is_open)
             && active.with(|active| {
-                active
-                    .request
-                    .as_ref()
-                    .is_none_or(|request| {
-                        !request.open.is_alive() || !request.open.with(DialogController::is_open)
-                    })
+                active.request.as_ref().is_none_or(|request| {
+                    !request.open.is_alive() || !request.open.with(DialogController::is_open)
+                })
             })
         {
             active.set(ArticleModalState {

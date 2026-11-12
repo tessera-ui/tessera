@@ -515,7 +515,7 @@ struct DatePickerConfig {
 /// assert!(state.selected_date().is_none());
 /// #     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn date_picker(
@@ -708,7 +708,7 @@ fn date_picker_content(args: DatePickerConfig) {
 ///     .picker_today(CalendarDate::new(2026, 7, 16).unwrap());
 /// #     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn date_picker_dialog(
@@ -1063,7 +1063,11 @@ struct CalendarRangeBand {
 }
 
 #[tessera]
-fn date_year_grid(state: State<DatePickerController>, view: State<DatePickerView>, today: CalendarDate) {
+fn date_year_grid(
+    state: State<DatePickerController>,
+    view: State<DatePickerView>,
+    today: CalendarDate,
+) {
     let snapshot = state.with(DatePickerController::snapshot);
     let first = *snapshot.year_range.start();
     let count = (*snapshot.year_range.end() as i64 - first as i64 + 1) as usize;
@@ -1491,14 +1495,7 @@ fn civil_from_days(days: i64) -> (i32, u8, u8) {
 mod tests {
     use tessera_ui::testing::{text_matches, visible_text};
 
-    use tessera_ui::{
-        CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition, State,
-        remember, tessera,
-        testing::{
-            layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-            start_layout_test_session,
-        },
-    };
+    use tessera_ui::{PressKeyEventType, PxPosition, State, remember, tessera, testing::UiTest};
 
     use crate::{button::button, column::column, text::text, theme::material_theme};
 
@@ -1581,7 +1578,7 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     fn assert_today_outline(
-        renderer: &tessera_ui::headless::HeadlessRenderer,
+        renderer: &tessera_ui::testing::UiTest,
         label: &str,
         radius: f64,
         expected: bool,
@@ -1598,7 +1595,7 @@ mod tests {
         let rect = node.1.bounds().expect("date target bounds");
         let x = (rect.x0 + rect.x1) / 2.0;
         let y = (rect.y0 + rect.y1) / 2.0;
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let width = renderer.physical_size().width as usize;
         let blue = ((y - radius - 1.0).floor() as usize..(y - radius + 4.0).ceil() as usize)
             .flat_map(|y| ((x - 8.0) as usize..(x + 8.0) as usize).map(move |x| (x, y)))
@@ -1613,30 +1610,19 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     fn check_today_override(range: bool, dialog: bool) {
-        use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
+        use tessera_ui::testing::UiTest;
 
         let observed = Probe::default();
 
-        let probe = observed.clone();
-
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                today_fixture(range, dialog, probe.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 650,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(400, 650)
+            .rendered(crate::TesseraComponents)
+            .content(|| today_fixture(range, dialog, observed.clone()));
+        renderer.frames(8);
         assert_today_outline(&renderer, "July 16, 2026", 20.0, true);
         assert_today_outline(&renderer, "July 17, 2026", 20.0, false);
         observed.focus.get().unwrap().request_focus();
-        renderer.render_frames(4);
+        renderer.frames(4);
         let tree = renderer.accessibility_snapshot().unwrap();
         assert!(text_matches(
             tree.nodes
@@ -1651,7 +1637,7 @@ mod tests {
             .get()
             .unwrap()
             .set(CalendarDate::new(2026, 7, 17).unwrap());
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_today_outline(&renderer, "July 16, 2026", 20.0, false);
         assert_today_outline(&renderer, "July 17, 2026", 20.0, true);
         if !range {
@@ -1661,7 +1647,7 @@ mod tests {
                 .get()
                 .unwrap()
                 .set(CalendarDate::new(2027, 7, 17).unwrap());
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_today_outline(&renderer, "2027", 18.0, true);
             assert_today_outline(&renderer, "2028", 18.0, false);
             observed
@@ -1669,7 +1655,7 @@ mod tests {
                 .get()
                 .unwrap()
                 .set(CalendarDate::new(2028, 7, 17).unwrap());
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_today_outline(&renderer, "2027", 18.0, false);
             assert_today_outline(&renderer, "2028", 18.0, true);
             observed.view.get().unwrap().set(DatePickerView::Calendar);
@@ -1678,9 +1664,9 @@ mod tests {
                 .get()
                 .unwrap()
                 .with_mut(|state| state.set_displayed_month(YearMonth::new(2028, 7).unwrap()));
-            renderer.render_frames(4);
+            renderer.frames(4);
             observed.focus.get().unwrap().request_focus();
-            renderer.render_frames(4);
+            renderer.frames(4);
             let tree = renderer.accessibility_snapshot().unwrap();
             assert!(text_matches(
                 tree.nodes
@@ -1700,9 +1686,9 @@ mod tests {
                 .get()
                 .unwrap()
                 .with_mut(|state| state.set_displayed_month(YearMonth::new(2028, 7).unwrap()));
-            renderer.render_frames(8);
+            renderer.frames(8);
             observed.focus.get().unwrap().request_focus();
-            renderer.render_frames(4);
+            renderer.frames(4);
             let tree = renderer.accessibility_snapshot().unwrap();
             assert!(text_matches(
                 tree.nodes
@@ -1782,11 +1768,8 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn gpu_external_year_view_tracks_header_toggle_selection_and_dialog_actions() {
-        use tessera_ui::{
-            accesskit::{Action, ActionRequest, TreeId},
-            headless::{HeadlessConfig, HeadlessRenderer},
-        };
-        fn activate(renderer: &mut HeadlessRenderer, label: &str) {
+        use tessera_ui::{accesskit::Action, testing::UiTest};
+        fn activate(renderer: &mut UiTest, label: &str) {
             let target_node = renderer
                 .accessibility_snapshot()
                 .unwrap()
@@ -1797,28 +1780,15 @@ mod tests {
                 })
                 .unwrap_or_else(|| panic!("missing actionable {label}"))
                 .0;
-            assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                action: Action::Click,
-                target_tree: TreeId::ROOT,
-                target_node,
-                data: None
-            }));
-            renderer.render_frames(4);
+            assert!(renderer.accessibility_action(target_node, Action::Click));
+            renderer.frames(4);
         }
         let observed = Probe::default();
-        let probe = observed.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || external_year_fixture(probe.clone())),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 650,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(400, 650)
+            .rendered(crate::TesseraComponents)
+            .content(|| external_year_fixture(observed.clone()));
+        renderer.frames(4);
         let state = observed.state.get().unwrap();
         let view = observed.view.get().unwrap();
         let selected = CalendarDate::new(2025, 8, 17);
@@ -1876,13 +1846,8 @@ mod tests {
             })
             .expect("virtualized overscan must retain the next focusable rows")
             .0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Focus,
-            target_tree: TreeId::ROOT,
-            target_node,
-            data: None
-        }));
-        renderer.render_frames(4);
+        assert!(renderer.accessibility_action(target_node, Action::Focus));
+        renderer.frames(4);
         let focused_tree = renderer.accessibility_snapshot().unwrap();
         let focused = focused_tree
             .nodes
@@ -1904,7 +1869,7 @@ mod tests {
                 .any(|(_, node)| text_matches(node.label(), "August 17, 2025"))
         );
         view.set(DatePickerView::Year);
-        renderer.render_frames(4);
+        renderer.frames(4);
         activate(&mut renderer, "2027");
         assert_eq!(view.get(), DatePickerView::Calendar);
         assert_eq!(
@@ -1973,30 +1938,20 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     fn check_single_calendar_accessibility(samples: u32) {
         use tessera_ui::{
-            FocusDirection, MOUSE_POINTER_ID,
-            accesskit::Role,
-            headless::{HeadlessConfig, HeadlessRenderer},
+            FocusDirection, MOUSE_POINTER_ID, accesskit::Role, focus, testing::UiTest,
         };
 
         let observed = Probe::default();
 
-        let probe = observed.clone();
-
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                calendar_fixture(probe.clone()).today(CalendarDate::new(2026, 7, 16).unwrap())
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 600,
-                height: 950,
-                scale_factor: 1.5,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .expect("single calendar renderer");
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(600, 950)
+            .scale_factor(1.5)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| {
+                calendar_fixture(observed.clone()).today(CalendarDate::new(2026, 7, 16).unwrap())
+            });
+        renderer.frames(8);
         let accessibility = renderer.accessibility_snapshot().expect("tree");
         assert_eq!(
             accessibility
@@ -2011,7 +1966,7 @@ mod tests {
             "the published calendar must expose every July date"
         );
         observed.focus.get().unwrap().request_focus();
-        renderer.render_frames(8);
+        renderer.frames(8);
         let accessibility = renderer.accessibility_snapshot().expect("tree");
         assert!(text_matches(
             accessibility
@@ -2021,8 +1976,8 @@ mod tests {
                 .and_then(|(_, node)| node.label()),
             "July 16, 2026"
         ));
-        assert!(tessera_ui::focus::request_move_focus(FocusDirection::Next));
-        renderer.render_frames(8);
+        assert!(focus::request_move_focus(FocusDirection::Next));
+        renderer.frames(8);
         let accessibility = renderer.accessibility_snapshot().expect("tree");
         assert!(text_matches(
             accessibility
@@ -2050,9 +2005,9 @@ mod tests {
             );
             renderer.pointer_move(MOUSE_POINTER_ID, point);
             renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-            renderer.step_frame();
+            renderer.frames(1);
             renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-            renderer.render_frames(8);
+            renderer.frames(8);
         }
         assert_eq!(
             state.with(DatePickerController::displayed_month),
@@ -2068,7 +2023,7 @@ mod tests {
                 .any(|(_, node)| text_matches(node.label(), "July 1, 2027"))
         );
         state.with_mut(|state| state.set_display_mode(super::DatePickerDisplayMode::Input));
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(
             renderer
                 .accessibility_snapshot()
@@ -2121,13 +2076,10 @@ mod tests {
         crate::test_utils::run_isolated_test(
             "date_picker::tests::internal_calendar_initializes_predicates_without_a_slot_borrow_conflict",
             || {
-                let mut session = start_layout_test_session(
-                    layout_test(|| {
-                        internal_predicate_fixture();
-                    })
-                    .viewport_px(400, 600),
-                );
-                let snapshot = pump_layout_test_session(&mut session, 0);
+                let mut session = UiTest::new()
+                    .content(internal_predicate_fixture)
+                    .viewport(400, 600);
+                let snapshot = session.frame();
                 snapshot.node("date-picker").size(360, 512);
                 snapshot.node("date-grid").size(336, 288);
             },
@@ -2140,14 +2092,10 @@ mod tests {
         let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
         let observed = Probe::default();
-        let probe = observed.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || {
-                calendar_fixture(probe.clone());
-            })
-            .viewport_px(400, 600),
-        );
-        let snapshot = pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| calendar_fixture(observed.clone()))
+            .viewport(400, 600);
+        let snapshot = session.frame();
         snapshot.node("date-picker").size(360, 512);
         snapshot.node("date-grid").size(336, 288);
         let bounds = snapshot.node("date-grid").bounds();
@@ -2175,25 +2123,7 @@ mod tests {
                 && point.y < day.y + day.height,
             "grid-derived pointer {point:?} must land in July 16 target {day:?}"
         );
-        for (index, content) in [
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            CursorEventContent::Released(PressKeyEventType::Left),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            pump_layout_test_session_with_input(
-                &mut session,
-                (index as u64 + 1) * 16_666_667,
-                vec![PointerChange::new(
-                    tessera_ui::current_frame_time().unwrap(),
-                    1,
-                    content,
-                    GestureState::TapCandidate,
-                )],
-                cursor,
-            );
-        }
+        session.click_at(point);
         assert_eq!(
             observed
                 .state
@@ -2209,39 +2139,13 @@ mod tests {
         let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
         let observed = Probe::default();
-        let probe = observed.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || {
-                calendar_fixture(probe.clone());
-            })
-            .viewport_px(400, 600),
-        );
-        pump_layout_test_session(&mut session, 0);
-        for (step, (x, y)) in [(100.0, 148.0), (68.0, 248.0)].into_iter().enumerate() {
-            for (index, content) in [
-                CursorEventContent::Pressed(PressKeyEventType::Left),
-                CursorEventContent::Released(PressKeyEventType::Left),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                let _ = pump_layout_test_session_with_input(
-                    &mut session,
-                    ((step * 3 + index + 1) as u64) * 16_666_667,
-                    vec![PointerChange::new(
-                        tessera_ui::current_frame_time().unwrap(),
-                        1,
-                        content,
-                        GestureState::TapCandidate,
-                    )],
-                    Some(PxPosition::from_f32_xy(x, y)),
-                );
-                if step == 0 && index == 1 {
-                    let snapshot = pump_layout_test_session(&mut session, 50_000_001);
-                    snapshot.node("date-years").size(336, 288);
-                }
-            }
-        }
+        let mut session = UiTest::new()
+            .content(|| calendar_fixture(observed.clone()))
+            .viewport(400, 600);
+        session.frame();
+        session.click_at(PxPosition::from_f32_xy(100.0, 148.0));
+        session.frames(1).node("date-years").size(336, 288);
+        session.click_at(PxPosition::from_f32_xy(68.0, 248.0));
         let state = observed.state.get().unwrap();
         assert_eq!(
             state.with(DatePickerController::displayed_month),
@@ -2255,14 +2159,10 @@ mod tests {
         let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
         let observed = Probe::default();
-        let probe = observed.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || {
-                calendar_fixture(probe.clone());
-            })
-            .viewport_px(320, 600),
-        );
-        let snapshot = pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| calendar_fixture(observed.clone()))
+            .viewport(320, 600);
+        let snapshot = session.frame();
         snapshot.node("date-grid").size(296, 288);
         let bounds = snapshot.node("date-grid").bounds();
         let cursor = Some(PxPosition::from_f32_xy(
@@ -2289,25 +2189,7 @@ mod tests {
                 && point.y < day.y + day.height,
             "grid-derived pointer {point:?} must land in July 16 target {day:?}"
         );
-        for (index, content) in [
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            CursorEventContent::Released(PressKeyEventType::Left),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            pump_layout_test_session_with_input(
-                &mut session,
-                (index as u64 + 1) * 16_666_667,
-                vec![PointerChange::new(
-                    tessera_ui::current_frame_time().unwrap(),
-                    1,
-                    content,
-                    GestureState::TapCandidate,
-                )],
-                cursor,
-            );
-        }
+        session.click_at(point);
         assert_eq!(
             observed
                 .state
@@ -2323,34 +2205,12 @@ mod tests {
         let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
         let observed = Probe::default();
-        let probe = observed.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || {
-                calendar_fixture(probe.clone());
-            })
-            .viewport_px(400, 600),
-        );
-        pump_layout_test_session(&mut session, 0);
-        for (index, content) in [
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            CursorEventContent::Released(PressKeyEventType::Left),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            pump_layout_test_session_with_input(
-                &mut session,
-                (index as u64 + 1) * 16_666_667,
-                vec![PointerChange::new(
-                    tessera_ui::current_frame_time().unwrap(),
-                    1,
-                    content,
-                    GestureState::TapCandidate,
-                )],
-                Some(PxPosition::from_f32_xy(328.0, 84.0)),
-            );
-        }
-        pump_layout_test_session(&mut session, 50_000_001);
+        let mut session = UiTest::new()
+            .content(|| calendar_fixture(observed.clone()))
+            .viewport(400, 600);
+        session.frame();
+        session.click_at(PxPosition::from_f32_xy(328.0, 84.0));
+        session.frames(1);
         assert_eq!(
             observed
                 .state

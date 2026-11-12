@@ -1,10 +1,7 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
-    RenderSlot, State,
-    layout::MeasureScope,
-    remember, tessera,
-    testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+    RenderSlot, State, layout::MeasureScope, remember, tessera, testing::UiTest,
 };
 
 use crate::{
@@ -61,29 +58,28 @@ fn padded_constraint_fixture(
 fn fixed_size_wrappers_preserve_child_origins_when_offered_bounds_change() {
     for vertical in [false, true] {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
-                let observed = observed.clone();
-                move || {
-                    padded_constraint_fixture(vertical, observed.clone());
-                }
+        let mut session = UiTest::new()
+            .content(|| {
+                padded_constraint_fixture(vertical, observed.clone());
             })
-            .viewport_px(200, 200),
-        );
-        pump_layout_test_session(&mut session, 0)
+            .viewport(200, 200);
+        session
+            .frame()
             .node("flex-77")
             .size(20, 10)
             .position(if vertical { 5 } else { 21 }, if vertical { 21 } else { 5 });
         observed.get().width.unwrap().set(Dp(24.0));
-        pump_layout_test_session(&mut session, 16_666_667)
+        session
+            .frames(1)
             .node("flex-77")
             .size(20, 10)
             .position(if vertical { 5 } else { 29 }, if vertical { 29 } else { 5 });
-        pump_layout_test_session(&mut session, 33_333_334)
+        session
+            .frames(1)
             .node("flex-77")
             .size(20, 10)
             .position(if vertical { 5 } else { 29 }, if vertical { 29 } else { 5 });
-        assert_eq!(session.diagnostics().unwrap().geometry_nodes_updated, 0);
+        assert_eq!(session.diagnostics().geometry_nodes_updated, 0);
     }
 }
 
@@ -181,19 +177,12 @@ fn fixture(vertical: bool, observed: tessera_ui::testing::TestProbe<FixtureHandl
 fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constraints() {
     for vertical in [false, true] {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
-                let observed = observed.clone();
-                move || {
-                    fixture(vertical, observed.clone());
-                }
+        let mut session = UiTest::new()
+            .content(|| {
+                fixture(vertical, observed.clone());
             })
-            .viewport_px(240, 180),
-        );
-        pump_layout_test_session(&mut session, 0)
-            .node("flex-0")
-            .size(20, 10)
-            .position(0, 0);
+            .viewport(240, 180);
+        session.frame().node("flex-0").rect(0, 0, 20, 10);
         let inputs = observed.get().inputs.unwrap();
         assert!(
             session
@@ -202,17 +191,21 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
                 > 0
         );
         inputs.with_mut(|inputs| inputs.ink = true);
-        pump_layout_test_session(&mut session, 8_000_000)
+        session
+            .advance(std::time::Duration::from_millis(8))
             .node("flex-0")
             .position(0, 0);
         assert_eq!(
-            session.work().phase(tessera_ui::testing::WorkPhase::Measure).count(),
+            session
+                .work()
+                .phase(tessera_ui::testing::WorkPhase::Measure)
+                .count(),
             0,
             "paint changes must resolve from the root cache"
         );
-        assert_eq!(session.diagnostics().unwrap().geometry_nodes_updated, 0);
+        assert_eq!(session.diagnostics().geometry_nodes_updated, 0);
         inputs.with_mut(|inputs| inputs.end = true);
-        let snapshot = pump_layout_test_session(&mut session, 16_666_667);
+        let snapshot = session.advance(std::time::Duration::from_nanos(8_666_667));
         snapshot.node("flex-0").position(
             if vertical { 40 } else { 60 },
             if vertical { 80 } else { 50 },
@@ -225,7 +218,7 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
             "alignment must use cached child measurements"
         );
         inputs.with_mut(|inputs| inputs.stretch = true);
-        let snapshot = pump_layout_test_session(&mut session, 33_333_334);
+        let snapshot = session.frames(1);
         snapshot.node("flex-0").size(
             if vertical { 60 } else { 20 },
             if vertical { 10 } else { 60 },
@@ -242,7 +235,7 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
             inputs.end = false;
             inputs.weight = 2.0;
         });
-        let snapshot = pump_layout_test_session(&mut session, 50_000_001);
+        let snapshot = session.frames(1);
         snapshot.node("flex-0").size(
             if vertical { 20 } else { 66 },
             if vertical { 66 } else { 10 },
@@ -252,13 +245,13 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
             if vertical { 33 } else { 10 },
         );
         inputs.with_mut(|inputs| inputs.reverse = true);
-        let snapshot = pump_layout_test_session(&mut session, 66_666_668);
+        let snapshot = session.frames(1);
         snapshot.node("flex-1").position(0, 0);
         snapshot
             .node("flex-0")
             .position(if vertical { 0 } else { 33 }, if vertical { 33 } else { 0 });
         inputs.with_mut(|inputs| inputs.count = 3);
-        let snapshot = pump_layout_test_session(&mut session, 83_333_335);
+        let snapshot = session.frames(1);
         snapshot.node("flex-2").position(0, 0);
         snapshot
             .node("flex-0")
@@ -268,7 +261,8 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
             )
             .position(if vertical { 0 } else { 50 }, if vertical { 50 } else { 0 });
         inputs.with_mut(|inputs| inputs.count = 1);
-        pump_layout_test_session(&mut session, 100_000_002)
+        session
+            .frames(1)
             .node("flex-0")
             .size(
                 if vertical { 20 } else { 100 },

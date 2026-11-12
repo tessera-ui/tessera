@@ -12,9 +12,9 @@ use tessera_components::{
     button::button,
     column::column,
     date_picker::{
-        CalendarDate, DatePickerDisplayMode, DatePickerController, DatePickerView, DateRangePickerController,
-        DockedDatePickerView, Weekday, YearMonth, date_picker_dialog, date_range_picker,
-        docked_date_picker,
+        CalendarDate, DatePickerController, DatePickerDisplayMode, DatePickerView,
+        DateRangePickerController, DockedDatePickerView, Weekday, YearMonth, date_picker_dialog,
+        date_range_picker, docked_date_picker,
     },
     dialog::{DialogController, dialog_provider},
     flow_row::flow_row,
@@ -3064,9 +3064,13 @@ fn range_configuration(number: usize, input: bool) {
                                             .accessibility_label(
                                                 I18N.text("ui-save-configuration-date-range"),
                                             )
-                                            .enabled(state.with(DateRangePickerController::is_complete))
+                                            .enabled(
+                                                state.with(DateRangePickerController::is_complete),
+                                            )
                                             .on_click(move || {
-                                                if !state.with(DateRangePickerController::is_complete) {
+                                                if !state
+                                                    .with(DateRangePickerController::is_complete)
+                                                {
                                                     return;
                                                 }
                                                 committed.set(state.with(|state| {
@@ -3229,7 +3233,13 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                             if open.with(DialogController::is_open) {
                                 restore_docked_date(state, controller, committed, error);
                             }
-                            open.with_mut(|open| if open.is_open() { open.close() } else { open.open() });
+                            open.with_mut(|open| {
+                                if open.is_open() {
+                                    open.close()
+                                } else {
+                                    open.open()
+                                }
+                            });
                             focus::defer_keyboard_until_layout();
                         });
                 });
@@ -3269,7 +3279,10 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
         });
 }
 
-fn docked_menu_selected_row(state: State<DatePickerController>, view: DockedDatePickerView) -> usize {
+fn docked_menu_selected_row(
+    state: State<DatePickerController>,
+    view: DockedDatePickerView,
+) -> usize {
     let displayed = state.with(DatePickerController::displayed_month);
     if view == DockedDatePickerView::Month {
         let month = displayed.month();

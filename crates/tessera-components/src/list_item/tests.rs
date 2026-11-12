@@ -5,7 +5,7 @@
 //! Keep list content consistent across layout and state changes.
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-use tessera_ui::{Dp, Modifier, tessera, testing::layout_test};
+use tessera_ui::{Dp, Modifier, tessera, testing::UiTest};
 
 use crate::{
     boxed::boxed, column::column, icon::icon, material_icons::filled, spacer::spacer, text::text,
@@ -55,21 +55,19 @@ fn list_rows_keep_token_heights_and_reclassify_multiline_supporting_content() {
         "list_item::tests::list_rows_keep_token_heights_and_reclassify_multiline_supporting_content",
         || {
             for (mode, height, inset) in [(0, 56, 18), (1, 72, 26), (2, 88, 10), (3, 88, 10)] {
-                let snapshot = layout_test(move || {
-                    fixture(mode);
-                })
-                .viewport_px(320, 200)
-                .run();
+                let snapshot = UiTest::new()
+                    .content(move || fixture(mode))
+                    .viewport(320, 200)
+                    .frame();
                 snapshot.node("item").position(0, 0).size(320, height);
                 snapshot.node("leading").position(16, inset).size(20, 20);
                 snapshot.node("trailing").position(284, inset).size(20, 20);
             }
             for (width, height, inset) in [(180, 88, 10), (320, 72, 26)] {
-                let snapshot = layout_test(|| {
-                    fixture(4);
-                })
-                .viewport_px(width, 200)
-                .run();
+                let snapshot = UiTest::new()
+                    .content(|| fixture(4))
+                    .viewport(width, 200)
+                    .frame();
                 snapshot.node("item").size(width as i32, height);
                 snapshot.node("leading").y(inset);
             }
@@ -78,11 +76,10 @@ fn list_rows_keep_token_heights_and_reclassify_multiline_supporting_content() {
                 (ListItemVerticalAlignment::Center, 40),
                 (ListItemVerticalAlignment::Bottom, 70),
             ] {
-                let snapshot = layout_test(move || {
-                    fixture(0).alignment(alignment).minimum(Dp(100.0));
-                })
-                .viewport_px(320, 200)
-                .run();
+                let snapshot = UiTest::new()
+                    .content(move || fixture(0).alignment(alignment).minimum(Dp(100.0)))
+                    .viewport(320, 200)
+                    .frame();
                 snapshot.node("item").size(320, 100);
                 snapshot.node("leading").y(inset);
                 snapshot.node("trailing").y(inset);
@@ -155,24 +152,17 @@ fn custom_list_slots_replace_text_and_share_main_column_constraints() {
             for (width, multiline, narrow, height, main_width) in
                 [(320, false, false, 88, 80), (160, true, true, 100, 64)]
             {
-                let snapshot = layout_test(move || {
-                    custom_content_fixture(multiline, narrow);
-                })
-                .viewport_px(width, 200)
-                .run();
+                let snapshot = UiTest::new()
+                    .content(move || custom_content_fixture(multiline, narrow))
+                    .viewport(width, 200)
+                    .frame();
                 snapshot.node("custom-item").size(width as i32, height);
-                snapshot
-                    .node("custom-leading")
-                    .position(16, 10)
-                    .size(20, 20);
+                snapshot.node("custom-leading").rect(16, 10, 20, 20);
                 snapshot
                     .node("custom-trailing")
                     .position(width as i32 - 36, 10)
                     .size(20, 20);
-                snapshot
-                    .node("custom-overline")
-                    .position(48, 10)
-                    .size(40, 16);
+                snapshot.node("custom-overline").rect(48, 10, 40, 16);
                 snapshot
                     .node("custom-headline")
                     .position(48, 26)
@@ -183,11 +173,10 @@ fn custom_list_slots_replace_text_and_share_main_column_constraints() {
                     .size(main_width.min(80), if multiline { 40 } else { 20 });
             }
             for (width, height, supporting_height) in [(180, 88, 40), (320, 72, 20)] {
-                let snapshot = layout_test(|| {
-                    wrapped_slot_fixture();
-                })
-                .viewport_px(width, 200)
-                .run();
+                let snapshot = UiTest::new()
+                    .content(wrapped_slot_fixture)
+                    .viewport(width, 200)
+                    .frame();
                 snapshot.node("wrapped-item").size(width as i32, height);
                 snapshot
                     .node("wrapped-supporting")

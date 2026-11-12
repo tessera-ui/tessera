@@ -317,7 +317,7 @@ fn update_state_for_frame(state: State<FluidSwitchState>, frame_nanos: u64) -> b
 ///         });
 ///     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn fluid_switch(
@@ -667,20 +667,12 @@ mod tests {
 
     #[test]
     fn fluid_switch_lens_expands_before_travel() {
-        let delay_nanos = EXPAND_BEFORE_TRAVEL_DURATION.as_nanos() as u64;
-        tessera_ui::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                animated_lens_probe();
-            },
-            expect: {
-                0 => {
-                    node(LENS_TEST_TAG).size(54, 32);
-                },
-                delay_nanos => {
-                    node(LENS_TEST_TAG).size(75, 44);
-                }
-            }
-        }
+        let mut ui = tessera_ui::testing::UiTest::new()
+            .viewport(200, 100)
+            .content(animated_lens_probe);
+        ui.frame().node(LENS_TEST_TAG).size(54, 32);
+        ui.advance(EXPAND_BEFORE_TRAVEL_DURATION)
+            .node(LENS_TEST_TAG)
+            .size(75, 44);
     }
 }

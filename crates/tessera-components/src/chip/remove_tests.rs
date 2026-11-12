@@ -4,14 +4,12 @@
 //!
 //! Preserve separate selection and removal targets in compact chips.
 
-use std::time::Duration;
-
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Role},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{material_icons::filled, theme::material_theme};
@@ -48,42 +46,23 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Counts>>>) {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
-        .unwrap_or_else(|| panic!("missing {label}"))
-}
-
-fn click(renderer: &mut HeadlessRenderer, x: f64, y: f64) {
+fn click(renderer: &mut UiTest, x: f64, y: f64) {
     let position = PxPosition::from_f32_xy(x as f32, y as f32);
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(3);
+    renderer.frames(3);
 }
 
 fn check_removal() {
     let probe = tessera_ui::testing::TestProbe::default();
-    let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 360,
-            height: 120,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(360, 120)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    renderer.frames(4);
     let counts = probe.get().unwrap();
-    let remove = node(&renderer, "Remove Alice");
+    let remove = renderer.accessibility_node("Remove Alice");
     assert_eq!(remove.1.role(), Role::Button);
     let target = remove.1.bounds().unwrap();
     assert_eq!((target.width(), target.height()), (48.0, 48.0));
@@ -99,7 +78,7 @@ fn check_removal() {
             ..Default::default()
         }
     );
-    let body = node(&renderer, "Alice").1.bounds().unwrap();
+    let body = renderer.accessibility_node("Alice").1.bounds().unwrap();
     click(&mut renderer, body.x0 + 16.0, (body.y0 + body.y1) / 2.0);
     assert_eq!(
         counts.get(),
@@ -109,13 +88,10 @@ fn check_removal() {
             selected: true
         }
     );
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Focus,
-        target_tree: TreeId::ROOT,
-        target_node: node(&renderer, "Remove Alice").0,
-        data: None
-    }));
-    renderer.render_frames(2);
+    assert!(
+        renderer.accessibility_action(renderer.accessibility_node("Remove Alice").0, Action::Focus)
+    );
+    renderer.frames(2);
     let snapshot = renderer.accessibility_snapshot().unwrap();
     assert_eq!(
         snapshot
@@ -132,13 +108,10 @@ fn check_removal() {
         1,
         "focusing removal must not activate it"
     );
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Click,
-        target_tree: TreeId::ROOT,
-        target_node: node(&renderer, "Remove Alice").0,
-        data: None
-    }));
-    renderer.render_frames(2);
+    assert!(
+        renderer.accessibility_action(renderer.accessibility_node("Remove Alice").0, Action::Click)
+    );
+    renderer.frames(2);
     assert_eq!(
         counts.get(),
         Counts {

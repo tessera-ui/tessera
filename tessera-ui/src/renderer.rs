@@ -2392,6 +2392,7 @@ where
                                 metadatas,
                                 focus_owner,
                                 action_request,
+                                Instant::now(),
                             )
                         });
                         flush_pending_focus_callbacks();
@@ -2415,6 +2416,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
 
     use winit::dpi::PhysicalSize;
 
@@ -2426,7 +2428,7 @@ mod tests {
         modifier::{FocusModifierExt as _, LayoutPolicy},
         remember,
         runtime::{TesseraRuntime, prune_persistent_focus_handles},
-        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+        testing::UiTest,
     };
 
     use super::{
@@ -2534,17 +2536,16 @@ mod tests {
 
         use crate::{
             CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PxPosition,
-            cursor::PressKeyEventType, testing::pump_layout_test_session_with_input, time::Instant,
+            cursor::PressKeyEventType, time::Instant,
         };
 
         let probe = VisibilityProbe::default();
-        let mut session =
-            start_layout_test_session(layout_test(|| focus_visibility_fixture(probe.clone())));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| focus_visibility_fixture(probe.clone()));
+        session.frame();
         let (first, second) = probe.focus.get().expect("test fixture entry exists");
         first.request_focus();
         first.capture_focus();
-        pump_layout_test_session(&mut session, 1);
+        session.advance(Duration::from_nanos(1));
         assert!(!first.is_focus_visible());
         let origin = Instant::now();
         let keyboard = origin + Duration::from_millis(10);
@@ -2559,7 +2560,7 @@ mod tests {
             });
         };
         key(keyboard);
-        pump_layout_test_session(&mut session, 2);
+        session.advance(Duration::from_nanos(1));
         assert!(first.is_captured());
         assert_eq!(probe.reads.with(|reads| reads.last().copied()), Some(true));
         let pointer = |timestamp| PointerChange {
@@ -2567,32 +2568,24 @@ mod tests {
             pointer_id: MOUSE_POINTER_ID,
             content: CursorEventContent::Pressed(PressKeyEventType::Left),
             gesture_state: GestureState::TapCandidate,
-            sampled_position: Default::default(),
+            sampled_position: crate::cursor::PointerPosition::At(PxPosition::ZERO),
             consumed: false,
             tap_claimed: false,
             scroll_discrete: None,
         };
-        pump_layout_test_session_with_input(
-            &mut session,
-            3,
-            vec![pointer(press)],
-            Some(PxPosition::ZERO),
-        );
-        pump_layout_test_session(&mut session, 4);
+        session.inject_pointer(pointer(press));
+        session.frames(1);
+        session.advance(Duration::from_nanos(1));
         assert!(first.is_captured());
         assert_eq!(probe.reads.with(|reads| reads.last().copied()), Some(false));
         key(keyboard);
         first.request_focus();
-        pump_layout_test_session(&mut session, 5);
+        session.advance(Duration::from_nanos(1));
         assert!(!first.is_focus_visible());
         key(newer_keyboard);
-        pump_layout_test_session_with_input(
-            &mut session,
-            6,
-            vec![pointer(press)],
-            Some(PxPosition::ZERO),
-        );
-        pump_layout_test_session(&mut session, 7);
+        session.inject_pointer(pointer(press));
+        session.frames(1);
+        session.advance(Duration::from_nanos(1));
         assert!(first.is_captured());
         assert_eq!(probe.reads.with(|reads| reads.last().copied()), Some(true));
         let mut hover = pointer(origin + Duration::from_millis(40));
@@ -2604,24 +2597,17 @@ mod tests {
             unit: crate::cursor::ScrollDeltaUnit::Pixel,
             source: crate::cursor::ScrollEventSource::Wheel,
         });
-        pump_layout_test_session_with_input(
-            &mut session,
-            8,
-            vec![hover, wheel],
-            Some(PxPosition::ZERO),
-        );
+        session.inject_pointer(hover);
+        session.inject_pointer(wheel);
+        session.frames(1);
         assert!(first.is_captured());
         assert!(first.is_focus_visible());
         first.free_focus();
         second.request_focus();
         assert!(second.is_focus_visible());
         assert!(!first.is_focus_visible());
-        pump_layout_test_session_with_input(
-            &mut session,
-            9,
-            vec![pointer(origin + Duration::from_millis(60))],
-            Some(PxPosition::ZERO),
-        );
+        session.inject_pointer(pointer(origin + Duration::from_millis(60)));
+        session.frames(1);
         first.request_focus();
         assert!(first.is_focused());
         assert!(!first.is_focus_visible());
@@ -2640,29 +2626,28 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = FrameEndProbe::default();
-        let mut session =
-            start_layout_test_session(layout_test(|| frame_end_focus_fixture(probe.clone())));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| frame_end_focus_fixture(probe.clone()));
+        session.frame();
         let (visible, removed, fallback) = probe.focus.get().expect("test fixture entry exists");
         removed.request_focus();
         assert!(removed.is_focused());
         dispatch_frame_end_reveal();
-        pump_layout_test_session(&mut session, 1);
+        session.advance(Duration::from_nanos(1));
         assert!(!RuntimePendingWork::capture(false).requires_redraw());
 
         visible.set(false);
-        pump_layout_test_session(&mut session, 2);
+        session.advance(Duration::from_nanos(1));
         assert!(!fallback.is_focused());
         prune_persistent_focus_handles();
         assert!(!fallback.is_focused());
         assert!(RuntimePendingWork::capture(false).requires_redraw());
-        pump_layout_test_session(&mut session, 3);
+        session.advance(Duration::from_nanos(1));
         prune_persistent_focus_handles();
         flush_pending_focus_callbacks();
         assert!(fallback.is_focused());
         assert_eq!(probe.events.get(), 1);
 
-        pump_layout_test_session(&mut session, 4);
+        session.advance(Duration::from_nanos(1));
         assert!(!crate::runtime::has_pending_build_invalidations());
         assert!(!crate::runtime::has_pending_layout_invalidations());
         assert!(!crate::runtime::has_pending_frame_waiters());
@@ -2736,14 +2721,13 @@ mod tests {
         }
 
         let probe = ColdProbe::default();
-        let mut session =
-            start_layout_test_session(layout_test(|| cold_geometry_fixture(probe.clone())));
+        let mut session = UiTest::new().content(|| cold_geometry_fixture(probe.clone()));
         let _guard = WakerGuard;
         crate::runtime::install_redraw_waker(std::sync::Arc::new({
             let wakes = probe.wakes.clone();
             move || wakes.with_mut(|wakes| *wakes += 1)
         }));
-        pump_layout_test_session(&mut session, 0);
+        session.frame();
         assert_eq!(probe.writes.get(), 1);
         let (before, after) = probe.counts.get();
         assert!(
@@ -2763,7 +2747,7 @@ mod tests {
         assert_eq!(probe.writes.get(), 1);
         assert!(!RuntimePendingWork::capture(false).requires_redraw());
         let wakes = probe.wakes.get();
-        pump_layout_test_session(&mut session, 16_666_667);
+        session.frames(1);
         assert_eq!(probe.writes.get(), 1);
         assert_eq!(
             probe.wakes.get(),

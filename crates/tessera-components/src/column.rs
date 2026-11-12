@@ -47,7 +47,7 @@ use crate::{
 ///     text("Last item");
 /// });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn column(
@@ -520,30 +520,22 @@ mod tests {
 
     #[test]
     fn column_centers_children_on_cross_axis() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 80),
-            content: {
-                column_layout_case();
-            },
-            expect: {
-                node("column_first").position(40, 0).size(20, 10);
-                node("column_second").position(30, 10).size(40, 15);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(120, 80)
+            .content(column_layout_case)
+            .frame();
+        layout.node("column_first").rect(40, 0, 20, 10);
+        layout.node("column_second").rect(30, 10, 40, 15);
     }
 
     #[test]
     fn column_allocates_remaining_height_to_weighted_child() {
-        tessera_ui::assert_layout! {
-            viewport: (100, 100),
-            content: {
-                column_weighted_case();
-            },
-            expect: {
-                node("column_weighted_fixed").position(0, 0).size(20, 10);
-                node("column_weighted_fill").position(0, 10).size(15, 80);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(100, 100)
+            .content(column_weighted_case)
+            .frame();
+        layout.node("column_weighted_fixed").rect(0, 0, 20, 10);
+        layout.node("column_weighted_fill").rect(0, 10, 15, 80);
     }
 
     #[tessera]
@@ -594,27 +586,21 @@ mod tests {
 
     #[test]
     fn column_measures_center_aligned_sized_child_intrinsically() {
-        tessera_ui::assert_layout! {
-            viewport: (100, 60),
-            content: {
-                column_center_sized_case();
-            },
-            expect: {
-                node("column_center_sized").position(34, 0).size(32, 4);
-            }
-        }
+        tessera_ui::testing::UiTest::new()
+            .viewport(100, 60)
+            .content(column_center_sized_case)
+            .frame()
+            .node("column_center_sized")
+            .rect(34, 0, 32, 4);
     }
 
     #[test]
     fn column_stretches_sized_child_to_container_width() {
-        tessera_ui::assert_layout! {
-            viewport: (100, 60),
-            content: {
-                column_stretch_sized_case();
-            },
-            expect: {
-                node("column_stretch_sized").position(0, 0).size(100, 4);
-            }
-        }
+        tessera_ui::testing::UiTest::new()
+            .viewport(100, 60)
+            .content(column_stretch_sized_case)
+            .frame()
+            .node("column_stretch_sized")
+            .rect(0, 0, 100, 4);
     }
 }

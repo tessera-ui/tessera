@@ -79,7 +79,7 @@ fn compute_child_offset(
 ///         .modifier(Modifier::new().align(Alignment::Center));
 /// });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn boxed(
@@ -306,41 +306,31 @@ mod tests {
 
     #[test]
     fn boxed_honors_child_alignment_override() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 100),
-            content: {
-                boxed_layout_case();
-            },
-            expect: {
-                node("boxed_start").position(0, 0).size(20, 10);
-                node("boxed_end").position(70, 65).size(30, 15);
-            }
-        }
+        let layout = tessera_ui::testing::UiTest::new()
+            .viewport(120, 100)
+            .content(boxed_layout_case)
+            .frame();
+        layout.node("boxed_start").rect(0, 0, 20, 10);
+        layout.node("boxed_end").rect(70, 65, 30, 15);
     }
 
     #[test]
     fn boxed_uses_default_alignment_for_children_without_parent_data() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 100),
-            content: {
-                boxed_center_case();
-            },
-            expect: {
-                node("boxed_center").position(40, 35).size(20, 10);
-            }
-        }
+        tessera_ui::testing::UiTest::new()
+            .viewport(120, 100)
+            .content(boxed_center_case)
+            .frame()
+            .node("boxed_center")
+            .rect(40, 35, 20, 10);
     }
 
     #[test]
     fn boxed_honors_alignment_on_wrapped_children() {
-        tessera_ui::assert_layout! {
-            viewport: (120, 100),
-            content: {
-                boxed_forwarded_parent_data_case();
-            },
-            expect: {
-                node("boxed_forwarded").position(40, 35).size(20, 10);
-            }
-        }
+        tessera_ui::testing::UiTest::new()
+            .viewport(120, 100)
+            .content(boxed_forwarded_parent_data_case)
+            .frame()
+            .node("boxed_forwarded")
+            .rect(40, 35, 20, 10);
     }
 }

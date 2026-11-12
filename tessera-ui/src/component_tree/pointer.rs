@@ -470,7 +470,7 @@ mod tests {
         remember,
         runtime::TesseraRuntime,
         tessera,
-        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+        testing::UiTest,
     };
 
     #[derive(Clone, Default, PartialEq)]
@@ -561,14 +561,10 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = PointerProbe::default();
-        let mut session = start_layout_test_session(
-            layout_test({
-                let probe = probe.clone();
-                move || moving_control(probe.clone())
-            })
-            .viewport_px(8000, 8000),
-        );
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| moving_control(probe.clone()))
+            .viewport(8000, 8000);
+        session.frame();
         let target = TesseraRuntime::with(|runtime| {
             let index = &runtime.component_tree.pointer_index;
             assert_eq!(index.eligible.len(), 1);
@@ -597,23 +593,23 @@ mod tests {
         check(1, 0, PxPosition::new(Px(15), Px(15)), true);
         let position = probe.position.get().expect("test fixture entry exists");
         position.set(PxPosition::new(Px(40), Px(10)));
-        pump_layout_test_session(&mut session, 16_666_667);
+        session.frames(1);
         check(0, 0, PxPosition::new(Px(15), Px(15)), false);
         check(0, 0, PxPosition::new(Px(45), Px(15)), true);
         position.set(PxPosition::new(Px(250), Px(10)));
-        pump_layout_test_session(&mut session, 33_333_334);
+        session.frames(1);
         check(1, 0, PxPosition::new(Px(265), Px(15)), true);
         position.set(PxPosition::new(Px(270), Px(10)));
-        pump_layout_test_session(&mut session, 50_000_001);
+        session.frames(1);
         check(0, 1, PxPosition::new(Px(265), Px(15)), false);
         check(0, 1, PxPosition::new(Px(275), Px(15)), true);
 
         let placed = probe.placed.get().expect("test fixture entry exists");
         placed.set(false);
-        pump_layout_test_session(&mut session, 66_666_668);
+        session.frames(1);
         check(0, 1, PxPosition::new(Px(275), Px(15)), false);
         placed.set(true);
-        pump_layout_test_session(&mut session, 83_333_335);
+        session.frames(1);
         check(1, 0, PxPosition::new(Px(275), Px(15)), true);
 
         let size = probe.size.get().expect("test fixture entry exists");
@@ -621,13 +617,13 @@ mod tests {
             width: Px(5000),
             height: Px(5000),
         });
-        pump_layout_test_session(&mut session, 100_000_002);
+        session.frames(1);
         check(0, 1, PxPosition::new(Px(500), Px(500)), true);
         size.set(ComputedData {
             width: Px(20),
             height: Px(20),
         });
-        pump_layout_test_session(&mut session, 116_666_669);
+        session.frames(1);
         check(1, 0, PxPosition::new(Px(500), Px(500)), false);
         check(1, 0, PxPosition::new(Px(275), Px(15)), true);
 
@@ -639,7 +635,7 @@ mod tests {
             tree.metadatas.mark_geometry_dirty(canvas);
         });
         position.set(PxPosition::new(Px(8100), Px(10)));
-        pump_layout_test_session(&mut session, 133_333_336);
+        session.frames(1);
         check(0, 1, PxPosition::new(Px(8105), Px(15)), false);
         TesseraRuntime::with(|runtime| {
             assert!(
@@ -651,9 +647,9 @@ mod tests {
             );
         });
         position.set(PxPosition::new(Px(270), Px(10)));
-        pump_layout_test_session(&mut session, 150_000_003);
+        session.frames(1);
         check(1, 0, PxPosition::new(Px(275), Px(15)), true);
-        pump_layout_test_session(&mut session, 166_666_670);
+        session.frames(1);
         check(0, 0, PxPosition::new(Px(275), Px(15)), true);
 
         probe.observed_handler.set(false);
@@ -662,7 +658,7 @@ mod tests {
             .get()
             .expect("test fixture entry exists")
             .set(true);
-        pump_layout_test_session(&mut session, 183_333_337);
+        session.frames(1);
         assert!(
             probe.observed_handler.get(),
             "replay must replace the cached input handler"

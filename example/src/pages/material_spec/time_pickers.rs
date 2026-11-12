@@ -15,8 +15,8 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
     time_picker::{
-        TimePickerDisplayMode, TimePickerLayout, TimePickerSelection, TimePickerController, time_picker,
-        time_picker_dialog,
+        TimePickerController, TimePickerDisplayMode, TimePickerLayout, TimePickerSelection,
+        time_picker, time_picker_dialog,
     },
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
@@ -303,7 +303,9 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                     [("v0", I18N.text(&label).into())],
                 ))
                 .on_click(move || {
-                    sample.state.with_mut(TimePickerController::toggle_display_mode);
+                    sample
+                        .state
+                        .with_mut(TimePickerController::toggle_display_mode);
                     focus::defer_keyboard_until_layout();
                 })
                 .child(move || {
@@ -1289,7 +1291,9 @@ fn time_figure_contents(
                             ),
                         )
                         .on_click(move || {
-                            sample.state.with_mut(TimePickerController::toggle_display_mode);
+                            sample
+                                .state
+                                .with_mut(TimePickerController::toggle_display_mode);
                             focus::defer_keyboard_until_layout();
                         });
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -1981,7 +1985,12 @@ fn time_adaptive() {
 }
 
 #[tessera]
-fn time_behavior(sample: Sample, modal: State<DialogController>, draft: Sample, committed: State<(u8, u8)>) {
+fn time_behavior(
+    sample: Sample,
+    modal: State<DialogController>,
+    draft: Sample,
+    committed: State<(u8, u8)>,
+) {
     prose(
         "ui-select-a-field-and-adjust-the-corresponding-dial-or-type-directly-using-keyboard-input-rel",
     );

@@ -255,7 +255,7 @@ fn start_glass_feedback(state: State<RippleState>, center: [f32; 2]) {
 ///     text("Content on glass");
 /// });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn fluid_glass(

@@ -13,8 +13,8 @@ use tessera_ui::{
 use crate::modifier::with_keyboard_input;
 
 use super::{
-    CalendarDate, DatePickerController, DateRangePickerController, Weekday, YearMonth, civil_from_days,
-    days_from_civil, days_in_month, is_date_selectable, weekday_for_date,
+    CalendarDate, DatePickerController, DateRangePickerController, Weekday, YearMonth,
+    civil_from_days, days_from_civil, days_in_month, is_date_selectable, weekday_for_date,
 };
 
 #[derive(Clone, Copy, PartialEq)]

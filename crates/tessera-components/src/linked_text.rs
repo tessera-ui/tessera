@@ -8,20 +8,11 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use tessera_foundation::{gesture::TapRecognizer, modifier::SemanticsArgs};
-use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint, Dp,
-    FocusRequester, LayoutResult, MeasurementError, Modifier, PointerInput,
-    PointerInputModifierNode, PxPosition, PxSize, SemanticsModifierNode, State,
-    accesskit::{Action, Role},
-    layout::{MeasureScope, layout},
-    modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
-    remember, tessera, use_context,
-    winit::{
+use tessera_ui::{AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint, Dp, FocusRequester, LayoutResult, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PxPosition, PxSize, SemanticsModifierNode, State, accesskit::{Action, Role}, layout::{MeasureScope, layout}, modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _}, remember, tessera, use_context, winit::{
         event::ElementState,
         keyboard::{Key, NamedKey},
         window::CursorIcon,
-    },
-};
+    }};
 
 use crate::{
     modifier::{ModifierExt as _, with_keyboard_input},
@@ -96,7 +87,7 @@ impl LinkedTextRun {
 ///     navigate.call();
 ///     assert!(opened.get());
 /// }
-/// # tessera_ui::testing::layout_test(explanation).run();
+/// # tessera_ui::testing::UiTest::new().content(explanation).frame();
 /// ```
 #[tessera]
 pub fn linked_text(

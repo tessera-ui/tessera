@@ -1,8 +1,8 @@
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role, Toggled},
-    headless::{HeadlessConfig, HeadlessRenderer},
     tessera,
+    testing::UiTest,
 };
 
 #[tessera]
@@ -25,7 +25,7 @@ fn switch_fixture() {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
+fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -36,38 +36,29 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .clone()
 }
 
-fn click(renderer: &mut HeadlessRenderer, x: f32, y: f32) {
+fn click(renderer: &mut UiTest, x: f32, y: f32) {
     let position = PxPosition::from_f32_xy(x, y);
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(60);
+    renderer.frames(60);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter for adjacent label illustrations"]
 fn adjacent_labels_activate_their_native_control_and_preserve_canonical_scaled_geometry() {
     for is_switch in [false, true] {
-        let mut renderer = HeadlessRenderer::new(
-            if is_switch {
-                Box::new(|| {
+        let mut renderer = UiTest::new()
+            .viewport(676, 400)
+            .rendered(crate::TestPipelines)
+            .content(move || {
+                if is_switch {
                     switch_fixture();
-                })
-            } else {
-                Box::new(|| {
+                } else {
                     checkbox_fixture();
-                })
-            },
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 676,
-                height: 400,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+                }
+            });
+        renderer.frames(8);
         let app = node(&renderer, "Adjacent labels app viewport", Role::Group)
             .bounds()
             .unwrap();
@@ -131,7 +122,7 @@ fn adjacent_labels_activate_their_native_control_and_preserve_canonical_scaled_g
         click(&mut renderer, 220.0, if is_switch { 264.0 } else { 304.0 });
         assert_eq!(node(&renderer, last, role).toggled(), Some(Toggled::True));
         renderer.resize(338, 400);
-        renderer.render_frames(8);
+        renderer.frames(8);
         let bounds = node(&renderer, first, role).bounds().unwrap();
         assert_eq!(
             (bounds.x0, bounds.y0, bounds.width(), bounds.height()),

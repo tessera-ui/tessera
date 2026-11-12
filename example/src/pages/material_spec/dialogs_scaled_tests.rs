@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use tessera_components::{
     alignment::Alignment, boxed::boxed, column::column, modifier::ModifierExt as _,
     scrollable::ScrollableController, spacer::spacer, theme::material_theme,
@@ -11,9 +9,9 @@ use tessera_ui::{
     ScrollEventSource, State,
     accesskit::{Node, Role},
     current_frame_time,
-    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
+    testing::UiTest,
 };
 
 use super::{Geometry, annotations};
@@ -75,7 +73,7 @@ fn fixture(
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
+fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -86,7 +84,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .clone()
 }
 
-fn assert_geometry(renderer: &HeadlessRenderer, scene: usize, scale: f32) {
+fn assert_geometry(renderer: &UiTest, scene: usize, scale: f32) {
     if scene == 6 {
         let bounds = node(renderer, "Dialogs overview figure", Role::Group)
             .bounds()
@@ -155,20 +153,12 @@ fn exercise(scenes: &[usize]) {
     for samples in [1, 4] {
         for &scene in scenes {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || fixture(scene, probe.clone())),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 640,
-                    height: 800,
-                    sample_count: samples,
-                    frame_time: Duration::from_nanos(16_666_667),
-                    ..Default::default()
-                },
-            )
-            .expect("Native GPU adapter");
-            renderer.render_frames(16);
+            let mut renderer = UiTest::new()
+                .viewport(640, 800)
+                .samples(samples)
+                .rendered(crate::TestPipelines)
+                .content(|| fixture(scene, output.clone()));
+            renderer.frames(16);
             renderer.inject_pointer(
                 PointerChange::new(
                     current_frame_time().unwrap(),
@@ -183,7 +173,7 @@ fn exercise(scenes: &[usize]) {
                 )
                 .with_position(PxPosition::from_f32_xy(40.0, 100.0)),
             );
-            renderer.render_frames(120);
+            renderer.frames(120);
             assert_eq!(
                 output
                     .get()
@@ -193,7 +183,7 @@ fn exercise(scenes: &[usize]) {
             );
             assert_geometry(&renderer, scene, 0.625);
             renderer.resize(512, 800);
-            renderer.render_frames(16);
+            renderer.frames(16);
             assert_geometry(&renderer, scene, 0.5);
             let (label, expected_notice, width) = match scene {
                 0 => ("Accept", "Accepted", 80.0),
@@ -211,7 +201,7 @@ fn exercise(scenes: &[usize]) {
             renderer.pointer_move(MOUSE_POINTER_ID, position);
             renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert!(
                 renderer
                     .inspect_accessibility()

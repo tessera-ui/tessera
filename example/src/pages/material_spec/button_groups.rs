@@ -9,7 +9,7 @@ use tessera_components::{
     boxed::boxed,
     button::{ButtonShape, ButtonVariant, button},
     button_groups::{
-        ButtonGroupsSelectionMode, ButtonGroupsSize, ButtonGroupsController, ButtonGroupsStyle,
+        ButtonGroupsController, ButtonGroupsSelectionMode, ButtonGroupsSize, ButtonGroupsStyle,
         button_groups,
     },
     column::column,

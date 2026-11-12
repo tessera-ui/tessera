@@ -750,7 +750,9 @@ mod tests {
             });
         }
 
-        crate::testing::layout_test(|| context_provider()).run();
+        crate::testing::UiTest::new()
+            .content(|| context_provider())
+            .frame();
     }
 
     #[test]

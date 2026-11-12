@@ -4,16 +4,13 @@
 //!
 //! Verify native shape coverage, clipping, and retained input targets.
 
-use std::time::Duration;
-
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _};
 use tessera_ui::{
     Callback, Color, Dp, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType,
     PxPosition, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
-    testing::TestProbe,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -102,29 +99,20 @@ fn create_renderer(
     scale: [f32; 2],
     outer: f32,
     clipped: bool,
-) -> (HeadlessRenderer, FixtureHandles) {
+) -> (UiTest<'static>, FixtureHandles) {
     let probe = TestProbe::default();
     let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            fixture(scale, outer, clipped, probe.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 240,
-            height: 140,
-            sample_count: samples,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(240, 140)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture(scale, outer, clipped, probe.clone()));
+    renderer.frames(4);
     (renderer, observed.get())
 }
 
-fn pixel(renderer: &HeadlessRenderer, x: usize, y: usize) -> [u8; 3] {
-    let pixels = renderer.read_pixels().unwrap();
+fn pixel(renderer: &UiTest, x: usize, y: usize) -> [u8; 3] {
+    let pixels = renderer.read_pixels();
     let offset = (y * 240 + x) * 4;
     pixels[offset..offset + 3].try_into().unwrap()
 }
@@ -148,7 +136,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
 
         assert_eq!(idle.dirty_nodes_param, 0);
         assert_eq!(idle.geometry_nodes_updated, 0);
-        let original = renderer.read_pixels().unwrap();
+        let original = renderer.read_pixels();
         let bounds = renderer
             .accessibility_snapshot()
             .unwrap()
@@ -164,7 +152,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
             (10.25, 20.5, 200.0, 80.0)
         );
         handles.scaled.unwrap().set(true);
-        renderer.render_frames(1);
+        renderer.frames(1);
         let diagnostics = renderer.diagnostics();
         assert_eq!(
             renderer
@@ -184,9 +172,9 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
             diagnostics.geometry_nodes_updated, 0,
             "paint-only scaling must not place nodes"
         );
-        renderer.render_frames(1);
+        renderer.frames(1);
         assert_eq!(
-            renderer.read_pixels().unwrap(),
+            renderer.read_pixels(),
             original,
             "identity must preserve existing coverage exactly"
         );
@@ -194,7 +182,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         scale = [0.32, 1.0];
         let (mut renderer, handles) = create_renderer(samples, scale, outer, false);
         handles.scaled.unwrap().set(true);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_eq!(
             pixel(&renderer, 135, 90),
             [255, 0, 0],
@@ -214,7 +202,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         let unpainted = PxPosition::from_f32_xy(30.5, 60.5);
         renderer.pointer_press(MOUSE_POINTER_ID, unpainted, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, unpainted, PressKeyEventType::Left);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_eq!(
             handles.clicks.unwrap().get(),
             1,
@@ -224,7 +212,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         scale = [1.0, 0.5];
         let (mut renderer, handles) = create_renderer(samples, scale, outer, false);
         handles.scaled.unwrap().set(true);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_eq!(
             pixel(&renderer, 20, 45),
             [255, 255, 255],
@@ -236,11 +224,10 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         scale = [0.0, 1.0];
         let (mut renderer, handles) = create_renderer(samples, scale, outer, false);
         handles.scaled.unwrap().set(true);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert!(
             renderer
                 .read_pixels()
-                .unwrap()
                 .chunks_exact(4)
                 .all(|pixel| pixel == [255, 255, 255, 255]),
             "zero scale produces no pixels"
@@ -251,7 +238,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         for clipped in [false, true] {
             let (mut renderer, handles) = create_renderer(samples, scale, outer, clipped);
             handles.scaled.unwrap().set(true);
-            renderer.render_frames(2);
+            renderer.frames(2);
             assert_eq!(pixel(&renderer, 65, 40), [255, 0, 0]);
             assert_eq!(
                 pixel(&renderer, 80, 40),
@@ -264,7 +251,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
             let position = PxPosition::from_f32_xy(80.5, 40.5);
             renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-            renderer.render_frames(2);
+            renderer.frames(2);
             assert_eq!(handles.clicks.unwrap().get(), usize::from(!clipped));
             drop(renderer);
         }

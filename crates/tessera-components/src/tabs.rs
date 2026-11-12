@@ -1657,10 +1657,7 @@ fn tab_title_content(title: Option<TabTitle>, tab_padding: Option<Dp>) {
 mod tests {
 
     use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-    use tessera_ui::{
-        CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
-        PxPosition, remember, tessera,
-    };
+    use tessera_ui::{Dp, Modifier, Px, PxPosition, remember, tessera};
 
     use crate::{
         column::column,
@@ -1721,17 +1718,13 @@ mod tests {
 
     #[test]
     fn tabs_stop_rebuilding_after_the_indicator_settles() {
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                idle_tabs_probe();
-            })
-            .viewport_px(1000, 900),
-        );
-        for frame in 0..90 {
-            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
-        for frame in 90..98 {
-            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
+        let mut session = tessera_ui::testing::UiTest::new()
+            .content(idle_tabs_probe)
+            .viewport(1000, 900);
+        session.frame();
+        session.frames(89);
+        for _ in 0..8 {
+            session.frames(1);
             assert_eq!(
                 session
                     .work()
@@ -1745,14 +1738,13 @@ mod tests {
     fn tabs_row() {
         let selected = remember(|| 0usize);
         column().children(move || {
-            tabs(selected.get()).on_select(move |index| selected.set(index)).content(move |row| {
-                tab(row)
-                    .label("Flights");
-                tab(row)
-                    .label("Hotels");
-                tab(row)
-                    .label("Trains");
-            });
+            tabs(selected.get())
+                .on_select(move |index| selected.set(index))
+                .content(move |row| {
+                    tab(row).label("Flights");
+                    tab(row).label("Hotels");
+                    tab(row).label("Trains");
+                });
             if selected.get() == 1 {
                 spacer().modifier(Modifier::new().width(Dp(10.0)).height(Dp(10.0)).semantics(
                     SemanticsArgs {
@@ -1777,69 +1769,23 @@ mod tests {
 
     #[test]
     fn clicking_middle_tab_selects_middle_tab() {
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                tabs_click_probe();
-            })
-            .viewport_px(300, 200),
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+        let mut session = tessera_ui::testing::UiTest::new()
+            .content(tabs_click_probe)
+            .viewport(300, 200);
+        session.frame();
 
         // Three equal tabs span the 300px viewport, so the middle tab covers
         // x in [100, 200] and its center is at x = 150.
-        let now = tessera_ui::time::Instant::now();
-        let cursor = Some(PxPosition::new(Px::new(150), Px::new(24)));
-
+        let position = PxPosition::new(Px::new(150), Px::new(24));
         // Move the pointer over the middle tab first. This rebuilds that tab
         // in isolation inside `lazy_column`; a per-instance self-assigned index
         // must still resolve to the middle tab after the click.
-        let moved = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Moved(PxPosition::new(Px::new(150), Px::new(24))),
-            GestureState::TapCandidate,
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            16_666_667,
-            vec![moved],
-            cursor,
-        );
-
-        let press = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            33_333_334,
-            vec![press],
-            cursor,
-        );
-        let release = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Released(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let mut snapshot = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            50_000_001,
-            vec![release],
-            cursor,
-        );
-        for frame in 3..40u64 {
-            snapshot = tessera_ui::testing::pump_layout_test_session(
-                &mut session,
-                50_000_001 + 16_666_667 * (frame - 2),
-            );
-        }
-
+        session.pointer_move(tessera_ui::MOUSE_POINTER_ID, position);
+        session.frames(1);
+        session.click_at(position);
         // With the regression the shared counter keeps growing, so the click
         // selects the last tab and this probe never appears.
-        snapshot.node("hotels-active").exists();
+        session.frames(37).node("hotels-active").exists();
     }
 }
 
@@ -1868,7 +1814,8 @@ mod custom_title_tests {
         observed.with_mut(|handles| handles.scrollable = Some(scrollable));
         material_theme().child(move || {
             let observed = observed.clone();
-            tabs(selected.get()).on_select(move |index| selected.set(index))
+            tabs(selected.get())
+                .on_select(move |index| selected.set(index))
                 .scrollable(scrollable.get())
                 .modifier(Modifier::new().width(Dp(300.0)))
                 .content(move |row| {
@@ -1886,13 +1833,10 @@ mod custom_title_tests {
     #[test]
     fn primary_custom_title_indicator_uses_unpadded_slot_width_in_both_row_modes() {
         let observed = tessera_ui::testing::TestProbe::default();
-        let fixture_observed = observed.clone();
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(move || fixture(fixture_observed.clone()))
-                .viewport_px(300, 100),
-        );
-        let mut frame = 0_u64;
-        tessera_ui::testing::pump_layout_test_session(&mut session, frame);
+        let mut session = tessera_ui::testing::UiTest::new()
+            .content(|| fixture(observed.clone()))
+            .viewport(300, 100);
+        session.frame();
         let selected = observed.get().selected.unwrap();
         let scrollable = observed.get().scrollable.unwrap();
         let controller = observed.get().controller.unwrap();
@@ -1900,10 +1844,7 @@ mod custom_title_tests {
             scrollable.set(scrolling);
             for (index, width) in [(0, 80), (1, 120)] {
                 selected.set(index);
-                for _ in 0..90 {
-                    frame += 16_666_667;
-                    tessera_ui::testing::pump_layout_test_session(&mut session, frame);
-                }
+                session.frames(90);
                 assert_eq!(controller.with(|c| c.indicator_width.value_px()), Px(width));
             }
         }
@@ -1917,9 +1858,9 @@ mod small_custom_title_tests {
     use tessera_foundation::modifier::ModifierExt as _;
     use tessera_ui::{
         Color, Dp, Modifier, Px, State,
-        accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
+        accesskit::{Action, Node, NodeId, Role},
         remember, tessera,
+        testing::UiTest,
     };
 
     use crate::{
@@ -1952,7 +1893,8 @@ mod small_custom_title_tests {
             })
             .child(move || {
                 let observed = observed.clone();
-                tabs(selected.get()).on_select(move |index| selected.set(index))
+                tabs(selected.get())
+                    .on_select(move |index| selected.set(index))
                     .scrollable(scrollable.get())
                     .min_scrollable_tab_width(Dp::ZERO)
                     .edge_padding(Dp::ZERO)
@@ -1979,7 +1921,7 @@ mod small_custom_title_tests {
             });
     }
 
-    fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+    fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
         renderer
             .accessibility_snapshot()
             .unwrap()
@@ -1996,46 +1938,31 @@ mod small_custom_title_tests {
             "tabs::small_custom_title_tests::gpu_small_custom_title_indicators_exclude_minimum_interactive_padding",
             || {
                 let observed = tessera_ui::testing::TestProbe::default();
-                let fixture_observed = observed.clone();
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(move || {
-                        fixture(fixture_observed.clone());
-                    }),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width: 300,
-                        height: 100,
-                        sample_count: 1,
-                        frame_time: Duration::from_millis(20),
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(12);
+                let mut renderer = UiTest::new()
+                    .viewport(300, 100)
+                    .frame_step(Duration::from_millis(20))
+                    .rendered(crate::TesseraComponents)
+                    .content(|| fixture(observed.clone()));
+                renderer.frames(12);
                 let selected = observed.get().selected.unwrap();
                 let scrollable = observed.get().scrollable.unwrap();
                 let controller = observed.get().controller.unwrap();
                 for scrolling in [false, true] {
                     scrollable.set(scrolling);
-                    renderer.render_frames(90);
+                    renderer.frames(90);
                     for (index, label, visual_width, indicator_width) in
                         [(0, "Small title", 32, 32), (1, "Minimum title", 16, 24)]
                     {
                         let target_node = node(&renderer, label, Role::Tab).0;
-                        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                            action: Action::Click,
-                            target_tree: TreeId::ROOT,
-                            target_node,
-                            data: None,
-                        }));
-                        renderer.render_frames(90);
+                        assert!(renderer.accessibility_action(target_node, Action::Click));
+                        renderer.frames(90);
                         assert_eq!(selected.get(), index);
                         assert_eq!(
                             renderer.accessibility_snapshot().unwrap().focus,
                             target_node
                         );
                         tessera_ui::focus::clear_focus(true);
-                        renderer.render_frames(12);
+                        renderer.frames(12);
                         assert_ne!(
                             renderer.accessibility_snapshot().unwrap().focus,
                             target_node
@@ -2049,7 +1976,7 @@ mod small_custom_title_tests {
                             controller.with(|c| c.indicator_width_px()),
                             Px(indicator_width)
                         );
-                        let pixels = renderer.read_pixels().unwrap();
+                        let pixels = renderer.read_pixels();
                         let width = renderer.physical_size().width;
                         let mut visual = Vec::new();
                         for y in target.y0 as u32..target.y1 as u32 {

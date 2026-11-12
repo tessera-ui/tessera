@@ -1166,7 +1166,8 @@ impl<'db> CallAnalyzer<'db> {
                 };
                 return self.method_call_takes_render_slot_setter_at(&call, index)
                     || self.method_call_takes_render_slot_closure_at(&call, index)
-                    || self.method_call_takes_pending_property_at(&call, index);
+                    || self.method_call_takes_pending_property_at(&call, index)
+                    || self.method_call_is_build_entry_at(&call, index);
             }
             current = node.parent();
         }
@@ -1257,18 +1258,27 @@ impl<'db> CallAnalyzer<'db> {
     fn call_is_build_entry(&self, call: &ast::CallExpr) -> bool {
         self.call_resolves_to(call, |function| {
             let name = function.name(self.db);
-            self.function_path(function) == "tessera_ui::testing::layout_test"
-                || (name.as_str() == "new"
-                    && (self.is_entry_point_method(function)
-                        || self.is_render_slot_method(
-                            function,
-                            "tessera_ui::headless::HeadlessRenderer",
-                        )))
+            (name.as_str() == "new"
+                && (self.is_entry_point_method(function)
+                    || self
+                        .is_render_slot_method(function, "tessera_ui::headless::HeadlessRenderer")))
                 || (matches!(
                     name.as_str(),
                     "run" | "run_with_config" | "run_web_with_config"
                 ) && self.is_render_slot_method(function, "tessera_ui::renderer::Renderer"))
         })
+    }
+
+    fn method_call_is_build_entry_at(&self, call: &ast::MethodCallExpr, index: usize) -> bool {
+        index == 0
+            && self.method_call_variants(call).any(|call| {
+                self.sema
+                    .resolve_method_call(&call)
+                    .is_some_and(|function| {
+                        function.name(self.db).as_str() == "content"
+                            && self.is_render_slot_method(function, "tessera_ui::testing::UiTest")
+                    })
+            })
     }
 
     fn method_call_takes_render_slot_closure_at(
@@ -1838,7 +1848,7 @@ pub fn run() -> EntryPoint {
 }
 
 pub fn inspect_root() {
-    let _ = tessera_ui::testing::layout_test({ let _input = 1; move || { child(); } });
+    let _ = tessera_ui::testing::UiTest::new().content({ let _input = 1; move || { child(); } });
     let _ = tessera_ui::headless::HeadlessRenderer::new(
         Box::new(|| { child(); }), Vec::new(), Default::default(),
     );
@@ -1990,7 +2000,10 @@ mod plain {
 
     pub fn accept(_: impl Into<RenderSlot>) {}
 
-    pub fn layout_test(_: impl Fn()) {}
+    pub struct UiTest;
+    impl UiTest {
+        pub fn content(self, _: impl Fn()) -> Self { self }
+    }
 
     pub struct Builder;
     impl Builder {
@@ -2014,7 +2027,7 @@ pub fn root() {
     wrapper(|| { child(); });
     plain::host().slot(|| { child(); });
     plain::accept(|| { child(); });
-    plain::layout_test(|| { child(); });
+    plain::UiTest.content(|| { child(); });
     let _boxed = Box::new(|| { child(); });
     let _ = remember(|| { let _ = remember(|| 1usize); 0u32 });
 }
@@ -2620,10 +2633,7 @@ pub fn screen(model: Model<Search>) {
     fn named_modifier_ext_imports_are_reported_with_an_anonymous_import_fix() {
         with_analyzer(
             r#"
-use tessera_ui::{
-    Modifier,
-    modifier::{CursorModifierExt as _, FocusModifierExt},
-};
+use tessera_ui::{Modifier, modifier::{CursorModifierExt as _, FocusModifierExt}};
 
 pub fn focus(modifier: Modifier) -> Modifier {
     modifier.focus_group(None)
@@ -2678,10 +2688,7 @@ pub fn focus(modifier: Modifier) -> Modifier {
     fn modifier_ext_imports_named_elsewhere_are_not_reported() {
         let diagnostics = diagnostics_for(
             r#"
-use tessera_ui::{
-    Modifier,
-    modifier::{CursorModifierExt, FocusModifierExt},
-};
+use tessera_ui::{Modifier, modifier::{CursorModifierExt, FocusModifierExt}};
 
 pub fn focus(modifier: Modifier) -> Modifier {
     FocusModifierExt::focus_group(modifier, None)
@@ -2819,7 +2826,7 @@ pub trait ModifierExt {}
 
             let tessera_ui_path = workspace_root().join("tessera-ui");
             let ui_features =
-                if source.contains("HeadlessRenderer") || source.contains("testing::layout_test") {
+                if source.contains("HeadlessRenderer") || source.contains("testing::UiTest") {
                     ", features = [\"testing\", \"headless\"]"
                 } else {
                     ""

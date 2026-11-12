@@ -1,9 +1,7 @@
-use std::time::Duration;
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Role, Toggled},
+    testing::UiTest,
 };
 
 use super::*;
@@ -15,7 +13,7 @@ fn fixture() {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -25,7 +23,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
     (id, node.clone())
 }
 
-fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
+fn exists(renderer: &UiTest, label: &str, role: Role) -> bool {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -34,25 +32,20 @@ fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
         .any(|(_, node)| node.role() == role && crate::has_label(&node, label))
 }
 
-fn action(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: node(renderer, label, role).0,
-        data: None,
-    }));
-    renderer.render_frames(20);
+fn action(renderer: &mut UiTest, label: &str, role: Role, action: Action) {
+    assert!(renderer.accessibility_action(node(renderer, label, role).0, action));
+    renderer.frames(20);
 }
 
-fn edit(renderer: &mut HeadlessRenderer, label: &str, value: &str) {
+fn edit(renderer: &mut UiTest, label: &str, value: &str) {
     action(renderer, label, Role::TextInput, Action::Focus);
     for character in value.chars() {
         renderer.inject_text(&character.to_string());
     }
-    renderer.render_frames(3);
+    renderer.frames(3);
 }
 
-fn assert_default_draft(renderer: &HeadlessRenderer) {
+fn assert_default_draft(renderer: &UiTest) {
     for (label, value) in [
         ("Event name", ""),
         ("From", "Mon, May 18"),
@@ -76,19 +69,11 @@ fn assert_default_draft(renderer: &HeadlessRenderer) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn event_dialog_keeps_edits_when_discard_is_cancelled_and_resets_after_discard_or_save() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 900,
-            height: 1000,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(5);
+    let mut renderer = UiTest::new()
+        .viewport(900, 1000)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(5);
     action(&mut renderer, "Overview", Role::Tab, Action::Click);
     action(
         &mut renderer,

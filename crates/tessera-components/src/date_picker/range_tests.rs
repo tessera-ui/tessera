@@ -3,10 +3,8 @@ use tessera_ui::{
     CallbackWith, Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
     accesskit::{Rect, Role},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::text_matches,
+    focus, remember, tessera,
+    testing::{UiTest, text_matches},
 };
 
 use crate::{
@@ -143,23 +141,16 @@ fn nested_fixture(
 
 fn check_nested_scroll(samples: u32) {
     let output = tessera_ui::testing::TestProbe::default();
-    let probe = output.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || nested_fixture(probe.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 600,
-            height: 950,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("nested renderer");
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(600, 950)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| nested_fixture(output.clone()));
+    renderer.frames(8);
     let outer = output.get().unwrap().1;
     outer.with_mut(|scroll| scroll.scroll_to(Dp::ZERO, Dp(400.0 / 1.5)));
-    renderer.render_frames(8);
+    renderer.frames(8);
     click(&mut renderer, "July 29, 2026");
     let state = output.get().unwrap().0;
     assert_eq!(
@@ -188,7 +179,7 @@ fn check_nested_scroll(samples: u32) {
         0.0,
         -600.0,
     );
-    renderer.render_frames(90);
+    renderer.frames(90);
     let accessibility = renderer.accessibility_snapshot().expect("tree");
     let focused = accessibility
         .nodes
@@ -219,7 +210,7 @@ fn check_nested_scroll(samples: u32) {
         "virtualizing the focused month must not reveal controls outside the calendar"
     );
     assert!(focus::request_move_focus(FocusDirection::Next));
-    renderer.render_frames(8);
+    renderer.frames(8);
     let accessibility = renderer.accessibility_snapshot().expect("tree");
     let focused = accessibility
         .nodes
@@ -237,9 +228,12 @@ fn check_nested_scroll(samples: u32) {
         state.with(DateRangePickerController::selected_start_date),
         Some(date(7, 29))
     );
-    assert_eq!(state.with(DateRangePickerController::selected_end_date), None);
+    assert_eq!(
+        state.with(DateRangePickerController::selected_end_date),
+        None
+    );
     assert!(focus::request_move_focus(FocusDirection::Next));
-    renderer.render_frames(12);
+    renderer.frames(12);
     let accessibility = renderer.accessibility_snapshot().expect("tree");
     assert!(
         text_matches(
@@ -292,7 +286,7 @@ fn fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerCo
         });
 }
 
-fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
+fn bounds(renderer: &UiTest, label: &str) -> Rect {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -305,24 +299,24 @@ fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
         .expect("bounds")
 }
 
-fn click_bounds(renderer: &mut HeadlessRenderer, bounds: Rect) {
+fn click_bounds(renderer: &mut UiTest, bounds: Rect) {
     let point = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
         ((bounds.y0 + bounds.y1) / 2.0) as f32,
     );
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(3);
+    renderer.frames(3);
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str) {
+fn click(renderer: &mut UiTest, label: &str) {
     let bounds = bounds(renderer, label);
     click_bounds(renderer, bounds);
 }
 
-fn input_bounds(renderer: &HeadlessRenderer) -> Vec<Rect> {
+fn input_bounds(renderer: &UiTest) -> Vec<Rect> {
     let nodes = renderer.accessibility_snapshot().expect("tree").nodes;
     assert_eq!(
         nodes
@@ -350,9 +344,9 @@ fn input_bounds(renderer: &HeadlessRenderer) -> Vec<Rect> {
     vec![start, end]
 }
 
-fn assert_color(renderer: &HeadlessRenderer, x: f64, y: f64, expected: [u8; 3]) {
+fn assert_color(renderer: &UiTest, x: f64, y: f64, expected: [u8; 3]) {
     let offset = (y as usize * renderer.physical_size().width as usize + x as usize) * 4;
-    let pixels = renderer.read_pixels().expect("pixels");
+    let pixels = renderer.read_pixels();
     for channel in 0..3 {
         assert!(
             (pixels[offset + channel] as i32 - expected[channel] as i32).abs() <= 2,
@@ -364,20 +358,13 @@ fn assert_color(renderer: &HeadlessRenderer, x: f64, y: f64, expected: [u8; 3]) 
 
 fn check_range(samples: u32) {
     let output = tessera_ui::testing::TestProbe::default();
-    let probe = output.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(probe.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 600,
-            height: 950,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(600, 950)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(output.clone()));
+    renderer.frames(8);
     let state = output.get().unwrap();
     let month = bounds(&renderer, "July 2026");
     let heading = renderer
@@ -422,13 +409,13 @@ fn check_range(samples: u32) {
     let x = day.x0 as usize + 12;
     let y = ((day.y0 + day.y1) / 2.0) as usize;
     let offset = (y * renderer.physical_size().width as usize + x) * 4;
-    let idle = renderer.read_pixels().expect("idle date");
+    let idle = renderer.read_pixels();
     renderer.pointer_move(
         MOUSE_POINTER_ID,
         PxPosition::from_f32_xy(x as f32, y as f32),
     );
-    renderer.render_frames(3);
-    let hovered = renderer.read_pixels().expect("hovered date");
+    renderer.frames(3);
+    let hovered = renderer.read_pixels();
     assert_ne!(
         &idle[offset..offset + 4],
         &hovered[offset..offset + 4],
@@ -436,9 +423,9 @@ fn check_range(samples: u32) {
     );
     assert_color(&renderer, day.x0 + 2.0, y as f64, [255, 255, 255]);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(590.0, 940.0));
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(
-        &renderer.read_pixels().expect("idle again")[offset..offset + 4],
+        &renderer.read_pixels()[offset..offset + 4],
         &idle[offset..offset + 4],
         "leaving the date clears its state layer"
     );
@@ -469,26 +456,22 @@ fn check_range(samples: u32) {
         .1;
     assert!(blocked.is_disabled());
     click(&mut renderer, "July 13, 2026");
-    assert_eq!(state.with(DateRangePickerController::selected_start_date), None);
+    assert_eq!(
+        state.with(DateRangePickerController::selected_start_date),
+        None
+    );
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(590.0, 940.0));
-    renderer.render_frames(3);
+    renderer.frames(3);
     let blocked = bounds(&renderer, "July 13, 2026");
     let focus_x = (blocked.x0 + blocked.x1) / 2.0 + 20.0;
     let focus_y = (blocked.y0 + blocked.y1) / 2.0;
     assert_color(&renderer, focus_x, focus_y, [255, 255, 255]);
     let tree = renderer.inspect_accessibility().unwrap();
     let target_node = tree.find("July 12, 2026", Role::Button).unwrap().0;
-    assert!(
-        renderer.dispatch_accessibility_action(tessera_ui::accesskit::ActionRequest {
-            action: tessera_ui::accesskit::Action::Focus,
-            target_tree: tessera_ui::accesskit::TreeId::ROOT,
-            target_node,
-            data: None,
-        })
-    );
-    renderer.render_frames(2);
+    assert!(renderer.accessibility_action(target_node, tessera_ui::accesskit::Action::Focus));
+    renderer.frames(2);
     renderer.press_key(tessera_ui::winit::keyboard::NamedKey::ArrowRight);
-    renderer.render_frames(8);
+    renderer.frames(8);
     let accessibility = renderer.accessibility_snapshot().expect("tree");
     let focused = accessibility
         .nodes
@@ -497,7 +480,7 @@ fn check_range(samples: u32) {
         .expect("focused unavailable date");
     assert!(text_matches(focused.1.label(), "July 13, 2026"));
     assert!(focused.1.is_disabled());
-    let pixels = renderer.read_pixels().expect("focused pixels");
+    let pixels = renderer.read_pixels();
     let offset =
         (focus_y as usize * renderer.physical_size().width as usize + focus_x as usize) * 4;
     assert!(
@@ -506,9 +489,12 @@ fn check_range(samples: u32) {
             .any(|channel| *channel < 250),
         "an unavailable date still shows a visible keyboard focus indicator"
     );
-    assert_eq!(state.with(DateRangePickerController::selected_start_date), None);
+    assert_eq!(
+        state.with(DateRangePickerController::selected_start_date),
+        None
+    );
     focus::clear_focus(true);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_color(&renderer, focus_x, focus_y, [255, 255, 255]);
     let start = bounds(&renderer, "July 29, 2026");
     let corner = Rect::new(
@@ -534,7 +520,7 @@ fn check_range(samples: u32) {
     );
     focus::clear_focus(true);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(590.0, 940.0));
-    renderer.render_frames(90);
+    renderer.frames(90);
     let start = bounds(&renderer, "July 29, 2026");
     let middle = bounds(&renderer, "July 30, 2026");
     let end = bounds(&renderer, "July 31, 2026");
@@ -545,44 +531,44 @@ fn check_range(samples: u32) {
     assert_color(&renderer, start.x1 - 2.0, y, [149, 203, 149]);
     assert_color(&renderer, end.x0 + 2.0, y, [149, 203, 149]);
     assert_color(&renderer, end.x1 - 2.0, y, [255, 255, 255]);
-    let selected = renderer.read_pixels().expect("selected");
+    let selected = renderer.read_pixels();
     renderer.resize(450, 950);
-    renderer.render_frames(8);
+    renderer.frames(8);
     let narrow = bounds(&renderer, "July 30, 2026");
     assert!(narrow.x1 <= 450.0 && narrow.x0 >= 0.0);
     renderer.resize(1, 950);
-    renderer.render_frames(4);
+    renderer.frames(4);
     renderer.resize(600, 950);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert!(
-        renderer.read_pixels().expect("restored") == selected,
+        renderer.read_pixels() == selected,
         "resize restores all pixels"
     );
 
     state.with_mut(|state| state.set_selection(Some(date(7, 30)), Some(date(7, 30))));
-    renderer.render_frames(8);
+    renderer.frames(8);
     let day = bounds(&renderer, "July 30, 2026");
     let y = (day.y0 + day.y1) / 2.0;
     assert_color(&renderer, day.x0 + 2.0, y, [255, 255, 255]);
     assert_color(&renderer, day.x1 - 2.0, y, [255, 255, 255]);
 
     state.with_mut(|state| state.set_displayed_month(YearMonth::new(2027, 1).unwrap()));
-    renderer.render_frames(8);
+    renderer.frames(8);
     bounds(&renderer, "January 13, 2027");
     state.with_mut(|state| state.set_year_range(2028..=2028));
-    renderer.render_frames(8);
+    renderer.frames(8);
     bounds(&renderer, "January 13, 2028");
     state.with_mut(|state| {
         state.set_year_range(1900..=2100);
         state.set_displayed_month(YearMonth::new(2026, 7).unwrap());
     });
-    renderer.render_frames(8);
+    renderer.frames(8);
 
     state.with_mut(DateRangePickerController::clear_selection);
     click(&mut renderer, "July 29, 2026");
     let point = PxPosition::from_f32_xy(middle.x0 as f32 + 8.0, y as f32);
     renderer.pointer_scroll(MOUSE_POINTER_ID, point, 0.0, -504.0);
-    renderer.render_frames(90);
+    renderer.frames(90);
     click(&mut renderer, "August 3, 2026");
     assert_eq!(
         state.with(DateRangePickerController::selected_start_date),
@@ -598,10 +584,10 @@ fn check_range(samples: u32) {
     );
     let august = bounds(&renderer, "August 3, 2026");
     renderer.pointer_scroll(MOUSE_POINTER_ID, point, 0.0, -72.0);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert!(bounds(&renderer, "August 3, 2026").y0 < august.y0);
     state.with_mut(|state| state.set_displayed_month(YearMonth::new(2026, 8).unwrap()));
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert_eq!(
         bounds(&renderer, "August 3, 2026"),
         august,
@@ -612,32 +598,35 @@ fn check_range(samples: u32) {
         state.clear_selection();
         state.set_display_mode(DatePickerDisplayMode::Input);
     });
-    renderer.render_frames(5);
+    renderer.frames(5);
     let inputs = input_bounds(&renderer);
     click_bounds(&mut renderer, inputs[1]);
     renderer.inject_text("08/03/2026");
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert!(!state.with(DateRangePickerController::is_complete));
     click_bounds(&mut renderer, inputs[0]);
     renderer.inject_text("07/29/2026");
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert!(state.with(DateRangePickerController::is_complete));
     assert_eq!(
         state.with(DateRangePickerController::selected_end_date),
         Some(date(8, 3))
     );
     state.with_mut(DateRangePickerController::clear_selection);
-    renderer.render_frames(4);
+    renderer.frames(4);
     click_bounds(&mut renderer, inputs[0]);
     renderer.inject_text("07/13/2026");
-    renderer.render_frames(4);
-    assert_eq!(state.with(DateRangePickerController::selected_start_date), None);
+    renderer.frames(4);
+    assert_eq!(
+        state.with(DateRangePickerController::selected_start_date),
+        None
+    );
     state.with_mut(DateRangePickerController::clear_selection);
-    renderer.render_frames(4);
+    renderer.frames(4);
     let start_input = input_bounds(&renderer)[0];
     click_bounds(&mut renderer, start_input);
     renderer.inject_text("07/29/2026");
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_eq!(
         state.with(DateRangePickerController::selected_start_date),
         Some(date(7, 29)),
@@ -676,7 +665,9 @@ fn gpu_date_range_selection_scrolling_input_and_resize_msaa() {
 }
 
 #[tessera]
-fn header_fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerController>>>) {
+fn header_fixture(
+    output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerController>>>,
+) {
     let state = remember(|| {
         DateRangePickerController::new(
             None,
@@ -698,20 +689,12 @@ fn header_fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangeP
 #[ignore = "requires a native GPU adapter"]
 fn gpu_range_input_uses_modal_header_while_calendar_keeps_compact_header() {
     let output = tessera_ui::testing::TestProbe::default();
-    let probe = output.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || header_fixture(probe.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 400,
-            height: 700,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
-    let bounds = |renderer: &HeadlessRenderer, label: &str| {
+    let mut renderer = UiTest::new()
+        .viewport(400, 700)
+        .rendered(crate::TesseraComponents)
+        .content(|| header_fixture(output.clone()));
+    renderer.frames(4);
+    let bounds = |renderer: &UiTest, label: &str| {
         renderer
             .accessibility_snapshot()
             .unwrap()
@@ -730,7 +713,7 @@ fn gpu_range_input_uses_modal_header_while_calendar_keeps_compact_header() {
         .get()
         .unwrap()
         .with_mut(|state| state.set_display_mode(DatePickerDisplayMode::Input));
-    renderer.render_frames(4);
+    renderer.frames(4);
     let input_title = bounds(&renderer, "Select date");
     let input_headline = bounds(&renderer, "Enter dates");
     assert_eq!(input_title.x0, 24.0);
@@ -744,6 +727,6 @@ fn gpu_range_input_uses_modal_header_while_calendar_keeps_compact_header() {
         .get()
         .unwrap()
         .with_mut(|state| state.set_display_mode(DatePickerDisplayMode::Picker));
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_eq!(bounds(&renderer, "Select dates"), picker_title);
 }

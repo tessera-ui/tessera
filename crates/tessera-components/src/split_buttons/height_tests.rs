@@ -2,9 +2,8 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier, State,
     accesskit::{Rect, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
-    testing::TestProbe,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -79,7 +78,7 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
     });
 }
 
-fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
+fn bounds(renderer: &UiTest, label: &str) -> Rect {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -112,22 +111,14 @@ fn check_height_recovery(samples: u32, scale: f64) {
     let width = (650.0 * scale) as u32;
     let probe = TestProbe::<Option<State<Settings>>>::default();
     let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            fixture().probe(probe.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width,
-            height: (500.0 * scale) as u32,
-            scale_factor: scale,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(4);
-    let initial = renderer.read_pixels().expect("pixels");
+    let mut renderer = UiTest::new()
+        .viewport(width, (500.0 * scale) as u32)
+        .scale_factor(scale)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture().probe(probe.clone()));
+    renderer.frames(4);
+    let initial = renderer.read_pixels();
     let settings = observed.get().expect("settings");
     use SplitButtonSize::{ExtraLarge, ExtraSmall, Small};
     for (leading, trailing, available, expected) in [
@@ -146,13 +137,13 @@ fn check_height_recovery(samples: u32, scale: f64) {
             width: available,
             enabled: true,
         });
-        renderer.step_frame();
+        renderer.frames(1);
         let primary = bounds(&renderer, "Primary");
         let options = bounds(&renderer, "Options");
         assert_eq!(primary.height(), options.height());
         assert_eq!(primary.y0, options.y0);
         assert!(primary.height() >= 48.0 * scale);
-        let pixels = renderer.read_pixels().expect("pixels");
+        let pixels = renderer.read_pixels();
         let primary_rows = filled_rows(&pixels, width as usize, primary);
         let options_rows = filled_rows(&pixels, width as usize, options);
         assert!(
@@ -176,11 +167,11 @@ fn check_height_recovery(samples: u32, scale: f64) {
             );
         }
     }
-    renderer.render_frames(90);
-    assert_eq!(renderer.read_pixels().expect("restored pixels"), initial);
+    renderer.frames(90);
+    assert_eq!(renderer.read_pixels(), initial);
     let before = (bounds(&renderer, "Primary"), bounds(&renderer, "Options"));
     settings.with_mut(|settings| settings.enabled = false);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_eq!(
         (bounds(&renderer, "Primary"), bounds(&renderer, "Options")),
         before

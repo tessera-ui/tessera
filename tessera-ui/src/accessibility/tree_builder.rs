@@ -756,6 +756,7 @@ pub fn dispatch_action(
     metadatas: &ComponentNodeMetaDatas,
     focus_owner: &mut FocusOwner,
     action_request: accesskit::ActionRequest,
+    timestamp: crate::time::Instant,
 ) -> bool {
     if action_request.target_tree != TreeId::ROOT {
         return false;
@@ -796,7 +797,7 @@ pub fn dispatch_action(
         });
         let registration = tree[target].get().interaction().focus_registration;
         if eligible && let Some(registration) = registration {
-            focus_owner.record_accessibility_focus(crate::time::Instant::now());
+            focus_owner.record_accessibility_focus(timestamp);
             focus_owner.request_focus(registration.id);
             return true;
         }
@@ -1548,7 +1549,8 @@ mod tests {
             &tree,
             &metadatas,
             &mut focus_owner,
-            request()
+            request(),
+            crate::time::Instant::now(),
         ));
         assert_eq!(calls.get(), 1);
         tree[slider].get_mut().instance_key = 701;
@@ -1556,7 +1558,8 @@ mod tests {
             &tree,
             &metadatas,
             &mut focus_owner,
-            request()
+            request(),
+            crate::time::Instant::now(),
         ));
         assert_eq!(calls.get(), 1);
     }
@@ -1735,29 +1738,59 @@ mod tests {
             target_node: accesskit_id(target),
             data: None,
         };
-        assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert!(dispatch_action(
+            &tree,
+            &metadatas,
+            &mut owner,
+            request(),
+            crate::time::Instant::now()
+        ));
         assert_eq!(calls.get(), 1);
         edit_semantics(&mut metadatas, parent, |node| node.hidden = true);
-        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert!(!dispatch_action(
+            &tree,
+            &metadatas,
+            &mut owner,
+            request(),
+            crate::time::Instant::now()
+        ));
         assert_eq!(calls.get(), 1);
         edit_semantics(&mut metadatas, parent, |node| {
             node.hidden = false;
             node.merge_descendants = false;
         });
-        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert!(!dispatch_action(
+            &tree,
+            &metadatas,
+            &mut owner,
+            request(),
+            crate::time::Instant::now()
+        ));
         assert_eq!(calls.get(), 1);
         edit_semantics(&mut metadatas, parent, |node| node.merge_descendants = true);
         let metadata = metadatas
             .get_mut(&parent)
             .expect("test fixture entry exists");
         let position = metadata.abs_position.take();
-        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert!(!dispatch_action(
+            &tree,
+            &metadatas,
+            &mut owner,
+            request(),
+            crate::time::Instant::now()
+        ));
         assert_eq!(calls.get(), 1);
         metadatas
             .get_mut(&parent)
             .expect("test fixture entry exists")
             .abs_position = position;
-        assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert!(dispatch_action(
+            &tree,
+            &metadatas,
+            &mut owner,
+            request(),
+            crate::time::Instant::now()
+        ));
         assert_eq!(calls.get(), 2);
     }
 
@@ -1798,24 +1831,48 @@ mod tests {
             target_node: accesskit_id(target),
             data: None,
         };
-        assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert!(dispatch_action(
+            &tree,
+            &metadatas,
+            &mut owner,
+            request(),
+            crate::time::Instant::now()
+        ));
         assert_eq!(owner.active_component_node_id(), Some(target));
         assert!(owner.is_requester_focus_visible(requester.requester_id()));
         owner.record_pointer_press(crate::time::Instant::now());
         assert!(!owner.is_requester_focus_visible(requester.requester_id()));
-        assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert!(dispatch_action(
+            &tree,
+            &metadatas,
+            &mut owner,
+            request(),
+            crate::time::Instant::now()
+        ));
         assert_eq!(owner.active_component_node_id(), Some(target));
         assert!(owner.is_requester_focus_visible(requester.requester_id()));
         owner.clear_focus_global(true);
         edit_semantics(&mut metadatas, target, |node| node.disabled = true);
-        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert!(!dispatch_action(
+            &tree,
+            &metadatas,
+            &mut owner,
+            request(),
+            crate::time::Instant::now()
+        ));
         assert_eq!(owner.active_component_node_id(), None);
         edit_semantics(&mut metadatas, target, |node| node.disabled = false);
         metadatas
             .get_mut(&target)
             .expect("semantic fixture")
             .abs_position = None;
-        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert!(!dispatch_action(
+            &tree,
+            &metadatas,
+            &mut owner,
+            request(),
+            crate::time::Instant::now()
+        ));
         assert_eq!(owner.active_component_node_id(), None);
     }
 

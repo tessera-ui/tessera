@@ -66,7 +66,7 @@ selected level. `--cap-lints LEVEL` caps levels, including `forbid`, except
 ## Execution and lifetime
 
 Root build callbacks use the same controlled execution model. The callbacks
-accepted by `EntryPoint::new`, `HeadlessRenderer::new`, `testing::layout_test`,
+accepted by `EntryPoint::new`, `HeadlessRenderer::new`, `testing::UiTest::content`,
 and the `Renderer::run` variants are build fragments. Call checking recognizes
 these APIs by their resolved definitions, including `Box::new` wrapping a root
 callback directly. Ordinary helper functions and event callbacks keep their

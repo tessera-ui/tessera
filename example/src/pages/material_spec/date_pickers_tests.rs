@@ -1,15 +1,13 @@
-use std::time::Duration;
-
 use tessera_components::{
     boxed::boxed, column::column, dialog::DialogController, theme::material_theme,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, Role},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
+    testing::UiTest,
 };
 
 #[tessera]
@@ -59,7 +57,7 @@ fn modal_example_fixture(
     });
 }
 
-fn choose_modal_day(renderer: &mut HeadlessRenderer, day: &str) {
+fn choose_modal_day(renderer: &mut UiTest, day: &str) {
     activate(renderer, "Switch to calendar");
     activate(renderer, day);
 }
@@ -70,18 +68,20 @@ fn date_dialog_example_commits_only_confirmed_selection() {
     let output = tessera_ui::testing::TestProbe::default();
     let observed = output.clone();
     let mut renderer = reference_renderer(Scene::Modal(observed));
-    renderer.render_frames(4);
+    renderer.frames(4);
     let (source, open) = output.get().expect("mounted date dialog example");
     activate(&mut renderer, "Open Input date dialog");
     choose_modal_day(&mut renderer, "July 20, 2026");
     activate(&mut renderer, "Modal cancel date");
     assert!(!open.with(DialogController::is_open));
     assert_eq!(
-        source.single.with(super::DatePickerController::selected_date),
+        source
+            .single
+            .with(super::DatePickerController::selected_date),
         Some(super::date(18))
     );
 
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert!(
         !renderer
             .accessibility_snapshot()
@@ -96,14 +96,16 @@ fn date_dialog_example_commits_only_confirmed_selection() {
     renderer.pointer_move(MOUSE_POINTER_ID, outside);
     renderer.pointer_press(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert!(!open.with(DialogController::is_open));
     assert_eq!(
-        source.single.with(super::DatePickerController::selected_date),
+        source
+            .single
+            .with(super::DatePickerController::selected_date),
         Some(super::date(18))
     );
 
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert!(
         !renderer
             .accessibility_snapshot()
@@ -117,7 +119,9 @@ fn date_dialog_example_commits_only_confirmed_selection() {
     activate(&mut renderer, "Modal confirm date");
     assert!(!open.with(DialogController::is_open));
     assert_eq!(
-        source.single.with(super::DatePickerController::selected_date),
+        source
+            .single
+            .with(super::DatePickerController::selected_date),
         Some(super::date(22))
     );
     assert_eq!(
@@ -156,21 +160,11 @@ impl PlacementModifierNode for Translation {
 #[ignore = "requires a native GPU adapter"]
 fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_callouts() {
     let translation_probe = tessera_ui::testing::TestProbe::default();
-    let observed = translation_probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            translation_fixture(observed.clone());
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 800,
-            height: 900,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(36);
+    let mut renderer = UiTest::new()
+        .viewport(800, 900)
+        .rendered(crate::TestPipelines)
+        .content(|| translation_fixture(translation_probe.clone()));
+    renderer.frames(36);
     let before = field(&renderer).bounds().unwrap();
     let raw = field_coordinates(&renderer);
     let local = relative_geometry(&renderer);
@@ -190,7 +184,7 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
     assert!(builds > 0, "The real figure must build its annotations");
     for translation in [48.0, 48.125, 96.625] {
         translation_probe.get().unwrap().set(Dp(translation));
-        renderer.render_frames(6);
+        renderer.frames(6);
         let after = field(&renderer).bounds().unwrap();
         let moved = field_coordinates(&renderer);
         assert_eq!(after.y0, before.y0 + translation);
@@ -206,7 +200,7 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
         );
     }
     activate(&mut renderer, "Choose month");
-    renderer.render_frames(6);
+    renderer.frames(6);
     let changed = relative_geometry(&renderer);
     assert_ne!(
         changed["figure"].h, local["figure"].h,
@@ -269,7 +263,7 @@ fn color_fixture(figure: super::Figure, menu: bool, year: bool) {
     });
 }
 
-fn field(renderer: &HeadlessRenderer) -> Node {
+fn field(renderer: &UiTest) -> Node {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -280,7 +274,7 @@ fn field(renderer: &HeadlessRenderer) -> Node {
         .1
 }
 
-fn activate(renderer: &mut HeadlessRenderer, label: &str) {
+fn activate(renderer: &mut UiTest, label: &str) {
     let target_node = renderer
         .accessibility_snapshot()
         .unwrap()
@@ -289,35 +283,22 @@ fn activate(renderer: &mut HeadlessRenderer, label: &str) {
         .find(|(_, node)| crate::has_label(&node, label) && node.supports_action(Action::Click))
         .unwrap_or_else(|| panic!("missing actionable {label}"))
         .0;
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Click,
-        target_tree: TreeId::ROOT,
-        target_node,
-        data: None,
-    }));
-    renderer.render_frames(3);
+    assert!(renderer.accessibility_action(target_node, Action::Click));
+    renderer.frames(3);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 800,
-            height: 800,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(800, 800)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(4);
     let before = field(&renderer).bounds().unwrap();
     let visual = field_coordinates(&renderer);
     assert_eq!(visual.local_size.height.0, 56);
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let snapshot = renderer.accessibility_snapshot().unwrap();
     for label in ["Anatomy marker 2", "Anatomy marker 3"] {
         let marker = snapshot
@@ -400,7 +381,7 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
     assert_eq!(field(&renderer).bounds(), Some(before));
     assert_eq!(field(&renderer).value(), Some("08/26/2025"));
     renderer.resize(640, 800);
-    renderer.render_frames(8);
+    renderer.frames(8);
     let narrow = field(&renderer).bounds().unwrap();
     let container = field_coordinates(&renderer).window_bounds();
     assert_eq!(container.width, 195.0);
@@ -432,7 +413,7 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
     renderer.pointer_move(MOUSE_POINTER_ID, pointer);
     renderer.pointer_press(MOUSE_POINTER_ID, pointer, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, pointer, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_eq!(field(&renderer).value(), Some("08/19/2025"));
     assert_eq!(field(&renderer).bounds(), Some(narrow));
     activate(&mut renderer, "OK");
@@ -453,20 +434,11 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
 fn check_single_date_input_confirmation() {
     for (value, valid) in [("02/30/2025", false), ("02/28/2025", true)] {
         let figure = super::Figure::Input;
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                range_fixture(figure);
-            }),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 800,
-                height: 800,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(800, 800)
+            .rendered(crate::TestPipelines)
+            .content(move || range_fixture(figure));
+        renderer.frames(4);
         let input = renderer
             .accessibility_snapshot()
             .unwrap()
@@ -475,15 +447,10 @@ fn check_single_date_input_confirmation() {
             .find(|(_, node)| node.role() == Role::TextInput)
             .expect("native date input")
             .0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Focus,
-            target_tree: TreeId::ROOT,
-            target_node: input,
-            data: None,
-        }));
-        renderer.render_frames(3);
+        assert!(renderer.accessibility_action(input, Action::Focus));
+        renderer.frames(3);
         renderer.inject_text(value);
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_eq!(
             range_action(&renderer, "Reference date confirm").is_disabled(),
             !valid,
@@ -511,21 +478,11 @@ fn check_single_date_input_confirmation() {
 }
 
 fn check_range_confirmation_and_cancellation(figure: super::Figure) {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            range_fixture(figure);
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 800,
-            height: 900,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(800, 900)
+        .rendered(crate::TestPipelines)
+        .content(move || range_fixture(figure));
+    renderer.frames(4);
     if figure == super::Figure::RangeInput {
         activate(&mut renderer, "Switch to range calendar");
     }
@@ -557,7 +514,7 @@ fn check_range_confirmation_and_cancellation(figure: super::Figure) {
     assert_range_endpoints(&renderer, 19, 21);
 }
 
-fn range_action(renderer: &HeadlessRenderer, label: &str) -> Node {
+fn range_action(renderer: &UiTest, label: &str) -> Node {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -568,7 +525,7 @@ fn range_action(renderer: &HeadlessRenderer, label: &str) -> Node {
         .1
 }
 
-fn assert_range_endpoints(renderer: &HeadlessRenderer, start: u8, end: u8) {
+fn assert_range_endpoints(renderer: &UiTest, start: u8, end: u8) {
     let snapshot = renderer.accessibility_snapshot().unwrap();
     for (day, description) in [(start, "Start date"), (end, "End date")] {
         let label = format!("August {day}, 2025");
@@ -585,19 +542,11 @@ fn assert_range_endpoints(renderer: &HeadlessRenderer, start: u8, end: u8) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(article_fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 900,
-            height: 8000,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(900, 8000)
+        .rendered(crate::TestPipelines)
+        .content(article_fixture);
+    renderer.frames(4);
     for (page, present, absent) in [
         ("Overview", None, "Tokens & specs"),
         ("Guidelines", Some("Usage"), "Date entry methods"),
@@ -684,7 +633,7 @@ fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
 fn date_reference_guidelines_and_color_pairs_mount_native_views() {
     for year in [false, true] {
         let mut renderer = reference_renderer(Scene::Guideline(year));
-        renderer.render_frames(4);
+        renderer.frames(4);
         let label = if year { "2025" } else { "August" };
         assert!(
             renderer
@@ -745,7 +694,7 @@ fn date_reference_guidelines_and_color_pairs_mount_native_views() {
         ),
     ] {
         let mut renderer = reference_renderer(Scene::Color(figure, menu, year));
-        renderer.render_frames(4);
+        renderer.frames(4);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         assert!(
             snapshot
@@ -787,7 +736,7 @@ fn date_reference_guidelines_and_color_pairs_mount_native_views() {
                 );
             }
         }
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let light = &pixels[(20 * 1000 + 100) * 4..][..3];
         let dark = &pixels[(20 * 1000 + 600) * 4..][..3];
         assert_ne!(
@@ -804,9 +753,11 @@ enum Scene {
     Color(super::Figure, bool, bool),
 }
 
-fn reference_renderer(scene: Scene) -> HeadlessRenderer {
-    HeadlessRenderer::new(
-        Box::new(move || match scene.clone() {
+fn reference_renderer(scene: Scene) -> UiTest<'static> {
+    UiTest::new()
+        .viewport(1000, 1000)
+        .rendered(crate::TestPipelines)
+        .content(move || match scene.clone() {
             Scene::Modal(output) => {
                 modal_example_fixture(output);
             }
@@ -816,20 +767,10 @@ fn reference_renderer(scene: Scene) -> HeadlessRenderer {
             Scene::Color(figure, menu, year) => {
                 color_fixture(figure, menu, year);
             }
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1000,
-            height: 1000,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap()
+        })
 }
 
-fn field_coordinates(renderer: &HeadlessRenderer) -> tessera_ui::LayoutCoordinates {
+fn field_coordinates(renderer: &UiTest) -> tessera_ui::LayoutCoordinates {
     renderer
         .inspect_components()
         .tagged("docked-date-field")
@@ -837,9 +778,7 @@ fn field_coordinates(renderer: &HeadlessRenderer) -> tessera_ui::LayoutCoordinat
         .expect("placed native date field")
 }
 
-fn relative_geometry(
-    renderer: &HeadlessRenderer,
-) -> std::collections::BTreeMap<&'static str, super::Rect> {
+fn relative_geometry(renderer: &UiTest) -> std::collections::BTreeMap<&'static str, super::Rect> {
     let snapshot = renderer.inspect_components();
     let mut coordinates = std::collections::BTreeMap::new();
     for name in ["figure", "field", "container", "calendar"] {
@@ -857,14 +796,12 @@ fn relative_geometry(
     super::annotations::relative_precise_geometry(&coordinates)
 }
 
-fn annotation_builds(renderer: &HeadlessRenderer) -> usize {
+fn annotation_builds(renderer: &UiTest) -> usize {
     renderer
         .work_totals()
         .count("date_annotations", tessera_ui::testing::WorkPhase::Build)
-        + renderer
-            .work_totals()
-            .count(
-                "date_color_annotations",
-                tessera_ui::testing::WorkPhase::Build,
-            )
+        + renderer.work_totals().count(
+            "date_color_annotations",
+            tessera_ui::testing::WorkPhase::Build,
+        )
 }

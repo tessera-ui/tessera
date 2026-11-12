@@ -1,9 +1,7 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, PxPosition, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    layout::MeasureScope,
-    remember, tessera,
+    layout::MeasureScope, remember, tessera, testing::UiTest,
 };
 
 use crate::{
@@ -113,7 +111,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         });
 }
 
-fn rect(renderer: &HeadlessRenderer, tag: &str) -> [i64; 4] {
+fn rect(renderer: &UiTest, tag: &str) -> [i64; 4] {
     let snapshot = renderer.inspect_components();
     let bounds = snapshot
         .find_tag(tag)
@@ -124,7 +122,7 @@ fn rect(renderer: &HeadlessRenderer, tag: &str) -> [i64; 4] {
     [bounds.x.0, bounds.y.0, bounds.width.0, bounds.height.0].map(i64::from)
 }
 
-fn pixel(renderer: &HeadlessRenderer, pixels: &[u8], x: i64, y: i64) -> [u8; 4] {
+fn pixel(renderer: &UiTest, pixels: &[u8], x: i64, y: i64) -> [u8; 4] {
     let offset = ((y as u32 * renderer.physical_size().width + x as u32) * 4) as usize;
     pixels[offset..offset + 4].try_into().unwrap()
 }
@@ -147,31 +145,22 @@ fn check(samples: u32) {
         (2.0, 160, 2, 4, 32, 8, 64),
     ] {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new({
-                let observed = observed.clone();
-                move || fixture(observed.clone())
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 200,
-                height: 200,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(3);
-        let baseline = renderer.read_pixels().unwrap();
+        let mut renderer = UiTest::new()
+            .viewport(200, 200)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(observed.clone()));
+        renderer.frames(3);
+        let baseline = renderer.read_pixels();
         let allocations = renderer
             .graphics_work()
             .group("divider_instances")
             .buffer_allocations;
         for dark in [true, false] {
             observed.get().dark.unwrap().set(dark);
-            renderer.render_frames(3);
-            let pixels = renderer.read_pixels().unwrap();
+            renderer.frames(3);
+            let pixels = renderer.read_pixels();
             let expected = if dark {
                 [0, 0, 255, 255]
             } else {
@@ -261,17 +250,17 @@ fn check(samples: u32) {
             assert_eq!(pixel(&renderer, &pixels, gap - 1, y + gap * 2), [255; 4]);
             assert_eq!(pixel(&renderer, &pixels, gap, y + gap * 2 - 1), [255; 4]);
         }
-        assert_eq!(renderer.read_pixels().unwrap(), baseline);
+        assert_eq!(renderer.read_pixels(), baseline);
         renderer.resize(240, 200);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(
             rect(&renderer, "horizontal"),
             [0, 0, width, thickness + gap * 2]
         );
         renderer.resize(200, 200);
-        renderer.render_frames(3);
-        assert_eq!(renderer.read_pixels().unwrap(), baseline);
-        renderer.render_frames(8);
+        renderer.frames(3);
+        assert_eq!(renderer.read_pixels(), baseline);
+        renderer.frames(8);
         assert_eq!(
             renderer
                 .graphics_work()
@@ -284,32 +273,23 @@ fn check(samples: u32) {
     check_constrained_strokes(samples);
 }
 
-fn interior_pixel(renderer: &HeadlessRenderer, pixels: &[u8], x: i64, y: i64) -> [u8; 4] {
+fn interior_pixel(renderer: &UiTest, pixels: &[u8], x: i64, y: i64) -> [u8; 4] {
     pixel(renderer, pixels, x + 4, y + 4)
 }
 
 fn check_fractional_placement(samples: u32) {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || fractional_fixture(observed.clone())
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 20,
-            height: 20,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(3);
-    let baseline = renderer.read_pixels().unwrap();
+    let mut renderer = UiTest::new()
+        .viewport(20, 20)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fractional_fixture(observed.clone()));
+    renderer.frames(3);
+    let baseline = renderer.read_pixels();
     for (faint, edge, corner) in [(false, 188, 225), (true, 225, 240)] {
         observed.get().faint.unwrap().set(faint);
-        renderer.render_frames(3);
-        let pixels = renderer.read_pixels().unwrap();
+        renderer.frames(3);
+        let pixels = renderer.read_pixels();
         for y in [0, 1] {
             for x in [0, 8] {
                 assert_pixel_near(
@@ -328,8 +308,8 @@ fn check_fractional_placement(samples: u32) {
         assert_eq!(interior_pixel(&renderer, &pixels, 1, 2), [255; 4]);
     }
     observed.get().clipped.unwrap().set(true);
-    renderer.render_frames(3);
-    let clipped = renderer.read_pixels().unwrap();
+    renderer.frames(3);
+    let clipped = renderer.read_pixels();
     assert_pixel_near(
         interior_pixel(&renderer, &clipped, 1, 0),
         [225, 225, 225, 255],
@@ -338,8 +318,8 @@ fn check_fractional_placement(samples: u32) {
     assert_eq!(interior_pixel(&renderer, &clipped, 8, 0), [255; 4]);
     observed.get().clipped.unwrap().set(false);
     observed.get().faint.unwrap().set(false);
-    renderer.render_frames(3);
-    assert_eq!(renderer.read_pixels().unwrap(), baseline);
+    renderer.frames(3);
+    assert_eq!(renderer.read_pixels(), baseline);
 }
 
 #[test]
@@ -390,19 +370,13 @@ fn constrained_fixture() {
 }
 
 fn check_constrained_strokes(samples: u32) {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(constrained_fixture),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 20,
-            height: 20,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(3);
-    let pixels = renderer.read_pixels().unwrap();
+    let mut renderer = UiTest::new()
+        .viewport(20, 20)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(constrained_fixture);
+    renderer.frames(3);
+    let pixels = renderer.read_pixels();
     assert_eq!(interior_pixel(&renderer, &pixels, 1, 0), [0, 0, 0, 255]);
     assert_eq!(interior_pixel(&renderer, &pixels, 1, 1), [255; 4]);
     assert_eq!(interior_pixel(&renderer, &pixels, 1, 3), [255; 4]);

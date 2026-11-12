@@ -25,13 +25,25 @@ impl OverlayController {
     pub(crate) fn set(self, open: bool) {
         match self {
             Self::Dialog(controller) => controller.with_mut(|controller| {
-                if open { controller.open() } else { controller.close() }
+                if open {
+                    controller.open()
+                } else {
+                    controller.close()
+                }
             }),
             Self::Bottom(controller) => controller.with_mut(|controller| {
-                if open { controller.open() } else { controller.close() }
+                if open {
+                    controller.open()
+                } else {
+                    controller.close()
+                }
             }),
             Self::Side(controller) => controller.with_mut(|controller| {
-                if open { controller.open() } else { controller.close() }
+                if open {
+                    controller.open()
+                } else {
+                    controller.close()
+                }
             }),
         }
     }

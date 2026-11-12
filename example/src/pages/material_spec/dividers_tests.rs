@@ -4,9 +4,7 @@
 //!
 //! Verify the painted extent of full-width, inset, and open-space list figures.
 
-use std::time::Duration;
-
-use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
+use tessera_ui::testing::UiTest;
 
 use super::*;
 
@@ -28,20 +26,12 @@ fn list_fixture(rules: u8) {
     });
 }
 
-fn render(rules: u8) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || list_fixture(rules)),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 400,
-            height: 400,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(6);
+fn render(rules: u8) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(400, 400)
+        .rendered(crate::TestPipelines)
+        .content(move || list_fixture(rules));
+    renderer.frames(6);
     renderer
 }
 
@@ -52,10 +42,10 @@ struct Frame {
 }
 
 impl Frame {
-    fn read(renderer: &HeadlessRenderer) -> Self {
+    fn read(renderer: &UiTest) -> Self {
         let size = renderer.physical_size();
         Self {
-            pixels: renderer.read_pixels().unwrap(),
+            pixels: renderer.read_pixels(),
             width: size.width as usize,
             height: size.height as usize,
         }

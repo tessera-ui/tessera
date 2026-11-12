@@ -8,11 +8,11 @@
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
-    layout::{Stack, layout},
+    accesskit::{Action, Node, NodeId, Rect, Role, Toggled},
+    layout::Stack,
+    layout::layout,
     remember, tessera,
-    testing::TestProbe,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -81,7 +81,7 @@ fn fixture(settings_observed: TestProbe<Option<State<Settings>>>, clicks: TestPr
     });
 }
 
-fn nodes(renderer: &HeadlessRenderer, index: usize) -> (NodeId, Node, Node) {
+fn nodes(renderer: &UiTest, index: usize) -> (NodeId, Node, Node) {
     let snapshot = renderer.accessibility_snapshot().unwrap();
     let (mut id, content) = snapshot
         .nodes
@@ -115,7 +115,7 @@ fn center(bounds: Rect) -> PxPosition {
     )
 }
 
-fn check_widths(renderer: &HeadlessRenderer, widths: [f64; 3], scale: f64, gap: f64) {
+fn check_widths(renderer: &UiTest, widths: [f64; 3], scale: f64, gap: f64) {
     let mut x = 0.0;
     for (index, width) in widths.into_iter().enumerate() {
         let (_, node, content) = nodes(renderer, index);
@@ -142,25 +142,16 @@ fn check_press_widths(samples: u32) {
     for scale in [1.0, 1.5] {
         let clicks = TestProbe::new(0usize);
         let settings_observed = TestProbe::default();
-        let fixture_clicks = clicks.clone();
         let fixture_settings = settings_observed.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(fixture_settings.clone(), fixture_clicks.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 800,
-                height: 180,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(12);
+        let mut renderer = UiTest::new()
+            .viewport(800, 180)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(fixture_settings.clone(), clicks.clone()));
+        renderer.frames(12);
         for _ in 0..8 {
-            renderer.render_frames(1);
+            renderer.frames(1);
             assert_eq!(
                 renderer
                     .work()
@@ -177,7 +168,7 @@ fn check_press_widths(samples: u32) {
         let point = center(middle.1.bounds().unwrap());
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
         check_widths(
             &renderer,
             if scale == 1.0 {
@@ -191,7 +182,7 @@ fn check_press_widths(samples: u32) {
         assert_eq!(nodes(&renderer, 1).1.toggled(), Some(Toggled::False));
         assert_eq!(clicks.get(), 0);
         for _ in 0..8 {
-            renderer.render_frames(1);
+            renderer.frames(1);
             assert_eq!(
                 renderer
                     .work()
@@ -201,13 +192,13 @@ fn check_press_widths(samples: u32) {
             );
         }
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         check_widths(&renderer, base, scale, gap);
         assert_eq!(nodes(&renderer, 1).0, middle.0);
         assert_eq!(nodes(&renderer, 1).1.toggled(), Some(Toggled::True));
         assert_eq!(clicks.get(), 1);
         for _ in 0..8 {
-            renderer.render_frames(1);
+            renderer.frames(1);
             assert_eq!(
                 renderer
                     .work()
@@ -220,7 +211,7 @@ fn check_press_widths(samples: u32) {
         let first = center(nodes(&renderer, 0).1.bounds().unwrap());
         renderer.pointer_move(MOUSE_POINTER_ID, first);
         renderer.pointer_press(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
         check_widths(
             &renderer,
             if scale == 1.0 {
@@ -232,49 +223,44 @@ fn check_press_widths(samples: u32) {
             gap,
         );
         renderer.pointer_release(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         check_widths(&renderer, base, scale, gap);
         assert_eq!(clicks.get(), 2);
 
         renderer.pointer_press(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_ne!(
             nodes(&renderer, 0).1.bounds().unwrap().width(),
             base[0],
             "same-frame click must animate"
         );
-        renderer.render_frames(60);
+        renderer.frames(60);
         check_widths(&renderer, base, scale, gap);
         assert_eq!(clicks.get(), 3);
         let target_node = nodes(&renderer, 0).0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node,
-            data: None
-        }));
-        renderer.render_frames(2);
+        assert!(renderer.accessibility_action(target_node, Action::Click));
+        renderer.frames(2);
         assert_ne!(
             nodes(&renderer, 0).1.bounds().unwrap().width(),
             base[0],
             "accessibility activation must animate"
         );
-        renderer.render_frames(60);
+        renderer.frames(60);
         assert_eq!(clicks.get(), 4);
         check_widths(&renderer, base, scale, gap);
 
         settings.with_mut(|value| value.ratio = 0.0);
-        renderer.render_frames(5);
+        renderer.frames(5);
         renderer.pointer_press(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
         check_widths(&renderer, base, scale, gap);
         renderer.pointer_release(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         settings.with_mut(|value| value.ratio = 1.0);
-        renderer.render_frames(5);
+        renderer.frames(5);
         renderer.pointer_press(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
         check_widths(
             &renderer,
             if scale == 1.0 {
@@ -286,10 +272,10 @@ fn check_press_widths(samples: u32) {
             gap,
         );
         settings.with_mut(|value| value.connected = true);
-        renderer.render_frames(10);
+        renderer.frames(10);
         check_widths(&renderer, base, scale, 2.0 * scale);
         renderer.pointer_release(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         check_widths(&renderer, base, scale, 2.0 * scale);
         assert_eq!(clicks.get(), 6);
 
@@ -297,23 +283,23 @@ fn check_press_widths(samples: u32) {
             value.connected = false;
             value.ratio = 0.15;
         });
-        renderer.render_frames(10);
+        renderer.frames(10);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(2);
+        renderer.frames(2);
         settings.with_mut(|value| value.enabled = false);
-        renderer.render_frames(10);
+        renderer.frames(10);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         check_widths(&renderer, base, scale, gap);
         assert_eq!(clicks.get(), 6);
         settings.with_mut(|value| value.enabled = true);
-        renderer.render_frames(10);
+        renderer.frames(10);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(2);
+        renderer.frames(2);
         settings.with_mut(|value| value.items = 0);
-        renderer.render_frames(10);
+        renderer.frames(10);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         assert!(
             !renderer
                 .accessibility_snapshot()
@@ -323,25 +309,25 @@ fn check_press_widths(samples: u32) {
                 .any(|(_, node)| node.role() == Role::CheckBox)
         );
         settings.with_mut(|value| value.items = 1);
-        renderer.render_frames(10);
+        renderer.frames(10);
         let point = center(nodes(&renderer, 0).1.bounds().unwrap());
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_eq!(nodes(&renderer, 0).1.bounds().unwrap().width(), base[0]);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         assert_eq!(clicks.get(), 7);
         settings.with_mut(|value| value.items = 3);
-        renderer.render_frames(10);
+        renderer.frames(10);
         let point = center(nodes(&renderer, 1).1.bounds().unwrap());
         let outside = PxPosition::from_f32_xy(700.0, 150.0);
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(2);
+        renderer.frames(2);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        renderer.render_frames(2);
+        renderer.frames(2);
         renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         check_widths(&renderer, base, scale, gap);
         assert_eq!(
             clicks.get(),
@@ -350,7 +336,7 @@ fn check_press_widths(samples: u32) {
         );
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(30);
+        renderer.frames(30);
         check_widths(
             &renderer,
             if scale == 1.0 {
@@ -362,27 +348,27 @@ fn check_press_widths(samples: u32) {
             gap,
         );
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(60);
+        renderer.frames(60);
         check_widths(&renderer, base, scale, gap);
         assert_eq!(
             clicks.get(),
             8,
             "a later press must recover after cancellation"
         );
-        let baseline = renderer.read_pixels().unwrap();
+        let baseline = renderer.read_pixels();
         for _ in 0..2 {
             renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
             renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-            renderer.render_frames(60);
+            renderer.frames(60);
         }
         assert!(
-            renderer.read_pixels().unwrap() == baseline,
+            renderer.read_pixels() == baseline,
             "width, shape, and ripple pixels must fully recover after two toggles"
         );
         assert_eq!(clicks.get(), 10);
         let toggled = nodes(&renderer, 1).1.toggled();
         settings.with_mut(|value| value.presented = Some(1));
-        renderer.render_frames(60);
+        renderer.frames(60);
         check_widths(
             &renderer,
             if scale == 1.0 {
@@ -400,7 +386,7 @@ fn check_press_widths(samples: u32) {
             "pressed presentation must not activate a button"
         );
         settings.with_mut(|value| value.presented = None);
-        renderer.render_frames(60);
+        renderer.frames(60);
         check_widths(&renderer, base, scale, gap);
     }
 }

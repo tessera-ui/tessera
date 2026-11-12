@@ -1161,13 +1161,9 @@ fn keyboard() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::time::Duration;
 
     use tessera_components::theme::material_theme;
-    use tessera_ui::{
-        MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        headless::{HeadlessConfig, HeadlessRenderer},
-    };
+    use tessera_ui::{MOUSE_POINTER_ID, PressKeyEventType, PxPosition, testing::UiTest};
 
     use super::*;
 
@@ -1184,7 +1180,7 @@ mod tests {
         });
     }
 
-    fn click(renderer: &mut HeadlessRenderer, label: &str) {
+    fn click(renderer: &mut UiTest, label: &str) {
         let node = renderer
             .accessibility_snapshot()
             .unwrap()
@@ -1201,7 +1197,7 @@ mod tests {
         renderer.pointer_move(MOUSE_POINTER_ID, position);
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(2);
+        renderer.frames(2);
     }
 
     #[tessera]
@@ -1216,18 +1212,11 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn search_anatomy_keeps_two_full_trailing_targets_and_centered_input() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(trailing_targets_fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 400,
-                height: 100,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(400, 100)
+            .rendered(crate::TestPipelines)
+            .content(trailing_targets_fixture);
+        renderer.frames(4);
         let tree = renderer.accessibility_snapshot().unwrap();
         for (label, x) in [("Voice search", 300.0), ("Submit search", 348.0)] {
             let bounds = tree
@@ -1258,19 +1247,11 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn live_search_filters_real_input_and_result_activation_preserves_query() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 600,
-                height: 500,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(3);
+        let mut renderer = UiTest::new()
+            .viewport(600, 500)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(3);
         assert!(
             renderer
                 .accessibility_snapshot()
@@ -1284,7 +1265,7 @@ mod tests {
         for character in "Weekend".chars() {
             renderer.inject_text(&character.to_string());
         }
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert!(
             renderer
                 .accessibility_snapshot()
@@ -1357,20 +1338,12 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn search_anatomy_keeps_six_callouts_and_adapts_phone_geometry() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(anatomy_fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 800,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(6);
-        let bounds = |renderer: &HeadlessRenderer, label: &str| {
+        let mut renderer = UiTest::new()
+            .viewport(900, 800)
+            .rendered(crate::TestPipelines)
+            .content(anatomy_fixture);
+        renderer.frames(6);
+        let bounds = |renderer: &UiTest, label: &str| {
             renderer
                 .accessibility_snapshot()
                 .unwrap()
@@ -1390,7 +1363,7 @@ mod tests {
             bounds(&renderer, &format!("Anatomy marker {number}"));
         }
         renderer.resize(600, 800);
-        renderer.render_frames(6);
+        renderer.frames(6);
         let top = bounds(&renderer, "Unfocused search phone");
         let bottom = bounds(&renderer, "Focused search phone");
         assert_eq!(top.x0, bottom.x0);

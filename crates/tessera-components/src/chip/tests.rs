@@ -7,9 +7,9 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Role, Toggled},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -78,7 +78,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
         });
 }
 
-pub(super) fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
+pub(super) fn rect(renderer: &UiTest, key: &str) -> [i64; 4] {
     let snapshot = renderer.inspect_components();
     let node = snapshot
         .find_tag(key)
@@ -86,32 +86,15 @@ pub(super) fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
     let bounds = node.bounds().expect("placed test target");
     [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value as i64)
 }
-fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
-        .unwrap()
-}
-
 fn check_chips() {
     for scale in [1.0, 2.0] {
         let probe = tessera_ui::testing::TestProbe::default();
-        let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || fixture(observed.clone())),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 800,
-                height: 600,
-                scale_factor: scale,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(5);
+        let mut renderer = UiTest::new()
+            .viewport(800, 600)
+            .scale_factor(scale)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(probe.clone()));
+        renderer.frames(5);
         let settings = probe.get().unwrap();
         for (leading, trailing) in [(false, false), (true, false), (false, true), (true, true)] {
             settings.set(Settings {
@@ -119,7 +102,7 @@ fn check_chips() {
                 trailing,
                 ..Default::default()
             });
-            renderer.render_frames(5);
+            renderer.frames(5);
             for (input, label) in [
                 (false, "Assist sample"),
                 (false, "Suggestion sample"),
@@ -151,41 +134,51 @@ fn check_chips() {
             }
         }
         settings.set(Settings::default());
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(rect(&renderer, "Filter sample")[3], 20 * scale as i64);
         settings.with_mut(|value| value.large = true);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(rect(&renderer, "Filter sample")[3], 28 * scale as i64);
         settings.with_mut(|value| value.large = false);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(rect(&renderer, "Filter sample")[3], 20 * scale as i64);
-        let (id, filter) = node(&renderer, "Control Filter sample");
+        let (id, filter) = renderer.accessibility_node("Control Filter sample");
         assert_eq!(filter.role(), Role::CheckBox);
         assert_eq!(filter.toggled(), Some(Toggled::False));
         assert_eq!(
-            node(&renderer, "Control Assist sample").1.role(),
+            renderer
+                .accessibility_node("Control Assist sample")
+                .1
+                .role(),
             Role::Button
         );
-        assert_eq!(node(&renderer, "Control Assist sample").1.toggled(), None);
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node: id,
-            data: None,
-        }));
-        renderer.render_frames(5);
+        assert_eq!(
+            renderer
+                .accessibility_node("Control Assist sample")
+                .1
+                .toggled(),
+            None
+        );
+        assert!(renderer.accessibility_action(id, Action::Click));
+        renderer.frames(5);
         assert_eq!(settings.get().calls, 1);
         assert_eq!(
-            node(&renderer, "Control Filter sample").1.toggled(),
+            renderer
+                .accessibility_node("Control Filter sample")
+                .1
+                .toggled(),
             Some(Toggled::True)
         );
         assert_eq!(
-            node(&renderer, "Control Input sample").1.toggled(),
+            renderer
+                .accessibility_node("Control Input sample")
+                .1
+                .toggled(),
             Some(Toggled::True)
         );
         settings.with_mut(|value| value.disabled = true);
-        renderer.render_frames(5);
-        let (_, filter) = node(&renderer, "Control Filter sample");
+        renderer.frames(5);
+        let (_, filter) = renderer.accessibility_node("Control Filter sample");
         assert!(filter.is_disabled());
         assert!(!filter.supports_action(Action::Click));
         let bounds = filter.bounds().unwrap();
@@ -195,16 +188,19 @@ fn check_chips() {
         );
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(settings.get().calls, 1);
         settings.with_mut(|value| value.disabled = false);
-        renderer.render_frames(5);
+        renderer.frames(5);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_eq!(settings.get().calls, 2);
         assert_eq!(
-            node(&renderer, "Control Filter sample").1.toggled(),
+            renderer
+                .accessibility_node("Control Filter sample")
+                .1
+                .toggled(),
             Some(Toggled::False)
         );
     }

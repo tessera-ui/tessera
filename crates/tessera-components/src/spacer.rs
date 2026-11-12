@@ -47,7 +47,7 @@ impl tessera_ui::LayoutPolicy for SpacerLayout {
 ///     text("Right");
 /// });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn spacer(modifier: Option<Modifier>) {

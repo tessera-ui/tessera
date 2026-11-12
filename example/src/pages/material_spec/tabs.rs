@@ -826,7 +826,8 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                     });
                 gap(Dp(24.0));
             }
-            tabs(selected.get()).on_select(move |index| selected.set(index))
+            tabs(selected.get())
+                .on_select(move |index| selected.set(index))
                 .variant(if primary {
                     TabsVariant::Primary
                 } else {
@@ -1492,7 +1493,8 @@ fn swipe_tabs(selected: State<usize>) {
                 .clip_shape(Shape::rounded_rectangle(Dp(24.0))),
         )
         .children(move || {
-            tabs(selected.get()).on_select(move |index| selected.set(index))
+            tabs(selected.get())
+                .on_select(move |index| selected.set(index))
                 .modifier(Modifier::new().fill_max_width())
                 .content(move |tab_row| {
                     for (name, _) in SWIPE_PAGES {
@@ -1642,7 +1644,8 @@ fn native_tabs_figure(
                             boxed()
                                 .modifier(watch(geometry, "container").width(Dp(360.0 * scale)))
                                 .children(move || {
-                                    tabs(selected.get()).on_select(move |index| selected.set(index))
+                                    tabs(selected.get())
+                                        .on_select(move |index| selected.set(index))
                                         .variant(if primary {
                                             TabsVariant::Primary
                                         } else {
@@ -1958,14 +1961,16 @@ fn nested_tabs() {
     let primary = remember(|| 0usize);
     let secondary = remember(|| 0usize);
     panel(RenderSlot::new(move || {
-        tabs(primary.get()).on_select(move |index| primary.set(index))
+        tabs(primary.get())
+            .on_select(move |index| primary.set(index))
             .modifier(Modifier::new().fill_max_width())
             .content(move |tab_row| {
                 tab(tab_row).label(I18N.text("ui-travel"));
                 tab(tab_row).label(I18N.text("ui-saved"));
             });
         gap(Dp(24.0));
-        tabs(secondary.get()).on_select(move |index| secondary.set(index))
+        tabs(secondary.get())
+            .on_select(move |index| secondary.set(index))
             .variant(TabsVariant::Secondary)
             .modifier(Modifier::new().fill_max_width())
             .content(move |tab_row| {
@@ -2020,7 +2025,8 @@ fn tab_placement() {
         )
         .children(move || {
             tessera_components::app_bar::top_app_bar().title(I18N.text("ui-travel"));
-            tabs(selected.get()).on_select(move |index| selected.set(index))
+            tabs(selected.get())
+                .on_select(move |index| selected.set(index))
                 .modifier(Modifier::new().fill_max_width())
                 .content(move |tab_row| {
                     tab(tab_row).label(I18N.text("ui-flights"));
@@ -2112,7 +2118,8 @@ fn mock_label_tabs(labels: Vec<String>, scrollable: Option<bool>, width: Option<
                 )
                 .children(move || {
                     let labels = labels.clone();
-                    tabs(selected.get()).on_select(move |index| selected.set(index))
+                    tabs(selected.get())
+                        .on_select(move |index| selected.set(index))
                         .scrollable(scrollable.unwrap_or(false))
                         .edge_padding(Dp(52.0))
                         .modifier(Modifier::new().fill_max_width())
@@ -2139,7 +2146,8 @@ fn mock_icon_tabs(labelled: Vec<bool>) {
                 .modifier(Modifier::new().width(Dp(300.0)).background(surface_color))
                 .children(move || {
                     let labelled = labelled.clone();
-                    tabs(selected.get()).on_select(move |index| selected.set(index))
+                    tabs(selected.get())
+                        .on_select(move |index| selected.set(index))
                         .min_tab_height(Dp(64.0))
                         .modifier(Modifier::new().fill_max_width())
                         .content(move |tab_row| {
@@ -2246,7 +2254,8 @@ fn mock_scrolled_screen(behind_bar: bool) {
                         boxed()
                             .modifier(Modifier::new().fill_max_width().offset(Dp(0.0), Dp(36.0)))
                             .children(move || {
-                                tabs(selected.get()).on_select(move |index| selected.set(index))
+                                tabs(selected.get())
+                                    .on_select(move |index| selected.set(index))
                                     .modifier(Modifier::new().fill_max_width())
                                     .content(move |tab_row| {
                                         tab(tab_row).label(I18N.text("ui-flights"));
@@ -2345,7 +2354,8 @@ fn secondary_measure_figure(inline_icons: bool) {
                             boxed()
                                 .modifier(watch(geometry, "container").width(Dp(420.0 * scale)))
                                 .children(move || {
-                                    tabs(selected.get()).on_select(move |index| selected.set(index))
+                                    tabs(selected.get())
+                                        .on_select(move |index| selected.set(index))
                                         .variant(TabsVariant::Secondary)
                                         .indicator_height(Dp(2.0 * scale))
                                         .min_tab_height(Dp(48.0 * scale))
@@ -2549,7 +2559,8 @@ fn scrolling_tabs() {
                                                         .clip_to_bounds(),
                                                 )
                                                 .children(move || {
-                                                    tabs(selected.get()).on_select(move |index| selected.set(index))
+                                                    tabs(selected.get())
+                                                        .on_select(move |index| selected.set(index))
                                                         .modifier(Modifier::new().fill_max_width())
                                                         .content(move |tab_row| {
                                                             tab(tab_row)

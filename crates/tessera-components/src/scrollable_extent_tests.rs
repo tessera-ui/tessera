@@ -4,16 +4,12 @@
 //!
 //! Keep an existing scroll position valid when content shrinks after resizing.
 
-use std::time::Duration;
-
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     CursorEventContent, Dp, GestureState, LayoutCoordinates, MOUSE_POINTER_ID, Modifier,
     PointerChange, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource, State,
-    current_frame_time,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    modifier::FocusModifierExt as _,
-    remember, scaled_box, tessera,
+    current_frame_time, modifier::FocusModifierExt as _, remember, scaled_box, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -80,21 +76,11 @@ fn wheel_bottom_is_clamped_during_resize_before_further_input() {
         "scrollable::extent_tests::wheel_bottom_is_clamped_during_resize_before_further_input",
         || {
             let observed = tessera_ui::testing::TestProbe::default();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new({
-                    let observed = observed.clone();
-                    move || fixture(observed.clone())
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 1024,
-                    height: 800,
-                    frame_time: Duration::from_nanos(16_666_667),
-                    ..Default::default()
-                },
-            )
-            .expect("Native GPU adapter");
-            renderer.render_frames(12);
+            let mut renderer = UiTest::new()
+                .viewport(1024, 800)
+                .rendered(crate::TesseraComponents)
+                .content(|| fixture(observed.clone()));
+            renderer.frames(12);
             let scroll = observed.get().scroll.expect("Scrollable controller");
             assert_eq!(scroll.with(|scroll| scroll.child_size().height), Px(948));
             assert_eq!(scroll.with(|scroll| scroll.visible_size().height), Px(320));
@@ -112,14 +98,14 @@ fn wheel_bottom_is_clamped_during_resize_before_further_input() {
                 )
                 .with_position(PxPosition::from_f32_xy(40.0, 100.0)),
             );
-            renderer.render_frames(120);
+            renderer.frames(120);
             assert_eq!(
                 scroll.with(|scroll| scroll.child_position().y),
                 -628.0,
                 "Real wheel input must establish a valid old bottom without a programmatic setter"
             );
             renderer.resize(640, 1600);
-            renderer.render_frames(12);
+            renderer.frames(12);
             assert_eq!(scroll.with(|scroll| scroll.child_size().height), Px(836));
             assert_eq!(scene_coordinates(&renderer).local_to_window.scale(), 0.625);
             assert_eq!(
@@ -131,7 +117,7 @@ fn wheel_bottom_is_clamped_during_resize_before_further_input() {
             let scene = scene_coordinates(&renderer).window_bounds();
             assert_eq!(scene.y, 132.0);
             assert_eq!(scene.y + scene.height, 319.5);
-            renderer.render_frames(12);
+            renderer.frames(12);
             assert_eq!(
                 scroll.with(|scroll| scroll.child_position().y),
                 -516.0,
@@ -141,7 +127,7 @@ fn wheel_bottom_is_clamped_during_resize_before_further_input() {
     );
 }
 
-fn scene_coordinates(renderer: &HeadlessRenderer) -> LayoutCoordinates {
+fn scene_coordinates(renderer: &UiTest) -> LayoutCoordinates {
     renderer
         .inspect_components()
         .find_tag("scroll-native-scene")

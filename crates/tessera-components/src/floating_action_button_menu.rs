@@ -860,13 +860,7 @@ fn fab_menu_action(
 
 #[cfg(test)]
 mod tests {
-    use tessera_ui::{
-        CursorEventContent, GestureState, PointerChange, PressKeyEventType,
-        testing::{
-            layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-            start_layout_test_session,
-        },
-    };
+    use tessera_ui::testing::UiTest;
 
     use crate::theme::material_theme;
 
@@ -879,31 +873,9 @@ mod tests {
         action: Option<State<usize>>,
     }
 
-    fn click(
-        session: &mut tessera_ui::testing::LayoutTestSession<impl Fn()>,
-        frame: &mut u64,
-        x: f32,
-        y: f32,
-    ) -> tessera_ui::testing::LayoutSnapshot {
-        for event in [
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            CursorEventContent::Released(PressKeyEventType::Left),
-        ] {
-            *frame += 1;
-            pump_layout_test_session_with_input(
-                session,
-                *frame * 16_666_667,
-                vec![PointerChange::new(
-                    tessera_ui::time::Instant::now(),
-                    1,
-                    event,
-                    GestureState::TapCandidate,
-                )],
-                Some(PxPosition::from_f32_xy(x, y)),
-            );
-        }
-        *frame += 1;
-        pump_layout_test_session(session, *frame * 16_666_667)
+    fn click(session: &mut UiTest, x: f32, y: f32) -> tessera_ui::testing::LayoutSnapshot {
+        session.click_at(PxPosition::from_f32_xy(x, y));
+        session.frames(1)
     }
 
     #[tessera]
@@ -954,11 +926,10 @@ mod tests {
     #[test]
     fn action_list_matches_spacing_and_stays_inside_short_viewports() {
         for (width, height) in [(400, 400), (240, 200)] {
-            let snapshot = layout_test(|| {
-                fixture(true, FloatingActionButtonMenuAlignment::End, 3);
-            })
-            .viewport_px(width, height)
-            .run();
+            let snapshot = UiTest::new()
+                .content(|| fixture(true, FloatingActionButtonMenuAlignment::End, 3))
+                .viewport(width, height)
+                .frame();
             let panel = snapshot.node("fab-menu-panel").bounds();
             assert_eq!(panel.x + panel.width, Px::new(width as i32 - 16));
             assert_eq!(panel.y + panel.height, Px::new(height as i32 - 16));
@@ -978,11 +949,10 @@ mod tests {
                 assert_eq!(panel.height, Px::new(168));
             }
         }
-        let snapshot = layout_test(|| {
-            fixture(false, FloatingActionButtonMenuAlignment::Start, 3);
-        })
-        .viewport_px(400, 400)
-        .run();
+        let snapshot = UiTest::new()
+            .content(|| fixture(false, FloatingActionButtonMenuAlignment::Start, 3))
+            .viewport(400, 400)
+            .frame();
         snapshot.node("fab-menu-panel").size(56, 56);
         assert_eq!(snapshot.node("fab-menu-panel").bounds().x, Px::new(16));
     }
@@ -1019,17 +989,15 @@ mod tests {
     fn overlay_blocks_background_preserves_state_and_actions_dismiss() {
         let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
 
-        let mut session = start_layout_test_session(
-            layout_test(|| {
-                fixture(false, FloatingActionButtonMenuAlignment::End, 3).probe(probe.clone());
+        let mut session = UiTest::new()
+            .content(|| {
+                fixture(false, FloatingActionButtonMenuAlignment::End, 3).probe(probe.clone())
             })
-            .viewport_px(400, 400),
-        );
-        pump_layout_test_session(&mut session, 0);
-        let mut frame = 0u64;
-        click(&mut session, &mut frame, 60.0, 24.0);
+            .viewport(400, 400);
+        session.frame();
+        click(&mut session, 60.0, 24.0);
         assert_eq!(probe.get().background.unwrap().get(), 8);
-        click(&mut session, &mut frame, 356.0, 356.0);
+        click(&mut session, 356.0, 356.0);
         assert!(
             probe
                 .get()
@@ -1037,12 +1005,9 @@ mod tests {
                 .unwrap()
                 .with(FloatingActionButtonMenuController::is_expanded)
         );
-        for _ in 0..100 {
-            frame += 1;
-            pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
+        session.frames(100);
         assert_eq!(probe.get().background.unwrap().get(), 8);
-        let snapshot = click(&mut session, &mut frame, 350.0, 232.0);
+        let snapshot = click(&mut session, 350.0, 232.0);
         assert!(
             probe
                 .get()
@@ -1054,7 +1019,6 @@ mod tests {
         let bounds = snapshot.node("fab-menu-item-2").bounds();
         click(
             &mut session,
-            &mut frame,
             bounds.x.to_f32() + 50.0,
             bounds.y.to_f32() + 28.0,
         );
@@ -1071,9 +1035,8 @@ mod tests {
             .state
             .unwrap()
             .with_mut(FloatingActionButtonMenuController::open);
-        frame += 1;
-        pump_layout_test_session(&mut session, frame * 16_666_667);
-        click(&mut session, &mut frame, 60.0, 24.0);
+        session.frames(1);
+        click(&mut session, 60.0, 24.0);
         assert!(
             !probe
                 .get()
@@ -1092,11 +1055,8 @@ mod tests {
     #[ignore = "requires a native GPU adapter"]
     fn rendered_menu_restores_pixels_and_exposes_disclosure_state() {
         let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
-        let observed = probe.clone();
 
-        use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
-
-        fn disclosure_states(renderer: &HeadlessRenderer) -> Vec<bool> {
+        fn disclosure_states(renderer: &UiTest) -> Vec<bool> {
             let tree = renderer
                 .accessibility_snapshot()
                 .expect("accessibility tree");
@@ -1124,20 +1084,14 @@ mod tests {
             states
         }
 
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(true, FloatingActionButtonMenuAlignment::End, 3).probe(observed.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 400,
-                ..Default::default()
-            },
-        )
-        .expect("GPU renderer");
-        renderer.render_frames(3);
-        let expanded = renderer.read_pixels().unwrap();
+        let mut renderer = UiTest::new()
+            .viewport(400, 400)
+            .rendered(crate::TesseraComponents)
+            .content(|| {
+                fixture(true, FloatingActionButtonMenuAlignment::End, 3).probe(probe.clone())
+            });
+        renderer.frames(3);
+        let expanded = renderer.read_pixels();
         let corner = (335 * 400 + 335) * 4;
         let interior = (356 * 400 + 335) * 4;
         let contrast: u32 = (0..3)
@@ -1153,16 +1107,16 @@ mod tests {
             .state
             .unwrap()
             .with_mut(FloatingActionButtonMenuController::close);
-        renderer.render_frames(120);
-        assert_ne!(expanded, renderer.read_pixels().unwrap());
+        renderer.frames(120);
+        assert_ne!(expanded, renderer.read_pixels());
         assert_eq!(disclosure_states(&renderer), vec![false]);
         probe
             .get()
             .state
             .unwrap()
             .with_mut(FloatingActionButtonMenuController::open);
-        renderer.render_frames(120);
-        let reopened = renderer.read_pixels().unwrap();
+        renderer.frames(120);
+        let reopened = renderer.read_pixels();
         crate::test_utils::assert_pixels_near(&expanded, &reopened, 400);
     }
 }

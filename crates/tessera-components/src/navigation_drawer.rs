@@ -265,13 +265,7 @@ pub fn navigation_drawer_item(
 mod tests {
 
     use tessera_foundation::modifier::SemanticsArgs;
-    use tessera_ui::{
-        CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition, State,
-        testing::{
-            layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-            start_layout_test_session,
-        },
-    };
+    use tessera_ui::{PxPosition, State, testing::UiTest};
 
     use crate::theme::material_theme;
 
@@ -323,14 +317,10 @@ mod tests {
     #[test]
     fn destinations_keep_token_bounds_select_and_ignore_disabled_input() {
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || {
-                fixture(probe.clone());
-            })
-            .viewport_px(400, 400),
-        );
-        let snapshot = pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| fixture(output.clone()))
+            .viewport(400, 400);
+        let snapshot = session.frame();
         snapshot.node("saved").size(336, 56);
         let saved = snapshot.node("saved").bounds();
         let badge = snapshot.node("saved-badge").bounds();
@@ -344,31 +334,12 @@ mod tests {
             36.0
         );
         let disabled = snapshot.node("disabled").bounds();
-        for (index, bounds) in [saved, disabled].into_iter().enumerate() {
-            let cursor = Some(PxPosition::from_f32_xy(
+        for bounds in [saved, disabled] {
+            session.click_at(PxPosition::from_f32_xy(
                 bounds.x.to_f32() + 100.0,
                 bounds.y.to_f32() + 28.0,
             ));
-            for (event, content) in [
-                CursorEventContent::Pressed(PressKeyEventType::Left),
-                CursorEventContent::Released(PressKeyEventType::Left),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                pump_layout_test_session_with_input(
-                    &mut session,
-                    (index * 2 + event + 1) as u64 * 16_666_667,
-                    vec![PointerChange::new(
-                        tessera_ui::current_frame_time().unwrap(),
-                        1,
-                        content,
-                        GestureState::TapCandidate,
-                    )],
-                    cursor,
-                );
-            }
-            pump_layout_test_session(&mut session, (index as u64 + 1) * 100_000_000);
+            session.frames(1);
             assert_eq!(output.get().unwrap().get(), 1);
         }
     }
@@ -397,19 +368,12 @@ mod tests {
     #[test]
     #[ignore = "Requires a native GPU adapter to verify navigation drawer corner pixels"]
     fn standard_drawer_rounds_only_the_ending_corners() {
-        let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
-            Box::new(shape_fixture),
-            vec![Box::new(crate::TesseraComponents)],
-            tessera_ui::headless::HeadlessConfig {
-                width: 400,
-                height: 120,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(3);
-        let pixels = renderer.read_pixels().unwrap();
+        let mut renderer = tessera_ui::testing::UiTest::new()
+            .viewport(400, 120)
+            .rendered(crate::TesseraComponents)
+            .content(shape_fixture);
+        renderer.frames(3);
+        let pixels = renderer.read_pixels();
         let pixel = |x: usize, y: usize| -> [u8; 4] {
             let offset = (y * 400 + x) * 4;
             pixels[offset..offset + 4].try_into().unwrap()

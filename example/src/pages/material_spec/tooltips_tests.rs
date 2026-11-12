@@ -1,9 +1,7 @@
-use std::time::Duration;
-
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Action, Node, NodeId, Rect, Toggled},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    testing::UiTest,
 };
 
 use super::*;
@@ -22,9 +20,11 @@ enum Scene {
     Keyboard,
 }
 
-fn reference_renderer(scene: Scene, width: u32) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || match scene.clone() {
+fn reference_renderer(scene: Scene, width: u32) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(width, 1000)
+        .rendered(crate::TestPipelines)
+        .content(move || match scene.clone() {
             Scene::Live(width, actions) => {
                 fixture(width, actions);
             }
@@ -72,22 +72,12 @@ fn reference_renderer(scene: Scene, width: u32) -> HeadlessRenderer {
                     }
                 });
             }
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width,
-            height: 1000,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(4);
+        });
+    renderer.frames(4);
     renderer
 }
 
-fn semantic_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn semantic_node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -97,12 +87,12 @@ fn semantic_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeI
     (id, node.clone())
 }
 
-fn settle_color_pair_geometry(renderer: &mut HeadlessRenderer) {
+fn settle_color_pair_geometry(renderer: &mut UiTest) {
     let mut previous = None;
     let mut history = Vec::new();
     let mut stable_frames = 0;
     for _ in 0..16 {
-        renderer.step_frame();
+        renderer.frames(1);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         let mut geometry: Vec<_> = snapshot
             .nodes
@@ -132,7 +122,7 @@ fn settle_color_pair_geometry(renderer: &mut HeadlessRenderer) {
         } else {
             1
         };
-        history.push((renderer.frame_index(), geometry.clone()));
+        history.push((renderer.frame_time(), geometry.clone()));
         previous = Some(geometry);
         if stable_frames == 3 {
             return;
@@ -241,7 +231,7 @@ fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
                 assert!(marker.y1 < popup.y0);
             }
         }
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let center = |popup: Rect| {
             let x = (popup.x0 + 8.0) as usize;
             let y = (popup.y0 + popup.height() / 2.0) as usize;
@@ -413,7 +403,7 @@ fn tooltip_configurations_keep_five_native_cards_static_after_pointer_clicks() {
     for action in actions {
         click(&mut renderer, action);
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(1000.0, 900.0));
-        renderer.render_frames(4);
+        renderer.frames(4);
         let mut current: Vec<_> = renderer
             .accessibility_snapshot()
             .unwrap()
@@ -494,7 +484,7 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
                 );
             }
             if rich {
-                let measured = renderer.read_pixels().unwrap();
+                let measured = renderer.read_pixels();
                 let popup = popups[0];
                 let x = (popup.x0 + 8.0 * scale).floor() as usize;
                 let y = (popup.y0 + 48.0 * scale).floor() as usize;
@@ -504,7 +494,7 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
                 assert!(!action.supports_action(Action::Click));
                 click(&mut renderer, action.bounds().unwrap());
                 renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(0.0, 900.0));
-                renderer.render_frames(4);
+                renderer.frames(4);
                 let current = renderer.accessibility_snapshot().unwrap();
                 let initial: Vec<_> = initial
                     .nodes
@@ -525,7 +515,7 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
                 drop(renderer);
                 let mut anatomy = reference_renderer(Scene::Figure(rich, false), width);
                 settle_color_pair_geometry(&mut anatomy);
-                let plain = anatomy.read_pixels().unwrap();
+                let plain = anatomy.read_pixels();
                 assert!(
                     i16::from(measured[offset]) - i16::from(measured[offset + 1])
                         > i16::from(plain[offset]) - i16::from(plain[offset + 1]) + 10,
@@ -595,14 +585,14 @@ fn fixture(width: f64, actions: tessera_ui::testing::TestProbe<usize>) {
     });
 }
 
-fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
+fn bounds(renderer: &UiTest, label: &str) -> Rect {
     semantic_node(renderer, label, Role::Button)
         .1
         .bounds()
         .unwrap()
 }
 
-fn click(renderer: &mut HeadlessRenderer, bounds: Rect) {
+fn click(renderer: &mut UiTest, bounds: Rect) {
     let position = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) * 0.5) as f32,
         ((bounds.y0 + bounds.y1) * 0.5) as f32,
@@ -610,26 +600,18 @@ fn click(renderer: &mut HeadlessRenderer, bounds: Rect) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
 #[test]
 #[ignore = "Requires a GPU adapter for the real component pipelines"]
 fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
     let actions = tessera_ui::testing::TestProbe::new(0usize);
-    let output = actions.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(600.0, output.clone())),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 800,
-            height: 600,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .expect("native tooltip examples");
-    renderer.render_frames(4);
+    let mut renderer = UiTest::new()
+        .viewport(800, 600)
+        .rendered(crate::TestPipelines)
+        .content(|| fixture(600.0, actions.clone()));
+    renderer.frames(4);
     let favorite = bounds(&renderer, "Add to favorites");
     renderer.pointer_move(
         MOUSE_POINTER_ID,
@@ -638,7 +620,7 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
             ((favorite.y0 + favorite.y1) * 0.5) as f32,
         ),
     );
-    renderer.render_frames(35);
+    renderer.frames(35);
     assert!(
         renderer
             .accessibility_snapshot()
@@ -686,7 +668,7 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
         1,
         "the actual action updates its production owner exactly once"
     );
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_eq!(actions.get(), 1);
     semantic_node(&renderer, "Collection guidance acknowledged.", Role::Label);
     let selected = bounds(&renderer, "Remove from favorites");
@@ -722,7 +704,7 @@ fn persistent_live_tooltips_leave_the_trigger_visible_after_flow_wrapping() {
         let got_it = bounds(&renderer, "Got it");
         click(&mut renderer, got_it);
         assert_eq!(actions.get(), 1);
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_eq!(actions.get(), 1);
         assert!(
             !renderer
@@ -872,7 +854,7 @@ fn writing_examples_keep_plain_tooltips_content_sized_and_publish_advice_bars() 
     );
     drop(renderer);
     let mut renderer = reference_renderer(Scene::Wording(true), 640);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert_eq!(
         renderer
             .accessibility_snapshot()
@@ -912,7 +894,7 @@ fn plain_placement_reference_measures_four_dp_from_the_actual_icon_target() {
 #[ignore = "requires a native GPU adapter"]
 fn keyboard_table_keeps_headers_cells_and_centered_header_text() {
     let mut renderer = reference_renderer(Scene::Keyboard, 640);
-    renderer.render_frames(4);
+    renderer.frames(4);
     semantic_node(&renderer, "Tooltip keyboard navigation", Role::Table);
     let snapshot = renderer.accessibility_snapshot().unwrap();
     let table = semantic_node(&renderer, "Tooltip keyboard navigation", Role::Table)
@@ -934,7 +916,7 @@ fn keyboard_table_keeps_headers_cells_and_centered_header_text() {
     for row in &rows {
         assert!(row.y0 >= table.y0 && row.y1 <= table.y1);
     }
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let width = renderer.physical_size().width;
     let x = (table.x0 + (table.width() * 0.355).floor()) as u32;
     for row in &rows {

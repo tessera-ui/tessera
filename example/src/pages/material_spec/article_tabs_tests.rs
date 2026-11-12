@@ -1,17 +1,15 @@
-use std::time::Duration;
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Role},
+    testing::UiTest,
 };
 
 use super::*;
 
 type Observed = (State<&'static str>, State<bool>);
 
-fn content_bounds(renderer: &HeadlessRenderer) -> [Option<tessera_ui::PxRect>; 4] {
+fn content_bounds(renderer: &UiTest) -> [Option<tessera_ui::PxRect>; 4] {
     let snapshot = renderer.inspect_components();
     std::array::from_fn(|index| {
         snapshot
@@ -21,9 +19,9 @@ fn content_bounds(renderer: &HeadlessRenderer) -> [Option<tessera_ui::PxRect>; 4
     })
 }
 
-fn ink(renderer: &HeadlessRenderer, index: usize, label: bool) -> Vec<(usize, usize)> {
+fn ink(renderer: &UiTest, index: usize, label: bool) -> Vec<(usize, usize)> {
     let bounds = content_bounds(renderer)[index].unwrap();
-    let rgba = renderer.read_pixels().unwrap();
+    let rgba = renderer.read_pixels();
     let left = bounds.x.to_f32() as usize + if label { 32 } else { 0 };
     let right = if label {
         (bounds.x + bounds.width).to_f32() as usize
@@ -74,7 +72,7 @@ fn fixture(output: tessera_ui::testing::TestProbe<Option<Observed>>) {
     });
 }
 
-fn tab(renderer: &HeadlessRenderer, title: &str) -> (NodeId, Node) {
+fn tab(renderer: &UiTest, title: &str) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -86,7 +84,7 @@ fn tab(renderer: &HeadlessRenderer, title: &str) -> (NodeId, Node) {
         .expect("native article tab")
 }
 
-fn geometry(renderer: &HeadlessRenderer) -> Vec<(NodeId, tessera_ui::accesskit::Rect)> {
+fn geometry(renderer: &UiTest) -> Vec<(NodeId, tessera_ui::accesskit::Rect)> {
     ARTICLE_TAB_TITLES
         .into_iter()
         .map(|title| {
@@ -103,16 +101,16 @@ fn center(bounds: tessera_ui::accesskit::Rect) -> PxPosition {
     )
 }
 
-fn pixel(renderer: &HeadlessRenderer, title: &str, y: f64) -> [u8; 3] {
+fn pixel(renderer: &UiTest, title: &str, y: f64) -> [u8; 3] {
     let bounds = tab(renderer, title).1.bounds().unwrap();
     let x = ((bounds.x0 + bounds.x1) * 0.5).floor() as usize;
     let y = (bounds.y0 + y).floor() as usize;
-    let rgba = renderer.read_pixels().unwrap();
+    let rgba = renderer.read_pixels();
     let offset = (y * renderer.physical_size().width as usize + x) * 4;
     rgba[offset..offset + 3].try_into().unwrap()
 }
 
-fn assert_pixel(renderer: &HeadlessRenderer, title: &str, y: f64, expected: [u8; 3]) {
+fn assert_pixel(renderer: &UiTest, title: &str, y: f64, expected: [u8; 3]) {
     let actual = pixel(renderer, title, y);
     assert!(
         actual
@@ -128,27 +126,19 @@ fn assert_pixel(renderer: &HeadlessRenderer, title: &str, y: f64, expected: [u8;
 fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
     for samples in [1, 4] {
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || fixture(probe.clone())),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1000,
-                height: 160,
-                sample_count: samples,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(1000, 160)
+            .samples(samples)
+            .rendered(crate::TestPipelines)
+            .content(|| fixture(output.clone()));
+        renderer.frames(8);
         let initial = geometry(&renderer);
         assert_pixel(&renderer, "Overview", 8.0, [248, 241, 246]);
         assert_pixel(&renderer, "Specs", 8.0, [220, 218, 245]);
         let normal_icon = ink(&renderer, 0, false);
         let overview = center(tab(&renderer, "Overview").1.bounds().unwrap());
         renderer.pointer_move(MOUSE_POINTER_ID, overview);
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_pixel(&renderer, "Overview", 8.0, [234, 227, 233]);
         let hover_icon = ink(&renderer, 0, false);
         assert_ne!(
@@ -161,7 +151,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
             "hover font grade must preserve label advances and target IDs"
         );
         renderer.pointer_press(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_pixel(&renderer, "Overview", 8.0, [227, 220, 227]);
         assert_eq!(
             I18N.text(output.get().unwrap().0.get()),
@@ -174,7 +164,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
             "pressed font grade must preserve layout"
         );
         renderer.pointer_release(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
-        renderer.render_frames(14);
+        renderer.frames(14);
         assert_eq!(I18N.text(output.get().unwrap().0.get()), "Overview");
         assert_pixel(&renderer, "Overview", 8.0, [205, 203, 228]);
         let selected_icon = ink(&renderer, 0, false);
@@ -189,7 +179,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
             "selection must preserve targets"
         );
         renderer.pointer_press(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_pixel(&renderer, "Overview", 8.0, [197, 195, 220]);
         assert_ne!(
             ink(&renderer, 0, true),
@@ -198,15 +188,10 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
         );
         renderer.pointer_release(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(990.0, 150.0));
-        renderer.render_frames(4);
+        renderer.frames(4);
         let guidelines = tab(&renderer, "Guidelines");
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            target_node: guidelines.0,
-            target_tree: TreeId::ROOT,
-            action: Action::Focus,
-            data: None,
-        }));
-        renderer.render_frames(4);
+        assert!(renderer.accessibility_action(guidelines.0, Action::Focus));
+        renderer.frames(4);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
             guidelines.0
@@ -220,7 +205,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
         assert_pixel(&renderer, "Guidelines", 3.0, [255, 255, 255]);
         let guidelines_center = center(guidelines.1.bounds().unwrap());
         renderer.pointer_move(MOUSE_POINTER_ID, guidelines_center);
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_pixel(&renderer, "Guidelines", 1.0, [255, 255, 255]);
         assert_pixel(&renderer, "Guidelines", 3.0, [234, 227, 233]);
         assert_eq!(
@@ -228,7 +213,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
             initial,
             "focus strokes must not move content"
         );
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_eq!(
             renderer
                 .work()
@@ -237,7 +222,10 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
             0
         );
         assert_eq!(
-            renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
+            renderer
+                .work()
+                .phase(tessera_ui::testing::WorkPhase::Paint)
+                .count(),
             0,
             "resting tabs must not repaint"
         );
@@ -249,20 +237,12 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
 fn article_selection_pill_animates_with_clock_without_measuring_or_moving_targets() {
     for samples in [1, 4] {
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || fixture(probe.clone())),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1000,
-                height: 160,
-                sample_count: samples,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(1000, 160)
+            .samples(samples)
+            .rendered(crate::TestPipelines)
+            .content(|| fixture(output.clone()));
+        renderer.frames(8);
         assert_eq!(
             renderer
                 .work()
@@ -278,11 +258,11 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(990.0, 150.0));
-        renderer.render_frames(1);
+        renderer.frames(1);
         assert_eq!(I18N.text(output.get().unwrap().0.get()), "Overview");
         assert_pixel(&renderer, "Overview", 8.0, [248, 241, 246]);
-        let edge = |renderer: &HeadlessRenderer| {
-            let rgba = renderer.read_pixels().unwrap();
+        let edge = |renderer: &UiTest| {
+            let rgba = renderer.read_pixels();
             let x = (bounds.x0 + bounds.width() * 0.97).floor() as usize;
             let y = ((bounds.y0 + bounds.y1) * 0.5).floor() as usize;
             let offset = (y * 1000 + x) * 4;
@@ -290,7 +270,7 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         };
         assert_eq!(edge(&renderer), [248, 241, 246]);
         for frame in 1..=12 {
-            renderer.render_frames(1);
+            renderer.frames(1);
             let diagnostics = renderer.diagnostics();
             assert_eq!(
                 renderer
@@ -330,9 +310,12 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
             [220, 218, 245],
             "200ms pill reaches its complete original capsule extent"
         );
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(
-            renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
+            renderer
+                .work()
+                .phase(tessera_ui::testing::WorkPhase::Paint)
+                .count(),
             0,
             "completed motion must not repaint"
         );
@@ -376,30 +359,22 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
         return;
     }
     let output = tessera_ui::testing::TestProbe::default();
-    let probe = output.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(probe.clone())),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1000,
-            height: 160,
-            scale_factor: 1.0,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(12);
+    let mut renderer = UiTest::new()
+        .viewport(1000, 160)
+        .scale_factor(1.0)
+        .rendered(crate::TestPipelines)
+        .content(|| fixture(output.clone()));
+    renderer.frames(12);
     for scale in [1.25, 1.15, 1.0, 1.5, 2.0] {
         tessera_ui::dp::set_scale_factor(scale);
         renderer.resize((1000.0 * scale) as u32, (160.0 * scale) as u32);
-        renderer.render_frames(12);
+        renderer.frames(12);
         let natural = content_bounds(&renderer).map(|bounds| bounds.unwrap().width);
         for pinned in [false, true] {
             output.get().unwrap().1.set(pinned);
             for width in [753.0, 500.0, 485.0, 375.0, 320.0, 1000.0] {
                 renderer.resize((width * scale) as u32, (160.0 * scale) as u32);
-                renderer.render_frames(12);
+                renderer.frames(12);
                 let tree = renderer.accessibility_snapshot().unwrap();
                 let focused_label = tree
                     .nodes
@@ -433,13 +408,8 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
                     );
                 }
                 let target = tab(&renderer, "Accessibility").0;
-                assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                    action: Action::Focus,
-                    target_node: target,
-                    data: None,
-                    target_tree: TreeId::ROOT,
-                }));
-                renderer.render_frames(24);
+                assert!(renderer.accessibility_action(target, Action::Focus));
+                renderer.frames(24);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, target);
                 let focused_contents = content_bounds(&renderer);
                 for (index, content) in focused_contents.into_iter().enumerate() {
@@ -469,7 +439,7 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
                     tablist.x0 >= 0.0 && tablist.x1 <= width * scale,
                     "tab viewport overflows window: {tablist:?}"
                 );
-                let pixels = renderer.read_pixels().unwrap();
+                let pixels = renderer.read_pixels();
                 let sample = |x: f64, y: f64| {
                     let offset = (((y * scale) as usize * renderer.physical_size().width as usize)
                         + (x * scale) as usize)
@@ -494,23 +464,15 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
 #[ignore = "requires a native GPU adapter for responsive article navigation controls"]
 fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
     let output = tessera_ui::testing::TestProbe::default();
-    let probe = output.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(probe.clone())),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 500,
-            height: 160,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(12);
+    let mut renderer = UiTest::new()
+        .viewport(500, 160)
+        .rendered(crate::TestPipelines)
+        .content(|| fixture(output.clone()));
+    renderer.frames(12);
     for pinned in [false, true] {
         output.get().unwrap().1.set(pinned);
         output.get().unwrap().0.set("ui-specs");
-        renderer.render_frames(12);
+        renderer.frames(12);
         for (label, expected) in [
             ("Go to next tab", "Guidelines"),
             ("Go to next tab", "Accessibility"),
@@ -524,13 +486,8 @@ fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
                 .iter()
                 .find(|(_, node)| node.role() == Role::Button && crate::has_label(&node, label))
                 .expect("adjacent page control");
-            assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                target_node: button.0,
-                target_tree: TreeId::ROOT,
-                action: Action::Click,
-                data: None,
-            }));
-            renderer.render_frames(16);
+            assert!(renderer.accessibility_action(button.0, Action::Click));
+            renderer.frames(16);
             assert_eq!(I18N.text(output.get().unwrap().0.get()), expected);
             let tree = renderer.accessibility_snapshot().unwrap();
             let viewport = tree

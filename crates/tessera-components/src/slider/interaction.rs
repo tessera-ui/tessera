@@ -929,9 +929,8 @@ mod tests {
 
     #[test]
     fn key_dispatch_consumes_limits_and_releases_but_preserves_shortcuts_and_tab() {
-        tessera_ui::testing::layout_test(|| {
-            key_dispatch_fixture();
-        })
-        .run();
+        tessera_ui::testing::UiTest::new()
+            .content(key_dispatch_fixture)
+            .frame();
     }
 }

@@ -867,7 +867,8 @@ fn scrollbar_h_bound(
         .thumb_color_optional(thumb_color)
         .thumb_hover_color_optional(thumb_hover_color)
         .scrollbar_controller(
-            scrollbar_controller.unwrap_or_else(|| ScrollBarController::viewport(controller, false)),
+            scrollbar_controller
+                .unwrap_or_else(|| ScrollBarController::viewport(controller, false)),
         );
 }
 
@@ -2030,10 +2031,7 @@ mod scroll_tests {
 
         use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
         use tessera_ui::{
-            Dp, Modifier, Px, PxPosition, State,
-            layout::layout,
-            remember, tessera,
-            testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+            Dp, Modifier, Px, PxPosition, State, layout::layout, remember, tessera, testing::UiTest,
         };
 
         use crate::{column::column, modifier::ModifierExt as _, spacer::spacer};
@@ -2063,14 +2061,10 @@ mod scroll_tests {
         #[test]
         fn cached_viewport_publishes_updated_scroll_extent() {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    scroll_modifier_case(probe.clone());
-                })
-                .viewport_px(100, 100),
-            );
-            let _ = pump_layout_test_session(&mut session, 0);
+            let mut session = UiTest::new()
+                .content(|| scroll_modifier_case(output.clone()))
+                .viewport(100, 100);
+            session.frame();
             let controller = output.get().expect("scroll controller");
             controller.with_mut(|c| {
                 c.override_child_size(tessera_ui::ComputedData {
@@ -2078,31 +2072,27 @@ mod scroll_tests {
                     height: Px(400),
                 });
             });
-            let _ = pump_layout_test_session(&mut session, 16_666_667);
+            session.frames(1);
             controller.with_mut(|c| {
                 c.override_child_size(tessera_ui::ComputedData {
                     width: Px(100),
                     height: Px(800),
                 });
             });
-            let _ = pump_layout_test_session(&mut session, 33_333_334);
+            session.frames(1);
             assert_eq!(controller.with(|c| c.child_size().height), Px(800));
             controller.with_mut(|c| c.set_scroll_position(PxPosition::new(Px(0), Px(-650))));
-            let snapshot = pump_layout_test_session(&mut session, 50_000_001);
+            let snapshot = session.frames(1);
             snapshot.node("inner").y(-650);
         }
 
         #[test]
         fn vertical_scroll_modifier_reapplies_offset() {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    scroll_modifier_case(probe.clone());
-                })
-                .viewport_px(100, 100),
-            );
-            let snapshot = pump_layout_test_session(&mut session, 0);
+            let mut session = UiTest::new()
+                .content(|| scroll_modifier_case(output.clone()))
+                .viewport(100, 100);
+            let snapshot = session.frame();
             snapshot.node("inner").y(0);
 
             let controller = output.get().expect("scroll controller");
@@ -2110,7 +2100,7 @@ mod scroll_tests {
                 c.set_scroll_position(PxPosition::new(Px(0), Px(-40)));
             });
 
-            let snapshot = pump_layout_test_session(&mut session, 16_666_667);
+            let snapshot = session.frames(1);
             snapshot.node("inner").y(-40);
         }
     }

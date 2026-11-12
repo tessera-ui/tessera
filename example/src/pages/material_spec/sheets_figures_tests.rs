@@ -1,10 +1,8 @@
-use std::time::Duration;
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role, Toggled},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    testing::UiTest,
 };
 
 use super::*;
@@ -36,24 +34,16 @@ fn tokens_fixture() {
     });
 }
 
-fn renderer<Output: 'static>(fixture: fn() -> Output) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 676,
-            height: 700,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(5);
+fn renderer<Output: 'static>(fixture: fn() -> Output) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(676, 700)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(5);
     renderer
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
+fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -64,7 +54,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .clone()
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+fn click(renderer: &mut UiTest, label: &str, role: Role) {
     let bounds = node(renderer, label, role).bounds().unwrap();
     assert!(bounds.width() >= 48.0 && bounds.height() >= 48.0);
     let position = PxPosition::from_f32_xy(
@@ -74,10 +64,10 @@ fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
-fn labelled(renderer: &HeadlessRenderer, label: &str) -> bool {
+fn labelled(renderer: &UiTest, label: &str) -> bool {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -123,9 +113,9 @@ fn music_context_places_native_actions_and_updates_playback_and_cover_art() {
     node(&renderer, "Play", Role::Button);
     click(&mut renderer, "Play", Role::Button);
     node(&renderer, "Pause", Role::Button);
-    let before = renderer.read_pixels().unwrap();
+    let before = renderer.read_pixels();
     click(&mut renderer, "Next track", Role::Button);
-    let after = renderer.read_pixels().unwrap();
+    let after = renderer.read_pixels();
     let changed = (140..208)
         .flat_map(|y| (132..196).map(move |x| (y * 676 + x) * 4))
         .filter(|&offset| before[offset..offset + 4] != after[offset..offset + 4])

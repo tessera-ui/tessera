@@ -10,8 +10,8 @@ use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, Modifier,
     accesskit::{Node, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -114,7 +114,7 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<OverlayCont
     });
 }
 
-fn marker(renderer: &HeadlessRenderer) -> Option<Node> {
+fn marker(renderer: &UiTest) -> Option<Node> {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -124,14 +124,14 @@ fn marker(renderer: &HeadlessRenderer) -> Option<Node> {
         .map(|(_, n)| n)
 }
 
-fn green(renderer: &HeadlessRenderer, node: &Node) -> u8 {
+fn green(renderer: &UiTest, node: &Node) -> u8 {
     let rect = node.bounds().unwrap();
     let width = renderer.physical_size().width as usize;
     let height = renderer.physical_size().height as usize;
     let x = ((rect.x0 + rect.x1) * 0.5) as usize;
     let y = ((rect.y0 + rect.y1) * 0.5) as usize;
     assert!(x < width && y < height);
-    renderer.read_pixels().unwrap()[(y * width + x) * 4 + 1]
+    renderer.read_pixels()[(y * width + x) * 4 + 1]
 }
 
 fn check(samples: u32) {
@@ -145,25 +145,18 @@ fn check(samples: u32) {
     ] {
         for scale in [1.0, 1.5] {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || fixture(kind, probe.clone())),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 800,
-                    height: 600,
-                    scale_factor: scale,
-                    sample_count: samples,
-                    frame_time: Duration::from_millis(10),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(4);
-            let baseline = renderer.read_pixels().unwrap();
+            let mut renderer = UiTest::new()
+                .viewport(800, 600)
+                .scale_factor(scale)
+                .samples(samples)
+                .frame_step(Duration::from_millis(10))
+                .rendered(crate::TesseraComponents)
+                .content(|| fixture(kind, output.clone()));
+            renderer.frames(4);
+            let baseline = renderer.read_pixels();
             let open = output.get().unwrap();
-            renderer.run(|| open.set(true));
-            renderer.render_frames(8);
+            open.set(true);
+            renderer.frames(8);
             let entering = marker(&renderer).unwrap();
             let entering_bounds = entering.bounds().unwrap();
             let entering_opacity =
@@ -172,8 +165,8 @@ fn check(samples: u32) {
                 let before = marker(&renderer).unwrap();
                 let rect = before.bounds().unwrap();
                 let opacity = matches!(kind, Kind::Dialog).then(|| green(&renderer, &before));
-                renderer.run(|| open.set(target));
-                renderer.step_frame();
+                open.set(target);
+                renderer.frames(1);
                 let after = marker(&renderer).unwrap();
                 let next = after.bounds().unwrap();
                 assert!(
@@ -190,10 +183,10 @@ fn check(samples: u32) {
                         "dialog opacity jumped"
                     );
                 }
-                renderer.render_frames(2);
+                renderer.frames(2);
             }
-            renderer.render_frames(80);
-            let full = renderer.read_pixels().unwrap();
+            renderer.frames(80);
+            let full = renderer.read_pixels();
             assert!(full != baseline);
             let settled = marker(&renderer).unwrap();
             let is_sheet = !matches!(kind, Kind::Dialog | Kind::Bottom);
@@ -220,26 +213,26 @@ fn check(samples: u32) {
                         > 8.0 * scale
                 );
             }
-            renderer.run(|| open.set(false));
-            renderer.render_frames(5);
-            renderer.run(|| open.set(true));
-            renderer.render_frames(80);
+            open.set(false);
+            renderer.frames(5);
+            open.set(true);
+            renderer.frames(80);
             assert!(
-                renderer.read_pixels().unwrap() == full,
+                renderer.read_pixels() == full,
                 "{kind:?}: reopened pixels differ"
             );
-            renderer.run(|| open.set(false));
-            renderer.render_frames(80);
+            open.set(false);
+            renderer.frames(80);
             assert!(marker(&renderer).is_none());
             assert!(
-                renderer.read_pixels().unwrap() == baseline,
+                renderer.read_pixels() == baseline,
                 "{kind:?}: exit did not restore the scene"
             );
             if is_sheet {
                 renderer.resize(320, 600);
-                renderer.render_frames(4);
-                renderer.run(|| open.set(true));
-                renderer.render_frames(80);
+                renderer.frames(4);
+                open.set(true);
+                renderer.frames(80);
                 let bounds = marker(&renderer).unwrap().bounds().unwrap();
                 assert!(
                     (bounds.x0 - 24.0 * scale).abs() < 0.01,

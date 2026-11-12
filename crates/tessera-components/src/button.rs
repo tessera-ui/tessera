@@ -390,7 +390,7 @@ struct ButtonResolvedArgs {
 /// assert!(selected.get());
 /// #     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 /// Renders a Material button.
 #[tessera]
@@ -899,10 +899,8 @@ impl ButtonBuilder {
 mod tests {
     use tessera_foundation::modifier::SemanticsArgs;
     use tessera_ui::{
-        MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State,
-        headless::{HeadlessConfig, HeadlessRenderer},
-        modifier::FocusModifierExt as _,
-        remember,
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State, modifier::FocusModifierExt as _,
+        remember, testing::UiTest,
     };
 
     use crate::{
@@ -1090,37 +1088,30 @@ mod tests {
             .expect("button bounds")
     }
 
-    fn click(renderer: &mut HeadlessRenderer, rect: tessera_ui::accesskit::Rect) {
+    fn click(renderer: &mut UiTest, rect: tessera_ui::accesskit::Rect) {
         let point = PxPosition::from_f32_xy(
             ((rect.x0 + rect.x1) * 0.5) as f32,
             ((rect.y0 + rect.y1) * 0.5) as f32,
         );
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(8);
+        renderer.frames(8);
     }
 
     fn check_sizes(samples: u32) {
         let probe = FixtureProbes::default();
-        let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || fixture(observed.clone())),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 640,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .expect("button renderer");
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(400, 640)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(probe.clone()));
+        renderer.frames(8);
         let tree = renderer
             .accessibility_snapshot()
             .expect("button accessibility");
-        let pixels = renderer.read_pixels().expect("button pixels");
+        let pixels = renderer.read_pixels();
         if let Some(directory) = std::env::var_os("TESSERA_BUTTON_QA_DIR") {
             let directory = std::path::PathBuf::from(directory);
             std::fs::create_dir_all(&directory).unwrap();
@@ -1195,7 +1186,7 @@ mod tests {
         }
         let settings = probe.settings.get().unwrap();
         settings.with_mut(|settings| settings.variant = ButtonVariant::Elevated);
-        renderer.render_frames(8);
+        renderer.frames(8);
         let scheme = MaterialTheme::default().color_scheme;
         probe.colors.with(|colors| {
             assert_eq!(
@@ -1204,7 +1195,7 @@ mod tests {
                 "elevated labels retain their primary color"
             )
         });
-        let elevated = renderer.read_pixels().unwrap();
+        let elevated = renderer.read_pixels();
         let edge = (2 * 400 + 130) * 4;
         let background = (2 * 400 + 300) * 4;
         let fringe: u32 = elevated[edge..edge + 3]
@@ -1217,7 +1208,7 @@ mod tests {
             "the shadow must follow the 32dp visual container, not the 48dp touch target: {fringe}"
         );
         settings.with_mut(|settings| settings.color = Some(scheme.secondary_container));
-        renderer.render_frames(8);
+        renderer.frames(8);
         probe.colors.with(|colors| {
             assert_eq!(
                 *colors,
@@ -1226,7 +1217,7 @@ mod tests {
             )
         });
         settings.with_mut(|settings| settings.content = Some(Color::RED));
-        renderer.render_frames(8);
+        renderer.frames(8);
         probe.colors.with(|colors| {
             assert_eq!(
                 *colors,
@@ -1239,12 +1230,12 @@ mod tests {
             settings.color = None;
             settings.content = None;
         });
-        renderer.render_frames(8);
+        renderer.frames(8);
         let clicks = probe.clicks.get().unwrap();
         click(&mut renderer, bounds(&tree, 0));
         assert_eq!(clicks.get(), 1);
         settings.with_mut(|settings| settings.disabled = true);
-        renderer.render_frames(8);
+        renderer.frames(8);
         let disabled = renderer.accessibility_snapshot().unwrap();
         for index in 0..5 {
             assert_eq!(
@@ -1260,7 +1251,7 @@ mod tests {
             settings.variant = ButtonVariant::Outlined;
         });
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(390.0, 600.0));
-        renderer.render_frames(120);
+        renderer.frames(120);
         probe.colors.with(|colors| {
             assert_eq!(
                 *colors,
@@ -1268,7 +1259,7 @@ mod tests {
                 "outlined labels use on-surface-variant"
             )
         });
-        let outlined = renderer.read_pixels().unwrap();
+        let outlined = renderer.read_pixels();
         for (index, width) in [1usize, 1, 1, 2, 3].into_iter().enumerate() {
             let rect = bounds(&tree, index);
             let y = ((rect.y0 + rect.y1) * 0.5) as usize;
@@ -1286,7 +1277,7 @@ mod tests {
             assert_eq!(&outlined[inner..inner + 4], &outlined[fill..fill + 4]);
         }
         settings.with_mut(|settings| settings.size = Some(ButtonSize::ExtraLarge));
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(
             bounds(&renderer.accessibility_snapshot().unwrap(), 2).height(),
             176.0
@@ -1385,28 +1376,21 @@ mod tests {
 
     fn check_shape_and_toggle_input(samples: u32) {
         let probe = FixtureProbes::default();
-        let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || fixture(observed.clone())),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 640,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(400, 640)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(probe.clone()));
+        renderer.frames(8);
         let initial = renderer.accessibility_snapshot().unwrap();
-        let round = renderer.read_pixels().unwrap();
+        let round = renderer.read_pixels();
         let settings = probe.settings.get().unwrap();
         settings.with_mut(|settings| {
             settings.shape = ButtonShape::Square;
             settings.selected = Some(false);
         });
-        renderer.render_frames(120);
-        let square = renderer.read_pixels().unwrap();
+        renderer.frames(120);
+        let square = renderer.read_pixels();
         assert_ne!(round, square, "square preset changes visible corners");
         let before = renderer.accessibility_snapshot().unwrap();
         let find = |tree: &tessera_ui::accesskit::TreeUpdate| {
@@ -1427,7 +1411,7 @@ mod tests {
         );
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(20);
+        renderer.frames(20);
         assert!(
             probe
                 .interactions
@@ -1435,11 +1419,11 @@ mod tests {
                 .with(InteractionState::is_pressed)
         );
         assert_eq!(probe.clicks.get().unwrap().get(), 0);
-        assert_ne!(square, renderer.read_pixels().unwrap());
+        assert_ne!(square, renderer.read_pixels());
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(390.0, 630.0));
-        renderer.render_frames(120);
+        renderer.frames(120);
         assert_eq!(settings.get().selected, Some(true));
         assert_eq!(probe.clicks.get().unwrap().get(), 1);
         let selected = renderer.accessibility_snapshot().unwrap();
@@ -1454,7 +1438,7 @@ mod tests {
             .colors
             .with(|colors| assert_eq!(*colors, [Some(scheme.on_primary); 5]));
         settings.with_mut(|settings| settings.disabled = true);
-        renderer.render_frames(120);
+        renderer.frames(120);
         let disabled = renderer.accessibility_snapshot().unwrap();
         let (disabled_identity, node) = find(&disabled);
         assert_eq!(identity, disabled_identity);
@@ -1467,7 +1451,7 @@ mod tests {
             settings.disabled = false;
             settings.selected = None;
         });
-        renderer.render_frames(120);
+        renderer.frames(120);
         assert_eq!(
             find(&renderer.accessibility_snapshot().unwrap())
                 .1
@@ -1475,7 +1459,7 @@ mod tests {
             None
         );
         renderer.pointer_move(MOUSE_POINTER_ID, point);
-        renderer.step_frame();
+        renderer.frames(1);
         let pressed_at = tessera_ui::time::Instant::now();
         renderer.inject_pointer(tessera_ui::PointerChange::new(
             pressed_at,
@@ -1483,25 +1467,25 @@ mod tests {
             tessera_ui::CursorEventContent::Pressed(PressKeyEventType::Left),
             tessera_ui::GestureState::TapCandidate,
         ));
-        renderer.step_frame();
+        renderer.frames(1);
         renderer.inject_pointer(tessera_ui::PointerChange::new(
             pressed_at + std::time::Duration::from_secs(2),
             MOUSE_POINTER_ID,
             tessera_ui::CursorEventContent::Released(PressKeyEventType::Left),
             tessera_ui::GestureState::TapCandidate,
         ));
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(
             probe.clicks.get().unwrap().get(),
             2,
             "an ordinary button still activates after a long hold"
         );
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         let outside = PxPosition::from_f32_xy(390.0, 630.0);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(
             probe.clicks.get().unwrap().get(),
             3,
@@ -1521,7 +1505,7 @@ mod tests {
             renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         }
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_eq!(
             probe.activated.get().unwrap().get(),
             [2, 2, 2, 0, 4],
@@ -1529,7 +1513,7 @@ mod tests {
         );
         renderer.pointer_press(11, button_point(0), PressKeyEventType::Left);
         renderer.pointer_press(22, button_point(4), PressKeyEventType::Left);
-        renderer.render_frames(2);
+        renderer.frames(2);
         for index in [0, 4] {
             assert!(
                 probe
@@ -1542,7 +1526,7 @@ mod tests {
         renderer.pointer_release(11, button_point(0), PressKeyEventType::Left);
         renderer.pointer_release(22, button_point(4), PressKeyEventType::Left);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_eq!(probe.activated.get().unwrap().get(), [2, 2, 2, 0, 4, 0, 4]);
         if let Some(directory) = std::env::var_os("TESSERA_BUTTON_QA_DIR") {
             let directory = std::path::PathBuf::from(directory);
@@ -1586,25 +1570,18 @@ mod tests {
         crate::test_utils::run_isolated_test(
             "button::tests::controlled_presentation_matches_native_states_without_taking_focus",
             || {
-                use tessera_ui::accesskit::{Action, ActionRequest, TreeId};
+                use tessera_ui::accesskit::Action;
 
                 let probe = FixtureProbes::default();
-                let observed = probe.clone();
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(move || fixture(observed.clone())),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width: 400,
-                        height: 640,
-                        frame_time: std::time::Duration::from_millis(100),
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(20);
+                let mut renderer = UiTest::new()
+                    .viewport(400, 640)
+                    .frame_step(std::time::Duration::from_millis(100))
+                    .rendered(crate::TesseraComponents)
+                    .content(|| fixture(probe.clone()));
+                renderer.frames(20);
                 let settings = probe.settings.get().unwrap();
                 settings.with_mut(|settings| settings.focus_reference = true);
-                renderer.render_frames(20);
+                renderer.frames(20);
                 let tree = renderer.accessibility_snapshot().unwrap();
                 let id = tree
                     .nodes
@@ -1637,7 +1614,7 @@ mod tests {
                     result
                 };
                 let mut focus_preview = None;
-                let rest_pixels = renderer.read_pixels().unwrap();
+                let rest_pixels = renderer.read_pixels();
                 let rest = crop(&rest_pixels);
                 let mut previews = Vec::new();
                 for presentation in [
@@ -1646,8 +1623,8 @@ mod tests {
                     InteractionVisualState::Pressed,
                 ] {
                     settings.with_mut(|settings| settings.presentation_state = Some(presentation));
-                    renderer.render_frames(20);
-                    let preview = crop(&renderer.read_pixels().unwrap());
+                    renderer.frames(20);
+                    let preview = crop(&renderer.read_pixels());
                     assert_ne!(
                         preview, rest,
                         "presentation changes native appearance: {presentation:?}"
@@ -1658,7 +1635,7 @@ mod tests {
                     assert_eq!(probe.clicks.get().unwrap().get(), 0);
 
                     if presentation == InteractionVisualState::Focus {
-                        let pixels = renderer.read_pixels().unwrap();
+                        let pixels = renderer.read_pixels();
                         focus_preview = Some(focus_crop(&pixels));
                         let mut changed = Vec::new();
                         for y in rect.y0 as usize - 6..rect.y1 as usize + 6 {
@@ -1688,9 +1665,9 @@ mod tests {
                     }
                     previews.push(preview);
                     settings.with_mut(|settings| settings.presentation_state = None);
-                    renderer.render_frames(20);
+                    renderer.frames(20);
                     assert_eq!(
-                        crop(&renderer.read_pixels().unwrap()),
+                        crop(&renderer.read_pixels()),
                         rest,
                         "clearing retained presentation restores native rest"
                     );
@@ -1703,9 +1680,9 @@ mod tests {
                         opacity: 0.2,
                     });
                 });
-                renderer.render_frames(20);
-                let sampled = crop(&renderer.read_pixels().unwrap());
-                let pixels = renderer.read_pixels().unwrap();
+                renderer.frames(20);
+                let sampled = crop(&renderer.read_pixels());
+                let pixels = renderer.read_pixels();
                 let reference = probe.focus_reference.get().unwrap();
                 let x = (reference.x.0 as f32 + reference.width.0 as f32 * 0.7) as usize;
                 let y = (reference.y.0 as f32 + reference.height.0 as f32 * 0.9) as usize;
@@ -1720,19 +1697,22 @@ mod tests {
                     sampled, previews[2],
                     "explicit native ripple sample changes pressed pixels"
                 );
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert_eq!(
-                    crop(&renderer.read_pixels().unwrap()),
+                    crop(&renderer.read_pixels()),
                     sampled,
                     "presentation ripple remains static across frame timestamps"
                 );
                 assert_eq!(
-                    renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
+                    renderer
+                        .work()
+                        .phase(tessera_ui::testing::WorkPhase::Paint)
+                        .count(),
                     0
                 );
                 settings.with_mut(|settings| settings.presentation_ripple = None);
-                renderer.render_frames(20);
-                assert_eq!(crop(&renderer.read_pixels().unwrap()), previews[2]);
+                renderer.frames(20);
+                assert_eq!(crop(&renderer.read_pixels()), previews[2]);
                 settings.with_mut(|settings| {
                     settings.presentation_ripple = Some(RipplePresentation {
                         origin: [f32::NAN, f32::INFINITY],
@@ -1740,9 +1720,9 @@ mod tests {
                         opacity: f32::NAN,
                     })
                 });
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert_eq!(
-                    crop(&renderer.read_pixels().unwrap()),
+                    crop(&renderer.read_pixels()),
                     previews[2],
                     "invalid samples safely disable the ripple"
                 );
@@ -1750,58 +1730,53 @@ mod tests {
                     settings.presentation_ripple = None;
                     settings.presentation_state = None;
                 });
-                renderer.render_frames(20);
+                renderer.frames(20);
                 renderer.pointer_move(MOUSE_POINTER_ID, point);
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert_eq!(
-                    crop(&renderer.read_pixels().unwrap()),
+                    crop(&renderer.read_pixels()),
                     previews[0],
                     "preview hover matches actual pointer hover"
                 );
                 settings.with_mut(|settings| {
                     settings.presentation_state = Some(InteractionVisualState::Pressed)
                 });
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert_eq!(
-                    crop(&renderer.read_pixels().unwrap()),
+                    crop(&renderer.read_pixels()),
                     previews[0],
                     "live hover overrides pressed presentation"
                 );
                 renderer.pointer_move(MOUSE_POINTER_ID, outside);
                 settings.with_mut(|settings| settings.presentation_state = None);
-                renderer.render_frames(20);
-                assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                    action: Action::Focus,
-                    target_tree: TreeId::ROOT,
-                    target_node: id,
-                    data: None,
-                }));
-                renderer.render_frames(20);
+                renderer.frames(20);
+                assert!(renderer.accessibility_action(id, Action::Focus));
+                renderer.frames(20);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
                 assert_eq!(
-                    focus_crop(&renderer.read_pixels().unwrap()),
+                    focus_crop(&renderer.read_pixels()),
                     focus_preview.as_ref().unwrap().as_slice(),
                     "preview focus matches actual native focus"
                 );
                 settings.with_mut(|settings| {
                     settings.presentation_state = Some(InteractionVisualState::Hover)
                 });
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert_eq!(
-                    focus_crop(&renderer.read_pixels().unwrap()),
+                    focus_crop(&renderer.read_pixels()),
                     focus_preview.as_ref().unwrap().as_slice(),
                     "live focus overrides hover presentation"
                 );
                 settings.with_mut(|settings| settings.presentation_state = None);
                 renderer.pointer_move(MOUSE_POINTER_ID, point);
                 renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
                     id,
                     "pointer modality preserves actual focus ownership"
                 );
-                let pointer_pixels = renderer.read_pixels().unwrap();
+                let pointer_pixels = renderer.read_pixels();
                 for y in rect.y0 as usize - 5..rect.y1 as usize + 5 {
                     for x in rect.x0 as usize - 5..rect.x1 as usize + 5 {
                         if x >= rect.x0 as usize
@@ -1821,23 +1796,18 @@ mod tests {
                 }
                 renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
                 renderer.pointer_move(MOUSE_POINTER_ID, outside);
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
-                assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                    action: Action::Focus,
-                    target_tree: TreeId::ROOT,
-                    target_node: id,
-                    data: None,
-                }));
-                renderer.render_frames(20);
+                assert!(renderer.accessibility_action(id, Action::Focus));
+                renderer.frames(20);
                 assert_eq!(
-                    focus_crop(&renderer.read_pixels().unwrap()),
+                    focus_crop(&renderer.read_pixels()),
                     focus_preview.as_ref().unwrap().as_slice(),
                     "explicit accessibility focus restores the ring on the same focused handle"
                 );
                 renderer.pointer_move(MOUSE_POINTER_ID, point);
                 renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert!(
                     probe
                         .interactions
@@ -1845,7 +1815,7 @@ mod tests {
                         .with(InteractionState::is_pressed)
                 );
                 tessera_ui::focus::clear_focus(true);
-                renderer.render_frames(20);
+                renderer.frames(20);
                 let held = probe.interactions.with(|states| states[2].unwrap()).get();
                 assert!(
                     held.is_pressed(),
@@ -1859,25 +1829,25 @@ mod tests {
                         .collect::<Vec<_>>()
                 };
                 assert_eq!(
-                    mask(&crop(&renderer.read_pixels().unwrap())),
+                    mask(&crop(&renderer.read_pixels())),
                     mask(&previews[2]),
                     "pressed presentation uses the actual native pressed silhouette"
                 );
                 renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
                 renderer.pointer_move(MOUSE_POINTER_ID, outside);
                 tessera_ui::focus::clear_focus(true);
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert_eq!(probe.clicks.get().unwrap().get(), 0);
                 settings.with_mut(|settings| {
                     settings.disabled = true;
                     settings.presentation_state = Some(InteractionVisualState::Pressed);
                 });
-                renderer.render_frames(20);
-                let disabled = renderer.read_pixels().unwrap();
+                renderer.frames(20);
+                let disabled = renderer.read_pixels();
                 settings.with_mut(|settings| settings.presentation_state = None);
-                renderer.render_frames(20);
+                renderer.frames(20);
                 assert_eq!(
-                    renderer.read_pixels().unwrap(),
+                    renderer.read_pixels(),
                     disabled,
                     "disabled styling overrides presentation"
                 );

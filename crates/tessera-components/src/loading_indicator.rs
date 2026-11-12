@@ -249,8 +249,7 @@ pub fn loading_indicator(
 mod tests {
     use tessera_ui::{
         State,
-        headless::{HeadlessConfig, HeadlessRenderer},
-        testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
+        testing::{TestProbe, UiTest},
     };
 
     use crate::{
@@ -360,52 +359,31 @@ mod tests {
 
     #[test]
     fn both_appearances_default_to_48dp_and_accept_bounded_sizes() {
-        let snapshot = layout_test(|| {
-            fixture();
-        })
-        .viewport_px(160, 160)
-        .run();
+        let snapshot = UiTest::new().content(fixture).viewport(160, 160).frame();
         snapshot.node("indicator-0").size(48, 48);
         snapshot.node("indicator-1").size(48, 48);
-        let snapshot = layout_test(|| {
-            fixture();
-        })
-        .viewport_px(32, 64)
-        .run();
+        let snapshot = UiTest::new().content(fixture).viewport(32, 64).frame();
         snapshot.node("indicator-0").size(32, 48);
         let probe = TestProbe::default();
-        let mut session = start_layout_test_session(layout_test(|| {
-            fixture().probe(probe.clone());
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| fixture().probe(probe.clone()));
+        session.frame();
         probe
             .get()
             .unwrap()
             .with_mut(|config| config.progress = Some(1.0));
-        pump_layout_test_session(&mut session, 16_666_667)
-            .node("indicator-0")
-            .size(48, 48);
+        session.frames(1).node("indicator-0").size(48, 48);
     }
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn gpu_loading_animation_pauses_reuses_buffers_and_publishes_progress() {
         let probe = TestProbe::default();
-        let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture().probe(observed.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 128,
-                height: 128,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(3);
-        let initial = renderer.read_pixels().unwrap();
+        let mut renderer = UiTest::new()
+            .viewport(128, 128)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture().probe(probe.clone()));
+        renderer.frames(3);
+        let initial = renderer.read_pixels();
         let tree = renderer.accessibility_snapshot().unwrap();
         let indicators: Vec<_> = tree
             .nodes
@@ -422,27 +400,27 @@ mod tests {
             .get()
             .unwrap()
             .with_mut(|config| config.progress = Some(1.0));
-        renderer.render_frames(3);
-        assert_ne!(initial, renderer.read_pixels().unwrap());
+        renderer.frames(3);
+        assert_ne!(initial, renderer.read_pixels());
         probe
             .get()
             .unwrap()
             .with_mut(|config| config.progress = Some(0.0));
-        renderer.render_frames(3);
-        assert_eq!(initial, renderer.read_pixels().unwrap());
+        renderer.frames(3);
+        assert_eq!(initial, renderer.read_pixels());
         probe
             .get()
             .unwrap()
             .with_mut(|config| config.progress = None);
-        renderer.render_frames(5);
-        let before = renderer.read_pixels().unwrap();
-        renderer.render_frames(10);
-        assert_ne!(before, renderer.read_pixels().unwrap());
+        renderer.frames(5);
+        let before = renderer.read_pixels();
+        renderer.frames(10);
+        assert_ne!(before, renderer.read_pixels());
         let allocations = renderer
             .graphics_work()
             .group("loading_shape_instances")
             .buffer_allocations;
-        renderer.render_frames(180);
+        renderer.frames(180);
         assert_eq!(
             allocations,
             renderer
@@ -451,14 +429,14 @@ mod tests {
                 .buffer_allocations
         );
         probe.get().unwrap().with_mut(|config| config.paused = true);
-        renderer.render_frames(3);
-        let paused = renderer.read_pixels().unwrap();
+        renderer.frames(3);
+        let paused = renderer.read_pixels();
         let allocations = renderer
             .graphics_work()
             .group("loading_shape_instances")
             .buffer_allocations;
-        renderer.render_frames(180);
-        assert_eq!(paused, renderer.read_pixels().unwrap());
+        renderer.frames(180);
+        assert_eq!(paused, renderer.read_pixels());
         assert_eq!(
             allocations,
             renderer
@@ -533,21 +511,12 @@ mod tests {
     fn gpu_loading_shapes_match_supersampled_cubic_references() {
         for sample_count in [1, 4] {
             let probe = TestProbe::default();
-            let observed = probe.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || {
-                    shape_fixture(observed.clone());
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 64,
-                    height: 64,
-                    sample_count,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(2);
+            let mut renderer = UiTest::new()
+                .viewport(64, 64)
+                .samples(sample_count)
+                .rendered(crate::TesseraComponents)
+                .content(|| shape_fixture(probe.clone()));
+            renderer.frames(2);
             for sequence in 0..8 {
                 for progress in [0.0, 0.5, 1.086] {
                     let pose = Pose {
@@ -556,8 +525,8 @@ mod tests {
                         rotation: 37.0,
                     };
                     probe.get().unwrap().set(pose);
-                    renderer.render_frames(2);
-                    let pixels = renderer.read_pixels().unwrap();
+                    renderer.frames(2);
+                    let pixels = renderer.read_pixels();
                     let reference = reference_coverage(pose);
                     let total: f32 = reference.iter().sum();
                     if let Some(directory) = std::env::var_os("TESSERA_LOADING_QA_DIR") {

@@ -1115,10 +1115,7 @@ fn tooltip_panel(
 #[cfg(test)]
 mod tests {
 
-    use tessera_ui::{
-        accesskit::{Action, ActionRequest, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
-    };
+    use tessera_ui::{accesskit::Action, testing::UiTest};
 
     use crate::{boxed::boxed, theme::material_theme};
 
@@ -1210,19 +1207,11 @@ mod tests {
 
     #[test]
     fn touch_focus_suppression_clears_when_actual_focus_leaves_the_anchor() {
-        use tessera_ui::testing::{
-            layout_test, pump_layout_test_session, start_layout_test_session,
-        };
-
         let observed = tessera_ui::testing::TestProbe::default();
-        let fixture_observed = observed.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || {
-                fixture(fixture_observed.clone());
-            })
-            .viewport_px(400, 320),
-        );
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| fixture(observed.clone()))
+            .viewport(400, 320);
+        session.frame();
         let controller = observed.get().controller.expect("controller");
         let anchor = controller.with(|controller| controller.focus);
         controller.with_mut(|controller| {
@@ -1385,24 +1374,16 @@ mod tests {
     }
 
     fn renderer() -> (
-        HeadlessRenderer,
+        UiTest<'static>,
         tessera_ui::testing::TestProbe<FixtureHandles>,
     ) {
         let observed = tessera_ui::testing::TestProbe::default();
         let fixture_observed = observed.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(fixture_observed.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 320,
-                ..Default::default()
-            },
-        )
-        .expect("headless renderer");
-        renderer.render_frames(3);
+        let mut renderer = UiTest::new()
+            .viewport(400, 320)
+            .rendered(crate::TesseraComponents)
+            .content(move || fixture(fixture_observed.clone()));
+        renderer.frames(3);
         (renderer, observed)
     }
 
@@ -1489,20 +1470,11 @@ mod tests {
     fn gpu_rich_tooltip_flips_inside_clipped_scaled_hosts_and_its_action_remains_available() {
         for scale in [1.0, 0.75] {
             let observed = tessera_ui::testing::TestProbe::default();
-            let fixture_observed = observed.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || {
-                    clipped_host_fixture(scale, fixture_observed.clone());
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 400,
-                    height: 320,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(6);
+            let mut renderer = UiTest::new()
+                .viewport(400, 320)
+                .rendered(crate::TesseraComponents)
+                .content(|| clipped_host_fixture(scale, observed.clone()));
+            renderer.frames(6);
             let tree = renderer.accessibility_snapshot().unwrap();
             let popup = tree
                 .nodes
@@ -1538,7 +1510,7 @@ mod tests {
             );
             assert!(popup.y1 <= 300.0 * f64::from(scale), "{popup:?}");
             renderer.resize(400, 200);
-            renderer.render_frames(6);
+            renderer.frames(6);
             let tree = renderer.accessibility_snapshot().unwrap();
             let resized = tree
                 .nodes
@@ -1558,13 +1530,8 @@ mod tests {
                 .find(|(_, node)| node.role() == Role::Button && node.label() == Some("Got it"))
                 .expect("tooltip action")
                 .0;
-            assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                action: Action::Click,
-                target_node: action,
-                data: None,
-                target_tree: TreeId::ROOT,
-            }));
-            renderer.render_frames(4);
+            assert!(renderer.accessibility_action(action, Action::Click));
+            renderer.frames(4);
             assert!(
                 !observed
                     .get()
@@ -1605,7 +1572,7 @@ mod tests {
             .controller
             .expect("controller")
             .with_mut(TooltipController::show);
-        renderer.render_frames(4);
+        renderer.frames(4);
         let requested = renderer.accessibility_snapshot().expect("tree");
         let requested = requested
             .nodes
@@ -1622,7 +1589,7 @@ mod tests {
         );
 
         settings.with_mut(|settings| settings.popup_width = None);
-        renderer.render_frames(4);
+        renderer.frames(4);
         let natural = renderer.accessibility_snapshot().expect("tree");
         let natural = natural
             .nodes
@@ -1640,11 +1607,7 @@ mod tests {
         );
     }
 
-    fn assert_rich_action_insets(
-        renderer: &HeadlessRenderer,
-        custom_actions: bool,
-        without_headline: bool,
-    ) {
+    fn assert_rich_action_insets(renderer: &UiTest, custom_actions: bool, without_headline: bool) {
         let tree = renderer.accessibility_snapshot().expect("tree");
         let bounds = |role: Role, label: &str| {
             tree.nodes
@@ -1718,11 +1681,11 @@ mod tests {
                 settings.custom_actions = custom_actions;
                 settings.without_headline = without_headline;
             });
-        renderer.render_frames(2);
-        let before = renderer.read_pixels().expect("pixels");
+        renderer.frames(2);
+        let before = renderer.read_pixels();
         let focus = renderer.accessibility_snapshot().expect("tree").focus;
         renderer.pointer_move(MOUSE_POINTER_ID, anchor_center(&observed));
-        renderer.render_frames(35);
+        renderer.frames(35);
         assert!(
             observed
                 .get()
@@ -1762,7 +1725,7 @@ mod tests {
             .settings
             .expect("settings")
             .with_mut(|settings| settings.changed = true);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert!(
             renderer
                 .accessibility_snapshot()
@@ -1781,7 +1744,7 @@ mod tests {
                 settings.rich = true;
                 settings.changed = false;
             });
-        renderer.render_frames(3);
+        renderer.frames(3);
         let tree = renderer.accessibility_snapshot().expect("tree");
         assert!(
             tree.nodes
@@ -1815,7 +1778,7 @@ mod tests {
         let controller = observed.get().controller.expect("controller");
         let trigger = controller.with(|controller| controller.focus);
         trigger.request_focus();
-        renderer.render_frames(2);
+        renderer.frames(2);
         let navigation = TooltipDismissInput {
             controller,
             popup: observed.get().scratch_popup.expect("test popup state"),
@@ -1825,7 +1788,7 @@ mod tests {
             if custom_actions {
                 assert!(navigation.handle_tab(ElementState::Pressed, false));
             }
-            renderer.render_frames(2);
+            renderer.frames(2);
             let focused = renderer.accessibility_snapshot().expect("tree");
             assert_eq!(
                 focused
@@ -1841,7 +1804,7 @@ mod tests {
             if custom_actions {
                 assert!(navigation.handle_tab(ElementState::Pressed, true));
             }
-            renderer.render_frames(2);
+            renderer.frames(2);
             let focused = renderer.accessibility_snapshot().expect("tree");
             assert_eq!(
                 focused
@@ -1863,7 +1826,7 @@ mod tests {
                 .with(|controller| controller.popup_group)
                 .has_focus()
         );
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert!(!controller.with(TooltipController::is_open));
         controller.with_mut(TooltipController::show);
         observed
@@ -1871,19 +1834,19 @@ mod tests {
             .settings
             .expect("settings")
             .with_mut(|settings| settings.focus_stress = true);
-        renderer.render_frames(2);
+        renderer.frames(2);
         renderer.pointer_press(
             MOUSE_POINTER_ID,
             anchor_center(&observed),
             PressKeyEventType::Left,
         );
-        renderer.step_frame();
+        renderer.frames(1);
         renderer.pointer_release(
             MOUSE_POINTER_ID,
             anchor_center(&observed),
             PressKeyEventType::Left,
         );
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert!(!controller.with(TooltipController::is_open));
         assert!(trigger.has_focus());
         observed
@@ -1892,7 +1855,7 @@ mod tests {
             .expect("settings")
             .with_mut(|settings| settings.focus_stress = false);
         controller.with_mut(TooltipController::show);
-        renderer.render_frames(2);
+        renderer.frames(2);
         let action = tree
             .nodes
             .iter()
@@ -1906,9 +1869,9 @@ mod tests {
             ((action.y0 + action.y1) / 2.0) as f32,
         );
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(observed.get().actions.expect("actions").get(), 1);
         assert!(
             !observed
@@ -1932,7 +1895,7 @@ mod tests {
             custom_actions,
             ..Settings::default()
         });
-        renderer.render_frames(40);
+        renderer.frames(40);
         let (open, anchor_focused, popup_focused, hovered, popup_hovered, manual, ignore) =
             controller.with(|controller| {
                 (
@@ -1953,7 +1916,7 @@ mod tests {
                 .with(|controller| controller.popup_group)
                 .has_focus()
         );
-        let restored = renderer.read_pixels().expect("restored pixels");
+        let restored = renderer.read_pixels();
         let changed = before
             .chunks_exact(4)
             .zip(restored.chunks_exact(4))
@@ -1971,7 +1934,7 @@ mod tests {
         let (mut renderer, observed) = renderer();
         let position = anchor_center(&observed);
         renderer.pointer_press(1, position, PressKeyEventType::Left);
-        renderer.render_frames(35);
+        renderer.frames(35);
         assert!(
             observed
                 .get()
@@ -1980,9 +1943,9 @@ mod tests {
                 .with(TooltipController::is_open)
         );
         renderer.pointer_release(1, position, PressKeyEventType::Left);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(observed.get().clicks.expect("clicks").get(), 0);
-        renderer.render_frames(100);
+        renderer.frames(100);
         assert!(
             !observed
                 .get()
@@ -1998,32 +1961,32 @@ mod tests {
                 .with(TooltipController::needs_frame)
         );
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(observed.get().clicks.expect("clicks").get(), 1);
         let controller = observed.get().controller.expect("controller");
         let focus = controller.with(|controller| controller.focus);
         focus.clear_focus();
         controller.with_mut(TooltipController::dismiss);
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::new(Px(390), Px(310)));
-        renderer.render_frames(8);
+        renderer.frames(8);
         renderer.pointer_press(2, position, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         renderer.pointer_move(2, PxPosition::from_f32_xy(position.x + 20.0, position.y));
-        renderer.step_frame();
+        renderer.frames(1);
         assert!(
             controller.with(|controller| controller.touch.is_none()),
             "after movement: {:?}",
             controller.get()
         );
-        renderer.render_frames(35);
+        renderer.frames(35);
         assert!(
             !controller.with(TooltipController::is_open),
             "after cancellation: {:?}",
             controller.get()
         );
         renderer.pointer_release(2, position, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
     }
 }

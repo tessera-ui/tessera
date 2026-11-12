@@ -4,14 +4,10 @@
 //!
 //! Scroll past an active editor without forcing it back into the viewport.
 
-use std::time::Duration;
-
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, PxRect, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    modifier::FocusModifierExt as _,
-    remember, tessera,
+    modifier::FocusModifierExt as _, remember, tessera, testing::UiTest,
 };
 
 use crate::{
@@ -95,25 +91,14 @@ fn focus_request_reveals_the_target_through_both_nested_scroll_viewports() {
     let name = name.split_once("::").unwrap().1;
     crate::test_utils::run_isolated_test(name, || {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new({
-                let observed = observed.clone();
-                move || nested_reveal_fixture(observed.clone())
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 300,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(3);
+        let mut renderer = UiTest::new()
+            .viewport(400, 300)
+            .rendered(crate::TesseraComponents)
+            .content(|| nested_reveal_fixture(observed.clone()));
+        renderer.frames(3);
         let (outer, inner, target) = observed.get().nested.unwrap();
         target.request_focus();
-        renderer.step_frame();
+        renderer.frames(1);
         assert!(target.is_focused());
         assert!(inner.with(|scroll| scroll.child_position().y) < 0.0);
         assert!(
@@ -139,7 +124,7 @@ fn focus_request_reveals_the_target_through_both_nested_scroll_viewports() {
             outer.with(|scroll| scroll.child_position()),
             inner.with(|scroll| scroll.child_position()),
         );
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(
             settled,
             (
@@ -187,26 +172,15 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
 #[ignore = "requires a native GPU adapter"]
 fn wheel_scroll_keeps_a_focused_editor_offscreen_through_later_idle_frames() {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 360,
-            height: 240,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(3);
+    let mut renderer = UiTest::new()
+        .viewport(360, 240)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(3);
     let scroll = observed.get().scroll.unwrap();
     let editor = observed.get().editor.unwrap();
     scroll.with_mut(|scroll| scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -520.0)));
-    renderer.render_frames(3);
+    renderer.frames(3);
     let field = renderer
         .accessibility_snapshot()
         .unwrap()
@@ -227,7 +201,7 @@ fn wheel_scroll_keeps_a_focused_editor_offscreen_through_later_idle_frames() {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert!(editor.with(|editor| editor.focus_handler().is_focused()));
     let mut previous = scroll.with(|scroll| scroll.child_position().y);
     for _ in 0..2 {
@@ -237,7 +211,7 @@ fn wheel_scroll_keeps_a_focused_editor_offscreen_through_later_idle_frames() {
             0.0,
             200.0,
         );
-        renderer.render_frames(30);
+        renderer.frames(30);
         let moved = scroll.with(|scroll| scroll.child_position().y);
         assert!(
             moved > previous + 100.0,
@@ -251,7 +225,7 @@ fn wheel_scroll_keeps_a_focused_editor_offscreen_through_later_idle_frames() {
             editor.with(|editor| editor.focus_handler().is_focused()),
             "a placed offscreen editor should retain focus"
         );
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert!(
             (scroll.with(|scroll| scroll.child_position().y) - moved).abs() < 1.0,
             "idle frames must not reveal the previously focused editor"
@@ -261,7 +235,7 @@ fn wheel_scroll_keeps_a_focused_editor_offscreen_through_later_idle_frames() {
     }
 }
 
-fn bounds(renderer: &HeadlessRenderer, tag: &str) -> PxRect {
+fn bounds(renderer: &UiTest, tag: &str) -> PxRect {
     renderer
         .inspect_components()
         .find_tag(tag)

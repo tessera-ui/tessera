@@ -3,10 +3,9 @@ use tessera_ui::{
     Color, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType, PxPosition, State,
     accesskit::{Orientation, Rect, Role},
     focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
-    testing::text_matches,
+    testing::{UiTest, text_matches},
 };
 
 use crate::{
@@ -330,7 +329,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         });
 }
 
-fn control(renderer: &HeadlessRenderer, label: &str) -> tessera_ui::accesskit::Node {
+fn control(renderer: &UiTest, label: &str) -> tessera_ui::accesskit::Node {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -341,19 +340,19 @@ fn control(renderer: &HeadlessRenderer, label: &str) -> tessera_ui::accesskit::N
         .1
 }
 
-fn click(renderer: &mut HeadlessRenderer, x: f64, y: f64) {
+fn click(renderer: &mut UiTest, x: f64, y: f64) {
     let position = PxPosition::from_f32_xy(x as f32, y as f32);
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(2);
+    renderer.frames(2);
 }
 
-fn drag(renderer: &mut HeadlessRenderer, from: PxPosition, to: PxPosition) {
+fn drag(renderer: &mut UiTest, from: PxPosition, to: PxPosition) {
     renderer.pointer_move(MOUSE_POINTER_ID, from);
     renderer.pointer_press(MOUSE_POINTER_ID, from, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     for fraction in [0.25, 0.5, 0.75, 1.0] {
         renderer.pointer_move(
             MOUSE_POINTER_ID,
@@ -362,30 +361,21 @@ fn drag(renderer: &mut HeadlessRenderer, from: PxPosition, to: PxPosition) {
                 from.y + (to.y - from.y) * fraction,
             ),
         );
-        renderer.step_frame();
+        renderer.frames(1);
     }
     renderer.pointer_release(MOUSE_POINTER_ID, to, PressKeyEventType::Left);
-    renderer.render_frames(2);
+    renderer.frames(2);
 }
 
 fn check_orientation(samples: u32) {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 500,
-            height: 500,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(2);
+    let mut renderer = UiTest::new()
+        .viewport(500, 500)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(2);
     let settings = observed.get().settings.unwrap();
     for kind in [Kind::Single, Kind::Centered, Kind::Range] {
         for size in [
@@ -400,14 +390,14 @@ fn check_orientation(samples: u32) {
                 size,
                 ..Default::default()
             });
-            renderer.render_frames(2);
+            renderer.frames(2);
             let label = if matches!(kind, Kind::Range) {
                 "Interval"
             } else {
                 "Value"
             };
             let horizontal = control(&renderer, label).bounds().unwrap();
-            let original = renderer.read_pixels().unwrap();
+            let original = renderer.read_pixels();
             let handle_ids: Vec<_> = renderer
                 .accessibility_snapshot()
                 .unwrap()
@@ -421,11 +411,11 @@ fn check_orientation(samples: u32) {
                     settings.orientation = SliderOrientation::Vertical;
                     settings.reversed = reversed;
                 });
-                renderer.render_frames(2);
+                renderer.frames(2);
                 let vertical = control(&renderer, label).bounds().unwrap();
                 assert_eq!(vertical.width(), horizontal.height());
                 assert_eq!(vertical.height(), horizontal.width());
-                let actual = renderer.read_pixels().unwrap();
+                let actual = renderer.read_pixels();
                 let mut visible = 0;
                 for y in vertical.y0 as usize..vertical.y1 as usize {
                     for x in vertical.x0 as usize..vertical.x1 as usize {
@@ -483,11 +473,11 @@ fn check_orientation(samples: u32) {
             steps: 3,
             ..Default::default()
         });
-        renderer.render_frames(2);
-        let without = renderer.read_pixels().unwrap();
+        renderer.frames(2);
+        let without = renderer.read_pixels();
         settings.with_mut(|settings| settings.inset_icon = true);
-        renderer.render_frames(2);
-        let with = renderer.read_pixels().unwrap();
+        renderer.frames(2);
+        let with = renderer.read_pixels();
         assert_pixels_near(&without, &with, 500);
     }
     for orientation in [SliderOrientation::Horizontal, SliderOrientation::Vertical] {
@@ -498,27 +488,27 @@ fn check_orientation(samples: u32) {
             length: Some(273.0),
             ..Default::default()
         });
-        renderer.step_frame();
+        renderer.frames(1);
         let rect = control(&renderer, "Value").bounds().unwrap();
         assert_eq!((rect.x0, rect.y0), (60.5, 60.75));
-        let first = renderer.read_pixels().unwrap();
-        renderer.render_frames(12);
-        assert_pixels_near(&first, &renderer.read_pixels().unwrap(), 500);
+        let first = renderer.read_pixels();
+        renderer.frames(12);
+        assert_pixels_near(&first, &renderer.read_pixels(), 500);
     }
     settings.set(Settings {
         size: SliderSize::Medium,
         inset_icon: true,
         ..Default::default()
     });
-    renderer.render_frames(2);
-    let horizontal_icon = renderer.read_pixels().unwrap();
+    renderer.frames(2);
+    let horizontal_icon = renderer.read_pixels();
     for reversed in [false, true] {
         settings.with_mut(|settings| {
             settings.orientation = SliderOrientation::Vertical;
             settings.reversed = reversed;
         });
-        renderer.render_frames(2);
-        let vertical_icon = renderer.read_pixels().unwrap();
+        renderer.frames(2);
+        let vertical_icon = renderer.read_pixels();
         for y in 0..36 {
             for x in 0..36 {
                 let source = ((81 + y) * 500 + 69 + x) * 4;
@@ -542,8 +532,8 @@ fn check_orientation(samples: u32) {
     });
     for fraction in [0.0, 0.01] {
         observed.get().value.unwrap().set(fraction);
-        renderer.render_frames(2);
-        let pixels = renderer.read_pixels().unwrap();
+        renderer.frames(2);
+        let pixels = renderer.read_pixels();
         let mut ink = 0;
         let mut first_ink = usize::MAX;
         for y in 81..117 {
@@ -582,7 +572,7 @@ fn check_orientation(samples: u32) {
             });
             observed.get().value.unwrap().set(0.25);
             observed.get().range.unwrap().set((0.25, 0.75));
-            renderer.render_frames(2);
+            renderer.frames(2);
             let rect: Rect = control(
                 &renderer,
                 if matches!(kind, Kind::Range) {
@@ -630,23 +620,23 @@ fn check_orientation(samples: u32) {
                     "dragging cannot cross the peer handle"
                 );
                 observed.get().range.unwrap().set((0.0, 1.0));
-                renderer.render_frames(2);
+                renderer.frames(2);
             } else {
                 assert_eq!(observed.get().value.unwrap().get(), 0.5);
                 click(&mut renderer, x, maximum);
             }
             settings.with_mut(|settings| settings.disabled = true);
-            renderer.render_frames(2);
+            renderer.frames(2);
             click(&mut renderer, x, (rect.y0 + rect.y1) / 2.0);
             if matches!(kind, Kind::Range) {
                 assert_eq!(observed.get().range.unwrap().get(), (0.0, 1.0));
             } else {
                 assert_eq!(observed.get().value.unwrap().get(), 1.0);
             }
-            let before = renderer.read_pixels().unwrap();
+            let before = renderer.read_pixels();
             for (length, pixels) in [(0.0, 0.0), (1.0, 1.0), (280.0, 420.0)] {
                 settings.with_mut(|settings| settings.length = Some(length));
-                renderer.render_frames(2);
+                renderer.frames(2);
                 assert_eq!(
                     control(
                         &renderer,
@@ -663,7 +653,7 @@ fn check_orientation(samples: u32) {
                 );
             }
             assert_eq!(
-                renderer.read_pixels().unwrap(),
+                renderer.read_pixels(),
                 before,
                 "collapsed length must recover its pixels"
             );
@@ -674,7 +664,7 @@ fn check_orientation(samples: u32) {
 }
 
 fn check_color_states_and_markers(
-    renderer: &mut HeadlessRenderer,
+    renderer: &mut UiTest,
     settings: State<Settings>,
     observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
 ) {
@@ -706,7 +696,7 @@ fn check_color_states_and_markers(
                                 ..Default::default()
                             });
                             focus::clear_focus(true);
-                            renderer.step_frame();
+                            renderer.frames(1);
                             let rect = control(
                                 renderer,
                                 if matches!(kind, Kind::Range) {
@@ -726,7 +716,7 @@ fn check_color_states_and_markers(
                                 };
                                 (rect.x0 as usize + x, rect.y0 as usize + y)
                             };
-                            let pixels = renderer.read_pixels().unwrap();
+                            let pixels = renderer.read_pixels();
                             for y in rect.y0 as usize..rect.y0 as usize + 7 {
                                 for x in rect.x0 as usize..rect.x0 as usize + 7 {
                                     assert_eq!(
@@ -800,8 +790,8 @@ fn check_color_states_and_markers(
                                 );
                             }
                             settings.with_mut(|settings| settings.stops = Some(false));
-                            renderer.render_frames(2);
-                            let without_stops = renderer.read_pixels().unwrap();
+                            renderer.frames(2);
+                            let without_stops = renderer.read_pixels();
                             let (x, y) = point(408, 39);
                             let index = if disabled { 9 } else { 4 };
                             let expected = pixel(
@@ -821,7 +811,7 @@ fn check_color_states_and_markers(
                             if !disabled {
                                 let (x, y) = point(309, 39);
                                 click(renderer, x as f64, y as f64);
-                                let focused = renderer.read_pixels().unwrap();
+                                let focused = renderer.read_pixels();
                                 let (x, y) = point(307, 39);
                                 assert_eq!(
                                     pixel(&focused, x, y),
@@ -833,8 +823,8 @@ fn check_color_states_and_markers(
                             settings.with_mut(|settings| settings.stops = Some(true));
                             observed.get().value.unwrap().set(1.0);
                             observed.get().range.unwrap().set((0.0, 1.0));
-                            renderer.render_frames(2);
-                            let endpoints = renderer.read_pixels().unwrap();
+                            renderer.frames(2);
+                            let endpoints = renderer.read_pixels();
                             let (x, y) = point(402, 39);
                             assert_eq!(
                                 pixel(&endpoints, x, y),
@@ -861,17 +851,14 @@ fn check_color_states_and_markers(
     });
     observed.get().value.unwrap().set(0.75);
     focus::clear_focus(true);
-    renderer.render_frames(2);
+    renderer.frames(2);
     settings.with_mut(|settings| settings.palette = Palette::Contrast);
-    renderer.render_frames(2);
-    assert_eq!(
-        pixel(&renderer.read_pixels().unwrap(), 160, 87),
-        [255, 0, 0, 255]
-    );
+    renderer.frames(2);
+    assert_eq!(pixel(&renderer.read_pixels(), 160, 87), [255, 0, 0, 255]);
     settings.with_mut(|settings| settings.reversed = true);
-    renderer.render_frames(2);
+    renderer.frames(2);
     assert_eq!(
-        pixel(&renderer.read_pixels().unwrap(), 379, 87),
+        pixel(&renderer.read_pixels(), 379, 87),
         [255, 0, 0, 255],
         "unrelated changes keep the provided theme"
     );
@@ -879,8 +866,8 @@ fn check_color_states_and_markers(
         settings.palette = Palette::Dark;
         settings.references = true;
     });
-    renderer.step_frame();
-    let changed = renderer.read_pixels().unwrap();
+    renderer.frames(1);
+    let changed = renderer.read_pixels();
     assert_eq!(
         pixel(&changed, 379, 87),
         pixel(&changed, 307, 307),
@@ -889,7 +876,7 @@ fn check_color_states_and_markers(
 }
 
 fn check_controlled_steps(
-    renderer: &mut HeadlessRenderer,
+    renderer: &mut UiTest,
     settings: State<Settings>,
     observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
 ) {
@@ -918,7 +905,7 @@ fn check_controlled_steps(
                 ] {
                     value.set(supplied);
                     range.set(supplied_range);
-                    renderer.render_frames(2);
+                    renderer.frames(2);
                     if matches!(kind, Kind::Range) {
                         let start = control(renderer, "Interval start");
                         let end = control(renderer, "Interval end");
@@ -935,17 +922,17 @@ fn check_controlled_steps(
                     assert_eq!(value.get().to_bits(), supplied.to_bits());
                     assert_eq!(range.get().0.to_bits(), supplied_range.0.to_bits());
                     assert_eq!(range.get().1.to_bits(), supplied_range.1.to_bits());
-                    let coerced = renderer.read_pixels().unwrap();
+                    let coerced = renderer.read_pixels();
                     value.set(expected);
                     range.set(expected_range);
-                    renderer.render_frames(2);
-                    assert_pixels_near(&coerced, &renderer.read_pixels().unwrap(), 500);
+                    renderer.frames(2);
+                    assert_pixels_near(&coerced, &renderer.read_pixels(), 500);
                 }
                 value.set(0.31);
                 range.set((0.31, 0.59));
                 settings.with_mut(|settings| settings.steps = 0);
-                renderer.render_frames(2);
-                let continuous = renderer.read_pixels().unwrap();
+                renderer.frames(2);
+                let continuous = renderer.read_pixels();
                 if matches!(kind, Kind::Range) {
                     assert_eq!(
                         control(renderer, "Interval start").numeric_value(),
@@ -959,9 +946,9 @@ fn check_controlled_steps(
                 }
                 for steps in [3, 0] {
                     settings.with_mut(|settings| settings.steps = steps);
-                    renderer.render_frames(2);
+                    renderer.frames(2);
                 }
-                assert_pixels_near(&continuous, &renderer.read_pixels().unwrap(), 500);
+                assert_pixels_near(&continuous, &renderer.read_pixels(), 500);
                 assert_eq!(value.get(), 0.31);
                 assert_eq!(range.get(), (0.31, 0.59));
             }
@@ -992,23 +979,14 @@ fn check_value_indicators(samples: u32) {
 
     let observed = tessera_ui::testing::TestProbe::default();
 
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 500,
-            height: 500,
-            scale_factor: 1.5,
-            sample_count: samples,
-            frame_time: std::time::Duration::from_millis(20),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(3);
+    let mut renderer = UiTest::new()
+        .viewport(500, 500)
+        .scale_factor(1.5)
+        .samples(samples)
+        .frame_step(std::time::Duration::from_millis(20))
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(3);
     let settings = observed.get().settings.unwrap();
     let value = observed.get().value.unwrap();
     let range = observed.get().range.unwrap();
@@ -1019,11 +997,11 @@ fn check_value_indicators(samples: u32) {
     settings.with_mut(|s| {
         s.origin = Some((800.0, 800.0));
     });
-    renderer.render_frames(25);
-    let without_offscreen_label = renderer.read_pixels().unwrap();
+    renderer.frames(25);
+    let without_offscreen_label = renderer.read_pixels();
     settings.with_mut(|s| s.indicator = Visibility::Always);
-    renderer.render_frames(25);
-    let offscreen = renderer.read_pixels().unwrap();
+    renderer.frames(25);
+    let offscreen = renderer.read_pixels();
     assert!(
         offscreen == without_offscreen_label,
         "an initially offscreen handle does not record an unmeasured label"
@@ -1034,17 +1012,17 @@ fn check_value_indicators(samples: u32) {
         s.clip_slider = true;
         s.references = true;
     });
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert!(observed_labels(&renderer).is_empty());
-    let original = renderer.read_pixels().unwrap();
+    let original = renderer.read_pixels();
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(230.0, 153.0));
-    renderer.render_frames(25);
+    renderer.frames(25);
     assert!(
         observed_labels(&renderer).is_empty(),
         "hover alone does not show a value label"
     );
     click(&mut renderer, 230.0, 153.0);
-    renderer.render_frames(25);
+    renderer.frames(25);
     let labels = observed_labels(&renderer);
     assert_eq!(
         labels.len(),
@@ -1052,7 +1030,7 @@ fn check_value_indicators(samples: u32) {
         "pressing the real slider focuses its handle and reveals the label"
     );
     for _ in 0..6 {
-        renderer.render_frames(1);
+        renderer.frames(1);
         assert_eq!(
             renderer
                 .work()
@@ -1078,16 +1056,16 @@ fn check_value_indicators(samples: u32) {
             .count(),
         1
     );
-    let visible_default = renderer.read_pixels().unwrap();
+    let visible_default = renderer.read_pixels();
     settings.with_mut(|s| s.value_label = Some("Warm"));
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(
         observed_labels(&renderer)[0].0,
         "Warm",
         "retained labels read current props"
     );
     assert_eq!(control(&renderer, "Value").value(), Some("Warm"));
-    let image = renderer.read_pixels().unwrap();
+    let image = renderer.read_pixels();
     assert!(
         image != visible_default,
         "changing a retained label updates its actual glyph pixels"
@@ -1122,8 +1100,8 @@ fn check_value_indicators(samples: u32) {
         "the label glyphs use inverse on surface"
     );
     settings.with_mut(|s| s.palette = Palette::Dark);
-    renderer.render_frames(4);
-    let dark = renderer.read_pixels().unwrap();
+    renderer.frames(4);
+    let dark = renderer.read_pixels();
     let rect = observed_labels(&renderer)[0].1;
     assert_eq!(
         pixel(
@@ -1139,17 +1117,17 @@ fn check_value_indicators(samples: u32) {
         "the retained glyphs follow the dark inverse on surface role"
     );
     settings.with_mut(|s| s.palette = Palette::Light);
-    renderer.render_frames(4);
-    let custom = renderer.read_pixels().unwrap();
+    renderer.frames(4);
+    let custom = renderer.read_pixels();
     assert!(custom != original);
     value.set(0.8);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(
         observed_labels(&renderer)[0].1.x > bounds.x,
         "the label follows programmatic value changes"
     );
     focus::clear_focus(true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert!(
         observed_labels(&renderer).is_empty(),
         "blur settles the hide animation"
@@ -1159,37 +1137,36 @@ fn check_value_indicators(samples: u32) {
         s.value_label = None;
     });
     value.set(0.25);
-    renderer.render_frames(25);
+    renderer.frames(25);
     assert_eq!(observed_labels(&renderer)[0].0, "25");
     assert_eq!(control(&renderer, "Value").value(), Some("25%"));
     value.set(0.245);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(
         observed_labels(&renderer)[0].0,
         "25",
         "percentage labels round halfway upward"
     );
     assert_eq!(control(&renderer, "Value").value(), Some("25%"));
-    let before_resize = renderer.read_pixels().unwrap();
+    let before_resize = renderer.read_pixels();
     renderer.resize(1, 1);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(
         renderer
             .read_pixels()
-            .unwrap()
             .chunks_exact(4)
             .all(|pixel| pixel[..3] == [255, 255, 255]),
         "collapsed page bounds do not retain a label"
     );
     renderer.resize(500, 500);
-    renderer.render_frames(4);
-    assert_pixels_near(&before_resize, &renderer.read_pixels().unwrap(), 500);
+    renderer.frames(4);
+    assert_pixels_near(&before_resize, &renderer.read_pixels(), 500);
 
     settings.with_mut(|s| {
         s.origin = Some((0.0, 0.0));
     });
     value.set(0.0);
-    renderer.render_frames(3);
+    renderer.frames(3);
     let edge = observed_labels(&renderer)[0].1;
     assert!(edge.x.0 >= 12);
     assert!(
@@ -1203,7 +1180,7 @@ fn check_value_indicators(samples: u32) {
         s.orientation = SliderOrientation::Vertical;
         s.reversed = true;
     });
-    renderer.render_frames(3);
+    renderer.frames(3);
     let vertical = observed_labels(&renderer)[0].1;
     assert_eq!(
         (vertical.x + vertical.width).0,
@@ -1222,7 +1199,7 @@ fn check_value_indicators(samples: u32) {
             s.origin = Some((80.0, 80.0));
         });
         value.set(0.25);
-        renderer.render_frames(25);
+        renderer.frames(25);
         assert_eq!(observed_labels(&renderer).len(), 1);
         assert_eq!(
             (observed_labels(&renderer)[0].1.y + observed_labels(&renderer)[0].1.height).0,
@@ -1235,7 +1212,7 @@ fn check_value_indicators(samples: u32) {
         s.end_value_label = Some("High");
     });
     range.set((0.2, 0.8));
-    renderer.render_frames(25);
+    renderer.frames(25);
     let labels = observed_labels(&renderer);
     assert_eq!(labels.len(), 2);
     assert!(labels.iter().any(|(label, _)| label == "Low"));
@@ -1243,7 +1220,7 @@ fn check_value_indicators(samples: u32) {
     assert_eq!(control(&renderer, "Interval start").value(), Some("Low"));
     assert_eq!(control(&renderer, "Interval end").value(), Some("High"));
     settings.with_mut(|s| s.disabled = true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert!(
         observed_labels(&renderer).is_empty(),
         "disabled handles hide both labels"
@@ -1252,7 +1229,7 @@ fn check_value_indicators(samples: u32) {
         s.disabled = false;
         s.removed = true;
     });
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(
         observed_labels(&renderer).is_empty(),
         "removing the owner unregisters its labels"
@@ -1262,14 +1239,14 @@ fn check_value_indicators(samples: u32) {
         s.kind = Kind::Single;
         s.value_label = Some("Back");
     });
-    renderer.render_frames(25);
+    renderer.frames(25);
     assert_eq!(
         observed_labels(&renderer)[0].0,
         "Back",
         "a newly mounted slider registers without stale resources"
     );
     settings.with_mut(|s| s.indicator = Visibility::Hidden);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(
         observed_labels(&renderer).is_empty(),
         "switching the feature off releases the overlay request"
@@ -1284,8 +1261,8 @@ fn check_value_indicators(samples: u32) {
     value.set(0.25);
     focus::clear_focus(true);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(490.0, 490.0));
-    renderer.render_frames(25);
-    assert_pixels_near(&original, &renderer.read_pixels().unwrap(), 500);
+    renderer.frames(25);
+    assert_pixels_near(&original, &renderer.read_pixels(), 500);
 }
 
 #[test]
@@ -1313,21 +1290,11 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
         "slider::orientation_tests::presentation_uses_native_handle_geometry_without_starting_interaction",
         || {
             let observed = tessera_ui::testing::TestProbe::default();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new({
-                    let observed = observed.clone();
-                    move || fixture(observed.clone())
-                }),
-                vec![Box::new(crate::TesseraComponents)],
-                HeadlessConfig {
-                    width: 500,
-                    height: 500,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(3);
+            let mut renderer = UiTest::new()
+                .viewport(500, 500)
+                .rendered(crate::TesseraComponents)
+                .content(|| fixture(observed.clone()));
+            renderer.frames(3);
             let settings = observed.get().settings.unwrap();
             let controller = observed.get().controller.unwrap();
             for kind in [Kind::Single, Kind::Centered] {
@@ -1339,7 +1306,7 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                         presentation_state: Some(InteractionVisualState::Pressed),
                         ..Default::default()
                     });
-                    renderer.render_frames(3);
+                    renderer.frames(3);
                     let before = observed.get().value.unwrap().get();
                     assert!(!controller.with(|controller| controller.is_dragging()));
                     assert!(!controller.with(|controller| controller.is_focused()));
@@ -1351,7 +1318,7 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                         .unwrap()
                         .0;
                     assert_ne!(semantics.focus, id);
-                    let pressed = renderer.read_pixels().unwrap();
+                    let pressed = renderer.read_pixels();
                     let thumb_span = |pixels: &[u8]| {
                         let points: Vec<_> = pixels
                             .chunks_exact(4)
@@ -1379,8 +1346,8 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                     settings.with_mut(|settings| {
                         settings.presentation_state = Some(InteractionVisualState::Focus)
                     });
-                    renderer.render_frames(3);
-                    let focus_preview = renderer.read_pixels().unwrap();
+                    renderer.frames(3);
+                    let focus_preview = renderer.read_pixels();
                     let changed: Vec<_> = focus_preview
                         .chunks_exact(4)
                         .zip(pressed.chunks_exact(4))
@@ -1402,46 +1369,41 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                             (64, 20)
                         }
                     );
-                    assert!(renderer.dispatch_accessibility_action(
-                        tessera_ui::accesskit::ActionRequest {
-                            action: tessera_ui::accesskit::Action::Focus,
-                            target_tree: tessera_ui::accesskit::TreeId::ROOT,
-                            target_node: id,
-                            data: None,
-                        }
-                    ));
-                    renderer.render_frames(3);
+                    assert!(
+                        renderer.accessibility_action(id, tessera_ui::accesskit::Action::Focus)
+                    );
+                    renderer.frames(3);
                     assert!(controller.with(|controller| controller.is_focused()));
                     assert!(controller.with(|controller| controller.focus.is_focus_visible()));
-                    assert_pixels_near(&focus_preview, &renderer.read_pixels().unwrap(), 500);
+                    assert_pixels_near(&focus_preview, &renderer.read_pixels(), 500);
                     settings.with_mut(|settings| {
                         settings.presentation_state = Some(InteractionVisualState::Pressed)
                     });
-                    renderer.render_frames(3);
-                    assert_pixels_near(&focus_preview, &renderer.read_pixels().unwrap(), 500);
+                    renderer.frames(3);
+                    assert_pixels_near(&focus_preview, &renderer.read_pixels(), 500);
                     focus::clear_focus(true);
-                    renderer.render_frames(3);
+                    renderer.frames(3);
 
                     settings.with_mut(|settings| settings.presentation_state = None);
-                    renderer.render_frames(3);
-                    assert_eq!(thumb_span(&renderer.read_pixels().unwrap()), 4);
+                    renderer.frames(3);
+                    assert_eq!(thumb_span(&renderer.read_pixels()), 4);
                     assert_eq!(observed.get().value.unwrap().get(), before);
                     settings.with_mut(|settings| {
                         settings.disabled = true;
                         settings.presentation_state = Some(InteractionVisualState::Pressed);
                     });
-                    renderer.render_frames(3);
-                    let disabled = renderer.read_pixels().unwrap();
+                    renderer.frames(3);
+                    let disabled = renderer.read_pixels();
                     settings.with_mut(|settings| settings.presentation_state = None);
-                    renderer.render_frames(3);
-                    assert_pixels_near(&disabled, &renderer.read_pixels().unwrap(), 500);
+                    renderer.frames(3);
+                    assert_pixels_near(&disabled, &renderer.read_pixels(), 500);
                 }
             }
         },
     );
 }
 
-fn observed_labels(renderer: &HeadlessRenderer) -> Vec<(String, tessera_ui::PxRect)> {
+fn observed_labels(renderer: &UiTest) -> Vec<(String, tessera_ui::PxRect)> {
     renderer
         .inspect_components()
         .nodes()

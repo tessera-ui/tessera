@@ -1791,12 +1791,11 @@ fn size_annotation_geometry(
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod size_figure_tests {
-    use std::time::Duration;
 
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
+        accesskit::{Action, Node, NodeId, Role},
+        testing::UiTest,
     };
 
     use super::*;
@@ -1833,20 +1832,11 @@ mod size_figure_tests {
     #[ignore = "Requires a native GPU adapter for scaled slider input and value indicators"]
     fn narrow_native_configuration_maps_drag_and_value_indicator_without_scrolling() {
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || narrow_configuration_fixture(probe.clone())),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 640,
-                height: 350,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(6);
+        let mut renderer = UiTest::new()
+            .viewport(640, 350)
+            .rendered(crate::TestPipelines)
+            .content(|| narrow_configuration_fixture(output.clone()));
+        renderer.frames(6);
         let control = node(&renderer, "Value indicator configuration", Role::Slider)
             .1
             .bounds()
@@ -1865,11 +1855,11 @@ mod size_figure_tests {
         let end = PxPosition::from_f32_xy((control.x0 + 183.0 * 0.625) as f32, start.y);
         renderer.pointer_move(MOUSE_POINTER_ID, start);
         renderer.pointer_press(MOUSE_POINTER_ID, start, PressKeyEventType::Left);
-        renderer.render_frames(1);
+        renderer.frames(1);
         renderer.pointer_move(MOUSE_POINTER_ID, end);
-        renderer.render_frames(2);
+        renderer.frames(2);
         renderer.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Left);
-        renderer.render_frames(24);
+        renderer.frames(24);
         let value = node(&renderer, "Value indicator configuration", Role::Slider)
             .1
             .numeric_value()
@@ -1908,7 +1898,7 @@ mod size_figure_tests {
             label_bounds.expect("the native decorative value indicator must display 80");
         assert!(width > 0.0 && height > 0.0);
         assert!(x >= 0.0 && y >= 0.0 && x + width <= 640.0 && y + height <= 350.0);
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let surface_x = (x - 2.0).floor().max(0.0) as usize;
         let surface = &pixels[(((y + height / 2.0) as usize * 640 + surface_x) * 4)..][..3];
         let mut foreground = 0;
@@ -1979,7 +1969,7 @@ mod size_figure_tests {
         });
     }
 
-    fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+    fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
         let snapshot = renderer
             .inspect_accessibility()
             .expect("accessibility tree");
@@ -1992,19 +1982,11 @@ mod size_figure_tests {
     #[test]
     #[ignore = "Requires a native GPU adapter for the actual slider and annotation pipelines"]
     fn slider_size_figure_places_five_native_sizes_and_tracks_accessible_value_changes() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1200,
-                height: 700,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .expect("native size figure renderer");
-        renderer.render_frames(6);
+        let mut renderer = UiTest::new()
+            .viewport(1200, 700)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(6);
         for (label, width, height, center_x, center_y) in [
             ("XS", 232.0, 44.0, 191.0, 144.0),
             ("S", 232.0, 44.0, 511.0, 144.0),
@@ -2040,13 +2022,8 @@ mod size_figure_tests {
         assert_eq!(marker.height(), 24.0);
         assert_eq!((marker.x0 + marker.x1) * 0.5, 191.0);
         let (slider_id, _) = node(&renderer, "XS size measurements", Role::Slider);
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Increment,
-            target_tree: TreeId::ROOT,
-            target_node: slider_id,
-            data: None
-        }));
-        renderer.render_frames(4);
+        assert!(renderer.accessibility_action(slider_id, Action::Increment));
+        renderer.frames(4);
         let value = node(&renderer, "XS size measurements", Role::Slider)
             .1
             .numeric_value()
@@ -2089,35 +2066,21 @@ mod size_figure_tests {
         });
     }
 
-    fn value_action(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
+    fn value_action(renderer: &mut UiTest, label: &str, role: Role, action: Action) {
         let target_node = node(renderer, label, role).0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action,
-            target_tree: TreeId::ROOT,
-            target_node,
-            data: None,
-        }));
-        renderer.render_frames(4);
+        assert!(renderer.accessibility_action(target_node, action));
+        renderer.frames(4);
     }
 
     #[test]
     #[ignore = "Requires a native GPU adapter for actual slider, field and focus routing"]
     fn external_value_field_synchronizes_both_directions_and_follows_the_slider_in_focus_order() {
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || value_fixture(probe.clone())),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 640,
-                height: 160,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .expect("native external value renderer");
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(640, 160)
+            .rendered(crate::TestPipelines)
+            .content(|| value_fixture(output.clone()));
+        renderer.frames(4);
         value_action(
             &mut renderer,
             "Keyboard-adjustable value",
@@ -2134,8 +2097,10 @@ mod size_figure_tests {
             Role::Slider,
             Action::Focus,
         );
-        assert!(tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Next));
-        renderer.render_frames(4);
+        assert!(tessera_ui::focus::request_move_focus(
+            tessera_ui::FocusDirection::Next
+        ));
+        renderer.frames(4);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         assert_eq!(
             snapshot.focus,
@@ -2143,9 +2108,9 @@ mod size_figure_tests {
         );
         let editor = output.get().unwrap();
         editor.with_mut(|editor| editor.set_text(""));
-        renderer.render_frames(2);
+        renderer.frames(2);
         renderer.inject_text("75");
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_eq!(
             node(&renderer, "Slider value", Role::TextInput).1.value(),
             Some("75")
@@ -2158,9 +2123,9 @@ mod size_figure_tests {
         );
         for invalid in ["NaN", "101", "-1"] {
             editor.with_mut(|editor| editor.set_text(""));
-            renderer.render_frames(2);
+            renderer.frames(2);
             renderer.inject_text(invalid);
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(
                 node(&renderer, "Slider value", Role::TextInput).1.value(),
                 Some(invalid)
@@ -2198,9 +2163,9 @@ mod size_figure_tests {
             Action::Focus,
         );
         editor.with_mut(|editor| editor.set_text(""));
-        renderer.render_frames(2);
+        renderer.frames(2);
         renderer.inject_text("12.5");
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_eq!(
             node(&renderer, "Keyboard-adjustable value", Role::Slider)
                 .1
@@ -2225,9 +2190,9 @@ mod size_figure_tests {
         );
         for (input, expected) in [("0", 0.0), ("100", 1.0)] {
             editor.with_mut(|editor| editor.set_text(""));
-            renderer.render_frames(2);
+            renderer.frames(2);
             renderer.inject_text(input);
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(
                 node(&renderer, "Keyboard-adjustable value", Role::Slider)
                     .1
@@ -2263,19 +2228,11 @@ mod size_figure_tests {
     #[test]
     #[ignore = "Requires a native GPU adapter for actual slider color roles and annotations"]
     fn color_figure_places_nine_callouts_in_each_scheme_and_tracks_the_live_handle() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(color_fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1100,
-                height: 550,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .expect("native slider color renderer");
-        renderer.render_frames(6);
+        let mut renderer = UiTest::new()
+            .viewport(1100, 550)
+            .rendered(crate::TestPipelines)
+            .content(color_fixture);
+        renderer.frames(6);
         for (scheme, offset) in [("Light", 0.0), ("Dark", 512.0)] {
             let bounds = node(
                 &renderer,
@@ -2365,10 +2322,10 @@ mod size_figure_tests {
         });
     }
 
-    fn painted_handle_center(renderer: &HeadlessRenderer, slider: &Node, width: u32) -> f64 {
+    fn painted_handle_center(renderer: &UiTest, slider: &Node, width: u32) -> f64 {
         let bounds = slider.bounds().unwrap();
         let row = ((bounds.y0 + bounds.y1) * 0.5 - 18.0).round() as u32;
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let mut sum = 0.0;
         let mut count = 0.0;
         for x in bounds.x0.ceil() as u32..bounds.x1.floor() as u32 {
@@ -2386,19 +2343,11 @@ mod size_figure_tests {
     #[test]
     #[ignore = "Requires a native GPU adapter for the actual slider and annotation pipelines"]
     fn anatomy_handle_callout_follows_the_painted_handle_away_from_the_midpoint() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(anatomy_fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1100,
-                height: 600,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .expect("native slider anatomy renderer");
-        renderer.render_frames(6);
+        let mut renderer = UiTest::new()
+            .viewport(1100, 600)
+            .rendered(crate::TestPipelines)
+            .content(anatomy_fixture);
+        renderer.frames(6);
         for step in 0..5 {
             let slider = node(&renderer, "Slider anatomy", Role::Slider).1;
             let painted = painted_handle_center(&renderer, &slider, 1100);
@@ -2451,19 +2400,11 @@ mod size_figure_tests {
     #[ignore = "Requires a native GPU adapter for actual slider configurations and geometry"]
     fn configuration_figures_keep_official_orientation_size_and_optional_control_geometry() {
         for optional in [false, true] {
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || configuration_fixture(optional)),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 1100,
-                    height: 800,
-                    sample_count: 1,
-                    frame_time: Duration::from_nanos(16_666_667),
-                    ..Default::default()
-                },
-            )
-            .expect("native slider configuration renderer");
-            renderer.render_frames(6);
+            let mut renderer = UiTest::new()
+                .viewport(1100, 800)
+                .rendered(crate::TestPipelines)
+                .content(move || configuration_fixture(optional));
+            renderer.frames(6);
             if let Some(directory) = std::env::var_os("TESSERA_SLIDER_QA_DIR") {
                 let file = if optional {
                     "slider-optional-configurations-native.png"
@@ -2474,7 +2415,7 @@ mod size_figure_tests {
                     std::path::Path::new(&directory).join(file),
                     1100,
                     800,
-                    &renderer.read_pixels().unwrap(),
+                    &renderer.read_pixels(),
                 )
                 .unwrap();
             }

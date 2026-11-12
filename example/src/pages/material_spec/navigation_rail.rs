@@ -2766,45 +2766,11 @@ mod reference_tests;
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use tessera_ui::{
-        CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition,
-        testing::{
-            LayoutSnapshot, LayoutTestSession, layout_test, pump_layout_test_session,
-            pump_layout_test_session_with_input, start_layout_test_session,
-        },
-    };
+    use std::time::Duration;
+
+    use tessera_ui::{PxPosition, testing::UiTest};
 
     use super::*;
-
-    fn click(
-        session: &mut LayoutTestSession<impl Fn()>,
-        snapshot: &LayoutSnapshot,
-        tag: &str,
-        frame: &mut u64,
-    ) {
-        let bounds = snapshot.node(tag).bounds();
-        let cursor = Some(PxPosition::from_f32_xy(
-            bounds.x.to_f32() + bounds.width.to_f32() * 0.5,
-            bounds.y.to_f32() + bounds.height.to_f32() * 0.5,
-        ));
-        for content in [
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            CursorEventContent::Released(PressKeyEventType::Left),
-        ] {
-            *frame += 16_666_667;
-            pump_layout_test_session_with_input(
-                session,
-                *frame,
-                vec![PointerChange::new(
-                    tessera_ui::time::Instant::now(),
-                    1,
-                    content,
-                    GestureState::TapCandidate,
-                )],
-                cursor,
-            );
-        }
-    }
 
     #[tessera]
     fn fixture() {
@@ -2813,26 +2779,20 @@ mod tests {
 
     #[test]
     fn menu_toggles_the_rail_without_resetting_the_selected_destination() {
-        let mut session = start_layout_test_session(layout_test(fixture).viewport_px(400, 700));
-        let mut frame = 0;
-        let snapshot = pump_layout_test_session(&mut session, frame);
+        let mut session = UiTest::new().content(fixture).viewport(400, 700);
+        let snapshot = session.frame();
         snapshot.node("behavior-rail").width(96);
-        click(&mut session, &snapshot, "behavior-rail-item-1", &mut frame);
-        frame += 400_000_000;
-        let snapshot = pump_layout_test_session(&mut session, frame);
+        session.node("behavior-rail-item-1").click();
+        let snapshot = session.advance(Duration::from_millis(400));
         snapshot.node("behavior-rail-destination-1").exists();
-        click(&mut session, &snapshot, "behavior-rail-menu", &mut frame);
-        frame += 400_000_000;
-        pump_layout_test_session(&mut session, frame);
-        frame += 400_000_000;
-        let snapshot = pump_layout_test_session(&mut session, frame);
+        session.node("behavior-rail-menu").click();
+        session.advance(Duration::from_millis(400));
+        let snapshot = session.advance(Duration::from_millis(400));
         snapshot.node("behavior-rail").width(220);
         snapshot.node("behavior-rail-destination-1").exists();
-        click(&mut session, &snapshot, "behavior-rail-menu", &mut frame);
-        frame += 400_000_000;
-        pump_layout_test_session(&mut session, frame);
-        frame += 400_000_000;
-        let snapshot = pump_layout_test_session(&mut session, frame);
+        session.node("behavior-rail-menu").click();
+        session.advance(Duration::from_millis(400));
+        let snapshot = session.advance(Duration::from_millis(400));
         snapshot.node("behavior-rail").width(96);
         snapshot.node("behavior-rail-destination-1").exists();
     }
@@ -2853,20 +2813,16 @@ mod tests {
     #[test]
     fn scrolling_body_keeps_menu_and_destinations_fixed_and_selectable_in_both_variants() {
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || scrolling_fixture(probe.clone())).viewport_px(600, 600),
-        );
-        let mut frame = 0;
-        pump_layout_test_session(&mut session, frame);
+        let mut session = UiTest::new()
+            .content(|| scrolling_fixture(output.clone()))
+            .viewport(600, 600);
+        session.frame();
         let (scroll, expanded_state) = output.get().unwrap();
         for expanded in [false, true] {
             expanded_state.set(expanded);
             scroll.with_mut(|scroll| scroll.set_scroll_position(PxPosition::ZERO));
-            frame += 16_666_667;
-            pump_layout_test_session(&mut session, frame);
-            frame += 400_000_000;
-            let before = pump_layout_test_session(&mut session, frame);
+            session.frames(1);
+            let before = session.advance(Duration::from_millis(400));
             before
                 .node("scrolling-rail")
                 .size(if expanded { 220 } else { 96 }, 480);
@@ -2877,17 +2833,16 @@ mod tests {
             scroll.with_mut(|scroll| {
                 scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -200.0));
             });
-            frame += 16_666_667;
-            let scrolled = pump_layout_test_session(&mut session, frame);
+            let scrolled = session.frames(1);
             assert_eq!(scrolled.node("scrolling-rail-menu").bounds(), menu);
             assert_eq!(scrolled.node("scrolling-rail-item-3").bounds(), destination);
             assert_eq!(
                 scrolled.node("scrolling-message-0").bounds().y.0,
                 message.y.0 - 200
             );
-            click(&mut session, &scrolled, "scrolling-rail-item-3", &mut frame);
-            frame += 16_666_667;
-            pump_layout_test_session(&mut session, frame)
+            session.node("scrolling-rail-item-3").click();
+            session
+                .frames(1)
                 .node("scrolling-rail-destination-3")
                 .exists();
         }
@@ -2912,10 +2867,7 @@ mod tests {
     #[test]
     #[ignore = "Requires a native GPU adapter for gallery semantics and accessibility focus"]
     fn gallery_and_behavior_wrappers_keep_destinations_visible_and_focus_separate_from_selection() {
-        use tessera_ui::{
-            accesskit::{Action, ActionRequest, TreeId},
-            headless::{HeadlessConfig, HeadlessRenderer},
-        };
+        use tessera_ui::{accesskit::Action, testing::UiTest};
 
         for (variant, menu) in [
             None,
@@ -2925,8 +2877,10 @@ mod tests {
         .into_iter()
         .enumerate()
         {
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || match variant {
+            let mut renderer = UiTest::new()
+                .viewport(600, 600)
+                .rendered(crate::TestPipelines)
+                .content(move || match variant {
                     0 => {
                         gallery_fixture();
                     }
@@ -2936,17 +2890,8 @@ mod tests {
                     _ => {
                         scrolling_fixture(tessera_ui::testing::TestProbe::default());
                     }
-                }),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 600,
-                    height: 600,
-                    sample_count: 1,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(6);
+                });
+            renderer.frames(6);
             let snapshot = renderer.accessibility_snapshot().unwrap();
             let destinations: Vec<_> = snapshot
                 .nodes
@@ -2980,13 +2925,8 @@ mod tests {
                 .find(|(_, node)| crate::has_label(&node, "Saved"))
                 .unwrap()
                 .0;
-            assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                action: Action::Focus,
-                target_tree: TreeId::ROOT,
-                target_node: saved,
-                data: None,
-            }));
-            renderer.render_frames(4);
+            assert!(renderer.accessibility_action(saved, Action::Focus));
+            renderer.frames(4);
             let focused = renderer.accessibility_snapshot().unwrap();
             assert_eq!(focused.focus, saved);
             let tabs: Vec<_> = focused

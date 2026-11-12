@@ -14,8 +14,10 @@ use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Insets, Modifier, WindowInsetsController,
     accesskit::{Node, NodeId, Rect, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera, use_context,
+    headless::HeadlessConfig,
+    remember, tessera,
+    testing::UiTest,
+    use_context,
     wgpu::TextureFormat,
 };
 
@@ -125,23 +127,17 @@ fn render<Output: 'static>(
     height: u32,
     format: TextureFormat,
     sample_count: u32,
-) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(root),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width,
-            height,
-            format,
-            sample_count,
-            scale_factor: 1.0,
-            frame_time: Duration::from_millis(100),
-            ..Default::default()
-        },
-    )
-    .unwrap_or_else(|error| panic!("GPU session for {format:?}, MSAA {sample_count}: {error}"));
+) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(width, height)
+        .scale_factor(1.0)
+        .samples(sample_count)
+        .format(format)
+        .frame_step(Duration::from_millis(100))
+        .rendered(crate::TestPipelines)
+        .content(root);
     // Two virtual seconds exceed the native visibility and rail motion bounds.
-    renderer.render_frames(21);
+    renderer.frames(21);
     renderer
 }
 
@@ -193,7 +189,7 @@ fn check_dark_surface(format: TextureFormat, sample_count: u32) {
             renderer.resize(width, height);
         }
         if stage > 0 {
-            renderer.render_frames(21);
+            renderer.frames(21);
         }
         let size = renderer.physical_size();
         assert_eq!((size.width, size.height), (width, height), "{phase}");
@@ -224,7 +220,7 @@ fn check_dark_surface(format: TextureFormat, sample_count: u32) {
                 "{phase} observed region must fit the actual viewport: {rect:?}, {viewport:?}"
             );
         }
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let stride = size.width as usize;
         assert_eq!(pixels.len(), stride * size.height as usize * 4, "{phase}");
         for (label, rect, y) in [
@@ -278,7 +274,7 @@ fn check_linear_scrim(format: TextureFormat, sample_count: u32) {
             renderer.resize(width, height);
         }
         if stage > 0 {
-            renderer.render_frames(21);
+            renderer.frames(21);
         }
         let size = renderer.physical_size();
         assert_eq!((size.width, size.height), (width, height), "{phase}");
@@ -290,7 +286,7 @@ fn check_linear_scrim(format: TextureFormat, sample_count: u32) {
             "{phase} sheet geometry must follow the actual viewport height"
         );
         assert!(sheet.x1 < 349.0);
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let stride = size.width as usize;
         assert_eq!(pixels.len(), stride * size.height as usize * 4, "{phase}");
         for center in [(350, 100), (stride - 32, size.height as usize - 32)] {

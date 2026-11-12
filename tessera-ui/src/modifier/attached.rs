@@ -445,7 +445,7 @@ mod tests {
         modifier::{DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier},
         remember,
         runtime::TesseraRuntime,
-        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+        testing::UiTest,
     };
 
     use super::{AttachedModifierChain, ModifierNodeContext, ModifierNodeId, flush_lifecycle};
@@ -756,30 +756,23 @@ mod tests {
         let records = Rc::new(RefCell::new(Vec::new()));
         let drops = Rc::new(Cell::new(0));
         let state = Rc::new(Cell::new(None::<State<u8>>));
-        let harness = {
-            let records = records.clone();
-            let drops = drops.clone();
-            let state = state.clone();
-            layout_test(move || {
-                lifecycle_fixture(records.clone(), drops.clone(), state.clone());
-            })
-        };
-        let mut session = start_layout_test_session(harness);
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(|| lifecycle_fixture(records.clone(), drops.clone(), state.clone()));
+        session.frame();
         let first = records.borrow().clone();
         assert_eq!(first.len(), 2);
         assert!(first.iter().all(|event| event.1 == 0));
-        pump_layout_test_session(&mut session, 1);
+        session.frames(1);
         assert_eq!(records.borrow().len(), 2);
         session.run(|| state.get().unwrap().set(1));
-        pump_layout_test_session(&mut session, 2);
+        session.frames(1);
         let second = records.borrow().clone();
         assert_eq!(second.len(), 4);
         for (attached, updated) in first.iter().zip(&second[2..]) {
             assert_eq!((updated.1, updated.2, updated.3), (1, attached.2, 1));
         }
         session.run(|| state.get().unwrap().set(2));
-        pump_layout_test_session(&mut session, 3);
+        session.frames(1);
         assert_eq!(records.borrow().len(), 6);
         assert!(records.borrow()[4..].iter().all(|event| event.1 == 2));
         assert_eq!(drops.get(), 2);

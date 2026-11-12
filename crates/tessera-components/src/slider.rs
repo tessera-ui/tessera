@@ -27,9 +27,9 @@ use crate::{
 
 use axis::{SliderAxis, SliderMeasureScope};
 use interaction::{
-    RangeSliderHandleWidths, RangeSliderInteraction, SliderKeyboardModel, SliderKeyboardModifierNode,
-    apply_range_slider_semantics, apply_slider_semantics, handle_range_slider_state,
-    handle_slider_state, snap_fraction,
+    RangeSliderHandleWidths, RangeSliderInteraction, SliderKeyboardModel,
+    SliderKeyboardModifierNode, apply_range_slider_semantics, apply_slider_semantics,
+    handle_range_slider_state, handle_slider_state, snap_fraction,
 };
 use layout::{
     CenteredSliderLayout, RangeSliderLayout, SliderLayout, fallback_component_width,
@@ -1262,7 +1262,7 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 ///     });
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn slider(
@@ -1751,7 +1751,7 @@ fn measure_centered_slider(
 /// assert_eq!(current_value.get(), 0.25);
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn centered_slider(
@@ -2226,7 +2226,7 @@ fn measure_range_slider(
 /// assert_eq!(range_value.get(), (0.2, 0.8));
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn range_slider(
@@ -2541,10 +2541,7 @@ fn range_slider_content(
 #[cfg(test)]
 mod tests {
     use tessera_foundation::modifier::ModifierExt as _;
-    use tessera_ui::{
-        headless::{HeadlessConfig, HeadlessRenderer},
-        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
-    };
+    use tessera_ui::testing::UiTest;
 
     use crate::{column::column, theme::material_theme};
 
@@ -2624,20 +2621,17 @@ mod tests {
     #[test]
     fn sliders_survive_zero_width_and_restore_their_values_and_bounds() {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut session = start_layout_test_session(layout_test({
-            let observed = observed.clone();
-            move || {
-                fixture(observed.clone());
-            }
-        }));
-        pump_layout_test_session(&mut session, 0);
-        for (frame, width) in [0.0, 1.0, 3.0, 5.0, 280.0].into_iter().enumerate() {
+        let mut session = UiTest::new().content(|| {
+            fixture(observed.clone());
+        });
+        session.frame();
+        for width in [0.0, 1.0, 3.0, 5.0, 280.0] {
             observed
                 .get()
                 .settings
                 .unwrap()
                 .with_mut(|settings| settings.width = Some(width));
-            let snapshot = pump_layout_test_session(&mut session, (frame as u64 + 1) * 16_666_667);
+            let snapshot = session.frames(1);
             for selector in ["slider", "centered_slider", "range_slider"] {
                 assert_eq!(snapshot.node(selector).bounds().width, Dp(width).to_px());
             }
@@ -2648,31 +2642,21 @@ mod tests {
     #[test]
     fn range_thumb_actions_preserve_the_latest_other_endpoint() {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut session = start_layout_test_session(layout_test({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| fixture(observed.clone()));
+        session.frame();
         let range = observed.get().range.expect("range state");
         range.set((0.3, 0.6));
-        pump_layout_test_session(&mut session, 16_666_667);
-        for (frame, label, expected) in [
-            (2, "Minimum price", (0.35_f32, 0.6_f32)),
-            (3, "Maximum price", (0.35_f32, 0.65_f32)),
+        session.frames(1);
+        for (label, expected) in [
+            ("Minimum price", (0.35_f32, 0.6_f32)),
+            ("Maximum price", (0.35_f32, 0.65_f32)),
         ] {
             let snapshot = session.inspect_accessibility().expect("slider tree");
             let target = snapshot.find(label, Role::Slider).expect("range thumb").0;
-            assert!(
-                session.dispatch_accessibility_action(tessera_ui::accesskit::ActionRequest {
-                    action: Action::Increment,
-                    target_node: target,
-                    target_tree: tessera_ui::accesskit::TreeId::ROOT,
-                    data: None,
-                })
-            );
+            assert!(session.accessibility_action(target, Action::Increment));
             let actual = range.get();
             assert!((actual.0 - expected.0).abs() < 1e-6 && (actual.1 - expected.1).abs() < 1e-6);
-            pump_layout_test_session(&mut session, frame * 16_666_667);
+            session.frames(1);
         }
         let snapshot = session.inspect_accessibility().expect("slider tree");
         let start = snapshot.find("Minimum price", Role::Slider).unwrap().1;
@@ -2684,30 +2668,20 @@ mod tests {
     #[test]
     fn changing_steps_updates_actual_actions_and_disabling_removes_them() {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut session = start_layout_test_session(layout_test({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| fixture(observed.clone()));
+        session.frame();
         let settings = observed.get().settings.expect("slider settings");
         settings.with_mut(|settings| settings.steps = 3);
-        pump_layout_test_session(&mut session, 16_666_667);
+        session.frames(1);
         let snapshot = session.inspect_accessibility().expect("slider tree");
         let target = snapshot.find("Minimum price", Role::Slider).unwrap().0;
-        assert!(
-            session.dispatch_accessibility_action(tessera_ui::accesskit::ActionRequest {
-                action: Action::Increment,
-                target_node: target,
-                target_tree: tessera_ui::accesskit::TreeId::ROOT,
-                data: None,
-            })
-        );
+        assert!(session.accessibility_action(target, Action::Increment));
         assert_eq!(observed.get().range.unwrap().get(), (0.5, 0.75));
         settings.with_mut(|settings| {
             settings.steps = 0;
             settings.disabled = true;
         });
-        pump_layout_test_session(&mut session, 33_333_334);
+        session.frames(1);
         let snapshot = session.inspect_accessibility().expect("slider tree");
         for label in ["Minimum price", "Maximum price"] {
             let (target, node) = snapshot.find(label, Role::Slider).expect("disabled thumb");
@@ -2715,39 +2689,21 @@ mod tests {
             assert!(!node.supports_action(Action::Focus));
             assert!(!node.supports_action(Action::Increment));
             assert!(!node.supports_action(Action::Decrement));
-            assert!(
-                !session.dispatch_accessibility_action(tessera_ui::accesskit::ActionRequest {
-                    action: Action::Increment,
-                    target_node: target,
-                    target_tree: tessera_ui::accesskit::TreeId::ROOT,
-                    data: None,
-                })
-            );
+            assert!(!session.accessibility_action(target, Action::Increment));
         }
         assert_eq!(observed.get().range.unwrap().get(), (0.5, 0.75));
     }
 
     fn check_centered_slider_gaps(samples: u32) {
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new({
-                let observed = observed.clone();
-                move || {
-                    fixture(observed.clone());
-                }
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 300,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let mut renderer = UiTest::new()
+            .viewport(400, 300)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(observed.clone()));
         for frames in [2, 12] {
-            renderer.render_frames(frames);
-            let pixels = renderer.read_pixels().unwrap();
+            renderer.frames(frames);
+            let pixels = renderer.read_pixels();
             let pixel = |x: usize, y: usize| &pixels[(y * 400 + x) * 4..(y * 400 + x + 1) * 4];
             let background = pixel(300, 72);
             for y in 65..79 {
@@ -2798,22 +2754,11 @@ mod tests {
             (*id, node)
         }
         let observed = tessera_ui::testing::TestProbe::default();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new({
-                let observed = observed.clone();
-                move || {
-                    fixture(observed.clone());
-                }
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 300,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(2);
+        let mut renderer = UiTest::new()
+            .viewport(400, 300)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(observed.clone()));
+        renderer.frames(2);
         let before = renderer.accessibility_snapshot().unwrap();
         assert_eq!(
             before
@@ -2832,7 +2777,7 @@ mod tests {
         assert!(!group.is_hidden());
         assert!(group.children().contains(&start_id) && group.children().contains(&end_id));
         observed.get().range.unwrap().set((0.3, 0.6));
-        renderer.render_frames(2);
+        renderer.frames(2);
         let after = renderer.accessibility_snapshot().unwrap();
         let (id, start) = control(&after, "Minimum price");
         assert_eq!(id, start_id);
@@ -2845,7 +2790,7 @@ mod tests {
             .settings
             .unwrap()
             .with_mut(|settings| settings.steps = 3);
-        renderer.render_frames(2);
+        renderer.frames(2);
         let stepped = renderer.accessibility_snapshot().unwrap();
         assert_eq!(control(&stepped, "Minimum price").0, start_id);
         assert_eq!(control(&stepped, "Maximum price").0, end_id);
@@ -2858,7 +2803,7 @@ mod tests {
             .settings
             .unwrap()
             .with_mut(|settings| settings.disabled = true);
-        renderer.render_frames(2);
+        renderer.frames(2);
         let disabled = renderer.accessibility_snapshot().unwrap();
         for (_, node) in disabled
             .nodes

@@ -132,10 +132,8 @@ impl DrawModifierNode for BorderModifierNode {
 mod tests {
     use tessera_foundation::modifier::ModifierExt as _;
     use tessera_ui::{
-        Modifier, State,
-        headless::{HeadlessConfig, HeadlessRenderer},
-        remember, tessera,
-        testing::TestProbe,
+        Modifier, State, remember, tessera,
+        testing::{TestProbe, UiTest},
     };
 
     use crate::{
@@ -190,34 +188,26 @@ mod tests {
     fn cached_layout_rebuilds_opacity_and_clipping_for_each_record_pass() {
         let probe = TestProbe::default();
         let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                visual_fixture(probe.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 160,
-                height: 100,
-                ..Default::default()
-            },
-        )
-        .expect("headless GPU renderer");
-        renderer.step_frame();
-        let half_opacity = renderer.read_pixels().expect("half-opacity pixels");
-        renderer.render_frames(3);
-        let repeated = renderer.read_pixels().expect("repeated pixels");
+        let mut renderer = UiTest::new()
+            .viewport(160, 100)
+            .rendered(crate::TesseraComponents)
+            .content(move || visual_fixture(probe.clone()));
+        renderer.frames(1);
+        let half_opacity = renderer.read_pixels();
+        renderer.frames(3);
+        let repeated = renderer.read_pixels();
         assert!(
             half_opacity == repeated,
             "constant alpha must not accumulate across cached frames"
         );
 
         observed.get().opacity.expect("fixture state").set(0.0);
-        renderer.render_frames(3);
-        let invisible = renderer.read_pixels().expect("invisible pixels");
+        renderer.frames(3);
+        let invisible = renderer.read_pixels();
         assert!(invisible != half_opacity);
         observed.get().opacity.expect("fixture state").set(1.0);
-        renderer.render_frames(3);
-        let visible = renderer.read_pixels().expect("visible pixels");
+        renderer.frames(3);
+        let visible = renderer.read_pixels();
         assert!(
             visible != invisible,
             "an alpha-zero subtree must become visible again"
@@ -225,15 +215,15 @@ mod tests {
         assert!(visible != half_opacity);
 
         observed.get().clipped.expect("fixture state").set(true);
-        renderer.render_frames(3);
-        let clipped = renderer.read_pixels().expect("clipped pixels");
+        renderer.frames(3);
+        let clipped = renderer.read_pixels();
         assert!(
             clipped == invisible,
             "the offset child must be clipped outside the container"
         );
         observed.get().clipped.expect("fixture state").set(false);
-        renderer.render_frames(3);
-        let unclipped = renderer.read_pixels().expect("unclipped pixels");
+        renderer.frames(3);
+        let unclipped = renderer.read_pixels();
         assert!(
             unclipped == visible,
             "removed clipping must not persist on a layout cache hit"
@@ -332,21 +322,13 @@ mod tests {
 
         let observed = probe.clone();
 
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                shape_fixture(probe.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 200,
-                height: 220,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .expect("shape clipping renderer");
-        renderer.render_frames(8);
-        let first = renderer.read_pixels().expect("masked pixels");
+        let mut renderer = UiTest::new()
+            .viewport(200, 220)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(move || shape_fixture(probe.clone()));
+        renderer.frames(8);
+        let first = renderer.read_pixels();
         let pixel = |pixels: &[u8], x: usize, y: usize| {
             pixels[(y * 200 + x) * 4..(y * 200 + x) * 4 + 4].to_vec()
         };
@@ -377,26 +359,23 @@ mod tests {
             );
         }
         observed.get().stage.expect("stage").set(1);
-        renderer.render_frames(6);
-        let raster = renderer.read_pixels().expect("masked raster pixels");
+        renderer.frames(6);
+        let raster = renderer.read_pixels();
         assert_eq!(pixel(&raster, 95, 30), [0, 0, 255, 255]);
         assert_eq!(pixel(&raster, 130, 30), [255, 255, 255, 255]);
         observed.get().stage.expect("stage").set(3);
-        renderer.render_frames(6);
-        let sampled = renderer.read_pixels().expect("masked scene sampling");
+        renderer.frames(6);
+        let sampled = renderer.read_pixels();
         assert_eq!(pixel(&sampled, 11, 11), [255, 255, 255, 255]);
         assert_eq!(pixel(&sampled, 130, 30), [255, 255, 255, 255]);
         assert_ne!(pixel(&sampled, 95, 30), [255, 255, 255, 255]);
         observed.get().stage.expect("stage").set(2);
-        renderer.render_frames(6);
-        assert_eq!(
-            pixel(&renderer.read_pixels().expect("unmasked pixels"), 11, 11),
-            [255, 0, 0, 255]
-        );
+        renderer.frames(6);
+        assert_eq!(pixel(&renderer.read_pixels(), 11, 11), [255, 0, 0, 255]);
         observed.get().stage.expect("stage").set(0);
-        renderer.render_frames(6);
+        renderer.frames(6);
         assert!(
-            renderer.read_pixels().expect("restored mask") == first,
+            renderer.read_pixels() == first,
             "cached masks must restore exactly"
         );
 
@@ -405,9 +384,9 @@ mod tests {
             let point = PxPosition::from_f32_xy(x, y);
             renderer.pointer_move(MOUSE_POINTER_ID, point);
             renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-            renderer.step_frame();
+            renderer.frames(1);
             renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-            renderer.render_frames(3);
+            renderer.frames(3);
             assert_eq!(clicks.get(), expected, "clipped pointer target at {x},{y}");
         }
         renderer.pointer_press(
@@ -415,11 +394,11 @@ mod tests {
             PxPosition::from_f32_xy(60.0, 150.0),
             PressKeyEventType::Left,
         );
-        renderer.step_frame();
+        renderer.frames(1);
         let corner = PxPosition::from_f32_xy(11.0, 111.0);
         renderer.pointer_move(MOUSE_POINTER_ID, corner);
         renderer.pointer_release(MOUSE_POINTER_ID, corner, PressKeyEventType::Left);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(
             clicks.get(),
             1,

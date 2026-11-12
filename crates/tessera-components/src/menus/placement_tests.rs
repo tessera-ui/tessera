@@ -2,8 +2,8 @@ use tessera_foundation::modifier::{ModifierExt as _, Padding};
 use tessera_ui::{
     Color, Dp, Modifier, State,
     accesskit::{Rect, Role},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -79,7 +79,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn panel(renderer: &HeadlessRenderer) -> Rect {
+fn panel(renderer: &UiTest) -> Rect {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -94,22 +94,13 @@ fn panel(renderer: &HeadlessRenderer) -> Rect {
 
 fn check_placement(samples: u32) {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || fixture(observed.clone())
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 900,
-            height: 900,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(3);
+    let mut renderer = UiTest::new()
+        .viewport(900, 900)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(3);
     let settings = observed.get().settings.expect("settings");
     let controller = observed.get().controller.expect("controller");
     controller.with_mut(|menu| {
@@ -118,7 +109,7 @@ fn check_placement(samples: u32) {
             (Dp(80.0), Dp(40.0)),
         ))
     });
-    renderer.render_frames(4);
+    renderer.frames(4);
     let first = panel(&renderer);
     assert_eq!(
         first.x0,
@@ -144,7 +135,7 @@ fn check_placement(samples: u32) {
             (Dp(80.0), Dp(40.0)),
         ))
     });
-    renderer.render_frames(4);
+    renderer.frames(4);
     let moved = panel(&renderer);
     assert_eq!(
         moved.x0,
@@ -157,7 +148,7 @@ fn check_placement(samples: u32) {
         focus,
         "repositioning preserves menu focus"
     );
-    let pixels = renderer.read_pixels().expect("moved pixels");
+    let pixels = renderer.read_pixels();
     let previous_center = ((first.x0 + first.x1) / 2.0, (first.y0 + first.y1) / 2.0);
     let index = (previous_center.1 as usize * 900 + previous_center.0 as usize) * 4;
     assert_eq!(
@@ -176,7 +167,7 @@ fn check_placement(samples: u32) {
             anchor: Some(MenuAnchor::from_dp((Dp(x), Dp(y)), (Dp(width), Dp(height)))),
             placement,
         });
-        renderer.render_frames(4);
+        renderer.frames(4);
         let bounds = panel(&renderer);
         match placement {
             MenuPlacement::BelowStart => assert_eq!(
@@ -204,7 +195,7 @@ fn check_placement(samples: u32) {
         assert!(bounds.x0 >= 48.0 && bounds.x1 <= 900.0 && bounds.y0 >= 36.0 && bounds.y1 <= 900.0);
     }
     renderer.resize(318, 900);
-    renderer.render_frames(4);
+    renderer.frames(4);
     let fitted = panel(&renderer);
     assert_eq!(fitted.x0, 48.0, "exact-fit viewport clamps to its origin");
     assert_eq!(fitted.x1, 318.0);
@@ -213,7 +204,7 @@ fn check_placement(samples: u32) {
         anchor: None,
         placement: MenuPlacement::BelowStart,
     });
-    renderer.render_frames(4);
+    renderer.frames(4);
     let saved = panel(&renderer);
     assert_eq!(
         saved.x0,
@@ -222,7 +213,7 @@ fn check_placement(samples: u32) {
     );
     assert_eq!(saved.y0, (24.0 + 200.0 + 40.0 + 8.0) * 1.5);
     controller.with_mut(MenuController::close);
-    renderer.render_frames(4);
+    renderer.frames(4);
     assert!(
         !renderer
             .accessibility_snapshot()

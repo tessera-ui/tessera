@@ -135,7 +135,7 @@ impl From<Color> for SurfaceStyle {
 ///         assert_eq!(live.get(), InteractionState::new());
 ///     });
 /// }
-/// # tessera_ui::testing::layout_test(sample).run();
+/// # tessera_ui::testing::UiTest::new().content(sample).frame();
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RipplePresentation {
@@ -1124,7 +1124,7 @@ fn surface_content(
 ///     });
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 /// Renders a styled surface container.
 #[tessera]
@@ -1521,21 +1521,14 @@ mod tests {
 
     #[test]
     fn enabling_a_button_updates_inherited_content_color() {
-        use tessera_ui::testing::{
-            layout_test, pump_layout_test_session, start_layout_test_session,
-        };
+        use tessera_ui::testing::UiTest;
 
         let probe = tessera_ui::testing::TestProbe::default();
-        let observed = probe.clone();
-        let mut session = start_layout_test_session(layout_test(move || {
-            changing_button_fixture(observed.clone());
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| changing_button_fixture(probe.clone()));
+        session.frame();
         let disabled = probe.get().content;
         probe.get().enabled.unwrap().set(true);
-        for frame in 1..4 {
-            pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
+        session.frames(3);
         assert_ne!(probe.get().content, disabled);
         assert_eq!(probe.get().content, MaterialColorScheme::default().primary);
     }
@@ -1632,22 +1625,14 @@ mod tests {
     }
 
     fn check_transparent_state_layers(samples: u32) {
-        let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
-            Box::new(|| {
-                transparent_state_layers_fixture();
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            tessera_ui::headless::HeadlessConfig {
-                width: 200,
-                height: 240,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let mut renderer = tessera_ui::testing::UiTest::new()
+            .viewport(200, 240)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(transparent_state_layers_fixture);
         for frames in [2, 8] {
-            renderer.render_frames(frames);
-            let pixels = renderer.read_pixels().unwrap();
+            renderer.frames(frames);
+            let pixels = renderer.read_pixels();
             for y in [32usize, 104, 176] {
                 let actual = (y * 200 + 32) * 4;
                 let reference = (y * 200 + 104) * 4;
@@ -1737,20 +1722,12 @@ mod tests {
         crate::test_utils::run_isolated_test(
             "surface::tests::transparent_outline_fill_rgb_does_not_affect_border_with_or_without_ripple",
             || {
-                let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
-                    Box::new(|| {
-                        transparent_outline_rgb_fixture();
-                    }),
-                    vec![Box::new(crate::TesseraComponents)],
-                    tessera_ui::headless::HeadlessConfig {
-                        width: 160,
-                        height: 160,
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(4);
-                let pixels = renderer.read_pixels().unwrap();
+                let mut renderer = tessera_ui::testing::UiTest::new()
+                    .viewport(160, 160)
+                    .rendered(crate::TesseraComponents)
+                    .content(transparent_outline_rgb_fixture);
+                renderer.frames(4);
+                let pixels = renderer.read_pixels();
                 let crop = |left: usize, top: usize| {
                     let mut result = Vec::new();
                     for y in top..top + 64 {

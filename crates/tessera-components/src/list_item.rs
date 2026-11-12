@@ -353,7 +353,7 @@ impl ListItemDefaults {
 ///         });
 /// }
 ///
-/// # tessera_ui::testing::layout_test(demo).run();
+/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn list_item(

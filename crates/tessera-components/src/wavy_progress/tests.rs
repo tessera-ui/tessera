@@ -2,9 +2,8 @@ use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, Modifier, State,
     accesskit::Role,
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
-    testing::{TestProbe, layout_test},
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -146,17 +145,9 @@ fn fixture(circular: Option<bool>, probe: Option<TestProbe<Option<State<Settings
 
 #[test]
 fn default_container_and_parent_constraints_are_measured_by_the_component() {
-    let snapshot = layout_test(|| {
-        fixture();
-    })
-    .viewport_px(400, 100)
-    .run();
+    let snapshot = UiTest::new().content(fixture).viewport(400, 100).frame();
     snapshot.node("wave").size(240, 10);
-    let snapshot = layout_test(|| {
-        fixture();
-    })
-    .viewport_px(80, 8)
-    .run();
+    let snapshot = UiTest::new().content(fixture).viewport(80, 8).frame();
     snapshot.node("wave").size(80, 8);
 }
 
@@ -277,23 +268,15 @@ fn reference_wave_coverage(image: &[u8]) {
 fn check_pixels_and_motion(samples: u32) {
     let probe = TestProbe::<Option<State<Settings>>>::default();
     let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            fixture().probe(probe.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 600,
-            height: 120,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(3);
+    let mut renderer = UiTest::new()
+        .viewport(600, 120)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture().probe(probe.clone()));
+    renderer.frames(3);
     let settings = observed.get().expect("settings");
-    let original = renderer.read_pixels().expect("wave pixels");
+    let original = renderer.read_pixels();
     let accessibility = renderer
         .accessibility_snapshot()
         .expect("progress semantics");
@@ -317,8 +300,8 @@ fn check_pixels_and_motion(samples: u32) {
     assert_eq!(pixel(&original, 387, 37), [0, 0, 0], "stop dot");
     reference_wave_coverage(&original);
     settings.with_mut(|settings| settings.reverse = true);
-    renderer.render_frames(2);
-    let reversed = renderer.read_pixels().expect("reversed wave");
+    renderer.frames(2);
+    let reversed = renderer.read_pixels();
     for y in 0..15 {
         for x in 0..360 {
             let a = pixel(&original, x + 30, y + 30);
@@ -333,37 +316,26 @@ fn check_pixels_and_motion(samples: u32) {
         settings.reverse = false;
         settings.custom_colors = false;
     });
-    renderer.render_frames(2);
-    let themed = renderer.read_pixels().expect("theme roles");
+    renderer.frames(2);
+    let themed = renderer.read_pixels();
     assert_eq!(pixel(&themed, 45, 42), [101, 87, 137]);
     assert_eq!(pixel(&themed, 300, 37), [232, 222, 248]);
     settings.with_mut(|settings| settings.amplitude = Some(0.0));
-    renderer.render_frames(2);
-    let flat_paused = renderer.read_pixels().expect("paused shape change");
+    renderer.frames(2);
+    let flat_paused = renderer.read_pixels();
     assert_eq!(pixel(&flat_paused, 45, 42), [255, 255, 255]);
     assert_eq!(pixel(&flat_paused, 45, 37), [101, 87, 137]);
     settings.with_mut(|settings| settings.amplitude = None);
-    renderer.render_frames(2);
-    assert_pixels_near(
-        &themed,
-        &renderer.read_pixels().expect("paused shape restoration"),
-        600,
-    );
+    renderer.frames(2);
+    assert_pixels_near(&themed, &renderer.read_pixels(), 600);
     settings.with_mut(|settings| {
         settings.progress = None;
         settings.custom_colors = true;
         settings.opacity = 0.5;
     });
-    renderer.render_frames(2);
+    renderer.frames(2);
     assert!(
-        pixel_near(
-            &pixel(
-                &renderer.read_pixels().expect("translucent initial track"),
-                300,
-                37
-            ),
-            &[255, 188, 188],
-        ),
+        pixel_near(&pixel(&renderer.read_pixels(), 300, 37), &[255, 188, 188],),
         "overlapping empty segments must not paint the track repeatedly"
     );
     settings.with_mut(|settings| {
@@ -372,8 +344,8 @@ fn check_pixels_and_motion(samples: u32) {
         settings.progress = Some(0.5);
         settings.paused = false;
     });
-    renderer.render_frames(17);
-    let moved = renderer.read_pixels().expect("moving wave");
+    renderer.frames(17);
+    let moved = renderer.read_pixels();
     assert!(
         original != moved,
         "the component must request animation frames"
@@ -382,7 +354,7 @@ fn check_pixels_and_motion(samples: u32) {
         .graphics_work()
         .group("linear_wave_instances")
         .buffer_allocations;
-    renderer.render_frames(17);
+    renderer.frames(17);
     assert_eq!(
         allocations,
         renderer
@@ -391,10 +363,10 @@ fn check_pixels_and_motion(samples: u32) {
             .buffer_allocations
     );
     settings.with_mut(|settings| settings.paused = true);
-    renderer.render_frames(2);
-    let paused = renderer.read_pixels().expect("paused wave");
-    renderer.render_frames(31);
-    assert_pixels_near(&paused, &renderer.read_pixels().expect("stable pause"), 600);
+    renderer.frames(2);
+    let paused = renderer.read_pixels();
+    renderer.frames(31);
+    assert_pixels_near(&paused, &renderer.read_pixels(), 600);
     for progress in [
         Some(f32::NAN),
         Some(f32::NEG_INFINITY),
@@ -404,7 +376,7 @@ fn check_pixels_and_motion(samples: u32) {
         None,
     ] {
         settings.with_mut(|settings| settings.progress = progress);
-        renderer.render_frames(2);
+        renderer.frames(2);
         let snapshot = renderer.accessibility_snapshot().expect("semantics");
         let node = snapshot
             .nodes
@@ -425,42 +397,34 @@ fn check_pixels_and_motion(samples: u32) {
         settings.progress = None;
         settings.paused = false;
     });
-    renderer.render_frames(23);
-    let indeterminate = renderer.read_pixels().expect("indeterminate");
-    renderer.render_frames(17);
+    renderer.frames(23);
+    let indeterminate = renderer.read_pixels();
+    renderer.frames(17);
     assert!(
-        indeterminate != renderer.read_pixels().expect("indeterminate motion"),
+        indeterminate != renderer.read_pixels(),
         "indeterminate heads and tails must advance"
     );
     settings.with_mut(|settings| {
         settings.progress = Some(0.95);
         settings.speed = Some(Dp::ZERO);
     });
-    renderer.render_frames(32);
-    let flattened = renderer.read_pixels().expect("flattened near completion");
-    renderer.render_frames(17);
-    assert_pixels_near(
-        &flattened,
-        &renderer.read_pixels().expect("settled amplitude"),
-        600,
-    );
+    renderer.frames(32);
+    let flattened = renderer.read_pixels();
+    renderer.frames(17);
+    assert_pixels_near(&flattened, &renderer.read_pixels(), 600);
     settings.with_mut(|settings| {
         settings.amplitude = Some(0.0);
         settings.paused = true;
     });
-    renderer.render_frames(2);
-    assert_pixels_near(
-        &flattened,
-        &renderer.read_pixels().expect("explicit flat amplitude"),
-        600,
-    );
+    renderer.frames(2);
+    assert_pixels_near(&flattened, &renderer.read_pixels(), 600);
     for (width, height) in [(0.0, 10.0), (1.0, 10.0), (240.0, 0.0), (8.0, 30.0)] {
         settings.with_mut(|settings| {
             settings.width = Some(Dp(width));
             settings.height = Some(Dp(height));
         });
-        renderer.render_frames(2);
-        let pixels = renderer.read_pixels().expect("small bounds");
+        renderer.frames(2);
+        let pixels = renderer.read_pixels();
         if width == 0.0 || height == 0.0 {
             assert!(
                 pixels.chunks_exact(4).all(|pixel| pixel == &pixels[..4]),
@@ -473,24 +437,18 @@ fn check_pixels_and_motion(samples: u32) {
         paused: false,
         ..Default::default()
     });
-    renderer.render_frames(32);
+    renderer.frames(32);
     settings.with_mut(|settings| settings.paused = true);
-    renderer.render_frames(2);
-    assert_pixels_near(
-        &original,
-        &renderer.read_pixels().expect("restored constraints"),
-        600,
-    );
+    renderer.frames(2);
+    assert_pixels_near(&original, &renderer.read_pixels(), 600);
     settings.with_mut(|settings| {
         settings.height = Some(Dp(20.0));
         settings.stroke = Some(Dp(8.0));
         settings.track_stroke = Some(Dp(4.0));
         settings.track_cap = Some(ProgressStrokeCap::Butt);
     });
-    renderer.render_frames(2);
-    let mixed = renderer
-        .read_pixels()
-        .expect("independent track stroke and cap");
+    renderer.frames(2);
+    let mixed = renderer.read_pixels();
     assert_eq!(pixel(&mixed, 45, 54), [0, 0, 0], "thick active crest");
     assert_eq!(
         pixel(&mixed, 227, 45),
@@ -508,10 +466,8 @@ fn check_pixels_and_motion(samples: u32) {
         settings.track_stroke = Some(Dp(8.0));
         settings.track_cap = None;
     });
-    renderer.render_frames(2);
-    let thick = renderer
-        .read_pixels()
-        .expect("reference thick configuration");
+    renderer.frames(2);
+    let thick = renderer.read_pixels();
     assert_eq!(
         pixel(&thick, 45, 45),
         [0, 0, 0],
@@ -537,10 +493,10 @@ fn check_pixels_and_motion(samples: u32) {
         settings.stop = Some(Dp::ZERO);
         settings.amplitude = Some(0.0);
     });
-    renderer.render_frames(2);
+    renderer.frames(2);
     settings.with_mut(|settings| settings.paused = false);
-    renderer.render_frames(32);
-    let butt = renderer.read_pixels().expect("flat butt caps");
+    renderer.frames(32);
+    let butt = renderer.read_pixels();
     assert_eq!(pixel(&butt, 210, 37), [255, 255, 255]);
     assert_eq!(pixel(&butt, 215, 37), [255, 255, 255]);
     assert_eq!(pixel(&butt, 218, 37), [255, 0, 0]);
@@ -567,17 +523,15 @@ fn gpu_linear_waves_match_quadratic_coverage_motion_and_semantics_msaa4() {
 
 #[test]
 fn circular_layout_clamps_to_parent_and_uses_the_48dp_default() {
-    let snapshot = layout_test(|| {
-        fixture().circular(true);
-    })
-    .viewport_px(400, 100)
-    .run();
+    let snapshot = UiTest::new()
+        .content(|| fixture().circular(true))
+        .viewport(400, 100)
+        .frame();
     snapshot.node("wave").size(48, 48);
-    let snapshot = layout_test(|| {
-        fixture().circular(true);
-    })
-    .viewport_px(35, 20)
-    .run();
+    let snapshot = UiTest::new()
+        .content(|| fixture().circular(true))
+        .viewport(35, 20)
+        .frame();
     snapshot.node("wave").size(35, 20);
 }
 
@@ -628,23 +582,15 @@ fn circular_timing_runs_all_four_rotation_steps_and_preserves_holds() {
 fn check_circular_pixels_and_motion(samples: u32) {
     let probe = TestProbe::<Option<State<Settings>>>::default();
     let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            fixture().circular(true).probe(probe.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 600,
-            height: 120,
-            scale_factor: 1.5,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(3);
+    let mut renderer = UiTest::new()
+        .viewport(600, 120)
+        .scale_factor(1.5)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture().circular(true).probe(probe.clone()));
+    renderer.frames(3);
     let settings = observed.get().unwrap();
-    let original = renderer.read_pixels().unwrap();
+    let original = renderer.read_pixels();
     let region_contains = |image: &[u8], left: usize, top: usize, rgb: [u8; 3]| {
         (top..top + 10).any(|y| (left..left + 10).any(|x| pixel(image, x, y) == rgb))
     };
@@ -671,8 +617,8 @@ fn check_circular_pixels_and_motion(samples: u32) {
         (30.0, 30.0, 102.0, 102.0)
     );
     settings.with_mut(|s| s.reverse = true);
-    renderer.render_frames(2);
-    let reversed = renderer.read_pixels().unwrap();
+    renderer.frames(2);
+    let reversed = renderer.read_pixels();
     for y in 30..102 {
         for x in 30..102 {
             let a = pixel(&original, x, y);
@@ -689,8 +635,8 @@ fn check_circular_pixels_and_motion(samples: u32) {
         s.progress = Some(1.0);
         s.opacity = 0.5;
     });
-    renderer.render_frames(2);
-    let flat = renderer.read_pixels().unwrap();
+    renderer.frames(2);
+    let flat = renderer.read_pixels();
     assert!(
         pixel_near(&pixel(&flat, 99, 66), &[188, 188, 188]),
         "half-alpha stroke"
@@ -701,8 +647,8 @@ fn check_circular_pixels_and_motion(samples: u32) {
         "tile boundaries and joined segments must blend once"
     );
     settings.with_mut(|s| s.offset = Dp(20.5));
-    renderer.render_frames(2);
-    let fractional = renderer.read_pixels().unwrap();
+    renderer.frames(2);
+    let fractional = renderer.read_pixels();
     assert!(
         fractional
             .chunks_exact(4)
@@ -710,16 +656,16 @@ fn check_circular_pixels_and_motion(samples: u32) {
         "fractional tile edges retain uniform alpha"
     );
     settings.with_mut(|s| s.offset = Dp(20.0));
-    renderer.render_frames(2);
-    assert_pixels_near(&flat, &renderer.read_pixels().unwrap(), 600);
+    renderer.frames(2);
+    assert_pixels_near(&flat, &renderer.read_pixels(), 600);
     settings.with_mut(|s| {
         s.progress = Some(0.25);
         s.opacity = 1.0;
         s.cap = ProgressStrokeCap::Butt;
         s.track_stroke = Some(Dp(8.0));
     });
-    renderer.render_frames(2);
-    let butt = renderer.read_pixels().unwrap();
+    renderer.frames(2);
+    let butt = renderer.read_pixels();
     assert_eq!(
         pixel(&butt, 64, 33),
         [255, 255, 255],
@@ -741,17 +687,17 @@ fn check_circular_pixels_and_motion(samples: u32) {
         s.progress = Some(0.5);
         s.opacity = 1.0;
     });
-    renderer.render_frames(2);
-    assert_pixels_near(&original, &renderer.read_pixels().unwrap(), 600);
+    renderer.frames(2);
+    assert_pixels_near(&original, &renderer.read_pixels(), 600);
     settings.with_mut(|s| s.paused = false);
-    renderer.render_frames(23);
-    let moving = renderer.read_pixels().unwrap();
+    renderer.frames(23);
+    let moving = renderer.read_pixels();
     assert!(moving != original, "the component schedules wave motion");
     let allocations = renderer
         .graphics_work()
         .group("path_stroke_instances")
         .buffer_allocations;
-    renderer.render_frames(19);
+    renderer.frames(19);
     assert_eq!(
         allocations,
         renderer
@@ -761,20 +707,20 @@ fn check_circular_pixels_and_motion(samples: u32) {
         "buffers are reused at steady size"
     );
     settings.with_mut(|s| s.paused = true);
-    renderer.render_frames(2);
-    let paused = renderer.read_pixels().unwrap();
-    renderer.render_frames(20);
-    assert_pixels_near(&paused, &renderer.read_pixels().unwrap(), 600);
+    renderer.frames(2);
+    let paused = renderer.read_pixels();
+    renderer.frames(20);
+    assert_pixels_near(&paused, &renderer.read_pixels(), 600);
     settings.with_mut(|s| {
         s.progress = None;
         s.paused = false;
         s.speed = Some(Dp::ZERO);
     });
-    renderer.render_frames(23);
-    let ongoing = renderer.read_pixels().unwrap();
-    renderer.render_frames(23);
+    renderer.frames(23);
+    let ongoing = renderer.read_pixels();
+    renderer.frames(23);
     assert!(
-        ongoing != renderer.read_pixels().unwrap(),
+        ongoing != renderer.read_pixels(),
         "ongoing sweep moves without wave travel"
     );
     let snapshot = renderer.accessibility_snapshot().unwrap();
@@ -795,11 +741,10 @@ fn check_circular_pixels_and_motion(samples: u32) {
         s.height = Some(Dp::ZERO);
         s.width = Some(Dp::ZERO);
     });
-    renderer.render_frames(2);
+    renderer.frames(2);
     assert!(
         renderer
             .read_pixels()
-            .unwrap()
             .chunks_exact(4)
             .all(|p| p[..3] == [255, 255, 255]),
         "zero bounds do not draw"
@@ -811,9 +756,9 @@ fn check_circular_pixels_and_motion(samples: u32) {
         s.track_stroke = Some(Dp(8.0));
         s.amplitude = Some(1.0);
     });
-    renderer.render_frames(2);
+    renderer.frames(2);
     assert!(
-        region_contains(&renderer.read_pixels().unwrap(), 98, 65, [0, 0, 0]),
+        region_contains(&renderer.read_pixels(), 98, 65, [0, 0, 0]),
         "thick 52dp wave recovers after empty bounds"
     );
 }

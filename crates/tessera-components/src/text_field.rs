@@ -1230,7 +1230,7 @@ fn text_field_menu_content(
 /// text_field().input_transform_shared(transform);
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn text_field(
@@ -1658,42 +1658,14 @@ mod tests {
 
     #[test]
     fn clicking_an_empty_outlined_field_focuses_its_editor() {
-        use tessera_ui::{
-            CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition,
-            testing::{
-                layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-                start_layout_test_session,
-            },
-        };
+        use tessera_ui::{PxPosition, testing::UiTest};
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || {
-                pointer_focus_fixture(probe.clone());
-            })
-            .viewport_px(400, 200),
-        );
-        pump_layout_test_session(&mut session, 0);
-        for (index, content) in [
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            CursorEventContent::Released(PressKeyEventType::Left),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            pump_layout_test_session_with_input(
-                &mut session,
-                (index as u64 + 1) * 16_666_667,
-                vec![PointerChange::new(
-                    tessera_ui::current_frame_time().unwrap(),
-                    1,
-                    content,
-                    GestureState::TapCandidate,
-                )],
-                Some(PxPosition::from_f32_xy(100.0, 28.0)),
-            );
-        }
-        pump_layout_test_session(&mut session, 50_000_001);
+        let mut session = UiTest::new()
+            .content(|| pointer_focus_fixture(output.clone()))
+            .viewport(400, 200);
+        session.frame();
+        session.click_at(PxPosition::from_f32_xy(100.0, 28.0));
+        session.frames(1);
         assert!(
             output
                 .get()
@@ -1705,13 +1677,9 @@ mod tests {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod native_field_regressions {
-    use std::time::Duration;
 
     use tessera_ui::{
-        MOUSE_POINTER_ID, PressKeyEventType,
-        accesskit::Role,
-        headless::{HeadlessConfig, HeadlessRenderer},
-        winit::event::Ime,
+        MOUSE_POINTER_ID, PressKeyEventType, accesskit::Role, testing::UiTest, winit::event::Ime,
     };
 
     use super::*;
@@ -1904,20 +1872,11 @@ mod native_field_regressions {
         for dark in [false, true] {
             for enabled in [false, true] {
                 let probe = Probe::default();
-                let output = probe.clone();
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(move || notch_fixture(dark, enabled, output.clone())),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width: 460,
-                        height: 160,
-                        sample_count: 1,
-                        frame_time: Duration::from_nanos(16_666_667),
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(7);
+                let mut renderer = UiTest::new()
+                    .viewport(460, 160)
+                    .rendered(crate::TesseraComponents)
+                    .content(|| notch_fixture(dark, enabled, probe.clone()));
+                renderer.frames(7);
                 for focused in [false, true] {
                     if focused {
                         if !enabled {
@@ -1928,9 +1887,9 @@ mod native_field_regressions {
                             .get()
                             .unwrap()
                             .with(|editor| editor.focus_handler().request_focus());
-                        renderer.render_frames(4);
+                        renderer.frames(4);
                     }
-                    let pixels = renderer.read_pixels().unwrap();
+                    let pixels = renderer.read_pixels();
                     let pixel = |x: usize, y: usize| -> [u8; 4] {
                         pixels[(y * 460 + x) * 4..][..4].try_into().unwrap()
                     };
@@ -1997,26 +1956,18 @@ mod native_field_regressions {
         }
     }
 
-    fn renderer(case: Case) -> (HeadlessRenderer, Probe) {
+    fn renderer(case: Case) -> (UiTest<'static>, Probe) {
         let probe = Probe::default();
         let output = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || fixture(case, output.clone())),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 400,
-                height: 320,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .expect("native field renderer");
-        renderer.render_frames(5);
+        let mut renderer = UiTest::new()
+            .viewport(400, 320)
+            .rendered(crate::TesseraComponents)
+            .content(move || fixture(case, output.clone()));
+        renderer.frames(5);
         (renderer, probe)
     }
 
-    fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+    fn click(renderer: &mut UiTest, label: &str, role: Role) {
         let bounds = renderer
             .accessibility_snapshot()
             .expect("field semantics")
@@ -2034,7 +1985,7 @@ mod native_field_regressions {
         renderer.pointer_move(MOUSE_POINTER_ID, position);
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(4);
+        renderer.frames(4);
     }
 
     #[test]
@@ -2048,7 +1999,7 @@ mod native_field_regressions {
                 Dp(56.0).to_px()
             );
             editor.with(|editor| editor.focus_handler().request_focus());
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(
                 probe.bounds.get().expect("focused bounds").height,
                 Dp(56.0).to_px()
@@ -2069,14 +2020,14 @@ mod native_field_regressions {
             for character in ["a", "l", "p", "h", "a"] {
                 renderer.inject_ime_event(Ime::Commit(character.into()));
             }
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(editor.with(|editor| editor.text()), "alpha");
             assert_eq!(
                 probe.changes.with(|values| values.clone()),
                 ["a", "al", "alp", "alph", "alpha"]
             );
             renderer.inject_ime_event(Ime::Commit(" beta".into()));
-            renderer.render_frames(3);
+            renderer.frames(3);
             assert_eq!(editor.with(|editor| editor.text()), "alpha beta");
             let long = "AAAAAAAAAAAAAAAAAAAAAAAA zzzzzzzzzzzzzzzzzzzzzzzz";
             editor.with_mut(|editor| {
@@ -2086,9 +2037,9 @@ mod native_field_regressions {
                 );
             });
             editor.with(|editor| *editor.focus_handler()).clear_focus();
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert!(editor.with(|editor| editor.scroll_controller().horizontal()) > 0.0);
-            let end_pixels = renderer.read_pixels().unwrap();
+            let end_pixels = renderer.read_pixels();
             let input = renderer
                 .accessibility_snapshot()
                 .unwrap()
@@ -2105,13 +2056,13 @@ mod native_field_regressions {
                     crate::text_edit_core::TextSelection::collapsed(0),
                 );
             });
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(
                 editor.with(|editor| editor.scroll_controller().horizontal()),
                 0.0
             );
             assert_eq!(editor.with(|editor| editor.text()), long);
-            let start_pixels = renderer.read_pixels().unwrap();
+            let start_pixels = renderer.read_pixels();
             let mut changed_glyph_pixels = 0;
             for y in input.y0.ceil() as usize..input.y1.floor() as usize {
                 for x in (input.x0.ceil() as usize + 3)..(input.x1.floor() as usize - 3) {
@@ -2133,7 +2084,7 @@ mod native_field_regressions {
             .get()
             .unwrap()
             .with(|editor| editor.focus_handler().request_focus());
-        tall.render_frames(4);
+        tall.frames(4);
         assert_eq!(
             probe.bounds.get().unwrap().height,
             Dp(96.0).to_px(),
@@ -2146,7 +2097,7 @@ mod native_field_regressions {
             .get()
             .unwrap()
             .with(|editor| editor.focus_handler().request_focus());
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert!(probe.bounds.get().expect("multiline bounds").height >= Dp(96.0).to_px());
         let tree = renderer.accessibility_snapshot().unwrap();
         let placeholder = tree
@@ -2181,7 +2132,7 @@ mod native_field_regressions {
                 },
             )
         });
-        renderer.render_frames(4);
+        renderer.frames(4);
         click(&mut renderer, "Leading search decoration", Role::Image);
         assert_eq!(editor.with(|editor| editor.selection().start), 0);
         editor.with_mut(|editor| {
@@ -2193,7 +2144,7 @@ mod native_field_regressions {
                 },
             )
         });
-        renderer.render_frames(3);
+        renderer.frames(3);
         click(&mut renderer, "Dollar prefix", Role::Label);
         assert_eq!(editor.with(|editor| editor.selection().start), 0);
     }
@@ -2203,9 +2154,9 @@ mod native_field_regressions {
         let (mut renderer, probe) = renderer(Case::Secure);
         let editor = probe.editor.get().unwrap();
         editor.with(|editor| editor.focus_handler().request_focus());
-        renderer.render_frames(3);
+        renderer.frames(3);
         renderer.inject_ime_event(Ime::Commit("secret".into()));
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_eq!(editor.with(|editor| editor.text()), "secret");
         let tree = renderer.accessibility_snapshot().unwrap();
         let node = &tree
@@ -2277,22 +2228,13 @@ mod native_field_regressions {
                     (true, true, 76.0, 259.0),
                 ] {
                     let probe = Probe::default();
-                    let output = probe.clone();
-                    let mut renderer = HeadlessRenderer::new(
-                        Box::new(move || empty_viewport_fixture(label, leading, output.clone())),
-                        vec![Box::new(crate::TesseraComponents)],
-                        HeadlessConfig {
-                            width: 400,
-                            height: 160,
-                            sample_count: 1,
-                            frame_time: Duration::from_nanos(16_666_667),
-                            ..Default::default()
-                        },
-                    )
-                    .unwrap();
-                    renderer.render_frames(6);
+                    let mut renderer = UiTest::new()
+                        .viewport(400, 160)
+                        .rendered(crate::TesseraComponents)
+                        .content(|| empty_viewport_fixture(label, leading, probe.clone()));
+                    renderer.frames(6);
                     let editor = probe.editor.get().unwrap();
-                    let check_bounds = |renderer: &HeadlessRenderer| {
+                    let check_bounds = |renderer: &UiTest| {
                         let tree = renderer.accessibility_snapshot().unwrap();
                         let (id, node) = tree
                             .nodes
@@ -2310,30 +2252,30 @@ mod native_field_regressions {
                         );
                         *id
                     };
-                    let click_fixed = |renderer: &mut HeadlessRenderer| {
+                    let click_fixed = |renderer: &mut UiTest| {
                         let point = PxPosition::from_f32_xy(224.0, 60.0);
                         renderer.pointer_move(MOUSE_POINTER_ID, point);
-                        renderer.step_frame();
+                        renderer.frames(1);
                         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-                        renderer.step_frame();
+                        renderer.frames(1);
                         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-                        renderer.render_frames(3);
+                        renderer.frames(3);
                     };
                     let id = check_bounds(&renderer);
                     click_fixed(&mut renderer);
                     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
                     renderer.inject_ime_event(Ime::Commit("Q".into()));
-                    renderer.render_frames(3);
+                    renderer.frames(3);
                     assert_eq!(editor.with(|editor| editor.text()), "Q");
                     check_bounds(&renderer);
                     editor.with_mut(|editor| editor.set_text(""));
                     tessera_ui::focus::clear_focus(true);
-                    renderer.render_frames(4);
+                    renderer.frames(4);
                     check_bounds(&renderer);
                     click_fixed(&mut renderer);
                     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
                     renderer.inject_ime_event(Ime::Commit("R".into()));
-                    renderer.render_frames(3);
+                    renderer.frames(3);
                     assert_eq!(editor.with(|editor| editor.text()), "R");
                     check_bounds(&renderer);
                 }
@@ -2346,10 +2288,7 @@ mod native_field_regressions {
 mod presentation_regressions {
     use std::time::Duration;
 
-    use tessera_ui::{
-        State,
-        headless::{HeadlessConfig, HeadlessRenderer},
-    };
+    use tessera_ui::{State, testing::UiTest};
 
     use super::*;
 
@@ -2419,19 +2358,12 @@ mod presentation_regressions {
             "text_field::presentation_regressions::focus_presentation_draws_static_native_fields_without_taking_focus",
             || {
                 let probe = Probe::default();
-                let output = probe.clone();
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(move || fixture(output.clone())),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width: 620,
-                        height: 120,
-                        frame_time: Duration::from_millis(100),
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(4);
+                let mut renderer = UiTest::new()
+                    .viewport(620, 120)
+                    .frame_step(Duration::from_millis(100))
+                    .rendered(crate::TesseraComponents)
+                    .content(|| fixture(probe.clone()));
+                renderer.frames(4);
                 let editors = probe.editors.get().map(Option::unwrap);
                 assert!(
                     editors
@@ -2447,38 +2379,41 @@ mod presentation_regressions {
                     .collect();
                 assert_eq!(field_ids.len(), 2);
                 assert!(!field_ids.contains(&semantics.focus));
-                let preview = renderer.read_pixels().unwrap();
+                let preview = renderer.read_pixels();
                 assert_eq!(crop(&preview, 0), crop(&preview, 1));
-                renderer.render_frames(6);
+                renderer.frames(6);
                 assert_eq!(
-                    renderer.read_pixels().unwrap(),
+                    renderer.read_pixels(),
                     preview,
                     "preview carets stay visible across blink phases"
                 );
                 assert_eq!(
-                    renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
+                    renderer
+                        .work()
+                        .phase(tessera_ui::testing::WorkPhase::Paint)
+                        .count(),
                     0
                 );
                 let presentation = probe.presentation.get().unwrap();
                 presentation.set((None, true));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_ne!(
-                    crop(&renderer.read_pixels().unwrap(), 0),
+                    crop(&renderer.read_pixels(), 0),
                     crop(&preview, 0),
                     "native resting decoration differs from focused presentation"
                 );
-                let rest = renderer.read_pixels().unwrap();
+                let rest = renderer.read_pixels();
                 presentation.set((Some(InteractionVisualState::Focus), true));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(
-                    renderer.read_pixels().unwrap(),
+                    renderer.read_pixels(),
                     preview,
                     "retained props restore the static focus presentation"
                 );
                 presentation.set((None, true));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(
-                    renderer.read_pixels().unwrap(),
+                    renderer.read_pixels(),
                     rest,
                     "retained props clear the static focus presentation again"
                 );
@@ -2489,29 +2424,29 @@ mod presentation_regressions {
                 );
 
                 presentation.set((Some(InteractionVisualState::Focus), false));
-                renderer.render_frames(3);
-                let disabled = renderer.read_pixels().unwrap();
+                renderer.frames(3);
+                let disabled = renderer.read_pixels();
                 presentation.set((None, false));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 assert_eq!(
-                    renderer.read_pixels().unwrap(),
+                    renderer.read_pixels(),
                     disabled,
                     "disabled style takes precedence over presentation"
                 );
                 presentation.set((Some(InteractionVisualState::Focus), true));
-                renderer.render_frames(3);
+                renderer.frames(3);
                 editors[0].with(|editor| editor.focus_handler().request_focus());
                 editors[0].with_mut(|editor| editor.set_text(""));
-                renderer.render_frames(2);
+                renderer.frames(2);
                 assert!(editors[0].with(|editor| editor.focus_handler().is_focused()));
-                let focused = renderer.read_pixels().unwrap();
+                let focused = renderer.read_pixels();
                 assert_eq!(
                     crop(&focused, 0),
                     crop(&focused, 1),
                     "actual focus and presentation share the native focused appearance"
                 );
-                renderer.render_frames(4);
-                let blink_off = renderer.read_pixels().unwrap();
+                renderer.frames(4);
+                let blink_off = renderer.read_pixels();
                 assert_ne!(
                     crop(&blink_off, 0),
                     crop(&blink_off, 1),

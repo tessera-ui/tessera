@@ -1,10 +1,8 @@
-use std::time::Duration;
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, NodeId, Role, Toggled},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    testing::UiTest,
 };
 
 use super::*;
@@ -23,24 +21,16 @@ fn overview_fixture() {
     });
 }
 
-fn renderer<Output: 'static>(fixture: fn() -> Output) -> HeadlessRenderer {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 600,
-            height: 300,
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(5);
+fn renderer<Output: 'static>(fixture: fn() -> Output) -> UiTest<'static> {
+    let mut renderer = UiTest::new()
+        .viewport(600, 300)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(5);
     renderer
 }
 
-fn radio(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn radio(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     let radio = renderer
         .accessibility_snapshot()
         .unwrap()
@@ -56,12 +46,12 @@ fn radio(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
     radio
 }
 
-fn click(renderer: &mut HeadlessRenderer, x: f64, y: f64) {
+fn click(renderer: &mut UiTest, x: f64, y: f64) {
     let position = PxPosition::from_f32_xy(x as f32, y as f32);
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
 #[test]
@@ -159,7 +149,7 @@ fn matrix_fixture() {
     material_theme().child(states);
 }
 
-fn click_button(renderer: &mut HeadlessRenderer, label: &str) {
+fn click_button(renderer: &mut UiTest, label: &str) {
     let bounds = renderer
         .accessibility_snapshot()
         .unwrap()
@@ -177,7 +167,7 @@ fn click_button(renderer: &mut HeadlessRenderer, label: &str) {
     );
 }
 
-fn click_label(renderer: &mut HeadlessRenderer, label: &str) {
+fn click_label(renderer: &mut UiTest, label: &str) {
     let bounds = radio(renderer, label).1.bounds().unwrap();
     click(renderer, bounds.x1 + 12.0, (bounds.y0 + bounds.y1) * 0.5);
 }
@@ -188,7 +178,7 @@ fn checkout_label_selection_remains_exclusive_and_explicit_clear_works_after_res
     let mut renderer = renderer(checkout_fixture);
     for width in [1024, 390, 1024] {
         renderer.resize(width, 800);
-        renderer.render_frames(12);
+        renderer.frames(12);
         click_label(&mut renderer, "Office");
         assert_eq!(radio(&renderer, "Office").1.toggled(), Some(Toggled::True));
         assert_eq!(radio(&renderer, "Home").1.toggled(), Some(Toggled::False));
@@ -216,7 +206,7 @@ fn checkout_label_selection_remains_exclusive_and_explicit_clear_works_after_res
 fn language_dialog_cancel_restores_saved_choice_and_continue_commits_the_draft() {
     let mut renderer = renderer(language_fixture);
     renderer.resize(676, 900);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_eq!(radio(&renderer, "Spanish").1.toggled(), Some(Toggled::True));
     click_label(&mut renderer, "English");
     assert_eq!(radio(&renderer, "English").1.toggled(), Some(Toggled::True));
@@ -241,7 +231,7 @@ fn state_matrix_keeps_twenty_native_radios_and_disabled_examples_inert_after_res
     let mut renderer = renderer(matrix_fixture);
     for width in [1024, 390, 1024] {
         renderer.resize(width, 1000);
-        renderer.render_frames(12);
+        renderer.frames(12);
         let nodes = renderer.accessibility_snapshot().unwrap().nodes;
         assert_eq!(
             nodes

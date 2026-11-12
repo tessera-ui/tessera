@@ -200,17 +200,15 @@ impl KeyboardInputModifierNode for ArticleTabKeyboard {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::{env, process::Command, time::Duration};
+    use std::{env, process::Command};
 
     use tessera_components::{
         alignment::Alignment, boxed::boxed, column::column, row::row,
         scrollable::ScrollableController, spacer::spacer, text::text,
     };
     use tessera_ui::{
-        Dp, FocusDirection, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::{Action, ActionRequest, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
-        remember, tessera,
+        Dp, FocusDirection, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Action,
+        remember, tessera, testing::UiTest,
     };
 
     use super::*;
@@ -296,20 +294,11 @@ mod tests {
         }
         for settle_focus in [true, false] {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || scrolling_tab_fixture(probe.clone())),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 400,
-                    height: 300,
-                    sample_count: 1,
-                    frame_time: Duration::from_nanos(16_666_667),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(3);
+            let mut renderer = UiTest::new()
+                .viewport(400, 300)
+                .rendered(crate::TestPipelines)
+                .content(|| scrolling_tab_fixture(output.clone()));
+            renderer.frames(3);
             let tree = renderer.accessibility_snapshot().unwrap();
             let bounds = tree
                 .nodes
@@ -327,7 +316,7 @@ mod tests {
             renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             if settle_focus {
-                renderer.render_frames(4);
+                renderer.frames(4);
                 assert_eq!(focused(&renderer), "Specs");
             }
             for _ in 0..10 {
@@ -338,7 +327,7 @@ mod tests {
                     -24.0,
                 );
             }
-            renderer.step_frame();
+            renderer.frames(1);
             let scroll = output.get().unwrap().2.unwrap();
             assert_eq!(focused(&renderer), "Specs");
             assert_eq!(output.get().unwrap().1.get(), "ui-specs");
@@ -347,7 +336,7 @@ mod tests {
                 -240.0,
                 "newer wheel input must win over the earlier pointer focus reveal; settled={settle_focus}"
             );
-            renderer.render_frames(8);
+            renderer.frames(8);
             assert_eq!(focused(&renderer), "Specs");
             assert_eq!(scroll.with(|scroll| scroll.child_position().y), -240.0);
 
@@ -368,7 +357,7 @@ mod tests {
                 0.0,
                 0.0,
             );
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_focused_tab_visible(&renderer, "Accessibility");
             assert!(scroll.with(|scroll| scroll.child_position().y) > -240.0);
 
@@ -380,7 +369,7 @@ mod tests {
                     -24.0,
                 );
             }
-            renderer.step_frame();
+            renderer.frames(1);
             let manual_position = scroll.with(|scroll| scroll.child_position().y);
             output
                 .get()
@@ -388,13 +377,13 @@ mod tests {
                 .0
                 .with(|navigation| navigation.requesters[0])
                 .request_focus();
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_focused_tab_visible(&renderer, "Overview");
             assert!(scroll.with(|scroll| scroll.child_position().y) > manual_position);
         }
     }
 
-    fn assert_focused_tab_visible(renderer: &HeadlessRenderer, label: &str) {
+    fn assert_focused_tab_visible(renderer: &UiTest, label: &str) {
         assert_eq!(focused(renderer), label);
         let tree = renderer.accessibility_snapshot().unwrap();
         let bounds = tree
@@ -480,7 +469,7 @@ mod tests {
             });
     }
 
-    fn focused(renderer: &HeadlessRenderer) -> String {
+    fn focused(renderer: &UiTest) -> String {
         let tree = renderer.accessibility_snapshot().unwrap();
         tree.nodes
             .iter()
@@ -492,7 +481,7 @@ mod tests {
             .into()
     }
 
-    fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) {
+    fn action(renderer: &mut UiTest, label: &str, action: Action) {
         let tree = renderer.accessibility_snapshot().unwrap();
         let target_node = tree
             .nodes
@@ -505,17 +494,12 @@ mod tests {
             target_node.1
         );
         let target_node = target_node.0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            target_node,
-            target_tree: TreeId::ROOT,
-            action,
-            data: None,
-        }));
-        renderer.render_frames(4);
+        assert!(renderer.accessibility_action(target_node, action));
+        renderer.frames(4);
     }
 
     fn key(
-        renderer: &mut HeadlessRenderer,
+        renderer: &mut UiTest,
         navigation: State<ArticleNavigationState>,
         from: usize,
         key: NamedKey,
@@ -531,7 +515,7 @@ mod tests {
                 ModifiersState::empty()
             )
         );
-        renderer.render_frames(4);
+        renderer.frames(4);
     }
 
     #[test]
@@ -540,20 +524,11 @@ mod tests {
     {
         for available in [[true; 4], [true, false, false, true]] {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || fixture(available, probe.clone())),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 640,
-                    height: 240,
-                    sample_count: 1,
-                    frame_time: Duration::from_nanos(16_666_667),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(5);
+            let mut renderer = UiTest::new()
+                .viewport(640, 240)
+                .rendered(crate::TestPipelines)
+                .content(|| fixture(available, output.clone()));
+            renderer.frames(5);
             let initial = if available[1] { 1 } else { 0 };
             let next = if available[1] { 2 } else { 3 };
             let tree = renderer.accessibility_snapshot().unwrap();
@@ -575,7 +550,7 @@ mod tests {
             renderer.pointer_move(MOUSE_POINTER_ID, position);
             renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(
                 focused(&renderer),
                 I18N.text(ARTICLE_TAB_TITLES[initial]),
@@ -644,21 +619,21 @@ mod tests {
                 );
             }
             output.get().unwrap().1.set("ui-overview");
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(
                 focused(&renderer),
                 "Accessibility",
                 "external page selection must not steal current tab focus"
             );
             assert!(focus::request_move_focus(FocusDirection::Next));
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(
                 focused(&renderer),
                 "After sections",
                 "one Tab traversal leaves the tab list"
             );
             assert!(focus::request_move_focus(FocusDirection::Previous));
-            renderer.render_frames(4);
+            renderer.frames(4);
             assert_eq!(
                 focused(&renderer),
                 "Overview",

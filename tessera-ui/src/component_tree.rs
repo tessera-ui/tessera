@@ -4583,15 +4583,15 @@ mod tests {
         ComponentTree,
         NodeId,
         crate::focus::FocusRegistration,
-        crate::testing::LayoutTestSession<impl Fn()>,
+        crate::testing::UiTest<'static>,
     ) {
         use crate::focus::{FocusNode, FocusRegistration};
 
-        let mut session = crate::testing::start_layout_test_session(crate::testing::layout_test({
+        let mut session = crate::testing::UiTest::new().content({
             let probe = probe.clone();
             move || retry_reveal_callback_fixture(probe.clone())
-        }));
-        crate::testing::pump_layout_test_session(&mut session, 0);
+        });
+        session.frame();
         probe.rects.with_mut(Vec::clear);
         probe.scroll.set(0);
         let mut tree = ComponentTree::new();

@@ -7,11 +7,9 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, RenderSlot, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::TestProbe,
+    accesskit::{Action, Node, NodeId, Role},
+    focus, remember, tessera,
+    testing::{TestProbe, UiTest},
     use_context,
 };
 
@@ -139,7 +137,7 @@ fn fixture(probe: TestProbe<Option<State<Settings>>>) {
         });
 }
 
-fn rect(renderer: &HeadlessRenderer, tag: &str) -> [i64; 4] {
+fn rect(renderer: &UiTest, tag: &str) -> [i64; 4] {
     let snapshot = renderer.inspect_components();
     let bounds = snapshot
         .find_tag(tag)
@@ -149,7 +147,7 @@ fn rect(renderer: &HeadlessRenderer, tag: &str) -> [i64; 4] {
     [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value.round() as i64)
 }
 
-fn entry(renderer: &HeadlessRenderer) -> (NodeId, Node) {
+fn entry(renderer: &UiTest) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -159,7 +157,7 @@ fn entry(renderer: &HeadlessRenderer) -> (NodeId, Node) {
         .unwrap()
 }
 
-fn click(renderer: &mut HeadlessRenderer, settings: State<Settings>) {
+fn click(renderer: &mut UiTest, settings: State<Settings>) {
     let [x, y, width, height] = rect(renderer, "item");
     let point_y = if settings.get().custom {
         y + height - 4
@@ -170,14 +168,14 @@ fn click(renderer: &mut HeadlessRenderer, settings: State<Settings>) {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(630.0, 390.0));
-    renderer.render_frames(60);
+    renderer.frames(60);
 }
 
-fn assert_ink(renderer: &HeadlessRenderer, tag: &str, expected: [u8; 4]) {
+fn assert_ink(renderer: &UiTest, tag: &str, expected: [u8; 4]) {
     let [x, y, width, height] = rect(renderer, tag);
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let offset = (((y + height / 2) as u32 * renderer.physical_size().width
         + (x + width / 2) as u32)
         * 4) as usize;
@@ -193,21 +191,13 @@ fn check(samples: u32) {
     ] {
         let probe = TestProbe::default();
         let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(probe.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 640,
-                height: 400,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(640, 400)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(move || fixture(probe.clone()));
+        renderer.frames(8);
         let settings = observed.get().unwrap();
         assert_eq!(rect(&renderer, "item"), [0, 0, width, height]);
         assert_eq!(rect(&renderer, "Lead")[3], lead_height);
@@ -217,7 +207,7 @@ fn check(samples: u32) {
         let id = entry(&renderer).0;
         assert_eq!(entry(&renderer).1.is_selected(), Some(false));
         settings.with_mut(|settings| settings.custom = true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_eq!(entry(&renderer).0, id);
         assert_eq!(rect(&renderer, "Main")[3], (24.0 * scale) as i64);
         assert_eq!(rect(&renderer, "Over")[3], (16.0 * scale) as i64);
@@ -226,7 +216,7 @@ fn check(samples: u32) {
         assert_ink(&renderer, "Over-ink", [0, 255, 0, 255]);
         assert_ink(&renderer, "Support-ink", [0, 255, 0, 255]);
         settings.with_mut(|settings| settings.large = true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_eq!(rect(&renderer, "Main")[3], (32.0 * scale) as i64);
         assert_eq!(rect(&renderer, "Over")[3], (20.0 * scale) as i64);
         assert_eq!(rect(&renderer, "Support")[3], (28.0 * scale) as i64);
@@ -248,23 +238,23 @@ fn check(samples: u32) {
             settings.calls = 0;
         });
         focus::clear_focus(true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_eq!(rect(&renderer, "item"), [0, 0, width, height]);
         settings.with_mut(|settings| settings.large = true);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_eq!(rect(&renderer, "Lead")[3], (28.0 * scale) as i64);
         assert_eq!(rect(&renderer, "Meta")[3], (20.0 * scale) as i64);
         assert_ink(&renderer, "Lead-ink", [0, 0, 255, 255]);
         assert_ink(&renderer, "Meta-ink", [0, 0, 255, 255]);
         settings.with_mut(|settings| settings.large = false);
-        renderer.render_frames(8);
+        renderer.frames(8);
         click(&mut renderer, settings);
         assert_eq!(settings.get().calls, 1);
         assert_eq!(entry(&renderer).0, id);
         assert_eq!(entry(&renderer).1.is_selected(), Some(true));
         assert_ink(&renderer, "Lead-ink", [255; 4]);
         settings.with_mut(|settings| settings.enabled = false);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert!(entry(&renderer).1.is_disabled());
         assert!(!entry(&renderer).1.supports_action(Action::Click));
         assert!(!entry(&renderer).1.supports_action(Action::Focus));
@@ -274,25 +264,20 @@ fn check(samples: u32) {
             settings.enabled = true;
             settings.width = Dp::ZERO;
         });
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(rect(&renderer, "item")[2], 0);
         settings.with_mut(|settings| settings.width = Dp(240.0));
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(rect(&renderer, "item"), [0, 0, width, height]);
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node: id,
-            data: None
-        }));
-        renderer.render_frames(8);
+        assert!(renderer.accessibility_action(id, Action::Click));
+        renderer.frames(8);
         assert_eq!(settings.get().calls, 2);
         assert_eq!(entry(&renderer).1.is_selected(), Some(false));
         renderer.resize(320, 400);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert!(rect(&renderer, "item")[2] <= 320);
         renderer.resize(640, 400);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(rect(&renderer, "item"), [0, 0, width, height]);
     }
 }

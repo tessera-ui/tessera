@@ -416,7 +416,7 @@ fn label_layer(
 ///     });
 ///     assert_eq!(value.get(), 0.5);
 /// }
-/// # tessera_ui::testing::layout_test(content).run();
+/// # tessera_ui::testing::UiTest::new().content(content).frame();
 /// ```
 #[tessera]
 pub fn slider_value_indicator_provider(

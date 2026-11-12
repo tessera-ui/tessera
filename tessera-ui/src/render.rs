@@ -44,8 +44,8 @@ pub use crate::{
 
 pub use self::{
     compute::{
-               ComputablePipeline, ComputeBatchItem, ComputeCommand, ComputeContext,
- ComputePipelineRegistry,
+        ComputablePipeline, ComputeBatchItem, ComputeCommand, ComputeContext,
+        ComputePipelineRegistry,
     },
     drawer::{DrawCommand, DrawContext, DrawablePipeline, FrameContext, PipelineRegistry},
 };

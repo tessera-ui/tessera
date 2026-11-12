@@ -10,10 +10,10 @@ use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
 use tessera_ui::{
     Callback, Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
     State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera, use_context,
+    accesskit::{Action, Node, NodeId, Role},
+    focus, remember, tessera,
+    testing::UiTest,
+    use_context,
 };
 
 use crate::{
@@ -209,7 +209,7 @@ fn card_content(config: State<Config>, nested_calls: State<u32>) {
         });
 }
 
-fn control(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn control(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
         .expect("tree")
@@ -220,47 +220,29 @@ fn control(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .unwrap_or_else(|| panic!("missing {label}"))
 }
 
-fn action(renderer: &mut HeadlessRenderer, id: NodeId, action: Action) {
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: id,
-        data: None,
-    }));
-    renderer.render_frames(12);
-}
-
-fn pixel(renderer: &HeadlessRenderer, x: u32, y: u32) -> [u8; 4] {
-    let offset = ((y * renderer.physical_size().width + x) * 4) as usize;
-    renderer.read_pixels().expect("pixels")[offset..offset + 4]
-        .try_into()
-        .unwrap()
+fn action(renderer: &mut UiTest, id: NodeId, action: Action) {
+    assert!(renderer.accessibility_action(id, action));
+    renderer.frames(12);
 }
 
 fn check_cards(samples: u32) {
     let probe = tessera_ui::testing::TestProbe::default();
     let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 540,
-            height: 540,
-            scale_factor: 1.5,
-            sample_count: samples,
-            frame_time: Duration::from_millis(if samples == 4 { 50 } else { 16 }),
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.step_frame();
+    let mut renderer = UiTest::new()
+        .viewport(540, 540)
+        .scale_factor(1.5)
+        .samples(samples)
+        .frame_step(Duration::from_millis(if samples == 4 { 50 } else { 16 }))
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture(observed.clone()));
+    renderer.frames(1);
     assert!(
         renderer
             .work()
             .count("card_content", tessera_ui::testing::WorkPhase::Build)
             > 0
     );
-    renderer.render_frames(11);
+    renderer.frames(11);
     let config = probe.get().config.unwrap();
     let interaction = probe.get().interaction.unwrap();
     let calls = probe.get().calls.unwrap();
@@ -271,12 +253,12 @@ fn check_cards(samples: u32) {
     assert!(node.supports_action(Action::Focus));
     assert_eq!(bounds.x1 - bounds.x0, 360.0);
     assert_eq!(bounds.y1 - bounds.y0, 144.0);
-    assert_eq!(pixel(&renderer, 380, 160), [0, 255, 0, 255]);
-    let baseline = renderer.read_pixels().expect("baseline pixels");
+    assert_eq!(renderer.pixel(380, 160), [0, 255, 0, 255]);
+    let baseline = renderer.read_pixels();
     let position = PxPosition::from_f32_xy(100.0, 100.0);
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     for _ in 0..90 {
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(
             renderer
                 .work()
@@ -286,42 +268,42 @@ fn check_cards(samples: u32) {
         );
     }
     assert!(interaction.with(|state| state.is_hovered()));
-    assert_ne!(renderer.read_pixels().expect("hover pixels"), baseline);
+    assert_ne!(renderer.read_pixels(), baseline);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(500.0, 330.0));
-    renderer.render_frames(90);
-    assert_eq!(renderer.read_pixels().expect("restored pixels"), baseline);
+    renderer.frames(90);
+    assert_eq!(renderer.read_pixels(), baseline);
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(2);
+    renderer.frames(2);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_eq!(calls.get(), 1);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(500.0, 330.0));
     let after = control(&renderer, "After card").0;
     action(&mut renderer, after, Action::Focus);
-    renderer.render_frames(90);
+    renderer.frames(90);
     assert_eq!(control(&renderer, "Card action").0, id);
     config.with_mut(|config| config.alternate = true);
-    renderer.render_frames(12);
-    assert_eq!(pixel(&renderer, 380, 160), [0, 255, 255, 255]);
+    renderer.frames(12);
+    assert_eq!(renderer.pixel(380, 160), [0, 255, 255, 255]);
     config.with_mut(|config| {
         config.alternate = false;
         config.variant = CardVariant::Filled;
     });
-    renderer.render_frames(90);
-    assert_eq!(pixel(&renderer, 380, 160), [255, 0, 0, 255]);
+    renderer.frames(90);
+    assert_eq!(renderer.pixel(380, 160), [255, 0, 0, 255]);
     config.with_mut(|config| config.variant = CardVariant::Outlined);
-    renderer.render_frames(90);
-    assert_eq!(pixel(&renderer, 380, 160), [255, 255, 255, 255]);
-    let outline = pixel(&renderer, 48, 110);
+    renderer.frames(90);
+    assert_eq!(renderer.pixel(380, 160), [255, 255, 255, 255]);
+    let outline = renderer.pixel(48, 110);
     assert!(
         outline[0] < 150 && outline[0] == outline[1] && outline[1] == outline[2],
         "outline={outline:?}"
     );
-    assert_eq!(pixel(&renderer, 51, 110), [255, 255, 255, 255]);
-    assert_eq!(pixel(&renderer, 49, 49), [255, 255, 255, 255]);
+    assert_eq!(renderer.pixel(51, 110), [255, 255, 255, 255]);
+    assert_eq!(renderer.pixel(49, 49), [255, 255, 255, 255]);
     action(&mut renderer, id, Action::Focus);
-    let focused_outline = pixel(&renderer, 48, 110);
+    let focused_outline = renderer.pixel(48, 110);
     assert!(
         focused_outline[2] > 240 && focused_outline[0] < 170 && focused_outline[1] < 170,
         "focused outline must use on-surface: {focused_outline:?}"
@@ -329,42 +311,42 @@ fn check_cards(samples: u32) {
     assert_eq!(calls.get(), 1);
     action(&mut renderer, after, Action::Focus);
     renderer.pointer_move(MOUSE_POINTER_ID, position);
-    renderer.render_frames(90);
-    let hover_shadow = pixel(&renderer, 380, 193);
+    renderer.frames(90);
+    let hover_shadow = renderer.pixel(380, 193);
     assert!(
         hover_shadow[0] < 255,
         "outlined hover must raise the card: {hover_shadow:?}"
     );
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(500.0, 330.0));
-    renderer.render_frames(90);
+    renderer.frames(90);
     interaction.with_mut(|state| state.set_dragged(true));
-    renderer.render_frames(90);
-    let dragged = pixel(&renderer, 380, 160);
+    renderer.frames(90);
+    let dragged = renderer.pixel(380, 160);
     assert!(
         dragged[0].abs_diff(236) <= 1 && dragged[1].abs_diff(236) <= 1 && dragged[2] == 255,
         "dragged={dragged:?}"
     );
     config.with_mut(|config| config.enabled = false);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_eq!(interaction.get(), InteractionState::default());
-    assert_eq!(pixel(&renderer, 380, 160), [255, 255, 255, 255]);
+    assert_eq!(renderer.pixel(380, 160), [255, 255, 255, 255]);
     let disabled = control(&renderer, "Card action").1;
     assert!(disabled.is_disabled());
     assert!(!disabled.supports_action(Action::Click));
     assert!(!disabled.supports_action(Action::Focus));
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_eq!(calls.get(), 1);
     focus::request_move_focus(FocusDirection::Previous);
-    renderer.render_frames(12);
+    renderer.frames(12);
     let tree = renderer.accessibility_snapshot().unwrap();
     assert_ne!(tree.focus, id);
     config.with_mut(|config| {
         config.enabled = true;
         config.clickable = false;
     });
-    renderer.render_frames(12);
+    renderer.frames(12);
     let static_card = control(&renderer, "Card action").1;
     assert_ne!(static_card.role(), Role::Button);
     assert!(!static_card.supports_action(Action::Click));
@@ -378,36 +360,36 @@ fn check_cards(samples: u32) {
             .any(|(_, node)| node.label() == Some("Card content"))
     );
     config.with_mut(|config| config.clickable = true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     action(&mut renderer, id, Action::Focus);
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
     renderer.resize(420, 360);
-    renderer.render_frames(12);
+    renderer.frames(12);
     let resized = control(&renderer, "Card action")
         .1
         .bounds()
         .expect("resized bounds");
     assert!(resized.x1 <= 420.0 && resized.x1 - resized.x0 >= 72.0);
     renderer.resize(540, 540);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_eq!(control(&renderer, "Card action").1.bounds(), Some(bounds));
     action(&mut renderer, after, Action::Focus);
     config.with_mut(|config| config.clickable = false);
-    renderer.render_frames(12);
+    renderer.frames(12);
     config.with_mut(|config| config.covered = true);
-    renderer.render_frames(12);
-    assert_eq!(pixel(&renderer, 49, 49), [255, 255, 255, 255]);
-    assert_eq!(pixel(&renderer, 380, 160), [255, 0, 0, 255]);
-    let covered_outline = pixel(&renderer, 48, 110);
+    renderer.frames(12);
+    assert_eq!(renderer.pixel(49, 49), [255, 255, 255, 255]);
+    assert_eq!(renderer.pixel(380, 160), [255, 0, 0, 255]);
+    let covered_outline = renderer.pixel(48, 110);
     assert!(
         covered_outline[0] < 150 && covered_outline[1] < 150 && covered_outline[2] < 150,
         "opaque content must not cover the outline: {covered_outline:?}"
     );
     config.with_mut(|config| config.clickable = true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     interaction.with_mut(|state| state.set_dragged(true));
-    renderer.render_frames(90);
-    let covered_feedback = pixel(&renderer, 380, 160);
+    renderer.frames(90);
+    let covered_feedback = renderer.pixel(380, 160);
     assert!(
         covered_feedback[0].abs_diff(236) <= 1
             && covered_feedback[1] == 0
@@ -417,8 +399,8 @@ fn check_cards(samples: u32) {
     interaction.with_mut(|state| state.set_dragged(false));
     config.with_mut(|config| config.clickable = false);
     config.with_mut(|config| config.variant = CardVariant::Elevated);
-    renderer.render_frames(12);
-    let shadow = pixel(&renderer, 380, 193);
+    renderer.frames(12);
+    let shadow = renderer.pixel(380, 193);
     assert!(
         shadow[0] < 255 && shadow[0] == shadow[1] && shadow[1] == shadow[2],
         "shadow={shadow:?}"
@@ -435,7 +417,7 @@ fn check_cards(samples: u32) {
         CardVariant::Outlined,
     ] {
         config.with_mut(|config| config.variant = variant);
-        renderer.render_frames(90);
+        renderer.frames(90);
         assert_eq!(
             interaction.get(),
             InteractionState::default(),
@@ -446,16 +428,12 @@ fn check_cards(samples: u32) {
             .bounds()
             .expect("reference bounds");
         assert_eq!(
-            pixel(&renderer, 380, 160),
-            pixel(
-                &renderer,
-                (reference.x1 - 28.0) as u32,
-                (reference.y1 - 32.0) as u32
-            ),
+            renderer.pixel(380, 160),
+            renderer.pixel((reference.x1 - 28.0) as u32, (reference.y1 - 32.0) as u32),
             "dark {variant:?} must use its specified container role"
         );
         assert_eq!(control(&renderer, "Card action").0, id);
-        let pixels = renderer.read_pixels().expect("dark text pixels");
+        let pixels = renderer.read_pixels();
         let width = renderer.physical_size().width as usize;
         for y in 24..64 {
             let card_start = ((48 + y) * width + 72) * 4;
@@ -468,7 +446,7 @@ fn check_cards(samples: u32) {
             );
         }
     }
-    let dark_pixels = renderer.read_pixels().expect("dark pixels");
+    let dark_pixels = renderer.read_pixels();
     let width = renderer.physical_size().width;
     assert!(
         (72..112).any(|y| (72..260).any(|x| {
@@ -484,8 +462,8 @@ fn check_cards(samples: u32) {
         config.variant = CardVariant::Elevated;
     });
     focus::clear_focus(true);
-    renderer.render_frames(90);
-    let restored = renderer.read_pixels().expect("restored theme pixels");
+    renderer.frames(90);
+    let restored = renderer.read_pixels();
     for y in 40..194 {
         let start = ((y * width + 40) * 4) as usize;
         let end = ((y * width + 420) * 4) as usize;
@@ -496,7 +474,7 @@ fn check_cards(samples: u32) {
     }
     let parent_calls = calls.get();
     config.with_mut(|config| config.nested_action = true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     let (nested_id, nested) = control(&renderer, "Nested action");
     let bounds = nested.bounds().expect("nested action bounds");
     let position = PxPosition::from_f32_xy(
@@ -505,9 +483,9 @@ fn check_cards(samples: u32) {
     );
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(100);
+    renderer.frames(100);
     assert_eq!(probe.get().nested_calls.unwrap().get(), 1);
     assert_eq!(
         calls.get(),
@@ -523,7 +501,7 @@ fn check_cards(samples: u32) {
     );
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(100);
+    renderer.frames(100);
     assert_eq!(
         probe.get().nested_calls.unwrap().get(),
         2,

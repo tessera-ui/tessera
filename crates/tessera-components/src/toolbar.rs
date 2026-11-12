@@ -332,10 +332,7 @@ pub fn docked_toolbar(
 #[cfg(test)]
 mod tests {
 
-    use tessera_ui::{
-        Modifier, State, remember, tessera,
-        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
-    };
+    use tessera_ui::{Modifier, State, remember, tessera, testing::UiTest};
 
     use crate::{spacer::spacer, theme::material_theme};
 
@@ -412,15 +409,11 @@ mod tests {
         ] {
             let output = tessera_ui::testing::TestProbe::default();
             let content_output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
             let content_probe = content_output.clone();
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    fixture(orientation, expanded, probe.clone(), content_probe.clone());
-                })
-                .viewport_px(400, 400),
-            );
-            let snapshot = pump_layout_test_session(&mut session, 0);
+            let mut session = UiTest::new()
+                .content(|| fixture(orientation, expanded, output.clone(), content_probe.clone()))
+                .viewport(400, 400);
+            let snapshot = session.frame();
             snapshot.node("toolbar").size(width, height);
             if expanded {
                 for (tag, offset) in [
@@ -446,7 +439,7 @@ mod tests {
                 };
                 assert_eq!(end_padding, Dp(8.0).to_px());
             } else {
-                snapshot.node("content-action").size(48, 48).position(8, 8);
+                snapshot.node("content-action").rect(8, 8, 48, 48);
             }
         }
     }
@@ -457,29 +450,25 @@ mod tests {
             let horizontal = orientation == ToolbarOrientation::Horizontal;
             let output = tessera_ui::testing::TestProbe::default();
             let content_output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
             let content_probe = content_output.clone();
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    fixture(orientation, true, probe.clone(), content_probe.clone());
-                })
-                .viewport_px(400, 400),
-            );
-            let initial = pump_layout_test_session(&mut session, 0);
+            let mut session = UiTest::new()
+                .content(|| fixture(orientation, true, output.clone(), content_probe.clone()))
+                .viewport(400, 400);
+            let initial = session.frame();
             initial.node("toolbar").size(
                 if horizontal { 168 } else { 64 },
                 if horizontal { 64 } else { 168 },
             );
             output.get().expect("fixture state").set(false);
-            let collapsed = pump_layout_test_session(&mut session, 16_666_667);
+            let collapsed = session.frames(1);
             collapsed.node("toolbar").size(64, 64);
-            collapsed.node("content-action").size(48, 48).position(8, 8);
+            collapsed.node("content-action").rect(8, 8, 48, 48);
 
             content_output
                 .get()
                 .expect("persistent content state")
                 .set(Dp(40.0));
-            let updated = pump_layout_test_session(&mut session, 33_333_334);
+            let updated = session.frames(1);
             updated.node("toolbar").size(
                 if horizontal { 56 } else { 64 },
                 if horizontal { 64 } else { 56 },
@@ -490,12 +479,12 @@ mod tests {
             );
 
             output.get().expect("fixture state").set(true);
-            let expanded = pump_layout_test_session(&mut session, 50_000_001);
+            let expanded = session.frames(1);
             expanded.node("toolbar").size(
                 if horizontal { 160 } else { 64 },
                 if horizontal { 64 } else { 160 },
             );
-            expanded.node("leading-action").size(48, 48).position(8, 8);
+            expanded.node("leading-action").rect(8, 8, 48, 48);
             expanded.node("content-action").size(40, 40).position(
                 if horizontal { 60 } else { 12 },
                 if horizontal { 12 } else { 60 },
@@ -552,34 +541,27 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     fn check_default_shadow() {
-        use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
+        use tessera_ui::testing::UiTest;
 
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || elevation_fixture(probe.clone())),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 160,
-                height: 160,
-                ..Default::default()
-            },
-        )
-        .expect("native GPU renderer");
-        renderer.render_frames(4);
-        let default = renderer.read_pixels().expect("default elevation pixels");
+        let mut renderer = UiTest::new()
+            .viewport(160, 160)
+            .rendered(crate::TesseraComponents)
+            .content(|| elevation_fixture(output.clone()));
+        renderer.frames(4);
+        let default = renderer.read_pixels();
         let elevation = output.get().expect("fixture elevation state");
         elevation.set(Some(Dp(6.0)));
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_eq!(
             default,
-            renderer.read_pixels().expect("explicit 6dp pixels"),
+            renderer.read_pixels(),
             "the default must reach the same surface drawing as explicit 6dp"
         );
 
         elevation.set(Some(Dp::ZERO));
-        renderer.render_frames(4);
-        let flat = renderer.read_pixels().expect("zero elevation pixels");
+        renderer.frames(4);
+        let flat = renderer.read_pixels();
         let shadow_pixels = |pixels: &[u8]| {
             let mut crop = Vec::new();
             for y in 112..128 {
@@ -602,11 +584,8 @@ mod tests {
         );
 
         elevation.set(None);
-        renderer.render_frames(4);
-        assert_eq!(
-            default,
-            renderer.read_pixels().expect("restored default pixels")
-        );
+        renderer.frames(4);
+        assert_eq!(default, renderer.read_pixels());
     }
 
     #[tessera]
@@ -643,11 +622,10 @@ mod tests {
     #[test]
     fn docked_toolbar_fills_the_available_width_at_64dp_height() {
         for (width, gap) in [(132, 4), (140, 12), (320, 32), (800, 32)] {
-            let snapshot = layout_test(|| {
-                docked_fixture();
-            })
-            .viewport_px(width, 400)
-            .run();
+            let snapshot = UiTest::new()
+                .content(docked_fixture)
+                .viewport(width, 400)
+                .frame();
             snapshot.node("docked").size(width as i32, 64);
             let first = snapshot.node("first-action").bounds();
             let second = snapshot.node("second-action").bounds();

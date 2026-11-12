@@ -8,11 +8,8 @@ use std::time::Duration;
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State, accesskit::Action,
+    focus, remember, tessera, testing::UiTest,
 };
 
 use crate::{
@@ -116,9 +113,9 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
         });
 }
 
-fn shadow(renderer: &HeadlessRenderer, key: &str) -> Vec<u8> {
+fn shadow(renderer: &UiTest, key: &str) -> Vec<u8> {
     let [x, y, width, _] = rect(renderer, key);
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let mut strip = Vec::new();
     for py in y + 41..y + 63 {
         let start = ((py as u32 * renderer.physical_size().width + x as u32) * 4) as usize;
@@ -127,7 +124,7 @@ fn shadow(renderer: &HeadlessRenderer, key: &str) -> Vec<u8> {
     strip
 }
 
-fn assert_shadow(renderer: &HeadlessRenderer, elevated: bool) {
+fn assert_shadow(renderer: &UiTest, elevated: bool) {
     let actual = shadow(renderer, "chip");
     let expected = shadow(renderer, "reference");
     let differences: Vec<_> = actual
@@ -151,9 +148,9 @@ fn assert_shadow(renderer: &HeadlessRenderer, elevated: bool) {
     );
 }
 
-fn count_icon(renderer: &HeadlessRenderer, color: [u8; 3]) -> usize {
+fn count_icon(renderer: &UiTest, color: [u8; 3]) -> usize {
     let [x, y, _, height] = rect(renderer, "Sample chip");
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let mut count = 0;
     for py in y + height / 2 - 9..y + height / 2 + 9 {
         for px in x - 26..x - 8 {
@@ -172,20 +169,13 @@ fn count_icon(renderer: &HeadlessRenderer, color: [u8; 3]) -> usize {
 
 fn check_appearance(samples: u32) {
     let probe = tessera_ui::testing::TestProbe::default();
-    let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 600,
-            height: 160,
-            sample_count: samples,
-            frame_time: Duration::from_millis(10),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(5);
+    let mut renderer = UiTest::new()
+        .viewport(600, 160)
+        .samples(samples)
+        .frame_step(Duration::from_millis(10))
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    renderer.frames(5);
     let settings = probe.get().unwrap();
     let point = PxPosition::from_f32_xy(120.0, 56.0);
     let outside = PxPosition::from_f32_xy(580.0, 140.0);
@@ -201,22 +191,22 @@ fn check_appearance(samples: u32) {
             s.reference = Dp(3.0);
         });
         renderer.pointer_move(MOUSE_POINTER_ID, point);
-        renderer.render_frames(5);
+        renderer.frames(5);
         assert_ne!(shadow(&renderer, "chip"), shadow(&renderer, "reference"));
-        renderer.render_frames(20);
+        renderer.frames(20);
         assert_shadow(&renderer, true);
         settings.with_mut(|s| {
             s.enabled = false;
             s.reference = Dp::ZERO;
         });
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_shadow(&renderer, false);
         settings.with_mut(|s| {
             s.enabled = true;
             s.reference = Dp(1.0);
         });
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        renderer.render_frames(20);
+        renderer.frames(20);
         assert_shadow(&renderer, true);
     }
     settings.with_mut(|s| {
@@ -226,11 +216,11 @@ fn check_appearance(samples: u32) {
         s.reference = Dp(1.0);
     });
     renderer.pointer_move(MOUSE_POINTER_ID, point);
-    renderer.render_frames(20);
+    renderer.frames(20);
     assert_shadow(&renderer, true);
     settings.with_mut(|s| s.reference = Dp::ZERO);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(20);
+    renderer.frames(20);
     assert_shadow(&renderer, false);
     renderer.pointer_move(MOUSE_POINTER_ID, outside);
     renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
@@ -239,13 +229,13 @@ fn check_appearance(samples: u32) {
         s.variant = ChipVariant::Input;
         s.selected = false;
     });
-    renderer.render_frames(30);
+    renderer.frames(30);
     assert!(count_icon(&renderer, [0, 255, 0]) > 20);
     renderer.pointer_move(MOUSE_POINTER_ID, point);
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert!(count_icon(&renderer, [246, 80, 0]) > 20);
     settings.with_mut(|s| s.custom = true);
-    renderer.render_frames(5);
+    renderer.frames(5);
     assert!(count_icon(&renderer, [0, 80, 246]) > 20);
     settings.with_mut(|s| s.custom = false);
     renderer.pointer_move(MOUSE_POINTER_ID, outside);
@@ -257,16 +247,11 @@ fn check_appearance(samples: u32) {
         .find(|(_, node)| node.label() == Some("Chip action"))
         .unwrap()
         .0;
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Focus,
-        target_tree: TreeId::ROOT,
-        target_node: id,
-        data: None,
-    }));
-    renderer.render_frames(10);
+    assert!(renderer.accessibility_action(id, Action::Focus));
+    renderer.frames(10);
     assert!(count_icon(&renderer, [243, 89, 0]) > 20);
     let [x, y, _, _] = rect(&renderer, "chip");
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let offset = (((y + 8) as u32 * renderer.physical_size().width + (x + 90) as u32) * 4) as usize;
     let [red, green, blue]: [u8; 3] = pixels[offset..offset + 3].try_into().unwrap();
     assert!(
@@ -274,7 +259,7 @@ fn check_appearance(samples: u32) {
         "focus outline must use the green variant role, got {red}, {green}, {blue}"
     );
     settings.with_mut(|s| s.enabled = false);
-    renderer.render_frames(2);
+    renderer.frames(2);
     assert!(count_icon(&renderer, [206, 206, 206]) > 20);
 }
 

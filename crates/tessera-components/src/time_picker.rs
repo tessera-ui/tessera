@@ -290,7 +290,7 @@ struct TimePickerSnapshot {
 /// time_picker().layout(TimePickerLayout::Horizontal);
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn time_picker(
@@ -314,7 +314,9 @@ pub fn time_picker(
     let state = if let Some(state) = controller {
         state
     } else {
-        remember(|| TimePickerController::new(initial_hour, initial_minute, is_24_hour, display_mode))
+        remember(|| {
+            TimePickerController::new(initial_hour, initial_minute, is_24_hour, display_mode)
+        })
     };
     time_picker_content(
         state,
@@ -1419,7 +1421,7 @@ fn clock_value(
 ///     .picker_layout(TimePickerLayout::Horizontal);
 /// # });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn time_picker_dialog(
@@ -1659,19 +1661,13 @@ fn current_time_utc() -> (u8, u8) {
 mod tests {
 
     use tessera_foundation::modifier::ModifierExt as _;
-    use tessera_ui::{
-        CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType,
-        PxPosition, State, remember, tessera,
-        testing::{
-            layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
-            start_layout_test_session,
-        },
-    };
+    use tessera_ui::{Dp, Modifier, PxPosition, State, remember, tessera, testing::UiTest};
 
     use crate::theme::material_theme;
 
     use super::{
-        TimePickerLayout, TimePickerSelection, TimePickerController, time_picker, time_picker_dialog,
+        TimePickerController, TimePickerLayout, TimePickerSelection, time_picker,
+        time_picker_dialog,
     };
 
     #[tessera]
@@ -1747,13 +1743,10 @@ mod tests {
                 116,
             ),
         ] {
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    arrangement_fixture(arrangement, is_24_hour);
-                })
-                .viewport_px(viewport.0, viewport.1),
-            );
-            let snapshot = pump_layout_test_session(&mut session, 0);
+            let mut session = UiTest::new()
+                .content(move || arrangement_fixture(arrangement, is_24_hour))
+                .viewport(viewport.0, viewport.1);
+            let snapshot = session.frame();
             snapshot.node("time-picker").size(size.0, size.1);
             let clock = snapshot.node("time-clock").bounds();
             assert_eq!((clock.x.raw(), clock.y.raw()), (clock_x, clock_y));
@@ -1797,13 +1790,10 @@ mod tests {
 
     #[test]
     fn constrained_horizontal_dialog_restores_vertical_header_spacing() {
-        let mut session = start_layout_test_session(
-            layout_test(|| {
-                constrained_dialog_fixture();
-            })
-            .viewport_px(800, 600),
-        );
-        let snapshot = pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new()
+            .content(constrained_dialog_fixture)
+            .viewport(800, 600);
+        let snapshot = session.frame();
         snapshot.node("time-picker-dialog").size(400, 472);
         let clock = snapshot.node("time-clock").bounds();
         assert_eq!((clock.x.raw(), clock.y.raw()), (72, 152));
@@ -1813,68 +1803,31 @@ mod tests {
     fn dial_pointer_selection_distinguishes_inner_hours_and_advances_to_minutes() {
         for (is_24_hour, radius, expected_hour) in [(false, 101.0, 3), (true, 69.0, 15)] {
             let output = tessera_ui::testing::TestProbe::default();
-            let probe = output.clone();
-            let mut session = start_layout_test_session(
-                layout_test(move || {
-                    clock_fixture(is_24_hour, probe.clone());
-                })
-                .viewport_px(400, 500),
-            );
-            let snapshot = pump_layout_test_session(&mut session, 0);
+            let mut session = UiTest::new()
+                .content(|| clock_fixture(is_24_hour, output.clone()))
+                .viewport(400, 500);
+            let snapshot = session.frame();
             snapshot.node("time-clock").size(256, 256);
             let bounds = snapshot.node("time-clock").bounds();
-            let cursor = Some(PxPosition::from_f32_xy(
+            let cursor = PxPosition::from_f32_xy(
                 bounds.x.to_f32() + bounds.width.to_f32() / 2.0 + radius,
                 bounds.y.to_f32() + bounds.height.to_f32() / 2.0,
-            ));
-            for (index, content) in [
-                CursorEventContent::Pressed(PressKeyEventType::Left),
-                CursorEventContent::Released(PressKeyEventType::Left),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                pump_layout_test_session_with_input(
-                    &mut session,
-                    (index as u64 + 1) * 16_666_667,
-                    vec![PointerChange::new(
-                        tessera_ui::current_frame_time().unwrap(),
-                        1,
-                        content,
-                        GestureState::TapCandidate,
-                    )],
-                    cursor,
-                );
-            }
+            );
+            session.click_at(cursor);
             let state = output.get().unwrap();
             assert_eq!(state.with(TimePickerController::hour), expected_hour);
             assert_eq!(state.with(|s| s.selection), TimePickerSelection::Minute);
-            for (index, content) in [
-                CursorEventContent::Pressed(PressKeyEventType::Left),
-                CursorEventContent::Released(PressKeyEventType::Left),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                pump_layout_test_session_with_input(
-                    &mut session,
-                    (index as u64 + 3) * 16_666_667,
-                    vec![PointerChange::new(
-                        tessera_ui::current_frame_time().unwrap(),
-                        1,
-                        content,
-                        GestureState::TapCandidate,
-                    )],
-                    cursor,
-                );
-            }
+            session.click_at(cursor);
             assert_eq!(state.with(TimePickerController::minute), 15);
         }
     }
     #[tessera]
-    fn time_input_fixture(output: tessera_ui::testing::TestProbe<Option<State<TimePickerController>>>) {
+    fn time_input_fixture(
+        output: tessera_ui::testing::TestProbe<Option<State<TimePickerController>>>,
+    ) {
         let state = remember(|| {
-            let mut state = TimePickerController::new(10, 8, false, super::TimePickerDisplayMode::Input);
+            let mut state =
+                TimePickerController::new(10, 8, false, super::TimePickerDisplayMode::Input);
             state.selection = TimePickerSelection::Minute;
             state
         });
@@ -1889,36 +1842,12 @@ mod tests {
     #[test]
     fn focusing_an_input_updates_the_active_clock_field() {
         let output = tessera_ui::testing::TestProbe::default();
-        let probe = output.clone();
-        let mut session = start_layout_test_session(
-            layout_test(move || {
-                time_input_fixture(probe.clone());
-            })
-            .viewport_px(400, 500),
-        );
-        pump_layout_test_session(&mut session, 0);
-        for (index, content) in [
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            CursorEventContent::Released(PressKeyEventType::Left),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            pump_layout_test_session_with_input(
-                &mut session,
-                (index as u64 + 1) * 16_666_667,
-                vec![PointerChange::new(
-                    tessera_ui::current_frame_time().unwrap(),
-                    1,
-                    content,
-                    GestureState::TapCandidate,
-                )],
-                Some(PxPosition::from_f32_xy(48.0, 36.0)),
-            );
-        }
-        for frame in 3..6 {
-            pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
+        let mut session = UiTest::new()
+            .content(|| time_input_fixture(output.clone()))
+            .viewport(400, 500);
+        session.frame();
+        session.click_at(PxPosition::from_f32_xy(48.0, 36.0));
+        session.frames(3);
         assert_eq!(
             output.get().unwrap().with(|s| s.selection),
             TimePickerSelection::Hour

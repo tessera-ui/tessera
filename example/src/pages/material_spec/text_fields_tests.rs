@@ -4,8 +4,8 @@ use tessera_components::scrollable::ScrollableController;
 use tessera_ui::{
     CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PressKeyEventType,
     PxPosition,
-    accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, NodeId, Role},
+    testing::UiTest,
     winit::event::Ime,
 };
 
@@ -67,39 +67,34 @@ fn fixture(
         });
     });
 }
-fn renderer(kind: usize) -> HeadlessRenderer {
+fn renderer(kind: usize) -> UiTest<'static> {
     renderer_with_scroll(kind).0
 }
 
 fn renderer_with_scroll(
     kind: usize,
 ) -> (
-    HeadlessRenderer,
+    UiTest<'static>,
     tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>,
 ) {
     let scroll = tessera_ui::testing::TestProbe::default();
     let output = scroll.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(kind, output.clone())),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: match kind {
+    let mut renderer = UiTest::new()
+        .viewport(
+            match kind {
                 3..=13 | 15 | 16 | 20 | 21 => 1024,
                 17..=19 => 676,
                 22 => 1363,
                 _ => 900,
             },
-            height: if kind == 19 { 5000 } else { 1600 },
-            sample_count: 1,
-            frame_time: Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(5);
+            if kind == 19 { 5000 } else { 1600 },
+        )
+        .rendered(crate::TestPipelines)
+        .content(move || fixture(kind, output.clone()));
+    renderer.frames(5);
     (renderer, scroll)
 }
-fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -108,7 +103,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
         .unwrap_or_else(|| panic!("missing {label} {role:?}"));
     (id, node.clone())
 }
-fn group_descendants(renderer: &HeadlessRenderer, label: &str) -> Vec<(NodeId, Node)> {
+fn group_descendants(renderer: &UiTest, label: &str) -> Vec<(NodeId, Node)> {
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
@@ -123,7 +118,7 @@ fn group_descendants(renderer: &HeadlessRenderer, label: &str) -> Vec<(NodeId, N
         .collect()
 }
 
-fn group_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+fn group_node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
     let mut matches = group_descendants(renderer, label)
         .into_iter()
         .filter(|(_, node)| node.role() == role);
@@ -137,7 +132,7 @@ fn group_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, 
     found
 }
 
-fn sample_node(renderer: &HeadlessRenderer, group: &str, role: Role) -> (NodeId, Node) {
+fn sample_node(renderer: &UiTest, group: &str, role: Role) -> (NodeId, Node) {
     let found = group_node(renderer, group, role);
     let label = found
         .1
@@ -153,11 +148,11 @@ fn sample_node(renderer: &HeadlessRenderer, group: &str, role: Role) -> (NodeId,
     found
 }
 
-fn act_in_group(renderer: &mut HeadlessRenderer, group: &str, role: Role, action: Action) {
+fn act_in_group(renderer: &mut UiTest, group: &str, role: Role, action: Action) {
     act_node(renderer, group_node(renderer, group, role).0, action);
 }
 
-fn group_input_value(renderer: &HeadlessRenderer, group: &str) -> String {
+fn group_input_value(renderer: &UiTest, group: &str) -> String {
     group_node(renderer, group, Role::TextInput)
         .1
         .value()
@@ -165,7 +160,7 @@ fn group_input_value(renderer: &HeadlessRenderer, group: &str) -> String {
         .to_owned()
 }
 
-fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
+fn exists(renderer: &UiTest, label: &str, role: Role) -> bool {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -173,30 +168,25 @@ fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
         .iter()
         .any(|(_, node)| node.role() == role && crate::has_label(&node, label))
 }
-fn act(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
+fn act(renderer: &mut UiTest, label: &str, role: Role, action: Action) {
     act_node(renderer, node(renderer, label, role).0, action);
 }
 
-fn act_node(renderer: &mut HeadlessRenderer, id: NodeId, action: Action) {
+fn act_node(renderer: &mut UiTest, id: NodeId, action: Action) {
     assert!(
-        renderer.dispatch_accessibility_action(ActionRequest {
-            action,
-            target_tree: TreeId::ROOT,
-            target_node: id,
-            data: None,
-        }),
+        renderer.accessibility_action(id, action),
         "{action:?} target {id:?}"
     );
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
-fn commit(renderer: &mut HeadlessRenderer, value: &str) {
+fn commit(renderer: &mut UiTest, value: &str) {
     for character in value.chars() {
         renderer.inject_ime_event(Ime::Commit(character.to_string()));
     }
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
-fn input_value(renderer: &HeadlessRenderer, label: &str) -> String {
+fn input_value(renderer: &UiTest, label: &str) -> String {
     node(renderer, label, Role::TextInput)
         .1
         .value()
@@ -456,7 +446,7 @@ fn counter_overflow_and_password_visibility_keep_real_editor_values() {
             ((bounds.y0 + bounds.y1) / 2.0) as f32,
         );
         renderer.pointer_move(MOUSE_POINTER_ID, position);
-        renderer.step_frame();
+        renderer.frames(1);
         let base = tessera_ui::time::Instant::now();
         for (milliseconds, content) in [
             (0, CursorEventContent::Pressed(PressKeyEventType::Left)),
@@ -470,10 +460,10 @@ fn counter_overflow_and_password_visibility_keep_real_editor_values() {
                 content,
                 GestureState::TapCandidate,
             ));
-            renderer.step_frame();
+            renderer.frames(1);
         }
         renderer.inject_ime_event(Ime::Commit("Corrected".into()));
-        renderer.render_frames(4);
+        renderer.frames(4);
         assert_eq!(input_value(&renderer, "Description"), "Corrected");
         node(&renderer, "Character count: 9 of 100", Role::Label);
         node(&renderer, "Supporting text", Role::Label);
@@ -821,7 +811,7 @@ fn outlined_anatomy_uses_one_reference_artboard_and_retains_input_on_resize() {
             .1
             .bounds()
             .unwrap();
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let pixel = |x: f64, y: f64| {
             let offset = (y.floor() as usize * 1024 + x.floor() as usize) * 4;
             &pixels[offset..offset + 4]
@@ -844,7 +834,7 @@ fn outlined_anatomy_uses_one_reference_artboard_and_retains_input_on_resize() {
         );
         assert_eq!(group_input_value(&renderer, &input), "");
         renderer.resize(512, 1600);
-        renderer.render_frames(4);
+        renderer.frames(4);
         let panel = node(
             &renderer,
             &format!("{theme} outlined anatomy panel"),
@@ -915,7 +905,7 @@ fn specs_anatomy_keeps_original_inputs_and_publishes_ten_geometry_callouts() {
         group_input_value(&renderer, "Filled populated anatomy field preview"),
         "Input text"
     );
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let width = renderer.physical_size().width as usize;
     let pixel = |x: f64, y: f64| {
         let offset = (y.floor() as usize * width + x.floor() as usize) * 4;
@@ -964,7 +954,7 @@ fn specs_anatomy_keeps_original_inputs_and_publishes_ten_geometry_callouts() {
         ""
     );
     renderer.resize(512, 1600);
-    renderer.render_frames(4);
+    renderer.frames(4);
     let panel = node(&renderer, "Light filled anatomy panel", Role::Group)
         .1
         .bounds()
@@ -1007,7 +997,7 @@ fn field_color_panels_use_their_own_theme_surface_and_readable_supporting_text()
             .bounds()
             .unwrap();
         let theme = MaterialTheme::from_seed(ACCENT, dark);
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let width = renderer.physical_size().width as usize;
         let pixel = |x: usize, y: usize| {
             let offset = (y * width + x) * 4;
@@ -1167,7 +1157,7 @@ fn measurement_figures_keep_native_field_icon_support_and_counter_geometry() {
             assert_eq!(counter.x0 - support.x1, 16.0);
             assert_eq!(pop.x1 - counter.x1, 16.0);
         } else {
-            let pixels = renderer.read_pixels().unwrap();
+            let pixels = renderer.read_pixels();
             let width = renderer.physical_size().width as usize;
             let pixel = |x: f64, y: f64| {
                 let offset = (y as usize * width + x as usize) * 4;
@@ -1208,7 +1198,7 @@ fn measurement_figures_keep_native_field_icon_support_and_counter_geometry() {
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, earlier);
         let scroll = scroll.get().unwrap();
         scroll.with_mut(|scroll| scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -600.0)));
-        renderer.render_frames(5);
+        renderer.frames(5);
         let right = measurement_name(outlined, 1, true);
         let container_label = format!("{right} container");
         let before = node(&renderer, &container_label, Role::Group)
@@ -1250,7 +1240,7 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
         scroll.with_mut(|scroll| {
             scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -500.0));
         });
-        renderer.render_frames(24);
+        renderer.frames(24);
         let label = format!("{} container", measurement_name(outlined, 1, true));
         let before = node(&renderer, &label, Role::Group).1.bounds().unwrap();
         let callouts: Vec<_> = renderer
@@ -1271,7 +1261,7 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
         let mut geometry = 0;
         let mut measurements = 0;
         for _ in 0..6 {
-            renderer.render_frames(1);
+            renderer.frames(1);
             let work = renderer.diagnostics();
             geometry += work.geometry_nodes_updated;
             measurements += renderer
@@ -1299,9 +1289,12 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
             assert_eq!(after.width(), before.width());
             assert_eq!(after.height(), before.height());
         }
-        renderer.render_frames(1);
+        renderer.frames(1);
         assert_eq!(
-            renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
+            renderer
+                .work()
+                .phase(tessera_ui::testing::WorkPhase::Paint)
+                .count(),
             0
         );
         assert_eq!(
@@ -1313,11 +1306,11 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
         );
 
         renderer.resize(640, 1600);
-        renderer.render_frames(12);
+        renderer.frames(12);
         scroll.with_mut(|scroll| {
             scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -500.0));
         });
-        renderer.render_frames(5);
+        renderer.frames(5);
         let empty = node(
             &renderer,
             &format!("{} container", measurement_name(outlined, 1, false)),
@@ -1405,7 +1398,7 @@ fn pointer_clear_fixture(
         });
 }
 
-fn pointer_click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+fn pointer_click(renderer: &mut UiTest, label: &str, role: Role) {
     let bounds = node(renderer, label, role).1.bounds().unwrap();
     let position = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
@@ -1414,7 +1407,7 @@ fn pointer_click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(5);
+    renderer.frames(5);
 }
 
 #[test]
@@ -1423,7 +1416,7 @@ fn required_labeling_field_accepts_pointer_focus_and_editing_at_scaled_artboard_
     let mut renderer = renderer(22);
     for width in [1363, 676, 320] {
         renderer.resize(width, 1000);
-        renderer.render_frames(8);
+        renderer.frames(8);
         let (id, field) = node(&renderer, "Username*", Role::TextInput);
         let bounds = field.bounds().unwrap();
         let scale = f64::from(width) / 676.0;
@@ -1438,12 +1431,12 @@ fn required_labeling_field_accepts_pointer_focus_and_editing_at_scaled_artboard_
                 "semantic input must match the independently mapped canonical inner field at {width}: {bounds:?}, actual {actual}, expected {expected}"
             );
         }
-        let before = renderer.read_pixels().unwrap();
+        let before = renderer.read_pixels();
         let position = PxPosition::from_f32_xy((500.0 * scale) as f32, (135.0 * scale) as f32);
         renderer.pointer_move(MOUSE_POINTER_ID, position);
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
             id,
@@ -1451,7 +1444,7 @@ fn required_labeling_field_accepts_pointer_focus_and_editing_at_scaled_artboard_
         );
         commit(&mut renderer, "Q");
         assert!(input_value(&renderer, "Username*").contains('Q'));
-        let after = renderer.read_pixels().unwrap();
+        let after = renderer.read_pixels();
         let mut changed = false;
         for y in (123.0 * scale).floor() as usize..(147.0 * scale).ceil() as usize {
             for x in (378.0 * scale).floor() as usize..(673.0 * scale).ceil() as usize {

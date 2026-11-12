@@ -3938,31 +3938,27 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         for keyed in [false, true] {
             let probe = ConditionalLoopProbe::default();
-            let mut session = crate::testing::start_layout_test_session(
-                crate::testing::layout_test({
-                    let probe = probe.clone();
-                    move || conditional_loop_fixture(keyed, probe.clone())
-                })
-                .viewport_px(100, 20),
-            );
-            let initial = crate::testing::pump_layout_test_session(&mut session, 0);
+            let mut session = crate::testing::UiTest::new()
+                .content(|| conditional_loop_fixture(keyed, probe.clone()))
+                .viewport(100, 20);
+            let initial = session.frame();
             let values = probe.values.get();
             let first = values[1].expect("test fixture value is present");
             let second = values[2].expect("test fixture value is present");
             assert_eq!(first.get(), 1);
             assert_eq!(second.get(), 2);
-            initial.node("loop-item-1").size(1, 10).position(0, 0);
-            initial.node("loop-item-2").size(2, 10).position(1, 0);
+            initial.node("loop-item-1").rect(0, 0, 1, 10);
+            initial.node("loop-item-2").rect(1, 0, 2, 10);
 
             first.set(11);
-            let changed = crate::testing::pump_layout_test_session(&mut session, 16_666_667);
-            changed.node("loop-item-1").size(11, 10).position(0, 0);
-            changed.node("loop-item-2").size(2, 10).position(11, 0);
+            let changed = session.frames(1);
+            changed.node("loop-item-1").rect(0, 0, 11, 10);
+            changed.node("loop-item-2").rect(11, 0, 2, 10);
             assert_eq!(second.get(), 2);
             probe.tick.get().expect("test fixture entry exists").set(1);
-            let replayed = crate::testing::pump_layout_test_session(&mut session, 33_333_334);
-            replayed.node("loop-item-1").size(11, 10).position(0, 0);
-            replayed.node("loop-item-2").size(2, 10).position(11, 0);
+            let replayed = session.frames(1);
+            replayed.node("loop-item-1").rect(0, 0, 11, 10);
+            replayed.node("loop-item-2").rect(11, 0, 2, 10);
 
             if keyed {
                 probe
@@ -3970,9 +3966,9 @@ mod tests {
                     .get()
                     .expect("test fixture entry exists")
                     .set(vec![0, 2, 1]);
-                let reordered = crate::testing::pump_layout_test_session(&mut session, 50_000_001);
-                reordered.node("loop-item-2").size(2, 10).position(0, 0);
-                reordered.node("loop-item-1").size(11, 10).position(2, 0);
+                let reordered = session.frames(1);
+                reordered.node("loop-item-2").rect(0, 0, 2, 10);
+                reordered.node("loop-item-1").rect(2, 0, 11, 10);
                 assert!(probe.values.get()[1].expect("test fixture entry exists") == first);
                 assert!(probe.values.get()[2].expect("test fixture entry exists") == second);
 
@@ -3981,8 +3977,8 @@ mod tests {
                     .get()
                     .expect("test fixture entry exists")
                     .set(vec![0, 2]);
-                let removed = crate::testing::pump_layout_test_session(&mut session, 66_666_668);
-                removed.node("loop-item-2").size(2, 10).position(0, 0);
+                let removed = session.frames(1);
+                removed.node("loop-item-2").rect(0, 0, 2, 10);
                 assert!(!first.is_alive());
                 assert!(second.is_alive());
             }
@@ -3994,14 +3990,10 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = ConditionalLoopProbe::default();
-        let mut session = crate::testing::start_layout_test_session(
-            crate::testing::layout_test({
-                let probe = probe.clone();
-                move || conditional_loop_fixture(false, probe.clone())
-            })
-            .viewport_px(100, 20),
-        );
-        crate::testing::pump_layout_test_session(&mut session, 0);
+        let mut session = crate::testing::UiTest::new()
+            .content(|| conditional_loop_fixture(false, probe.clone()))
+            .viewport(100, 20);
+        session.frame();
         let first = probe.values.get()[1].expect("test fixture entry exists");
         let second = probe.values.get()[2].expect("test fixture entry exists");
 
@@ -4010,9 +4002,9 @@ mod tests {
             second.set(22);
         });
 
-        let changed = crate::testing::pump_layout_test_session(&mut session, 16_666_667);
-        changed.node("loop-item-1").size(11, 10).position(0, 0);
-        changed.node("loop-item-2").size(22, 10).position(11, 0);
+        let changed = session.frames(1);
+        changed.node("loop-item-1").rect(0, 0, 11, 10);
+        changed.node("loop-item-2").rect(11, 0, 22, 10);
     }
 
     #[test]
@@ -4100,20 +4092,17 @@ mod tests {
 
     #[test]
     fn replaced_props_drop_after_runtime_borrows_end() {
-        use crate::testing::{layout_test, pump_layout_test_session, start_layout_test_session};
+        use crate::testing::UiTest;
 
         let generation = crate::testing::TestProbe::default();
         let dropped = crate::testing::TestProbe::new(0_u32);
-        let mut session = start_layout_test_session(layout_test({
-            let generation = generation.clone();
-            let dropped = dropped.clone();
-            move || runtime_on_drop_parent(generation.clone(), dropped.clone())
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session =
+            UiTest::new().content(|| runtime_on_drop_parent(generation.clone(), dropped.clone()));
+        session.frame();
         let state = generation.get().expect("parent published its state");
-        for frame in 1..=3 {
-            session.run(|| state.set(frame));
-            pump_layout_test_session(&mut session, u64::from(frame) * 16_000_000);
+        for value in 1..=3 {
+            session.run(|| state.set(value));
+            session.frames(1);
         }
         let replaced = dropped.get();
         assert!(replaced > 0, "replaced props must be released");
@@ -4379,16 +4368,12 @@ mod tests {
         let key_probe = crate::testing::TestProbe::default();
         let started = std::sync::Arc::new(AtomicUsize::new(0));
         let dropped = std::sync::Arc::new(AtomicUsize::new(0));
-        let mut session = crate::testing::start_layout_test_session(crate::testing::layout_test({
-            let key_probe = key_probe.clone();
-            let started = started.clone();
-            let dropped = dropped.clone();
-            move || launch_fixture(key_probe.clone(), started.clone(), dropped.clone())
-        }));
-        crate::testing::pump_layout_test_session(&mut session, 0);
-        crate::testing::pump_layout_test_session(&mut session, 1_000_000);
+        let mut session = crate::testing::UiTest::new()
+            .content(|| launch_fixture(key_probe.clone(), started.clone(), dropped.clone()));
+        session.frame();
+        session.advance(Duration::from_millis(1));
         assert_eq!(started.load(Ordering::SeqCst), 1);
-        crate::testing::pump_layout_test_session(&mut session, 2_000_000);
+        session.advance(Duration::from_millis(1));
         assert_eq!(
             started.load(Ordering::SeqCst),
             1,
@@ -4396,9 +4381,7 @@ mod tests {
         );
 
         key_probe.get().expect("key state").set(1);
-        for frame in 3..6 {
-            crate::testing::pump_layout_test_session(&mut session, frame * 1_000_000);
-        }
+        session.frames(3);
         assert_eq!(started.load(Ordering::SeqCst), 2);
         assert_eq!(
             dropped.load(Ordering::SeqCst),
@@ -4422,23 +4405,18 @@ mod tests {
     fn off_thread_state_update_publishes_to_component_build_dependencies() {
         let state_probe = crate::testing::TestProbe::default();
         let builds = crate::testing::TestProbe::new(Vec::new());
-        let mut session = crate::testing::start_layout_test_session(crate::testing::layout_test({
-            let state_probe = state_probe.clone();
-            let builds = builds.clone();
-            move || async_update_dependency_fixture(state_probe.clone(), builds.clone())
-        }));
-        crate::testing::pump_layout_test_session(&mut session, 0);
+        let mut session = crate::testing::UiTest::new()
+            .content(|| async_update_dependency_fixture(state_probe.clone(), builds.clone()));
+        session.frame();
         assert_eq!(builds.get(), [0]);
         let state = state_probe.get().expect("component remembered its state");
 
         let worker = std::thread::spawn(move || state.set(9));
-        let mut frame = 0;
         while !worker.is_finished() {
-            frame += 1_000_000;
-            crate::testing::pump_layout_test_session(&mut session, frame);
+            session.advance(Duration::from_millis(1));
         }
         worker.join().expect("update worker");
-        crate::testing::pump_layout_test_session(&mut session, frame + 16_000_000);
+        session.frames(1);
         assert_eq!(builds.get(), [0, 9]);
     }
 
@@ -4484,19 +4462,14 @@ mod tests {
         let visible_probe = crate::testing::TestProbe::default();
         let model_probe = crate::testing::TestProbe::default();
         let state_probe = crate::testing::TestProbe::default();
-        let mut session = crate::testing::start_layout_test_session(crate::testing::layout_test({
-            let visible_probe = visible_probe.clone();
-            let model_probe = model_probe.clone();
-            let state_probe = state_probe.clone();
-            move || {
-                component_model_lifetime_fixture(
-                    visible_probe.clone(),
-                    model_probe.clone(),
-                    state_probe.clone(),
-                )
-            }
-        }));
-        crate::testing::pump_layout_test_session(&mut session, 0);
+        let mut session = crate::testing::UiTest::new().content(|| {
+            component_model_lifetime_fixture(
+                visible_probe.clone(),
+                model_probe.clone(),
+                state_probe.clone(),
+            )
+        });
+        session.frame();
         let visible = visible_probe.get().expect("component state");
         let model = model_probe.get().expect("component model");
         let state = state_probe.get().expect("model state");
@@ -4504,7 +4477,7 @@ mod tests {
         assert!(state.is_alive());
 
         session.run(|| visible.set(false));
-        crate::testing::pump_layout_test_session(&mut session, 16_000_000);
+        session.advance(Duration::from_millis(16));
         assert!(!model.is_alive());
         assert!(!state.is_alive());
     }
@@ -4524,21 +4497,16 @@ mod tests {
         let scope_probe = crate::testing::TestProbe::default();
         let model_probe = crate::testing::TestProbe::default();
         let state_probe = crate::testing::TestProbe::default();
-        let mut session = crate::testing::start_layout_test_session(crate::testing::layout_test({
-            let scope_probe = scope_probe.clone();
-            let model_probe = model_probe.clone();
-            let state_probe = state_probe.clone();
-            move || {
-                store_model_fixture(
-                    scope_probe.clone(),
-                    model_probe.clone(),
-                    state_probe.clone(),
-                )
-            }
-        }));
+        let mut session = crate::testing::UiTest::new().content(|| {
+            store_model_fixture(
+                scope_probe.clone(),
+                model_probe.clone(),
+                state_probe.clone(),
+            )
+        });
         let store = session.run(crate::ModelStore::new);
         scope_probe.set(Some(store.scope()));
-        crate::testing::pump_layout_test_session(&mut session, 0);
+        session.frame();
         let state = state_probe.get().expect("injected model state");
         let stored = session.run(|| {
             store

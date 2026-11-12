@@ -1015,13 +1015,10 @@ fn list_focus() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod collection_article_tests {
-    use std::time::Duration;
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
-        MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::Node,
-        headless::{HeadlessConfig, HeadlessRenderer},
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Node, testing::UiTest,
     };
 
     use super::*;
@@ -1044,7 +1041,7 @@ mod collection_article_tests {
         });
     }
 
-    fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
+    fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
         let snapshot = renderer
             .inspect_accessibility()
             .expect("accessibility tree");
@@ -1055,7 +1052,7 @@ mod collection_article_tests {
             .clone()
     }
 
-    fn click(renderer: &mut HeadlessRenderer, node: Node) {
+    fn click(renderer: &mut UiTest, node: Node) {
         let target = renderer
             .accessibility_snapshot()
             .unwrap()
@@ -1085,7 +1082,7 @@ mod collection_article_tests {
                 0.0,
                 (height * 0.5 - center).clamp(-2000.0, 2000.0) as f32,
             );
-            renderer.render_frames(12);
+            renderer.frames(12);
             bounds = renderer
                 .accessibility_snapshot()
                 .unwrap()
@@ -1109,15 +1106,15 @@ mod collection_article_tests {
         renderer.pointer_move(MOUSE_POINTER_ID, position);
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(4);
+        renderer.frames(4);
     }
 
-    fn reveal_section(renderer: &mut HeadlessRenderer, tab: &str, section: &str) {
+    fn reveal_section(renderer: &mut UiTest, tab: &str, section: &str) {
         let target = node(renderer, tab, Role::Tab);
         click(renderer, target);
         let contents = node(renderer, section, Role::Link);
         click(renderer, contents);
-        renderer.render_frames(12);
+        renderer.frames(12);
         let bounds = node(renderer, section, Role::Heading).bounds().unwrap();
         assert!(
             bounds.y0 >= 0.0 && bounds.y0 < f64::from(renderer.physical_size().height),
@@ -1188,21 +1185,11 @@ mod collection_article_tests {
                 vec![],
             ),
         ] {
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || {
-                    fixture(kind);
-                }),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 900,
-                    height: 8000,
-                    sample_count: 1,
-                    frame_time: Duration::from_nanos(16_666_667),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(5);
+            let mut renderer = UiTest::new()
+                .viewport(900, 8000)
+                .rendered(crate::TestPipelines)
+                .content(move || fixture(kind));
+            renderer.frames(5);
             for (tab, sections) in [("Guidelines", guidelines), ("Accessibility", accessibility)] {
                 for section in sections {
                     reveal_section(&mut renderer, tab, section);

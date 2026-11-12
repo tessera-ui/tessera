@@ -1,9 +1,7 @@
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::Role,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
+    accesskit::Role, remember, tessera, testing::UiTest,
 };
 
 use crate::{
@@ -72,7 +70,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     });
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str) {
+fn click(renderer: &mut UiTest, label: &str) {
     let tree = renderer.accessibility_snapshot().expect("tree");
     let rect = tree
         .nodes
@@ -90,12 +88,12 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
     );
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(4);
+    renderer.frames(4);
 }
 
-fn assert_focus(renderer: &HeadlessRenderer, label: &str, stage: &str) {
+fn assert_focus(renderer: &UiTest, label: &str, stage: &str) {
     let tree = renderer.accessibility_snapshot().expect("tree");
     assert_eq!(
         tree.nodes
@@ -159,22 +157,11 @@ fn lazy_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
 #[ignore = "requires a native GPU adapter"]
 fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || {
-                lazy_fixture(observed.clone());
-            }
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 600,
-            height: 350,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(5);
+    let mut renderer = UiTest::new()
+        .viewport(600, 350)
+        .rendered(crate::TesseraComponents)
+        .content(|| lazy_fixture(observed.clone()));
+    renderer.frames(5);
     assert!(
         !renderer
             .accessibility_snapshot()
@@ -187,33 +174,41 @@ fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
     click(&mut renderer, "Action 10");
     assert_focus(&renderer, "Choose action", "opened from a virtualized item");
     close_for_traversal(observed.get().lazy_menu.expect("menu"), &None, true);
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_focus(
         &renderer,
         "Action 9",
         "reverse Tab reveals the previous item",
     );
     for index in [8, 7] {
-        assert!(tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Previous));
-        renderer.render_frames(12);
+        assert!(tessera_ui::focus::request_move_focus(
+            tessera_ui::FocusDirection::Previous
+        ));
+        renderer.frames(12);
         assert_focus(
             &renderer,
             &format!("Action {index}"),
             "repeated traversal uses current lazy bounds",
         );
     }
-    assert!(tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Next));
-    renderer.render_frames(4);
+    assert!(tessera_ui::focus::request_move_focus(
+        tessera_ui::FocusDirection::Next
+    ));
+    renderer.frames(4);
     assert_focus(&renderer, "Action 8", "forward traversal after lazy reveal");
     let current = observed.get().lazy_targets.expect("targets").get()[8];
     current.capture_focus();
-    assert!(!tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Previous));
-    renderer.render_frames(3);
+    assert!(!tessera_ui::focus::request_move_focus(
+        tessera_ui::FocusDirection::Previous
+    ));
+    renderer.frames(3);
     assert_focus(&renderer, "Action 8", "capture rejects queued traversal");
     current.free_focus();
-    assert!(tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Previous));
+    assert!(tessera_ui::focus::request_move_focus(
+        tessera_ui::FocusDirection::Previous
+    ));
     current.request_focus();
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_focus(
         &renderer,
         "Action 8",
@@ -225,22 +220,11 @@ fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
 #[ignore = "requires a native GPU adapter"]
 fn gpu_menu_restores_trigger_without_stealing_external_focus() {
     let observed = tessera_ui::testing::TestProbe::default();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new({
-            let observed = observed.clone();
-            move || {
-                fixture(observed.clone());
-            }
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 400,
-            height: 320,
-            ..Default::default()
-        },
-    )
-    .expect("renderer");
-    renderer.render_frames(3);
+    let mut renderer = UiTest::new()
+        .viewport(400, 320)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(3);
     let controller = observed.get().controller.expect("controller");
     for explicit in [false, true] {
         observed
@@ -248,7 +232,7 @@ fn gpu_menu_restores_trigger_without_stealing_external_focus() {
             .explicit
             .expect("explicit fallback")
             .set(explicit);
-        renderer.render_frames(2);
+        renderer.frames(2);
         for _ in 0..3 {
             click(&mut renderer, "Menu trigger");
             assert_focus(&renderer, "Choose action", "opened");
@@ -268,22 +252,22 @@ fn gpu_menu_restores_trigger_without_stealing_external_focus() {
             for (reverse, expected) in [(false, "Next action"), (true, "Unrelated action")] {
                 click(&mut renderer, "Menu trigger");
                 close_for_traversal(controller, &None, reverse);
-                renderer.render_frames(4);
+                renderer.frames(4);
                 assert!(!controller.with(MenuController::is_open));
                 assert_focus(&renderer, expected, "Tab exit");
             }
         }
         click(&mut renderer, "Menu trigger");
         observed.get().other_focus.expect("other").request_focus();
-        renderer.render_frames(2);
+        renderer.frames(2);
         controller.with_mut(MenuController::close);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_focus(&renderer, "Unrelated action", "external focus");
 
         click(&mut renderer, "Menu trigger");
         observed.get().enabled.expect("enabled").set(false);
         controller.with_mut(MenuController::close);
-        renderer.render_frames(3);
+        renderer.frames(3);
         let tree = renderer.accessibility_snapshot().expect("tree");
         let trigger = tree
             .nodes
@@ -295,7 +279,7 @@ fn gpu_menu_restores_trigger_without_stealing_external_focus() {
             assert_focus(&renderer, "Unrelated action", "disabled trigger");
         }
         observed.get().enabled.expect("enabled").set(true);
-        renderer.render_frames(3);
+        renderer.frames(3);
         assert_ne!(
             renderer.accessibility_snapshot().expect("tree").focus,
             trigger.0

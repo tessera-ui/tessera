@@ -6,10 +6,8 @@
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Color, Dp, Modifier, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
-    testing::TestProbe,
+    Color, Dp, Modifier, State, remember, tessera,
+    testing::{TestProbe, UiTest},
     use_context,
 };
 
@@ -98,13 +96,7 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
         });
 }
 
-fn pixel(renderer: &HeadlessRenderer, x: u32, y: u32) -> [u8; 4] {
-    let pixels = renderer.read_pixels().unwrap();
-    let offset = ((y * renderer.physical_size().width + x) * 4) as usize;
-    pixels[offset..offset + 4].try_into().unwrap()
-}
-
-fn slot_pixel(renderer: &HeadlessRenderer, tag: &str) -> [u8; 4] {
+fn slot_pixel(renderer: &UiTest, tag: &str) -> [u8; 4] {
     let snapshot = renderer.snapshot();
     let mut pending = vec![&snapshot["root"]];
     while let Some(node) = pending.pop() {
@@ -112,7 +104,7 @@ fn slot_pixel(renderer: &HeadlessRenderer, tag: &str) -> [u8; 4] {
             let bounds = &node["bounds"];
             let x = bounds["x"].as_i64().unwrap() + bounds["width"].as_i64().unwrap() / 2;
             let y = bounds["y"].as_i64().unwrap() + bounds["height"].as_i64().unwrap() / 2;
-            return pixel(renderer, x as u32, y as u32);
+            return renderer.pixel(x as u32, y as u32);
         }
         if let Some(children) = node["children"].as_array() {
             pending.extend(children);
@@ -131,21 +123,13 @@ fn check(samples: u32) {
     for scale in [1.0, 1.5] {
         let probe = TestProbe::<Option<State<Settings>>>::default();
         let observed = probe.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture().probe(probe.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 300,
-                height: 160,
-                scale_factor: scale,
-                sample_count: samples,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(300, 160)
+            .scale_factor(scale)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(move || fixture().probe(probe.clone()));
+        renderer.frames(4);
         assert!(
             renderer
                 .work_totals()
@@ -153,11 +137,11 @@ fn check(samples: u32) {
                 > 0
         );
         let settings = observed.get().unwrap();
-        near(pixel(&renderer, 4, 4), [255; 4]);
+        near(renderer.pixel(4, 4), [255; 4]);
         near(slot_pixel(&renderer, "lead"), [0, 255, 0, 255]);
         settings.with_mut(|s| s.selected = true);
-        renderer.render_frames(3);
-        let partial = pixel(&renderer, 4, 4);
+        renderer.frames(3);
+        let partial = renderer.pixel(4, 4);
         assert_ne!(
             partial, [255; 4],
             "selection must animate without shape motion"
@@ -167,30 +151,30 @@ fn check(samples: u32) {
             [0, 0, 255, 255],
             "selection must have intermediate colors"
         );
-        renderer.render_frames(30);
-        near(pixel(&renderer, 4, 4), [0, 0, 255, 255]);
+        renderer.frames(30);
+        near(renderer.pixel(4, 4), [0, 0, 255, 255]);
         near(slot_pixel(&renderer, "lead"), [255; 4]);
         settings.with_mut(|s| s.selected = false);
-        renderer.render_frames(3);
+        renderer.frames(3);
         settings.with_mut(|s| s.selected = true);
-        renderer.render_frames(30);
-        near(pixel(&renderer, 4, 4), [0, 0, 255, 255]);
+        renderer.frames(30);
+        near(renderer.pixel(4, 4), [0, 0, 255, 255]);
         settings.with_mut(|s| s.alternate = true);
-        renderer.render_frames(30);
-        near(pixel(&renderer, 4, 4), [0, 255, 0, 255]);
+        renderer.frames(30);
+        near(renderer.pixel(4, 4), [0, 255, 0, 255]);
         settings.with_mut(|s| s.dragged = true);
-        renderer.render_frames(30);
-        near(pixel(&renderer, 4, 4), [255, 0, 0, 255]);
+        renderer.frames(30);
+        near(renderer.pixel(4, 4), [255, 0, 0, 255]);
         near(slot_pixel(&renderer, "lead"), [0, 0, 255, 255]);
         near(slot_pixel(&renderer, "trail"), [0, 0, 255, 255]);
         settings.with_mut(|s| s.custom = true);
-        renderer.render_frames(30);
-        near(pixel(&renderer, 4, 4), [0, 255, 0, 255]);
+        renderer.frames(30);
+        near(renderer.pixel(4, 4), [0, 255, 0, 255]);
         near(slot_pixel(&renderer, "lead"), [255, 0, 0, 255]);
         near(slot_pixel(&renderer, "trail"), [255; 4]);
         settings.with_mut(|s| s.enabled = false);
-        renderer.render_frames(30);
-        near(pixel(&renderer, 4, 4), [255; 4]);
+        renderer.frames(30);
+        near(renderer.pixel(4, 4), [255; 4]);
         near(slot_pixel(&renderer, "lead"), [255, 206, 206, 255]);
         near(slot_pixel(&renderer, "trail"), [255, 206, 206, 255]);
         settings.with_mut(|s| {
@@ -200,14 +184,14 @@ fn check(samples: u32) {
             s.custom = false;
             s.alternate = false;
         });
-        renderer.render_frames(30);
-        near(pixel(&renderer, 4, 4), [255; 4]);
+        renderer.frames(30);
+        near(renderer.pixel(4, 4), [255; 4]);
         near(slot_pixel(&renderer, "lead"), [0, 255, 0, 255]);
         let builds = renderer
             .work_totals()
             .count("list_item", tessera_ui::testing::WorkPhase::Build);
-        let final_pixels = renderer.read_pixels().unwrap();
-        renderer.render_frames(8);
+        let final_pixels = renderer.read_pixels();
+        renderer.frames(8);
         assert_eq!(
             renderer
                 .work_totals()
@@ -215,7 +199,7 @@ fn check(samples: u32) {
             builds,
             "settled colors must stop scheduling builds"
         );
-        assert_eq!(renderer.read_pixels().unwrap(), final_pixels);
+        assert_eq!(renderer.read_pixels(), final_pixels);
     }
 }
 

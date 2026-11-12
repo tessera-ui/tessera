@@ -588,17 +588,17 @@ fn optional_clear() {
                                         [("v0", I18N.text(&caption).into())],
                                     ))
                                     .on_click(move || match caption {
-                                        "ui-clear" => {
-                                            state.with_mut(DatePickerController::clear_selected_date)
-                                        }
+                                        "ui-clear" => state
+                                            .with_mut(DatePickerController::clear_selected_date),
                                         "ui-cancel" => {
                                             if let Some(date) = committed.get() {
                                                 state.with_mut(|state| {
                                                     state.set_selected_date(date)
                                                 });
                                             } else {
-                                                state
-                                                    .with_mut(DatePickerController::clear_selected_date);
+                                                state.with_mut(
+                                                    DatePickerController::clear_selected_date,
+                                                );
                                             }
                                         }
                                         _ => committed

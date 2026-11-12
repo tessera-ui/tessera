@@ -725,7 +725,11 @@ fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Call
 }
 
 #[tessera]
-fn launch(open: State<SideSheetController>, selected: State<usize>, session: Option<LiveDrawerSession>) {
+fn launch(
+    open: State<SideSheetController>,
+    selected: State<usize>,
+    session: Option<LiveDrawerSession>,
+) {
     column().children(move || {
         button()
             .outlined()
@@ -779,7 +783,11 @@ fn drawer_content(
 }
 
 #[tessera]
-fn live_drawer(selected: State<usize>, open: State<SideSheetController>, scroll: State<ScrollableController>) {
+fn live_drawer(
+    selected: State<usize>,
+    open: State<SideSheetController>,
+    scroll: State<ScrollableController>,
+) {
     column()
         .modifier(
             Modifier::new()

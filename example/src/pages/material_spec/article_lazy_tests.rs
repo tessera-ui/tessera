@@ -1,15 +1,15 @@
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     FocusDirection, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-    accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
+    accesskit::{Action, Node, NodeId, Rect, Role, Toggled},
     focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
+    testing::UiTest,
 };
 
 use crate::pages::{home::HomePageDestination, material_components::current_article};
 
 fn find(
-    renderer: &HeadlessRenderer,
+    renderer: &UiTest,
     label: &str,
     role: Option<Role>,
 ) -> Option<(tessera_ui::accesskit::NodeId, Node)> {
@@ -27,7 +27,7 @@ fn find(
 }
 
 fn reveal(
-    renderer: &mut HeadlessRenderer,
+    renderer: &mut UiTest,
     label: &str,
     role: Option<Role>,
     direction: f32,
@@ -37,7 +37,7 @@ fn reveal(
 }
 
 fn reveal_with_scroll_x(
-    renderer: &mut HeadlessRenderer,
+    renderer: &mut UiTest,
     label: &str,
     role: Option<Role>,
     direction: f32,
@@ -71,7 +71,7 @@ fn reveal_with_scroll_x(
                 direction,
             );
         }
-        renderer.render_frames(20);
+        renderer.frames(20);
     }
     let visible = renderer
         .accessibility_snapshot()
@@ -87,7 +87,7 @@ fn reveal_with_scroll_x(
 }
 
 fn click(
-    renderer: &mut HeadlessRenderer,
+    renderer: &mut UiTest,
     label: &str,
     role: Option<Role>,
     direction: f32,
@@ -110,26 +110,19 @@ fn click(
             wheel,
         );
     }
-    renderer.render_frames(12);
+    renderer.frames(12);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter for actual directory and article navigation"]
 fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_and_border() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(crate::app::app),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 907,
-            height: 871,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(907, 871)
+        .rendered(crate::TestPipelines)
+        .content(crate::app::app);
+    renderer.frames(8);
     click(&mut renderer, "Material components", None, -600.0, None);
-    renderer.render_frames(60);
+    renderer.frames(60);
     click(
         &mut renderer,
         "Open Text fields specifications",
@@ -165,7 +158,7 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
     assert_eq!(compact.0, specs.0);
     assert_eq!(compact.1.bounds().unwrap().height(), 63.0);
     assert_eq!(compact.1.bounds().unwrap().y0, 73.0);
-    let rgba = renderer.read_pixels().unwrap();
+    let rgba = renderer.read_pixels();
     let under_bar = &rgba[(138 * 907 + 450) * 4..(138 * 907 + 450) * 4 + 3];
     let outside_shadow = &rgba[(145 * 907 + 450) * 4..(145 * 907 + 450) * 4 + 3];
     assert!(
@@ -213,7 +206,7 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
     .1
     .bounds()
     .unwrap();
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let x = ((field.x0 + field.x1) * 0.5) as usize;
     let pixel = |y: usize| {
         let offset = (y * 907 + x) * 4;
@@ -231,7 +224,7 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
     );
 
     click(&mut renderer, "Specs", Some(Role::Tab), 800.0, None);
-    renderer.render_frames(24);
+    renderer.frames(24);
     let expanded = find(&renderer, "Specs", Some(Role::Tab)).unwrap();
     assert_eq!(expanded.0, specs.0);
     assert_eq!(expanded.1.bounds().unwrap().height(), 79.0);
@@ -243,7 +236,7 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
         None,
     );
     renderer.resize(1400, 871);
-    renderer.render_frames(24);
+    renderer.frames(24);
     let first = find(&renderer, "Overview", Some(Role::Tab))
         .unwrap()
         .1
@@ -272,8 +265,8 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
         0.0,
         -520.0,
     );
-    renderer.render_frames(30);
-    let pixels = renderer.read_pixels().unwrap();
+    renderer.frames(30);
+    let pixels = renderer.read_pixels();
     let y = ((first.y0 + first.y1) / 2.0) as usize;
     let pixel = |x| &pixels[(y * 1400 + x) * 4..][..4];
     assert_eq!(
@@ -292,18 +285,11 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
 #[ignore = "requires a native GPU adapter for actual directory and article navigation"]
 fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_preserves_queued_wheel()
  {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(crate::app::app),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 907,
-            height: 871,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(907, 871)
+        .rendered(crate::TestPipelines)
+        .content(crate::app::app);
+    renderer.frames(8);
     click(&mut renderer, "Material components", None, -600.0, None);
     for _ in 0..90 {
         let tree = renderer.accessibility_snapshot().unwrap();
@@ -315,7 +301,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         {
             break;
         }
-        renderer.render_frames(1);
+        renderer.frames(1);
     }
     assert!(
         !renderer
@@ -389,7 +375,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         "Article navigation must precede chapter links in assistive reading order"
     );
     tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Next);
-    renderer.render_frames(8);
+    renderer.frames(8);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
         first_section,
@@ -431,8 +417,8 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         heading.y0 >= pinned_bounds.y1 && heading.y0 < pinned_bounds.y1 + 120.0,
         "cold last section must align below the pinned article tabs: {heading:?}"
     );
-    let tab_pixels = |renderer: &HeadlessRenderer| {
-        let pixels = renderer.read_pixels().unwrap();
+    let tab_pixels = |renderer: &UiTest| {
+        let pixels = renderer.read_pixels();
         let mut interior = Vec::new();
         for y in (pinned_bounds.y0 as usize + 16)..(pinned_bounds.y1 as usize - 16) {
             for x in (pinned_bounds.x0 as usize + 16)..(pinned_bounds.x1 as usize - 16) {
@@ -449,7 +435,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         0.0,
         -120.0,
     );
-    renderer.render_frames(20);
+    renderer.frames(20);
     let occluded = tab_pixels(&renderer);
     assert!(
         before == occluded,
@@ -504,20 +490,15 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         restored.1.description(),
         "Activations: 1"
     ));
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Focus,
-        target_tree: TreeId::ROOT,
-        target_node: selected_id,
-        data: None,
-    }));
-    renderer.render_frames(12);
+    assert!(renderer.accessibility_action(selected_id, Action::Focus));
+    renderer.frames(12);
     renderer.pointer_scroll(
         MOUSE_POINTER_ID,
         PxPosition::from_f32_xy(870.0, 430.0),
         0.0,
         -1200.0,
     );
-    renderer.render_frames(60);
+    renderer.frames(60);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
         selected_id
@@ -528,7 +509,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         offscreen_bounds.y1 < 64.0 || offscreen_bounds.y0 > 871.0,
         "Manual wheel input must move the focused control outside the viewport: {offscreen_bounds:?}"
     );
-    renderer.render_frames(12);
+    renderer.frames(12);
     assert_eq!(
         find(&renderer, "Play", Some(Role::Button))
             .unwrap()
@@ -558,20 +539,13 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
 #[test]
 #[ignore = "requires a native GPU adapter for actual date configuration navigation"]
 fn saving_date_range_configuration_preserves_article_position() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(crate::app::app),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1280,
-            height: 800,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(32);
+    let mut renderer = UiTest::new()
+        .viewport(1280, 800)
+        .rendered(crate::TestPipelines)
+        .content(crate::app::app);
+    renderer.frames(32);
     click(&mut renderer, "Material components", None, -600.0, None);
-    renderer.render_frames(60);
+    renderer.frames(60);
     click(
         &mut renderer,
         "Open Date pickers specifications",
@@ -618,10 +592,10 @@ fn saving_date_range_configuration_preserves_article_position() {
     );
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(1);
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     for frame in 0..12 {
-        renderer.render_frames(1);
+        renderer.frames(1);
         let current = find(
             &renderer,
             "Modal date picker configurations",
@@ -649,20 +623,13 @@ fn saving_date_range_configuration_preserves_article_position() {
 #[ignore = "requires a native GPU adapter for actual carousel article navigation"]
 fn carousel_collection_page_keeps_return_visible_and_restores_article_position() {
     for width in [1280, 390] {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(crate::app::app),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width,
-                height: 800,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(32);
+        let mut renderer = UiTest::new()
+            .viewport(width, 800)
+            .rendered(crate::TestPipelines)
+            .content(crate::app::app);
+        renderer.frames(32);
         click(&mut renderer, "Material components", None, -600.0, None);
-        renderer.render_frames(60);
+        renderer.frames(60);
         click(
             &mut renderer,
             "Open Carousel specifications",
@@ -724,11 +691,11 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
         );
         renderer.pointer_move(MOUSE_POINTER_ID, point);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.step_frame();
+        renderer.frames(1);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(8);
+        renderer.frames(8);
         for frame in 0..16 {
-            renderer.step_frame();
+            renderer.frames(1);
             let after = find(&renderer, "Back to carousel", Some(Role::Button))
                 .expect("collection page return control");
             let bounds = after.1.bounds().unwrap();
@@ -795,17 +762,10 @@ fn responsive_article_fixture() {
 #[test]
 #[ignore = "requires a native GPU adapter for actual responsive article layout"]
 fn article_body_and_contents_share_responsive_gutters_and_bounded_desktop_width() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(responsive_article_fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 390,
-            height: 3000,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let mut renderer = UiTest::new()
+        .viewport(390, 3000)
+        .rendered(crate::TestPipelines)
+        .content(responsive_article_fixture);
     for (width, expected_width, expected_left) in [
         (390, 327.0, 24.0),
         (800, 705.0, 40.0),
@@ -815,7 +775,7 @@ fn article_body_and_contents_share_responsive_gutters_and_bounded_desktop_width(
         (390, 327.0, 24.0),
     ] {
         renderer.resize(width, 3000);
-        renderer.render_frames(12);
+        renderer.frames(12);
         let body = find(&renderer, "Measured article body", Some(Role::Group))
             .expect("composed section")
             .1
@@ -844,20 +804,13 @@ fn article_body_and_contents_share_responsive_gutters_and_bounded_desktop_width(
 #[test]
 #[ignore = "requires a native GPU adapter for actual directory and article navigation"]
 fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(crate::app::app),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1650,
-            height: 1200,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(1650, 1200)
+        .rendered(crate::TestPipelines)
+        .content(crate::app::app);
+    renderer.frames(8);
     click(&mut renderer, "Material components", None, -600.0, None);
-    renderer.render_frames(60);
+    renderer.frames(60);
     click(
         &mut renderer,
         "Open Text fields specifications",
@@ -900,7 +853,7 @@ fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal
             "required editor {bounds:?} must match its independently positioned supporting label {support:?}"
         );
     }
-    let before = renderer.read_pixels().unwrap();
+    let before = renderer.read_pixels();
     let point = PxPosition::from_f32_xy(
         (support.x0 + 122.0 * scale) as f32,
         (support.y0 - 32.0 * scale) as f32,
@@ -908,7 +861,7 @@ fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert!(crate::text_matches(field.description(), "Required"));
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
@@ -916,7 +869,7 @@ fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal
         "the visible required editor must receive pointer focus after article scrolling"
     );
     renderer.inject_text("Q");
-    renderer.render_frames(2);
+    renderer.frames(2);
     assert_eq!(
         find(&renderer, "Username*", Some(Role::TextInput))
             .unwrap()
@@ -924,7 +877,7 @@ fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal
             .value(),
         Some("Q")
     );
-    let after = renderer.read_pixels().unwrap();
+    let after = renderer.read_pixels();
     let mut changed = false;
     for y in bounds.y0.floor().max(0.0) as usize..bounds.y1.ceil().min(1200.0) as usize {
         for x in bounds.x0.floor().max(0.0) as usize..bounds.x1.ceil().min(1650.0) as usize {
@@ -938,14 +891,14 @@ fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal
     );
 }
 
-fn tap_app_point(renderer: &mut HeadlessRenderer, point: PxPosition) {
+fn tap_app_point(renderer: &mut UiTest, point: PxPosition) {
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
 }
 
-fn tap_app_bounds(renderer: &mut HeadlessRenderer, bounds: Rect) {
+fn tap_app_bounds(renderer: &mut UiTest, bounds: Rect) {
     tap_app_point(
         renderer,
         PxPosition::from_f32_xy(
@@ -972,7 +925,7 @@ fn node_is_exposed(nodes: &[(NodeId, Node)], mut id: NodeId) -> bool {
     panic!("accessibility ancestry must not contain a cycle");
 }
 
-fn app_mail_destination(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn app_mail_destination(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     let dialog = find(renderer, "Mail navigation", Some(Role::Dialog))
         .expect("actual root mail dialog")
         .0;
@@ -987,26 +940,16 @@ fn app_mail_destination(renderer: &HeadlessRenderer, label: &str) -> (NodeId, No
         .expect("actual destination inside the live dialog, not an instructional figure")
 }
 
-fn actual_app_drawer_article() -> (HeadlessRenderer, crate::app::AppNavigationHandles) {
+fn actual_app_drawer_article() -> (UiTest<'static>, crate::app::AppNavigationHandles) {
     let navigation = tessera_ui::testing::TestProbe::default();
     let observed = navigation.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            crate::app::app_fixture(observed.clone());
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 907,
-            height: 871,
-            sample_count: 1,
-            frame_time: std::time::Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(907, 871)
+        .rendered(crate::TestPipelines)
+        .content(move || crate::app::app_fixture(observed.clone()));
+    renderer.frames(8);
     click(&mut renderer, "Material components", None, -600.0, None);
-    renderer.render_frames(60);
+    renderer.frames(60);
     click(
         &mut renderer,
         "Open Navigation drawer specifications",
@@ -1024,7 +967,7 @@ fn actual_app_drawer_article() -> (HeadlessRenderer, crate::app::AppNavigationHa
     (renderer, navigation.get().expect("mounted app navigation"))
 }
 
-fn launch_app_mail(renderer: &mut HeadlessRenderer) -> NodeId {
+fn launch_app_mail(renderer: &mut UiTest) -> NodeId {
     let (opener, node) = reveal(
         renderer,
         "Open modal navigation drawer",
@@ -1032,7 +975,7 @@ fn launch_app_mail(renderer: &mut HeadlessRenderer) -> NodeId {
         -600.0,
     );
     tap_app_bounds(renderer, node.bounds().unwrap());
-    renderer.render_frames(60);
+    renderer.frames(60);
     let inbox = app_mail_destination(renderer, "Inbox");
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
@@ -1042,7 +985,7 @@ fn launch_app_mail(renderer: &mut HeadlessRenderer) -> NodeId {
     opener
 }
 
-fn assert_app_mail_closed(renderer: &HeadlessRenderer, opener: NodeId) {
+fn assert_app_mail_closed(renderer: &UiTest, opener: NodeId) {
     assert!(find(renderer, "Mail navigation", Some(Role::Dialog)).is_none());
     let tree = renderer.accessibility_snapshot().unwrap();
     assert!(node_is_exposed(&tree.nodes, opener));
@@ -1052,7 +995,7 @@ fn assert_app_mail_closed(renderer: &HeadlessRenderer, opener: NodeId) {
     );
 }
 
-fn initial_mail_focus_outline_pixels(renderer: &HeadlessRenderer, bounds: Rect) -> usize {
+fn initial_mail_focus_outline_pixels(renderer: &UiTest, bounds: Rect) -> usize {
     let secondary = tessera_components::theme::MaterialTheme::default()
         .color_scheme
         .secondary;
@@ -1065,7 +1008,7 @@ fn initial_mail_focus_outline_pixels(renderer: &HeadlessRenderer, bounds: Rect) 
         (encoded * 255.0).round() as u8
     });
     let size = renderer.physical_size();
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let x0 = (bounds.x0 + bounds.width() * 0.25).ceil().max(0.0) as u32;
     let x1 = (bounds.x1 - bounds.width() * 0.25)
         .floor()
@@ -1093,21 +1036,16 @@ fn live_drawer_initial_focus_paints_the_first_destination_and_traverses_without_
         -600.0,
     );
     for action in [Action::Focus, Action::Click] {
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action,
-            target_tree: TreeId::ROOT,
-            target_node: opener,
-            data: None,
-        }));
+        assert!(renderer.accessibility_action(opener, action));
     }
-    renderer.step_frame();
+    renderer.frames(1);
     let inbox = app_mail_destination(&renderer, "Inbox");
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
         inbox.0,
         "opening must focus Inbox on the first layout without a later focus action"
     );
-    renderer.render_frames(32);
+    renderer.frames(32);
     let inbox = app_mail_destination(&renderer, "Inbox");
     assert_eq!(inbox.1.is_selected(), Some(true));
     assert!(
@@ -1116,7 +1054,7 @@ fn live_drawer_initial_focus_paints_the_first_destination_and_traverses_without_
     );
     for label in ["Outbox", "Favorites"] {
         assert!(focus::request_move_focus(FocusDirection::Next));
-        renderer.step_frame();
+        renderer.frames(1);
         let destination = app_mail_destination(&renderer, label);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
@@ -1134,13 +1072,8 @@ fn live_drawer_initial_focus_paints_the_first_destination_and_traverses_without_
         );
     }
     let favorites = app_mail_destination(&renderer, "Favorites").0;
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Click,
-        target_tree: TreeId::ROOT,
-        target_node: favorites,
-        data: None,
-    }));
-    renderer.render_frames(60);
+    assert!(renderer.accessibility_action(favorites, Action::Click));
+    renderer.frames(60);
     assert_app_mail_closed(&renderer, opener);
     assert!(
         find(
@@ -1165,7 +1098,7 @@ fn live_drawer_covers_the_real_app_bar_blocks_background_and_restores_its_launch
     let selected_article = navigation.router.with(current_article);
     let (back_id, back) = find(&renderer, "Back to components", Some(Role::Button))
         .expect("real app bar navigation button");
-    let before = renderer.read_pixels().unwrap();
+    let before = renderer.read_pixels();
     let opener = launch_app_mail(&mut renderer);
     let dialog = find(&renderer, "Mail navigation", Some(Role::Dialog))
         .unwrap()
@@ -1181,7 +1114,7 @@ fn live_drawer_covers_the_real_app_bar_blocks_background_and_restores_its_launch
         !node_is_exposed(&tree.nodes, back_id),
         "the modal background must hide the real top bar, including through hidden ancestors"
     );
-    let after = renderer.read_pixels().unwrap();
+    let after = renderer.read_pixels();
     let mut darkened = 0;
     for y in 16..24 {
         for x in 600..624 {
@@ -1198,18 +1131,18 @@ fn live_drawer_covers_the_real_app_bar_blocks_background_and_restores_its_launch
         "the native scrim must darken the blank top-bar area outside the sheet: {darkened}/192"
     );
     tap_app_bounds(&mut renderer, back.bounds().unwrap());
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(navigation.router.with(current_article), selected_article);
     assert!(!navigation.directory.with(|directory| directory.is_open()));
     assert!(find(&renderer, "Mail navigation", Some(Role::Dialog)).is_some());
     let outbox = app_mail_destination(&renderer, "Outbox");
     tap_app_bounds(&mut renderer, outbox.1.bounds().unwrap());
-    renderer.render_frames(60);
+    renderer.frames(60);
     assert_app_mail_closed(&renderer, opener);
     assert!(find(&renderer, "Current destination: Outbox", Some(Role::Label)).is_some());
     let opener = launch_app_mail(&mut renderer);
     tap_app_point(&mut renderer, PxPosition::from_f32_xy(612.0, 20.0));
-    renderer.render_frames(60);
+    renderer.frames(60);
     assert_app_mail_closed(&renderer, opener);
     assert_eq!(navigation.router.with(current_article), selected_article);
     assert!(!navigation.directory.with(|directory| directory.is_open()));
@@ -1227,7 +1160,7 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
         launch_app_mail(&mut renderer);
         let outbox = app_mail_destination(&renderer, "Outbox");
         tap_app_bounds(&mut renderer, outbox.1.bounds().unwrap());
-        renderer.render_frames(60);
+        renderer.frames(60);
         let opener = launch_app_mail(&mut renderer);
         let (dialog_id, _) = find(&renderer, "Mail navigation", Some(Role::Dialog)).unwrap();
         let inbox_id = app_mail_destination(&renderer, "Inbox").0;
@@ -1238,7 +1171,7 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
         } else {
             navigation.router.with_mut(|router| router.pop());
         }
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(
             find(&renderer, "Mail navigation", Some(Role::Dialog))
                 .expect("the root modal must stay mounted during its route-exit animation")
@@ -1246,7 +1179,7 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
             dialog_id
         );
         assert_eq!(app_mail_destination(&renderer, "Inbox").0, inbox_id);
-        renderer.render_frames(60);
+        renderer.frames(60);
         let tree = renderer.accessibility_snapshot().unwrap();
         assert!(find(&renderer, "Mail navigation", Some(Role::Dialog)).is_none());
         assert!(!tree.nodes.iter().any(|(id, _)| *id == dialog_id));
@@ -1261,9 +1194,9 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
             let menu = find(&renderer, "Open navigation drawer", Some(Role::Button))
                 .expect("home route app-bar menu");
             tap_app_bounds(&mut renderer, menu.1.bounds().unwrap());
-            renderer.render_frames(60);
+            renderer.frames(60);
             click(&mut renderer, "Material components", None, -600.0, None);
-            renderer.render_frames(60);
+            renderer.frames(60);
         }
         click(
             &mut renderer,
@@ -1285,31 +1218,21 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
         );
         let opener = launch_app_mail(&mut renderer);
         tap_app_point(&mut renderer, PxPosition::from_f32_xy(612.0, 20.0));
-        renderer.render_frames(60);
+        renderer.frames(60);
         assert_app_mail_closed(&renderer, opener);
     }
 }
 
-fn actual_app_rail_article() -> (HeadlessRenderer, crate::app::AppNavigationHandles) {
+fn actual_app_rail_article() -> (UiTest<'static>, crate::app::AppNavigationHandles) {
     let navigation = tessera_ui::testing::TestProbe::default();
     let observed = navigation.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            crate::app::app_fixture(observed.clone());
-        }),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 907,
-            height: 871,
-            sample_count: 1,
-            frame_time: std::time::Duration::from_nanos(16_666_667),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(907, 871)
+        .rendered(crate::TestPipelines)
+        .content(move || crate::app::app_fixture(observed.clone()));
+    renderer.frames(8);
     click(&mut renderer, "Material components", None, -600.0, None);
-    renderer.render_frames(60);
+    renderer.frames(60);
     click(
         &mut renderer,
         "Open Navigation rail specifications",
@@ -1322,7 +1245,7 @@ fn actual_app_rail_article() -> (HeadlessRenderer, crate::app::AppNavigationHand
     (renderer, navigation.get().expect("mounted app navigation"))
 }
 
-fn app_rail_destination(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
+fn app_rail_destination(renderer: &UiTest, label: &str) -> (NodeId, Node) {
     let dialog = find(renderer, "Mail rail navigation", Some(Role::Dialog))
         .expect("actual root rail dialog")
         .0;
@@ -1337,7 +1260,7 @@ fn app_rail_destination(renderer: &HeadlessRenderer, label: &str) -> (NodeId, No
         .expect("actual destination inside the live rail")
 }
 
-fn launch_app_rail(renderer: &mut HeadlessRenderer) -> NodeId {
+fn launch_app_rail(renderer: &mut UiTest) -> NodeId {
     let (opener, _) = reveal(
         renderer,
         "Open modal navigation rail",
@@ -1345,14 +1268,9 @@ fn launch_app_rail(renderer: &mut HeadlessRenderer) -> NodeId {
         -600.0,
     );
     for action in [Action::Focus, Action::Click] {
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action,
-            target_tree: TreeId::ROOT,
-            target_node: opener,
-            data: None,
-        }));
+        assert!(renderer.accessibility_action(opener, action));
     }
-    renderer.step_frame();
+    renderer.frames(1);
     let close = find(renderer, "Close modal navigation rail", Some(Role::Button))
         .expect("native header is the first interactive control");
     assert_eq!(
@@ -1360,11 +1278,11 @@ fn launch_app_rail(renderer: &mut HeadlessRenderer) -> NodeId {
         close.0,
         "initial focus must enter the actual rail header on the first layout"
     );
-    renderer.render_frames(32);
+    renderer.frames(32);
     opener
 }
 
-fn assert_app_rail_closed(renderer: &HeadlessRenderer, opener: NodeId) {
+fn assert_app_rail_closed(renderer: &UiTest, opener: NodeId) {
     assert!(find(renderer, "Mail rail navigation", Some(Role::Dialog)).is_none());
     let tree = renderer.accessibility_snapshot().unwrap();
     assert!(node_is_exposed(&tree.nodes, opener));
@@ -1386,7 +1304,7 @@ fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selecti
     );
     let article = navigation.router.with(current_article);
     let (back_id, back) = find(&renderer, "Back to components", Some(Role::Button)).unwrap();
-    let before = renderer.read_pixels().unwrap();
+    let before = renderer.read_pixels();
     let opener = launch_app_rail(&mut renderer);
     let dialog = find(&renderer, "Mail rail navigation", Some(Role::Dialog))
         .unwrap()
@@ -1401,7 +1319,7 @@ fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selecti
         &renderer.accessibility_snapshot().unwrap().nodes,
         back_id
     ));
-    let after = renderer.read_pixels().unwrap();
+    let after = renderer.read_pixels();
     let mut darkened = 0;
     for y in 16..24 {
         for x in 600..624 {
@@ -1419,7 +1337,7 @@ fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selecti
     );
     for label in ["Home", "Inbox"] {
         assert!(focus::request_move_focus(FocusDirection::Next));
-        renderer.step_frame();
+        renderer.frames(1);
         let destination = app_rail_destination(&renderer, label);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
@@ -1439,13 +1357,8 @@ fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selecti
         );
     }
     let inbox = app_rail_destination(&renderer, "Inbox").0;
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Click,
-        target_tree: TreeId::ROOT,
-        target_node: inbox,
-        data: None,
-    }));
-    renderer.render_frames(60);
+    assert!(renderer.accessibility_action(inbox, Action::Click));
+    renderer.frames(60);
     assert_app_rail_closed(&renderer, opener);
     let opener = launch_app_rail(&mut renderer);
     assert_eq!(
@@ -1453,11 +1366,11 @@ fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selecti
         Some(true)
     );
     tap_app_bounds(&mut renderer, back.bounds().unwrap());
-    renderer.render_frames(3);
+    renderer.frames(3);
     assert_eq!(navigation.router.with(current_article), article);
     assert!(find(&renderer, "Mail rail navigation", Some(Role::Dialog)).is_some());
     tap_app_point(&mut renderer, PxPosition::from_f32_xy(612.0, 20.0));
-    renderer.render_frames(60);
+    renderer.frames(60);
     assert_app_rail_closed(&renderer, opener);
     assert!(!navigation.directory.with(|directory| directory.is_open()));
 }
@@ -1469,13 +1382,8 @@ fn live_rail_route_exit_clears_modal_focus_and_preserves_selection_on_return() {
         let (mut renderer, navigation) = actual_app_rail_article();
         launch_app_rail(&mut renderer);
         let inbox = app_rail_destination(&renderer, "Inbox").0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node: inbox,
-            data: None,
-        }));
-        renderer.render_frames(8);
+        assert!(renderer.accessibility_action(inbox, Action::Click));
+        renderer.frames(8);
         let opener = launch_app_rail(&mut renderer);
         let dialog = find(&renderer, "Mail rail navigation", Some(Role::Dialog))
             .unwrap()
@@ -1488,12 +1396,12 @@ fn live_rail_route_exit_clears_modal_focus_and_preserves_selection_on_return() {
         } else {
             navigation.router.with_mut(|router| router.pop());
         }
-        renderer.step_frame();
+        renderer.frames(1);
         assert!(
             find(&renderer, "Mail rail navigation", Some(Role::Dialog)).is_none(),
             "the native modal rail closes immediately rather than running a side-sheet exit animation"
         );
-        renderer.render_frames(4);
+        renderer.frames(4);
         let tree = renderer.accessibility_snapshot().unwrap();
         for stale in [dialog, opener, home] {
             assert!(!tree.nodes.iter().any(|(id, _)| *id == stale));
@@ -1504,9 +1412,9 @@ fn live_rail_route_exit_clears_modal_focus_and_preserves_selection_on_return() {
         if leave_material_route {
             let menu = find(&renderer, "Open navigation drawer", Some(Role::Button)).unwrap();
             tap_app_bounds(&mut renderer, menu.1.bounds().unwrap());
-            renderer.render_frames(60);
+            renderer.frames(60);
             click(&mut renderer, "Material components", None, -600.0, None);
-            renderer.render_frames(60);
+            renderer.frames(60);
         }
         click(
             &mut renderer,
@@ -1526,13 +1434,8 @@ fn live_rail_route_exit_clears_modal_focus_and_preserves_selection_on_return() {
         let close = find(&renderer, "Close modal navigation rail", Some(Role::Button))
             .unwrap()
             .0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node: close,
-            data: None,
-        }));
-        renderer.render_frames(8);
+        assert!(renderer.accessibility_action(close, Action::Click));
+        renderer.frames(8);
         assert_app_rail_closed(&renderer, opener);
     }
 }

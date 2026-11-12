@@ -138,7 +138,7 @@ impl AppBarDefaults {
 /// });
 /// #     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn app_bar(
@@ -340,7 +340,7 @@ fn window_control(control: WindowControl) {
 /// assert_eq!(unread.get(), 0);
 /// #     });
 /// # }
-/// # tessera_ui::testing::layout_test(component).run();
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn top_app_bar(
@@ -702,11 +702,12 @@ impl tessera_ui::LayoutPolicy for TopAppBarLayout {
             toolbar_height
         };
         let offset = if let Some(state) = self.scroll_controller {
-            let range = if state.with(AppBarScrollController::behavior) == AppBarScrollBehavior::Pinned {
-                Dp::ZERO
-            } else {
-                Dp::from(content_height - compact_height)
-            };
+            let range =
+                if state.with(AppBarScrollController::behavior) == AppBarScrollBehavior::Pinned {
+                    Dp::ZERO
+                } else {
+                    Dp::from(content_height - compact_height)
+                };
             if state.with(AppBarScrollController::height_range) != range {
                 state.with_mut(|value| {
                     value.configure_height(Dp::from(content_height), Dp::from(compact_height))

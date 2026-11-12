@@ -1,8 +1,8 @@
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-    accesskit::{Action, ActionRequest, Node, Role, Toggled, TreeId},
-    headless::{HeadlessConfig, HeadlessRenderer},
+    accesskit::{Action, Node, Role, Toggled},
     tessera,
+    testing::UiTest,
 };
 
 #[tessera]
@@ -14,7 +14,7 @@ fn fixture() {
     });
 }
 
-fn node(renderer: &HeadlessRenderer, label: &str) -> Node {
+fn node(renderer: &UiTest, label: &str) -> Node {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -25,7 +25,7 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> Node {
         .1
 }
 
-fn click(renderer: &mut HeadlessRenderer, label: &str) {
+fn click(renderer: &mut UiTest, label: &str) {
     let bounds = node(renderer, label).bounds().unwrap();
     let position = PxPosition::from_f32_xy(
         ((bounds.x0 + bounds.x1) * 0.5) as f32,
@@ -34,24 +34,17 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
     renderer.pointer_move(MOUSE_POINTER_ID, position);
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-    renderer.render_frames(60);
+    renderer.frames(60);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter for switch state illustrations"]
 fn switch_states_keep_twenty_independent_native_controls_and_scaled_pointer_targets() {
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(crate::TestPipelines)],
-        HeadlessConfig {
-            width: 1024,
-            height: 760,
-            sample_count: 1,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport(1024, 760)
+        .rendered(crate::TestPipelines)
+        .content(fixture);
+    renderer.frames(8);
     let tree = renderer.accessibility_snapshot().unwrap();
     assert_eq!(
         tree.nodes
@@ -87,7 +80,7 @@ fn switch_states_keep_twenty_independent_native_controls_and_scaled_pointer_targ
     renderer.pointer_move(MOUSE_POINTER_ID, pointer);
     renderer.pointer_press(MOUSE_POINTER_ID, pointer, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, pointer, PressKeyEventType::Left);
-    renderer.render_frames(60);
+    renderer.frames(60);
     assert_eq!(
         node(&renderer, "Light Hovered selected switch state").toggled(),
         Some(Toggled::False),
@@ -109,13 +102,8 @@ fn switch_states_keep_twenty_independent_native_controls_and_scaled_pointer_targ
         .into_iter()
         .find(|(_, node)| crate::has_label(&node, "Light Focused selected switch state"))
         .unwrap();
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action: Action::Focus,
-        target_tree: TreeId::ROOT,
-        target_node: id,
-        data: None
-    }));
-    renderer.render_frames(4);
+    assert!(renderer.accessibility_action(id, Action::Focus));
+    renderer.frames(4);
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
     assert_eq!(
         node(&renderer, "Light Focused selected switch state").toggled(),
@@ -123,7 +111,7 @@ fn switch_states_keep_twenty_independent_native_controls_and_scaled_pointer_targ
         "requesting accessibility focus must not toggle the switch"
     );
     renderer.resize(512, 760);
-    renderer.render_frames(8);
+    renderer.frames(8);
     let narrow = node(&renderer, "Light Enabled selected switch state")
         .bounds()
         .unwrap();

@@ -140,7 +140,7 @@ pub(crate) fn dispatch(event: SystemBackEvent) {
 mod tests {
     use crate::{
         State, remember,
-        testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
+        testing::{TestProbe, UiTest},
     };
 
     use super::*;
@@ -166,16 +166,13 @@ mod tests {
         let overlay = TestProbe::default();
         let events = TestProbe::default();
         let probe = overlay.clone();
-        let log = events.clone();
-        let mut session = start_layout_test_session(layout_test(move || {
-            fixture(probe.clone(), log.clone());
-        }));
-        pump_layout_test_session(&mut session, 0);
+        let mut session = UiTest::new().content(|| fixture(probe.clone(), events.clone()));
+        session.frame();
         let overlay = overlay.get().expect("mounted overlay");
         let started = SystemBackEvent::Started(BackSwipeEdge::Right);
         session.dispatch_system_back(started);
         session.run(|| overlay.set(true));
-        pump_layout_test_session(&mut session, 16_000_000);
+        session.advance(std::time::Duration::from_millis(16));
         session.dispatch_system_back(SystemBackEvent::Cancelled);
         session.dispatch_system_back(SystemBackEvent::Committed);
         assert_eq!(

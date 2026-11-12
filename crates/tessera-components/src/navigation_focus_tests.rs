@@ -4,15 +4,12 @@
 //!
 //! Verify that focus is visible without selecting or activating a destination.
 
-use std::time::Duration;
-
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, FocusDirection, Modifier, State,
-    accesskit::{Action, ActionRequest, Rect, Role, TreeId},
-    focus,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
+    accesskit::{Action, Rect, Role},
+    focus, remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -97,9 +94,9 @@ fn fixture(mode: u8, owner: tessera_ui::testing::TestProbe<Option<(State<usize>,
         });
 }
 
-fn indicator_pixels(renderer: &HeadlessRenderer, bounds: Rect) -> usize {
+fn indicator_pixels(renderer: &UiTest, bounds: Rect) -> usize {
     let size = renderer.physical_size();
-    let pixels = renderer.read_pixels().unwrap();
+    let pixels = renderer.read_pixels();
     let x0 = (bounds.x0 - 6.0).floor().max(0.0) as u32;
     let y0 = (bounds.y0 - 6.0).floor().max(0.0) as u32;
     let x1 = (bounds.x1 + 6.0).ceil().min(f64::from(size.width)) as u32;
@@ -118,22 +115,11 @@ fn indicator_pixels(renderer: &HeadlessRenderer, bounds: Rect) -> usize {
 fn navigation_initial_traversal_and_accessibility_focus_do_not_activate_destinations() {
     for mode in 0..5 {
         let owner = tessera_ui::testing::TestProbe::default();
-        let observed = owner.clone();
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture(mode, observed.clone());
-            }),
-            vec![Box::new(crate::TesseraComponents)],
-            HeadlessConfig {
-                width: 600,
-                height: 800,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(32);
+        let mut renderer = UiTest::new()
+            .viewport(600, 800)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(mode, owner.clone()));
+        renderer.frames(32);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         let (inbox_id, inbox) = snapshot
             .nodes
@@ -155,7 +141,7 @@ fn navigation_initial_traversal_and_accessibility_focus_do_not_activate_destinat
             assert_eq!(bounds.width(), if mode == 1 { 96.0 } else { 220.0 });
         }
         assert!(focus::request_move_focus(FocusDirection::Next));
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
             inbox_id,
@@ -180,13 +166,8 @@ fn navigation_initial_traversal_and_accessibility_focus_do_not_activate_destinat
             0,
             "mode {mode}: inactive destination must not have a focus outline"
         );
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Focus,
-            target_tree: TreeId::ROOT,
-            target_node: id,
-            data: None
-        }));
-        renderer.render_frames(4);
+        assert!(renderer.accessibility_action(id, Action::Focus));
+        renderer.frames(4);
         let (selected, activations) = owner.get().expect("mounted navigation state");
         assert_eq!(selected.get(), 0, "mode {mode}: focus must not select");
         assert_eq!(activations.get(), 0, "mode {mode}: focus must not activate");
@@ -195,13 +176,8 @@ fn navigation_initial_traversal_and_accessibility_focus_do_not_activate_destinat
             indicator_pixels(&renderer, bounds) > 0,
             "mode {mode}: the actual focused destination must draw its secondary outline"
         );
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node: id,
-            data: None
-        }));
-        renderer.render_frames(4);
+        assert!(renderer.accessibility_action(id, Action::Click));
+        renderer.frames(4);
         assert_eq!(selected.get(), 1);
         assert_eq!(activations.get(), 1);
     }

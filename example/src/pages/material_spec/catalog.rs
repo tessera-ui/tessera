@@ -566,14 +566,13 @@ fn component_card(component: Component, index: usize, on_open: CallbackWith<usiz
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::time::Duration;
 
     use tessera_components::{side_sheet::SideSheetController, theme::material_theme};
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::{Action, ActionRequest, Node, Rect, Role, Toggled, TreeId},
-        headless::{HeadlessConfig, HeadlessRenderer},
+        accesskit::{Action, Node, Rect, Role, Toggled},
         remember,
+        testing::UiTest,
     };
 
     use super::*;
@@ -595,8 +594,7 @@ mod tests {
                 }
                 router
             });
-            let drawer =
-                remember(|| SideSheetController::new(false));
+            let drawer = remember(|| SideSheetController::new(false));
             column()
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
@@ -614,7 +612,7 @@ mod tests {
         });
     }
 
-    fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
+    fn bounds(renderer: &UiTest, label: &str) -> Rect {
         renderer
             .accessibility_snapshot()
             .unwrap()
@@ -627,7 +625,7 @@ mod tests {
             .unwrap()
     }
 
-    fn click(renderer: &mut HeadlessRenderer, mut bounds: Rect) {
+    fn click(renderer: &mut UiTest, mut bounds: Rect) {
         let viewport = renderer.physical_size();
         let snapshot = renderer.accessibility_snapshot().unwrap();
         let article_tab = snapshot.nodes.iter().any(|(_, node)| {
@@ -668,7 +666,7 @@ mod tests {
                 0.0,
                 (f64::from(viewport.height) * 0.5 - center) as f32,
             );
-            renderer.render_frames(40);
+            renderer.frames(40);
             bounds = renderer
                 .accessibility_snapshot()
                 .unwrap()
@@ -691,10 +689,10 @@ mod tests {
         renderer.pointer_move(MOUSE_POINTER_ID, position);
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(2);
+        renderer.frames(2);
     }
 
-    fn control(renderer: &HeadlessRenderer, label: &str) -> Node {
+    fn control(renderer: &UiTest, label: &str) -> Node {
         let nodes = renderer.accessibility_snapshot().unwrap().nodes;
         nodes
             .iter()
@@ -722,12 +720,7 @@ mod tests {
             .clone()
     }
 
-    fn scoped_node(
-        renderer: &HeadlessRenderer,
-        group: &str,
-        label: &str,
-        role: Role,
-    ) -> Option<Node> {
+    fn scoped_node(renderer: &UiTest, group: &str, label: &str, role: Role) -> Option<Node> {
         let tree = renderer
             .inspect_accessibility()
             .expect("published accessibility");
@@ -751,7 +744,7 @@ mod tests {
             .map(|(_, node)| node.clone())
     }
 
-    fn toggle(renderer: &mut HeadlessRenderer, label: &str, before: Toggled, after: Toggled) {
+    fn toggle(renderer: &mut UiTest, label: &str, before: Toggled, after: Toggled) {
         let node = control(renderer, label);
         assert_eq!(node.toggled(), Some(before), "initial {label}");
         click(renderer, node.bounds().unwrap());
@@ -762,7 +755,7 @@ mod tests {
         );
     }
 
-    fn tab(renderer: &HeadlessRenderer, label: &str) -> Node {
+    fn tab(renderer: &UiTest, label: &str) -> Node {
         renderer
             .accessibility_snapshot()
             .unwrap()
@@ -773,24 +766,24 @@ mod tests {
             .1
     }
 
-    fn enter_specs(renderer: &mut HeadlessRenderer) {
+    fn enter_specs(renderer: &mut UiTest) {
         compose_navigation_target(renderer, "Overview", Role::Tab);
         assert_eq!(tab(renderer, "Overview").is_selected(), Some(true));
         let specs = tab(renderer, "Specs").bounds().unwrap();
         click(renderer, specs);
-        renderer.render_frames(24);
+        renderer.frames(24);
         assert_eq!(tab(renderer, "Specs").is_selected(), Some(true));
     }
 
-    fn select_article_page(renderer: &mut HeadlessRenderer, page: &str) {
+    fn select_article_page(renderer: &mut UiTest, page: &str) {
         compose_navigation_target(renderer, page, Role::Tab);
         let target = tab(renderer, page).bounds().unwrap();
         click(renderer, target);
-        renderer.render_frames(24);
+        renderer.frames(24);
         assert_eq!(tab(renderer, page).is_selected(), Some(true));
     }
 
-    fn compose_navigation_target(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+    fn compose_navigation_target(renderer: &mut UiTest, label: &str, role: Role) {
         let toward_header = matches!(role, Role::Tab | Role::Heading)
             || (role == Role::Link
                 && !label.starts_with("Previous ")
@@ -814,7 +807,7 @@ mod tests {
                 0.0,
                 if toward_header { 1200.0 } else { -1200.0 },
             );
-            renderer.render_frames(40);
+            renderer.frames(40);
         }
         let visible = renderer
             .accessibility_snapshot()
@@ -834,7 +827,7 @@ mod tests {
         panic!("scrolling did not compose actual navigation target {label} {role:?}: {visible:?}");
     }
 
-    fn activate_navigation(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+    fn activate_navigation(renderer: &mut UiTest, label: &str, role: Role) {
         compose_navigation_target(renderer, label, role);
         for action in [Action::Focus, Action::Click] {
             let id = renderer
@@ -845,13 +838,8 @@ mod tests {
                 .find(|(_, node)| node.role() == role && crate::has_label(&node, label))
                 .unwrap_or_else(|| panic!("missing navigation {label}"))
                 .0;
-            assert!(renderer.dispatch_accessibility_action(ActionRequest {
-                action,
-                target_tree: TreeId::ROOT,
-                target_node: id,
-                data: None,
-            }));
-            renderer.render_frames(4);
+            assert!(renderer.accessibility_action(id, action));
+            renderer.frames(4);
         }
     }
 
@@ -862,24 +850,14 @@ mod tests {
             let initial_component = COMPONENTS
                 .iter()
                 .position(|component| component.title == "ui-text-fields");
-            let mut renderer = HeadlessRenderer::new(
-                Box::new(move || {
-                    fixture().initial_component_optional(initial_component);
-                }),
-                vec![Box::new(crate::TestPipelines)],
-                HeadlessConfig {
-                    width: 900,
-                    height: 900,
-                    sample_count: 1,
-                    frame_time: Duration::from_nanos(16_666_667),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-            renderer.render_frames(5);
+            let mut renderer = UiTest::new()
+                .viewport(900, 900)
+                .rendered(crate::TestPipelines)
+                .content(move || fixture().initial_component_optional(initial_component));
+            renderer.frames(5);
             let specs = tab(&renderer, "Specs").bounds().unwrap();
             click(&mut renderer, specs);
-            let focused_label = |renderer: &HeadlessRenderer| {
+            let focused_label = |renderer: &UiTest| {
                 let tree = renderer.accessibility_snapshot().unwrap();
                 tree.nodes
                     .iter()
@@ -912,7 +890,7 @@ mod tests {
                         0.0,
                         -1200.0,
                     );
-                    renderer.render_frames(40);
+                    renderer.frames(40);
                     continue;
                 };
                 observations.push(current);
@@ -925,14 +903,14 @@ mod tests {
                     0.0,
                     (450.0 - (current.y0 + current.y1) * 0.5) as f32,
                 );
-                renderer.render_frames(40);
+                renderer.frames(40);
             }
             let margin = PxPosition::from_f32_xy(875.0, 850.0);
             renderer.pointer_move(MOUSE_POINTER_ID, margin);
             renderer.pointer_press(MOUSE_POINTER_ID, margin, PressKeyEventType::Left);
-            renderer.render_frames(1);
+            renderer.frames(1);
             renderer.pointer_release(MOUSE_POINTER_ID, margin, PressKeyEventType::Left);
-            renderer.render_frames(5);
+            renderer.frames(5);
             let target = control(&renderer, &clear).bounds().unwrap();
             assert!(
                 target.y0 >= 64.0 && target.y1 <= 900.0,
@@ -948,10 +926,10 @@ mod tests {
                 ((target.y0 + target.y1) * 0.5) as f32,
             );
             renderer.pointer_move(MOUSE_POINTER_ID, position);
-            renderer.render_frames(1);
+            renderer.frames(1);
             renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             if !same_frame {
-                renderer.render_frames(1);
+                renderer.frames(1);
                 assert_eq!(
                     bounds(&renderer, &container),
                     before,
@@ -973,7 +951,7 @@ mod tests {
                 );
             }
             renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-            renderer.render_frames(5);
+            renderer.frames(5);
             assert_eq!(
                 bounds(&renderer, &container),
                 before,
@@ -1003,21 +981,11 @@ mod tests {
         let initial_component = COMPONENTS
             .iter()
             .position(|component| component.title == "ui-text-fields");
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture().initial_component_optional(initial_component);
-            }),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 1500,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(5);
+        let mut renderer = UiTest::new()
+            .viewport(900, 1500)
+            .rendered(crate::TestPipelines)
+            .content(move || fixture().initial_component_optional(initial_component));
+        renderer.frames(5);
         enter_specs(&mut renderer);
         compose_navigation_target(&mut renderer, "Previous and up next articles", Role::Group);
         let footer_tree = renderer.accessibility_snapshot().unwrap();
@@ -1126,18 +1094,11 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn app_bar_crossfades_to_back_and_restores_directory_navigation() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 1800,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(3);
+        let mut renderer = UiTest::new()
+            .viewport(900, 1800)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(3);
         let menu = bounds(&renderer, "Open navigation drawer");
         assert!(menu.y1 <= 64.0 && menu.x0 < 16.0);
         let card = bounds(&renderer, "Open Button groups specifications");
@@ -1160,20 +1121,20 @@ mod tests {
         let back = bounds(&renderer, "Back to components");
         assert_eq!(back, menu);
         assert_eq!(bounds(&renderer, "Button groups specifications").y0, 64.0);
-        let icon_pixels = |renderer: &HeadlessRenderer| {
-            let pixels = renderer.read_pixels().unwrap();
+        let icon_pixels = |renderer: &UiTest| {
+            let pixels = renderer.read_pixels();
             (16..48)
                 .flat_map(|y| pixels[(y * 900 + 8) * 4..(y * 900 + 48) * 4].to_vec())
                 .collect::<Vec<_>>()
         };
         let transitioning = icon_pixels(&renderer);
-        renderer.render_frames(30);
+        renderer.frames(30);
         let finished = icon_pixels(&renderer);
         assert_ne!(
             transitioning, finished,
             "the icon must continue fading without pointer events"
         );
-        renderer.render_frames(10);
+        renderer.frames(10);
         assert_eq!(
             finished,
             icon_pixels(&renderer),
@@ -1185,7 +1146,7 @@ mod tests {
             (900, 8.0, 869.0, 434.0),
         ] {
             renderer.resize(width, 1800);
-            renderer.render_frames(5);
+            renderer.frames(5);
             let illustration = bounds(&renderer, "Button groups illustration");
             assert_eq!(illustration.x0, image_x);
             assert_eq!(illustration.width(), image_width);
@@ -1210,7 +1171,7 @@ mod tests {
         assert_eq!(bounds(&renderer, "Open navigation drawer"), menu);
         bounds(&renderer, "Open Button groups specifications");
         let transitioning = icon_pixels(&renderer);
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_ne!(
             transitioning,
             icon_pixels(&renderer),
@@ -1221,21 +1182,14 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn dialog_article_switches_tabs_and_annotates_live_component_bounds() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 8000,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(900, 8000)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(4);
         let card = bounds(&renderer, "Open Dialogs specifications");
         click(&mut renderer, card);
-        renderer.render_frames(8);
+        renderer.frames(8);
         enter_specs(&mut renderer);
         let tabs = || ["Overview", "Specs", "Guidelines", "Accessibility"];
         let nodes = renderer.accessibility_snapshot().unwrap().nodes;
@@ -1270,7 +1224,7 @@ mod tests {
         assert!((container.x0 - figure.x0 - figure.width() * 360.0 / 1024.0).abs() <= 1.0);
         let marker = bounds(&renderer, "Anatomy marker 2");
         assert!(marker.y1 < bounds(&renderer, "Basic dialog anatomy container").y0);
-        let pixels = renderer.read_pixels().unwrap();
+        let pixels = renderer.read_pixels();
         let pixel = |x: usize, y: usize| &pixels[(y * 900 + x) * 4..(y * 900 + x) * 4 + 4];
         let selected_tab = tab(&renderer, "Specs").bounds().unwrap();
         let idle_tab = tab(&renderer, "Overview").bounds().unwrap();
@@ -1328,7 +1282,7 @@ mod tests {
             "intro content must stack instead of painting over its controls"
         );
         click(&mut renderer, open.bounds().unwrap());
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert!(
             renderer
                 .accessibility_snapshot()
@@ -1340,7 +1294,7 @@ mod tests {
         );
         let cancel = control(&renderer, "Cancel");
         click(&mut renderer, cancel.bounds().unwrap());
-        renderer.render_frames(30);
+        renderer.frames(30);
         let guidelines = bounds(&renderer, "Guidelines");
         click(&mut renderer, guidelines);
         bounds(&renderer, "Adaptive design");
@@ -1352,24 +1306,17 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn selection_articles_keep_four_pages_and_labels_operate_their_controls() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 8000,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(900, 8000)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(4);
         for title in ["Checkbox", "Radio button", "Switch"] {
             let card = bounds(&renderer, &format!("Open {title} specifications"));
             click(&mut renderer, card);
-            renderer.render_frames(4);
+            renderer.frames(4);
             enter_specs(&mut renderer);
-            let tab = |renderer: &HeadlessRenderer, label: &str| {
+            let tab = |renderer: &UiTest, label: &str| {
                 renderer
                     .accessibility_snapshot()
                     .unwrap()
@@ -1538,18 +1485,11 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn new_articles_keep_four_pages_and_route_live_collection_and_modal_actions() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 1800,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
+        let mut renderer = UiTest::new()
+            .viewport(900, 1800)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(4);
         for demo in [2, 10, 11, 26, 27, 33, 34] {
             let component = COMPONENTS[component_index(demo).unwrap()];
             let card = reveal_card(
@@ -1557,7 +1497,7 @@ mod tests {
                 &format!("Open {} specifications", I18N.text(component.title)),
             );
             click(&mut renderer, card);
-            renderer.render_frames(4);
+            renderer.frames(4);
             for page in [
                 "Overview",
                 "Guidelines",
@@ -1607,7 +1547,7 @@ mod tests {
                     bounds(&renderer, "Collection 2 opened");
                     let back = control(&renderer, "Back to carousel");
                     click(&mut renderer, back.bounds().unwrap());
-                    renderer.render_frames(30);
+                    renderer.frames(30);
                     let restored = renderer.accessibility_snapshot().unwrap();
                     assert!(
                         !restored.nodes.iter().any(|(_, node)| {
@@ -1648,7 +1588,7 @@ mod tests {
                     let brush = control(&renderer, "Brush");
                     click(&mut renderer, brush.bounds().unwrap());
                     bounds(&renderer, "Brush activated");
-                    let brush_count = |renderer: &HeadlessRenderer| {
+                    let brush_count = |renderer: &UiTest| {
                         renderer
                             .accessibility_snapshot()
                             .unwrap()
@@ -1679,7 +1619,7 @@ mod tests {
                     };
                     let launch = control(&renderer, label);
                     click(&mut renderer, launch.bounds().unwrap());
-                    renderer.render_frames(30);
+                    renderer.frames(30);
                     if demo == 11 {
                         let modal = renderer
                             .accessibility_snapshot()
@@ -1692,7 +1632,7 @@ mod tests {
                             .expect("modal destination")
                             .1;
                         click(&mut renderer, modal.bounds().unwrap());
-                        renderer.render_frames(30);
+                        renderer.frames(30);
                         bounds(&renderer, "Current destination: Outbox");
                     } else {
                         if demo == 34 {
@@ -1707,7 +1647,7 @@ mod tests {
                             },
                         );
                         click(&mut renderer, action.bounds().unwrap());
-                        renderer.render_frames(30);
+                        renderer.frames(30);
                         assert!(
                             !renderer
                                 .accessibility_snapshot()
@@ -1729,7 +1669,7 @@ mod tests {
                         );
                         let reopen = control(&renderer, label);
                         click(&mut renderer, reopen.bounds().unwrap());
-                        renderer.render_frames(30);
+                        renderer.frames(30);
                         assert!(
                             renderer
                                 .accessibility_snapshot()
@@ -1755,7 +1695,7 @@ mod tests {
                             },
                         );
                         click(&mut renderer, close.bounds().unwrap());
-                        renderer.render_frames(30);
+                        renderer.frames(30);
                         assert!(
                             !renderer
                                 .accessibility_snapshot()
@@ -1788,28 +1728,18 @@ mod tests {
         let initial_component = COMPONENTS
             .iter()
             .position(|component| component.title == "ui-time-pickers");
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture().initial_component_optional(initial_component);
-            }),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 1200,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(900, 1200)
+            .rendered(crate::TestPipelines)
+            .content(move || fixture().initial_component_optional(initial_component));
+        renderer.frames(8);
         enter_specs(&mut renderer);
         activate_navigation(&mut renderer, "Anatomy", Role::Link);
-        renderer.render_frames(8);
+        renderer.frames(8);
         for confirm in [false, true] {
             let open = control(&renderer, "Open time picker dialog");
             click(&mut renderer, open.bounds().unwrap());
-            renderer.render_frames(24);
+            renderer.frames(24);
             assert_eq!(
                 scoped_node(&renderer, "Modal time preview", "Hour", Role::Button)
                     .unwrap()
@@ -1841,7 +1771,7 @@ mod tests {
                 },
             );
             click(&mut renderer, action.bounds().unwrap());
-            renderer.render_frames(24);
+            renderer.frames(24);
             bounds(
                 &renderer,
                 if confirm {
@@ -1861,7 +1791,7 @@ mod tests {
         }
         let open = control(&renderer, "Open time picker dialog");
         click(&mut renderer, open.bounds().unwrap());
-        renderer.render_frames(24);
+        renderer.frames(24);
         assert_eq!(
             scoped_node(&renderer, "Modal time preview", "Hour", Role::Button)
                 .unwrap()
@@ -1893,7 +1823,7 @@ mod tests {
             PxPosition::from_f32_xy(4.0, 180.0),
             PressKeyEventType::Left,
         );
-        renderer.render_frames(24);
+        renderer.frames(24);
         assert!(
             !renderer
                 .accessibility_snapshot()
@@ -1905,7 +1835,7 @@ mod tests {
         bounds(&renderer, "Saved time: 03:15");
         let open = control(&renderer, "Open time picker dialog");
         click(&mut renderer, open.bounds().unwrap());
-        renderer.render_frames(24);
+        renderer.frames(24);
         assert_eq!(
             scoped_node(&renderer, "Modal time preview", "Hour", Role::Button)
                 .unwrap()
@@ -1920,21 +1850,11 @@ mod tests {
         let initial_component = COMPONENTS
             .iter()
             .position(|component| component.title == "ui-app-bars");
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(move || {
-                fixture().initial_component_optional(initial_component);
-            }),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 8000,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(900, 8000)
+            .rendered(crate::TestPipelines)
+            .content(move || fixture().initial_component_optional(initial_component));
+        renderer.frames(8);
         enter_specs(&mut renderer);
         activate_navigation(&mut renderer, "Configurations", Role::Link);
         let configured_bar = renderer
@@ -1946,9 +1866,9 @@ mod tests {
             .expect("configured native app bar")
             .0;
         renderer.resize(390, 900);
-        renderer.render_frames(8);
+        renderer.frames(8);
         renderer.resize(900, 8000);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 136.0);
         let small = control(&renderer, "Configured app bar Small");
         click(&mut renderer, small.bounds().unwrap());
@@ -1979,26 +1899,18 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter for actual directory and compact split button navigation"]
     fn split_button_xl_configuration_keeps_both_segments_visible_and_live_at_compact_width() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 8000,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(900, 8000)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(8);
         let card = bounds(&renderer, "Open Split buttons specifications");
         click(&mut renderer, card);
-        renderer.render_frames(8);
+        renderer.frames(8);
         enter_specs(&mut renderer);
         activate_navigation(&mut renderer, "Configurations", Role::Link);
         renderer.resize(390, 900);
-        renderer.render_frames(8);
+        renderer.frames(8);
         for label in ["XL main action", "XL menu actions"] {
             let preview = control(&renderer, label).bounds().unwrap();
             assert!(
@@ -2012,7 +1924,7 @@ mod tests {
         bounds(&renderer, "XL: 1 main actions");
         let menu = control(&renderer, "XL menu actions");
         click(&mut renderer, menu.bounds().unwrap());
-        renderer.render_frames(30);
+        renderer.frames(30);
         assert_eq!(
             control(&renderer, "XL menu actions").is_expanded(),
             Some(true)
@@ -2028,7 +1940,7 @@ mod tests {
             .expect("the open XL menu must expose its actual Save draft item")
             .1;
         click(&mut renderer, draft.bounds().unwrap());
-        renderer.render_frames(30);
+        renderer.frames(30);
         bounds(&renderer, "Menu choice: Save draft");
         assert_eq!(
             control(&renderer, "XL menu actions").is_expanded(),
@@ -2039,20 +1951,12 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter for real directory and article tracks"]
     fn reserved_track_preserves_directory_groups_wheel_and_article_routes() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 907,
-                height: 1800,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
-        let track = |renderer: &HeadlessRenderer| {
+        let mut renderer = UiTest::new()
+            .viewport(907, 1800)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(8);
+        let track = |renderer: &UiTest| {
             let bars = renderer
                 .accessibility_snapshot()
                 .unwrap()
@@ -2083,7 +1987,7 @@ mod tests {
             0.0,
             -120.0,
         );
-        renderer.render_frames(120);
+        renderer.frames(120);
         assert_eq!(
             bounds(&renderer, "Open Button groups specifications").y0,
             first.y0 - 120.0
@@ -2094,13 +1998,13 @@ mod tests {
             0.0,
             120.0,
         );
-        renderer.render_frames(120);
+        renderer.frames(120);
         assert_eq!(
             bounds(&renderer, "Open Button groups specifications"),
             first
         );
         click(&mut renderer, first);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(track(&renderer), bar);
         let guidelines = tab(&renderer, "Guidelines").bounds().unwrap();
         click(&mut renderer, guidelines);
@@ -2108,7 +2012,7 @@ mod tests {
         assert_eq!(track(&renderer), bar);
         let back = bounds(&renderer, "Back to components");
         click(&mut renderer, back);
-        renderer.render_frames(8);
+        renderer.frames(8);
         assert_eq!(track(&renderer), bar);
         assert_eq!(
             bounds(&renderer, "Open Button groups specifications").width(),
@@ -2116,7 +2020,7 @@ mod tests {
         );
     }
 
-    fn reveal_card(renderer: &mut HeadlessRenderer, label: &str) -> Rect {
+    fn reveal_card(renderer: &mut UiTest, label: &str) -> Rect {
         let viewport = renderer.physical_size();
         for step in 0..64 {
             let target = renderer
@@ -2142,12 +2046,12 @@ mod tests {
                 0.0,
                 delta,
             );
-            renderer.render_frames(40);
+            renderer.frames(40);
         }
         panic!("missing {label}");
     }
 
-    fn assert_directory_packing(renderer: &HeadlessRenderer, columns: usize) {
+    fn assert_directory_packing(renderer: &UiTest, columns: usize) {
         let nodes = renderer.accessibility_snapshot().unwrap().nodes;
         let gap = f64::from(tessera_ui::Px::from(Dp(8.0)).0);
         let mut observed = 0;
@@ -2215,20 +2119,12 @@ mod tests {
         }
         // A 1650x1200 browser viewport at device pixel ratio 1.5 is the
         // default window, where the directory shows two columns.
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 1650,
-                height: 1200,
-                scale_factor: 1.5,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
+        let mut renderer = UiTest::new()
+            .viewport(1650, 1200)
+            .scale_factor(1.5)
+            .rendered(crate::TestPipelines)
+            .content(fixture);
+        renderer.frames(8);
         reveal_card(&mut renderer, "Open Button groups specifications");
         assert_directory_packing(&renderer, 2);
         for (width, columns) in [
@@ -2243,7 +2139,7 @@ mod tests {
             (1650, 2),
         ] {
             renderer.resize(width, 1200);
-            renderer.render_frames(8);
+            renderer.frames(8);
             reveal_card(&mut renderer, "Open Button groups specifications");
             assert_directory_packing(&renderer, columns);
         }
@@ -2254,7 +2150,7 @@ mod tests {
             0.0,
             -1500.0,
         );
-        renderer.render_frames(120);
+        renderer.frames(120);
         assert!(
             !renderer
                 .accessibility_snapshot()
@@ -2269,10 +2165,10 @@ mod tests {
         assert_directory_packing(&renderer, 2);
         let cards = reveal_card(&mut renderer, "Open Cards specifications");
         click(&mut renderer, cards);
-        renderer.render_frames(8);
+        renderer.frames(8);
         let back = bounds(&renderer, "Back to components");
         click(&mut renderer, back);
-        renderer.render_frames(8);
+        renderer.frames(8);
         reveal_card(&mut renderer, "Open Button groups specifications");
         assert_directory_packing(&renderer, 2);
     }

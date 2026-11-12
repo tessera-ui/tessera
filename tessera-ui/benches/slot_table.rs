@@ -47,25 +47,18 @@ fn benchmark_slot_workload(criterion: &mut Criterion, count: usize, structural_e
     let tick_probe = TestProbe::default();
     let builds = Arc::new(AtomicUsize::new(0));
     let initial_keys = forward.clone();
-    let content = testing::layout_test({
-        let keys_probe = keys_probe.clone();
-        let tick_probe = tick_probe.clone();
-        let builds = builds.clone();
-        move || {
-            remembered_slot_workload(
-                initial_keys.clone(),
-                keys_probe.clone(),
-                tick_probe.clone(),
-                builds.clone(),
-            )
-        }
+    let mut session = testing::UiTest::new().content(|| {
+        remembered_slot_workload(
+            initial_keys.clone(),
+            keys_probe.clone(),
+            tick_probe.clone(),
+            builds.clone(),
+        )
     });
-    let mut session = testing::start_layout_test_session(content);
-    testing::pump_layout_test_session(&mut session, 0);
+    session.frame();
     let keys = keys_probe.get().expect("benchmark key state");
     let tick = tick_probe.get().expect("benchmark invalidation state");
     let mut was_edited = false;
-    let mut frame = 16_000_000_u64;
     let name = if structural_edit {
         "local_edit"
     } else {
@@ -86,13 +79,12 @@ fn benchmark_slot_workload(criterion: &mut Criterion, count: usize, structural_e
                 }
             });
             let previous_builds = builds.load(Ordering::Relaxed);
-            black_box(testing::pump_layout_test_session(&mut session, frame));
+            black_box(session.frames(1));
             let current_builds = builds.load(Ordering::Relaxed);
             assert!(
                 current_builds > previous_builds,
                 "the benchmark must rebuild"
             );
-            frame = frame.wrapping_add(16_000_000);
         });
     });
     group.finish();

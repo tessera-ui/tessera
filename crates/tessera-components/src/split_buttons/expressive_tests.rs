@@ -2,9 +2,8 @@ use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, State,
     accesskit::{Action, HasPopup, Node, NodeId, Rect, Role, TreeUpdate},
-    headless::{HeadlessConfig, HeadlessRenderer},
     remember,
-    testing::TestProbe,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -155,16 +154,16 @@ fn bounds(tree: &TreeUpdate, label: &str) -> Rect {
     node(tree, label).1.bounds().unwrap()
 }
 
-fn click(renderer: &mut HeadlessRenderer, rect: Rect) {
+fn click(renderer: &mut UiTest, rect: Rect) {
     let point = PxPosition::from_f32_xy(
         ((rect.x0 + rect.x1) / 2.0) as f32,
         ((rect.y0 + rect.y1) / 2.0) as f32,
     );
     renderer.pointer_move(MOUSE_POINTER_ID, point);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.step_frame();
+    renderer.frames(1);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-    renderer.render_frames(5);
+    renderer.frames(5);
 }
 
 fn check_sizes_and_shrink(samples: u32, scale: f64) {
@@ -172,21 +171,13 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
     let observed = probe.clone();
     let styles = TestProbe::default();
     let observed_styles = styles.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || {
-            fixture(probe.clone(), styles.clone());
-        }),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: (750.0 * scale) as u32,
-            height: (750.0 * scale) as u32,
-            scale_factor: scale,
-            sample_count: samples,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(8);
+    let mut renderer = UiTest::new()
+        .viewport((750.0 * scale) as u32, (750.0 * scale) as u32)
+        .scale_factor(scale)
+        .samples(samples)
+        .rendered(crate::TesseraComponents)
+        .content(move || fixture(probe.clone(), styles.clone()));
+    renderer.frames(8);
     let initial = renderer.accessibility_snapshot().unwrap();
     for (index, height) in [48.0, 48.0, 56.0, 96.0, 136.0].into_iter().enumerate() {
         let leading = bounds(&initial, &format!("Send {index}"));
@@ -214,7 +205,7 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
     let settings = observed.get().settings.unwrap();
     for width in [360.0, 200.0, 100.0, 72.0, 1.0] {
         settings.with_mut(|settings| settings.width = Dp(width));
-        renderer.render_frames(4);
+        renderer.frames(4);
         let tree = renderer.accessibility_snapshot().unwrap();
         for (index, expected_width) in [48.0, 48.0, 56.0, 96.0, 136.0].into_iter().enumerate() {
             let leading = bounds(&tree, &format!("Send {index}"));
@@ -227,7 +218,7 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
         }
     }
     settings.with_mut(|settings| settings.width = Dp(200.0));
-    renderer.render_frames(4);
+    renderer.frames(4);
     let narrow = renderer.accessibility_snapshot().unwrap();
     click(&mut renderer, bounds(&narrow, "Send 0"));
     click(&mut renderer, bounds(&narrow, "More 0"));
@@ -242,7 +233,7 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
             settings.enabled = false;
             settings.variant = variant;
         });
-        renderer.render_frames(8);
+        renderer.frames(8);
         let disabled = renderer.accessibility_snapshot().unwrap();
         for index in 0..5 {
             for name in [format!("Send {index}"), format!("More {index}")] {
@@ -263,7 +254,7 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
         middle_size: Some(SplitButtonSize::ExtraLarge),
         ..Default::default()
     });
-    renderer.render_frames(8);
+    renderer.frames(8);
     let changed = renderer.accessibility_snapshot().unwrap();
     assert_eq!(bounds(&changed, "Split icon 4").width(), 40.0 * scale);
     assert_eq!(bounds(&changed, "Split icon 5").width(), 50.0 * scale);
@@ -275,13 +266,13 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
         expanded: Some(false),
         ..Default::default()
     });
-    renderer.render_frames(90);
+    renderer.frames(90);
     let before = renderer.accessibility_snapshot().unwrap();
     let identity = node(&before, "More 2").0;
     assert_eq!(node(&before, "More 2").1.is_expanded(), Some(false));
     assert_eq!(node(&before, "More 2").1.has_popup(), Some(HasPopup::Menu));
     click(&mut renderer, bounds(&before, "More 2"));
-    renderer.render_frames(90);
+    renderer.frames(90);
     let expanded = renderer.accessibility_snapshot().unwrap();
     assert_eq!(node(&expanded, "More 2").0, identity);
     assert_eq!(node(&expanded, "More 2").1.is_expanded(), Some(true));
@@ -289,7 +280,7 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
     let icon = bounds(&expanded, "Split icon 5");
     assert_eq!((icon.x0 + icon.x1) / 2.0, (action.x0 + action.x1) / 2.0);
     settings.with_mut(|settings| settings.enabled = false);
-    renderer.render_frames(90);
+    renderer.frames(90);
     let disabled = renderer.accessibility_snapshot().unwrap();
     assert_eq!(node(&disabled, "More 2").1.is_expanded(), Some(true));
     assert!(node(&disabled, "More 2").1.is_disabled());
@@ -297,7 +288,7 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
         settings.enabled = true;
         settings.expanded = None;
     });
-    renderer.render_frames(90);
+    renderer.frames(90);
     let ordinary = renderer.accessibility_snapshot().unwrap();
     assert_eq!(node(&ordinary, "More 2").0, identity);
     assert_eq!(node(&ordinary, "More 2").1.is_expanded(), None);

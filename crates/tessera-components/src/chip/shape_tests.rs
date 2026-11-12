@@ -8,9 +8,8 @@ use std::time::Duration;
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    headless::{HeadlessConfig, HeadlessRenderer},
-    remember, tessera,
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State, remember, tessera,
+    testing::UiTest,
 };
 
 use crate::{
@@ -93,16 +92,16 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     });
 }
 
-fn bounds(renderer: &HeadlessRenderer) -> [i64; 4] {
+fn bounds(renderer: &UiTest) -> [i64; 4] {
     let snapshot = renderer.inspect_components();
     let node = snapshot.tagged("shape_chip");
     let bounds = node.bounds().expect("placed test target");
     [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value as i64)
 }
-fn corners(renderer: &HeadlessRenderer) -> Vec<bool> {
+fn corners(renderer: &UiTest) -> Vec<bool> {
     let [x, y, width, height] = bounds(renderer);
     assert_eq!((width, height), (160, 48));
-    let data = renderer.read_pixels().unwrap();
+    let data = renderer.read_pixels();
     let mut samples = Vec::new();
     for (right, bottom) in [(false, false), (true, false), (false, true), (true, true)] {
         for (dx, dy) in [(2, 4), (4, 4), (0, 0)] {
@@ -115,70 +114,63 @@ fn corners(renderer: &HeadlessRenderer) -> Vec<bool> {
     samples
 }
 
-fn assert_shape(renderer: &HeadlessRenderer, expected: [bool; 3]) {
+fn assert_shape(renderer: &UiTest, expected: [bool; 3]) {
     assert_eq!(corners(renderer), expected.repeat(4));
 }
 
 fn check_shapes(samples: u32) {
     let probe = tessera_ui::testing::TestProbe::default();
-    let observed = probe.clone();
-    let mut renderer = HeadlessRenderer::new(
-        Box::new(move || fixture(observed.clone())),
-        vec![Box::new(crate::TesseraComponents)],
-        HeadlessConfig {
-            width: 220,
-            height: 140,
-            sample_count: samples,
-            frame_time: Duration::from_millis(10),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    renderer.render_frames(5);
+    let mut renderer = UiTest::new()
+        .viewport(220, 140)
+        .samples(samples)
+        .frame_step(Duration::from_millis(10))
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    renderer.frames(5);
     let settings = probe.get().expect("settings");
     for input in [false, true] {
         settings.set(Settings {
             input,
             ..Default::default()
         });
-        renderer.render_frames(100);
+        renderer.frames(100);
         assert_shape(&renderer, [false, true, false]);
         let rest = corners(&renderer);
         settings.with_mut(|s| s.selected = true);
-        renderer.step_frame();
+        renderer.frames(1);
         assert_eq!(corners(&renderer), rest);
-        renderer.render_frames(100);
+        renderer.frames(100);
         assert_shape(&renderer, [false, false, false]);
         let point = PxPosition::from_f32_xy(96.0, 40.0);
         let outside = PxPosition::from_f32_xy(210.0, 130.0);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_shape(&renderer, [false, false, false]);
-        renderer.render_frames(100);
+        renderer.frames(100);
         assert_shape(&renderer, [true, true, false]);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
         renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
-        renderer.render_frames(100);
+        renderer.frames(100);
         assert_shape(&renderer, [false, false, false]);
         settings.with_mut(|s| {
             s.standard = true;
         });
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_shape(&renderer, [true, true, false]);
         settings.with_mut(|s| {
             s.fixed = true;
             s.standard = false;
         });
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_shape(&renderer, [true, true, true]);
         settings.with_mut(|s| {
             s.fixed = false;
             s.disabled = true;
         });
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_shape(&renderer, [false, false, false]);
         settings.with_mut(|s| s.selected = false);
-        renderer.render_frames(2);
+        renderer.frames(2);
         assert_shape(&renderer, [false, true, false]);
     }
 }
