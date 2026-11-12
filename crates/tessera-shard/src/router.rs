@@ -12,3 +12,19 @@ mod home;
 pub use controller::RouterController;
 pub use destination::RouterDestination;
 pub use home::shard_home;
+
+use tessera_ui::{State, use_context};
+
+/// Returns the router rendering the current page.
+///
+/// Call it during a build below [`shard_home`]; capture the returned handle in
+/// callbacks to navigate.
+///
+/// # Panics
+///
+/// Panics when called outside [`shard_home`].
+pub fn use_router() -> State<RouterController> {
+    use_context::<State<RouterController>>()
+        .expect("`use_router` requires a page rendered by `shard_home`")
+        .get()
+}

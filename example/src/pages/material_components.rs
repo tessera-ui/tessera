@@ -1,7 +1,7 @@
 //! Material component directory and article routes.
 
 use tessera_components::{lazy_list::LazyListController, scrollable::ScrollableController};
-use tessera_shard::{RouterController, shard};
+use tessera_shard::{RouterController, shard, use_router};
 use tessera_ui::{CallbackWith, Dp, Model, ModelInit, Px, State};
 
 use crate::app::AppLiveSessions;
@@ -27,11 +27,8 @@ impl ModelInit for DirectoryModel {
 }
 
 #[shard]
-pub fn material_components_page(
-    router: State<RouterController>,
-    model: Model<DirectoryModel>,
-    sessions: Option<AppLiveSessions>,
-) {
+pub fn material_components_page(model: Model<DirectoryModel>, sessions: Option<AppLiveSessions>) {
+    let router = use_router();
     component_directory(
         model.scroll,
         model.list,
@@ -45,11 +42,8 @@ pub fn material_components_page(
 }
 
 #[shard]
-pub fn material_article_page(
-    router: State<RouterController>,
-    index: usize,
-    sessions: Option<AppLiveSessions>,
-) {
+pub fn material_article_page(index: usize, sessions: Option<AppLiveSessions>) {
+    let router = use_router();
     component_article(index, router).sessions_optional(sessions);
 }
 

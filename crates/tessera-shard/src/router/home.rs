@@ -17,18 +17,18 @@ use crate::router::{RouterController, RouterDestination, back::route_display};
 /// ## Parameters
 ///
 /// - `root` — initial destination used when `controller` is omitted
-/// - `controller` — optional external router controller state, provided to
-///   descendants as a `State<RouterController>` context
+/// - `controller` — optional external router controller state; descendants
+///   read it with [`crate::use_router`]
 ///
 /// ## Examples
 ///
 /// ```rust
-/// use tessera_shard::{RouterController, shard, shard_home};
-/// use tessera_ui::{State, tessera};
+/// use tessera_shard::{RouterController, shard, shard_home, use_router};
+/// use tessera_ui::tessera;
 ///
 /// #[shard]
-/// fn home_page(router: State<RouterController>) {
-///     assert_eq!(router.with(RouterController::len), 1);
+/// fn home_page() {
+///     assert_eq!(use_router().with(RouterController::len), 1);
 /// }
 ///
 /// #[tessera]

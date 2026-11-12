@@ -18,4 +18,4 @@ pub mod router;
 
 pub use tessera_macros::shard;
 
-pub use crate::router::{RouterController, RouterDestination, shard_home};
+pub use crate::router::{RouterController, RouterDestination, shard_home, use_router};

@@ -63,6 +63,8 @@ const LAUNCH_PATH: &str = "tessera_ui::runtime::launch";
 const PUBLIC_LAUNCH_PATH: &str = "tessera_ui::launch";
 const LAUNCH_ONCE_PATH: &str = "tessera_ui::runtime::launch_once";
 const PUBLIC_LAUNCH_ONCE_PATH: &str = "tessera_ui::launch_once";
+const USE_ROUTER_PATH: &str = "tessera_shard::router::use_router";
+const PUBLIC_USE_ROUTER_PATH: &str = "tessera_shard::use_router";
 const KEY_PATH: &str = "tessera_ui::runtime::key";
 const PUBLIC_KEY_PATH: &str = "tessera_ui::key";
 const RUNTIME_MODULE_PATH_PREFIX: &str = "tessera_ui::runtime::";
@@ -965,6 +967,7 @@ impl<'db> CallAnalyzer<'db> {
             }
             LAUNCH_PATH | PUBLIC_LAUNCH_PATH => Some(TesseraRuntimeApi::Launch),
             LAUNCH_ONCE_PATH | PUBLIC_LAUNCH_ONCE_PATH => Some(TesseraRuntimeApi::LaunchOnce),
+            USE_ROUTER_PATH | PUBLIC_USE_ROUTER_PATH => Some(TesseraRuntimeApi::UseRouter),
             KEY_PATH | PUBLIC_KEY_PATH => Some(TesseraRuntimeApi::Key),
             path => {
                 let name = path.rsplit("::").next().unwrap_or(path);
@@ -1409,6 +1412,7 @@ impl<'db> CallAnalyzer<'db> {
                 | "receive_frame_nanos"
                 | "launch"
                 | "launch_once"
+                | "use_router"
                 | "key"
         ) || self.index.tessera_function_names.contains(last)
             || Self::is_render_slot_constructor_path(path)

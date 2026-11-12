@@ -229,7 +229,6 @@ fn field_compare_expr(field_ident: &Ident, ty: &Type) -> proc_macro2::TokenStrea
 struct ShardParam {
     ident: Ident,
     ty: Type,
-    is_router: bool,
     is_model: bool,
 }
 
@@ -251,42 +250,16 @@ fn parse_shard_params(sig: &syn::Signature) -> syn::Result<Vec<ShardParam>> {
                         "#[shard] parameters must be simple named bindings like `foo: T`",
                     ));
                 };
-                let is_router = is_state_router_controller_type(&pat_type.ty);
                 let is_model = model_value_type(&pat_type.ty).is_some();
                 params.push(ShardParam {
                     ident: pat_ident.ident.clone(),
                     ty: (*pat_type.ty).clone(),
-                    is_router,
                     is_model,
                 });
             }
         }
     }
     Ok(params)
-}
-
-#[cfg(feature = "shard")]
-fn is_state_router_controller_type(ty: &Type) -> bool {
-    let Type::Path(type_path) = ty else {
-        return false;
-    };
-    let Some(state_segment) = type_path.path.segments.last() else {
-        return false;
-    };
-    if state_segment.ident != "State" {
-        return false;
-    }
-    let syn::PathArguments::AngleBracketed(args) = &state_segment.arguments else {
-        return false;
-    };
-    let Some(syn::GenericArgument::Type(Type::Path(controller_path))) = args.args.first() else {
-        return false;
-    };
-    controller_path
-        .path
-        .segments
-        .last()
-        .is_some_and(|segment| segment.ident == "RouterController")
 }
 
 /// Parse and validate strict component props signature:
@@ -1222,8 +1195,6 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`)
 ///   implementing `tessera_shard::router::RouterDestination`
 /// * Other parameters become destination fields.
-/// * A `State<RouterController>` parameter receives the router rendering the
-///   page and is not a destination field.
 /// * `Model<T>` parameters are injected like in any component and are not
 ///   destination fields; the route entry provides the model store, so a model
 ///   lives until its route is popped.
@@ -1261,42 +1232,12 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         Ok(params) => params,
         Err(err) => return err.to_compile_error().into(),
     };
-    let router_params: Vec<_> = shard_params
-        .iter()
-        .filter(|param| param.is_router)
-        .collect();
-    if router_params.len() > 1 {
-        return syn::Error::new_spanned(
-            &func.sig.inputs,
-            "#[shard] supports at most one `State<RouterController>` parameter",
-        )
-        .to_compile_error()
-        .into();
-    }
-
     let func_body = func.block;
     let func_name_str = func.sig.ident.to_string();
 
     let func_attrs = &func.attrs;
     let func_vis = &func.vis;
-    let router_binding = router_params.first().map(|param| {
-        let ident = &param.ident;
-        let ty = &param.ty;
-        quote! {
-            let #ident: #ty = #ui_crate_path::use_context::<#ty>()
-                .expect("shard pages render inside `shard_home`")
-                .get();
-        }
-    });
-    let mut func_sig_modified = func.sig.clone();
-    func_sig_modified.inputs = func_sig_modified
-        .inputs
-        .into_iter()
-        .filter(|input| {
-            !matches!(input, FnArg::Typed(pat_type) if is_state_router_controller_type(&pat_type.ty))
-        })
-        .collect();
-
+    let func_sig = &func.sig;
     // Generate struct name for the new RouterDestination
     let func_name = func.sig.ident.clone();
     let struct_name = syn::Ident::new(
@@ -1307,7 +1248,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     // `RouterDestination`
     let dest_fields = shard_params
         .iter()
-        .filter(|param| !param.is_router && !param.is_model)
+        .filter(|param| !param.is_model)
         .map(|param| {
             let ident = &param.ident;
             let ty = &param.ty;
@@ -1317,18 +1258,14 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     let expanded = {
         let required_args = shard_params
             .iter()
-            .filter(|param| {
-                !param.is_router && !param.is_model && option_inner_type(&param.ty).is_none()
-            })
+            .filter(|param| !param.is_model && option_inner_type(&param.ty).is_none())
             .map(|param| {
                 let ident = &param.ident;
                 quote! { self.#ident.clone() }
             });
         let destination_builder_setters = shard_params
             .iter()
-            .filter(|param| {
-                !param.is_router && !param.is_model && option_inner_type(&param.ty).is_some()
-            })
+            .filter(|param| !param.is_model && option_inner_type(&param.ty).is_some())
             .map(|param| {
                 let ident = &param.ident;
                 quote! {
@@ -1354,8 +1291,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                 #(#func_attrs)*
                 #[#ui_crate_path::tessera]
-                #func_vis #func_sig_modified {
-                    #router_binding
+                #func_vis #func_sig {
                     #func_body
                 }
             }
