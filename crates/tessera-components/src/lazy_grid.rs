@@ -1708,19 +1708,19 @@ mod tests {
         let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
         let first_builds = session
             .work()
-            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert!(first_builds > 0);
 
         let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667);
         let second_builds = session
             .work()
-            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert_eq!(second_builds, 0);
 
         let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
         let third_builds = session
             .work()
-            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert_eq!(third_builds, 0);
     }
 }

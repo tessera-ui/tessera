@@ -197,7 +197,7 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
         assert!(
             session
                 .work()
-                .executed::<Leaf>(tessera_ui::WorkPhase::Measure)
+                .executed::<Leaf>(tessera_ui::testing::WorkPhase::Measure)
                 > 0
         );
         inputs.with_mut(|inputs| inputs.ink = true);
@@ -205,7 +205,7 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
             .node("flex-0")
             .position(0, 0);
         assert_eq!(
-            session.work().phase(tessera_ui::WorkPhase::Measure).count(),
+            session.work().phase(tessera_ui::testing::WorkPhase::Measure).count(),
             0,
             "paint changes must resolve from the root cache"
         );
@@ -219,7 +219,7 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
         assert_eq!(
             session
                 .work()
-                .executed::<Leaf>(tessera_ui::WorkPhase::Measure),
+                .executed::<Leaf>(tessera_ui::testing::WorkPhase::Measure),
             0,
             "alignment must use cached child measurements"
         );
@@ -232,7 +232,7 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
         assert!(
             session
                 .work()
-                .executed::<Leaf>(tessera_ui::WorkPhase::Measure)
+                .executed::<Leaf>(tessera_ui::testing::WorkPhase::Measure)
                 > 0,
             "stretch changes the child constraints"
         );

@@ -5,8 +5,10 @@
 //! Preserve selection strokes and state colors across display densities.
 
 use tessera_ui::{
-    Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
-    PressKeyEventType, PxPosition, State, remember, tessera,
+    Color, Dp, FocusDirection, FocusManager, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
+    State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, tessera,
 };
 
 use crate::{
@@ -138,7 +140,7 @@ fn check_appearance(samples: u32) {
             );
         }
         settings.set(Settings::default());
-        FocusManager::current().clear_focus(true);
+        FocusManager::clear_focus(true);
         renderer.render_frames(30);
         let edge = (left + 1, cy);
         let is_color = |pixels: &[u8], channel: usize| {
@@ -183,7 +185,7 @@ fn check_appearance(samples: u32) {
             PressKeyEventType::Left,
         );
         renderer.render_frames(30);
-        FocusManager::current().clear_focus(true);
+        FocusManager::clear_focus(true);
         renderer.render_frames(30);
         let pixels = renderer.read_pixels().unwrap();
         assert!(
@@ -192,7 +194,7 @@ fn check_appearance(samples: u32) {
             &pixels[edge_offset..edge_offset + 4],
             renderer.accessibility_snapshot().unwrap().focus,
         );
-        FocusManager::current().request_move_focus(FocusDirection::Next);
+        FocusManager::request_move_focus(FocusDirection::Next);
         renderer.render_frames(30);
         assert!(
             is_color(&renderer.read_pixels().unwrap(), 2),

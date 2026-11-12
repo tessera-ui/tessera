@@ -208,8 +208,9 @@ fn selection_column(multiple: bool) {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
         accesskit::{Action, ActionRequest, Node, NodeId, Toggled, TreeId},
+        headless::{HeadlessConfig, HeadlessRenderer},
     };
 
     use super::*;

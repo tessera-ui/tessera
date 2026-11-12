@@ -7,10 +7,11 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    CursorEventContent, Dp, FocusModifierExt as _, GestureState, HeadlessConfig, HeadlessRenderer,
-    LayoutCoordinates, MOUSE_POINTER_ID, Modifier, PointerChange, Px, PxPosition, ScrollDeltaUnit,
-    ScrollEventContent, ScrollEventSource, State, current_frame_time, remember, scaled_box,
-    tessera,
+    CursorEventContent, Dp, FocusModifierExt as _, GestureState, LayoutCoordinates,
+    MOUSE_POINTER_ID, Modifier, PointerChange, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent,
+    ScrollEventSource, State, current_frame_time,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, scaled_box, tessera,
 };
 
 use crate::{

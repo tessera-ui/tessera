@@ -36,7 +36,7 @@ pub struct ComputeBatchItem<'a, C: ComputeCommand> {
 /// they can be larger than `target_size` and offset from the window.
 pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
     /// Renderer-owned resource creation and uploads.
-    pub graphics: &'a crate::GraphicsDevice,
+    pub graphics: &'a crate::render::GraphicsDevice,
     /// WGPU device used to create and manage GPU resources.
     pub device: &'a wgpu::Device,
     /// Queue for submitting GPU workloads.
@@ -57,7 +57,7 @@ pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
 
 /// Type-erased context used when dispatching compute pipelines.
 pub(crate) struct ErasedDispatchContext<'a, 'b> {
-    pub graphics: &'a crate::GraphicsDevice,
+    pub graphics: &'a crate::render::GraphicsDevice,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub config: &'a wgpu::SurfaceConfiguration,

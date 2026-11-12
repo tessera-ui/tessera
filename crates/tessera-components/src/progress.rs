@@ -851,7 +851,10 @@ mod tests {
     use std::time::Duration;
 
     use tessera_ui::{
-        Color, HeadlessConfig, HeadlessRenderer, State, remember, tessera, testing::TestProbe,
+        Color, State,
+        headless::{HeadlessConfig, HeadlessRenderer},
+        remember, tessera,
+        testing::TestProbe,
     };
 
     use crate::theme::material_theme;

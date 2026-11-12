@@ -5,8 +5,9 @@
 //! Preserve caller semantics while text and explicit labels change.
 
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer, Modifier, State,
+    Modifier, State,
     accesskit::{Node, NodeId, Role},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::TestProbe,
 };

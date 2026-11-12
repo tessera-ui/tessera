@@ -65,7 +65,7 @@ pub(super) fn route_display(controller: State<RouterController>) {
                     && started.is_none_or(|started| started.route_id == id)
                 {
                     controller.with_mut(RouterController::pop);
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 }
             }
         }

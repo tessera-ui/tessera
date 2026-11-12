@@ -1432,7 +1432,7 @@ impl Modifier {
             if let ModifierAction::Placement(node) = action {
                 crate::work::record(
                     instance,
-                    crate::WorkPhase::Transform,
+                    crate::work::WorkPhase::Transform,
                     node.node().diagnostic_name(),
                 );
                 position = node.node().transform_position(position);

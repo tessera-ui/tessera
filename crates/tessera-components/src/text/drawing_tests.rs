@@ -1,12 +1,12 @@
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, DrawModifierContent, DrawModifierContext,
-    DrawModifierNode, HeadlessConfig, HeadlessRenderer, LayoutModifier, LayoutModifierChild,
-    LayoutModifierInput, LayoutPolicy, LayoutResult, MeasurementError, Modifier, PxPosition, State,
-    WorkPhase,
+    DrawModifierNode, LayoutModifier, LayoutModifierChild, LayoutModifierInput, LayoutPolicy,
+    LayoutResult, MeasurementError, Modifier, PxPosition, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
-    testing::TestProbe,
+    testing::{TestProbe, WorkPhase},
 };
 
 use crate::{
@@ -342,12 +342,12 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
             assert_eq!(
                 renderer
                     .work()
-                    .executed::<StateInkDraw>(tessera_ui::WorkPhase::Paint),
+                    .executed::<StateInkDraw>(tessera_ui::testing::WorkPhase::Paint),
                 1
             );
             let builds = renderer
                 .work_totals()
-                .count("paint_state_fixture", tessera_ui::WorkPhase::Build);
+                .count("paint_state_fixture", tessera_ui::testing::WorkPhase::Build);
             assert!(builds > 0);
             retained_paint_frames(&mut renderer, 3);
             assert!(reference == renderer.read_pixels().expect("retained red frame"));
@@ -363,13 +363,13 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
             assert_eq!(
                 renderer
                     .work_totals()
-                    .count("paint_state_fixture", tessera_ui::WorkPhase::Build),
+                    .count("paint_state_fixture", tessera_ui::testing::WorkPhase::Build),
                 builds
             );
             assert_eq!(
                 renderer
                     .work()
-                    .executed::<StateInkDraw>(tessera_ui::WorkPhase::Paint),
+                    .executed::<StateInkDraw>(tessera_ui::testing::WorkPhase::Paint),
                 1
             );
             retained_paint_frames(&mut renderer, 3);
@@ -377,7 +377,7 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
             assert_eq!(
                 renderer
                     .work()
-                    .executed::<StateInkDraw>(tessera_ui::WorkPhase::Paint),
+                    .executed::<StateInkDraw>(tessera_ui::testing::WorkPhase::Paint),
                 0
             );
         },
@@ -391,7 +391,7 @@ fn retained_paint_frames(renderer: &mut HeadlessRenderer, count: usize) {
         assert_eq!(
             renderer
                 .work()
-                .executed::<StateInkDraw>(tessera_ui::WorkPhase::Paint),
+                .executed::<StateInkDraw>(tessera_ui::testing::WorkPhase::Paint),
             0
         );
     }

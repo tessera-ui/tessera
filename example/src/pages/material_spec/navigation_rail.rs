@@ -2912,8 +2912,8 @@ mod tests {
     #[ignore = "Requires a native GPU adapter for gallery semantics and accessibility focus"]
     fn gallery_and_behavior_wrappers_keep_destinations_visible_and_focus_separate_from_selection() {
         use tessera_ui::{
-            HeadlessConfig, HeadlessRenderer,
             accesskit::{Action, ActionRequest, TreeId},
+            headless::{HeadlessConfig, HeadlessRenderer},
         };
 
         for (variant, menu) in [

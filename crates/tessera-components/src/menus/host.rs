@@ -122,7 +122,7 @@ impl MenuHost {
         if self.root.is_alive() {
             self.root.with_mut(MenuController::close);
         }
-        FocusManager::current().defer_keyboard_until_layout();
+        FocusManager::defer_keyboard_until_layout();
     }
 
     pub fn dismiss_all(&self) {
@@ -162,7 +162,7 @@ impl MenuHost {
             return;
         };
         self.entries.set(entries[..index].to_vec());
-        FocusManager::current().defer_keyboard_until_layout();
+        FocusManager::defer_keyboard_until_layout();
         for request in &entries[index..] {
             if request.is_alive() {
                 let controller = request.get().controller;
@@ -201,7 +201,7 @@ impl MenuHost {
         entries.truncate(keep);
         entries.push(request);
         self.entries.set(entries);
-        FocusManager::current().defer_keyboard_until_layout();
+        FocusManager::defer_keyboard_until_layout();
     }
 }
 

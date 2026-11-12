@@ -11,8 +11,9 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Insets, Modifier, WindowInsetsController,
+    Color, Dp, Insets, Modifier, WindowInsetsController,
     accesskit::{Node, NodeId, Rect, Role},
+    headless::{HeadlessConfig, HeadlessRenderer},
     tessera, use_context,
     wgpu::TextureFormat,
 };

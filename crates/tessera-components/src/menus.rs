@@ -4,16 +4,18 @@
 //!
 //! Present anchored overflow or context actions as surfaced menus.
 use tessera_ui::{
-    AxisConstraint, Callback, ClipRegion, ClipShape, Color, ComputedData, CursorEventContent, Dp,
-    DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusDirection, FocusManager,
-    FocusRequester, FocusScopeNode, FocusTraversalPolicy, KeyboardInput, KeyboardInputModifierNode,
-    LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier, ParentConstraint, PointerInput,
+    AxisConstraint, Callback, Color, ComputedData, CursorEventContent, Dp, DrawModifierContent,
+    DrawModifierContext, DrawModifierNode, FocusDirection, FocusManager, FocusRequester,
+    FocusScopeNode, FocusTraversalPolicy, KeyboardInput, KeyboardInputModifierNode, LayoutResult,
+    MOUSE_POINTER_ID, MeasurementError, Modifier, ParentConstraint, PointerInput,
     PointerInputModifierNode, Px, PxPosition, PxSize, RenderSlot, RenderSlotWith, State,
     accesskit::{HasPopup, Role, Toggled},
     current_frame_nanos,
     layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, remember, tessera, use_context, winit,
+    provide_context, remember,
+    render::{ClipRegion, ClipShape},
+    tessera, use_context, winit,
 };
 
 use crate::{
@@ -532,7 +534,7 @@ struct MenuKeyboardBoundary {
 impl MenuKeyboardBoundary {
     fn check(&self) {
         if self.controller.with(MenuController::is_open) != self.rendered_open {
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
         }
     }
 }
@@ -749,7 +751,7 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
         *was_open = is_open;
     });
     if just_opened || just_closed {
-        FocusManager::current().defer_keyboard_until_layout();
+        FocusManager::defer_keyboard_until_layout();
     }
     let root_restore = just_closed
         && provider_args.parent_request.is_none()
@@ -786,7 +788,7 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
                     main_focus_scope.restore_focus();
                 }
                 if let Some(direction) = controller.with_mut(|menu| menu.exit_direction.take()) {
-                    FocusManager::current().request_move_focus(direction);
+                    FocusManager::request_move_focus(direction);
                 }
             }
         });
@@ -1754,8 +1756,8 @@ mod tests {
     #[ignore = "requires a native GPU adapter"]
     fn gpu_menu_prefix_matching_moves_focus_skips_disabled_items_and_cleans_removed_items() {
         use tessera_ui::{
-            HeadlessConfig, HeadlessRenderer,
             accesskit::{Action, ActionRequest, Role, TreeId},
+            headless::{HeadlessConfig, HeadlessRenderer},
         };
 
         let observed = tessera_ui::testing::TestProbe::default();

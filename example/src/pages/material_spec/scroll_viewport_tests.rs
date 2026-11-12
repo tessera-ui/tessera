@@ -11,8 +11,11 @@ use tessera_components::{
     theme::material_theme,
 };
 use tessera_ui::{
-    Dp, HeadlessConfig, HeadlessRenderer, LayoutCoordinates, Modifier, accesskit::Role,
-    modifier::FocusModifierExt as _, remember, tessera,
+    Dp, LayoutCoordinates, Modifier,
+    accesskit::Role,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    modifier::FocusModifierExt as _,
+    remember, tessera,
 };
 
 use super::spec_scroll_viewport;

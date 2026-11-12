@@ -1,4 +1,4 @@
-use tessera_ui::PipelineContext;
+use tessera_ui::render::PipelineContext;
 
 use crate::pipelines::{
     checkmark::pipeline::CheckmarkPipeline, divider::DividerPipeline,

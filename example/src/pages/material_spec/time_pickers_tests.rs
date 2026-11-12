@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use tessera_components::{column::column, modifier::ModifierExt as _, theme::material_theme};
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
+    MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     tessera,
     winit::event::Ime,
 };

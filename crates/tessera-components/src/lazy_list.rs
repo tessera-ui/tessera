@@ -1780,7 +1780,7 @@ mod tests {
                     assert_eq!(
                         session
                             .work()
-                            .count("fixed_test_box", tessera_ui::WorkPhase::Build),
+                            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build),
                         2,
                         "the first layout must only construct the two intersecting items"
                     );
@@ -2741,7 +2741,7 @@ mod tests {
             .width(20);
         let first_builds = session
             .work()
-            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert!(first_builds > 0);
 
         tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667)
@@ -2749,7 +2749,7 @@ mod tests {
             .width(22);
         let second_builds = session
             .work()
-            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert!(second_builds > 0);
 
         tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334)
@@ -2757,7 +2757,7 @@ mod tests {
             .width(24);
         let third_builds = session
             .work()
-            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
         assert!(third_builds > 0);
     }
 }

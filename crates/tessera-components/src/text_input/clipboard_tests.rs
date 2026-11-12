@@ -1,6 +1,7 @@
 use tessera_ui::{
-    Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
+    Dp, Modifier, State,
     clipboard::{ClipboardAction, ClipboardResponse, ClipboardWrite, request_clipboard_action},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
 

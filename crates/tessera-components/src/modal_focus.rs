@@ -24,7 +24,7 @@ pub(crate) fn modal_focus_modifier(
 ) -> Modifier {
     if state.with(|state| state.visible != visible) {
         let origin = if visible {
-            FocusManager::current().save_focus()
+            FocusManager::save_focus()
         } else {
             None
         };
@@ -39,7 +39,7 @@ pub(crate) fn modal_focus_modifier(
                 state.origin = None;
             }
         });
-        FocusManager::current().defer_keyboard_until_layout();
+        FocusManager::defer_keyboard_until_layout();
     }
     if state.with(|state| state.pending.is_some()) {
         modifier.on_globally_positioned(move |_| {

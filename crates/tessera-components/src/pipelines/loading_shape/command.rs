@@ -1,4 +1,4 @@
-use tessera_ui::{Color, DrawCommand};
+use tessera_ui::{Color, render::DrawCommand};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct LoadingShapeCommand {

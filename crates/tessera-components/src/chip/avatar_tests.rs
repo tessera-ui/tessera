@@ -4,7 +4,11 @@
 //!
 //! Preserve contact artwork when input chips change state or density.
 
-use tessera_ui::{Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, tessera};
+use tessera_ui::{
+    Color, Dp, Modifier, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, tessera,
+};
 
 use crate::{
     column::column,

@@ -255,8 +255,9 @@ fn expanded_indicator_hugs_badged_content_while_the_full_target_activates_and_an
     let options_probe = tessera_ui::testing::TestProbe::default();
     let observed = options_probe.clone();
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
         accesskit::Role,
+        headless::{HeadlessConfig, HeadlessRenderer},
     };
 
     let mut renderer = HeadlessRenderer::new(

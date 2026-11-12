@@ -8,7 +8,7 @@ use std::{
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
-use crate::{Command, px::PxRect};
+use crate::{px::PxRect, render::Command};
 
 use super::{OpCategory, OpInfo, RenderGraphOp, is_state_change};
 

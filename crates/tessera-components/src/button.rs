@@ -896,8 +896,10 @@ impl ButtonBuilder {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State,
-        modifier::FocusModifierExt as _, remember,
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State,
+        headless::{HeadlessConfig, HeadlessRenderer},
+        modifier::FocusModifierExt as _,
+        remember,
     };
 
     use crate::{
@@ -1722,7 +1724,7 @@ mod tests {
                     "presentation ripple remains static across frame timestamps"
                 );
                 assert_eq!(
-                    renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+                    renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
                     0
                 );
                 settings.with_mut(|settings| settings.presentation_ripple = None);
@@ -1839,7 +1841,7 @@ mod tests {
                         .with(|states| states[2].unwrap())
                         .with(InteractionState::is_pressed)
                 );
-                tessera_ui::FocusManager::current().clear_focus(true);
+                tessera_ui::FocusManager::clear_focus(true);
                 renderer.render_frames(20);
                 let held = probe.interactions.with(|states| states[2].unwrap()).get();
                 assert!(
@@ -1860,7 +1862,7 @@ mod tests {
                 );
                 renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
                 renderer.pointer_move(MOUSE_POINTER_ID, outside);
-                tessera_ui::FocusManager::current().clear_focus(true);
+                tessera_ui::FocusManager::clear_focus(true);
                 renderer.render_frames(20);
                 assert_eq!(probe.clicks.get().unwrap().get(), 0);
                 settings.with_mut(|settings| {

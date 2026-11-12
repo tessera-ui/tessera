@@ -1,5 +1,7 @@
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, tessera,
+    Color, Dp, Modifier, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, tessera,
     testing::TestProbe,
 };
 

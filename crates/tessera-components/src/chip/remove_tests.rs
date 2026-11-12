@@ -7,9 +7,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
-    State,
+    MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
 

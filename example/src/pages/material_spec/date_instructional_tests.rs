@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use tessera_components::theme::material_theme;
 use tessera_ui::{
-    CursorEventContent, FocusDirection, GestureState, HeadlessConfig, HeadlessRenderer,
-    MOUSE_POINTER_ID, PointerChange, PressKeyEventType, PxPosition,
+    CursorEventContent, FocusDirection, GestureState, MOUSE_POINTER_ID, PointerChange,
+    PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
 };
 
 use super::*;
@@ -252,7 +253,7 @@ fn illustrated_entry_keeps_separate_native_stops_and_confirms_calendar_selection
         Action::Focus,
     );
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, editor);
-    FocusManager::current().request_move_focus(FocusDirection::Next);
+    FocusManager::request_move_focus(FocusDirection::Next);
     renderer.render_frames(4);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
@@ -401,7 +402,7 @@ fn illustrated_clear_uses_native_day_selection_and_only_visible_focus_targets() 
     );
     act(&mut renderer, "August 9, 2020", Role::Button, Action::Focus);
     for _ in 0..26 {
-        FocusManager::current().request_move_focus(FocusDirection::Next);
+        FocusManager::request_move_focus(FocusDirection::Next);
         renderer.render_frames(2);
         let tree = renderer.accessibility_snapshot().unwrap();
         let focus = tree.focus;

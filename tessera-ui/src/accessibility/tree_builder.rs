@@ -1209,10 +1209,10 @@ mod tests {
             ),
         );
         let metadata = metadatas.get_mut(&wrapper).expect("wrapper metadata");
-        metadata.set_clip_region(Some(crate::ClipRegion {
+        metadata.set_clip_region(Some(crate::render::ClipRegion {
             position: PxPosition::from_f32_xy(5.0, 3.0),
             size: [10.25, 12.5],
-            shape: crate::ClipShape::Ellipse,
+            shape: crate::render::ClipShape::Ellipse,
         }));
         metadata.has_shape_clipping = true;
         metadatas

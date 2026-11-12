@@ -4,7 +4,10 @@
 //!
 //! Keep threshold, reversal and custom indicator behavior on real scroll input.
 
-use tessera_ui::{HeadlessConfig, HeadlessRenderer, PxPosition};
+use tessera_ui::{
+    PxPosition,
+    headless::{HeadlessConfig, HeadlessRenderer},
+};
 
 use crate::{scrollable::ScrollableController, text::text, theme::material_theme};
 

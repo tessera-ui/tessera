@@ -11,7 +11,7 @@ use lru::LruCache;
 use parking_lot::{ArcRwLockReadGuard, ArcRwLockWriteGuard, Mutex, RawRwLock, RwLock};
 use tessera_ui::{
     Color, PxPosition,
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
 
@@ -283,7 +283,7 @@ impl GlyphonTextRender {
                 &mut self.atlas,
                 device,
                 self.msaa,
-                tessera_ui::ui_stencil_state(),
+                tessera_ui::render::ui_stencil_state(),
             ),
             viewport: glyphon::Viewport::new(device, &self.cache),
         });

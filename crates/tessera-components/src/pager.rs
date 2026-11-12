@@ -12,7 +12,9 @@ use tessera_ui::{
     PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventSource, State, key,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    normalize_platform_scroll_delta, remember, tessera, winit,
+    remember,
+    scroll::normalize_platform_scroll_delta,
+    tessera, winit,
 };
 
 use crate::{

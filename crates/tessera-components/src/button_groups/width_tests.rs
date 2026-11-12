@@ -6,9 +6,9 @@
 //! width.
 
 use tessera_ui::{
-    Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
-    PxPosition, State,
+    Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     layout::Stack,
     layout::layout,
     remember, tessera,
@@ -165,7 +165,7 @@ fn check_press_widths(samples: u32) {
             assert_eq!(
                 renderer
                     .work()
-                    .count("group_item", tessera_ui::WorkPhase::Build),
+                    .count("group_item", tessera_ui::testing::WorkPhase::Build),
                 0,
                 "an idle group must retain its items"
             );
@@ -196,7 +196,7 @@ fn check_press_widths(samples: u32) {
             assert_eq!(
                 renderer
                     .work()
-                    .count("group_item", tessera_ui::WorkPhase::Build),
+                    .count("group_item", tessera_ui::testing::WorkPhase::Build),
                 0,
                 "a settled held press must stop rebuilding"
             );
@@ -212,7 +212,7 @@ fn check_press_widths(samples: u32) {
             assert_eq!(
                 renderer
                     .work()
-                    .count("group_item", tessera_ui::WorkPhase::Build),
+                    .count("group_item", tessera_ui::testing::WorkPhase::Build),
                 0,
                 "release must stop the animation driver"
             );

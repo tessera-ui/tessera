@@ -242,7 +242,7 @@ impl PointerIndex {
                         if context.input_transforms.is_none() {
                             crate::work::record(
                                 context.instance_logic_id,
-                                crate::WorkPhase::Transform,
+                                crate::work::WorkPhase::Transform,
                                 placement.node().diagnostic_name(),
                             );
                             position = placement.node().transform_position(position);

@@ -2905,8 +2905,8 @@ mod anatomy_tests {
     use super::*;
     use std::time::Duration;
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer,
         accesskit::{Node, NodeId},
+        headless::{HeadlessConfig, HeadlessRenderer},
     };
     #[tessera]
     fn fixture() {

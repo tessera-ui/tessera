@@ -630,7 +630,7 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
                 .accessibility_label(label.clone())
                 .on_click(move || {
                     state.with_mut(|s| s.selection = field);
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(format_two_digit(value))
@@ -741,7 +741,7 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
                     })
                     .on_click(move || {
                         state.with_mut(|state| state.set_period(value));
-                        FocusManager::current().defer_keyboard_until_layout();
+                        FocusManager::defer_keyboard_until_layout();
                     });
             }
         });
@@ -898,7 +898,7 @@ impl KeyboardInputModifierNode for PeriodNavigation {
                 });
             });
             self.requesters[index].request_focus();
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
             input.block_keyboard();
             return;
         }
@@ -1089,7 +1089,7 @@ impl PointerInputModifierNode for ClockInput {
         requester.request_focus();
         if released {
             self.dragging.set(false);
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
         }
         input.consume_pointer_changes();
     }
@@ -1192,7 +1192,7 @@ impl KeyboardInputModifierNode for ClockNavigation {
                 focus.requesters[target]
             });
             requester.request_focus();
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
             input.block_keyboard();
             return;
         }
@@ -1612,7 +1612,7 @@ fn time_display_mode_toggle(state: State<TimePickerState>) {
         })
         .on_click(move || {
             state.with_mut(TimePickerState::toggle_display_mode);
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
         });
 }
 

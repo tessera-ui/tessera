@@ -1,6 +1,9 @@
 pub mod pipeline;
 
-use tessera_ui::{Color, Px, SampleRegion, renderer::DrawCommand};
+use tessera_ui::{
+    Color, Px,
+    render::{DrawCommand, SampleRegion},
+};
 
 use crate::{fluid_glass::GlassBorder, shape_def::Shape};
 

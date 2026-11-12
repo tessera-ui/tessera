@@ -7,8 +7,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
-    PxPosition, State, remember, tessera,
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, tessera,
 };
 
 use crate::{

@@ -253,7 +253,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                     sample
                         .state
                         .with_mut(|state| state.set_is_24_hour(!state.is_24_hour()));
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(
@@ -279,7 +279,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                         } else {
                             TimePickerLayout::Vertical
                         });
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(
@@ -303,7 +303,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                 ))
                 .on_click(move || {
                     sample.state.with_mut(TimePickerState::toggle_display_mode);
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(
@@ -1289,7 +1289,7 @@ fn time_figure_contents(
                         )
                         .on_click(move || {
                             sample.state.with_mut(TimePickerState::toggle_display_mode);
-                            FocusManager::current().defer_keyboard_until_layout();
+                            FocusManager::defer_keyboard_until_layout();
                         });
                     spacer().modifier(Modifier::new().weight(1.0));
                     button()

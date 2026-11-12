@@ -103,7 +103,7 @@ pub(super) fn apply_shadow_modifier(
 }
 
 fn record_md3_shadow(
-    fragment: &mut tessera_ui::RenderFragment,
+    fragment: &mut tessera_ui::render::RenderFragment,
     shadow: ShadowLayers,
     shape: ResolvedShape,
     size: PxSize,
@@ -149,7 +149,7 @@ fn record_md3_shadow(
 }
 
 fn push_shadow(
-    fragment: &mut tessera_ui::RenderFragment,
+    fragment: &mut tessera_ui::render::RenderFragment,
     layer: ShadowLayer,
     shape: ResolvedShape,
     inset: f32,
@@ -170,7 +170,10 @@ fn push_shadow(
 
 #[cfg(test)]
 mod tests {
-    use tessera_ui::{Color, Command, Px, PxPosition, PxSize, RenderFragment};
+    use tessera_ui::{
+        Color, Px, PxPosition, PxSize,
+        render::{Command, RenderFragment},
+    };
 
     use crate::{
         pipelines::shape::command::ShapeCommand,

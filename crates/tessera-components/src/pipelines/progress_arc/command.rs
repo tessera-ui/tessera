@@ -1,4 +1,4 @@
-use tessera_ui::{Color, DrawCommand};
+use tessera_ui::{Color, render::DrawCommand};
 
 /// Stroke cap used for arc ends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

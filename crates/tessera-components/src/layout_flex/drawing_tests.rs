@@ -1,6 +1,8 @@
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, Px, PxPosition, State,
-    modifier::ModifierCapabilityExt as _, remember, tessera,
+    Color, Dp, Modifier, Px, PxPosition, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    modifier::ModifierCapabilityExt as _,
+    remember, tessera,
 };
 
 use crate::{
@@ -329,7 +331,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             assert_eq!(
                 renderer
                     .work()
-                    .phase(tessera_ui::WorkPhase::Measure)
+                    .phase(tessera_ui::testing::WorkPhase::Measure)
                     .count(),
                 0
             );
@@ -337,7 +339,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             assert!(idle.geometry_nodes_visited <= 2);
             assert_eq!(idle.measure_dirty_children_checked, 0);
             assert_eq!(
-                renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+                renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
                 0
             );
             assert_eq!(idle.scene_nodes_updated, 0);
@@ -353,7 +355,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
                 "an off-hover state reader must receive input without waking unrelated handlers"
             );
             assert_eq!(
-                renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+                renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
                 0
             );
 
@@ -363,7 +365,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             assert_eq!(
                 renderer
                     .work()
-                    .phase(tessera_ui::WorkPhase::Measure)
+                    .phase(tessera_ui::testing::WorkPhase::Measure)
                     .count(),
                 0
             );
@@ -381,7 +383,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             assert_eq!(
                 renderer
                     .work()
-                    .phase(tessera_ui::WorkPhase::Measure)
+                    .phase(tessera_ui::testing::WorkPhase::Measure)
                     .count(),
                 0
             );
@@ -414,7 +416,7 @@ fn full_frames_retain_clean_branches_and_update_pixels_and_pointer_dependencies(
             assert!(
                 renderer
                     .work()
-                    .phase(tessera_ui::WorkPhase::Measure)
+                    .phase(tessera_ui::testing::WorkPhase::Measure)
                     .count()
                     < 16,
                 "changing one tile must not remeasure the other tiles"

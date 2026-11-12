@@ -250,7 +250,8 @@ pub fn loading_indicator(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, State,
+        State,
+        headless::{HeadlessConfig, HeadlessRenderer},
         testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
     };
 

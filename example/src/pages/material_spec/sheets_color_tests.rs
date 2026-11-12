@@ -2,10 +2,12 @@ use std::time::Duration;
 
 use tessera_components::{column::column, scrollable::ScrollableController};
 use tessera_ui::{
-    Color, CursorEventContent, GestureState, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
-    PointerChange, PressKeyEventType, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
+    Color, CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PressKeyEventType,
+    ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
     accesskit::{Node, Role},
-    current_frame_time, scaled_box,
+    current_frame_time,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    scaled_box,
     testing::TestProbe,
 };
 

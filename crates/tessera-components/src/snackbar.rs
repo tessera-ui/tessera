@@ -700,11 +700,11 @@ pub fn snackbar_host(
     let visible = record.is_some();
     if visible != showing.get() {
         if visible {
-            origin.set(FocusManager::current().save_focus());
+            origin.set(FocusManager::save_focus());
         } else {
             if scope.has_focus() {
                 pending_restore.set(origin.get());
-                FocusManager::current().defer_keyboard_until_layout();
+                FocusManager::defer_keyboard_until_layout();
             }
             origin.set(None);
         }

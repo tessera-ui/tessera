@@ -88,7 +88,7 @@ impl Navigation {
         } else {
             return false;
         };
-        FocusManager::current().defer_keyboard_until_layout();
+        FocusManager::defer_keyboard_until_layout();
         self.pending.set(Some(target));
         if !self.items.with(|items| items.contains_key(&target)) {
             self.viewport.request_focus();

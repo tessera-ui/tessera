@@ -77,11 +77,11 @@ impl DrawModifierNode for ShapeClipModifierNode {
             ResolvedShape::Rounded {
                 corner_radii,
                 corner_g2,
-            } => tessera_ui::ClipShape::RoundedRectangle {
+            } => tessera_ui::render::ClipShape::RoundedRectangle {
                 radii: corner_radii,
                 exponents: corner_g2,
             },
-            ResolvedShape::Ellipse => tessera_ui::ClipShape::Ellipse,
+            ResolvedShape::Ellipse => tessera_ui::render::ClipShape::Ellipse,
         };
         metadata.set_clip_shape(shape);
         content.draw(ctx.render_input);

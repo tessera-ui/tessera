@@ -1310,8 +1310,9 @@ mod tests {
 mod modal_tests {
 
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType,
+        MOUSE_POINTER_ID, PressKeyEventType,
         accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
+        headless::{HeadlessConfig, HeadlessRenderer},
         winit::{
             event::ElementState,
             keyboard::{KeyCode, PhysicalKey},

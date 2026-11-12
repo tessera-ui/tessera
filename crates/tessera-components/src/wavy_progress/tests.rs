@@ -1,6 +1,10 @@
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, accesskit::Role, remember,
-    tessera, testing::TestProbe, testing::layout_test,
+    Color, Dp, Modifier, State,
+    accesskit::Role,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, tessera,
+    testing::TestProbe,
+    testing::layout_test,
 };
 
 use crate::{

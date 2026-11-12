@@ -5,8 +5,9 @@ use tessera_components::{
     scrollable::ScrollableController, spacer::spacer, theme::material_theme,
 };
 use tessera_ui::{
-    Dp, HeadlessConfig, HeadlessRenderer, Modifier, PxPosition, State,
+    Dp, Modifier, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
 
@@ -264,7 +265,7 @@ fn translated_expanded_tokens_reuse_drawing_and_keep_the_popup_on_its_selector()
         paint += work.paint_nodes_recorded;
         measurements += renderer
             .work()
-            .phase(tessera_ui::WorkPhase::Measure)
+            .phase(tessera_ui::testing::WorkPhase::Measure)
             .count();
         geometry += work.geometry_nodes_updated;
     }
@@ -295,13 +296,13 @@ fn translated_expanded_tokens_reuse_drawing_and_keep_the_popup_on_its_selector()
     assert_eq!(row_after.height(), row_before.height());
     renderer.render_frames(1);
     assert_eq!(
-        renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+        renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
         0
     );
     assert_eq!(
         renderer
             .work()
-            .phase(tessera_ui::WorkPhase::Measure)
+            .phase(tessera_ui::testing::WorkPhase::Measure)
             .count(),
         0
     );

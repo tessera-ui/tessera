@@ -1,5 +1,5 @@
 use tessera_ui::{
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
 
@@ -29,7 +29,7 @@ pub(crate) struct LoadingShapePipeline {
 
 impl LoadingShapePipeline {
     pub(crate) fn new(
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,

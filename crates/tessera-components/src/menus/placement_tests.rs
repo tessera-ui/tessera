@@ -1,6 +1,7 @@
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
+    Color, Dp, Modifier, State,
     accesskit::{Rect, Role},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
 

@@ -1,8 +1,7 @@
 //! Pipeline registration context for renderer initialization
 
-use crate::{
-    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline,
-    renderer::{RenderCore, RenderResources},
+use crate::render::{
+    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, RenderCore, RenderResources,
 };
 
 /// Context passed to pipeline initialization functions.
@@ -12,7 +11,7 @@ pub struct PipelineContext<'a> {
 
 impl<'a> PipelineContext<'a> {
     /// Returns the resource and upload service owned by this renderer.
-    pub fn graphics(&self) -> &crate::GraphicsDevice {
+    pub fn graphics(&self) -> &crate::render::GraphicsDevice {
         self.core.resources().graphics
     }
     /// Creates a new pipeline context for the given renderer app.

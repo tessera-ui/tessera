@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use tessera_ui::{
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu::{self, include_wgsl},
 };
 
@@ -26,7 +26,7 @@ pub struct CheckmarkPipeline {
 impl CheckmarkPipeline {
     /// Creates the selection-stroke pipeline.
     pub fn new(
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         cache: Option<&wgpu::PipelineCache>,
         config: &wgpu::SurfaceConfiguration,
         sample_count: u32,

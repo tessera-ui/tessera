@@ -12,9 +12,10 @@ use std::{
 use smallvec::SmallVec;
 
 use crate::{
-    Command, ComputeCommand, DrawCommand, DrawRegion, FloatRect, LocalToWindow, SampleRegion,
+    FloatRect, LocalToWindow,
     component_tree::SceneRope,
     px::{Px, PxPosition, PxRect, PxSize},
+    render::{Command, ComputeCommand, DrawCommand, DrawRegion, SampleRegion},
 };
 
 /// Local drawing dimensions and their precise placement in the render target.
@@ -60,12 +61,12 @@ impl DrawGeometry {
     /// Returns precise target bounds.
     #[must_use]
     pub fn window_bounds(self) -> FloatRect {
-        self.padded_window_bounds(crate::PaddingRect::ZERO)
+        self.padded_window_bounds(crate::render::PaddingRect::ZERO)
     }
 
     /// Maps local padding to target bounds without rounding individual edges.
     #[must_use]
-    pub fn padded_window_bounds(self, padding: crate::PaddingRect) -> FloatRect {
+    pub fn padded_window_bounds(self, padding: crate::render::PaddingRect) -> FloatRect {
         self.local_to_window.map_rect(FloatRect {
             x: -padding.left.to_f32(),
             y: -padding.top.to_f32(),
@@ -348,7 +349,7 @@ impl RenderGraphBuilder {
     }
 
     /// Pushes a shape clip op into the graph.
-    pub(crate) fn push_shape_clip_push(&mut self, region: crate::ClipRegion) {
+    pub(crate) fn push_shape_clip_push(&mut self, region: crate::render::ClipRegion) {
         self.push_state(Command::ShapeClipPush(region));
     }
 
@@ -526,7 +527,8 @@ fn is_state_change(op: &RenderGraphOp) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        PaddingRect, Px, PxPosition, PxSize, SampleRegion, renderer::drawer::command::DrawCommand,
+        Px, PxPosition, PxSize,
+        render::{PaddingRect, SampleRegion, drawer::command::DrawCommand},
     };
 
     #[test]

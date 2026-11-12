@@ -5,8 +5,10 @@
 //! Keep notification markers stable when content and themes change.
 
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
-    PxPosition, State, accesskit::Role, remember, tessera, use_context,
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
+    accesskit::Role,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, tessera, use_context,
 };
 
 use crate::{

@@ -5,9 +5,10 @@
 //! Keep list content consistent across layout and state changes.
 
 use tessera_ui::{
-    Color, Dp, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
-    PressKeyEventType, PxPosition, RenderSlot, State,
+    Color, Dp, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, RenderSlot,
+    State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::TestProbe,
     use_context,
@@ -245,7 +246,7 @@ fn check(samples: u32) {
             settings.selected = false;
             settings.calls = 0;
         });
-        FocusManager::current().clear_focus(true);
+        FocusManager::clear_focus(true);
         renderer.render_frames(30);
         assert_eq!(rect(&renderer, "item"), [0, 0, width, height]);
         settings.with_mut(|settings| settings.large = true);

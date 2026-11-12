@@ -2,9 +2,7 @@
 //! the main [`Renderer`] struct that manages the application lifecycle, event
 //! handling, and rendering pipeline for cross-platform UI applications.
 
-pub mod compute;
-pub mod core;
-pub mod drawer;
+pub(crate) mod core;
 
 #[cfg(target_os = "macos")]
 mod macos_titlebar;
@@ -17,8 +15,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-
-pub use core::{RenderCore, RenderResources};
 
 use accesskit::{self, TreeUpdate};
 use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
@@ -64,14 +60,7 @@ use crate::{
     time::Instant,
 };
 
-pub use crate::render_scene::{Command, DrawRegion, PaddingRect, SampleRegion};
-
-use self::core::RenderTimingBreakdown;
-
-pub use compute::{
-    ComputablePipeline, ComputeBatchItem, ComputePipelineRegistry, ErasedComputeBatchItem,
-};
-pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
+use self::core::{RenderCore, RenderTimingBreakdown};
 
 #[cfg(feature = "debug-dirty-overlay")]
 use crate::PxRect;

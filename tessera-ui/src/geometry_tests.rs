@@ -734,13 +734,13 @@ fn geometry_observer_updates_settle_placement_before_the_frame_snapshot() {
     assert_eq!(
         session
             .work()
-            .count("observer_follow_fixture", crate::WorkPhase::Build),
+            .count("observer_follow_fixture", crate::work::WorkPhase::Build),
         0
     );
     assert_eq!(
         session
             .work()
-            .executed::<SizeOnlyContent>(crate::WorkPhase::Measure),
+            .executed::<SizeOnlyContent>(crate::work::WorkPhase::Measure),
         0
     );
     pump_layout_test_session(&mut session, 2);
@@ -761,7 +761,7 @@ fn geometry_observer_updates_settle_placement_before_the_frame_snapshot() {
     assert_eq!(
         session
             .work()
-            .executed::<StateTranslation>(crate::WorkPhase::Transform),
+            .executed::<StateTranslation>(crate::work::WorkPhase::Transform),
         0
     );
 }
@@ -805,7 +805,7 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
     assert!(
         session
             .work()
-            .for_instance(child, crate::WorkPhase::Transform)
+            .for_instance(child, crate::work::WorkPhase::Transform)
             > 0
     );
     for frame in 1..=40 {
@@ -827,7 +827,7 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
         assert_eq!(
             session
                 .work()
-                .for_instance(child, crate::WorkPhase::Transform),
+                .for_instance(child, crate::work::WorkPhase::Transform),
             0
         );
         let bounds = probe.coordinates.with(|items| {
@@ -848,7 +848,7 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
     assert!(
         session
             .work()
-            .for_instance(child, crate::WorkPhase::Transform)
+            .for_instance(child, crate::work::WorkPhase::Transform)
             > 0
     );
     let bounds = probe.coordinates.with(|items| {

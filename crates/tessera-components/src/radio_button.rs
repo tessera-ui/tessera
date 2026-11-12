@@ -572,7 +572,7 @@ fn radio_button_inner(
                             .with_mut(|state| state.set_focused(focus_state.has_focus()));
                     }
                     let directional = matches!(
-                        FocusManager::current().focus_change_direction(),
+                        FocusManager::focus_change_direction(),
                         Some(
                             FocusDirection::Left
                                 | FocusDirection::Right

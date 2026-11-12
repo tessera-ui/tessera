@@ -25,7 +25,7 @@ mod draw;
 mod instanced;
 
 /// Register all draw and compute pipelines required by this crate.
-pub fn register_pipelines(context: &mut tessera_ui::PipelineContext<'_>) {
+pub fn register_pipelines(context: &mut tessera_ui::render::PipelineContext<'_>) {
     // Independent renderer instances can reuse backend device identifiers.
     SharedQuad::clear();
     draw::register(context);

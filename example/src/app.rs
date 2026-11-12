@@ -407,7 +407,7 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter for pointer-driven app navigation"]
     fn leaving_material_directory_through_the_app_drawer_keeps_destinations_live() {
-        fn click(renderer: &mut tessera_ui::HeadlessRenderer, label: &str) {
+        fn click(renderer: &mut tessera_ui::headless::HeadlessRenderer, label: &str) {
             let snapshot = renderer.inspect_accessibility().unwrap();
             let (_, node) = snapshot
                 .reading_order()
@@ -447,12 +447,12 @@ mod tests {
             registry.register_package(crate::pages::custom_shader::CustomShaderPackage);
             let navigation = TestProbe::default();
             let observed = navigation.clone();
-            let mut renderer = tessera_ui::HeadlessRenderer::new(
+            let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
                 Box::new(move || {
                     app_fixture(observed.clone());
                 }),
                 registry.finish(),
-                tessera_ui::HeadlessConfig {
+                tessera_ui::headless::HeadlessConfig {
                     width: 1200,
                     height: 800,
                     sample_count,

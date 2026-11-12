@@ -1093,7 +1093,7 @@ mod tests {
         let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
         let observed = probe.clone();
 
-        use tessera_ui::{HeadlessConfig, HeadlessRenderer};
+        use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
 
         fn disclosure_states(renderer: &HeadlessRenderer) -> Vec<bool> {
             let tree = renderer

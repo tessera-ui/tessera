@@ -361,8 +361,8 @@ fn article_footer_link(
                             }
                         });
                         if let Some(link) = link {
-                            FocusManager::current().clear_focus(false);
-                            FocusManager::current().defer_keyboard_until_layout();
+                            FocusManager::clear_focus(false);
+                            FocusManager::defer_keyboard_until_layout();
                             match link.action {
                                 FooterAction::Page(page) => {
                                     selected.set(page);
@@ -715,7 +715,7 @@ fn article_navigation_arrow(
             if (previous && target == first) || (!previous && target == last) {
                 focus_article_tab(navigation, target);
             } else {
-                FocusManager::current().defer_keyboard_until_layout();
+                FocusManager::defer_keyboard_until_layout();
             }
         });
 }
@@ -814,7 +814,7 @@ fn article_tab_strip(
                                 scroll.with_mut(|scroll| {
                                     scroll.set_scroll_position(PxPosition::ZERO)
                                 });
-                                FocusManager::current().defer_keyboard_until_layout();
+                                FocusManager::defer_keyboard_until_layout();
                             }),
                             Some(interaction),
                         ),

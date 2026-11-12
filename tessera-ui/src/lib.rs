@@ -21,7 +21,7 @@ pub mod android;
 pub mod asset;
 mod async_dispatch;
 mod build_tree;
-pub mod clip;
+mod clip;
 pub mod clipboard;
 pub mod color;
 mod component_call;
@@ -30,11 +30,6 @@ mod graphics;
 mod work;
 
 pub use async_dispatch::{Dispatcher, Task, next_frame, on, spawn};
-pub use graphics::{
-    FrameBuffer, GraphicsDevice, GraphicsWork, GraphicsWorkDiagnostics, ScratchFit, ScratchTexture,
-    ScratchTextureDescriptor, TrackedBuffer,
-};
-pub use work::{FrameWork, WorkExecution, WorkPhase, WorkTotals};
 
 mod session;
 pub mod system_back;
@@ -65,17 +60,18 @@ mod layout_policy_tests;
 pub mod modifier;
 pub mod nested_scroll;
 pub(crate) mod pipeline_cache;
-pub mod pipeline_context;
+mod pipeline_context;
 pub mod plugin;
 #[cfg(feature = "profiling")]
 pub mod profiler;
 mod prop;
 pub mod px;
 mod read_dependencies;
+pub mod render;
 mod render_graph;
-pub mod render_module;
+mod render_module;
 mod render_pass;
-pub mod render_scene;
+mod render_scene;
 pub mod renderer;
 mod runtime;
 pub mod scroll;
@@ -95,7 +91,6 @@ pub use winit;
 pub use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
     asset::{Asset, FontAsset, LoadState, Resource, Source},
-    clip::{ClipRegion, ClipShape, ui_stencil_state},
     clipboard::{
         ClipboardAction, ClipboardInput, ClipboardInputModifierNode, ClipboardResponse,
         ClipboardWrite, request_clipboard_action,
@@ -131,35 +126,18 @@ pub use crate::{
         PlacementModifierNode, PointerInputModifierNode, SemanticsModifierNode,
         StatefulLayoutPolicy,
     },
-    pipeline_context::PipelineContext,
     plugin::{DesktopPlatformContext, Plugin, PluginContext, PluginResult, with_plugin},
     prop::{Callback, CallbackWith, RenderSlot, RenderSlotWith},
     px::{Px, PxPosition, PxRect, PxSize},
-    render_graph::{DrawGeometry, RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp},
-    render_module::RenderModule,
-    render_scene::{Command, DrawRegion, PaddingRect, SampleRegion},
-    renderer::{
-        Renderer,
-        compute::{self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry},
-        core::OffscreenReadbackError,
-        drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
-    },
+    renderer::Renderer,
     runtime::{
         Model, ModelInit, ModelStore, ModelStoreScope, State, current_frame_nanos,
         current_frame_time, key, launch, launch_once, remember, remember_with_key, retain,
         retain_with_key,
     },
-    scroll::{PlatformScrollConfig, normalize_platform_scroll_delta, platform_scroll_config},
 };
 
 use ime_state::ImeState;
-
-#[cfg(all(feature = "headless", not(target_family = "wasm")))]
-pub use crate::headless::{
-    HEADLESS_ENV, HEADLESS_FRAME_TIME_MS_ENV, HEADLESS_HEIGHT_ENV, HEADLESS_WIDTH_ENV,
-    HeadlessConfig, HeadlessError, HeadlessRenderer, encode_png_rgba, headless_mode_requested,
-    run_headless, write_png_file,
-};
 
 #[cfg(target_os = "android")]
 pub use {jni, ndk_context, ndk_sys};

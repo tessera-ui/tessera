@@ -74,12 +74,12 @@ impl EntryPoint {
     #[cfg(all(feature = "headless", not(target_family = "wasm")))]
     pub fn into_headless(
         self,
-        mut config: crate::HeadlessConfig,
-    ) -> Result<crate::HeadlessRenderer, crate::headless::HeadlessError> {
+        mut config: crate::headless::HeadlessConfig,
+    ) -> Result<crate::headless::HeadlessRenderer, crate::headless::HeadlessError> {
         let _session = self.session.enter();
         config.sample_count = self.config.sample_count;
         config.max_non_sampler_bindings = self.config.max_non_sampler_bindings;
-        crate::HeadlessRenderer::new(self.entry, self.registry.finish(), config)
+        crate::headless::HeadlessRenderer::new(self.entry, self.registry.finish(), config)
     }
 
     /// Runs the entry point on desktop platforms.

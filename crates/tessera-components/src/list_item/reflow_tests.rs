@@ -5,8 +5,11 @@
 //! Keep expanded list rows clickable at their visible scrolled positions.
 
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
-    PxPosition, RenderSlot, State, accesskit::Node, remember, tessera, testing::TestProbe,
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, RenderSlot, State,
+    accesskit::Node,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{

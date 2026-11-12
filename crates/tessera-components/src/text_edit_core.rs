@@ -32,7 +32,7 @@ use crate::{
 /// Width of the caret drawn by the text editor in device-independent pixels.
 const CURSOR_WIDTH: Dp = Dp(2.5);
 
-fn push_rect(fragment: &mut tessera_ui::RenderFragment, rect: &RectDef, color: Color) {
+fn push_rect(fragment: &mut tessera_ui::render::RenderFragment, rect: &RectDef, color: Color) {
     if rect.width <= Px::ZERO || rect.height <= Px::ZERO {
         return;
     }
@@ -48,7 +48,7 @@ fn push_rect(fragment: &mut tessera_ui::RenderFragment, rect: &RectDef, color: C
 }
 
 fn push_highlight_rects(
-    fragment: &mut tessera_ui::RenderFragment,
+    fragment: &mut tessera_ui::render::RenderFragment,
     rects: &[RectDef],
     color: Color,
 ) {
@@ -3913,14 +3913,20 @@ mod tests {
             });
             let settled = session
                 .work_totals()
-                .count("editor_cache_contents", tessera_ui::WorkPhase::Build);
+                .count(
+                    "editor_cache_contents",
+                    tessera_ui::testing::WorkPhase::Build,
+                );
             for frame in 20..28 {
                 pump_layout_test_session(&mut session, frame * 16_666_667);
             }
             assert_eq!(
                 session
                     .work_totals()
-                    .count("editor_cache_contents", tessera_ui::WorkPhase::Build),
+                    .count(
+                        "editor_cache_contents",
+                        tessera_ui::testing::WorkPhase::Build,
+                    ),
                 settled,
                 "a cached intrinsic probe must not perpetually invalidate editor readers"
             );
@@ -3941,14 +3947,20 @@ mod tests {
             }
             let settled_builds = session
                 .work_totals()
-                .count("editor_cache_contents", tessera_ui::WorkPhase::Build);
+                .count(
+                    "editor_cache_contents",
+                    tessera_ui::testing::WorkPhase::Build,
+                );
             for frame in 4..12 {
                 let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
             }
             assert_eq!(
                 session
                     .work_totals()
-                    .count("editor_cache_contents", tessera_ui::WorkPhase::Build),
+                    .count(
+                        "editor_cache_contents",
+                        tessera_ui::testing::WorkPhase::Build,
+                    ),
                 settled_builds
             );
 
@@ -3962,7 +3974,10 @@ mod tests {
             assert!(
                 session
                     .work_totals()
-                    .count("editor_cache_contents", tessera_ui::WorkPhase::Build)
+                    .count(
+                        "editor_cache_contents",
+                        tessera_ui::testing::WorkPhase::Build,
+                    )
                     > settled_builds
             );
             assert!(

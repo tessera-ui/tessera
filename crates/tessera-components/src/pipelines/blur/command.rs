@@ -1,4 +1,7 @@
-use tessera_ui::{ComputeCommand, Px, SampleRegion};
+use tessera_ui::{
+    Px,
+    render::{ComputeCommand, SampleRegion},
+};
 
 /// A synchronous command to execute a gaussian blur.
 /// `BlurCommand` describes a single directional blur pass.

@@ -18,7 +18,7 @@ pub(super) struct BatchResources {
 }
 
 struct BatchBuffer {
-    buffer: tessera_ui::TrackedBuffer,
+    buffer: tessera_ui::render::TrackedBuffer,
     bind_group: wgpu::BindGroup,
     capacity: usize,
     bytes: Vec<u8>,
@@ -34,7 +34,7 @@ impl BatchResources {
 
     fn append(
         &mut self,
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         layout: &wgpu::BindGroupLayout,
         bytes: &[u8],
         instance_count: usize,
@@ -103,7 +103,7 @@ impl BatchResources {
         (&buffer.bind_group, start..end)
     }
 
-    pub(super) fn finish_frame(&self, queue: &tessera_ui::GraphicsDevice) {
+    pub(super) fn finish_frame(&self, queue: &tessera_ui::render::GraphicsDevice) {
         // Uploads must precede submission while retaining each recorded draw's
         // range.
         for buffer in self
@@ -120,10 +120,10 @@ impl BatchResources {
 impl ShapePipeline {
     pub(super) fn draw_batch(
         &mut self,
-        gpu: &tessera_ui::GraphicsDevice,
+        gpu: &tessera_ui::render::GraphicsDevice,
         target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&ShapeCommand, tessera_ui::DrawGeometry)],
+        commands: &[(&ShapeCommand, tessera_ui::render::DrawGeometry)],
     ) {
         let instances = commands
             .iter()

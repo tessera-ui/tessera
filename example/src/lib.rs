@@ -63,8 +63,8 @@ pub fn md3_start_diagnostics() -> Result<md3_diagnostics::Md3Diagnostics, JsValu
 struct TestPipelines;
 
 #[cfg(test)]
-impl tessera_ui::RenderModule for TestPipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
+impl tessera_ui::render::RenderModule for TestPipelines {
+    fn register_pipelines(&self, context: &mut tessera_ui::render::PipelineContext<'_>) {
         tessera_components::pipelines::register_pipelines(context);
     }
 }

@@ -21,7 +21,7 @@ use crate::{
 /// # Example
 ///
 /// ```
-/// use tessera_ui::DrawCommand;
+/// use tessera_ui::render::DrawCommand;
 ///
 /// #[derive(Clone, PartialEq)]
 /// struct RectangleCommand {

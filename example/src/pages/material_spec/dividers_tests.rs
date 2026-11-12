@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use tessera_ui::{HeadlessConfig, HeadlessRenderer};
+use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
 
 use super::*;
 

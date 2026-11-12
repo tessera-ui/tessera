@@ -95,7 +95,7 @@ Home/End、PageUp/PageDown。连续滑块按 1% 调整，离散滑块按配置�
 `Modifier::clip_shape` clips content and pointer hit testing to nested rounded
 rectangles or ellipses without resizing it. Use multisampling for smooth mask
 edges. Custom UI pipelines must set
-`depth_stencil: tessera_ui::ui_stencil_state()`; independent atlas-generation
+`depth_stencil: tessera_ui::render::ui_stencil_state()`; independent atlas-generation
 passes keep their own attachment configuration.
 
 `carousel(item_count)` provides multi-browse, uncontained, mixed-aspect

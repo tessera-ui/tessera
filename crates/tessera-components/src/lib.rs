@@ -158,7 +158,10 @@ pub mod wavy_progress;
 mod test_utils;
 
 use tessera_platform::PlatformPackage;
-use tessera_ui::{EntryRegistry, PipelineContext, RenderModule, TesseraPackage};
+use tessera_ui::{
+    EntryRegistry, TesseraPackage,
+    render::{PipelineContext, RenderModule},
+};
 
 pub use tessera_foundation::{alignment, shape_def};
 

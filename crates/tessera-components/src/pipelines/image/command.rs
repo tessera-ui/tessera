@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use tessera_ui::DrawCommand;
+use tessera_ui::render::DrawCommand;
 
 /// Image pixel data for rendering.
 ///

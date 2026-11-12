@@ -5,8 +5,9 @@ use tessera_components::{
     theme::material_theme,
 };
 use tessera_ui::{
-    Dp, HeadlessConfig, HeadlessRenderer, Modifier,
+    Dp, Modifier,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     tessera,
 };
 

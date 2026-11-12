@@ -1,4 +1,4 @@
-use tessera_ui::{DrawCommand, PxPosition};
+use tessera_ui::{PxPosition, render::DrawCommand};
 
 use super::pipeline::TextData;
 

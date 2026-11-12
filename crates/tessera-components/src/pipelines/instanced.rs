@@ -1,7 +1,10 @@
 use std::{marker::PhantomData, ops::Range};
 
 use bytemuck::Pod;
-use tessera_ui::{GraphicsDevice, TrackedBuffer, wgpu};
+use tessera_ui::{
+    render::{GraphicsDevice, TrackedBuffer},
+    wgpu,
+};
 
 struct Page {
     buffer: TrackedBuffer,
@@ -222,7 +225,7 @@ pub(super) fn quad_pipeline(
             cull_mode,
             ..Default::default()
         },
-        depth_stencil: tessera_ui::ui_stencil_state(),
+        depth_stencil: tessera_ui::render::ui_stencil_state(),
         multisample: wgpu::MultisampleState {
             count: sample_count,
             ..Default::default()

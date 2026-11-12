@@ -5,9 +5,11 @@
 //! Verify clipped and scaled surfaces across repeated draw batches.
 
 use tessera_ui::{
-    Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, HeadlessConfig,
-    HeadlessRenderer, Modifier, State, modifier::ModifierCapabilityExt as _, remember, scaled_box,
-    tessera, testing::TestProbe,
+    Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    modifier::ModifierCapabilityExt as _,
+    remember, scaled_box, tessera,
+    testing::TestProbe,
 };
 
 use crate::{boxed::boxed, modifier::ModifierExt as _, shape_def::Shape};

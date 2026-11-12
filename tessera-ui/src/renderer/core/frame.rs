@@ -4,14 +4,14 @@ use smallvec::SmallVec;
 use tracing::{debug, error, warn};
 
 use crate::{
-    DrawCommand, LocalToWindow, Px, PxPosition, PxRect, PxSize, SampleRegion, ScratchFit,
-    ScratchTexture, ScratchTextureDescriptor,
-    render_graph::{DrawGeometry, RenderGraph},
-    render_pass::{ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassPlan},
-    renderer::{
+    LocalToWindow, Px, PxPosition, PxRect, PxSize,
+    render::{
+        DrawCommand, SampleRegion, ScratchFit, ScratchTexture, ScratchTextureDescriptor,
         compute::{ErasedComputeBatchItem, pipeline::ErasedDispatchContext},
         drawer::ErasedDrawContext,
     },
+    render_graph::{DrawGeometry, RenderGraph},
+    render_pass::{ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassPlan},
     time::Instant,
 };
 
@@ -39,7 +39,7 @@ struct RenderPassParams<'a, 'commands> {
     commands_in_pass: &'a mut SmallVec<[DrawOrClip<'commands>; 32]>,
     scene: Option<(&'a wgpu::TextureView, PxRect)>,
     drawer: &'a mut Drawer,
-    graphics: &'a crate::GraphicsDevice,
+    graphics: &'a crate::render::GraphicsDevice,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
@@ -60,7 +60,7 @@ struct BlitParams<'a> {
 }
 
 struct RenderCoreFrameState<'a> {
-    graphics: &'a crate::GraphicsDevice,
+    graphics: &'a crate::render::GraphicsDevice,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
@@ -76,7 +76,7 @@ impl RenderCoreFrameState<'_> {
 }
 
 struct SubmitContext<'a> {
-    graphics: &'a crate::GraphicsDevice,
+    graphics: &'a crate::render::GraphicsDevice,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
@@ -1341,7 +1341,7 @@ mod tests {
     fn deferred_pipelines_start_on_first_use_and_draw_receives_the_whole_frame() {
         use std::sync::{Arc, Mutex};
 
-        use crate::renderer::{
+        use crate::render::{
             compute::pipeline::ComputeContext,
             drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
         };

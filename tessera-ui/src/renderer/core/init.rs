@@ -6,7 +6,8 @@ use winit::window::Window;
 
 use crate::{
     pipeline_cache::initialize_cache,
-    renderer::{compute::ComputePipelineRegistry, drawer::Drawer, window_drawable_size},
+    render::{compute::ComputePipelineRegistry, drawer::Drawer},
+    renderer::window_drawable_size,
 };
 
 use super::{BlitState, FrameTargets, RenderCore, RenderPipelines};
@@ -540,7 +541,7 @@ impl RenderCore {
 
         Self {
             window,
-            graphics: crate::GraphicsDevice::new(device.clone(), queue.clone()),
+            graphics: crate::render::GraphicsDevice::new(device.clone(), queue.clone()),
             instance,
             device,
             surface,

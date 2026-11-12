@@ -1819,8 +1819,9 @@ mod tests {
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
         accesskit::{Action, ActionRequest, TreeId},
+        headless::{HeadlessConfig, HeadlessRenderer},
     };
 
     use super::*;

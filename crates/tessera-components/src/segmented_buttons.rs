@@ -351,7 +351,7 @@ pub fn segmented_button(
             .preferred_tab_stop(selected)
             .on_focus_event(move |focus_state: FocusState| {
                 let directional = matches!(
-                    FocusManager::current().focus_change_direction(),
+                    FocusManager::focus_change_direction(),
                     Some(FocusDirection::Left | FocusDirection::Right)
                 );
                 if focus_state.is_focused()

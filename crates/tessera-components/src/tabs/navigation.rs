@@ -80,7 +80,7 @@ impl KeyboardInputModifierNode for TabNavigation {
             {
                 target.activate.call();
             }
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
             input.block_keyboard();
             return;
         }

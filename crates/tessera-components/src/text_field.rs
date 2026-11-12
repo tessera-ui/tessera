@@ -11,7 +11,9 @@ use tessera_ui::{
     ScrollDeltaUnit, State,
     layout::{MeasureScope, Stack, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _},
-    normalize_platform_scroll_delta, provide_context, remember, tessera, use_context, winit,
+    provide_context, remember,
+    scroll::normalize_platform_scroll_delta,
+    tessera, use_context, winit,
 };
 
 use crate::{
@@ -1703,7 +1705,9 @@ mod native_field_regressions {
     use std::time::Duration;
 
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, accesskit::Role,
+        MOUSE_POINTER_ID, PressKeyEventType,
+        accesskit::Role,
+        headless::{HeadlessConfig, HeadlessRenderer},
         winit::event::Ime,
     };
 
@@ -2320,7 +2324,7 @@ mod native_field_regressions {
                     assert_eq!(editor.with(|editor| editor.text()), "Q");
                     check_bounds(&renderer);
                     editor.with_mut(|editor| editor.set_text(""));
-                    tessera_ui::FocusManager::current().clear_focus(true);
+                    tessera_ui::FocusManager::clear_focus(true);
                     renderer.render_frames(4);
                     check_bounds(&renderer);
                     click_fixed(&mut renderer);
@@ -2339,7 +2343,10 @@ mod native_field_regressions {
 mod presentation_regressions {
     use std::time::Duration;
 
-    use tessera_ui::{HeadlessConfig, HeadlessRenderer, State};
+    use tessera_ui::{
+        State,
+        headless::{HeadlessConfig, HeadlessRenderer},
+    };
 
     use super::*;
 
@@ -2446,7 +2453,7 @@ mod presentation_regressions {
                     "preview carets stay visible across blink phases"
                 );
                 assert_eq!(
-                    renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+                    renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
                     0
                 );
                 let presentation = probe.presentation.get().unwrap();
@@ -2510,7 +2517,7 @@ mod presentation_regressions {
                 assert_eq!(
                     renderer
                         .work()
-                        .phase(tessera_ui::WorkPhase::Measure)
+                        .phase(tessera_ui::testing::WorkPhase::Measure)
                         .count(),
                     0
                 );

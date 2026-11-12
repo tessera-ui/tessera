@@ -390,10 +390,10 @@ mod tests {
     #[test]
     #[ignore = "Requires a native GPU adapter to verify navigation drawer corner pixels"]
     fn standard_drawer_rounds_only_the_ending_corners() {
-        let mut renderer = tessera_ui::HeadlessRenderer::new(
+        let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
             Box::new(shape_fixture),
             vec![Box::new(crate::TesseraComponents)],
-            tessera_ui::HeadlessConfig {
+            tessera_ui::headless::HeadlessConfig {
                 width: 400,
                 height: 120,
                 sample_count: 1,

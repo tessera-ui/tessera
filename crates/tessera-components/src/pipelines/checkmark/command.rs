@@ -1,4 +1,4 @@
-use tessera_ui::{Color, DrawCommand};
+use tessera_ui::{Color, render::DrawCommand};
 
 /// Command for drawing an animated checkmark
 #[derive(Debug, Clone, Copy, PartialEq)]

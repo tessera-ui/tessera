@@ -14,7 +14,7 @@ pub enum ScratchFit {
 }
 
 /// Describes a pooled texture requested with
-/// [`GraphicsDevice::scratch_texture`](crate::GraphicsDevice::scratch_texture).
+/// [`GraphicsDevice::scratch_texture`](crate::render::GraphicsDevice::scratch_texture).
 #[derive(Clone, Copy, Debug)]
 pub struct ScratchTextureDescriptor {
     /// Minimum width in texels.
@@ -154,7 +154,7 @@ impl Drop for ScratchTexture {
     }
 }
 
-impl crate::GraphicsDevice {
+impl crate::render::GraphicsDevice {
     /// Leases a pooled texture for work recorded in the current frame.
     pub fn scratch_texture(&self, descriptor: ScratchTextureDescriptor) -> ScratchTexture {
         let limit = self.device.limits().max_texture_dimension_2d;

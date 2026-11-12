@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use glam::Vec2;
-use tessera_ui::{Color, DrawCommand};
+use tessera_ui::{Color, render::DrawCommand};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PathStrokeCommand {

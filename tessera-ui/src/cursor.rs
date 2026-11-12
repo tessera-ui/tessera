@@ -429,7 +429,12 @@ pub struct ScrollEventContent {
 impl ScrollEventContent {
     /// Returns the horizontal and vertical delta in physical pixels.
     pub fn pixel_delta(&self) -> (f32, f32) {
-        crate::normalize_platform_scroll_delta(self.delta_x, self.delta_y, self.unit, self.source)
+        crate::scroll::normalize_platform_scroll_delta(
+            self.delta_x,
+            self.delta_y,
+            self.unit,
+            self.source,
+        )
     }
 
     /// Converts the sample to pixels so handlers can forward the remaining distance.

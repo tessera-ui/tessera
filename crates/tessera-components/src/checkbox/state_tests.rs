@@ -5,9 +5,9 @@
 //! Preserve complete selection and validation states across theme changes.
 
 use tessera_ui::{
-    Color, Dp, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
-    PressKeyEventType, PxPosition, State,
+    Color, Dp, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Invalid, Node, NodeId, Role, Toggled, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera, use_context,
 };
 
@@ -320,7 +320,7 @@ fn check_states(samples: u32) {
         renderer.render_frames(30);
         assert!(!action(&mut renderer, Action::Click));
         assert_eq!(settings.get().activations, 1);
-        FocusManager::current().clear_focus(true);
+        FocusManager::clear_focus(true);
     }
     for presentation in [
         InteractionVisualState::Hover,
@@ -373,7 +373,7 @@ fn check_states(samples: u32) {
         assert!(!action(&mut renderer, Action::Click));
         assert_eq!(settings.get().activations, 0);
     }
-    FocusManager::current().clear_focus(true);
+    FocusManager::clear_focus(true);
 }
 
 #[test]

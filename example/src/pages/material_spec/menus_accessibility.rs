@@ -283,7 +283,9 @@ pub(super) fn labeling() {
 mod tests {
     use tessera_components::theme::material_theme;
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, accesskit::Toggled,
+        MOUSE_POINTER_ID, PressKeyEventType,
+        accesskit::Toggled,
+        headless::{HeadlessConfig, HeadlessRenderer},
     };
 
     use super::*;

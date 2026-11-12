@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use tessera_ui::{Color, DrawCommand};
+use tessera_ui::{Color, render::DrawCommand};
 
 /// Vertex attributes for tessellated vector geometry.
 #[repr(C)]

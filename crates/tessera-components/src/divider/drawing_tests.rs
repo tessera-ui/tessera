@@ -1,6 +1,8 @@
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, LayoutPolicy, LayoutResult, MeasurementError,
-    Modifier, PxPosition, State, layout::MeasureScope, remember, tessera,
+    Color, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, PxPosition, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    layout::MeasureScope,
+    remember, tessera,
 };
 
 use crate::{

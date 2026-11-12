@@ -583,7 +583,7 @@ pub fn tab(
             if let Some(on_click) = activation.on_click {
                 on_click.call();
             }
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
         }
     });
     let title = if let Some(title_slot) = title_slot {
@@ -1344,7 +1344,7 @@ pub fn tabs(
         let requester = controller.with_mut(|controller| controller.pending_focus.take());
         if let Some(requester) = requester {
             requester.request_focus();
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
         }
     }
     let tab_row_scroll_recognizer =
@@ -1417,7 +1417,7 @@ fn tabs_content(
                     && controller.with(|controller| controller.focused_requester.is_some())
                 {
                     controller.with_mut(|controller| controller.set_focused_requester(None));
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 }
             }),
         move |input| {
@@ -1608,7 +1608,7 @@ fn tab_trigger(args: Option<TabTriggerArgs>) {
                 && controller.with(|controller| controller.focused_requester != Some(requester))
             {
                 controller.with_mut(|controller| controller.set_focused_requester(Some(requester)));
-                FocusManager::current().defer_keyboard_until_layout();
+                FocusManager::defer_keyboard_until_layout();
             }
         });
     }
@@ -1744,7 +1744,7 @@ mod tests {
             assert_eq!(
                 session
                     .work()
-                    .count("tabs_row", tessera_ui::WorkPhase::Build),
+                    .count("tabs_row", tessera_ui::testing::WorkPhase::Build),
                 0
             );
         }
@@ -1930,8 +1930,9 @@ mod small_custom_title_tests {
     use std::time::Duration;
 
     use tessera_ui::{
-        Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, Px, State,
+        Color, Dp, Modifier, Px, State,
         accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+        headless::{HeadlessConfig, HeadlessRenderer},
         remember, tessera,
     };
 
@@ -2048,7 +2049,7 @@ mod small_custom_title_tests {
                             renderer.accessibility_snapshot().unwrap().focus,
                             target_node
                         );
-                        tessera_ui::FocusManager::current().clear_focus(true);
+                        tessera_ui::FocusManager::clear_focus(true);
                         renderer.render_frames(12);
                         assert_ne!(
                             renderer.accessibility_snapshot().unwrap().focus,

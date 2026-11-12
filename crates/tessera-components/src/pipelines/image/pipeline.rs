@@ -11,7 +11,7 @@ use encase::{ShaderType, UniformBuffer};
 use glam::Vec4;
 use tessera_ui::{
     PxSize,
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
 
@@ -34,7 +34,7 @@ struct ImageResources {
 impl ImageResources {
     /// Uploads rows within the frame budget and reports whether all rows are
     /// uploaded.
-    fn upload(&self, graphics: &tessera_ui::GraphicsDevice, data: &ImageData) -> bool {
+    fn upload(&self, graphics: &tessera_ui::render::GraphicsDevice, data: &ImageData) -> bool {
         let start = self.uploaded_rows.load(Ordering::Relaxed);
         if start == data.height {
             return true;
@@ -88,7 +88,7 @@ pub struct ImagePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     uniform_layout: wgpu::BindGroupLayout,
-    uniform_buffer: tessera_ui::TrackedBuffer,
+    uniform_buffer: tessera_ui::render::TrackedBuffer,
     uniform_group: wgpu::BindGroup,
     uniform_capacity: u64,
     uniform_used: u64,
@@ -101,7 +101,7 @@ pub struct ImagePipeline {
 impl ImagePipeline {
     /// Create a new ImagePipeline.
     pub fn new(
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -177,7 +177,7 @@ impl ImagePipeline {
                 compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: tessera_ui::ui_stencil_state(),
+            depth_stencil: tessera_ui::render::ui_stencil_state(),
             multisample: wgpu::MultisampleState {
                 count: sample_count,
                 mask: !0,
@@ -216,7 +216,7 @@ impl ImagePipeline {
 
     fn get_or_create_resources(
         &mut self,
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         data: &ImageData,
     ) -> Arc<ImageResources> {
         let identity = (Arc::as_ptr(&data.data) as usize, data.width, data.height);
@@ -255,10 +255,10 @@ impl ImagePipeline {
     }
 
     fn uniform_resources(
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         layout: &wgpu::BindGroupLayout,
         capacity: u64,
-    ) -> (tessera_ui::TrackedBuffer, wgpu::BindGroup) {
+    ) -> (tessera_ui::render::TrackedBuffer, wgpu::BindGroup) {
         let buffer = device.create_buffer(
             "image_instances",
             &wgpu::BufferDescriptor {
@@ -284,7 +284,7 @@ impl ImagePipeline {
     }
 
     fn compute_uniforms(
-        geometry: tessera_ui::DrawGeometry,
+        geometry: tessera_ui::render::DrawGeometry,
         target_size: PxSize,
         opacity: f32,
     ) -> ImageUniforms {
@@ -304,7 +304,7 @@ impl ImagePipeline {
     }
 
     fn create_image_resources(
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         data: &ImageData,

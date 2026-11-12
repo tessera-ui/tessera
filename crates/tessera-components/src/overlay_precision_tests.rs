@@ -7,12 +7,13 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    CursorEventContent, Dp, GestureState, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
-    Modifier, PlacementModifierNode, PointerChange, PressKeyEventType, PxPosition, State,
-    WorkPhase,
+    CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier, PlacementModifierNode,
+    PointerChange, PressKeyEventType, PxPosition, State,
     accesskit::{Node, NodeId, Rect, Role},
+    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
+    testing::WorkPhase,
     time::Instant,
 };
 
@@ -513,7 +514,7 @@ fn assert_placement_only(renderer: &HeadlessRenderer) {
     assert!(
         renderer
             .work()
-            .phase(tessera_ui::WorkPhase::Paint)
+            .phase(tessera_ui::testing::WorkPhase::Paint)
             .next()
             .is_none()
     );

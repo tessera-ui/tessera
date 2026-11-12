@@ -6,11 +6,14 @@ use tessera_components::{
 };
 use tessera_shard::shard;
 use tessera_ui::{
-    Dp, DrawCommand, EntryRegistry, Modifier, PipelineContext, RenderModule, State, TesseraPackage,
+    Dp, EntryRegistry, Modifier, State, TesseraPackage,
     layout::layout,
     px::{Px, PxRect, PxSize},
     remember,
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
+    render::{
+        DrawCommand, PipelineContext, RenderModule,
+        drawer::pipeline::{DrawContext, DrawablePipeline},
+    },
     tessera, use_context, wgpu,
 };
 
@@ -267,7 +270,7 @@ impl RaymarchPipeline {
                 compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: tessera_ui::ui_stencil_state(),
+            depth_stencil: tessera_ui::render::ui_stencil_state(),
             multisample: wgpu::MultisampleState {
                 count: sample_count,
                 mask: !0,
@@ -304,7 +307,7 @@ impl RaymarchPipeline {
         &self,
         queue: &wgpu::Queue,
         command: &RaymarchCommand,
-        geometry: tessera_ui::DrawGeometry,
+        geometry: tessera_ui::render::DrawGeometry,
         target_size: PxSize,
     ) {
         let position = geometry.window_origin();
@@ -375,7 +378,7 @@ impl DrawablePipeline<RaymarchCommand> for RaymarchPipeline {
 }
 
 fn resolve_scissor_rect(
-    geometry: tessera_ui::DrawGeometry,
+    geometry: tessera_ui::render::DrawGeometry,
     clip_rect: Option<PxRect>,
     target_size: PxSize,
 ) -> Option<(u32, u32, u32, u32)> {

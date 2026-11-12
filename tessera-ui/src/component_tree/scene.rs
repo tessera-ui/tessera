@@ -10,7 +10,8 @@ use im::OrdMap;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{
-    ClipRegion, Command, DrawRegion, NodeId, PxPosition, PxRect, PxSize,
+    NodeId, PxPosition, PxRect, PxSize,
+    render::{ClipRegion, Command, DrawRegion},
     render_graph::{DrawGeometry, RenderFragment, RenderGraph, RenderGraphBuilder},
     time::Instant,
 };
@@ -728,10 +729,11 @@ impl SceneRope {
 mod tests {
     use super::*;
     use crate::{
-        DrawCommand, Px, RuntimeSession,
+        Px, RuntimeSession,
         component_tree::{
             ComponentNode, ComponentTree, ComputedData, node::place_node, populate_layout_metadata,
         },
+        render::DrawCommand,
         runtime::TesseraRuntime,
     };
 
@@ -791,7 +793,7 @@ mod tests {
         let original_clip = ClipRegion {
             position: zero,
             size: [16.0, 16.0],
-            shape: crate::ClipShape::RoundedRectangle {
+            shape: crate::render::ClipShape::RoundedRectangle {
                 radii: [3.0; 4],
                 exponents: [2.0; 4],
             },
@@ -852,7 +854,7 @@ mod tests {
         ));
         assert_eq!(drawing(&regional), [(3, zero)]);
         let new_clip = ClipRegion {
-            shape: crate::ClipShape::Ellipse,
+            shape: crate::render::ClipShape::Ellipse,
             ..original_clip
         };
         tree.metadatas

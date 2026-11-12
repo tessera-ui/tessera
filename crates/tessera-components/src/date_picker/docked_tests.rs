@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer, State,
+    State,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::text_matches,
 };

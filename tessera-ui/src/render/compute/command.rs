@@ -6,7 +6,7 @@
 use downcast_rs::{Downcast, impl_downcast};
 use dyn_clone::DynClone;
 
-use crate::SampleRegion;
+use crate::render::SampleRegion;
 
 /// Trait for GPU compute operations that can be dispatched through the unified
 /// command system.

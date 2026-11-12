@@ -821,8 +821,8 @@ mod form_article_tests {
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer,
         accesskit::{Action, ActionRequest, NodeId, TreeId},
+        headless::{HeadlessConfig, HeadlessRenderer},
     };
 
     use super::*;

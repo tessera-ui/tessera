@@ -3,7 +3,8 @@
 use smallvec::SmallVec;
 
 use crate::{
-    Command, ComputeCommand, DrawCommand, DrawRegion, Px, PxRect, SampleRegion,
+    Px, PxRect,
+    render::{Command, ComputeCommand, DrawCommand, DrawRegion, SampleRegion},
     render_graph::{DrawGeometry, RenderGraphOp},
 };
 
@@ -161,7 +162,7 @@ pub(crate) enum DrawOrClip<'a> {
 pub(crate) enum ClipOps {
     Push(PxRect),
     ShapePush {
-        region: crate::ClipRegion,
+        region: crate::render::ClipRegion,
         index: u32,
     },
     Pop,
@@ -234,7 +235,7 @@ mod tests {
     impl DrawCommand for ProbeDraw {
         fn sample_region(&self) -> Option<SampleRegion> {
             self.0
-                .then_some(SampleRegion::PaddedLocal(crate::PaddingRect::ZERO))
+                .then_some(SampleRegion::PaddedLocal(crate::render::PaddingRect::ZERO))
         }
         fn apply_opacity(&mut self, _: f32) {}
     }
@@ -323,7 +324,7 @@ mod tests {
         let expected = PxRect::new(Px(10), Px(10), Px(21), Px(11));
         assert_eq!(
             extract_draw_rect(
-                DrawRegion::PaddedLocal(crate::PaddingRect::ZERO),
+                DrawRegion::PaddedLocal(crate::render::PaddingRect::ZERO),
                 geometry,
                 target
             ),
@@ -331,7 +332,7 @@ mod tests {
         );
         assert_eq!(
             extract_sampling_rect(
-                Some(SampleRegion::PaddedLocal(crate::PaddingRect::ZERO)),
+                Some(SampleRegion::PaddedLocal(crate::render::PaddingRect::ZERO)),
                 geometry,
                 target
             ),

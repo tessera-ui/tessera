@@ -1,5 +1,5 @@
 use tessera_ui::{
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
 
@@ -25,10 +25,10 @@ struct Segment {
 }
 
 struct Buffer {
-    buffer: tessera_ui::TrackedBuffer,
+    buffer: tessera_ui::render::TrackedBuffer,
     bind_group: wgpu::BindGroup,
     capacity: usize,
-    segments: tessera_ui::TrackedBuffer,
+    segments: tessera_ui::render::TrackedBuffer,
     segment_capacity: usize,
 }
 
@@ -41,7 +41,7 @@ pub(crate) struct PathStrokePipeline {
 
 impl PathStrokePipeline {
     pub(crate) fn new(
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -88,7 +88,7 @@ impl PathStrokePipeline {
 
     fn ensure_buffer(
         &mut self,
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         count: usize,
         segment_count: usize,
     ) {

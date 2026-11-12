@@ -1635,12 +1635,12 @@ mod tests {
     }
 
     fn check_transparent_state_layers(samples: u32) {
-        let mut renderer = tessera_ui::HeadlessRenderer::new(
+        let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
             Box::new(|| {
                 transparent_state_layers_fixture();
             }),
             vec![Box::new(crate::TesseraComponents)],
-            tessera_ui::HeadlessConfig {
+            tessera_ui::headless::HeadlessConfig {
                 width: 200,
                 height: 240,
                 sample_count: samples,
@@ -1740,12 +1740,12 @@ mod tests {
         crate::test_utils::run_isolated_test(
             "surface::tests::transparent_outline_fill_rgb_does_not_affect_border_with_or_without_ripple",
             || {
-                let mut renderer = tessera_ui::HeadlessRenderer::new(
+                let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
                     Box::new(|| {
                         transparent_outline_rgb_fixture();
                     }),
                     vec![Box::new(crate::TesseraComponents)],
-                    tessera_ui::HeadlessConfig {
+                    tessera_ui::headless::HeadlessConfig {
                         width: 160,
                         height: 160,
                         ..Default::default()

@@ -7,9 +7,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, Dp, FocusDirection, FocusManager, FocusProperties, HeadlessConfig, HeadlessRenderer,
-    MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
+    Color, Dp, FocusDirection, FocusManager, FocusProperties, MOUSE_POINTER_ID, Modifier,
+    PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::FocusModifierExt as _,
     remember, tessera,
     testing::TestProbe,
@@ -272,7 +273,7 @@ fn action_by_label(renderer: &mut HeadlessRenderer, label: &str, requested: Acti
 }
 
 fn traverse(renderer: &mut HeadlessRenderer, direction: FocusDirection, label: &str) {
-    FocusManager::current().request_move_focus(direction);
+    FocusManager::request_move_focus(direction);
     renderer.render_frames(30);
     assert_eq!(
         renderer.accessibility_snapshot().expect("focus").focus,
@@ -488,7 +489,7 @@ fn check_radios(samples: u32) {
     renderer.render_frames(12);
     traverse(&mut renderer, FocusDirection::Next, "Gamma");
     assert_eq!(observed.get().selected.unwrap().get(), 1);
-    assert_eq!(FocusManager::current().focus_change_direction(), None);
+    assert_eq!(FocusManager::focus_change_direction(), None);
 }
 
 #[test]

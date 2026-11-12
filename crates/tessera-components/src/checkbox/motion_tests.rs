@@ -7,8 +7,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, HeadlessConfig, HeadlessRenderer, State,
+    Color, State,
     accesskit::{Action, ActionRequest, Toggled, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
 

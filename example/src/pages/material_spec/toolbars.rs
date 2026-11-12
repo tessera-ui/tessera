@@ -3409,8 +3409,8 @@ mod tests {
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer,
         accesskit::{Action, ActionRequest, Node, NodeId, Toggled, TreeId},
+        headless::{HeadlessConfig, HeadlessRenderer},
         testing::layout_test,
     };
 

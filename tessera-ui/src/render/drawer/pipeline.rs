@@ -10,14 +10,14 @@ use smallvec::SmallVec;
 
 use crate::{
     px::{PxRect, PxSize},
+    render::DrawCommand,
     render_graph::DrawGeometry,
-    renderer::DrawCommand,
 };
 
 /// Resources available throughout one frame.
 pub struct FrameContext<'a> {
     /// Renderer-owned resource creation and uploads.
-    pub graphics: &'a crate::GraphicsDevice,
+    pub graphics: &'a crate::render::GraphicsDevice,
     /// The WGPU device.
     pub device: &'a wgpu::Device,
     /// The WGPU queue.
@@ -29,7 +29,7 @@ pub struct FrameContext<'a> {
 /// A batch of drawing commands within an active render pass.
 pub struct DrawContext<'a, 'b, 'c, T> {
     /// Renderer-owned resource creation and uploads.
-    pub graphics: &'a crate::GraphicsDevice,
+    pub graphics: &'a crate::render::GraphicsDevice,
     /// The WGPU device.
     pub device: &'a wgpu::Device,
     /// The WGPU queue.
@@ -54,7 +54,7 @@ pub struct DrawContext<'a, 'b, 'c, T> {
 /// Type-erased context used for dispatching draw pipelines.
 pub struct ErasedDrawContext<'a, 'b> {
     /// Renderer-owned resource creation and uploads.
-    pub graphics: &'a crate::GraphicsDevice,
+    pub graphics: &'a crate::render::GraphicsDevice,
     /// WGPU device used for pipeline resource access.
     pub device: &'a wgpu::Device,
     /// WGPU queue used for submissions.
@@ -213,7 +213,7 @@ impl PipelineRegistry {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
-        graphics: &crate::GraphicsDevice,
+        graphics: &crate::render::GraphicsDevice,
     ) {
         graphics.begin_frame();
         for pipeline in self.pipelines.values_mut() {
@@ -231,7 +231,7 @@ impl PipelineRegistry {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
-        graphics: &crate::GraphicsDevice,
+        graphics: &crate::render::GraphicsDevice,
     ) {
         for pipeline in self.pipelines.values_mut() {
             pipeline.end_frame(&FrameContext {

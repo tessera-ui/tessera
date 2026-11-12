@@ -1,7 +1,7 @@
 use tessera_components::theme::material_theme;
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer,
     accesskit::Role,
+    headless::{HeadlessConfig, HeadlessRenderer},
     testing::{layout_test, pump_layout_test_session, start_layout_test_session},
 };
 

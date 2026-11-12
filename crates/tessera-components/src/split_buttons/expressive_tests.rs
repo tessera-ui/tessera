@@ -1,6 +1,7 @@
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, State,
+    MOUSE_POINTER_ID, PressKeyEventType, State,
     accesskit::{Action, HasPopup, Node, NodeId, Rect, Role, TreeUpdate},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember,
     testing::TestProbe,
 };

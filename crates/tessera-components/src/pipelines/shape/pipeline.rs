@@ -11,7 +11,7 @@ use std::sync::Arc;
 use encase::ShaderType;
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu::{self, include_wgsl},
 };
 
@@ -53,7 +53,7 @@ impl ShapePipeline {
     /// Creates the shape rendering pipeline for the target format and sample
     /// count.
     pub fn new(
-        gpu: &tessera_ui::GraphicsDevice,
+        gpu: &tessera_ui::render::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -102,7 +102,7 @@ impl ShapePipeline {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: tessera_ui::ui_stencil_state(),
+            depth_stencil: tessera_ui::render::ui_stencil_state(),
             multisample: wgpu::MultisampleState {
                 count: sample_count,
                 mask: !0,

@@ -1,8 +1,8 @@
 //! Render command definitions for frame graphs
 
 use crate::{
-    ComputeCommand, DrawCommand,
     px::{Px, PxRect},
+    render::{ComputeCommand, DrawCommand},
 };
 
 /// Defines the sampling requirements for a rendering command that needs a
@@ -91,7 +91,7 @@ pub enum Command {
     /// A command to push a clipping rectangle onto the stack.
     ClipPush(PxRect),
     /// Pushes a shape clip for this subtree.
-    ShapeClipPush(crate::ClipRegion),
+    ShapeClipPush(crate::render::ClipRegion),
     /// A command to pop the most recent clipping rectangle from the stack.
     ClipPop,
 }

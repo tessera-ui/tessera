@@ -7,8 +7,11 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, ComputedData, Dp, HeadlessConfig, HeadlessRenderer, LayoutResult, MOUSE_POINTER_ID,
-    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, layout::MeasureScope, tessera,
+    Color, ComputedData, Dp, LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier,
+    PressKeyEventType, Px, PxPosition,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    layout::MeasureScope,
+    tessera,
 };
 
 use crate::{button::button, modifier::ModifierExt as _, theme::material_theme};
@@ -54,14 +57,14 @@ fn assert_retained_frames(renderer: &mut HeadlessRenderer, frames: u32) {
         assert_eq!(
             renderer
                 .work()
-                .executed::<ContentMeasure>(tessera_ui::WorkPhase::Measure),
+                .executed::<ContentMeasure>(tessera_ui::testing::WorkPhase::Measure),
             0,
             "ripple must not remeasure content"
         );
         assert_eq!(
             renderer
                 .work()
-                .count("retained_content", tessera_ui::WorkPhase::Build),
+                .count("retained_content", tessera_ui::testing::WorkPhase::Build),
             0,
             "ripple must retain the button content"
         );
@@ -87,7 +90,7 @@ fn check_stationary_ripple(samples: u32) {
     assert!(
         renderer
             .work()
-            .executed::<ContentMeasure>(tessera_ui::WorkPhase::Measure)
+            .executed::<ContentMeasure>(tessera_ui::testing::WorkPhase::Measure)
             > 0
     );
     renderer.render_frames(4);
@@ -110,7 +113,7 @@ fn check_stationary_ripple(samples: u32) {
     let baseline = renderer.read_pixels().unwrap();
     let builds = renderer
         .work_totals()
-        .count("retained_content", tessera_ui::WorkPhase::Build);
+        .count("retained_content", tessera_ui::testing::WorkPhase::Build);
     assert!(builds > 0);
     for click in 2..=3 {
         renderer.pointer_press(MOUSE_POINTER_ID, center, PressKeyEventType::Left);
@@ -135,7 +138,7 @@ fn check_stationary_ripple(samples: u32) {
         assert_eq!(
             renderer
                 .work_totals()
-                .count("retained_content", tessera_ui::WorkPhase::Build),
+                .count("retained_content", tessera_ui::testing::WorkPhase::Build),
             builds,
             "ripple must retain the button content"
         );

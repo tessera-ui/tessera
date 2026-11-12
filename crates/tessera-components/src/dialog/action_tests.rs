@@ -7,8 +7,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
+    Callback, Dp, Modifier, State,
     accesskit::{Node, Role},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::{TestProbe, layout_test},
 };

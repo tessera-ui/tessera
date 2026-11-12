@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use tessera_components::theme::material_theme;
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType,
+    MOUSE_POINTER_ID, PressKeyEventType,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
 };
 
 use super::*;
@@ -231,12 +232,12 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
         assert_eq!(
             renderer
                 .work()
-                .phase(tessera_ui::WorkPhase::Measure)
+                .phase(tessera_ui::testing::WorkPhase::Measure)
                 .count(),
             0
         );
         assert_eq!(
-            renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+            renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
             0,
             "resting tabs must not repaint"
         );
@@ -265,7 +266,7 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         assert_eq!(
             renderer
                 .work()
-                .phase(tessera_ui::WorkPhase::Measure)
+                .phase(tessera_ui::testing::WorkPhase::Measure)
                 .count(),
             0
         );
@@ -294,7 +295,7 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
             assert_eq!(
                 renderer
                     .work()
-                    .phase(tessera_ui::WorkPhase::Measure)
+                    .phase(tessera_ui::testing::WorkPhase::Measure)
                     .count(),
                 0,
                 "animation frame{frame} must not measure"
@@ -331,14 +332,14 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         );
         renderer.render_frames(3);
         assert_eq!(
-            renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+            renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
             0,
             "completed motion must not repaint"
         );
         assert_eq!(
             renderer
                 .work()
-                .phase(tessera_ui::WorkPhase::Measure)
+                .phase(tessera_ui::testing::WorkPhase::Measure)
                 .count(),
             0
         );

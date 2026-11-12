@@ -6,8 +6,11 @@
 
 use bytemuck::{Pod, Zeroable};
 use tessera_ui::{
-    Color, DrawCommand, DrawRegion, PaddingRect, Px,
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    Color, Px,
+    render::{
+        DrawCommand, DrawRegion, PaddingRect,
+        drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    },
     wgpu::{self, include_wgsl},
 };
 
@@ -51,7 +54,7 @@ pub(crate) struct DividerPipeline {
 
 impl DividerPipeline {
     pub(crate) fn new(
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         cache: Option<&wgpu::PipelineCache>,
         config: &wgpu::SurfaceConfiguration,
         sample_count: u32,

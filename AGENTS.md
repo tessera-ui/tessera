@@ -141,7 +141,7 @@ programming contract; the guidelines below also govern framework implementation.
 
 ### Shape clipping
 
-- UI draw pipelines must set `depth_stencil: tessera_ui::ui_stencil_state()`.
+- UI draw pipelines must set `depth_stencil: tessera_ui::render::ui_stencil_state()`.
   The renderer supplies a `Stencil8` attachment and manages its reference value.
   Independent atlas or texture-generation passes may use their own attachments.
 - Resolve animated size-relative corners through shared shape definitions so

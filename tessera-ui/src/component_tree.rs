@@ -2896,7 +2896,7 @@ fn node_handles_pointer_at_position(
                 if transforms.is_none() {
                     crate::work::record(
                         node.instance_logic_id,
-                        crate::WorkPhase::Transform,
+                        crate::work::WorkPhase::Transform,
                         placement.node().diagnostic_name(),
                     );
                     current_abs_pos = placement.node().transform_position(current_abs_pos);
@@ -2939,7 +2939,7 @@ fn resolve_node_hover_cursor_icon(
                 if transforms.is_none() {
                     crate::work::record(
                         node.instance_logic_id,
-                        crate::WorkPhase::Transform,
+                        crate::work::WorkPhase::Transform,
                         placement.node().diagnostic_name(),
                     );
                     current_abs_pos = placement.node().transform_position(current_abs_pos);
@@ -3102,7 +3102,7 @@ fn dispatch_pointer_modifiers_for_node_pass(
                 if plan.context.input_transforms.is_none() {
                     crate::work::record(
                         plan.context.instance_logic_id,
-                        crate::WorkPhase::Transform,
+                        crate::work::WorkPhase::Transform,
                         placement.node().diagnostic_name(),
                     );
                     current_abs_pos = placement.node().transform_position(current_abs_pos);
@@ -3794,7 +3794,7 @@ fn record_layout_commands(
                 };
                 crate::work::record(
                     self.instance,
-                    crate::WorkPhase::Paint,
+                    crate::work::WorkPhase::Paint,
                     draw_modifier.diagnostic_name(),
                 );
                 draw_modifier.draw(&mut draw_ctx, &mut next);
@@ -3807,7 +3807,7 @@ fn record_layout_commands(
                 };
                 crate::work::record(
                     self.instance,
-                    crate::WorkPhase::Paint,
+                    crate::work::WorkPhase::Paint,
                     self.node_draw.diagnostic_name(),
                 );
                 self.node_draw.draw(&mut draw_ctx, &mut TerminalDrawContent);
@@ -3932,15 +3932,15 @@ impl PreparedLayoutMetadata {
 }
 
 fn map_clip_region(
-    mut region: crate::ClipRegion,
+    mut region: crate::render::ClipRegion,
     transform: crate::LocalToWindow,
-) -> crate::ClipRegion {
+) -> crate::render::ClipRegion {
     region.position = transform.map_point(region.position);
     region.size = [
         region.size[0] * transform.scale(),
         region.size[1] * transform.scale(),
     ];
-    if let crate::ClipShape::RoundedRectangle { ref mut radii, .. } = region.shape {
+    if let crate::render::ClipShape::RoundedRectangle { ref mut radii, .. } = region.shape {
         for radius in radii {
             *radius *= transform.scale();
         }
@@ -4473,10 +4473,10 @@ mod tests {
         );
         assert!(tree.metadatas.geometry_changed.contains(&leaf));
 
-        let clip = crate::ClipRegion {
+        let clip = crate::render::ClipRegion {
             position: PxPosition::ZERO,
             size: [100.0, 100.0],
-            shape: crate::ClipShape::RoundedRectangle {
+            shape: crate::render::ClipShape::RoundedRectangle {
                 radii: [0.0; 4],
                 exponents: [2.0; 4],
             },
@@ -4496,8 +4496,8 @@ mod tests {
 
         tree.metadatas
             .entry_or_default(root)
-            .set_clip_region(Some(crate::ClipRegion {
-                shape: crate::ClipShape::RoundedRectangle {
+            .set_clip_region(Some(crate::render::ClipRegion {
+                shape: crate::render::ClipShape::RoundedRectangle {
                     radii: [40.0; 4],
                     exponents: [2.0; 4],
                 },
@@ -4630,7 +4630,7 @@ mod tests {
         let (mut tree, _, focus, _session) = reveal_viewport_tree(probe.clone());
         {
             let _binding = bind_focus_owner(&mut tree.focus_owner);
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
         }
         assert!(
             !needs_deferred_focus_retry(&tree.focus_owner, false),
@@ -4854,7 +4854,7 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         #[derive(Clone)]
         struct Marker(u32);
-        impl crate::DrawCommand for Marker {
+        impl crate::render::DrawCommand for Marker {
             fn apply_opacity(&mut self, _: f32) {}
         }
         let mut tree = ComponentTree::new();
@@ -4958,7 +4958,7 @@ mod tests {
             }
         }
 
-        impl crate::DrawCommand for Marker {
+        impl crate::render::DrawCommand for Marker {
             fn apply_opacity(&mut self, opacity: f32) {
                 self.opacity *= opacity;
             }
@@ -5201,7 +5201,7 @@ mod tests {
         #[derive(Clone)]
         struct Marker;
 
-        impl crate::DrawCommand for Marker {
+        impl crate::render::DrawCommand for Marker {
             fn apply_opacity(&mut self, _opacity: f32) {}
         }
 
@@ -6059,7 +6059,7 @@ mod tests {
                 delivered.push(event);
                 {
                     let _binding = bind_focus_owner(&mut owner);
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 }
                 (None, owner.keyboard_is_deferred())
             }),
@@ -6079,7 +6079,7 @@ mod tests {
         );
         {
             let _binding = bind_focus_owner(&mut owner);
-            FocusManager::current().defer_keyboard_until_layout();
+            FocusManager::defer_keyboard_until_layout();
         }
         owner.finish_layout();
         assert!(
@@ -6107,9 +6107,9 @@ mod tests {
         let mut tree = ComponentTree::new();
         {
             let _binding = bind_focus_owner(&mut tree.focus_owner);
-            FocusManager::current().defer_keyboard_until_layout();
-            assert!(FocusManager::current().request_move_focus(FocusDirection::Previous));
-            assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
+            FocusManager::defer_keyboard_until_layout();
+            assert!(FocusManager::request_move_focus(FocusDirection::Previous));
+            assert!(FocusManager::request_move_focus(FocusDirection::Next));
         }
         assert_eq!(
             tree.focus_owner.take_pending_navigation(),
@@ -6141,12 +6141,12 @@ mod tests {
         assert!(!tree.focus_owner.has_pending_navigation());
         {
             let _binding = bind_focus_owner(&mut tree.focus_owner);
-            assert!(!FocusManager::current().request_move_focus(FocusDirection::Previous));
+            assert!(!FocusManager::request_move_focus(FocusDirection::Previous));
         }
         tree.focus_owner.set_owner_focused(true);
         {
             let _binding = bind_focus_owner(&mut tree.focus_owner);
-            assert!(FocusManager::current().request_move_focus(FocusDirection::Previous));
+            assert!(FocusManager::request_move_focus(FocusDirection::Previous));
         }
         tree.reset();
         assert!(!tree.focus_owner.has_pending_navigation());
@@ -6275,7 +6275,7 @@ mod tests {
             .get_mut()
             .interaction_mut()
             .ime_handlers = vec![Box::new(|mut input| {
-            assert!(crate::FocusManager::current().move_focus(FocusDirection::Next));
+            assert!(crate::FocusManager::move_focus(FocusDirection::Next));
             input
                 .ime_session()
                 .update(ImeRequest::new(PxSize::new(Px(1), Px(1))));
@@ -6363,7 +6363,7 @@ mod tests {
             .get_mut()
             .interaction_mut()
             .ime_preview_handlers = vec![Box::new(|_| {
-            assert!(crate::FocusManager::current().move_focus(FocusDirection::Next));
+            assert!(crate::FocusManager::move_focus(FocusDirection::Next));
         })];
         assert!(tree.focus_owner.move_focus(FocusDirection::Previous));
         requests = WindowRequests::default();

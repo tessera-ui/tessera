@@ -3434,7 +3434,8 @@ fn app_annotations(geometry: State<Geometry>, measurements: bool, variant: TopAp
 mod tests {
 
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, PxRect,
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition, PxRect,
+        headless::{HeadlessConfig, HeadlessRenderer},
         scaled_box,
     };
 

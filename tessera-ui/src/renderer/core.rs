@@ -10,10 +10,12 @@ use rustc_hash::FxHashMap;
 use winit::window::Window;
 
 use crate::{
-    ComputablePipeline, ComputeCommand, DrawCommand, DrawablePipeline, pipeline_cache::save_cache,
+    pipeline_cache::save_cache,
+    render::{
+        ComputablePipeline, ComputeCommand, ComputePipelineRegistry, DrawCommand,
+        DrawablePipeline, drawer::Drawer,
+    },
 };
-
-use super::{compute::ComputePipelineRegistry, drawer::Drawer};
 
 mod clip;
 mod frame;
@@ -97,7 +99,7 @@ struct BlitState {
 
 /// Render core holding device, surface, pipelines, and frame resources.
 pub struct RenderCore {
-    graphics: crate::GraphicsDevice,
+    graphics: crate::render::GraphicsDevice,
     #[allow(unused)]
     window: Option<Arc<Window>>,
     pub(crate) instance: wgpu::Instance,
@@ -117,7 +119,7 @@ pub struct RenderCore {
     targets: FrameTargets,
     blit: BlitState,
     frame_index: u64,
-    previous_graph: Option<crate::RenderGraph>,
+    previous_graph: Option<crate::render::RenderGraph>,
     last_render_breakdown: Option<RenderTimingBreakdown>,
     #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
     gpu_timing: Option<gpu_timing::GpuTimingProbe>,
@@ -126,7 +128,7 @@ pub struct RenderCore {
 /// Shared GPU resources used when creating pipelines.
 pub struct RenderResources<'a> {
     /// Renderer-owned resource creation, uploads, and work observations.
-    pub graphics: &'a crate::GraphicsDevice,
+    pub graphics: &'a crate::render::GraphicsDevice,
     /// WGPU device used for pipeline creation.
     pub device: &'a wgpu::Device,
     /// WGPU queue used by pipelines that upload data.

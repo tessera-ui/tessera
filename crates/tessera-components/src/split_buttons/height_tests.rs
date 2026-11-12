@@ -1,6 +1,7 @@
 use tessera_ui::{
-    Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
+    Dp, Modifier, State,
     accesskit::{Rect, Role},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::TestProbe,
 };

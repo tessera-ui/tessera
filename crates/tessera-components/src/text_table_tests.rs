@@ -7,8 +7,9 @@
 use std::{collections::BTreeMap, time::Duration};
 
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer, LayoutCoordinates, PlacementModifierNode, State,
+    LayoutCoordinates, PlacementModifierNode, State,
     accesskit::{Node, NodeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     scaled_box,
     testing::{layout_test, pump_layout_test_session, start_layout_test_session},

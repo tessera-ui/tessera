@@ -299,8 +299,10 @@ impl tessera_ui::DrawModifierNode for TextDraw {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        State, WorkPhase, provide_context,
-        testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
+        State, provide_context,
+        testing::{
+            TestProbe, WorkPhase, layout_test, pump_layout_test_session, start_layout_test_session,
+        },
     };
 
     use crate::{
@@ -442,7 +444,7 @@ mod tests {
         assert_eq!(changed, original);
         let diagnostics = session.diagnostics().unwrap();
         assert_eq!(
-            session.work().phase(tessera_ui::WorkPhase::Measure).count(),
+            session.work().phase(tessera_ui::testing::WorkPhase::Measure).count(),
             0
         );
         assert_eq!(diagnostics.geometry_nodes_updated, 0);

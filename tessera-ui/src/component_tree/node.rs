@@ -11,7 +11,7 @@ use tracing::debug;
 use winit::window::CursorIcon;
 
 use crate::{
-    ClipRegion, Px,
+    Px,
     accessibility::{AccessibilityActionHandler, AccessibilityNode, StoredSemantics},
     cursor::{CursorEventContent, PointerChange},
     focus::{
@@ -25,6 +25,7 @@ use crate::{
     modifier::{LayoutModifier, LayoutModifierChild, LayoutModifierInput, Modifier},
     prop::CallbackWith,
     px::{PxPosition, PxRect, PxSize},
+    render::ClipRegion,
     render_graph::RenderFragment,
     runtime::{
         RuntimePhase, push_current_component_instance_key,

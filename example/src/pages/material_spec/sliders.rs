@@ -1812,8 +1812,9 @@ mod size_figure_tests {
     use std::time::Duration;
 
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
+        MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
         accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+        headless::{HeadlessConfig, HeadlessRenderer},
     };
 
     use super::*;
@@ -2151,10 +2152,7 @@ mod size_figure_tests {
             Role::Slider,
             Action::Focus,
         );
-        assert!(
-            tessera_ui::FocusManager::current()
-                .request_move_focus(tessera_ui::FocusDirection::Next)
-        );
+        assert!(tessera_ui::FocusManager::request_move_focus(tessera_ui::FocusDirection::Next));
         renderer.render_frames(4);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         assert_eq!(
@@ -2490,7 +2488,7 @@ mod size_figure_tests {
                 } else {
                     "slider-orientation-size-configurations-native.png"
                 };
-                tessera_ui::write_png_file(
+                tessera_ui::headless::write_png_file(
                     std::path::Path::new(&directory).join(file),
                     1100,
                     800,

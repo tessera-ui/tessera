@@ -4,9 +4,9 @@ use tessera_components::{
     boxed::boxed, column::column, modifier::ModifierExt as _, theme::material_theme,
 };
 use tessera_ui::{
-    Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PlacementModifierNode,
-    PressKeyEventType, PxPosition, State,
+    Dp, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
 };
@@ -859,8 +859,11 @@ fn relative_geometry(
 fn annotation_builds(renderer: &HeadlessRenderer) -> usize {
     renderer
         .work_totals()
-        .count("date_annotations", tessera_ui::WorkPhase::Build)
+        .count("date_annotations", tessera_ui::testing::WorkPhase::Build)
         + renderer
             .work_totals()
-            .count("date_color_annotations", tessera_ui::WorkPhase::Build)
+            .count(
+                "date_color_annotations",
+                tessera_ui::testing::WorkPhase::Build,
+            )
 }

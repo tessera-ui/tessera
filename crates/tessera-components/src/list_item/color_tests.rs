@@ -5,8 +5,11 @@
 //! Preserve transitions and state precedence without pointer or shape updates.
 
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, tessera,
-    testing::TestProbe, use_context,
+    Color, Dp, Modifier, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, tessera,
+    testing::TestProbe,
+    use_context,
 };
 
 use crate::{
@@ -145,7 +148,7 @@ fn check(samples: u32) {
         assert!(
             renderer
                 .work_totals()
-                .count("list_item", tessera_ui::WorkPhase::Build)
+                .count("list_item", tessera_ui::testing::WorkPhase::Build)
                 > 0
         );
         let settings = observed.get().unwrap();
@@ -201,13 +204,13 @@ fn check(samples: u32) {
         near(slot_pixel(&renderer, "lead"), [0, 255, 0, 255]);
         let builds = renderer
             .work_totals()
-            .count("list_item", tessera_ui::WorkPhase::Build);
+            .count("list_item", tessera_ui::testing::WorkPhase::Build);
         let final_pixels = renderer.read_pixels().unwrap();
         renderer.render_frames(8);
         assert_eq!(
             renderer
                 .work_totals()
-                .count("list_item", tessera_ui::WorkPhase::Build),
+                .count("list_item", tessera_ui::testing::WorkPhase::Build),
             builds,
             "settled colors must stop scheduling builds"
         );

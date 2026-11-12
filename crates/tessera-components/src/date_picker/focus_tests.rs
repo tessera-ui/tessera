@@ -1,6 +1,6 @@
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     testing::text_matches,
 };
 

@@ -2565,7 +2565,7 @@ fn range_slider_content(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer,
+        headless::{HeadlessConfig, HeadlessRenderer},
         testing::{layout_test, pump_layout_test_session, start_layout_test_session},
     };
 

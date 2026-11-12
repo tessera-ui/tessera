@@ -7,9 +7,12 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, CursorEventContent, Dp, GestureState, HeadlessConfig, HeadlessRenderer,
-    MOUSE_POINTER_ID, Modifier, PointerChange, PressKeyEventType, PxPosition, ScrollEventSource,
-    State, accesskit::Role, remember, tessera, time::Instant,
+    Color, CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier, PointerChange,
+    PressKeyEventType, PxPosition, ScrollEventSource, State,
+    accesskit::Role,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    remember, tessera,
+    time::Instant,
 };
 
 use crate::{
@@ -183,7 +186,7 @@ fn assert_reused_measurements(renderer: &HeadlessRenderer, kind: Kind) {
     assert!(
         renderer
             .work()
-            .phase(tessera_ui::WorkPhase::Measure)
+            .phase(tessera_ui::testing::WorkPhase::Measure)
             .next()
             .is_none(),
         "{kind:?}: fixed sheet geometry must reuse measurements: {:?}",
@@ -463,7 +466,7 @@ fn check(samples: u32) {
                     assert!(
                         renderer
                             .work()
-                            .phase(tessera_ui::WorkPhase::Measure)
+                            .phase(tessera_ui::testing::WorkPhase::Measure)
                             .any(|work| work.target.ends_with("bottom_sheet::BottomSheetLayout")),
                         "resizing across the sheet width limit must update constraints"
                     );

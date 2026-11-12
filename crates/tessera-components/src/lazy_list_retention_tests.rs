@@ -5,9 +5,9 @@
 //! Preserve interactive item state while navigating unequal-height lists.
 
 use tessera_ui::{
-    FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
-    PressKeyEventType, PxPosition,
+    FocusDirection, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, Role, Toggled, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
 
@@ -53,7 +53,7 @@ fn fixture(keep: bool, observed: tessera_ui::testing::TestProbe<FixtureHandles>)
     if let Some(direction) = navigation.get() {
         navigation.set(None);
         observed.with_mut(|handles| {
-            handles.navigation_accepted = FocusManager::current().request_move_focus(direction)
+            handles.navigation_accepted = FocusManager::request_move_focus(direction)
         });
     }
     observed.with_mut(|handles| handles.list = Some(controller));

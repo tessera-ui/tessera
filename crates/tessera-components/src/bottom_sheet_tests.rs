@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    CursorEventContent, Dp, FocusDirection, FocusManager, GestureState, HeadlessConfig,
-    HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PointerChange, PressKeyEventType, PxPosition,
-    State,
+    CursorEventContent, Dp, FocusDirection, FocusManager, GestureState, MOUSE_POINTER_ID, Modifier,
+    PointerChange, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Rect, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
 
@@ -98,7 +98,7 @@ fn check_handle() {
     assert_eq!(handle.bounds().unwrap().height(), 48.0);
     assert_eq!(handle.bounds().unwrap().width(), 400.0);
     assert_eq!(bounds(&renderer, "Resizable sheet").height(), 240.0);
-    assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
+    assert!(FocusManager::request_move_focus(FocusDirection::Next));
     renderer.render_frames(4);
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, *handle_id);
     let handle = bounds(&renderer, "Drag handle");
@@ -240,7 +240,7 @@ fn check_handle_resize(scale: f64) {
     .unwrap();
     renderer.render_frames(8);
     let controller = observed.get().controller.unwrap();
-    assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
+    assert!(FocusManager::request_move_focus(FocusDirection::Next));
     renderer.render_frames(4);
     let tree = renderer.accessibility_snapshot().unwrap();
     let focus = tree.focus;

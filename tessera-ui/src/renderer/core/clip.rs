@@ -7,8 +7,9 @@
 use bytemuck::{Pod, Zeroable};
 
 use crate::{
-    ClipRegion, ClipShape, PxSize,
+    PxSize,
     clip::{finite_exponent, finite_radius},
+    render::{ClipRegion, ClipShape},
     render_pass::{ClipOps, DrawOrClip, RenderPassPlan},
 };
 
@@ -56,7 +57,7 @@ impl ShapeClipper {
             immediate_size: 0,
         });
         let pipeline = |operation| {
-            let mut state = crate::ui_stencil_state().expect("UI stencil state");
+            let mut state = crate::render::ui_stencil_state().expect("UI stencil state");
             state.stencil.front.pass_op = operation;
             state.stencil.back.pass_op = operation;
             state.stencil.write_mask = 0xff;

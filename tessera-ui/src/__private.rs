@@ -20,7 +20,7 @@ pub fn current_instance_logic_id() -> u64 {
 }
 
 pub fn record_component_execution(name: &'static str, instance: u64) {
-    crate::work::record(instance, crate::WorkPhase::Build, name);
+    crate::work::record(instance, crate::work::WorkPhase::Build, name);
 }
 
 pub fn current_instance_key() -> u64 {

@@ -5,8 +5,9 @@
 //! Publish transient status without taking focus from the user's current task.
 
 use tessera_ui::{
-    Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
+    Dp, Modifier, State,
     accesskit::{Action, ActionRequest, Live, Node, NodeId, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
 

@@ -7,8 +7,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, Modifier, State,
+    Color, Dp, FocusDirection, FocusManager, Modifier, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::TestProbe,
 };
@@ -143,7 +144,7 @@ fn focused(renderer: &HeadlessRenderer) -> Option<String> {
 }
 
 fn move_focus(renderer: &mut HeadlessRenderer, direction: FocusDirection, label: &str) {
-    FocusManager::current().request_move_focus(direction);
+    FocusManager::request_move_focus(direction);
     renderer.render_frames(12);
     assert_eq!(focused(renderer).as_deref(), Some(label));
 }

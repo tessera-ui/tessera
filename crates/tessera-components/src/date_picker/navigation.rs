@@ -148,7 +148,7 @@ impl CalendarKeyboard {
             focus.pending = Some(date);
         });
         self.owner.show(date);
-        FocusManager::current().defer_keyboard_until_layout();
+        FocusManager::defer_keyboard_until_layout();
     }
 
     pub(super) fn day_modifier(self, base: Modifier, date: CalendarDate) -> Modifier {

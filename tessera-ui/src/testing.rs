@@ -22,7 +22,10 @@ use crate::{
     time::Instant,
 };
 
-pub use crate::component_tree::LayoutFrameDiagnostics;
+pub use crate::{
+    component_tree::LayoutFrameDiagnostics,
+    work::{FrameWork, WorkExecution, WorkPhase, WorkTotals},
+};
 
 mod probe;
 mod query;
@@ -99,8 +102,8 @@ where
     frame_origin: Instant,
     current_frame_nanos: u64,
     diagnostics: Option<LayoutFrameDiagnostics>,
-    work: crate::FrameWork,
-    work_totals: crate::WorkTotals,
+    work: crate::work::FrameWork,
+    work_totals: crate::work::WorkTotals,
     frame_clock_diagnostics: crate::runtime::FrameClockDiagnostics,
 }
 
@@ -159,12 +162,12 @@ impl<F: Fn()> LayoutTestSession<F> {
     }
 
     /// Returns actual component, layout, and paint work in the last frame.
-    pub fn work(&self) -> &crate::FrameWork {
+    pub fn work(&self) -> &crate::work::FrameWork {
         &self.work
     }
 
     /// Returns cumulative work for this fixture's lifetime.
-    pub fn work_totals(&self) -> &crate::WorkTotals {
+    pub fn work_totals(&self) -> &crate::work::WorkTotals {
         &self.work_totals
     }
 
@@ -191,7 +194,7 @@ where
         current_frame_nanos: 0,
         diagnostics: None,
         work: Default::default(),
-        work_totals: crate::WorkTotals::default(),
+        work_totals: crate::work::WorkTotals::default(),
         frame_clock_diagnostics: crate::runtime::FrameClockDiagnostics::default(),
     }
 }
@@ -860,7 +863,7 @@ mod tests {
         assert_eq!(
             instances.map(|instance| session
                 .work()
-                .for_instance(instance, crate::WorkPhase::Measure)),
+                .for_instance(instance, crate::work::WorkPhase::Measure)),
             [1, 1, 0],
         );
     }
@@ -2252,20 +2255,20 @@ mod tests {
             assert!(
                 session
                     .work()
-                    .executed::<PlacementStatePolicy>(crate::WorkPhase::Measure)
+                    .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure)
                     > 0
             );
             assert!(
                 session
                     .work()
-                    .count("placement_state_fixture", crate::WorkPhase::Build)
+                    .count("placement_state_fixture", crate::work::WorkPhase::Build)
                     > 0
             );
             if transform {
                 assert!(
                     session
                         .work()
-                        .executed::<StateOffsetModifier>(crate::WorkPhase::Transform)
+                        .executed::<StateOffsetModifier>(crate::work::WorkPhase::Transform)
                         > 0
                 );
             }
@@ -2282,7 +2285,7 @@ mod tests {
             assert_eq!(
                 session
                     .work()
-                    .executed::<StateOffsetModifier>(crate::WorkPhase::Transform),
+                    .executed::<StateOffsetModifier>(crate::work::WorkPhase::Transform),
                 0
             );
             probe
@@ -2297,13 +2300,13 @@ mod tests {
             assert_eq!(
                 session
                     .work()
-                    .executed::<PlacementStatePolicy>(crate::WorkPhase::Measure),
+                    .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure),
                 0
             );
             assert_eq!(
                 session
                     .work()
-                    .count("placement_state_fixture", crate::WorkPhase::Build),
+                    .count("placement_state_fixture", crate::work::WorkPhase::Build),
                 0
             );
             assert!(
@@ -2358,7 +2361,7 @@ mod tests {
                 assert!(
                     session
                         .work()
-                        .executed::<PlacementStatePolicy>(crate::WorkPhase::Measure)
+                        .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure)
                         > 0
                 );
                 probe
@@ -2377,7 +2380,7 @@ mod tests {
                 assert_eq!(
                     session
                         .work()
-                        .executed::<PlacementStatePolicy>(crate::WorkPhase::Measure),
+                        .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure),
                     0
                 );
                 if !update_before_hiding {
@@ -2391,14 +2394,14 @@ mod tests {
                 assert_eq!(
                     session
                         .work()
-                        .executed::<PlacementStatePolicy>(crate::WorkPhase::Measure),
+                        .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure),
                     0
                 );
                 pump_layout_test_session(&mut session, 50_000_001);
                 assert_eq!(
                     session
                         .work()
-                        .executed::<PlacementStatePolicy>(crate::WorkPhase::Measure),
+                        .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure),
                     0
                 );
                 assert_eq!(
@@ -2419,7 +2422,7 @@ mod tests {
                 assert_eq!(
                     session
                         .work()
-                        .executed::<PlacementStatePolicy>(crate::WorkPhase::Measure),
+                        .executed::<PlacementStatePolicy>(crate::work::WorkPhase::Measure),
                     0,
                     "revealing a placement-only update must retain measured dimensions"
                 );
@@ -2521,7 +2524,7 @@ mod tests {
             session
                 .work()
                 .executed::<StatefulLayoutPolicy<PolicyWithLocalMeasurement>>(
-                    crate::WorkPhase::Measure,
+                    crate::work::WorkPhase::Measure,
                 )
                 > 0
         );
@@ -2534,7 +2537,7 @@ mod tests {
             session
                 .work()
                 .executed::<StatefulLayoutPolicy<PolicyWithLocalMeasurement>>(
-                    crate::WorkPhase::Measure,
+                    crate::work::WorkPhase::Measure,
                 ),
             0
         );

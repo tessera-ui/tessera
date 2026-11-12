@@ -291,7 +291,7 @@ fn example(
                 ))
                 .on_click(move || {
                     sample.range_mode.set(!sample.range_mode.get());
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(I18N.text(if sample.range_mode.get() {
@@ -1531,7 +1531,7 @@ fn date_figure(
                             .on_submit(move || {submit_docked_date(state,controller,committed,error);})
                             .trailing_icon(move || {icon_button().standard().icon(filled::CALENDAR_TODAY_SVG).accessibility_label(I18N.text("ui-toggle-event-date-calendar")).on_click(move || {
                                 if open.get() {restore_docked_date(state,controller,committed,error);}
-                                open.set(!open.get());FocusManager::current().defer_keyboard_until_layout();
+                                open.set(!open.get());FocusManager::defer_keyboard_until_layout();
                             });});
                         gap(Dp(4.0));text(I18N.text(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()})).style(type_style(12.0,16.0)).color(if error.with(String::is_empty) {scheme.on_surface_variant} else {scheme.error});
                     });
@@ -1539,8 +1539,8 @@ fn date_figure(
                         boxed().modifier(Modifier::new().offset(Dp::ZERO,Dp(84.0))).children(move || {
                             docked_date_picker().today(illustration_today()).state(state).view(view).first_day_of_week(Weekday::Sunday).modifier(watch_observed(geometry,"calendar"))
                                 .on_date_change(move |date:CalendarDate|{let formatted=format!("{:02}/{:02}/{:04}",date.month(),date.day(),date.year()); controller.with_mut(|value|value.set_text(&formatted));error.set(String::new());})
-                                .on_cancel(move || {restore_docked_date(state,controller,committed,error);open.set(false);status.set("ui-date-selection-cancelled".into());FocusManager::current().defer_keyboard_until_layout();})
-                                .on_confirm(move || {if submit_docked_date(state,controller,committed,error) {open.set(false);status.set("ui-event-date-confirmed".into());FocusManager::current().defer_keyboard_until_layout();}});
+                                .on_cancel(move || {restore_docked_date(state,controller,committed,error);open.set(false);status.set("ui-date-selection-cancelled".into());FocusManager::defer_keyboard_until_layout();})
+                                .on_confirm(move || {if submit_docked_date(state,controller,committed,error) {open.set(false);status.set("ui-event-date-confirmed".into());FocusManager::defer_keyboard_until_layout();}});
                         });
                     }
                 } else if open.get() {
@@ -1549,16 +1549,16 @@ fn date_figure(
                             column().modifier(Modifier::new().width(Dp(360.0))).children(move || {
                                 if figure==Figure::FullScreen {
                                     row().modifier(Modifier::new().fill_max_width().padding_all(Dp(8.0))).main_axis_alignment(MainAxisAlignment::SpaceBetween).children(move || {
-                                        icon_button().standard().icon(filled::CLOSE_SVG).accessibility_label(I18N.text("ui-close-full-screen-date-selection")).on_click(move ||{ let (start,end)=committed_range.get(); range.with_mut(|range|range.set_selection(start,end)); open.set(false); status.set("ui-full-screen-date-selection-closed".into()); FocusManager::current().defer_keyboard_until_layout(); });
-                                        button().text().accessibility_label(I18N.text("ui-save")).enabled(range.with(DateRangePickerState::is_complete)).on_click(move ||{ if !range.with(DateRangePickerState::is_complete) {return;} committed_range.set(range.with(|range|(range.selected_start_date(),range.selected_end_date()))); open.set(false); status.set("ui-date-range-saved".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(move ||{text(I18N.text("ui-save"));});
+                                        icon_button().standard().icon(filled::CLOSE_SVG).accessibility_label(I18N.text("ui-close-full-screen-date-selection")).on_click(move ||{ let (start,end)=committed_range.get(); range.with_mut(|range|range.set_selection(start,end)); open.set(false); status.set("ui-full-screen-date-selection-closed".into()); FocusManager::defer_keyboard_until_layout(); });
+                                        button().text().accessibility_label(I18N.text("ui-save")).enabled(range.with(DateRangePickerState::is_complete)).on_click(move ||{ if !range.with(DateRangePickerState::is_complete) {return;} committed_range.set(range.with(|range|(range.selected_start_date(),range.selected_end_date()))); open.set(false); status.set("ui-date-range-saved".into()); FocusManager::defer_keyboard_until_layout(); }).child(move ||{text(I18N.text("ui-save"));});
                                     });
                                 }
                                 date_range_picker().today(illustration_today()).state(range).first_day_of_week(Weekday::Sunday).calendar_height(Dp(if color_roles {624.0} else {336.0}));
                                 if figure!=Figure::FullScreen {figure_actions(status, open, range, committed_range);}
                             });
                         } else {
-                            date_picker_dialog().picker_today(illustration_today()).state(state).picker_view(modal_view).picker_title(I18N.text("ui-select-date")).picker_headline_optional(if state.with(DatePickerState::display_mode)==DatePickerDisplayMode::Input {Some(I18N.text("ui-enter-dates"))} else {None}).picker_first_day_of_week(Weekday::Sunday).dismiss_button(move || {button().text().accessibility_label(I18N.text("ui-reference-date-cancel")).on_click(move ||{ open.set(false); status.set("ui-date-selection-cancelled".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(move ||{text(I18N.text("ui-cancel"));});})
-                                .confirm_button(move || {button().text().enabled(state.with(|state| state.selected_date().is_some())).accessibility_label(I18N.text("ui-reference-date-confirm")).on_click(move ||{ if state.with(|state| state.selected_date().is_none()) { return; } open.set(false); status.set("ui-date-selection-confirmed".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(move ||{text(I18N.text("ui-ok"));});});
+                            date_picker_dialog().picker_today(illustration_today()).state(state).picker_view(modal_view).picker_title(I18N.text("ui-select-date")).picker_headline_optional(if state.with(DatePickerState::display_mode)==DatePickerDisplayMode::Input {Some(I18N.text("ui-enter-dates"))} else {None}).picker_first_day_of_week(Weekday::Sunday).dismiss_button(move || {button().text().accessibility_label(I18N.text("ui-reference-date-cancel")).on_click(move ||{ open.set(false); status.set("ui-date-selection-cancelled".into()); FocusManager::defer_keyboard_until_layout(); }).child(move ||{text(I18N.text("ui-cancel"));});})
+                                .confirm_button(move || {button().text().enabled(state.with(|state| state.selected_date().is_some())).accessibility_label(I18N.text("ui-reference-date-confirm")).on_click(move ||{ if state.with(|state| state.selected_date().is_none()) { return; } open.set(false); status.set("ui-date-selection-confirmed".into()); FocusManager::defer_keyboard_until_layout(); }).child(move ||{text(I18N.text("ui-ok"));});});
                         }
                     });
                 }
@@ -1944,7 +1944,7 @@ fn figure_actions(
                     range.with_mut(|range| range.set_selection(start, end));
                     open.set(false);
                     status.set("ui-date-range-cancelled".into());
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(I18N.text("ui-cancel"));
@@ -1963,7 +1963,7 @@ fn figure_actions(
                         }));
                     open.set(false);
                     status.set("ui-date-range-confirmed".into());
-                    FocusManager::current().defer_keyboard_until_layout();
+                    FocusManager::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(I18N.text("ui-ok"));
@@ -3229,7 +3229,7 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                                 restore_docked_date(state, controller, committed, error);
                             }
                             open.set(!open.get());
-                            FocusManager::current().defer_keyboard_until_layout();
+                            FocusManager::defer_keyboard_until_layout();
                         });
                 });
             gap(Dp(4.0));
@@ -3256,12 +3256,12 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                     .on_cancel(move || {
                         restore_docked_date(state, controller, committed, error);
                         open.set(false);
-                        FocusManager::current().defer_keyboard_until_layout();
+                        FocusManager::defer_keyboard_until_layout();
                     })
                     .on_confirm(move || {
                         if submit_docked_date(state, controller, committed, error) {
                             open.set(false);
-                            FocusManager::current().defer_keyboard_until_layout();
+                            FocusManager::defer_keyboard_until_layout();
                         }
                     });
             }

@@ -7,9 +7,12 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
-    PlacementModifierNode, PressKeyEventType, PxPosition, State,
-    modifier::ModifierCapabilityExt as _, remember, scaled_box, tessera, testing::TestProbe,
+    Callback, Color, Dp, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType,
+    PxPosition, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    modifier::ModifierCapabilityExt as _,
+    remember, scaled_box, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -139,7 +142,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         assert_eq!(
             renderer
                 .work()
-                .phase(tessera_ui::WorkPhase::Measure)
+                .phase(tessera_ui::testing::WorkPhase::Measure)
                 .count(),
             0,
             "idle frame must not measure"
@@ -168,7 +171,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         assert_eq!(
             renderer
                 .work()
-                .phase(tessera_ui::WorkPhase::Measure)
+                .phase(tessera_ui::testing::WorkPhase::Measure)
                 .count(),
             0,
             "paint-only scaling must not measure"

@@ -574,7 +574,7 @@ mod tests {
         assert_eq!(
             first
                 .work()
-                .count("observed_state", crate::WorkPhase::Build),
+                .count("observed_state", crate::work::WorkPhase::Build),
             1
         );
         let _selected = second.enter();
@@ -740,7 +740,7 @@ mod tests {
         assert_eq!(
             session
                 .work()
-                .count("observed_state", crate::WorkPhase::Build),
+                .count("observed_state", crate::work::WorkPhase::Build),
             0
         );
         assert!(state.set_if_changed(9));
@@ -750,7 +750,7 @@ mod tests {
         assert_eq!(
             session
                 .work()
-                .count("observed_state", crate::WorkPhase::Build),
+                .count("observed_state", crate::work::WorkPhase::Build),
             1
         );
     }
@@ -787,7 +787,7 @@ mod tests {
         assert_eq!(
             session
                 .work()
-                .count("owned_state_reader", crate::WorkPhase::Build),
+                .count("owned_state_reader", crate::work::WorkPhase::Build),
             1
         );
         drop(owner);

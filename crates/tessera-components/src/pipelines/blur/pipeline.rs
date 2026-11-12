@@ -4,8 +4,10 @@ use encase::{ShaderType, UniformBuffer, internal::WriteInto};
 use lru::LruCache;
 use smallvec::SmallVec;
 use tessera_ui::{
-    ScratchFit, ScratchTextureDescriptor,
-    compute::pipeline::{ComputablePipeline, ComputeContext},
+    render::{
+        ScratchFit, ScratchTextureDescriptor,
+        compute::pipeline::{ComputablePipeline, ComputeContext},
+    },
     wgpu,
 };
 
@@ -330,9 +332,9 @@ impl BlurPipeline {
     }
 
     fn create_uniform_buffer<T: ShaderType + WriteInto>(
-        graphics: &tessera_ui::GraphicsDevice,
+        graphics: &tessera_ui::render::GraphicsDevice,
         data: &T,
-    ) -> tessera_ui::FrameBuffer {
+    ) -> tessera_ui::render::FrameBuffer {
         let mut buffer = UniformBuffer::new(Vec::new());
         buffer.write(data).expect("buffer write failed");
         let bytes = buffer.into_inner();

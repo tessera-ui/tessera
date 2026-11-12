@@ -155,7 +155,7 @@ run an animation clock.
 content without changing their measured size. Ellipses and per-corner shapes are
 also supported. Nested masks apply to text, raster/vector images, custom draw
 pipelines, and pointer hit testing. Use multisampling for smooth mask edges.
-Custom UI pipelines set `depth_stencil: tessera_ui::ui_stencil_state()` and leave
+Custom UI pipelines set `depth_stencil: tessera_ui::render::ui_stencil_state()` and leave
 the stencil reference to the renderer. Independent atlas-generation passes keep
 their own attachment configuration.
 

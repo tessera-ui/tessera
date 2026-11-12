@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, Dp, FloatRect, FocusManager, HeadlessConfig, HeadlessRenderer, LayoutCoordinates,
-    MOUSE_POINTER_ID, Modifier, PressKeyEventType, Px, PxPosition, State,
+    Color, Dp, FloatRect, FocusManager, LayoutCoordinates, MOUSE_POINTER_ID, Modifier,
+    PressKeyEventType, Px, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
     testing::text_matches,
@@ -178,7 +179,7 @@ fn save_pixels(renderer: &HeadlessRenderer, pixels: &[u8], name: &str, samples: 
         let directory = std::path::PathBuf::from(directory);
         std::fs::create_dir_all(&directory).unwrap();
         let size = renderer.physical_size();
-        tessera_ui::write_png_file(
+        tessera_ui::headless::write_png_file(
             directory.join(format!("{name}-msaa{samples}.png")),
             size.width,
             size.height,
@@ -260,7 +261,7 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                     "scaled-field-focused",
                     samples,
                 );
-                FocusManager::current().clear_focus(true);
+                FocusManager::clear_focus(true);
                 renderer.render_frames(4);
                 assert!(
                     !observed
@@ -279,7 +280,7 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                         .with(|editor| editor.focus_handler().is_focused()),
                     "the same corner reaches the native field before ancestor clipping"
                 );
-                FocusManager::current().clear_focus(true);
+                FocusManager::clear_focus(true);
                 observed.get().clipped.unwrap().set(true);
                 renderer.render_frames(4);
                 assert!(

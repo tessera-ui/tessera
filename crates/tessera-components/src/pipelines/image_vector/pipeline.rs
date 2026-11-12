@@ -7,8 +7,11 @@ use encase::{ShaderType, UniformBuffer};
 use etagere::{AllocId, AtlasAllocator, size2};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    DrawGeometry, PxSize,
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    PxSize,
+    render::{
+        DrawGeometry,
+        drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    },
     wgpu,
 };
 
@@ -23,8 +26,8 @@ pub(super) const ATLAS_CACHE_BYTES: u64 = 32 << 20;
 pub(super) const RETAINED_FRAMES: u64 = 120;
 
 struct GeometryResources {
-    vertex_buffer: tessera_ui::TrackedBuffer,
-    index_buffer: tessera_ui::TrackedBuffer,
+    vertex_buffer: tessera_ui::render::TrackedBuffer,
+    index_buffer: tessera_ui::render::TrackedBuffer,
     index_count: u32,
 }
 
@@ -54,7 +57,7 @@ struct AtlasCacheEntry {
 }
 
 struct SampleResources {
-    buffer: tessera_ui::TrackedBuffer,
+    buffer: tessera_ui::render::TrackedBuffer,
     bind_groups: HashMap<usize, wgpu::BindGroup>,
     bytes: Vec<u8>,
     used: usize,
@@ -95,7 +98,7 @@ pub struct ImageVectorPipeline {
 
 impl ImageVectorPipeline {
     pub fn new(
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -262,7 +265,7 @@ impl ImageVectorPipeline {
                 compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: tessera_ui::ui_stencil_state(),
+            depth_stencil: tessera_ui::render::ui_stencil_state(),
             multisample: wgpu::MultisampleState {
                 count: sample_count,
                 mask: !0,
@@ -301,7 +304,7 @@ impl ImageVectorPipeline {
     }
 
     fn create_resources(
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         data: &ImageVectorData,
     ) -> GeometryResources {
         let vertex_buffer = device.create_buffer_init(
@@ -331,7 +334,7 @@ impl ImageVectorPipeline {
 
     fn ensure_cached_entry(
         &mut self,
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         data: &ImageVectorData,
         width: u32,
         height: u32,
@@ -381,7 +384,7 @@ impl ImageVectorPipeline {
 
     fn rasterize_into_allocation(
         &mut self,
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         geometry: &GeometryResources,
         allocation: &AtlasAllocation,
         width: u32,
@@ -390,13 +393,13 @@ impl ImageVectorPipeline {
         let padded_width = width + ATLAS_PADDING * 2;
         let padded_height = height + ATLAS_PADDING * 2;
         let target = |sample_count, usage| {
-            device.scratch_texture(tessera_ui::ScratchTextureDescriptor {
+            device.scratch_texture(tessera_ui::render::ScratchTextureDescriptor {
                 width: padded_width,
                 height: padded_height,
                 format: ATLAS_FORMAT,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT | usage,
                 sample_count,
-                fit: tessera_ui::ScratchFit::Approx,
+                fit: tessera_ui::render::ScratchFit::Approx,
             })
         };
         let resolved = target(1, wgpu::TextureUsages::COPY_SRC);
@@ -585,7 +588,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
 }
 
 fn create_sample_bind_group(
-    device: &tessera_ui::GraphicsDevice,
+    device: &tessera_ui::render::GraphicsDevice,
     layout: &wgpu::BindGroupLayout,
     view: &wgpu::TextureView,
     sampler: &wgpu::Sampler,
@@ -685,7 +688,7 @@ struct VectorAtlas {
 impl VectorAtlas {
     fn allocate(
         &mut self,
-        device: &tessera_ui::GraphicsDevice,
+        device: &tessera_ui::render::GraphicsDevice,
         width: u32,
         height: u32,
     ) -> AtlasAllocation {
@@ -754,7 +757,7 @@ impl AtlasPage {
         u64::from(self.texture.width()) * u64::from(self.texture.height()) * 4
     }
 
-    fn new(device: &tessera_ui::GraphicsDevice, size: u32) -> Self {
+    fn new(device: &tessera_ui::render::GraphicsDevice, size: u32) -> Self {
         let texture = device.create_texture(
             "vector_atlas",
             &wgpu::TextureDescriptor {

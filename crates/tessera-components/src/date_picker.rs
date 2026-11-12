@@ -1581,7 +1581,7 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     fn assert_today_outline(
-        renderer: &tessera_ui::HeadlessRenderer,
+        renderer: &tessera_ui::headless::HeadlessRenderer,
         label: &str,
         radius: f64,
         expected: bool,
@@ -1613,7 +1613,10 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     fn check_today_override(range: bool, dialog: bool) {
-        use tessera_ui::{FocusManager, HeadlessConfig, HeadlessRenderer};
+        use tessera_ui::{
+            FocusManager,
+            headless::{HeadlessConfig, HeadlessRenderer},
+        };
 
         let observed = Probe::default();
 
@@ -1645,7 +1648,7 @@ mod tests {
                 .and_then(|(_, node)| node.label()),
             "July 16, 2026"
         ));
-        FocusManager::current().clear_focus(true);
+        FocusManager::clear_focus(true);
         observed
             .today
             .get()
@@ -1783,8 +1786,8 @@ mod tests {
     #[ignore = "requires a native GPU adapter"]
     fn gpu_external_year_view_tracks_header_toggle_selection_and_dialog_actions() {
         use tessera_ui::{
-            HeadlessConfig, HeadlessRenderer,
             accesskit::{Action, ActionRequest, TreeId},
+            headless::{HeadlessConfig, HeadlessRenderer},
         };
         fn activate(renderer: &mut HeadlessRenderer, label: &str) {
             let target_node = renderer
@@ -1973,8 +1976,9 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     fn check_single_calendar_accessibility(samples: u32) {
         use tessera_ui::{
-            FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
+            FocusDirection, FocusManager, MOUSE_POINTER_ID,
             accesskit::Role,
+            headless::{HeadlessConfig, HeadlessRenderer},
         };
 
         let observed = Probe::default();
@@ -2020,7 +2024,7 @@ mod tests {
                 .and_then(|(_, node)| node.label()),
             "July 16, 2026"
         ));
-        assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
+        assert!(FocusManager::request_move_focus(FocusDirection::Next));
         renderer.render_frames(8);
         let accessibility = renderer.accessibility_snapshot().expect("tree");
         assert!(text_matches(

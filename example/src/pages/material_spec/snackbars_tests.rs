@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
 };
 
 use super::*;

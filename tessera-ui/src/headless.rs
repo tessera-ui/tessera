@@ -27,9 +27,10 @@ use crate::{
     ime_state::ImeState,
     keyboard_state::KeyboardState,
     pipeline_context::PipelineContext,
+    render::RenderCore,
     render_module::RenderModule,
     renderer::{
-        MAX_FRAME_SETTLING_RETRIES, RenderCore, TesseraConfig, core::OffscreenReadbackError,
+        MAX_FRAME_SETTLING_RETRIES, TesseraConfig, core::OffscreenReadbackError,
         frame_settling_can_progress,
     },
     runtime::{
@@ -169,10 +170,10 @@ pub struct HeadlessRenderer {
     current_frame_nanos: u64,
     frame_time: Duration,
     diagnostics: crate::component_tree::LayoutFrameDiagnostics,
-    work: crate::FrameWork,
-    work_totals: crate::WorkTotals,
+    work: crate::work::FrameWork,
+    work_totals: crate::work::WorkTotals,
     frame_clock_diagnostics: FrameClockDiagnostics,
-    frame_graphics_work: crate::GraphicsWorkDiagnostics,
+    frame_graphics_work: crate::render::GraphicsWorkDiagnostics,
 
     #[cfg(feature = "profiling")]
     profile_summary: bool,
@@ -223,12 +224,12 @@ impl HeadlessRenderer {
     }
 
     /// Captures cumulative resource creation and uploads performed by pipelines.
-    pub fn graphics_work(&self) -> crate::GraphicsWorkDiagnostics {
+    pub fn graphics_work(&self) -> crate::render::GraphicsWorkDiagnostics {
         self.core.resources().graphics.diagnostics()
     }
 
     /// Returns actual resource operations performed in the last completed frame.
-    pub fn frame_graphics_work(&self) -> &crate::GraphicsWorkDiagnostics {
+    pub fn frame_graphics_work(&self) -> &crate::render::GraphicsWorkDiagnostics {
         &self.frame_graphics_work
     }
     /// Returns the runtime identity shared by this session's snapshots and diagnostics.
@@ -694,12 +695,12 @@ impl HeadlessRenderer {
     }
 
     /// Returns actual component, layout, and paint work in the last frame.
-    pub fn work(&self) -> &crate::FrameWork {
+    pub fn work(&self) -> &crate::work::FrameWork {
         &self.work
     }
 
     /// Returns cumulative work for this fixture's lifetime.
-    pub fn work_totals(&self) -> &crate::WorkTotals {
+    pub fn work_totals(&self) -> &crate::work::WorkTotals {
         &self.work_totals
     }
 

@@ -167,8 +167,8 @@ enum Scene {
     ),
 }
 
-fn gpu_renderer(scene: Scene, width: u32, height: u32) -> tessera_ui::HeadlessRenderer {
-    let mut renderer = tessera_ui::HeadlessRenderer::new(
+fn gpu_renderer(scene: Scene, width: u32, height: u32) -> tessera_ui::headless::HeadlessRenderer {
+    let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
         Box::new(move || match scene.clone() {
             Scene::Native(width, mode, output) => {
                 native_figure_fixture(width, mode, output);
@@ -181,7 +181,7 @@ fn gpu_renderer(scene: Scene, width: u32, height: u32) -> tessera_ui::HeadlessRe
             }
         }),
         vec![Box::new(crate::TestPipelines)],
-        tessera_ui::HeadlessConfig {
+        tessera_ui::headless::HeadlessConfig {
             width,
             height,
             sample_count: 1,
@@ -194,7 +194,10 @@ fn gpu_renderer(scene: Scene, width: u32, height: u32) -> tessera_ui::HeadlessRe
     renderer
 }
 
-fn settle_native_figure(renderer: &mut tessera_ui::HeadlessRenderer, geometry: State<Geometry>) {
+fn settle_native_figure(
+    renderer: &mut tessera_ui::headless::HeadlessRenderer,
+    geometry: State<Geometry>,
+) {
     let mut previous = None;
     let mut stable = 0;
     let mut history = Vec::new();
@@ -397,7 +400,10 @@ fn figure_contains(outer: AccessibleRect, node: &Node) -> bool {
     })
 }
 
-fn visibility_group(renderer: &tessera_ui::HeadlessRenderer, label: &str) -> AccessibleRect {
+fn visibility_group(
+    renderer: &tessera_ui::headless::HeadlessRenderer,
+    label: &str,
+) -> AccessibleRect {
     renderer
         .accessibility_snapshot()
         .unwrap()
@@ -411,7 +417,7 @@ fn visibility_group(renderer: &tessera_ui::HeadlessRenderer, label: &str) -> Acc
 }
 
 fn assert_visibility_panel(
-    renderer: &tessera_ui::HeadlessRenderer,
+    renderer: &tessera_ui::headless::HeadlessRenderer,
     width: u32,
     number: usize,
     shown: bool,
@@ -482,7 +488,7 @@ fn assert_visibility_panel(
 }
 
 fn tap_visibility_node(
-    renderer: &mut tessera_ui::HeadlessRenderer,
+    renderer: &mut tessera_ui::headless::HeadlessRenderer,
     label: &str,
     role: Role,
     within: Option<AccessibleRect>,
@@ -680,10 +686,10 @@ fn enter_cold_child(test: &str) -> bool {
 fn check_cold_specs_svg(count: usize) {
     let output = tessera_ui::testing::TestProbe::default();
     let probe = output.clone();
-    let mut renderer = tessera_ui::HeadlessRenderer::new(
+    let mut renderer = tessera_ui::headless::HeadlessRenderer::new(
         Box::new(move || cold_specs_fixture(count, probe.clone())),
         vec![Box::new(crate::TestPipelines)],
-        tessera_ui::HeadlessConfig {
+        tessera_ui::headless::HeadlessConfig {
             width: 1024,
             height: 1100,
             sample_count: 1,

@@ -278,7 +278,7 @@ fn date_field(
                     .accessibility_label(I18N.text(&(icon_name)))
                     .on_click(move || {
                         open.set(!open.get());
-                        FocusManager::current().defer_keyboard_until_layout();
+                        FocusManager::defer_keyboard_until_layout();
                     });
             }
         });
@@ -717,7 +717,7 @@ fn field_labels(
                                     on_click: Callback::new(move || {
                                         view.set(DockedDatePickerView::Calendar);
                                         chooser.set(true);
-                                        FocusManager::current().defer_keyboard_until_layout();
+                                        FocusManager::defer_keyboard_until_layout();
                                     }),
                                     ..Default::default()
                                 }),
@@ -852,7 +852,7 @@ fn visible_calendar_header(
                     .on_click(move || {
                         view.set(target);
                         chooser.set(true);
-                        FocusManager::current().defer_keyboard_until_layout();
+                        FocusManager::defer_keyboard_until_layout();
                     })
                     .child(move || {
                         let label = label.clone();

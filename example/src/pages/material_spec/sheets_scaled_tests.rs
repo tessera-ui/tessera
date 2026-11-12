@@ -5,11 +5,11 @@ use tessera_components::{
     spacer::spacer, theme::material_theme,
 };
 use tessera_ui::{
-    CursorEventContent, GestureState, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
-    PlacementModifierNode, PointerChange, PressKeyEventType, PxPosition, ScrollDeltaUnit,
-    ScrollEventContent, ScrollEventSource,
+    CursorEventContent, GestureState, MOUSE_POINTER_ID, PlacementModifierNode, PointerChange,
+    PressKeyEventType, PxPosition, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
     accesskit::{Node, Role, Toggled},
     current_frame_time,
+    headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     testing::TestProbe,
 };

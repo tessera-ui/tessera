@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use tessera_components::scrollable::ScrollableController;
 use tessera_ui::{
-    CursorEventContent, GestureState, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
-    PointerChange, PressKeyEventType, PxPosition,
+    CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PressKeyEventType,
+    PxPosition,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
     winit::event::Ime,
 };
 
@@ -1275,7 +1276,7 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
             geometry += work.geometry_nodes_updated;
             measurements += renderer
                 .work()
-                .phase(tessera_ui::WorkPhase::Measure)
+                .phase(tessera_ui::testing::WorkPhase::Measure)
                 .count();
         }
         assert!(geometry > 0, "the actual field subtree must move");
@@ -1300,13 +1301,13 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
         }
         renderer.render_frames(1);
         assert_eq!(
-            renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+            renderer.work().phase(tessera_ui::testing::WorkPhase::Paint).count(),
             0
         );
         assert_eq!(
             renderer
                 .work()
-                .phase(tessera_ui::WorkPhase::Measure)
+                .phase(tessera_ui::testing::WorkPhase::Measure)
                 .count(),
             0
         );

@@ -1,4 +1,4 @@
-use tessera_ui::{Color, DrawCommand};
+use tessera_ui::{Color, render::DrawCommand};
 
 /// Draw command for the simple rectangle pipeline.
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -7,9 +7,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Dp, FocusRequester, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
-    PressKeyEventType, PxPosition, PxRect, State, modifier::FocusModifierExt as _, remember,
-    tessera,
+    Dp, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, PxRect, State,
+    headless::{HeadlessConfig, HeadlessRenderer},
+    modifier::FocusModifierExt as _,
+    remember, tessera,
 };
 
 use crate::{

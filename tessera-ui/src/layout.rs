@@ -798,7 +798,7 @@ impl RenderMetadataMut<'_> {
             && (self.draw_bounds.position != PxPosition::ZERO
                 || self.metadata.computed_data != Some(self.draw_bounds.size))
         {
-            self.set_clip_shape(crate::ClipShape::RoundedRectangle {
+            self.set_clip_shape(crate::render::ClipShape::RoundedRectangle {
                 radii: [0.0; 4],
                 exponents: [2.0; 4],
             });
@@ -806,12 +806,12 @@ impl RenderMetadataMut<'_> {
     }
 
     /// Clips the node and its descendants to a shape within its bounds.
-    pub fn set_clip_shape(&mut self, shape: crate::ClipShape) {
+    pub fn set_clip_shape(&mut self, shape: crate::render::ClipShape) {
         self.metadata.clips_children = true;
         let size = self
             .computed_data()
             .expect("shape clipping requires measured bounds");
-        self.metadata.set_clip_region(Some(crate::ClipRegion {
+        self.metadata.set_clip_region(Some(crate::render::ClipRegion {
             position: self.draw_bounds.position,
             size: [size.width.to_f32(), size.height.to_f32()],
             shape,
@@ -820,7 +820,7 @@ impl RenderMetadataMut<'_> {
 
     /// Clips content to a fractional shape relative to the current drawing
     /// layer.
-    pub fn set_clip_region(&mut self, mut region: crate::ClipRegion) {
+    pub fn set_clip_region(&mut self, mut region: crate::render::ClipRegion) {
         self.metadata.clips_children = true;
         region.position = region.position + self.draw_bounds.position;
         self.metadata.set_clip_region(Some(region));
@@ -867,9 +867,9 @@ where
 
     fn measure_dyn(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         crate::work::record_policy::<T>(if scope.is_intrinsic() {
-            crate::WorkPhase::IntrinsicMeasure
+            crate::work::WorkPhase::IntrinsicMeasure
         } else {
-            crate::WorkPhase::Measure
+            crate::work::WorkPhase::Measure
         });
         LayoutPolicy::measure(self, scope)
     }
@@ -879,7 +879,7 @@ where
         scope: &PlacementScope<'_>,
         inner: &PlacementResult,
     ) -> Option<PlacementResult> {
-        crate::work::record_policy::<T>(crate::WorkPhase::Place);
+        crate::work::record_policy::<T>(crate::work::WorkPhase::Place);
         LayoutPolicy::place(self, scope, inner)
     }
 

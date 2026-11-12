@@ -192,7 +192,7 @@ fn update_one_leaf(count: usize) -> (super::LayoutFrameDiagnostics, super::Layou
     assert_eq!(
         session
             .work_totals()
-            .count("retained_branch", crate::WorkPhase::Build),
+            .count("retained_branch", crate::work::WorkPhase::Build),
         1
     );
     probe.version.get().expect("Version state").set(1);
@@ -209,7 +209,7 @@ fn update_one_leaf(count: usize) -> (super::LayoutFrameDiagnostics, super::Layou
     assert_eq!(
         session
             .work_totals()
-            .count("retained_branch", crate::WorkPhase::Build),
+            .count("retained_branch", crate::work::WorkPhase::Build),
         1,
         "The equal-prop sibling must really reuse its component subtree"
     );
@@ -351,7 +351,7 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
     assert_eq!(
         session
             .work_totals()
-            .count("retained_dirty_branch", crate::WorkPhase::Build),
+            .count("retained_dirty_branch", crate::work::WorkPhase::Build),
         1
     );
     probe
@@ -370,7 +370,7 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
     assert_eq!(
         session
             .work_totals()
-            .count("retained_dirty_branch", crate::WorkPhase::Build),
+            .count("retained_dirty_branch", crate::work::WorkPhase::Build),
         1,
         "A dirty descendant must replay independently of its equal-prop ancestor"
     );
@@ -388,7 +388,7 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
     assert_eq!(
         session
             .work_totals()
-            .count("nested_dirty_fixture", crate::WorkPhase::Build),
+            .count("nested_dirty_fixture", crate::work::WorkPhase::Build),
         2
     );
     let position = PxPosition::from_f32_xy(10.0, 10.0);
@@ -408,13 +408,13 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
         assert_eq!(
             session
                 .work_totals()
-                .count("nested_dirty_fixture", crate::WorkPhase::Build),
+                .count("nested_dirty_fixture", crate::work::WorkPhase::Build),
             3
         );
         assert_eq!(
             session
                 .work_totals()
-                .count("retained_dirty_branch", crate::WorkPhase::Build),
+                .count("retained_dirty_branch", crate::work::WorkPhase::Build),
             1
         );
     }
@@ -497,7 +497,7 @@ fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
         .executions()
         .iter()
         .filter(|entry| {
-            entry.phase == crate::WorkPhase::Build && entry.target == "cyclic_replay_peer"
+            entry.phase == crate::work::WorkPhase::Build && entry.target == "cyclic_replay_peer"
         })
         .map(|entry| entry.instance)
         .collect();
@@ -513,12 +513,12 @@ fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
         assert_eq!(
             session
                 .work()
-                .count("cyclic_replay_peer", crate::WorkPhase::Build),
+                .count("cyclic_replay_peer", crate::work::WorkPhase::Build),
             2
         );
         for &peer in &peers {
             assert_eq!(
-                session.work().for_instance(peer, crate::WorkPhase::Build),
+                session.work().for_instance(peer, crate::work::WorkPhase::Build),
                 1
             );
         }
@@ -597,12 +597,12 @@ fn placement_order_changes_update_retained_descendant_focus_traversal_without_re
     );
     pump_layout_test_session(&mut session, 0);
     let (first, second) = probe.requesters.with(|items| (items[&0], items[&1]));
-    assert!(FocusManager::current().move_focus(FocusDirection::Next));
+    assert!(FocusManager::move_focus(FocusDirection::Next));
     assert!(first.is_focused());
     pump_layout_test_session(&mut session, 8_000_000);
     let before = session
         .work_totals()
-        .count("ordered_branch", crate::WorkPhase::Build);
+        .count("ordered_branch", crate::work::WorkPhase::Build);
     probe
         .reverse
         .get()
@@ -612,11 +612,11 @@ fn placement_order_changes_update_retained_descendant_focus_traversal_without_re
     assert_eq!(
         session
             .work_totals()
-            .count("ordered_branch", crate::WorkPhase::Build),
+            .count("ordered_branch", crate::work::WorkPhase::Build),
         before
     );
-    FocusManager::current().clear_focus(true);
-    assert!(FocusManager::current().move_focus(FocusDirection::Next));
+    FocusManager::clear_focus(true);
+    assert!(FocusManager::move_focus(FocusDirection::Next));
     assert!(second.is_focused());
 }
 
@@ -645,7 +645,7 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
     assert_eq!(
         session
             .work_totals()
-            .count("ordered_branch", crate::WorkPhase::Build),
+            .count("ordered_branch", crate::work::WorkPhase::Build),
         2
     );
     assert_eq!(
@@ -653,7 +653,7 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
         ["Retained 0", "Retained 1"]
     );
     let (first, second) = probe.requesters.with(|items| (items[&0], items[&1]));
-    assert!(FocusManager::current().move_focus(FocusDirection::Next));
+    assert!(FocusManager::move_focus(FocusDirection::Next));
     assert!(first.is_focused());
     // Focus changes invalidate their host replay boundary independently of
     // reorder.
@@ -664,20 +664,20 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
         ["retained-0", "retained-1"].map(|tag| snapshot.tagged(tag).instance_id());
     let stabilized_builds = session
         .work_totals()
-        .count("ordered_branch", crate::WorkPhase::Build);
+        .count("ordered_branch", crate::work::WorkPhase::Build);
     probe.reverse.get().expect("Reverse state").set(true);
     pump_layout_test_session(&mut session, 16_000_000);
     assert_eq!(
         retained_instances.map(|instance| session
             .work()
-            .for_instance(instance, crate::WorkPhase::Measure)),
+            .for_instance(instance, crate::work::WorkPhase::Measure)),
         [0, 0],
         "Reordering retained children with unchanged constraints must reuse their measurements"
     );
     assert_eq!(
         session
             .work_totals()
-            .count("ordered_branch", crate::WorkPhase::Build),
+            .count("ordered_branch", crate::work::WorkPhase::Build),
         stabilized_builds,
         "Both branch bodies must really be retained during reorder"
     );
@@ -686,8 +686,8 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
         semantic_reading_order(&session),
         ["Retained 1", "Retained 0"]
     );
-    FocusManager::current().clear_focus(true);
-    assert!(FocusManager::current().move_focus(FocusDirection::Next));
+    FocusManager::clear_focus(true);
+    assert!(FocusManager::move_focus(FocusDirection::Next));
     assert!(
         second.is_focused(),
         "Traversal must follow the new retained sibling order"
@@ -906,14 +906,14 @@ fn replay_refreshes_retained_descendants_when_semantic_and_focus_ancestry_change
     let retained = retained_node_ids(&session);
     let stabilized_builds = session
         .work_totals()
-        .count("ordered_branch", crate::WorkPhase::Build);
+        .count("ordered_branch", crate::work::WorkPhase::Build);
     probe.reverse.get().expect("Changed state").set(true);
     pump_layout_test_session(&mut session, 16_000_000);
     assert_eq!(scope_nodes(&session), scope);
     assert_eq!(
         session
             .work_totals()
-            .count("ordered_branch", crate::WorkPhase::Build),
+            .count("ordered_branch", crate::work::WorkPhase::Build),
         stabilized_builds,
         "The descendant must really reuse its component subtree during ancestry change"
     );

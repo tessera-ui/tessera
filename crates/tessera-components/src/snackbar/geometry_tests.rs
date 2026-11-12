@@ -5,8 +5,9 @@
 //! Keep notification text and actions aligned at compact and constrained sizes.
 
 use tessera_ui::{
-    Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
+    Dp, Modifier, State,
     accesskit::{Node, Role},
+    headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
 

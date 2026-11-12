@@ -1,5 +1,8 @@
 use glam::{Vec2, Vec4};
-use tessera_ui::{Color, DrawCommand, DrawRegion, PaddingRect, Px, PxPosition, PxSize};
+use tessera_ui::{
+    Color, Px, PxPosition, PxSize,
+    render::{DrawCommand, DrawRegion, PaddingRect},
+};
 
 use crate::shape_def::ResolvedShape;
 

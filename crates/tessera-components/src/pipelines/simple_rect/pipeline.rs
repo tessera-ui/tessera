@@ -4,7 +4,7 @@ use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxSize,
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
+    render::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu::{self, include_wgsl},
 };
 
@@ -90,7 +90,7 @@ impl SimpleRectPipeline {
 }
 
 fn build_instances(
-    commands: &[(&SimpleRectCommand, tessera_ui::DrawGeometry)],
+    commands: &[(&SimpleRectCommand, tessera_ui::render::DrawGeometry)],
     target_size: PxSize,
 ) -> Vec<RectUniform> {
     commands

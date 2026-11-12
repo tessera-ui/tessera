@@ -1,7 +1,7 @@
 use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
+    render::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu,
 };
 
@@ -175,7 +175,7 @@ impl FluidGlassPipeline {
                 cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
-            depth_stencil: tessera_ui::ui_stencil_state(),
+            depth_stencil: tessera_ui::render::ui_stencil_state(),
             multisample: wgpu::MultisampleState {
                 count: sample_count,
                 mask: !0,
@@ -236,7 +236,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
 
 fn glass_uniforms(
     command: &FluidGlassCommand,
-    geometry: tessera_ui::DrawGeometry,
+    geometry: tessera_ui::render::DrawGeometry,
     context: &DrawContext<FluidGlassCommand>,
 ) -> GlassUniforms {
     let render = &command.render;

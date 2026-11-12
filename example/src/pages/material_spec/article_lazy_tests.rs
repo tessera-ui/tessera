@@ -1,7 +1,7 @@
 use tessera_ui::{
-    FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
-    PressKeyEventType, PxPosition,
+    FocusDirection, FocusManager, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
+    headless::{HeadlessConfig, HeadlessRenderer},
 };
 
 use crate::pages::{home::HomePageDestination, material_components::current_article};
@@ -386,7 +386,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
                 .expect("published chapter link"),
         "Article navigation must precede chapter links in assistive reading order"
     );
-    tessera_ui::FocusManager::current().request_move_focus(tessera_ui::FocusDirection::Next);
+    tessera_ui::FocusManager::request_move_focus(tessera_ui::FocusDirection::Next);
     renderer.render_frames(8);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
@@ -1116,7 +1116,7 @@ fn live_drawer_initial_focus_paints_the_first_destination_and_traverses_without_
         "the actual initially focused Inbox must paint the secondary outline outside its bounds"
     );
     for label in ["Outbox", "Favorites"] {
-        assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
+        assert!(FocusManager::request_move_focus(FocusDirection::Next));
         renderer.step_frame();
         let destination = app_mail_destination(&renderer, label);
         assert_eq!(
@@ -1419,7 +1419,7 @@ fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selecti
         "the real rail scrim must cover the blank top bar: {darkened}/192"
     );
     for label in ["Home", "Inbox"] {
-        assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
+        assert!(FocusManager::request_move_focus(FocusDirection::Next));
         renderer.step_frame();
         let destination = app_rail_destination(&renderer, label);
         assert_eq!(
