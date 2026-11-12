@@ -1,6 +1,7 @@
 use tessera_ui::{
-    FocusManager, MOUSE_POINTER_ID, PressKeyEventType, State,
+    MOUSE_POINTER_ID, PressKeyEventType, State,
     accesskit::{Rect, Role},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember,
 };
@@ -329,7 +330,7 @@ fn check_bar(samples: u32) {
     assert!(title.y0 >= 0.0 && title.y1 <= toolbar(&renderer).y1);
 
     settings.set(Settings::default());
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(530.0, 590.0));
     renderer.resize(540, 600);
     renderer.render_frames(90);

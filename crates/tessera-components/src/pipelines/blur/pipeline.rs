@@ -4,10 +4,7 @@ use encase::{ShaderType, UniformBuffer, internal::WriteInto};
 use lru::LruCache;
 use smallvec::SmallVec;
 use tessera_ui::{
-    render::{
-        ScratchFit, ScratchTextureDescriptor,
-        compute::pipeline::{ComputablePipeline, ComputeContext},
-    },
+    render::{ComputablePipeline, ComputeContext, ScratchFit, ScratchTextureDescriptor},
     wgpu,
 };
 

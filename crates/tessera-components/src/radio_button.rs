@@ -9,10 +9,10 @@ use std::time::Duration;
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
-    Dp, FocusDirection, FocusManager, FocusRequester, FocusState, FocusTraversalPolicy, Modifier,
-    Px, PxSize, RenderSlotWith, SemanticsModifierNode, State,
+    Dp, FocusDirection, FocusRequester, FocusState, FocusTraversalPolicy, Modifier, Px, PxSize,
+    RenderSlotWith, SemanticsModifierNode, State,
     accesskit::{Orientation, Role, Toggled},
-    current_frame_nanos,
+    current_frame_nanos, focus,
     layout::Stack,
     layout::layout,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
@@ -572,7 +572,7 @@ fn radio_button_inner(
                             .with_mut(|state| state.set_focused(focus_state.has_focus()));
                     }
                     let directional = matches!(
-                        FocusManager::focus_change_direction(),
+                        focus::focus_change_direction(),
                         Some(
                             FocusDirection::Left
                                 | FocusDirection::Right

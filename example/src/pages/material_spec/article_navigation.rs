@@ -3,9 +3,10 @@ use tessera_components::{
     modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs},
 };
 use tessera_ui::{
-    Callback, FocusManager, FocusProperties, FocusRequester, FocusState, KeyboardInput,
+    Callback, FocusProperties, FocusRequester, FocusState, KeyboardInput,
     KeyboardInputModifierNode, Modifier, State,
     accesskit::Role,
+    focus,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     winit::{
         event::ElementState,
@@ -71,7 +72,7 @@ pub(super) fn article_tablist_modifier(
         .on_focus_changed(move |focus: FocusState| {
             if !focus.has_focus() && navigation.with(|value| value.focused.is_some()) {
                 navigation.with_mut(|value| value.focused = None);
-                FocusManager::defer_keyboard_until_layout();
+                focus::defer_keyboard_until_layout();
             }
         })
 }
@@ -84,7 +85,7 @@ pub(super) fn focused_article_tab(navigation: State<ArticleNavigationState>) -> 
 pub(super) fn focus_article_tab(navigation: State<ArticleNavigationState>, index: usize) {
     let requester = navigation.with(|navigation| navigation.requesters[index]);
     requester.request_focus();
-    FocusManager::defer_keyboard_until_layout();
+    focus::defer_keyboard_until_layout();
 }
 
 pub(super) fn article_tab_focus_visible(
@@ -121,7 +122,7 @@ pub(super) fn article_tab_modifier(
         .on_focus_changed(move |focus: FocusState| {
             if focus.has_focus() && navigation.with(|value| value.focused != Some(index)) {
                 navigation.with_mut(|value| value.focused = Some(index));
-                FocusManager::defer_keyboard_until_layout();
+                focus::defer_keyboard_until_layout();
             }
         })
         .clickable_with(ClickableArgs {
@@ -183,7 +184,7 @@ impl ArticleTabKeyboard {
             return false;
         };
         target.request_focus();
-        FocusManager::defer_keyboard_until_layout();
+        focus::defer_keyboard_until_layout();
         true
     }
 }
@@ -253,7 +254,7 @@ mod tests {
                                         vertical.with_mut(|scroll| {
                                             scroll.set_scroll_position(PxPosition::ZERO);
                                         });
-                                        FocusManager::defer_keyboard_until_layout();
+                                        focus::defer_keyboard_until_layout();
                                     }),
                                     None,
                                 ))
@@ -651,14 +652,14 @@ mod tests {
                 "Accessibility",
                 "external page selection must not steal current tab focus"
             );
-            assert!(FocusManager::request_move_focus(FocusDirection::Next));
+            assert!(focus::request_move_focus(FocusDirection::Next));
             renderer.render_frames(4);
             assert_eq!(
                 focused(&renderer),
                 "After sections",
                 "one Tab traversal leaves the tab list"
             );
-            assert!(FocusManager::request_move_focus(FocusDirection::Previous));
+            assert!(focus::request_move_focus(FocusDirection::Previous));
             renderer.render_frames(4);
             assert_eq!(
                 focused(&renderer),

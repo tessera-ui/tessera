@@ -843,7 +843,7 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
                     .with(|states| states[7].unwrap())
                     .with(InteractionState::is_pressed)
             );
-            tessera_ui::FocusManager::clear_focus(true);
+            tessera_ui::focus::clear_focus(true);
             renderer.render_frames(20);
             let held = probe.interactions.with(|states| states[7].unwrap()).get();
             assert!(
@@ -864,7 +864,7 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
             );
             renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
             renderer.pointer_move(MOUSE_POINTER_ID, outside);
-            tessera_ui::FocusManager::clear_focus(true);
+            tessera_ui::focus::clear_focus(true);
             renderer.render_frames(20);
             assert_eq!(probe.clicks.get().unwrap().get(), 0);
             settings.with_mut(|settings| {

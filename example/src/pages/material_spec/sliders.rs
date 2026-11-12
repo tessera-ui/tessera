@@ -2152,7 +2152,7 @@ mod size_figure_tests {
             Role::Slider,
             Action::Focus,
         );
-        assert!(tessera_ui::FocusManager::request_move_focus(tessera_ui::FocusDirection::Next));
+        assert!(tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Next));
         renderer.render_frames(4);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         assert_eq!(

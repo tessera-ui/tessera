@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    CursorEventContent, FocusDirection, FocusManager, GestureState, MOUSE_POINTER_ID,
-    PointerChange, PressKeyEventType, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
+    CursorEventContent, FocusDirection, GestureState, MOUSE_POINTER_ID, PointerChange,
+    PressKeyEventType, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
     accesskit::Role,
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember,
 };
@@ -421,32 +422,32 @@ fn check_scrolling(samples: u32) {
             .any(|(_, node)| node.role() == Role::Button && node.label() == Some("Back")),
         "a hidden small header does not publish invisible navigation controls"
     );
-    FocusManager::clear_focus(true);
-    FocusManager::request_move_focus(FocusDirection::Next);
+    focus::clear_focus(true);
+    focus::request_move_focus(FocusDirection::Next);
     renderer.render_frames(8);
     assert_eq!(focused_label(&renderer).as_deref(), Some("Content action"));
     assert_eq!(height(&renderer), 0.0);
-    FocusManager::request_move_focus(FocusDirection::Previous);
+    focus::request_move_focus(FocusDirection::Previous);
     renderer.render_frames(8);
     assert_eq!(focused_label(&renderer).as_deref(), Some("Content action"));
     assert_eq!(height(&renderer), 0.0);
     wheel(&mut renderer, 150.0);
     assert_eq!(height(&renderer), 96.0);
     assert_eq!(labels(&renderer), 1);
-    FocusManager::clear_focus(true);
-    FocusManager::request_move_focus(FocusDirection::Next);
+    focus::clear_focus(true);
+    focus::request_move_focus(FocusDirection::Next);
     renderer.render_frames(8);
     let first = focused_label(&renderer);
-    FocusManager::request_move_focus(FocusDirection::Next);
+    focus::request_move_focus(FocusDirection::Next);
     renderer.render_frames(8);
     let second = focused_label(&renderer);
     let visible_targets = [first.as_deref(), second.as_deref()];
     assert!(visible_targets.contains(&Some("Back")));
     assert!(visible_targets.contains(&Some("Content action")));
-    FocusManager::request_move_focus(FocusDirection::Previous);
+    focus::request_move_focus(FocusDirection::Previous);
     renderer.render_frames(8);
     assert_eq!(focused_label(&renderer), first);
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
 
     reset(
         &mut renderer,

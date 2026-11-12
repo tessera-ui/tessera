@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Dp, FocusManager, ModelStore, Modifier,
-    PointerInput, PointerInputModifierNode, PxPosition, SemanticsModifierNode, State,
-    current_frame_nanos, key, launch_once,
+    AccessibilityActionHandler, AccessibilityNode, Dp, ModelStore, Modifier, PointerInput,
+    PointerInputModifierNode, PxPosition, SemanticsModifierNode, State, current_frame_nanos, focus,
+    key, launch_once,
     layout::Stack,
     layout::layout,
     modifier::{ModifierCapabilityExt as _, PlacementModifierNode},
@@ -65,7 +65,7 @@ pub(super) fn route_display(controller: State<RouterController>) {
                     && started.is_none_or(|started| started.route_id == id)
                 {
                     controller.with_mut(RouterController::pop);
-                    FocusManager::defer_keyboard_until_layout();
+                    focus::defer_keyboard_until_layout();
                 }
             }
         }

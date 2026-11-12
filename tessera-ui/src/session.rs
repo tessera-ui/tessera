@@ -826,7 +826,7 @@ mod tests {
         extra: State<bool>,
         output: TestProbe<Vec<State<usize>>>,
     ) {
-        use crate::FocusModifierExt as _;
+        use crate::modifier::FocusModifierExt as _;
         let requester = remember(crate::FocusRequester::new).get();
         let mut modifier = crate::Modifier::new();
         let extra = extra.get();

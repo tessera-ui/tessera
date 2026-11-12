@@ -5,8 +5,9 @@
 //! Keep grouped rows responsive and restore their resting appearance.
 
 use tessera_ui::{
-    Color, Dp, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::TestProbe,
@@ -300,14 +301,14 @@ fn check(samples: u32) {
                 .count("list_item", tessera_ui::testing::WorkPhase::Build),
             held
         );
-        FocusManager::clear_focus(true);
+        focus::clear_focus(true);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.render_frames(60);
         assert_eq!(clicks_observed.get(), 1);
         equal_patch(&patch(&renderer, 0, true, scale), &hover);
         let outside = PxPosition::from_f32_xy(300.0, 780.0);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        FocusManager::clear_focus(true);
+        focus::clear_focus(true);
         renderer.render_frames(60);
         equal_patch(&patch(&renderer, 0, true, scale), &inner);
         let resting = renderer
@@ -372,7 +373,7 @@ fn check(samples: u32) {
         equal_feedback_patch(&patch(&renderer, 0, true, scale), &fixed);
         renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
-        FocusManager::clear_focus(true);
+        focus::clear_focus(true);
         settings.with_mut(|value| {
             value.fixed = false;
             value.custom = false;
@@ -394,7 +395,7 @@ fn check(samples: u32) {
         }));
         renderer.render_frames(60);
         equal_feedback_patch(&patch(&renderer, 0, true, scale), &upper);
-        FocusManager::clear_focus(true);
+        focus::clear_focus(true);
         renderer.render_frames(60);
         equal_patch(&patch(&renderer, 0, true, scale), &inner);
     }

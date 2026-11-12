@@ -1,5 +1,5 @@
 use tessera_ui::{
-    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
 

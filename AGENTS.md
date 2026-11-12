@@ -191,7 +191,7 @@ programming contract; the guidelines below also govern framework implementation.
 - The typed input contexts are `PointerInput`, `KeyboardInput`, `ImeInput`, and `ClipboardInput`. Clipboard requests share keyboard ordering and focus/layout deferral; asynchronous cut writes must acknowledge success before deleting unchanged selected text.
 - Treat input contexts as event/consumption surfaces, not generic renderer request bags. Cursor changes, semantics, IME publication, and window-side effects must use their dedicated modifier/controller/session APIs.
 - Mouse, keyboard, and IME events are processed via event queues and must be consumed promptly.
-- Use `FocusManager::request_move_focus` when traversal may need lazy content to be revealed, including Tab exit after popup focus restoration. This traversal is queued after layout and precedes following keys; explicit focus requests, capture, and window blur cancel it. `move_focus` remains an immediate operation on attached targets.
+- Use `focus::request_move_focus` when traversal may need lazy content to be revealed, including Tab exit after popup focus restoration. This traversal is queued after layout and precedes following keys; explicit focus requests, capture, and window blur cancel it. `move_focus` remains an immediate operation on attached targets.
 - Focus cleanup must detach all removed handles before selecting a restoration target. Virtualized controls that unmount focused children should provide a stable local fallback so scrolling does not reveal unrelated controls. Without an explicit scope, removing focus must not activate an unrelated control. A focused `skip_traversal` target still anchors forward and reverse navigation without becoming a traversal destination.
 - Preserve each pointer sample's position when queuing it. Dispatch each sample's
   Initial, Main, and Final passes in order before processing the next sample.
@@ -206,7 +206,7 @@ programming contract; the guidelines below also govern framework implementation.
   synthetic presses fall back to their first movement sample. Direct and inertial
   scroll deltas share nested-scroll dispatch, and zero-velocity releases still
   notify nested-scroll completion. Advance inertia from the framework frame clock.
-- When opening or closing focusable content, use `FocusManager::defer_keyboard_until_layout` to preserve subsequent keys until the new layout and focus callbacks finish. Ordinary text-input updates must not introduce a layout barrier.
+- When opening or closing focusable content, use `focus::defer_keyboard_until_layout` to preserve subsequent keys until the new layout and focus callbacks finish. Ordinary text-input updates must not introduce a layout barrier.
 - Settle input and layout-observer state writes through bounded build/layout retries before presentation without repeating frame ticks or consumed input. Keep build-time feedback to already executed boundaries deferred until the next frame, independently of layout settling.
 
 ---

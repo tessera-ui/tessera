@@ -5,7 +5,7 @@
 //! Navigate scheduling dates without changing the selected value.
 
 use tessera_ui::{
-    FocusManager, FocusProperties, FocusRequester, FocusState, Modifier, State,
+    FocusProperties, FocusRequester, FocusState, Modifier, State, focus,
     modifier::FocusModifierExt as _,
     winit::{event::ElementState, keyboard::NamedKey},
 };
@@ -148,7 +148,7 @@ impl CalendarKeyboard {
             focus.pending = Some(date);
         });
         self.owner.show(date);
-        FocusManager::defer_keyboard_until_layout();
+        focus::defer_keyboard_until_layout();
     }
 
     pub(super) fn day_modifier(self, base: Modifier, date: CalendarDate) -> Modifier {

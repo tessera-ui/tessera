@@ -11,7 +11,7 @@ use crate::{PxRect, PxSize, SendSync, render_graph::DrawGeometry};
 use super::command::ComputeCommand;
 
 /// Type-erased metadata describing a compute command within a batch.
-pub struct ErasedComputeBatchItem<'a> {
+pub(crate) struct ErasedComputeBatchItem<'a> {
     /// The compute command to execute.
     pub command: &'a dyn ComputeCommand,
     /// Local dimensions and their mapping into the pass textures.

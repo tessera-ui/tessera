@@ -7,9 +7,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Color, Dp, FocusDirection, FocusManager, MOUSE_POINTER_ID, Modifier,
-    PressKeyEventType, PxPosition, State,
+    Callback, Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
+    State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera, use_context,
 };
@@ -354,7 +355,7 @@ fn check_cards(samples: u32) {
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.render_frames(12);
     assert_eq!(calls.get(), 1);
-    FocusManager::request_move_focus(FocusDirection::Previous);
+    focus::request_move_focus(FocusDirection::Previous);
     renderer.render_frames(12);
     let tree = renderer.accessibility_snapshot().unwrap();
     assert_ne!(tree.focus, id);
@@ -481,7 +482,7 @@ fn check_cards(samples: u32) {
         config.dark = false;
         config.variant = CardVariant::Elevated;
     });
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     renderer.render_frames(90);
     let restored = renderer.read_pixels().expect("restored theme pixels");
     for y in 40..194 {

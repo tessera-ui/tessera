@@ -2324,7 +2324,7 @@ mod native_field_regressions {
                     assert_eq!(editor.with(|editor| editor.text()), "Q");
                     check_bounds(&renderer);
                     editor.with_mut(|editor| editor.set_text(""));
-                    tessera_ui::FocusManager::clear_focus(true);
+                    tessera_ui::focus::clear_focus(true);
                     renderer.render_frames(4);
                     check_bounds(&renderer);
                     click_fixed(&mut renderer);

@@ -6,7 +6,7 @@ use winit::window::Window;
 
 use crate::{
     pipeline_cache::initialize_cache,
-    render::{compute::ComputePipelineRegistry, drawer::Drawer},
+    render::{ComputePipelineRegistry, drawer::Drawer},
     renderer::window_drawable_size,
 };
 

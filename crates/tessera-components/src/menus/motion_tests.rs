@@ -1,7 +1,7 @@
 use tessera_ui::{
-    Color, Dp, FocusDirection, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
-    PxPosition, State,
+    Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Rect, Role},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
@@ -180,7 +180,7 @@ fn check_motion(samples: u32) {
     );
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(1450.0, 950.0));
     renderer.step_frame();
-    assert!(FocusManager::move_focus(FocusDirection::Up));
+    assert!(focus::move_focus(FocusDirection::Up));
     renderer.render_frames(60);
     focus(&renderer, "Share");
     assert!(
@@ -194,7 +194,7 @@ fn check_motion(samples: u32) {
         bounds(&renderer, "Copy").is_none(),
         "short pointer crossings do not open a branch"
     );
-    assert!(FocusManager::move_focus(FocusDirection::Down));
+    assert!(focus::move_focus(FocusDirection::Down));
     renderer.render_frames(20);
     focus(&renderer, "Other");
     assert!(

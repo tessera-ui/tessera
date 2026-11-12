@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use tessera_ui::{FocusManager, FocusRequester, FocusScopeNode, State, winit::keyboard::NamedKey};
+use tessera_ui::{FocusRequester, FocusScopeNode, State, focus, winit::keyboard::NamedKey};
 
 use super::CarouselController;
 
@@ -88,7 +88,7 @@ impl Navigation {
         } else {
             return false;
         };
-        FocusManager::defer_keyboard_until_layout();
+        focus::defer_keyboard_until_layout();
         self.pending.set(Some(target));
         if !self.items.with(|items| items.contains_key(&target)) {
             self.viewport.request_focus();

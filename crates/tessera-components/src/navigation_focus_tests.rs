@@ -7,8 +7,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, Dp, FocusDirection, FocusManager, Modifier, State,
+    Color, Dp, FocusDirection, Modifier, State,
     accesskit::{Action, ActionRequest, Rect, Role, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
@@ -153,7 +154,7 @@ fn navigation_initial_traversal_and_accessibility_focus_do_not_activate_destinat
             );
             assert_eq!(bounds.width(), if mode == 1 { 96.0 } else { 220.0 });
         }
-        assert!(FocusManager::request_move_focus(FocusDirection::Next));
+        assert!(focus::request_move_focus(FocusDirection::Next));
         renderer.step_frame();
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,

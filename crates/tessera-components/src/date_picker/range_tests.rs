@@ -1,7 +1,8 @@
 use tessera_ui::{
-    CallbackWith, Color, Dp, FocusDirection, FocusManager, MOUSE_POINTER_ID, Modifier,
-    PressKeyEventType, PxPosition, State,
+    CallbackWith, Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
+    PxPosition, State,
     accesskit::{Rect, Role},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::text_matches,
@@ -217,7 +218,7 @@ fn check_nested_scroll(samples: u32) {
         before,
         "virtualizing the focused month must not reveal controls outside the calendar"
     );
-    assert!(FocusManager::request_move_focus(FocusDirection::Next));
+    assert!(focus::request_move_focus(FocusDirection::Next));
     renderer.render_frames(8);
     let accessibility = renderer.accessibility_snapshot().expect("tree");
     let focused = accessibility
@@ -237,7 +238,7 @@ fn check_nested_scroll(samples: u32) {
         Some(date(7, 29))
     );
     assert_eq!(state.with(DateRangePickerState::selected_end_date), None);
-    assert!(FocusManager::request_move_focus(FocusDirection::Next));
+    assert!(focus::request_move_focus(FocusDirection::Next));
     renderer.render_frames(12);
     let accessibility = renderer.accessibility_snapshot().expect("tree");
     assert!(
@@ -506,7 +507,7 @@ fn check_range(samples: u32) {
         "an unavailable date still shows a visible keyboard focus indicator"
     );
     assert_eq!(state.with(DateRangePickerState::selected_start_date), None);
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     renderer.render_frames(3);
     assert_color(&renderer, focus_x, focus_y, [255, 255, 255]);
     let start = bounds(&renderer, "July 29, 2026");
@@ -531,7 +532,7 @@ fn check_range(samples: u32) {
         state.with(DateRangePickerState::selected_end_date),
         Some(date(7, 31))
     );
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(590.0, 940.0));
     renderer.render_frames(90);
     let start = bounds(&renderer, "July 29, 2026");

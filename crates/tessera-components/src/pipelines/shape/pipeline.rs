@@ -11,7 +11,7 @@ use std::sync::Arc;
 use encase::ShaderType;
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::{DrawContext, DrawablePipeline, FrameContext},
     wgpu::{self, include_wgsl},
 };
 

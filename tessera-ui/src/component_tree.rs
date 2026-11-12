@@ -4625,12 +4625,12 @@ mod tests {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         let probe = RevealProbe::default();
-        use crate::focus::{FocusManager, bind_focus_owner};
+        use crate::focus::{self, bind_focus_owner};
 
         let (mut tree, _, focus, _session) = reveal_viewport_tree(probe.clone());
         {
             let _binding = bind_focus_owner(&mut tree.focus_owner);
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
         }
         assert!(
             !needs_deferred_focus_retry(&tree.focus_owner, false),
@@ -6049,7 +6049,7 @@ mod tests {
     fn keyboard_barrier_preserves_order_until_a_subsequent_layout_finishes() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        use crate::focus::{FocusManager, bind_focus_owner};
+        use crate::focus::{self, bind_focus_owner};
 
         let mut owner = FocusOwner::new();
         let mut events = VecDeque::from(["close popup", "Enter", "Tab"]);
@@ -6059,7 +6059,7 @@ mod tests {
                 delivered.push(event);
                 {
                     let _binding = bind_focus_owner(&mut owner);
-                    FocusManager::defer_keyboard_until_layout();
+                    focus::defer_keyboard_until_layout();
                 }
                 (None, owner.keyboard_is_deferred())
             }),
@@ -6079,7 +6079,7 @@ mod tests {
         );
         {
             let _binding = bind_focus_owner(&mut owner);
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
         }
         owner.finish_layout();
         assert!(
@@ -6102,14 +6102,14 @@ mod tests {
     fn recomposition_retains_deferred_input_but_runtime_reset_discards_it() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
-        use crate::focus::{FocusManager, bind_focus_owner};
+        use crate::focus::{self, bind_focus_owner};
 
         let mut tree = ComponentTree::new();
         {
             let _binding = bind_focus_owner(&mut tree.focus_owner);
-            FocusManager::defer_keyboard_until_layout();
-            assert!(FocusManager::request_move_focus(FocusDirection::Previous));
-            assert!(FocusManager::request_move_focus(FocusDirection::Next));
+            focus::defer_keyboard_until_layout();
+            assert!(focus::request_move_focus(FocusDirection::Previous));
+            assert!(focus::request_move_focus(FocusDirection::Next));
         }
         assert_eq!(
             tree.focus_owner.take_pending_navigation(),
@@ -6141,12 +6141,12 @@ mod tests {
         assert!(!tree.focus_owner.has_pending_navigation());
         {
             let _binding = bind_focus_owner(&mut tree.focus_owner);
-            assert!(!FocusManager::request_move_focus(FocusDirection::Previous));
+            assert!(!focus::request_move_focus(FocusDirection::Previous));
         }
         tree.focus_owner.set_owner_focused(true);
         {
             let _binding = bind_focus_owner(&mut tree.focus_owner);
-            assert!(FocusManager::request_move_focus(FocusDirection::Previous));
+            assert!(focus::request_move_focus(FocusDirection::Previous));
         }
         tree.reset();
         assert!(!tree.focus_owner.has_pending_navigation());
@@ -6275,7 +6275,7 @@ mod tests {
             .get_mut()
             .interaction_mut()
             .ime_handlers = vec![Box::new(|mut input| {
-            assert!(crate::FocusManager::move_focus(FocusDirection::Next));
+            assert!(crate::focus::move_focus(FocusDirection::Next));
             input
                 .ime_session()
                 .update(ImeRequest::new(PxSize::new(Px(1), Px(1))));
@@ -6363,7 +6363,7 @@ mod tests {
             .get_mut()
             .interaction_mut()
             .ime_preview_handlers = vec![Box::new(|_| {
-            assert!(crate::FocusManager::move_focus(FocusDirection::Next));
+            assert!(crate::focus::move_focus(FocusDirection::Next));
         })];
         assert!(tree.focus_owner.move_focus(FocusDirection::Previous));
         requests = WindowRequests::default();

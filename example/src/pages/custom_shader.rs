@@ -10,10 +10,7 @@ use tessera_ui::{
     layout::layout,
     px::{Px, PxRect, PxSize},
     remember,
-    render::{
-        DrawCommand, PipelineContext, RenderModule,
-        drawer::pipeline::{DrawContext, DrawablePipeline},
-    },
+    render::{DrawCommand, DrawContext, DrawablePipeline, PipelineContext, RenderModule},
     tessera, use_context, wgpu,
 };
 

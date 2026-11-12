@@ -20,7 +20,7 @@ use tessera_components::{
     },
 };
 use tessera_ui::{
-    Dp, FocusManager, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
+    Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role, focus,
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
@@ -253,7 +253,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                     sample
                         .state
                         .with_mut(|state| state.set_is_24_hour(!state.is_24_hour()));
-                    FocusManager::defer_keyboard_until_layout();
+                    focus::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(
@@ -279,7 +279,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                         } else {
                             TimePickerLayout::Vertical
                         });
-                    FocusManager::defer_keyboard_until_layout();
+                    focus::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(
@@ -303,7 +303,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                 ))
                 .on_click(move || {
                     sample.state.with_mut(TimePickerState::toggle_display_mode);
-                    FocusManager::defer_keyboard_until_layout();
+                    focus::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(
@@ -1289,7 +1289,7 @@ fn time_figure_contents(
                         )
                         .on_click(move || {
                             sample.state.with_mut(TimePickerState::toggle_display_mode);
-                            FocusManager::defer_keyboard_until_layout();
+                            focus::defer_keyboard_until_layout();
                         });
                     spacer().modifier(Modifier::new().weight(1.0));
                     button()

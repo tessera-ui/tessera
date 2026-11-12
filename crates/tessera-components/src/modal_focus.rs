@@ -5,8 +5,7 @@
 //! Return to the invoking control after a modal's exit transition finishes.
 
 use tessera_ui::{
-    FocusManager, FocusRestorationTarget, FocusScopeNode, Modifier, State,
-    modifier::FocusModifierExt as _,
+    FocusRestorationTarget, FocusScopeNode, Modifier, State, focus, modifier::FocusModifierExt as _,
 };
 
 #[derive(Default)]
@@ -24,7 +23,7 @@ pub(crate) fn modal_focus_modifier(
 ) -> Modifier {
     if state.with(|state| state.visible != visible) {
         let origin = if visible {
-            FocusManager::save_focus()
+            focus::save_focus()
         } else {
             None
         };
@@ -39,7 +38,7 @@ pub(crate) fn modal_focus_modifier(
                 state.origin = None;
             }
         });
-        FocusManager::defer_keyboard_until_layout();
+        focus::defer_keyboard_until_layout();
     }
     if state.with(|state| state.pending.is_some()) {
         modifier.on_globally_positioned(move |_| {

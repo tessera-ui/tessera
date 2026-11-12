@@ -528,7 +528,7 @@ mod tests {
     use super::*;
     use crate::{
         Px, PxPosition, PxSize,
-        render::{PaddingRect, SampleRegion, drawer::command::DrawCommand},
+        render::{DrawCommand, PaddingRect, SampleRegion},
     };
 
     #[test]

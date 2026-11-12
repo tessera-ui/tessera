@@ -4,10 +4,10 @@
 //!
 //! Submit [`ComputeCommand`] values to registered [`ComputablePipeline`] implementations.
 
-pub mod command;
-pub mod pipeline;
+mod command;
+mod pipeline;
 
 pub use command::ComputeCommand;
-pub use pipeline::{
-    ComputablePipeline, ComputeBatchItem, ComputePipelineRegistry, ErasedComputeBatchItem,
-};
+pub use pipeline::{ComputablePipeline, ComputeBatchItem, ComputeContext, ComputePipelineRegistry};
+
+pub(crate) use pipeline::{ErasedComputeBatchItem, ErasedDispatchContext};

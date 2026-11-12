@@ -5,9 +5,9 @@
 //! Keep selection requests, roles, focus, and disabled activation consistent.
 
 use tessera_ui::{
-    Dp, FocusDirection, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
-    State,
+    Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::TestProbe,
@@ -208,7 +208,7 @@ fn check(samples: u32) {
         verify(&renderer, &settings.get(), &ids);
         assert!(action(&mut renderer, 0, Action::Focus));
         renderer.render_frames(3);
-        FocusManager::request_move_focus(FocusDirection::Next);
+        focus::request_move_focus(FocusDirection::Next);
         renderer.render_frames(3);
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, ids[1]);
         settings.with_mut(|s| {

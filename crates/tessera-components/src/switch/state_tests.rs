@@ -7,8 +7,9 @@
 use std::sync::Arc;
 
 use tessera_ui::{
-    Color, Dp, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::TestProbe,
@@ -199,7 +200,7 @@ fn check_states(samples: u32) {
                     checked,
                     ..Default::default()
                 });
-                FocusManager::clear_focus(true);
+                focus::clear_focus(true);
                 renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(190.0, 130.0));
                 renderer.render_frames(30);
                 let (id, control) = node(&renderer);
@@ -330,7 +331,7 @@ fn check_states(samples: u32) {
         let scheme = &palettes[usize::from(dark)].color_scheme;
         for checked in [false, true] {
             for size in [None, Some(Dp(12.0))] {
-                FocusManager::clear_focus(true);
+                focus::clear_focus(true);
                 settings.set(Settings {
                     dark,
                     checked,
@@ -368,7 +369,7 @@ fn check_states(samples: u32) {
         InteractionVisualState::Focus,
         InteractionVisualState::Pressed,
     ] {
-        FocusManager::clear_focus(true);
+        focus::clear_focus(true);
         settings.set(Settings {
             checked: true,
             presentation: Some(presentation),
@@ -454,7 +455,7 @@ fn check_states(samples: u32) {
             assert_eq!(settings.get().activations, 0);
         }
     }
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
 }
 
 #[test]

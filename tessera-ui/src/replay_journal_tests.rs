@@ -2,11 +2,13 @@ use std::collections::BTreeMap;
 
 use crate::{
     AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, CursorEventContent,
-    FocusDirection, FocusManager, FocusModifierExt, FocusRequester, FocusScopeNode, GestureState,
-    LayoutPolicy, LayoutResult, Modifier, PointerChange, PointerEventPass, PointerInput,
-    PointerInputModifierNode, PressKeyEventType, Px, PxPosition, SemanticsModifierNode, State,
+    FocusDirection, FocusRequester, FocusScopeNode, GestureState, LayoutPolicy, LayoutResult,
+    Modifier, PointerChange, PointerEventPass, PointerInput, PointerInputModifierNode,
+    PressKeyEventType, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::Role,
+    focus,
     layout::MeasureScope,
+    modifier::FocusModifierExt as _,
     remember,
     runtime::TesseraRuntime,
     tessera,
@@ -597,7 +599,7 @@ fn placement_order_changes_update_retained_descendant_focus_traversal_without_re
     );
     pump_layout_test_session(&mut session, 0);
     let (first, second) = probe.requesters.with(|items| (items[&0], items[&1]));
-    assert!(FocusManager::move_focus(FocusDirection::Next));
+    assert!(focus::move_focus(FocusDirection::Next));
     assert!(first.is_focused());
     pump_layout_test_session(&mut session, 8_000_000);
     let before = session
@@ -615,8 +617,8 @@ fn placement_order_changes_update_retained_descendant_focus_traversal_without_re
             .count("ordered_branch", crate::work::WorkPhase::Build),
         before
     );
-    FocusManager::clear_focus(true);
-    assert!(FocusManager::move_focus(FocusDirection::Next));
+    focus::clear_focus(true);
+    assert!(focus::move_focus(FocusDirection::Next));
     assert!(second.is_focused());
 }
 
@@ -653,7 +655,7 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
         ["Retained 0", "Retained 1"]
     );
     let (first, second) = probe.requesters.with(|items| (items[&0], items[&1]));
-    assert!(FocusManager::move_focus(FocusDirection::Next));
+    assert!(focus::move_focus(FocusDirection::Next));
     assert!(first.is_focused());
     // Focus changes invalidate their host replay boundary independently of
     // reorder.
@@ -686,8 +688,8 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
         semantic_reading_order(&session),
         ["Retained 1", "Retained 0"]
     );
-    FocusManager::clear_focus(true);
-    assert!(FocusManager::move_focus(FocusDirection::Next));
+    focus::clear_focus(true);
+    assert!(focus::move_focus(FocusDirection::Next));
     assert!(
         second.is_focused(),
         "Traversal must follow the new retained sibling order"

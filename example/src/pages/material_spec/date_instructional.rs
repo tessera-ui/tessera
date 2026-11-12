@@ -18,8 +18,9 @@ use tessera_components::{
     theme::MaterialTheme,
 };
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, FocusManager, Modifier, RenderSlot, State,
+    Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State,
     accesskit::{HasPopup, Role},
+    focus,
     modifier::FocusModifierExt as _,
     remember, scaled_box, tessera, use_context,
 };
@@ -278,7 +279,7 @@ fn date_field(
                     .accessibility_label(I18N.text(&(icon_name)))
                     .on_click(move || {
                         open.set(!open.get());
-                        FocusManager::defer_keyboard_until_layout();
+                        focus::defer_keyboard_until_layout();
                     });
             }
         });
@@ -717,7 +718,7 @@ fn field_labels(
                                     on_click: Callback::new(move || {
                                         view.set(DockedDatePickerView::Calendar);
                                         chooser.set(true);
-                                        FocusManager::defer_keyboard_until_layout();
+                                        focus::defer_keyboard_until_layout();
                                     }),
                                     ..Default::default()
                                 }),
@@ -852,7 +853,7 @@ fn visible_calendar_header(
                     .on_click(move || {
                         view.set(target);
                         chooser.set(true);
-                        FocusManager::defer_keyboard_until_layout();
+                        focus::defer_keyboard_until_layout();
                     })
                     .child(move || {
                         let label = label.clone();

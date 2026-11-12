@@ -26,8 +26,8 @@
 //! [`DrawablePipeline`] provides frame and pass hooks for batched uploads and
 //! drawing. The renderer owns pass boundaries, clipping and submission.
 
-pub mod compute;
-pub mod drawer;
+pub(crate) mod compute;
+pub(crate) mod drawer;
 
 pub use crate::{
     clip::{ClipRegion, ClipShape, ui_stencil_state},
@@ -43,6 +43,9 @@ pub use crate::{
 };
 
 pub use self::{
-    compute::{ComputablePipeline, ComputeCommand, ComputePipelineRegistry},
-    drawer::{DrawCommand, DrawablePipeline, PipelineRegistry},
+    compute::{
+               ComputablePipeline, ComputeBatchItem, ComputeCommand, ComputeContext,
+ ComputePipelineRegistry,
+    },
+    drawer::{DrawCommand, DrawContext, DrawablePipeline, FrameContext, PipelineRegistry},
 };

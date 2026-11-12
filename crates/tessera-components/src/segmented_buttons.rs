@@ -6,9 +6,10 @@
 
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, Color, ComputedData,
-    Constraint, Dp, FocusDirection, FocusManager, FocusState, FocusTraversalPolicy, LayoutResult,
+    Constraint, Dp, FocusDirection, FocusState, FocusTraversalPolicy, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, RenderSlotWith, SemanticsModifierNode,
     accesskit::{Orientation, Role, Toggled},
+    focus,
     layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera, use_context,
@@ -351,7 +352,7 @@ pub fn segmented_button(
             .preferred_tab_stop(selected)
             .on_focus_event(move |focus_state: FocusState| {
                 let directional = matches!(
-                    FocusManager::focus_change_direction(),
+                    focus::focus_change_direction(),
                     Some(FocusDirection::Left | FocusDirection::Right)
                 );
                 if focus_state.is_focused()

@@ -5,9 +5,9 @@
 //! Keep connected choices consistent across size presets and viewport changes.
 
 use tessera_ui::{
-    Color, Dp, FocusDirection, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
-    PxPosition, State,
+    Color, Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     layout::Stack,
     layout::layout,
@@ -508,7 +508,7 @@ fn check_group_metrics(samples: u32) {
         assert!(controller.with(|state| state.is_selected(1)));
         assert!(action(&mut renderer, "G1 0", Action::Focus));
         renderer.render_frames(5);
-        FocusManager::request_move_focus(FocusDirection::Right);
+        focus::request_move_focus(FocusDirection::Right);
         renderer.render_frames(5);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
@@ -521,7 +521,7 @@ fn check_group_metrics(samples: u32) {
         );
         assert!(action(&mut renderer, "G1 0", Action::Focus));
         renderer.render_frames(5);
-        FocusManager::request_move_focus(FocusDirection::Next);
+        focus::request_move_focus(FocusDirection::Next);
         renderer.render_frames(5);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
@@ -611,7 +611,7 @@ fn check_group_metrics(samples: u32) {
                 );
             }
             click(&mut renderer, &label);
-            FocusManager::clear_focus(true);
+            focus::clear_focus(true);
             renderer.render_frames(1);
             let selected = button(&renderer, &label);
             assert_eq!(selected.0, before.0);
@@ -683,7 +683,7 @@ fn check_group_metrics(samples: u32) {
             focus_before,
             "style changes must preserve focus"
         );
-        FocusManager::clear_focus(true);
+        focus::clear_focus(true);
         renderer.step_frame();
         for index in 0..5 {
             let label = format!("G{index} 0");
@@ -702,7 +702,7 @@ fn check_group_metrics(samples: u32) {
                 "standard square resting corner {index}"
             );
             click(&mut renderer, &label);
-            FocusManager::clear_focus(true);
+            focus::clear_focus(true);
             renderer.step_frame();
             let selected = button(&renderer, &label);
             let bounds = selected.1.bounds().unwrap();

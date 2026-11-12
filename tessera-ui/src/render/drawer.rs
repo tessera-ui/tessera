@@ -1,16 +1,18 @@
 //! Graphics rendering pipeline management.
 
-pub mod command;
-pub mod pipeline;
+mod command;
+mod pipeline;
 
 use crate::render_graph::DrawGeometry;
 
 pub use command::DrawCommand;
-pub use pipeline::{DrawablePipeline, ErasedDrawContext, PipelineRegistry};
+pub use pipeline::{DrawContext, DrawablePipeline, FrameContext, PipelineRegistry};
+
+pub(crate) use pipeline::ErasedDrawContext;
 
 /// Drawer manages graphics pipelines and processes draw commands.
 #[derive(Default)]
-pub struct Drawer {
+pub(crate) struct Drawer {
     /// Registry containing all registered graphics pipelines
     pub pipeline_registry: PipelineRegistry,
 }

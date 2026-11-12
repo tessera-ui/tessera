@@ -9,10 +9,10 @@ use std::{fmt, sync::Arc};
 use tessera_foundation::gesture::{DragAxis, DragRecognizer, DragSettings};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint, Dp,
-    DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusManager, FocusProperties,
-    FocusRequester, FocusScopeNode, KeyboardInput, KeyboardInputModifierNode, LayoutResult,
-    MeasurementError, Modifier, PointerEventPass, PointerInput, PointerInputModifierNode, Px,
-    PxPosition, RenderSlotWith, SemanticsModifierNode, State,
+    DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusProperties, FocusRequester,
+    FocusScopeNode, KeyboardInput, KeyboardInputModifierNode, LayoutResult, MeasurementError,
+    Modifier, PointerEventPass, PointerInput, PointerInputModifierNode, Px, PxPosition,
+    RenderSlotWith, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     dp::scale_factor,
     key,
@@ -1125,7 +1125,7 @@ pub fn carousel(
             navigation.pending.set(None);
         }
     } else if navigation.pending.get().is_some() {
-        FocusManager::defer_keyboard_until_layout();
+        tessera_ui::focus::defer_keyboard_until_layout();
         // Rebuilds this component on every animated frame.
         let frame_clock = tessera_ui::remember(tessera_ui::current_frame_nanos);
         let _ = frame_clock.get();
@@ -1134,7 +1134,7 @@ pub fn carousel(
                 if navigation.finish(controller.with(|state| !state.needs_frame())) {
                     false
                 } else {
-                    FocusManager::defer_keyboard_until_layout();
+                    tessera_ui::focus::defer_keyboard_until_layout();
                     true
                 }
             };
@@ -1887,7 +1887,7 @@ mod tests {
             renderer.read_pixels().expect("focused image pixels") != initial,
             "focus feedback must remain visible over opaque carousel images"
         );
-        tessera_ui::FocusManager::clear_focus(true);
+        tessera_ui::focus::clear_focus(true);
         renderer.render_frames(12);
         assert!(renderer.read_pixels().expect("restored pixels") == initial);
 

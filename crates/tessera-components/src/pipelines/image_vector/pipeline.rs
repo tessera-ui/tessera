@@ -8,10 +8,7 @@ use etagere::{AllocId, AtlasAllocator, size2};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxSize,
-    render::{
-        DrawGeometry,
-        drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
-    },
+    render::{DrawContext, DrawGeometry, DrawablePipeline, FrameContext},
     wgpu,
 };
 

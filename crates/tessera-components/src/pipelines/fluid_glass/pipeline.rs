@@ -1,7 +1,7 @@
 use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    render::drawer::pipeline::{DrawContext, DrawablePipeline},
+    render::{DrawContext, DrawablePipeline},
     wgpu,
 };
 

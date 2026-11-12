@@ -154,8 +154,9 @@ impl FocusState {
 
 /// Focus traversal direction for owner-level movement.
 ///
-/// These directions are used by [`FocusManager`], [`FocusScopeNode`], and
-/// [`FocusGroupNode`] when keyboard or programmatic traversal moves focus.
+/// These directions are used by [`move_focus`], [`request_move_focus`],
+/// [`FocusScopeNode`], and [`FocusGroupNode`] when keyboard or programmatic
+/// traversal moves focus.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum FocusDirection {
     /// Move to the next focusable target in traversal order.
@@ -765,7 +766,7 @@ impl Default for FocusGroupNode {
 
 /// A saved focus target that can be restored while it remains available.
 ///
-/// Use [`FocusManager::save_focus`] before showing temporary interactive
+/// Use [`save_focus`] before showing temporary interactive
 /// content. Restoration does not wait for a removed or disabled target to
 /// become available.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -793,74 +794,65 @@ impl FocusRestorationTarget {
     }
 }
 
-/// Focus operations on the current component tree.
+/// Saves the current target for restoring focus after temporary UI closes.
 ///
-/// Use these functions to trigger application-level traversal and forced
-/// clears without storing a specific scope or requester.
-#[derive(Debug)]
-pub enum FocusManager {}
+/// Saving does not move focus or keep the target alive. Restore only while
+/// the temporary UI still owns focus, so later user navigation is
+/// preserved.
+pub fn save_focus() -> Option<FocusRestorationTarget> {
+    with_focus_owner(|owner| owner.active.map(|id| FocusRestorationTarget { id }))
+}
 
-impl FocusManager {
-    /// Saves the current target for restoring focus after temporary UI closes.
-    ///
-    /// Saving does not move focus or keep the target alive. Restore only while
-    /// the temporary UI still owns focus, so later user navigation is
-    /// preserved.
-    pub fn save_focus() -> Option<FocusRestorationTarget> {
-        with_focus_owner(|owner| owner.active.map(|id| FocusRestorationTarget { id }))
-    }
+/// Returns the traversal direction responsible for the focus callback
+/// currently running. Explicit focus requests, restoration, and calls
+/// outside a focus callback return `None`.
+pub fn focus_change_direction() -> Option<FocusDirection> {
+    FOCUS_CHANGE_DIRECTION.get()
+}
 
-    /// Returns the traversal direction responsible for the focus callback
-    /// currently running. Explicit focus requests, restoration, and calls
-    /// outside a focus callback return `None`.
-    pub fn focus_change_direction() -> Option<FocusDirection> {
-        FOCUS_CHANGE_DIRECTION.get()
-    }
+/// Defers queued keys until the next layout and its focus updates finish.
+///
+/// Use when opening or closing focusable content so subsequent keys reach
+/// the resulting focus target.
+pub fn defer_keyboard_until_layout() {
+    with_focus_owner_mut(|owner| owner.keyboard_barrier = KeyboardLayoutBarrier::Requested);
+}
 
-    /// Defers queued keys until the next layout and its focus updates finish.
-    ///
-    /// Use when opening or closing focusable content so subsequent keys reach
-    /// the resulting focus target.
-    pub fn defer_keyboard_until_layout() {
-        with_focus_owner_mut(|owner| owner.keyboard_barrier = KeyboardLayoutBarrier::Requested);
-    }
+/// Clears the current focus. Set `force` to `true` to break captured focus.
+pub fn clear_focus(force: bool) {
+    with_focus_owner_mut(|owner| {
+        owner.clear_focus_global(force);
+    });
+}
 
-    /// Clears the current focus. Set `force` to `true` to break captured focus.
-    pub fn clear_focus(force: bool) {
-        with_focus_owner_mut(|owner| {
-            owner.clear_focus_global(force);
-        });
-    }
+/// Moves focus in the requested direction.
+pub fn move_focus(direction: FocusDirection) -> bool {
+    with_focus_owner_mut(|owner| {
+        owner.pending_navigation = None;
+        owner.move_focus(direction)
+    })
+}
 
-    /// Moves focus in the requested direction.
-    pub fn move_focus(direction: FocusDirection) -> bool {
-        with_focus_owner_mut(|owner| {
-            owner.pending_navigation = None;
-            owner.move_focus(direction)
-        })
-    }
-
-    /// Queues traversal after the next layout, revealing lazy content as
-    /// needed.
-    ///
-    /// Later requests replace an earlier queued direction. Returns `false` when
-    /// the window is unfocused or focus is captured. Following keyboard input
-    /// waits for the requested traversal and its layout updates.
-    /// Explicit focus requests, focus capture, and window blur cancel it.
-    pub fn request_move_focus(direction: FocusDirection) -> bool {
-        let accepted = with_focus_owner_mut(|owner| {
-            if !owner.owner_focused || owner.captured.is_some() {
-                return false;
-            }
-            owner.pending_navigation = Some(direction);
-            owner.keyboard_barrier = KeyboardLayoutBarrier::Requested;
-            true
-        });
-        if accepted {
-            schedule_runtime_redraw();
+/// Queues traversal after the next layout, revealing lazy content as
+/// needed.
+///
+/// Later requests replace an earlier queued direction. Returns `false` when
+/// the window is unfocused or focus is captured. Following keyboard input
+/// waits for the requested traversal and its layout updates.
+/// Explicit focus requests, focus capture, and window blur cancel it.
+pub fn request_move_focus(direction: FocusDirection) -> bool {
+    let accepted = with_focus_owner_mut(|owner| {
+        if !owner.owner_focused || owner.captured.is_some() {
+            return false;
         }
-        accepted
+        owner.pending_navigation = Some(direction);
+        owner.keyboard_barrier = KeyboardLayoutBarrier::Requested;
+        true
+    });
+    if accepted {
+        schedule_runtime_redraw();
     }
+    accepted
 }
 
 #[derive(Clone, Copy, Debug)]

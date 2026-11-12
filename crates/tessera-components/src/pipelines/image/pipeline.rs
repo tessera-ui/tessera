@@ -11,7 +11,7 @@ use encase::{ShaderType, UniformBuffer};
 use glam::Vec4;
 use tessera_ui::{
     PxSize,
-    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
 

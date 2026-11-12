@@ -7,9 +7,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, Dp, FocusDirection, FocusManager, FocusRequester, MOUSE_POINTER_ID, Modifier,
-    PressKeyEventType, PxPosition, State,
+    Color, Dp, FocusDirection, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
+    PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
@@ -178,7 +179,7 @@ fn check_controls(samples: u32) {
     assert_values(&renderer, true);
     assert_eq!(probe.get().calls.unwrap().get(), [0, 0]);
     assert!(action(&mut renderer, "Before", Action::Focus));
-    FocusManager::request_move_focus(FocusDirection::Next);
+    focus::request_move_focus(FocusDirection::Next);
     renderer.render_frames(12);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,

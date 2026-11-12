@@ -1,4 +1,4 @@
-use tessera_ui::render::{SampleRegion, compute::command::ComputeCommand};
+use tessera_ui::render::{ComputeCommand, SampleRegion};
 
 /// Command that scales colors away from the mean luminance of its area.
 #[derive(Debug, Clone, Copy, PartialEq)]

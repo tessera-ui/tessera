@@ -18,9 +18,8 @@ use tessera_components::{
     theme::MaterialTheme,
 };
 use tessera_ui::{
-    Callback, Dp, FocusManager, LayoutCoordinates, Modifier, Px, PxPosition, RenderSlot, State,
-    accesskit::Role, current_frame_nanos, modifier::FocusModifierExt as _, remember, tessera,
-    use_context,
+    Callback, Dp, LayoutCoordinates, Modifier, Px, PxPosition, RenderSlot, State, accesskit::Role,
+    current_frame_nanos, focus, modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use crate::res::I18N;
@@ -361,8 +360,8 @@ fn article_footer_link(
                             }
                         });
                         if let Some(link) = link {
-                            FocusManager::clear_focus(false);
-                            FocusManager::defer_keyboard_until_layout();
+                            focus::clear_focus(false);
+                            focus::defer_keyboard_until_layout();
                             match link.action {
                                 FooterAction::Page(page) => {
                                     selected.set(page);
@@ -715,7 +714,7 @@ fn article_navigation_arrow(
             if (previous && target == first) || (!previous && target == last) {
                 focus_article_tab(navigation, target);
             } else {
-                FocusManager::defer_keyboard_until_layout();
+                focus::defer_keyboard_until_layout();
             }
         });
 }
@@ -814,7 +813,7 @@ fn article_tab_strip(
                                 scroll.with_mut(|scroll| {
                                     scroll.set_scroll_position(PxPosition::ZERO)
                                 });
-                                FocusManager::defer_keyboard_until_layout();
+                                focus::defer_keyboard_until_layout();
                             }),
                             Some(interaction),
                         ),

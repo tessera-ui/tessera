@@ -7,8 +7,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, Dp, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
@@ -232,7 +233,7 @@ fn check_appearance(samples: u32) {
     assert_shadow(&renderer, false);
     renderer.pointer_move(MOUSE_POINTER_ID, outside);
     renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     settings.with_mut(|s| {
         s.variant = ChipVariant::Input;
         s.selected = false;

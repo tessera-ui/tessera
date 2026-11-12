@@ -194,7 +194,7 @@ fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
         "reverse Tab reveals the previous item",
     );
     for index in [8, 7] {
-        assert!(tessera_ui::FocusManager::request_move_focus(tessera_ui::FocusDirection::Previous));
+        assert!(tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Previous));
         renderer.render_frames(12);
         assert_focus(
             &renderer,
@@ -202,16 +202,16 @@ fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
             "repeated traversal uses current lazy bounds",
         );
     }
-    assert!(tessera_ui::FocusManager::request_move_focus(tessera_ui::FocusDirection::Next));
+    assert!(tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Next));
     renderer.render_frames(4);
     assert_focus(&renderer, "Action 8", "forward traversal after lazy reveal");
     let current = observed.get().lazy_targets.expect("targets").get()[8];
     current.capture_focus();
-    assert!(!tessera_ui::FocusManager::request_move_focus(tessera_ui::FocusDirection::Previous));
+    assert!(!tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Previous));
     renderer.render_frames(3);
     assert_focus(&renderer, "Action 8", "capture rejects queued traversal");
     current.free_focus();
-    assert!(tessera_ui::FocusManager::request_move_focus(tessera_ui::FocusDirection::Previous));
+    assert!(tessera_ui::focus::request_move_focus(tessera_ui::FocusDirection::Previous));
     current.request_focus();
     renderer.render_frames(3);
     assert_focus(

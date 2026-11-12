@@ -1,6 +1,7 @@
 use tessera_ui::{
-    FocusDirection, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
+    FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::{text_matches, visible_text},
@@ -184,7 +185,7 @@ fn check_accessibility(samples: u32) {
     let header = control(&renderer, "Hour", Role::Button).0;
     action(&mut renderer, header, Action::Focus);
     for label in ["Minute", "PM", "Hour 2 of 12"] {
-        FocusManager::request_move_focus(FocusDirection::Next);
+        focus::request_move_focus(FocusDirection::Next);
         renderer.render_frames(8);
         assert!(text_matches(focused_label(&renderer).as_deref(), label));
         if label == "PM" {
@@ -192,12 +193,12 @@ fn check_accessibility(samples: u32) {
         }
     }
     for label in ["PM", "Minute"] {
-        FocusManager::request_move_focus(FocusDirection::Previous);
+        focus::request_move_focus(FocusDirection::Previous);
         renderer.render_frames(8);
         assert!(text_matches(focused_label(&renderer).as_deref(), label));
     }
     assert_eq!(state.with(TimePickerState::hour), 14);
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     renderer.render_frames(8);
 
     let third = control(&renderer, "Hour 3 of 12", Role::Button).0;
@@ -208,19 +209,19 @@ fn check_accessibility(samples: u32) {
         "Hour 3 of 12"
     ));
     assert!(renderer.read_pixels().expect("focus pixels") != initial);
-    FocusManager::request_move_focus(FocusDirection::Next);
+    focus::request_move_focus(FocusDirection::Next);
     renderer.render_frames(8);
     assert!(text_matches(
         focused_label(&renderer).as_deref(),
         "Switch to time input"
     ));
-    FocusManager::request_move_focus(FocusDirection::Previous);
+    focus::request_move_focus(FocusDirection::Previous);
     renderer.render_frames(8);
     assert!(text_matches(
         focused_label(&renderer).as_deref(),
         "Hour 2 of 12"
     ));
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     renderer.render_frames(8);
     assert!(renderer.read_pixels().expect("restored focus pixels") == initial);
 
@@ -280,13 +281,13 @@ fn check_accessibility(samples: u32) {
             .is_selected(),
         Some(true)
     );
-    FocusManager::request_move_focus(FocusDirection::Next);
+    focus::request_move_focus(FocusDirection::Next);
     renderer.render_frames(8);
     assert!(text_matches(
         focused_label(&renderer).as_deref(),
         "Switch to time input"
     ));
-    FocusManager::request_move_focus(FocusDirection::Previous);
+    focus::request_move_focus(FocusDirection::Previous);
     renderer.render_frames(8);
     assert!(text_matches(
         focused_label(&renderer).as_deref(),

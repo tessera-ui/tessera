@@ -7,11 +7,12 @@
 use std::{f32::consts::TAU, sync::Arc};
 
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Constraint, CursorEventContent, Dp, FocusManager,
-    FocusProperties, FocusRequester, KeyboardInput, KeyboardInputModifierNode, LayoutResult,
-    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PressKeyEventType, Px,
-    PxPosition, RenderSlot, State,
+    AxisConstraint, Color, ComputedData, Constraint, CursorEventContent, Dp, FocusProperties,
+    FocusRequester, KeyboardInput, KeyboardInputModifierNode, LayoutResult, MeasurementError,
+    Modifier, PointerInput, PointerInputModifierNode, PressKeyEventType, Px, PxPosition,
+    RenderSlot, State,
     accesskit::{Role, Toggled},
+    focus,
     layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera,
@@ -630,7 +631,7 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
                 .accessibility_label(label.clone())
                 .on_click(move || {
                     state.with_mut(|s| s.selection = field);
-                    FocusManager::defer_keyboard_until_layout();
+                    focus::defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text(format_two_digit(value))
@@ -741,7 +742,7 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
                     })
                     .on_click(move || {
                         state.with_mut(|state| state.set_period(value));
-                        FocusManager::defer_keyboard_until_layout();
+                        focus::defer_keyboard_until_layout();
                     });
             }
         });
@@ -898,7 +899,7 @@ impl KeyboardInputModifierNode for PeriodNavigation {
                 });
             });
             self.requesters[index].request_focus();
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
             input.block_keyboard();
             return;
         }
@@ -1089,7 +1090,7 @@ impl PointerInputModifierNode for ClockInput {
         requester.request_focus();
         if released {
             self.dragging.set(false);
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
         }
         input.consume_pointer_changes();
     }
@@ -1192,7 +1193,7 @@ impl KeyboardInputModifierNode for ClockNavigation {
                 focus.requesters[target]
             });
             requester.request_focus();
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
             input.block_keyboard();
             return;
         }
@@ -1612,7 +1613,7 @@ fn time_display_mode_toggle(state: State<TimePickerState>) {
         })
         .on_click(move || {
             state.with_mut(TimePickerState::toggle_display_mode);
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
         });
 }
 

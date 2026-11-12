@@ -7,10 +7,9 @@
 use std::{collections::VecDeque, time::Duration};
 
 use tessera_ui::{
-    Callback, Color, Dp, FocusManager, FocusRestorationTarget, FocusScopeNode, Modifier,
-    RenderSlotWith, State,
+    Callback, Color, Dp, FocusRestorationTarget, FocusScopeNode, Modifier, RenderSlotWith, State,
     accesskit::{Live, Role},
-    current_frame_nanos,
+    current_frame_nanos, focus,
     layout::Stack,
     layout::layout,
     modifier::FocusModifierExt as _,
@@ -700,11 +699,11 @@ pub fn snackbar_host(
     let visible = record.is_some();
     if visible != showing.get() {
         if visible {
-            origin.set(FocusManager::save_focus());
+            origin.set(focus::save_focus());
         } else {
             if scope.has_focus() {
                 pending_restore.set(origin.get());
-                FocusManager::defer_keyboard_until_layout();
+                focus::defer_keyboard_until_layout();
             }
             origin.set(None);
         }

@@ -5,9 +5,9 @@
 //! Keep connected choices accessible and usable as state and bounds change.
 
 use tessera_ui::{
-    Dp, FocusDirection, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
-    State,
+    Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::TestProbe,
@@ -156,7 +156,7 @@ fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) -> bool 
 }
 
 fn traverse(renderer: &mut HeadlessRenderer, direction: FocusDirection, label: &str) {
-    FocusManager::request_move_focus(direction);
+    focus::request_move_focus(direction);
     renderer.render_frames(5);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,

@@ -4,8 +4,8 @@
 //!
 //! Trigger data reloads when users pull down at the top of a scrollable view.
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, FocusModifierExt, Modifier, Px, RenderSlot, State,
-    current_frame_nanos, layout::Stack, layout::layout, remember, tessera, use_context,
+    Callback, CallbackWith, Color, Dp, Modifier, Px, RenderSlot, State, current_frame_nanos,
+    layout::Stack, layout::layout, modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use crate::{

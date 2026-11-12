@@ -7,8 +7,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Dp, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
+    Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
     testing::TestProbe,
@@ -326,7 +327,7 @@ fn check(samples: u32) {
         assert_eq!(observed_events.with(|events| events.surface_clicks), 0);
         press(&mut renderer, direct);
         renderer.render_frames(3);
-        FocusManager::clear_focus(true);
+        focus::clear_focus(true);
         renderer.render_frames(12);
         release(&mut renderer, direct);
         assert_eq!(observed_events.with(|events| events.surface_longs), 1);
@@ -355,7 +356,7 @@ fn check(samples: u32) {
             s.selected = false;
             s.mode = ListItemSelectionMode::Single;
         });
-        FocusManager::clear_focus(true);
+        focus::clear_focus(true);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
         renderer.render_frames(40);
         assert!(
@@ -391,7 +392,7 @@ fn check(samples: u32) {
             "unmount must release externally owned ripple state"
         );
         settings.with_mut(|s| s.show_surface = true);
-        FocusManager::clear_focus(true);
+        focus::clear_focus(true);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
         renderer.render_frames(40);
         assert!(

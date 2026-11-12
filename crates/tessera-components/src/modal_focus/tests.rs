@@ -7,9 +7,9 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Dp, FocusDirection, FocusManager, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
-    State,
+    Dp, FocusDirection, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     remember, tessera,
 };
@@ -529,13 +529,13 @@ fn check(samples: u32) {
                 action(&mut renderer, "First action", Action::Click);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
                 open(&mut renderer, kind, output.get().unwrap());
-                assert!(FocusManager::request_move_focus(FocusDirection::Previous));
+                assert!(focus::request_move_focus(FocusDirection::Previous));
                 renderer.render_frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
                     node(&renderer, "Other task").0
                 );
-                assert!(FocusManager::request_move_focus(FocusDirection::Next));
+                assert!(focus::request_move_focus(FocusDirection::Next));
                 renderer.render_frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
@@ -572,7 +572,7 @@ fn check(samples: u32) {
                 ]
             };
             for (direction, label) in traversal {
-                assert!(FocusManager::request_move_focus(direction));
+                assert!(focus::request_move_focus(direction));
                 renderer.render_frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
@@ -605,7 +605,7 @@ fn check(samples: u32) {
             open(&mut renderer, kind, output.get().unwrap());
             let empty_focus = renderer.accessibility_snapshot().unwrap().focus;
             for direction in [FocusDirection::Next, FocusDirection::Previous] {
-                assert!(FocusManager::request_move_focus(direction));
+                assert!(focus::request_move_focus(direction));
                 renderer.render_frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
@@ -614,7 +614,7 @@ fn check(samples: u32) {
             }
             settings.with_mut(|s| s.actions = true);
             renderer.render_frames(4);
-            assert!(FocusManager::request_move_focus(FocusDirection::Next));
+            assert!(focus::request_move_focus(FocusDirection::Next));
             renderer.render_frames(3);
             assert_eq!(
                 renderer.accessibility_snapshot().unwrap().focus,
@@ -688,7 +688,7 @@ fn check_full_screen(samples: u32) {
             assert!((first.x0 - dialog.x0 - 24.0 * scale).abs() < 0.01);
             assert!(first.y0 >= 88.0 * scale);
             for label in ["Save", "First action", "Second action", "Close dialog"] {
-                assert!(FocusManager::request_move_focus(FocusDirection::Next));
+                assert!(focus::request_move_focus(FocusDirection::Next));
                 renderer.render_frames(3);
                 assert_eq!(
                     renderer.accessibility_snapshot().unwrap().focus,
@@ -734,7 +734,7 @@ fn check_full_screen(samples: u32) {
                     .any(|(_, node)| node.label() == Some("Save")),
                 "omitting the confirm callback must omit its action"
             );
-            assert!(FocusManager::request_move_focus(FocusDirection::Next));
+            assert!(focus::request_move_focus(FocusDirection::Next));
             renderer.render_frames(3);
             assert_eq!(
                 renderer.accessibility_snapshot().unwrap().focus,

@@ -7,10 +7,7 @@
 use bytemuck::{Pod, Zeroable};
 use tessera_ui::{
     Color, Px,
-    render::{
-        DrawCommand, DrawRegion, PaddingRect,
-        drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
-    },
+    render::{DrawCommand, DrawContext, DrawRegion, DrawablePipeline, FrameContext, PaddingRect},
     wgpu::{self, include_wgsl},
 };
 

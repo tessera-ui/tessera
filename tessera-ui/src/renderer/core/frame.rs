@@ -7,7 +7,7 @@ use crate::{
     LocalToWindow, Px, PxPosition, PxRect, PxSize,
     render::{
         DrawCommand, SampleRegion, ScratchFit, ScratchTexture, ScratchTextureDescriptor,
-        compute::{ErasedComputeBatchItem, pipeline::ErasedDispatchContext},
+        compute::{ErasedComputeBatchItem, ErasedDispatchContext},
         drawer::ErasedDrawContext,
     },
     render_graph::{DrawGeometry, RenderGraph},
@@ -1341,10 +1341,7 @@ mod tests {
     fn deferred_pipelines_start_on_first_use_and_draw_receives_the_whole_frame() {
         use std::sync::{Arc, Mutex};
 
-        use crate::render::{
-            compute::pipeline::ComputeContext,
-            drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
-        };
+        use crate::render::{ComputeContext, DrawContext, DrawablePipeline, FrameContext};
 
         struct Probe(Arc<Mutex<Vec<&'static str>>>);
 

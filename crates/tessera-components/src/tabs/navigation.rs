@@ -7,8 +7,8 @@
 use std::any::TypeId;
 
 use tessera_ui::{
-    AccessibilityNode, Callback, FocusManager, FocusRequester, KeyboardInput,
-    KeyboardInputModifierNode, ParentDataMap, ParentDataModifierNode, SemanticsModifierNode, State,
+    AccessibilityNode, Callback, FocusRequester, KeyboardInput, KeyboardInputModifierNode,
+    ParentDataMap, ParentDataModifierNode, SemanticsModifierNode, State, focus,
     winit::{
         event::ElementState,
         keyboard::{Key, NamedKey},
@@ -80,7 +80,7 @@ impl KeyboardInputModifierNode for TabNavigation {
             {
                 target.activate.call();
             }
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
             input.block_keyboard();
             return;
         }

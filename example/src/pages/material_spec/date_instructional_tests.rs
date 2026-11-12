@@ -253,7 +253,7 @@ fn illustrated_entry_keeps_separate_native_stops_and_confirms_calendar_selection
         Action::Focus,
     );
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, editor);
-    FocusManager::request_move_focus(FocusDirection::Next);
+    focus::request_move_focus(FocusDirection::Next);
     renderer.render_frames(4);
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
@@ -402,7 +402,7 @@ fn illustrated_clear_uses_native_day_selection_and_only_visible_focus_targets() 
     );
     act(&mut renderer, "August 9, 2020", Role::Button, Action::Focus);
     for _ in 0..26 {
-        FocusManager::request_move_focus(FocusDirection::Next);
+        focus::request_move_focus(FocusDirection::Next);
         renderer.render_frames(2);
         let tree = renderer.accessibility_snapshot().unwrap();
         let focus = tree.focus;

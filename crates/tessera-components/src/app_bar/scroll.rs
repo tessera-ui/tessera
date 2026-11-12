@@ -5,8 +5,8 @@
 //! Coordinate a screen header with scrolling lists and feeds.
 
 use tessera_ui::{
-    CallbackWith, Dp, FocusModifierExt, Modifier, RenderSlot, ScrollEventSource, State,
-    current_frame_nanos, layout::Stack, layout::layout, remember, tessera,
+    CallbackWith, Dp, Modifier, RenderSlot, ScrollEventSource, State, current_frame_nanos,
+    layout::Stack, layout::layout, modifier::FocusModifierExt as _, remember, tessera,
 };
 
 use crate::{

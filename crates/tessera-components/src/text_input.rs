@@ -1191,7 +1191,7 @@ fn handle_text_input_ime(
             _ => None,
         };
         if let Some(direction) = direction {
-            tessera_ui::FocusManager::request_move_focus(direction);
+            tessera_ui::focus::request_move_focus(direction);
             break;
         }
         let Some(plan) = controller.with(|c| c.plan_ime_event(args.single_line, &event)) else {

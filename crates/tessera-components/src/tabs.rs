@@ -7,10 +7,11 @@ use std::any::TypeId;
 
 use tessera_foundation::gesture::{ScrollRecognizer, ScrollSettings};
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusManager, FocusProperties,
-    FocusRequester, FocusState, LayoutResult, MeasurementError, Modifier, ParentDataMap,
-    ParentDataModifierNode, Px, PxPosition, RenderSlot, RenderSlotWith, State,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
+    FocusState, LayoutResult, MeasurementError, Modifier, ParentDataMap, ParentDataModifierNode,
+    Px, PxPosition, RenderSlot, RenderSlotWith, State,
     accesskit::Role,
+    focus,
     layout::MeasureScope,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
@@ -583,7 +584,7 @@ pub fn tab(
             if let Some(on_click) = activation.on_click {
                 on_click.call();
             }
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
         }
     });
     let title = if let Some(title_slot) = title_slot {
@@ -1344,7 +1345,7 @@ pub fn tabs(
         let requester = controller.with_mut(|controller| controller.pending_focus.take());
         if let Some(requester) = requester {
             requester.request_focus();
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
         }
     }
     let tab_row_scroll_recognizer =
@@ -1417,7 +1418,7 @@ fn tabs_content(
                     && controller.with(|controller| controller.focused_requester.is_some())
                 {
                     controller.with_mut(|controller| controller.set_focused_requester(None));
-                    FocusManager::defer_keyboard_until_layout();
+                    focus::defer_keyboard_until_layout();
                 }
             }),
         move |input| {
@@ -1608,7 +1609,7 @@ fn tab_trigger(args: Option<TabTriggerArgs>) {
                 && controller.with(|controller| controller.focused_requester != Some(requester))
             {
                 controller.with_mut(|controller| controller.set_focused_requester(Some(requester)));
-                FocusManager::defer_keyboard_until_layout();
+                focus::defer_keyboard_until_layout();
             }
         });
     }
@@ -2049,7 +2050,7 @@ mod small_custom_title_tests {
                             renderer.accessibility_snapshot().unwrap().focus,
                             target_node
                         );
-                        tessera_ui::FocusManager::clear_focus(true);
+                        tessera_ui::focus::clear_focus(true);
                         renderer.render_frames(12);
                         assert_ne!(
                             renderer.accessibility_snapshot().unwrap().focus,

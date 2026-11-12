@@ -22,8 +22,8 @@ use tessera_components::{
 };
 use tessera_shard::shard;
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, FocusModifierExt as _, LayoutCoordinates, Modifier, Px,
-    RenderSlotWith, State, accesskit::Role, remember, tessera, use_context,
+    Callback, CallbackWith, Color, Dp, LayoutCoordinates, Modifier, Px, RenderSlotWith, State,
+    accesskit::Role, modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use crate::res::I18N;

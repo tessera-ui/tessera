@@ -1,9 +1,10 @@
 use crate::{
-    ComputedData, Constraint, CursorEventContent, FocusModifierExt, GestureState,
-    LayoutCoordinates, LayoutPolicy, LayoutResult, Modifier, PointerChange, PointerEventPass,
-    PointerInput, PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent,
+    ComputedData, Constraint, CursorEventContent, GestureState, LayoutCoordinates, LayoutPolicy,
+    LayoutResult, Modifier, PointerChange, PointerEventPass, PointerInput,
+    PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent,
     ScrollEventSource, State,
     layout::{MeasureScope, Stack, layout},
+    modifier::FocusModifierExt as _,
     testing::{
         layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
         start_layout_test_session,

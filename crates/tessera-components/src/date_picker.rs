@@ -1613,10 +1613,7 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     fn check_today_override(range: bool, dialog: bool) {
-        use tessera_ui::{
-            FocusManager,
-            headless::{HeadlessConfig, HeadlessRenderer},
-        };
+        use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
 
         let observed = Probe::default();
 
@@ -1648,7 +1645,7 @@ mod tests {
                 .and_then(|(_, node)| node.label()),
             "July 16, 2026"
         ));
-        FocusManager::clear_focus(true);
+        tessera_ui::focus::clear_focus(true);
         observed
             .today
             .get()
@@ -1976,7 +1973,7 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     fn check_single_calendar_accessibility(samples: u32) {
         use tessera_ui::{
-            FocusDirection, FocusManager, MOUSE_POINTER_ID,
+            FocusDirection, MOUSE_POINTER_ID,
             accesskit::Role,
             headless::{HeadlessConfig, HeadlessRenderer},
         };
@@ -2024,7 +2021,7 @@ mod tests {
                 .and_then(|(_, node)| node.label()),
             "July 16, 2026"
         ));
-        assert!(FocusManager::request_move_focus(FocusDirection::Next));
+        assert!(tessera_ui::focus::request_move_focus(FocusDirection::Next));
         renderer.render_frames(8);
         let accessibility = renderer.accessibility_snapshot().expect("tree");
         assert!(text_matches(

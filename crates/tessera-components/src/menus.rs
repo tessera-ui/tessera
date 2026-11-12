@@ -5,12 +5,12 @@
 //! Present anchored overflow or context actions as surfaced menus.
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, CursorEventContent, Dp, DrawModifierContent,
-    DrawModifierContext, DrawModifierNode, FocusDirection, FocusManager, FocusRequester,
-    FocusScopeNode, FocusTraversalPolicy, KeyboardInput, KeyboardInputModifierNode, LayoutResult,
-    MOUSE_POINTER_ID, MeasurementError, Modifier, ParentConstraint, PointerInput,
-    PointerInputModifierNode, Px, PxPosition, PxSize, RenderSlot, RenderSlotWith, State,
+    DrawModifierContext, DrawModifierNode, FocusDirection, FocusRequester, FocusScopeNode,
+    FocusTraversalPolicy, KeyboardInput, KeyboardInputModifierNode, LayoutResult, MOUSE_POINTER_ID,
+    MeasurementError, Modifier, ParentConstraint, PointerInput, PointerInputModifierNode, Px,
+    PxPosition, PxSize, RenderSlot, RenderSlotWith, State,
     accesskit::{HasPopup, Role, Toggled},
-    current_frame_nanos,
+    current_frame_nanos, focus,
     layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember,
@@ -534,7 +534,7 @@ struct MenuKeyboardBoundary {
 impl MenuKeyboardBoundary {
     fn check(&self) {
         if self.controller.with(MenuController::is_open) != self.rendered_open {
-            FocusManager::defer_keyboard_until_layout();
+            focus::defer_keyboard_until_layout();
         }
     }
 }
@@ -751,7 +751,7 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
         *was_open = is_open;
     });
     if just_opened || just_closed {
-        FocusManager::defer_keyboard_until_layout();
+        focus::defer_keyboard_until_layout();
     }
     let root_restore = just_closed
         && provider_args.parent_request.is_none()
@@ -788,7 +788,7 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
                     main_focus_scope.restore_focus();
                 }
                 if let Some(direction) = controller.with_mut(|menu| menu.exit_direction.take()) {
-                    FocusManager::request_move_focus(direction);
+                    focus::request_move_focus(direction);
                 }
             }
         });
@@ -1684,9 +1684,9 @@ mod tests {
         start_layout_test_session,
     };
     use tessera_ui::{
-        CursorEventContent, Dp, FocusModifierExt as _, GestureState, LayoutCoordinates, Modifier,
-        PointerChange, PressKeyEventType, Px, PxPosition, State, remember, scaled_box, tessera,
-        testing::LayoutSnapshot,
+        CursorEventContent, Dp, GestureState, LayoutCoordinates, Modifier, PointerChange,
+        PressKeyEventType, Px, PxPosition, State, modifier::FocusModifierExt as _, remember,
+        scaled_box, tessera, testing::LayoutSnapshot,
     };
 
     use crate::{

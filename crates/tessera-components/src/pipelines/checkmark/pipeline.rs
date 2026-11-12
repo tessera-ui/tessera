@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use tessera_ui::{
-    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::{DrawContext, DrawablePipeline, FrameContext},
     wgpu::{self, include_wgsl},
 };
 

@@ -5,9 +5,9 @@
 //! Keep nested action menus above scrolling and clipped menu content.
 
 use tessera_ui::{
-    Callback, ComputedData, CursorEventContent, FocusManager, FocusRequester, FocusScopeNode,
-    LayoutResult, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PxPosition,
-    RenderSlot, RenderSlotWith, State, key,
+    Callback, ComputedData, CursorEventContent, FocusRequester, FocusScopeNode, LayoutResult,
+    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PxPosition, RenderSlot,
+    RenderSlotWith, State, focus, key,
     layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
@@ -122,7 +122,7 @@ impl MenuHost {
         if self.root.is_alive() {
             self.root.with_mut(MenuController::close);
         }
-        FocusManager::defer_keyboard_until_layout();
+        focus::defer_keyboard_until_layout();
     }
 
     pub fn dismiss_all(&self) {
@@ -162,7 +162,7 @@ impl MenuHost {
             return;
         };
         self.entries.set(entries[..index].to_vec());
-        FocusManager::defer_keyboard_until_layout();
+        focus::defer_keyboard_until_layout();
         for request in &entries[index..] {
             if request.is_alive() {
                 let controller = request.get().controller;
@@ -201,7 +201,7 @@ impl MenuHost {
         entries.truncate(keep);
         entries.push(request);
         self.entries.set(entries);
-        FocusManager::defer_keyboard_until_layout();
+        focus::defer_keyboard_until_layout();
     }
 }
 

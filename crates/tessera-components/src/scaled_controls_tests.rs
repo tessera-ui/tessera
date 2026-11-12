@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Color, Dp, FloatRect, FocusManager, LayoutCoordinates, MOUSE_POINTER_ID, Modifier,
-    PressKeyEventType, Px, PxPosition, State,
+    Color, Dp, FloatRect, LayoutCoordinates, MOUSE_POINTER_ID, Modifier, PressKeyEventType, Px,
+    PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
@@ -261,7 +262,7 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                     "scaled-field-focused",
                     samples,
                 );
-                FocusManager::clear_focus(true);
+                focus::clear_focus(true);
                 renderer.render_frames(4);
                 assert!(
                     !observed
@@ -280,7 +281,7 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                         .with(|editor| editor.focus_handler().is_focused()),
                     "the same corner reaches the native field before ancestor clipping"
                 );
-                FocusManager::clear_focus(true);
+                focus::clear_focus(true);
                 observed.get().clipped.unwrap().set(true);
                 renderer.render_frames(4);
                 assert!(

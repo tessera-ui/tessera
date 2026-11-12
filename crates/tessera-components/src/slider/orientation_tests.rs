@@ -1,7 +1,7 @@
 use tessera_ui::{
-    Color, FocusManager, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType,
-    PxPosition, State,
+    Color, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PressKeyEventType, PxPosition, State,
     accesskit::{Orientation, Rect, Role},
+    focus,
     headless::{HeadlessConfig, HeadlessRenderer},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
@@ -707,7 +707,7 @@ fn check_color_states_and_markers(
                                 background: Some(Color::new(0.4, 0.2, 0.1, 1.0)),
                                 ..Default::default()
                             });
-                            FocusManager::clear_focus(true);
+                            focus::clear_focus(true);
                             renderer.step_frame();
                             let rect = control(
                                 renderer,
@@ -831,7 +831,7 @@ fn check_color_states_and_markers(
                                     "focused handle gap must not contain a tick: {kind:?}, {orientation:?}, reversed={reversed}"
                                 );
                             }
-                            FocusManager::clear_focus(true);
+                            focus::clear_focus(true);
                             settings.with_mut(|settings| settings.stops = Some(true));
                             observed.get().value.unwrap().set(1.0);
                             observed.get().range.unwrap().set((0.0, 1.0));
@@ -862,7 +862,7 @@ fn check_color_states_and_markers(
         ..Default::default()
     });
     observed.get().value.unwrap().set(0.75);
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     renderer.render_frames(2);
     settings.with_mut(|settings| settings.palette = Palette::Contrast);
     renderer.render_frames(2);
@@ -1150,7 +1150,7 @@ fn check_value_indicators(samples: u32) {
         observed_labels(&renderer)[0].1.x > bounds.x,
         "the label follows programmatic value changes"
     );
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     renderer.render_frames(12);
     assert!(
         observed_labels(&renderer).is_empty(),
@@ -1284,7 +1284,7 @@ fn check_value_indicators(samples: u32) {
         ..Default::default()
     });
     value.set(0.25);
-    FocusManager::clear_focus(true);
+    focus::clear_focus(true);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(490.0, 490.0));
     renderer.render_frames(25);
     assert_pixels_near(&original, &renderer.read_pixels().unwrap(), 500);
@@ -1421,7 +1421,7 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                     });
                     renderer.render_frames(3);
                     assert_pixels_near(&focus_preview, &renderer.read_pixels().unwrap(), 500);
-                    FocusManager::clear_focus(true);
+                    focus::clear_focus(true);
                     renderer.render_frames(3);
 
                     settings.with_mut(|settings| settings.presentation_state = None);

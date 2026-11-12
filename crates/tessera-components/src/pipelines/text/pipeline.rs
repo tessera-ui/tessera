@@ -11,7 +11,7 @@ use lru::LruCache;
 use parking_lot::{ArcRwLockReadGuard, ArcRwLockWriteGuard, Mutex, RawRwLock, RwLock};
 use tessera_ui::{
     Color, PxPosition,
-    render::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
+    render::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
 

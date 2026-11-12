@@ -52,7 +52,7 @@ pub struct DrawContext<'a, 'b, 'c, T> {
 }
 
 /// Type-erased context used for dispatching draw pipelines.
-pub struct ErasedDrawContext<'a, 'b> {
+pub(crate) struct ErasedDrawContext<'a, 'b> {
     /// Renderer-owned resource creation and uploads.
     pub graphics: &'a crate::render::GraphicsDevice,
     /// WGPU device used for pipeline resource access.

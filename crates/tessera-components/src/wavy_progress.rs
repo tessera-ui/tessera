@@ -159,7 +159,7 @@ pub fn circular_wavy_progress_indicator(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
-    use tessera_ui::FocusModifierExt as _;
+    use tessera_ui::modifier::FocusModifierExt as _;
 
     let progress = progress.map(normalized);
     let wavelength =
