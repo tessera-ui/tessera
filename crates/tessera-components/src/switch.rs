@@ -14,21 +14,15 @@ use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusRequester,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::{Role, Toggled},
-    launch, launch_once,
+    launch,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
-    provide_context, remember, tessera,
-    time::Instant,
-    use_context,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    animation::{
-        Motion as _, animate_to,
-        material_motion::{Scalar, Spec},
-        run_frames,
-    },
+    animation::{Motion as _, animate_to},
     boxed::boxed,
     icon::IconSize,
     modifier::{DisabledToggleSemantics, ModifierExt as _},
@@ -297,44 +291,6 @@ impl tessera_ui::LayoutPolicy for SwitchThumbLayout {
     }
 }
 
-struct SwitchMotion {
-    checked: bool,
-    progress: Scalar,
-}
-
-impl SwitchMotion {
-    fn new(initial_state: bool) -> Self {
-        Self {
-            checked: initial_state,
-            progress: Scalar::new(if initial_state { 1.0 } else { 0.0 }),
-        }
-    }
-
-    fn is_checked(&self) -> bool {
-        self.checked
-    }
-
-    fn toggle(&mut self) {
-        self.checked = !self.checked;
-        self.progress
-            .request_retarget(if self.checked { 1.0 } else { 0.0 }, Spec::FastSpatial);
-    }
-
-    #[cfg(test)]
-    fn animation_progress(&self) -> f32 {
-        self.progress.value.clamp(0.0, 1.0) as f32
-    }
-
-    fn is_animating(&self) -> bool {
-        self.progress.is_animating()
-    }
-
-    fn update_progress(&mut self, now: Instant) -> bool {
-        self.progress.advance(now);
-        self.progress.is_animating()
-    }
-}
-
 /// # switch
 ///
 /// Render a Material switch for boolean on/off input in settings or forms.
@@ -410,10 +366,6 @@ pub fn switch(
     #[prop(into)] accessibility_description: Option<String>,
     child: Option<RenderSlot>,
 ) {
-    let controller = remember(|| SwitchMotion::new(checked));
-    if controller.with(|controller| controller.is_checked()) != checked {
-        controller.with_mut(|controller| controller.toggle());
-    }
     let focus_requester = if let Some(focus_requester) = focus_requester {
         focus_requester
     } else {
@@ -437,10 +389,6 @@ pub fn switch(
         None
     };
 
-    if controller.with(|c| c.is_animating()) {
-        launch_once(run_frames(controller, SwitchMotion::update_progress));
-    }
-
     switch_content(checked)
         .focus_requester(focus_requester)
         .modifier_optional(modifier)
@@ -459,7 +407,6 @@ pub fn switch(
         .thumb_icon_color_optional(thumb_icon_color)
         .accessibility_label_optional(accessibility_label)
         .accessibility_description_optional(accessibility_description)
-        .controller(controller)
         .interaction_state_optional(interaction_state)
         .ripple_state_optional(ripple_state)
         .tap_recognizer_optional(tap_recognizer)
@@ -487,14 +434,12 @@ fn switch_content(
     thumb_icon_color: Option<Color>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
-    controller: Option<State<SwitchMotion>>,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
     tap_recognizer: Option<State<TapRecognizer>>,
     child: Option<RenderSlot>,
 ) {
     let enabled = enabled.unwrap_or(true);
-    let controller = controller.expect("switch_content requires controller to be set");
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -736,55 +681,3 @@ mod state_tests;
 
 #[cfg(test)]
 mod motion_tests;
-
-#[cfg(test)]
-mod tests {
-    use super::SwitchMotion;
-    use crate::animation::test_instant;
-
-    #[test]
-    fn selection_spring_matches_reference_samples_and_settles_both_values() {
-        for checked in [false, true] {
-            let mut controller = SwitchMotion::new(checked);
-            controller.toggle();
-            controller.update_progress(test_instant(0));
-            controller.update_progress(test_instant(50_000_000));
-            let expected = if checked {
-                1.0 - 0.5273674995
-            } else {
-                0.5273674995
-            };
-            assert!((controller.animation_progress() as f64 - expected).abs() < 0.000001);
-            controller.update_progress(test_instant(150_000_000));
-            assert!(if checked {
-                controller.progress.value < 0.0
-            } else {
-                controller.progress.value > 1.0
-            });
-            assert!(controller.is_animating());
-            controller.update_progress(test_instant(2_000_000_000));
-            assert_eq!(
-                controller.animation_progress(),
-                if checked { 0.0 } else { 1.0 }
-            );
-            assert!(!controller.is_animating());
-        }
-    }
-
-    #[test]
-    fn retarget_samples_the_incoming_position_and_preserves_velocity() {
-        let mut controller = SwitchMotion::new(false);
-        controller.toggle();
-        controller.update_progress(test_instant(0));
-        controller.update_progress(test_instant(50_000_000));
-        controller.toggle();
-        controller.update_progress(test_instant(75_000_000));
-        assert!((controller.progress.value - 0.8269005484).abs() < 0.000001);
-        assert!((controller.progress.velocity - 9.8223966780).abs() < 0.000001);
-        controller.update_progress(test_instant(76_000_000));
-        assert!(controller.progress.value > 0.8269005484);
-        controller.update_progress(test_instant(2_000_000_000));
-        assert_eq!(controller.animation_progress(), 0.0);
-        assert!(!controller.is_animating());
-    }
-}

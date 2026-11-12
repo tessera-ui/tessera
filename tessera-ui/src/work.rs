@@ -4,8 +4,6 @@
 //!
 //! Inspect actual component, layout, and paint dispatches in test sessions.
 
-use rustc_hash::FxHashMap;
-
 /// A runtime execution phase.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum WorkPhase {
@@ -23,88 +21,6 @@ pub enum WorkPhase {
     Paint,
 }
 
-/// One component, policy, or modifier execution.
-#[derive(Clone, Debug)]
-pub struct WorkExecution {
-    /// Stable instance identity within the session.
-    pub instance: u64,
-    /// Dispatched phase.
-    pub phase: WorkPhase,
-    /// Component function name or concrete policy type name.
-    pub target: &'static str,
-}
-
-/// Actual work in a completed frame.
-#[derive(Clone, Debug, Default)]
-pub struct FrameWork {
-    /// Session that owns the observed instances.
-    pub session: Option<crate::RuntimeSessionId>,
-    executions: Vec<WorkExecution>,
-}
-
-impl FrameWork {
-    /// Returns dispatches in execution order.
-    pub fn executions(&self) -> &[WorkExecution] {
-        &self.executions
-    }
-
-    /// Returns dispatches for one phase.
-    pub fn phase(&self, phase: WorkPhase) -> impl Iterator<Item = &WorkExecution> {
-        self.executions
-            .iter()
-            .filter(move |entry| entry.phase == phase)
-    }
-
-    /// Counts named component or policy dispatches in a phase.
-    pub fn count(&self, target: &str, phase: WorkPhase) -> usize {
-        self.phase(phase)
-            .filter(|entry| entry.target == target)
-            .count()
-    }
-
-    /// Counts dispatches of a concrete policy or modifier type.
-    pub fn executed<T: 'static>(&self, phase: WorkPhase) -> usize {
-        self.count(std::any::type_name::<T>(), phase)
-    }
-
-    /// Counts dispatches for one stable instance.
-    pub fn for_instance(&self, instance: u64, phase: WorkPhase) -> usize {
-        self.phase(phase)
-            .filter(|entry| entry.instance == instance)
-            .count()
-    }
-}
-
-/// Cumulative work during a renderer or test session's lifetime.
-#[derive(Clone, Debug, Default)]
-pub struct WorkTotals {
-    /// Session that owns the observed instances.
-    pub session: Option<crate::RuntimeSessionId>,
-    counts: FxHashMap<&'static str, [usize; 6]>,
-}
-
-impl WorkTotals {
-    /// Counts named component or policy dispatches in a phase.
-    pub fn count(&self, target: &str, phase: WorkPhase) -> usize {
-        self.counts
-            .get(target)
-            .map_or(0, |counts| counts[phase as usize])
-    }
-
-    #[cfg(any(
-        test,
-        feature = "testing",
-        all(feature = "headless", not(target_family = "wasm"))
-    ))]
-    pub(crate) fn record(&mut self, frame: &FrameWork) {
-        self.session = frame.session;
-        for entry in frame.executions() {
-            let count = &mut self.counts.entry(entry.target).or_default()[entry.phase as usize];
-            *count = count.checked_add(1).expect("work count exhausted");
-        }
-    }
-}
-
 #[cfg(any(
     test,
     feature = "testing",
@@ -113,7 +29,86 @@ impl WorkTotals {
 mod collector {
     use std::cell::RefCell;
 
-    use super::{FrameWork, WorkExecution, WorkPhase};
+    use rustc_hash::FxHashMap;
+
+    use super::WorkPhase;
+
+    /// One component, policy, or modifier execution.
+    #[derive(Clone, Debug)]
+    pub struct WorkExecution {
+        /// Stable instance identity within the session.
+        pub instance: u64,
+        /// Dispatched phase.
+        pub phase: WorkPhase,
+        /// Component function name or concrete policy type name.
+        pub target: &'static str,
+    }
+
+    /// Actual work in a completed frame.
+    #[derive(Clone, Debug, Default)]
+    pub struct FrameWork {
+        /// Session that owns the observed instances.
+        pub session: Option<crate::RuntimeSessionId>,
+        executions: Vec<WorkExecution>,
+    }
+
+    impl FrameWork {
+        /// Returns dispatches in execution order.
+        pub fn executions(&self) -> &[WorkExecution] {
+            &self.executions
+        }
+
+        /// Returns dispatches for one phase.
+        pub fn phase(&self, phase: WorkPhase) -> impl Iterator<Item = &WorkExecution> {
+            self.executions
+                .iter()
+                .filter(move |entry| entry.phase == phase)
+        }
+
+        /// Counts named component or policy dispatches in a phase.
+        pub fn count(&self, target: &str, phase: WorkPhase) -> usize {
+            self.phase(phase)
+                .filter(|entry| entry.target == target)
+                .count()
+        }
+
+        /// Counts dispatches of a concrete policy or modifier type.
+        pub fn executed<T: 'static>(&self, phase: WorkPhase) -> usize {
+            self.count(std::any::type_name::<T>(), phase)
+        }
+
+        /// Counts dispatches for one stable instance.
+        pub fn for_instance(&self, instance: u64, phase: WorkPhase) -> usize {
+            self.phase(phase)
+                .filter(|entry| entry.instance == instance)
+                .count()
+        }
+    }
+
+    /// Cumulative work during a renderer or test session's lifetime.
+    #[derive(Clone, Debug, Default)]
+    pub struct WorkTotals {
+        /// Session that owns the observed instances.
+        pub session: Option<crate::RuntimeSessionId>,
+        counts: FxHashMap<&'static str, [usize; 6]>,
+    }
+
+    impl WorkTotals {
+        /// Counts named component or policy dispatches in a phase.
+        pub fn count(&self, target: &str, phase: WorkPhase) -> usize {
+            self.counts
+                .get(target)
+                .map_or(0, |counts| counts[phase as usize])
+        }
+
+        pub(crate) fn record(&mut self, frame: &FrameWork) {
+            self.session = frame.session;
+            for entry in frame.executions() {
+                let count = &mut self.counts.entry(entry.target).or_default()[entry.phase as usize];
+                *count = count.checked_add(1).expect("work count exhausted");
+            }
+        }
+    }
 
     #[derive(Default)]
     struct Observer(RefCell<Option<FrameWork>>);
@@ -162,6 +157,12 @@ mod collector {
     }
 }
 
+#[cfg(any(
+    test,
+    feature = "testing",
+    all(feature = "headless", not(target_family = "wasm"))
+))]
+pub use collector::{FrameWork, WorkExecution, WorkTotals};
 #[cfg(any(
     test,
     feature = "testing",
