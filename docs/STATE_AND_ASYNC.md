@@ -40,6 +40,11 @@ fn search_panel(model: Model<SearchModel>) {
 }
 ```
 
+A model value does not change after `init`. Put data the UI reads in `State`
+fields so readers are invalidated; other mutable data, such as caches or
+request bookkeeping, can use `Cell` or `RefCell`. Models stay on the UI thread;
+move the `State` handles a background task needs instead of the model.
+
 A `Model<T>` component parameter is injected:
 
 - Passing an existing model with the generated setter shares it; the creating

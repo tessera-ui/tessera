@@ -163,7 +163,7 @@ pub trait ModelInit: 'static {
 ///     assert_eq!(model.count.get(), 1);
 /// });
 /// ```
-pub struct Model<T>(Arc<ModelInner<T>>);
+pub struct Model<T>(Rc<ModelInner<T>>);
 
 // The value drops before the lease releases the states it may still use.
 struct ModelInner<T> {
@@ -179,7 +179,7 @@ impl<T> Clone for Model<T> {
 
 impl<T> PartialEq for Model<T> {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
@@ -209,7 +209,7 @@ impl<T: 'static> Model<T> {
             let _guard = ConstructionGuard::enter(lease.id);
             init()
         };
-        Self(Arc::new(ModelInner { value, lease }))
+        Self(Rc::new(ModelInner { value, lease }))
     }
 
     /// Returns whether the model still accepts state updates and task results.
