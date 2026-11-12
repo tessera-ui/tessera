@@ -7,9 +7,9 @@ use std::any::TypeId;
 
 use tessera_foundation::gesture::{ScrollRecognizer, ScrollSettings};
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
-    FocusState, LayoutResult, MeasurementError, Modifier, ParentDataMap, ParentDataModifierNode,
-    Px, PxPosition, RenderSlot, RenderSlotWith, State,
+    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties,
+    FocusRequester, FocusState, LayoutResult, MeasurementError, Modifier, ParentDataMap,
+    ParentDataModifierNode, Px, PxPosition, RenderSlot, RenderSlotWith, State,
     accesskit::Role,
     focus,
     layout::MeasureScope,
@@ -365,7 +365,8 @@ impl Default for TabsController {
 
 #[derive(Clone, PartialEq)]
 struct TabsConfig {
-    selection: State<usize>,
+    selected: usize,
+    on_select: Option<CallbackWith<usize>>,
     modifier: Modifier,
     variant: TabsVariant,
     indicator_color: Color,
@@ -390,7 +391,8 @@ struct TabsConfig {
 /// The row configuration and selection handles supplied to its tab content.
 pub struct TabRow {
     controller: State<TabsController>,
-    selected: State<usize>,
+    selected: usize,
+    on_select: Option<CallbackWith<usize>>,
     enabled: bool,
     active_content_color: Color,
     inactive_content_color: Color,
@@ -418,8 +420,8 @@ impl ParentDataModifierNode for TabIndicatorPadding {
 
 #[derive(Clone, Copy, PartialEq)]
 struct TabActivation {
-    selection: State<usize>,
-    controlled: bool,
+    selected: usize,
+    on_select: Option<CallbackWith<usize>>,
     on_click: Option<Callback>,
 }
 
@@ -497,7 +499,6 @@ impl TabBuilder {
 /// ## Parameters
 ///
 /// - `row` — row configuration received by the enclosing tabs content slot.
-/// - `selected` — optional controlled selection; otherwise follows the tab row.
 /// - `on_click` — callback invoked when the tab is activated.
 /// - `enabled` — whether this tab can be focused or activated.
 /// - `title` — custom title slot; primary indicators match its intrinsic width.
@@ -521,11 +522,9 @@ impl TabBuilder {
 /// #         .theme(|| MaterialTheme::default())
 /// #         .child(|| {
 ///     let selected = remember(|| 0usize);
-///     tabs(selected).content(move |row| {
+///     tabs(selected.get()).on_select(move |index| selected.set(index)).content(move |row| {
 ///         tab(row)
-///             .label("Home")
-///             .selected(selected.get() == 0)
-///             .on_click(move || selected.set(0));
+///             .label("Home");
 ///     });
 /// #         });
 /// }
@@ -533,7 +532,6 @@ impl TabBuilder {
 #[tessera]
 pub fn tab(
     row: TabRow,
-    selected: Option<bool>,
     enabled: Option<bool>,
     #[prop(skip_setter)] title_slot: Option<RenderSlot>,
     #[prop(skip_setter)] label_text: Option<String>,
@@ -544,25 +542,21 @@ pub fn tab(
     let composition = row;
     let focus_requester = remember(FocusRequester::new).get();
     let controller = composition.controller;
-    let selected_state = composition.selected;
-    let controlled = selected.is_some();
     let activation = TabActivation {
-        selection: selected_state,
-        controlled,
+        selected: composition.selected,
+        on_select: composition.on_select,
         on_click,
     };
     let live_activation = remember(|| activation);
     if live_activation.with(|value| value != &activation) {
         live_activation.set(activation);
     }
-    let selected = selected.unwrap_or_else(|| {
-        controller.with(|controller| {
-            controller
-                .targets
-                .iter()
-                .position(|target| target.requester == focus_requester)
-                == Some(controller.active_tab())
-        })
+    let selected = controller.with(|controller| {
+        controller
+            .targets
+            .iter()
+            .position(|target| target.requester == focus_requester)
+            == Some(controller.active_tab())
     });
     let enabled = composition.enabled && enabled.unwrap_or(true);
     let interaction = remember(InteractionState::new);
@@ -578,8 +572,10 @@ pub fn tab(
         });
         if let Some(index) = index {
             let activation = live_activation.get();
-            if !activation.controlled && activation.selection.get() != index {
-                activation.selection.set(index);
+            if activation.selected != index
+                && let Some(on_select) = activation.on_select
+            {
+                on_select.call(index);
             }
             if let Some(on_click) = activation.on_click {
                 on_click.call();
@@ -1204,7 +1200,8 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 /// - `variant` — visual variant of the tab row.
 /// - `activation_mode` — manual activation by default, or selection with
 ///   arrows.
-/// - `selected` — caller-owned state holding the active tab index.
+/// - `selected` — index of the active tab.
+/// - `on_select` — invoked with the index of a newly activated tab.
 /// - `indicator_color` — optional override for the active indicator color.
 /// - `container_color` — optional override for the tab row background color.
 /// - `active_content_color` — optional override for active tab content color.
@@ -1244,15 +1241,11 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 ///     let selected = remember(|| 1usize);
 ///     let active_tab = selected.get();
 ///
-///     tabs(selected).content(move |row| {
+///     tabs(selected.get()).on_select(move |index| selected.set(index)).content(move |row| {
 ///         tab(row)
-///             .label("Flights")
-///             .selected(selected.get() == 0)
-///             .on_click(move || selected.set(0));
+///             .label("Flights");
 ///         tab(row)
-///             .label("Hotel")
-///             .selected(selected.get() == 1)
-///             .on_click(move || selected.set(1));
+///             .label("Hotel");
 ///     });
 ///
 ///     if active_tab == 0 {
@@ -1265,7 +1258,8 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 /// ```
 #[tessera]
 pub fn tabs(
-    selected: State<usize>,
+    selected: usize,
+    on_select: Option<CallbackWith<usize>>,
     modifier: Option<Modifier>,
     variant: Option<TabsVariant>,
     activation_mode: Option<TabActivationMode>,
@@ -1294,7 +1288,8 @@ pub fn tabs(
         .get()
         .color_scheme;
     let config = TabsConfig {
-        selection: selected,
+        selected,
+        on_select,
         modifier,
         variant,
         indicator_color: indicator_color.unwrap_or(scheme.primary),
@@ -1342,9 +1337,8 @@ pub fn tabs(
     }
     let tab_row_scroll_recognizer =
         remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
-    let selected_index = selected.get();
-    if controller.with(|controller| controller.active_tab()) != selected_index {
-        controller.with_mut(|controller| controller.sync_selected(selected_index));
+    if controller.with(|controller| controller.active_tab()) != selected {
+        controller.with_mut(|controller| controller.sync_selected(selected));
     }
     if controller.with(|c| c.has_pending_animation_frame()) {
         // Rebuilds this component on every animated frame.
@@ -1493,7 +1487,8 @@ fn tabs_content(
 
             let composition = TabRow {
                 controller,
-                selected: args.selection,
+                selected: args.selected,
+                on_select: args.on_select,
                 enabled: args.enabled,
                 active_content_color: args.active_content_color,
                 inactive_content_color: args.inactive_content_color,
@@ -1747,19 +1742,13 @@ mod tests {
     fn tabs_row() {
         let selected = remember(|| 0usize);
         column().children(move || {
-            tabs(selected).content(move |row| {
+            tabs(selected.get()).on_select(move |index| selected.set(index)).content(move |row| {
                 tab(row)
-                    .label("Flights")
-                    .selected(selected.get() == 0)
-                    .on_click(move || selected.set(0));
+                    .label("Flights");
                 tab(row)
-                    .label("Hotels")
-                    .selected(selected.get() == 1)
-                    .on_click(move || selected.set(1));
+                    .label("Hotels");
                 tab(row)
-                    .label("Trains")
-                    .selected(selected.get() == 2)
-                    .on_click(move || selected.set(2));
+                    .label("Trains");
             });
             if selected.get() == 1 {
                 spacer().modifier(Modifier::new().width(Dp(10.0)).height(Dp(10.0)).semantics(
@@ -1875,7 +1864,7 @@ mod custom_title_tests {
         observed.with_mut(|handles| handles.scrollable = Some(scrollable));
         material_theme().child(move || {
             let observed = observed.clone();
-            tabs(selected)
+            tabs(selected.get()).on_select(move |index| selected.set(index))
                 .scrollable(scrollable.get())
                 .modifier(Modifier::new().width(Dp(300.0)))
                 .content(move |row| {
@@ -1958,7 +1947,7 @@ mod small_custom_title_tests {
             })
             .child(move || {
                 let observed = observed.clone();
-                tabs(selected)
+                tabs(selected.get()).on_select(move |index| selected.set(index))
                     .scrollable(scrollable.get())
                     .min_scrollable_tab_width(Dp::ZERO)
                     .edge_padding(Dp::ZERO)

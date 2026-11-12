@@ -86,7 +86,7 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                         text("Before tabs");
                     });
                 let observed = observed.clone();
-                tabs(selected)
+                tabs(selected.get()).on_select(move |index| selected.set(index))
                     .modifier(Modifier::new().width(Dp(301.0)).semantics(SemanticsArgs {
                         label: Some("Transport views".to_owned()),
                         ..Default::default()
@@ -404,7 +404,7 @@ fn gpu_tabs_semantics_focus_and_geometry() {
 fn named_nontext_tabs_fixture() {
     let selected = remember(|| 0usize);
     material_theme().child(move || {
-        tabs(selected)
+        tabs(selected.get()).on_select(move |index| selected.set(index))
             .modifier(Modifier::new().width(Dp(360.0)))
             .content(|row| {
                 tab(row)
