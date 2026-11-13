@@ -1,4 +1,4 @@
-use tessera_components::{
+use tessera_components::md3::{
     surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},

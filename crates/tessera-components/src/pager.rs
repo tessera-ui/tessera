@@ -857,9 +857,9 @@ fn apply_pager_input_modifiers(
 ///
 /// ```
 /// use tessera_components::pager::horizontal_pager;
-/// use tessera_components::text::text;
+/// use tessera_components::md3::text::text;
 /// use tessera_ui::tessera;
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -964,9 +964,9 @@ pub fn horizontal_pager(
 ///
 /// ```
 /// use tessera_components::pager::vertical_pager;
-/// use tessera_components::text::text;
+/// use tessera_components::md3::text::text;
 /// use tessera_ui::tessera;
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {

@@ -1,4 +1,4 @@
-use tessera_components::{column::column, theme::material_theme};
+use tessera_components::{column::column, md3::theme::material_theme};
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,

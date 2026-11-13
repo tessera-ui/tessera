@@ -3,21 +3,24 @@ use std::collections::BTreeMap;
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
-    button::button,
     column::column,
-    divider::horizontal_divider,
-    icon::icon,
-    material_icons::{filled, outlined},
+    md3::{
+        button::button,
+        divider::horizontal_divider,
+        icon::icon,
+        material_icons::{filled, outlined},
+        modifier::ModifierExt as _,
+        navigation_drawer::{NavigationDrawerStyle, navigation_drawer, navigation_drawer_item},
+        scrollable::ScrollableController,
+        side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
+        surface::{RipplePresentation, surface},
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
-    navigation_drawer::{NavigationDrawerStyle, navigation_drawer, navigation_drawer_item},
     row::row,
-    scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
-    side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
     spacer::spacer,
-    surface::{RipplePresentation, surface},
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_shard::RouterController;
@@ -474,12 +477,12 @@ fn mail_messages(selected: State<usize>, width: f64) {
 
 #[tessera]
 fn small_rail() {
-    tessera_components::navigation_rail::navigation_rail().content(move |rail_scope| {
+    tessera_components::md3::navigation_rail::navigation_rail().content(move |rail_scope| {
         for (index, label) in ["ui-inbox", "ui-outbox", "ui-favorites"]
             .into_iter()
             .enumerate()
         {
-            tessera_components::navigation_rail::navigation_rail_item(rail_scope)
+            tessera_components::md3::navigation_rail::navigation_rail_item(rail_scope)
                 .label(I18N.text(label))
                 .selected(index == 0)
                 .icon(move || {

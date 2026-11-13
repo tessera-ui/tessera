@@ -1,0 +1,376 @@
+use std::time::Duration;
+
+use tessera_foundation::modifier::ModifierExt as _;
+use tessera_ui::{
+    CursorEventContent, Dp, FocusDirection, GestureState, MOUSE_POINTER_ID, Modifier,
+    PointerChange, PressKeyEventType, PxPosition, State,
+    accesskit::{Action, Rect, Role},
+    focus, remember, tessera,
+    testing::UiTest,
+};
+
+use crate::{
+    md3::{surface::surface, theme::material_theme},
+    spacer::spacer,
+};
+
+use super::{BottomSheetController, BottomSheetExpansion, bottom_sheet_provider};
+
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    controller: Option<State<BottomSheetController>>,
+    partial: Option<Dp>,
+    closes: usize,
+}
+
+#[tessera]
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
+    let controller = remember(|| BottomSheetController::new(true));
+    observed.with_mut(|handles| handles.controller = Some(controller));
+    material_theme().child(move || {
+        let observed = observed.clone();
+        bottom_sheet_provider()
+            .controller(controller)
+            .partial_height_optional(observed.get().partial)
+            .accessibility_label("Resizable sheet")
+            .on_close_request(move || {
+                observed.with_mut(|handles| handles.closes += 1);
+                controller.with_mut(BottomSheetController::close);
+            })
+            .main_content(|| {
+                surface()
+                    .modifier(Modifier::new().fill_max_size())
+                    .child(|| {});
+            })
+            .bottom_sheet_content(|| {
+                spacer().modifier(Modifier::new().height(Dp(120.0)));
+            });
+    });
+}
+
+fn bounds(renderer: &UiTest, label: &str) -> Rect {
+    renderer
+        .accessibility_snapshot()
+        .unwrap()
+        .nodes
+        .into_iter()
+        .find(|(_, node)| node.label() == Some(label) && node.role() != Role::Label)
+        .unwrap_or_else(|| panic!("missing {label}"))
+        .1
+        .bounds()
+        .unwrap()
+}
+
+fn tap(renderer: &mut UiTest, point: PxPosition) {
+    renderer.pointer_move(MOUSE_POINTER_ID, point);
+    renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.frames(1);
+    renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.frames(4);
+}
+
+fn check_handle() {
+    let observed = tessera_ui::testing::TestProbe::new(FixtureHandles {
+        partial: Some(Dp(240.0)),
+        ..Default::default()
+    });
+    let mut renderer = UiTest::new()
+        .viewport(400, 640)
+        .frame_step(Duration::from_millis(20))
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(8);
+    let controller = observed.get().controller.unwrap();
+    let tree = renderer.accessibility_snapshot().unwrap();
+    let (handle_id, handle) = tree
+        .nodes
+        .iter()
+        .find(|(_, node)| node.label() == Some("Drag handle"))
+        .unwrap();
+    assert_eq!(handle.role(), Role::Button);
+    assert!(handle.supports_action(Action::Click));
+    assert_eq!(handle.bounds().unwrap().height(), 48.0);
+    assert_eq!(handle.bounds().unwrap().width(), 400.0);
+    assert_eq!(bounds(&renderer, "Resizable sheet").height(), 240.0);
+    assert!(focus::request_move_focus(FocusDirection::Next));
+    renderer.frames(4);
+    assert_eq!(renderer.accessibility_snapshot().unwrap().focus, *handle_id);
+    let handle = bounds(&renderer, "Drag handle");
+    let point = PxPosition::from_f32_xy(
+        ((handle.x0 + handle.x1) / 2.0) as f32,
+        ((handle.y0 + handle.y1) / 2.0) as f32,
+    );
+    tap(&mut renderer, point);
+    assert_eq!(
+        controller.with(BottomSheetController::expansion),
+        BottomSheetExpansion::Expanded
+    );
+    assert_eq!(bounds(&renderer, "Resizable sheet").height(), 568.0);
+    assert!(controller.with(BottomSheetController::is_open));
+    assert_eq!(observed.get().closes, 0);
+    let tree = renderer.accessibility_snapshot().unwrap();
+    let handle_id = tree
+        .nodes
+        .iter()
+        .find(|(_, node)| node.label() == Some("Drag handle"))
+        .unwrap()
+        .0;
+    assert!(renderer.accessibility_action(handle_id, Action::Click));
+    renderer.frames(4);
+    assert_eq!(
+        controller.with(BottomSheetController::expansion),
+        BottomSheetExpansion::PartiallyExpanded
+    );
+    assert_eq!(bounds(&renderer, "Resizable sheet").height(), 240.0);
+    assert_eq!(renderer.accessibility_snapshot().unwrap().focus, handle_id);
+    let handle = bounds(&renderer, "Drag handle");
+    let point = PxPosition::from_f32_xy(
+        ((handle.x0 + handle.x1) / 2.0) as f32,
+        ((handle.y0 + handle.y1) / 2.0) as f32,
+    );
+    renderer.pointer_move(MOUSE_POINTER_ID, point);
+    renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.frames(1);
+    let moved = PxPosition::from_f32_xy(point.x, point.y + 20.0);
+    renderer.pointer_move(MOUSE_POINTER_ID, moved);
+    renderer.frames(2);
+    assert!(bounds(&renderer, "Drag handle").y0 > handle.y0 + 5.0);
+    // Hold past the velocity tracker's idle cutoff so release is not a fling.
+    renderer.frames(6);
+    renderer.pointer_release(MOUSE_POINTER_ID, moved, PressKeyEventType::Left);
+    renderer.frames(40);
+    assert_eq!(
+        controller.with(BottomSheetController::expansion),
+        BottomSheetExpansion::PartiallyExpanded
+    );
+    assert_eq!(bounds(&renderer, "Resizable sheet").height(), 240.0);
+    assert_eq!(
+        observed.get().closes,
+        0,
+        "a short drag must settle without toggling or dismissing"
+    );
+    tap(&mut renderer, PxPosition::from_f32_xy(10.0, 10.0));
+    assert_eq!(observed.get().closes, 1);
+    assert!(!controller.with(BottomSheetController::is_open));
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_bottom_sheet_handle_cycles_real_heights_without_activating_after_a_drag() {
+    crate::test_utils::run_isolated_test(
+        "md3::bottom_sheet::accessibility_tests::gpu_bottom_sheet_handle_cycles_real_heights_without_activating_after_a_drag",
+        check_handle,
+    );
+}
+
+fn move_handle(
+    renderer: &mut UiTest,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+    scale: f64,
+    distance: f32,
+) -> PxPosition {
+    let handle = bounds(renderer, "Drag handle");
+    let start = PxPosition::from_f32_xy(
+        ((handle.x0 + handle.x1) * 0.5) as f32,
+        ((handle.y0 + handle.y1) * 0.5) as f32,
+    );
+    renderer.pointer_move(MOUSE_POINTER_ID, start);
+    renderer.pointer_press(MOUSE_POINTER_ID, start, PressKeyEventType::Left);
+    renderer.frames(1);
+    let direction = distance.signum();
+    renderer.pointer_move(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(start.x, start.y + direction * 4.0 * scale as f32),
+    );
+    renderer.frames(1);
+    let end = PxPosition::from_f32_xy(start.x, start.y + distance * scale as f32);
+    renderer.pointer_move(MOUSE_POINTER_ID, end);
+    renderer.frames(1);
+    assert!(observed.get().controller.unwrap().with(|c| c.is_dragging));
+    // Input dispatch follows layout; publish the updated height on the next
+    // frame.
+    renderer.frames(1);
+    end
+}
+
+fn release_handle(renderer: &mut UiTest, point: PxPosition) {
+    renderer.frames(6);
+    renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.frames(40);
+}
+
+fn assert_sheet_height(renderer: &UiTest, height: f64, scale: f64) {
+    let sheet = bounds(renderer, "Resizable sheet");
+    assert_eq!(sheet.height(), height * scale);
+    assert_eq!(sheet.y0, (640.0 - height) * scale);
+    assert_eq!(sheet.y1, 640.0 * scale);
+}
+
+fn check_handle_resize(scale: f64) {
+    let observed = tessera_ui::testing::TestProbe::new(FixtureHandles {
+        partial: Some(Dp(240.0)),
+        ..Default::default()
+    });
+    let mut renderer = UiTest::new()
+        .viewport((400.0 * scale) as u32, (640.0 * scale) as u32)
+        .scale_factor(scale)
+        .frame_step(Duration::from_millis(20))
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(8);
+    let controller = observed.get().controller.unwrap();
+    assert!(focus::request_move_focus(FocusDirection::Next));
+    renderer.frames(4);
+    let tree = renderer.accessibility_snapshot().unwrap();
+    let focus = tree.focus;
+    let handle_id = tree
+        .nodes
+        .iter()
+        .find(|(_, node)| node.label() == Some("Drag handle"))
+        .unwrap()
+        .0;
+    assert_eq!(focus, handle_id);
+    assert_sheet_height(&renderer, 240.0, scale);
+
+    let point = move_handle(&mut renderer, &observed, scale, -220.0);
+    assert_sheet_height(&renderer, 456.0, scale);
+    assert_eq!(
+        controller.with(BottomSheetController::expansion),
+        BottomSheetExpansion::PartiallyExpanded
+    );
+    release_handle(&mut renderer, point);
+    assert_sheet_height(&renderer, 568.0, scale);
+    assert_eq!(
+        controller.with(BottomSheetController::expansion),
+        BottomSheetExpansion::Expanded
+    );
+    assert_eq!(renderer.accessibility_snapshot().unwrap().focus, focus);
+    assert!(controller.with(BottomSheetController::is_open));
+    assert_eq!(observed.get().closes, 0);
+
+    let point = move_handle(&mut renderer, &observed, scale, 220.0);
+    assert_sheet_height(&renderer, 352.0, scale);
+    release_handle(&mut renderer, point);
+    assert_sheet_height(&renderer, 240.0, scale);
+    assert_eq!(
+        controller.with(BottomSheetController::expansion),
+        BottomSheetExpansion::PartiallyExpanded
+    );
+    assert_eq!(
+        observed.get().closes,
+        0,
+        "resizing to partial must not dismiss"
+    );
+
+    let point = move_handle(&mut renderer, &observed, scale, -20.0);
+    assert_sheet_height(&renderer, 256.0, scale);
+    release_handle(&mut renderer, point);
+    assert_sheet_height(&renderer, 240.0, scale);
+    assert_eq!(
+        controller.with(BottomSheetController::expansion),
+        BottomSheetExpansion::PartiallyExpanded
+    );
+
+    move_handle(&mut renderer, &observed, scale, -220.0);
+    assert_sheet_height(&renderer, 456.0, scale);
+    renderer.inject_pointer(PointerChange::new(
+        tessera_ui::time::Instant::now(),
+        MOUSE_POINTER_ID,
+        CursorEventContent::Cancelled(PressKeyEventType::Left),
+        GestureState::TapCandidate,
+    ));
+    renderer.frames(40);
+    assert_sheet_height(&renderer, 240.0, scale);
+    assert_eq!(
+        controller.with(BottomSheetController::expansion),
+        BottomSheetExpansion::PartiallyExpanded
+    );
+    assert_eq!(renderer.accessibility_snapshot().unwrap().focus, focus);
+    assert!(controller.with(BottomSheetController::is_open));
+    assert_eq!(
+        observed.get().closes,
+        0,
+        "short and cancelled resizes must not activate"
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_bottom_sheet_handle_resizes_between_anchors_and_cancels() {
+    crate::test_utils::run_isolated_test(
+        "md3::bottom_sheet::accessibility_tests::gpu_bottom_sheet_handle_resizes_between_anchors_and_cancels",
+        || check_handle_resize(1.0),
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_bottom_sheet_handle_resizes_between_anchors_at_fractional_density() {
+    crate::test_utils::run_isolated_test(
+        "md3::bottom_sheet::accessibility_tests::gpu_bottom_sheet_handle_resizes_between_anchors_at_fractional_density",
+        || check_handle_resize(1.5),
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_bottom_sheet_natural_height_and_small_viewport_remain_bounded() {
+    crate::test_utils::run_isolated_test(
+        "md3::bottom_sheet::accessibility_tests::gpu_bottom_sheet_natural_height_and_small_viewport_remain_bounded",
+        || {
+            let observed = tessera_ui::testing::TestProbe::default();
+            let mut renderer = UiTest::new()
+                .viewport(400, 640)
+                .rendered(crate::TesseraComponents)
+                .content(|| fixture(observed.clone()));
+            renderer.frames(8);
+            assert_eq!(bounds(&renderer, "Resizable sheet").height(), 168.0);
+            let controller = observed.get().controller.unwrap();
+            controller.with_mut(BottomSheetController::expand);
+            renderer.frames(4);
+            assert_eq!(bounds(&renderer, "Resizable sheet").height(), 568.0);
+            for (width, expected_width, expected_left, expected_top) in [
+                (640, 640.0, 0.0, 72.0),
+                (641, 529.0, 56.0, 56.0),
+                (700, 588.0, 56.0, 56.0),
+                (752, 640.0, 56.0, 56.0),
+                (800, 640.0, 80.0, 56.0),
+            ] {
+                renderer.resize(width, 640);
+                renderer.frames(8);
+                let sheet = bounds(&renderer, "Resizable sheet");
+                assert_eq!(sheet.width(), expected_width, "viewport width {width}");
+                assert_eq!(sheet.x0, expected_left, "viewport width {width}");
+                assert_eq!(sheet.y0, expected_top, "viewport width {width}");
+                assert_eq!(sheet.y1, 640.0, "viewport width {width}");
+            }
+            renderer.resize(400, 640);
+            controller.with_mut(BottomSheetController::partially_expand);
+            renderer.frames(4);
+            assert_eq!(bounds(&renderer, "Resizable sheet").height(), 168.0);
+            renderer.resize(400, 100);
+            renderer.frames(8);
+            assert_eq!(bounds(&renderer, "Resizable sheet").height(), 28.0);
+            let tree = renderer.accessibility_snapshot().unwrap();
+            let handle = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Drag handle"))
+                .unwrap()
+                .1
+                .clone();
+            assert!(
+                handle.is_disabled(),
+                "one available height cannot offer a false resize action"
+            );
+            assert!(!handle.supports_action(Action::Click));
+            assert!(controller.with(BottomSheetController::is_open));
+            controller.with_mut(BottomSheetController::close);
+            renderer.frames(40);
+            controller.with_mut(BottomSheetController::expand);
+            assert!(!controller.with(BottomSheetController::is_open));
+            controller.with_mut(BottomSheetController::partially_expand);
+            assert!(!controller.with(BottomSheetController::is_open));
+        },
+    );
+}

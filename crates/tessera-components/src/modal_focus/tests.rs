@@ -15,17 +15,19 @@ use tessera_ui::{
 };
 
 use crate::{
-    bottom_sheet::{BottomSheetController, bottom_sheet_provider},
-    button::button,
     column::column,
-    dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
-    side_sheet::{
-        SideSheetController, SideSheetPosition, modal_side_sheet_provider,
-        standard_side_sheet_provider,
+    md3::{
+        bottom_sheet::{BottomSheetController, bottom_sheet_provider},
+        button::button,
+        dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
+        side_sheet::{
+            SideSheetController, SideSheetPosition, modal_side_sheet_provider,
+            standard_side_sheet_provider,
+        },
+        text::text,
+        theme::material_theme,
     },
     test_utils::OverlayController,
-    text::text,
-    theme::material_theme,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]

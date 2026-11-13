@@ -147,6 +147,9 @@ fn main() -> Result<()> {
     let mut fmt_targets = Vec::new();
 
     for file_path in &files_to_process {
+        if let Err(error) = check_design_system_layering(file_path) {
+            errors.push(format!("{}: {}", file_path.display(), error));
+        }
         let result = if cli.check {
             check_file(file_path)
         } else {
@@ -610,6 +613,60 @@ fn check_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Rejects non-test `crate::md3` imports from components outside the `md3`
+/// design system.
+fn check_design_system_layering(path: &Path) -> Result<()> {
+    let path = path.to_string_lossy().replace('\\', "/");
+    let Some((_, relative)) = path.split_once("crates/tessera-components/src/") else {
+        return Ok(());
+    };
+    let stem = relative
+        .rsplit('/')
+        .next()
+        .unwrap_or(relative)
+        .trim_end_matches(".rs");
+    if relative == "md3.rs"
+        || relative.starts_with("md3/")
+        || stem == "tests"
+        || stem == "test_utils"
+        || stem.ends_with("_tests")
+    {
+        return Ok(());
+    }
+    let ast = syn::parse_file(&fs::read_to_string(&path)?)?;
+    if let Some(line) = md3_import_line(&ast.items) {
+        bail!("Line {line}: only the md3 design system and tests may import `crate::md3`.");
+    }
+    Ok(())
+}
+
+fn md3_import_line(items: &[Item]) -> Option<usize> {
+    items.iter().find_map(|item| {
+        let attrs = match item {
+            Item::Use(item) => &item.attrs,
+            Item::Mod(item) => &item.attrs,
+            _ => return None,
+        };
+        if attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("cfg") && quote!(#attr).to_string().contains("test"))
+        {
+            return None;
+        }
+        match item {
+            Item::Use(item) => collect_use_paths(&item.tree)
+                .iter()
+                .any(|path| path.len() > 1 && path[0] == "crate" && path[1] == "md3")
+                .then(|| item.span().start().line),
+            Item::Mod(item) => item
+                .content
+                .as_ref()
+                .and_then(|(_, items)| md3_import_line(items)),
+            _ => None,
+        }
+    })
+}
+
 fn check_merge_status(items: &[UseItemInfo]) -> Result<()> {
     for i in 1..items.len() {
         let prev = &items[i - 1];
@@ -861,5 +918,16 @@ mod tests {
             check_intra_group_sorting(&imports).unwrap();
             check_blank_lines(&imports).unwrap();
         }
+    }
+
+    #[test]
+    fn md3_imports_are_reported_outside_test_modules_only() {
+        let source = "#[cfg(test)]\nmod tests {\n    use crate::md3::text::text;\n}\n\nmod inner {\n    use crate::{boxed::boxed, md3::theme::TextStyle};\n}\n";
+        let ast = syn::parse_file(source).unwrap();
+        assert_eq!(md3_import_line(&ast.items), Some(7));
+
+        let source = "use crate::modifier::ModifierExt as _;\n#[cfg(all(test, not(target_family = \"wasm\")))]\nuse crate::md3::text::text;\n";
+        let ast = syn::parse_file(source).unwrap();
+        assert_eq!(md3_import_line(&ast.items), None);
     }
 }

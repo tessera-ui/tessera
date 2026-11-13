@@ -54,10 +54,8 @@ Use `remember` to store state in a counter:
 
 ```rust
 use tessera_components::{
-    button::button,
     column::column,
-    surface::surface,
-    text::text,
+    md3::{button::button, surface::surface, text::text},
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Modifier, remember, tessera};

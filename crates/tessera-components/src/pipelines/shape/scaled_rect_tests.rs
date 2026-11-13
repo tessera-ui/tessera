@@ -14,8 +14,8 @@ use tessera_ui::{
 };
 
 use crate::{
-    alignment::Alignment, boxed::boxed, modifier::ModifierExt as _, shape_def::Shape,
-    theme::material_theme,
+    alignment::Alignment, boxed::boxed, md3::theme::material_theme, modifier::ModifierExt as _,
+    shape_def::Shape,
 };
 
 use super::{ShapeCommand, rect_to_uniforms};

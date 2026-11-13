@@ -2,13 +2,15 @@ use std::time::Duration;
 
 use tessera_components::{
     boxed::boxed,
+    md3::{
+        navigation_rail::{navigation_rail, navigation_rail_item},
+        side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
+        surface::surface,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
-    navigation_rail::{navigation_rail, navigation_rail_item},
     shape_def::Shape,
-    side_sheet::{SideSheetController, SideSheetPosition, modal_side_sheet_provider},
     spacer::spacer,
-    surface::surface,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

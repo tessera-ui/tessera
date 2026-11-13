@@ -1,4 +1,4 @@
-use tessera_components::theme::material_theme;
+use tessera_components::md3::theme::material_theme;
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Action, Node, NodeId},

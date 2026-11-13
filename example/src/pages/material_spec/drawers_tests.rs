@@ -1,4 +1,4 @@
-use tessera_components::{side_sheet::SideSheetController, theme::material_theme};
+use tessera_components::md3::{side_sheet::SideSheetController, theme::material_theme};
 use tessera_ui::{
     PressKeyEventType, PxPosition,
     accesskit::{Node, Rect as AccessibleRect},

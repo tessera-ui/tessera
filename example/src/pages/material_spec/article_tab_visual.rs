@@ -1,5 +1,5 @@
 use tessera_components::{
-    material_icons::{filled, outlined},
+    md3::material_icons::{filled, outlined},
     modifier::ModifierExt as _,
     shape_def::Shape,
 };

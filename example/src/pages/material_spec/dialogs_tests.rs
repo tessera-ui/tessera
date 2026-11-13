@@ -1,4 +1,4 @@
-use tessera_components::theme::material_theme;
+use tessera_components::md3::theme::material_theme;
 use tessera_ui::{
     accesskit::{Action, Node, NodeId, Role, Toggled},
     testing::UiTest,

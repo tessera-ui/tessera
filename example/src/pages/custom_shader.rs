@@ -1,8 +1,10 @@
 use std::{mem, time::Duration};
 
 use tessera_components::{
-    column::column, lazy_list::lazy_column, row::row, slider::slider, spacer::spacer, text::text,
-    theme::MaterialTheme,
+    column::column,
+    md3::{lazy_list::lazy_column, slider::slider, text::text, theme::MaterialTheme},
+    row::row,
+    spacer::spacer,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_shard::shard;

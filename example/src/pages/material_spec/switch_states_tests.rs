@@ -7,7 +7,7 @@ use tessera_ui::{
 
 #[tessera]
 fn fixture() {
-    tessera_components::theme::material_theme().child(|| {
+    tessera_components::md3::theme::material_theme().child(|| {
         tessera_components::column::column().children(|| {
             super::states();
         });

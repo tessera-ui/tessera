@@ -21,11 +21,17 @@ programming contract; the guidelines below also govern framework implementation.
 - **Core Crates**:
   - **tessera-ui**: Framework core (component tree, rendering, runtime, basic types Dp/Px, event handling, etc.)
   - **tessera-foundation**: Shared foundational UI building blocks (alignment, shape definitions, and future common modifier APIs)
-  - **tessera-components**: Basic UI components (row, column, text, button, surface, etc.) and their rendering pipelines
+  - **tessera-components**: Official components and their shared rendering pipelines. The crate root holds design-system-independent primitives (row, column, boxed, image, pager, etc.); `md3` holds Material Design 3 components; `experiment::hig` holds experimental Apple HIG components
   - **tessera-macros**: The `#[tessera]` procedural macro for simplified component definition
   - **example**: Example project demonstrating framework usage
 
 **Module Path Convention**: All modules must use the `src/module_name.rs` pattern. Do not use `src/module_name/mod.rs`.
+
+### Design System Layering
+
+- `tessera-components` places a component at the crate root only when it reads no design-system theme and implies no design-system visual, interaction, motion, or scrolling defaults. When in doubt, place it in a design-system module; promoting an API to the root later is additive.
+- Each design system owns its public text, icon, scrolling, lazy container, text editing, and interaction feedback components and their style types. Rendering pipelines and crate-private mechanisms, such as text shaping, editing, virtualization, and scroll control, may be shared.
+- Non-test code in root modules and other design systems must not depend on `md3`; `scripts/check-imports.rs` rejects such imports. Experimental design systems live under `experiment`.
 
 ---
 
@@ -419,7 +425,7 @@ Example:
 /// - `on_dismiss` — callback invoked when the dialog should close
 ///
 /// ## Examples
-/// use tessera_components::dialog::DialogProviderState;
+/// use tessera_components::md3::dialog::DialogProviderState;
 /// let s = DialogProviderState::new();
 /// assert!(!s.is_open());
 /// s.open();

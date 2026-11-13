@@ -6,16 +6,18 @@
 
 use tessera_components::{
     alignment::Alignment,
-    app_bar::top_app_bar,
     boxed::boxed,
-    checkbox::checkbox,
     column::column,
-    icon::icon,
-    material_icons::filled,
+    md3::{
+        app_bar::top_app_bar,
+        checkbox::checkbox,
+        icon::icon,
+        material_icons::filled,
+        switch::switch,
+        text::text,
+        theme::{MaterialTheme, TextStyle},
+    },
     modifier::ModifierExt as _,
-    switch::switch,
-    text::text,
-    theme::{MaterialTheme, TextStyle},
 };
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

@@ -6,24 +6,27 @@
 
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
-    app_bar::{AppBarScrollBehavior, AppBarScrollController, app_bar_scroll_provider},
-    badge::{badge, badge_with_content, badged_box},
     boxed::boxed,
-    button::button,
     column::column,
     flow_row::flow_row,
-    icon::icon,
-    material_icons::filled,
+    md3::{
+        app_bar::{AppBarScrollBehavior, AppBarScrollController, app_bar_scroll_provider},
+        badge::{badge, badge_with_content, badged_box},
+        button::button,
+        icon::icon,
+        material_icons::filled,
+        modifier::ModifierExt as _,
+        scaffold::scaffold,
+        scrollable::ScrollableController,
+        surface::surface,
+        tabs::{TabActivationMode, TabsVariant, tab, tabs},
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     row::row,
-    scaffold::scaffold,
-    scrollable::ScrollableController,
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
-    tabs::{TabActivationMode, TabsVariant, tab, tabs},
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
@@ -1547,7 +1550,7 @@ fn swipe_tabs(selected: State<usize>) {
         });
 }
 
-fn destination_asset(index: usize) -> tessera_components::material_icons::Asset {
+fn destination_asset(index: usize) -> tessera_components::md3::material_icons::Asset {
     [
         filled::FLIGHT_SVG,
         filled::HOTEL_SVG,
@@ -1580,7 +1583,7 @@ fn figure_name(primary: bool, index: usize) -> &'static str {
     }
 }
 
-fn figure_asset(primary: bool, index: usize) -> tessera_components::material_icons::Asset {
+fn figure_asset(primary: bool, index: usize) -> tessera_components::md3::material_icons::Asset {
     if primary {
         [
             filled::FLIGHT_SVG,
@@ -1736,7 +1739,7 @@ fn native_tab_title(
     let mut style = theme.typography.title_small;
     style.font_size = style.font_size * scale;
     style.line_height = style.line_height.map(|height| height * scale);
-    let color = use_context::<tessera_components::theme::ContentColor>()
+    let color = use_context::<tessera_components::md3::theme::ContentColor>()
         .map(|color| color.get().current)
         .unwrap_or(theme.color_scheme.on_surface);
     column()
@@ -2024,7 +2027,7 @@ fn tab_placement() {
                 .clip_shape(Shape::rounded_rectangle(Dp(24.0))),
         )
         .children(move || {
-            tessera_components::app_bar::top_app_bar().title(I18N.text("ui-travel"));
+            tessera_components::md3::app_bar::top_app_bar().title(I18N.text("ui-travel"));
             tabs(selected.get())
                 .on_select(move |index| selected.set(index))
                 .modifier(Modifier::new().fill_max_width())
@@ -2547,7 +2550,7 @@ fn scrolling_tabs() {
                                             },
                                         ))
                                         .children(move || {
-                                            tessera_components::app_bar::top_app_bar()
+                                            tessera_components::md3::app_bar::top_app_bar()
                                                 .title(I18N.text("ui-travel"))
                                                 .scroll_controller(bar);
                                             boxed()

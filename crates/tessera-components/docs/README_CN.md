@@ -5,7 +5,8 @@
 [readme-en-badge]: https://img.shields.io/badge/README-English-blue.svg?style=for-the-badge&logo=readme
 [readme-en-url]: https://github.com/tessera-ui/tessera/blob/main/crates/tessera-components/README.md
 
-`tessera-components` 提供了一组基础 UI 组件，用于构建常见的用户界面。这包括按钮、文本、布局容器等。
+`tessera-components` 提供 Tessera 的官方组件。crate 根模块包含布局容器、图片等与设计系统无关的基础组件。
+每套设计系统各自负责组件、排版、滚动和交互反馈：`md3` 实现 Material Design 3，`experiment::hig` 包含实验性的 Apple Human Interface Guidelines 组件。下文提到的组件模块均位于 `md3`。
 
 ## Material 默认设置
 

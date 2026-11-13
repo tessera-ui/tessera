@@ -7,12 +7,14 @@
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
-    checkbox::checkbox,
     column::column,
+    md3::{
+        checkbox::checkbox,
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     shape_def::Shape,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

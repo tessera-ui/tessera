@@ -2,23 +2,26 @@ use std::sync::Arc;
 
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    app_bar::top_app_bar,
     boxed::boxed,
-    button::button,
-    carousel::{CarouselController, CarouselFlingBehavior, CarouselVariant, carousel},
     column::column,
-    dialog::DialogController,
-    icon::icon,
-    icon_button::icon_button,
-    material_icons::filled,
+    md3::{
+        app_bar::top_app_bar,
+        button::button,
+        carousel::{CarouselController, CarouselFlingBehavior, CarouselVariant, carousel},
+        dialog::DialogController,
+        icon::icon,
+        icon_button::icon_button,
+        material_icons::filled,
+        modifier::ModifierExt as _,
+        scrollable::ScrollableController,
+        surface::surface,
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     row::row,
-    scrollable::ScrollableController,
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{InteractionState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -1819,7 +1822,7 @@ fn labeling() {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
 
-    use tessera_components::theme::material_theme;
+    use tessera_components::md3::theme::material_theme;
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Action, testing::UiTest,
     };

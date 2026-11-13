@@ -9,25 +9,27 @@ use std::collections::BTreeMap;
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
-    button::button,
     column::column,
-    date_picker::{
-        CalendarDate, DatePickerController, DatePickerDisplayMode, DatePickerView,
-        DateRangePickerController, DockedDatePickerView, Weekday, YearMonth, date_picker_dialog,
-        date_range_picker, docked_date_picker,
-    },
-    dialog::{DialogController, dialog_provider},
     flow_row::flow_row,
-    icon_button::icon_button,
-    material_icons::filled,
+    md3::{
+        button::button,
+        date_picker::{
+            CalendarDate, DatePickerController, DatePickerDisplayMode, DatePickerView,
+            DateRangePickerController, DockedDatePickerView, Weekday, YearMonth,
+            date_picker_dialog, date_range_picker, docked_date_picker,
+        },
+        dialog::{DialogController, dialog_provider},
+        icon_button::icon_button,
+        material_icons::filled,
+        surface::surface,
+        text::text,
+        text_field::text_field,
+        text_input::TextInputController,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
-    surface::surface,
-    text::text,
-    text_field::text_field,
-    text_input::TextInputController,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -383,7 +385,7 @@ fn themed_picker(
     modal: Option<State<DialogController>>,
     commit_target: Option<Sample>,
 
-    dialog: Option<tessera_components::dialog::DialogScope>,
+    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
     material_theme()
         .theme(move || MaterialTheme::from_seed(ACCENT, sample.dark.get()))
@@ -402,7 +404,7 @@ fn picker_surface(
     modal: Option<State<DialogController>>,
     commit_target: Option<Sample>,
 
-    dialog: Option<tessera_components::dialog::DialogScope>,
+    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")

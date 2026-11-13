@@ -1,4 +1,7 @@
-use tessera_components::{column::column, scrollable::ScrollableController};
+use tessera_components::{
+    column::column,
+    md3::{modifier::ModifierExt as _, scrollable::ScrollableController},
+};
 use tessera_ui::{
     Color, CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PressKeyEventType,
     ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,

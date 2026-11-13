@@ -2,16 +2,18 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     column::column,
-    divider::horizontal_divider,
     flow_row::flow_row,
-    icon::icon,
-    icon_button::icon_button,
-    list_item::{ListItemPosition, ListItemSelectionMode, list_item},
-    material_icons::filled,
+    md3::{
+        divider::horizontal_divider,
+        icon::icon,
+        icon_button::icon_button,
+        list_item::{ListItemPosition, ListItemSelectionMode, list_item},
+        material_icons::filled,
+        text::text,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
     shape_def::Shape,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -1016,7 +1018,7 @@ fn list_focus() {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod collection_article_tests {
 
-    use tessera_components::theme::material_theme;
+    use tessera_components::md3::theme::material_theme;
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Node, testing::UiTest,
     };

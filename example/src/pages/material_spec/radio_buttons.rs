@@ -2,15 +2,17 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
-    icon::icon,
-    material_icons::filled,
+    md3::{
+        icon::icon,
+        material_icons::filled,
+        radio_button::{radio_button, radio_group},
+        text::text,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
-    radio_button::{radio_button, radio_group},
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{

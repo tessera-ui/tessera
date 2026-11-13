@@ -10,12 +10,10 @@ use glyphon::fontdb;
 use lru::LruCache;
 use parking_lot::{ArcRwLockReadGuard, ArcRwLockWriteGuard, Mutex, RawRwLock, RwLock};
 use tessera_ui::{
-    Color, PxPosition,
+    Color, Dp, PxPosition,
     render::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
-
-use crate::theme::TextStyle;
 
 use super::command::{TextCommand, TextConstraint};
 
@@ -188,22 +186,32 @@ pub(crate) struct TextFormat {
     font: TextFont,
 }
 
-impl From<TextStyle> for TextFormat {
-    fn from(style: TextStyle) -> Self {
-        let font_size = style.font_size.to_pixels_f32();
+impl TextFormat {
+    pub(crate) fn new(
+        font_size: Dp,
+        line_height: Dp,
+        weight: u16,
+        letter_spacing: Dp,
+        family: Option<&'static str>,
+    ) -> Self {
+        let font_size = font_size.to_pixels_f32();
         Self {
             font_size,
-            line_height: style.line_height.unwrap_or(style.font_size).to_pixels_f32(),
+            line_height: line_height.to_pixels_f32(),
             font: TextFont {
-                weight: style.font_weight.clamp(1, 1000),
+                weight: weight.clamp(1, 1000),
                 tracking: if font_size > 0.0 {
-                    style.letter_spacing.to_pixels_f32() / font_size
+                    letter_spacing.to_pixels_f32() / font_size
                 } else {
                     0.0
                 },
-                family: style.font_family,
+                family,
             },
         }
+    }
+
+    pub(crate) fn family(&self) -> Option<&'static str> {
+        self.font.family
     }
 }
 
@@ -464,11 +472,12 @@ impl TextData {
     pub(crate) fn shape(
         text: String,
         color: Color,
-        style: TextStyle,
+        format: impl Into<TextFormat>,
         constraint: TextConstraint,
     ) -> Self {
-        crate::fonts::prepare(&text, style);
-        Self::shape_prepared(text.into(), color, style.into(), constraint)
+        let format = format.into();
+        crate::fonts::prepare(&text, format.family());
+        Self::shape_prepared(text.into(), color, format, constraint)
     }
 
     pub(crate) fn shape_prepared(
@@ -678,7 +687,7 @@ mod tests {
 
     use tessera_ui::Color;
 
-    use crate::theme::MaterialTypography;
+    use crate::md3::theme::MaterialTypography;
 
     use super::{TextConstraint, TextData, write_font_system};
 

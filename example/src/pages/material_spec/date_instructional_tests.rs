@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use tessera_components::theme::material_theme;
+use tessera_components::md3::theme::material_theme;
 use tessera_ui::{
     CursorEventContent, FocusDirection, GestureState, MOUSE_POINTER_ID, PointerChange,
     PressKeyEventType, PxPosition,

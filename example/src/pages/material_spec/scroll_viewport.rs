@@ -2,9 +2,11 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     column::column,
-    modifier::ModifierExt as _,
+    md3::{
+        modifier::ModifierExt as _,
+        scrollable::{ScrollBarBehavior, ScrollableController, scrollbar_v},
+    },
     row::row,
-    scrollable::{ScrollBarBehavior, ScrollableController, scrollbar_v},
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, RenderSlot, State, tessera};

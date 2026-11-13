@@ -1,4 +1,6 @@
-use tessera_components::{scrollable::ScrollableController, theme::material_theme};
+use tessera_components::md3::{
+    modifier::ModifierExt as _, scrollable::ScrollableController, theme::material_theme,
+};
 use tessera_ui::{
     MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role, Toggled},

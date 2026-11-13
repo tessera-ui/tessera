@@ -2,7 +2,7 @@ use std::{env, process::Command};
 
 use tessera_ui::State;
 
-use crate::{
+use crate::md3::{
     bottom_sheet::BottomSheetController, dialog::DialogController, side_sheet::SideSheetController,
 };
 

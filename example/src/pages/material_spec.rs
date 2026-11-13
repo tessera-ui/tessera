@@ -2,12 +2,14 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
+    md3::{
+        surface::{SurfaceStyle, surface},
+        text::text,
+        text_table::{TextTableCell, TextTableHeading, text_table},
+        theme::{MaterialTheme, TextStyle, material_theme},
+    },
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceStyle, surface},
-    text::text,
-    text_table::{TextTableCell, TextTableHeading, text_table},
-    theme::{MaterialTheme, TextStyle, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera, use_context};

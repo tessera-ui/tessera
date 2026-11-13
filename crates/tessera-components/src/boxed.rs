@@ -66,7 +66,7 @@ fn compute_child_offset(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{alignment::Alignment, boxed::boxed, text::text};
+/// use tessera_components::{alignment::Alignment, boxed::boxed, md3::text::text};
 /// use tessera_foundation::modifier::ModifierExt as _;
 /// use tessera_ui::Modifier;
 ///

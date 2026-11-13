@@ -4,19 +4,22 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
-    dialog::DialogController,
-    icon::icon,
-    icon_button::icon_button,
     interaction_state::InteractionState,
-    material_icons::filled,
-    modifier::{ModifierExt as _, ShadowArgs},
+    md3::{
+        dialog::DialogController,
+        icon::icon,
+        icon_button::icon_button,
+        material_icons::filled,
+        modifier::{ModifierExt as _, ShadowArgs},
+        scrollable::ScrollableController,
+        surface::surface,
+        text::text,
+        theme::MaterialTheme,
+    },
+    modifier::ModifierExt as _,
     row::row,
-    scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    surface::surface,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
@@ -839,7 +842,7 @@ fn article_tab_strip(
                                     .tint(article_tab_visual::foreground(active, hovered, pressed));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));
                                 text(I18N.text(label))
-                                    .style(tessera_components::theme::TextStyle {
+                                    .style(tessera_components::md3::theme::TextStyle {
                                         font_family: Some(article_tab_visual::font_family(
                                             active, hovered, pressed,
                                         )),

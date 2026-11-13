@@ -1,25 +1,27 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
-    button::button,
     column::column,
-    divider::vertical_divider,
-    floating_action_button::{
-        FloatingActionButtonElevation, FloatingActionButtonSize, floating_action_button,
-    },
     flow_row::flow_row,
-    icon::icon,
-    icon_button::icon_button,
-    material_icons::filled,
+    md3::{
+        button::button,
+        divider::vertical_divider,
+        floating_action_button::{
+            FloatingActionButtonElevation, FloatingActionButtonSize, floating_action_button,
+        },
+        icon::icon,
+        icon_button::icon_button,
+        material_icons::filled,
+        surface::{SurfaceStyle, surface},
+        text::text,
+        text_field::text_field,
+        theme::MaterialTheme,
+        toolbar::{ToolbarColorStyle, ToolbarOrientation, docked_toolbar, floating_toolbar},
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceStyle, surface},
-    text::text,
-    text_field::text_field,
-    theme::MaterialTheme,
-    toolbar::{ToolbarColorStyle, ToolbarOrientation, docked_toolbar, floating_toolbar},
 };
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
@@ -885,7 +887,7 @@ fn sample_actions(sample: Sample) -> Vec<SampleAction> {
     }
 }
 
-fn action_icon(label: &str) -> tessera_components::material_icons::Asset {
+fn action_icon(label: &str) -> tessera_components::md3::material_icons::Asset {
     match label {
         "ui-archive" => filled::ARCHIVE_SVG,
         "ui-delete" => filled::DELETE_SVG,
@@ -3017,7 +3019,7 @@ fn slots() {
 #[tessera]
 fn search_toolbar(notice: State<String>, gallery_tag: Option<usize>) {
     let controller = remember(|| {
-        tessera_components::text_input::TextInputController::new(Dp(16.0), Some(Dp(24.0)))
+        tessera_components::md3::text_input::TextInputController::new(Dp(16.0), Some(Dp(24.0)))
     });
     let selected = remember(|| false);
     let tag = gallery_tag;
@@ -3408,7 +3410,7 @@ fn collapsing_example() {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
 
-    use tessera_components::theme::material_theme;
+    use tessera_components::md3::theme::material_theme;
     use tessera_ui::{
         accesskit::{Action, Node, NodeId, Toggled},
         testing::UiTest,

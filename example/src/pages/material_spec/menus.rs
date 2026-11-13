@@ -1,23 +1,25 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    badge::badge_with_content,
     boxed::boxed,
-    button::button,
     column::column,
-    divider::horizontal_divider,
     flow_row::flow_row,
-    icon::icon,
-    material_icons::filled,
-    menus::{
-        MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition, menu_group, menu_item,
-        menu_provider,
+    md3::{
+        badge::badge_with_content,
+        button::button,
+        divider::horizontal_divider,
+        icon::icon,
+        material_icons::filled,
+        menus::{
+            MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition, menu_group,
+            menu_item, menu_provider,
+        },
+        split_buttons::{SplitButtonDefaults, SplitButtonSize},
+        text::text,
+        theme::{MaterialTheme, material_theme},
     },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
-    split_buttons::{SplitButtonDefaults, SplitButtonSize},
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -1633,7 +1635,7 @@ fn keyboard() {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
 
-    use tessera_components::theme::material_theme;
+    use tessera_components::md3::theme::material_theme;
     use tessera_ui::{MOUSE_POINTER_ID, PressKeyEventType, PxPosition, testing::UiTest};
 
     use super::*;

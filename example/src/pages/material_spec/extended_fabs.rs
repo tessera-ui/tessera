@@ -1,18 +1,20 @@
 use tessera_components::{
     boxed::boxed,
-    button::button,
     column::column,
-    extended_floating_action_button::{
-        ExtendedFloatingActionButtonSize, extended_floating_action_button,
-    },
     flow_row::flow_row,
-    material_icons::filled,
+    md3::{
+        button::button,
+        extended_floating_action_button::{
+            ExtendedFloatingActionButtonSize, extended_floating_action_button,
+        },
+        material_icons::filled,
+        text::text,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};

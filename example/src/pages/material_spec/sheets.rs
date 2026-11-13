@@ -1,22 +1,24 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
-    bottom_sheet::{BottomSheetController, BottomSheetExpansion, bottom_sheet_provider},
     boxed::boxed,
-    button::button,
-    checkbox::checkbox,
     column::column,
-    icon::icon,
-    icon_button::icon_button,
     image::image,
-    list_item::list_item,
-    material_icons::filled,
+    md3::{
+        bottom_sheet::{BottomSheetController, BottomSheetExpansion, bottom_sheet_provider},
+        button::button,
+        checkbox::checkbox,
+        icon::icon,
+        icon_button::icon_button,
+        list_item::list_item,
+        material_icons::filled,
+        text::text,
+        text_field::text_field,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    text_field::text_field,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -763,7 +765,7 @@ const TOKEN_GROUPS: [&str; 3] = ["ui-container", "ui-drag-handle", "ui-focus-ind
 
 fn token_values(
     group: usize,
-    scheme: &tessera_components::theme::MaterialColorScheme,
+    scheme: &tessera_components::md3::theme::MaterialColorScheme,
 ) -> Vec<(&'static str, String, Option<Color>)> {
     match group {
         0 => vec![

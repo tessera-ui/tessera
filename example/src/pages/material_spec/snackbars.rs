@@ -7,22 +7,24 @@ use std::fmt::Write as _;
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
-    button::button,
     column::column,
     flow_row::flow_row,
-    icon::icon,
-    material_icons::filled,
+    md3::{
+        button::button,
+        icon::icon,
+        material_icons::filled,
+        snackbar::{
+            SnackbarData, SnackbarDuration, SnackbarHostController, SnackbarRequest, snackbar,
+            snackbar_host,
+        },
+        surface::surface,
+        text::text,
+        theme::{MaterialTheme, TextStyle, material_theme},
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::{RoundedCorner, Shape},
-    snackbar::{
-        SnackbarData, SnackbarDuration, SnackbarHostController, SnackbarRequest, snackbar,
-        snackbar_host,
-    },
     spacer::spacer,
-    surface::surface,
-    text::text,
-    theme::{MaterialTheme, TextStyle, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{

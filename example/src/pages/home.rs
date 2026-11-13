@@ -1,6 +1,9 @@
 use tessera_components::{
-    alignment::CrossAxisAlignment, column::column, icon::icon, lazy_list::lazy_column, row::row,
-    spacer::spacer, text::text, theme::MaterialTheme,
+    alignment::CrossAxisAlignment,
+    column::column,
+    md3::{icon::icon, lazy_list::lazy_column, text::text, theme::MaterialTheme},
+    row::row,
+    spacer::spacer,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_shard::shard;

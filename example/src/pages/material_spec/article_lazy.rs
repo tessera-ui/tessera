@@ -8,12 +8,14 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     column::column,
-    lazy_list::{LazyListController, lazy_column},
+    md3::{
+        lazy_list::{LazyListController, lazy_column},
+        scrollable::{ScrollBarBehavior, ScrollableController, scrollbar_v},
+        text::text,
+    },
     modifier::ModifierExt as _,
     row::row,
-    scrollable::{ScrollBarBehavior, ScrollableController, scrollbar_v},
     spacer::spacer,
-    text::text,
 };
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _};
 use tessera_ui::{

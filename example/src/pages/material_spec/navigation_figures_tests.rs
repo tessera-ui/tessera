@@ -1,5 +1,5 @@
 use tessera_components::{
-    alignment::Alignment, boxed::boxed, column::column, theme::material_theme,
+    alignment::Alignment, boxed::boxed, column::column, md3::theme::material_theme,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{

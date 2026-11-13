@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use tessera_components::scrollable::ScrollableController;
+use tessera_components::md3::{modifier::ModifierExt as _, scrollable::ScrollableController};
 use tessera_ui::{
     CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PressKeyEventType,
     PxPosition,

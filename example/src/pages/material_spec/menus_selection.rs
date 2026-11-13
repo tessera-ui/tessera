@@ -4,13 +4,15 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     column::column,
-    icon::icon,
-    material_icons::filled,
-    menus::{MenuItemSelectionMode, menu_group, menu_item},
+    md3::{
+        icon::icon,
+        material_icons::filled,
+        menus::{MenuItemSelectionMode, menu_group, menu_item},
+        text_field::text_field,
+        text_input::TextInputController,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
-    text_field::text_field,
-    text_input::TextInputController,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -219,7 +221,7 @@ mod tests {
     #[tessera]
     fn fixture() {
         super::super::super::media::load_fonts();
-        tessera_components::theme::material_theme().child(selection_figure);
+        tessera_components::md3::theme::material_theme().child(selection_figure);
     }
 
     fn node(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {

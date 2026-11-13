@@ -6,7 +6,10 @@
 
 use std::{env, process::Command};
 
-use tessera_components::{boxed::boxed, scrollable::ScrollableController, theme::material_theme};
+use tessera_components::{
+    boxed::boxed,
+    md3::{scrollable::ScrollableController, theme::material_theme},
+};
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, LayoutCoordinates, Modifier, accesskit::Role, modifier::FocusModifierExt as _, remember,

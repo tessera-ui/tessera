@@ -137,7 +137,9 @@ mod tests {
     };
 
     use crate::{
-        boxed::boxed, modifier::ModifierExt as _, surface::surface, theme::material_theme,
+        boxed::boxed,
+        md3::{surface::surface, theme::material_theme},
+        modifier::ModifierExt as _,
     };
 
     use super::*;
@@ -262,7 +264,7 @@ mod tests {
                                 )
                                 .children(move || {
                                     if stage.get() == 3 {
-                                        crate::fluid_glass::fluid_glass()
+                                        crate::experiment::hig::glass::glass()
                                             .blur_radius(Dp(4.0))
                                             .contrast(1.1)
                                             .tint_color(Color::BLUE)
@@ -280,7 +282,7 @@ mod tests {
                                             .modifier(Modifier::new().fill_max_size())
                                             .child(|| {});
                                     }
-                                    crate::text::text("Mask")
+                                    crate::md3::text::text("Mask")
                                         .color(Color::BLACK)
                                         .modifier(Modifier::new().offset(Dp(0.0), Dp(40.0)));
                                 });
@@ -305,7 +307,7 @@ mod tests {
                                 .clip_shape(Shape::Ellipse),
                         )
                         .children(move || {
-                            crate::button::button()
+                            crate::md3::button::button()
                                 .modifier(Modifier::new().fill_max_size())
                                 .shape(Shape::RECTANGLE)
                                 .on_click(move || clicks.with_mut(|value| *value += 1))

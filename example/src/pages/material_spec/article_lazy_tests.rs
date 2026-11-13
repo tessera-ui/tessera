@@ -735,7 +735,7 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
 
 #[tessera_ui::tessera]
 fn responsive_article_fixture() {
-    use tessera_components::{boxed::boxed, theme::material_theme};
+    use tessera_components::{boxed::boxed, md3::theme::material_theme};
     use tessera_foundation::modifier::SemanticsArgs;
     use tessera_ui::{Dp, Modifier, RenderSlot};
 
@@ -996,7 +996,7 @@ fn assert_app_mail_closed(renderer: &UiTest, opener: NodeId) {
 }
 
 fn initial_mail_focus_outline_pixels(renderer: &UiTest, bounds: Rect) -> usize {
-    let secondary = tessera_components::theme::MaterialTheme::default()
+    let secondary = tessera_components::md3::theme::MaterialTheme::default()
         .color_scheme
         .secondary;
     let expected = [secondary.r, secondary.g, secondary.b].map(|linear| {

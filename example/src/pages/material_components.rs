@@ -1,6 +1,6 @@
 //! Material component directory and article routes.
 
-use tessera_components::{lazy_list::LazyListController, scrollable::ScrollableController};
+use tessera_components::md3::{lazy_list::LazyListController, scrollable::ScrollableController};
 use tessera_shard::{RouterController, shard, use_router};
 use tessera_ui::{CallbackWith, Dp, Model, ModelInit, Px, State};
 

@@ -1,0 +1,376 @@
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
+use tessera_ui::{
+    Color, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, PxPosition, State,
+    layout::MeasureScope, remember, tessera, testing::UiTest,
+};
+
+use crate::{
+    column::column,
+    md3::theme::{MaterialColorScheme, MaterialTheme, material_theme},
+    modifier::ModifierExt as _,
+    shape_def::Shape,
+};
+
+use super::{DividerDefaults, horizontal_divider, vertical_divider};
+
+#[derive(Clone, PartialEq)]
+struct HalfPosition;
+
+impl LayoutPolicy for HalfPosition {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let child = scope.children()[0];
+        let constraint = scope.parent_constraint().without_min();
+        let size = child.measure(scope, &constraint)?.size();
+        let mut result = LayoutResult::new(size);
+        result.place_child(child, PxPosition::from_f32_xy(0.5, 0.5));
+        Ok(result)
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    dark: Option<State<bool>>,
+    faint: Option<State<bool>>,
+    clipped: Option<State<bool>>,
+}
+
+#[tessera]
+fn fractional_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
+    let faint = remember(|| false);
+    let clipped = remember(|| false);
+    observed.with_mut(|handles| handles.faint = Some(faint));
+    observed.with_mut(|handles| handles.clipped = Some(clipped));
+    column()
+        .modifier(
+            Modifier::new()
+                .background(Color::WHITE)
+                .padding_all(Dp(4.0)),
+        )
+        .children(move || {
+            let modifier = Modifier::new().size(Dp(8.0), Dp(1.0));
+            let modifier = if clipped.get() {
+                modifier.clip_shape(Shape::rounded_rectangle(Dp::ZERO))
+            } else {
+                modifier
+            };
+            tessera_ui::layout::layout(HalfPosition)
+                .modifier(modifier)
+                .child(move || {
+                    horizontal_divider()
+                        .modifier(Modifier::new().width(Dp(8.0)).alpha(if faint.get() {
+                            0.5
+                        } else {
+                            1.0
+                        }))
+                        .color(Color::BLACK);
+                });
+        });
+}
+
+fn tagged(name: &str) -> Modifier {
+    Modifier::new().semantics(SemanticsArgs {
+        test_tag: Some(name.into()),
+        ..Default::default()
+    })
+}
+
+#[tessera]
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
+    let dark = remember(|| false);
+    observed.with_mut(|handles| handles.dark = Some(dark));
+    material_theme()
+        .theme(move || {
+            let mut theme = MaterialTheme::default();
+            theme.color_scheme.outline_variant = if dark.get() { Color::BLUE } else { Color::RED };
+            theme
+        })
+        .child(|| {
+            column().children(|| {
+                column()
+                    .modifier(Modifier::new().width(Dp(80.0)).background(Color::WHITE))
+                    .children(|| {
+                        horizontal_divider()
+                            .modifier(tagged("horizontal").padding_symmetric(Dp(16.0), Dp(4.0)));
+                        horizontal_divider()
+                            .modifier(tagged("hairline").padding_symmetric(Dp(16.0), Dp(4.0)))
+                            .thickness(Dp::ZERO);
+                        horizontal_divider()
+                            .modifier(tagged("explicit").padding_symmetric(Dp(16.0), Dp(4.0)))
+                            .thickness(Dp(2.0))
+                            .color(Color::GREEN);
+                        horizontal_divider()
+                            .modifier(tagged("defaults").padding_symmetric(Dp(16.0), Dp(4.0)))
+                            .color(DividerDefaults::color());
+                        vertical_divider().modifier(
+                            tagged("vertical")
+                                .height(Dp(32.0))
+                                .padding_symmetric(Dp(4.0), Dp(8.0)),
+                        );
+                    });
+            });
+        });
+}
+
+fn rect(renderer: &UiTest, tag: &str) -> [i64; 4] {
+    let snapshot = renderer.inspect_components();
+    let bounds = snapshot
+        .find_tag(tag)
+        .unwrap_or_else(|| panic!("missing {tag}"))
+        .bounds()
+        .expect("divider bounds")
+        .rounded();
+    [bounds.x.0, bounds.y.0, bounds.width.0, bounds.height.0].map(i64::from)
+}
+
+fn pixel(renderer: &UiTest, pixels: &[u8], x: i64, y: i64) -> [u8; 4] {
+    let offset = ((y as u32 * renderer.physical_size().width + x as u32) * 4) as usize;
+    pixels[offset..offset + 4].try_into().unwrap()
+}
+
+fn assert_pixel_near(actual: [u8; 4], expected: [u8; 4]) {
+    assert!(
+        actual
+            .into_iter()
+            .zip(expected)
+            .all(|(a, b)| a.abs_diff(b) <= 2),
+        "{actual:?} != {expected:?}"
+    );
+}
+
+fn check() {
+    for (scale, width, thickness, double, inset, gap, height) in [
+        (1.0, 80, 1, 2, 16, 4, 32),
+        (1.25, 100, 1, 3, 20, 5, 40),
+        (1.5, 120, 2, 3, 24, 6, 48),
+        (2.0, 160, 2, 4, 32, 8, 64),
+    ] {
+        let observed = tessera_ui::testing::TestProbe::default();
+        let mut renderer = UiTest::new()
+            .viewport(200, 200)
+            .scale_factor(scale)
+            .rendered(crate::TesseraComponents)
+            .content(|| fixture(observed.clone()));
+        renderer.frames(3);
+        let baseline = renderer.read_pixels();
+        let allocations = renderer
+            .graphics_work()
+            .group("divider_instances")
+            .buffer_allocations;
+        for dark in [true, false] {
+            observed.get().dark.unwrap().set(dark);
+            renderer.frames(3);
+            let pixels = renderer.read_pixels();
+            let expected = if dark {
+                [0, 0, 255, 255]
+            } else {
+                [255, 0, 0, 255]
+            };
+            let mut y = 0;
+            for (tag, line, color, full, tail) in [
+                (
+                    "horizontal",
+                    thickness,
+                    expected,
+                    1,
+                    if scale == 1.25 {
+                        225
+                    } else if scale == 1.5 {
+                        188
+                    } else {
+                        255
+                    },
+                ),
+                ("hairline", 1, expected, 1, 255),
+                (
+                    "explicit",
+                    double,
+                    [0, 255, 0, 255],
+                    if scale == 1.25 { 2 } else { double },
+                    if scale == 1.25 { 188 } else { 255 },
+                ),
+            ] {
+                assert_eq!(rect(&renderer, tag), [0, y, width, line + gap * 2]);
+                assert_eq!(pixel(&renderer, &pixels, inset, y + gap), color);
+                let stroke_pixels = if tag == "horizontal" && (scale == 1.25 || scale == 1.5) {
+                    2
+                } else {
+                    line
+                };
+                let edge = if tail == 255 {
+                    color
+                } else {
+                    color.map(|channel| if channel == 0 { tail } else { channel })
+                };
+                assert_pixel_near(
+                    pixel(
+                        &renderer,
+                        &pixels,
+                        width - inset - 1,
+                        y + gap + stroke_pixels - 1,
+                    ),
+                    edge,
+                );
+                if full > 1 {
+                    assert_eq!(pixel(&renderer, &pixels, inset, y + gap + full - 1), color);
+                }
+                for (x, sample_y) in [
+                    (inset - 1, y + gap),
+                    (width - inset, y + gap),
+                    (inset, y + gap - 1),
+                    (inset, y + gap + stroke_pixels),
+                ] {
+                    assert_eq!(pixel(&renderer, &pixels, x, sample_y), [255; 4]);
+                }
+                y += line + gap * 2;
+            }
+            assert_eq!(
+                rect(&renderer, "defaults"),
+                [0, y, width, thickness + gap * 2]
+            );
+            let color = MaterialColorScheme::default().outline_variant;
+            let encode = |channel: f32| {
+                ((if channel <= 0.0031308 {
+                    12.92 * channel
+                } else {
+                    1.055 * channel.powf(1.0 / 2.4) - 0.055
+                }) * 255.0)
+                    .round() as u8
+            };
+            assert_pixel_near(
+                pixel(&renderer, &pixels, inset, y + gap),
+                [encode(color.r), encode(color.g), encode(color.b), 255],
+            );
+            y += thickness + gap * 2;
+            assert_eq!(
+                rect(&renderer, "vertical"),
+                [0, y, thickness + gap * 2, height]
+            );
+            assert_eq!(pixel(&renderer, &pixels, gap, y + gap * 2), expected);
+            assert_eq!(pixel(&renderer, &pixels, gap - 1, y + gap * 2), [255; 4]);
+            assert_eq!(pixel(&renderer, &pixels, gap, y + gap * 2 - 1), [255; 4]);
+        }
+        assert_eq!(renderer.read_pixels(), baseline);
+        renderer.resize(240, 200);
+        renderer.frames(3);
+        assert_eq!(
+            rect(&renderer, "horizontal"),
+            [0, 0, width, thickness + gap * 2]
+        );
+        renderer.resize(200, 200);
+        renderer.frames(3);
+        assert_eq!(renderer.read_pixels(), baseline);
+        renderer.frames(8);
+        assert_eq!(
+            renderer
+                .graphics_work()
+                .group("divider_instances")
+                .buffer_allocations,
+            allocations
+        );
+    }
+    check_fractional_placement();
+    check_constrained_strokes();
+}
+
+fn interior_pixel(renderer: &UiTest, pixels: &[u8], x: i64, y: i64) -> [u8; 4] {
+    pixel(renderer, pixels, x + 4, y + 4)
+}
+
+fn check_fractional_placement() {
+    let observed = tessera_ui::testing::TestProbe::default();
+    let mut renderer = UiTest::new()
+        .viewport(20, 20)
+        .rendered(crate::TesseraComponents)
+        .content(|| fractional_fixture(observed.clone()));
+    renderer.frames(3);
+    let baseline = renderer.read_pixels();
+    for (faint, edge, corner) in [(false, 188, 225), (true, 225, 240)] {
+        observed.get().faint.unwrap().set(faint);
+        renderer.frames(3);
+        let pixels = renderer.read_pixels();
+        for y in [0, 1] {
+            for x in [0, 8] {
+                assert_pixel_near(
+                    interior_pixel(&renderer, &pixels, x, y),
+                    [corner, corner, corner, 255],
+                );
+            }
+            for x in 1..8 {
+                assert_pixel_near(
+                    interior_pixel(&renderer, &pixels, x, y),
+                    [edge, edge, edge, 255],
+                );
+            }
+        }
+        assert_eq!(interior_pixel(&renderer, &pixels, 9, 0), [255; 4]);
+        assert_eq!(interior_pixel(&renderer, &pixels, 1, 2), [255; 4]);
+    }
+    observed.get().clipped.unwrap().set(true);
+    renderer.frames(3);
+    let clipped = renderer.read_pixels();
+    assert_pixel_near(
+        interior_pixel(&renderer, &clipped, 1, 0),
+        [225, 225, 225, 255],
+    );
+    assert_eq!(interior_pixel(&renderer, &clipped, 1, 1), [255; 4]);
+    assert_eq!(interior_pixel(&renderer, &clipped, 8, 0), [255; 4]);
+    observed.get().clipped.unwrap().set(false);
+    observed.get().faint.unwrap().set(false);
+    renderer.frames(3);
+    assert_eq!(renderer.read_pixels(), baseline);
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn divider_insets_hairlines_theme_changes_and_resize() {
+    crate::test_utils::run_isolated_test(
+        "md3::divider::drawing_tests::divider_insets_hairlines_theme_changes_and_resize",
+        check,
+    );
+}
+
+#[tessera]
+fn constrained_fixture() {
+    column()
+        .modifier(
+            Modifier::new()
+                .background(Color::WHITE)
+                .padding_all(Dp(4.0)),
+        )
+        .children(|| {
+            horizontal_divider()
+                .modifier(Modifier::new().size(Dp(8.0), Dp(4.0)))
+                .color(Color::BLACK);
+            horizontal_divider()
+                .modifier(Modifier::new().size(Dp(8.0), Dp(1.0)))
+                .thickness(Dp(4.0))
+                .color(Color::BLACK);
+            horizontal_divider()
+                .modifier(Modifier::new().size(Dp(8.0), Dp::ZERO))
+                .color(Color::BLACK);
+            horizontal_divider()
+                .modifier(Modifier::new().width(Dp(8.0)))
+                .thickness(Dp(-2.0))
+                .color(Color::BLACK);
+            vertical_divider()
+                .modifier(Modifier::new().size(Dp(4.0), Dp(4.0)))
+                .color(Color::BLACK);
+        });
+}
+
+fn check_constrained_strokes() {
+    let mut renderer = UiTest::new()
+        .viewport(20, 20)
+        .rendered(crate::TesseraComponents)
+        .content(constrained_fixture);
+    renderer.frames(3);
+    let pixels = renderer.read_pixels();
+    assert_eq!(interior_pixel(&renderer, &pixels, 1, 0), [0, 0, 0, 255]);
+    assert_eq!(interior_pixel(&renderer, &pixels, 1, 1), [255; 4]);
+    assert_eq!(interior_pixel(&renderer, &pixels, 1, 3), [255; 4]);
+    assert_eq!(interior_pixel(&renderer, &pixels, 1, 4), [0, 0, 0, 255]);
+    assert_eq!(interior_pixel(&renderer, &pixels, 0, 5), [0, 0, 0, 255]);
+    assert_eq!(interior_pixel(&renderer, &pixels, 1, 5), [255; 4]);
+    assert_eq!(interior_pixel(&renderer, &pixels, 0, 8), [0, 0, 0, 255]);
+    assert_eq!(interior_pixel(&renderer, &pixels, 0, 9), [255; 4]);
+}

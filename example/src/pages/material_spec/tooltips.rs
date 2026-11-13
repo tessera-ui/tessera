@@ -3,21 +3,23 @@ use std::collections::BTreeMap;
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
-    button::button,
     column::column,
     flow_row::flow_row,
-    icon_button::icon_button,
-    material_icons::filled,
+    md3::{
+        button::button,
+        icon_button::icon_button,
+        material_icons::filled,
+        surface::surface,
+        text::text,
+        theme::{MaterialTheme, TextStyle, material_theme},
+        tooltip::{
+            TooltipController, TooltipPlacement, TooltipVariant, tooltip_anchor, tooltip_provider,
+        },
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
-    text::text,
-    theme::{MaterialTheme, TextStyle, material_theme},
-    tooltip::{
-        TooltipController, TooltipPlacement, TooltipVariant, tooltip_anchor, tooltip_provider,
-    },
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -720,7 +722,7 @@ fn tooltip_mock_icon(icon: usize, tone: usize) {
         .alignment(Alignment::Center)
         .modifier(modifier)
         .children(move || {
-            tessera_components::icon::icon()
+            tessera_components::md3::icon::icon()
                 .painter(symbol)
                 .size(Dp(24.0))
                 .tint(tint);
@@ -752,7 +754,7 @@ fn tooltip_mock(kind: usize) {
                                         .background_with_shape(scheme.primary, Shape::CAPSULE),
                                 )
                                 .children(move || {
-                                    tessera_components::icon::icon()
+                                    tessera_components::md3::icon::icon()
                                         .painter(filled::CALL_END_SVG)
                                         .size(Dp(24.0))
                                         .tint(scheme.on_primary);
@@ -777,7 +779,7 @@ fn tooltip_mock(kind: usize) {
                                 .padding_symmetric(Dp(16.0), Dp(16.0)),
                         )
                         .children(move || {
-                            tessera_components::icon::icon()
+                            tessera_components::md3::icon::icon()
                                 .painter(filled::EDIT_SVG)
                                 .size(Dp(24.0))
                                 .tint(scheme.primary);
@@ -1074,7 +1076,7 @@ fn tooltip_advice_bar(label: String, tone: usize) {
         )
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
-            tessera_components::icon::icon()
+            tessera_components::md3::icon::icon()
                 .painter(symbol)
                 .size(Dp(20.0))
                 .tint(ink);
@@ -1191,7 +1193,7 @@ fn tooltip_keyboard_table() {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             surface()
-                .style(tessera_components::surface::SurfaceStyle::FilledOutlined {
+                .style(tessera_components::md3::surface::SurfaceStyle::FilledOutlined {
                     fill_color: scheme.surface,
                     border_color: scheme.outline_variant,
                     border_width: Dp(1.0),
@@ -1707,7 +1709,7 @@ fn tooltip_browser_mock() {
         boxed()
             .modifier(Modifier::new().offset(Dp(x), Dp(y)))
             .children(move || {
-                tessera_components::icon::icon()
+                tessera_components::md3::icon::icon()
                     .painter(painter)
                     .size(Dp(size))
                     .tint(scheme.on_surface_variant);

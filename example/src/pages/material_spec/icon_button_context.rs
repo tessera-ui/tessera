@@ -1,20 +1,22 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
-    chip::chip,
     column::column,
-    floating_action_button::floating_action_button,
-    icon::icon,
-    icon_button::{IconButtonWidth, icon_button},
     image::image,
-    material_icons::{Asset, filled, outlined},
+    md3::{
+        chip::chip,
+        floating_action_button::floating_action_button,
+        icon::icon,
+        icon_button::{IconButtonWidth, icon_button},
+        material_icons::{Asset, filled, outlined},
+        text::text,
+        theme::MaterialTheme,
+        toolbar::floating_toolbar,
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    theme::MaterialTheme,
-    toolbar::floating_toolbar,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -237,9 +239,9 @@ fn placed_action(#[prop(into)] label: String, index: usize, x: f64, y: f64) {
 fn favorite(selected: State<bool>, tonal: bool) {
     icon_button()
         .variant(if tonal {
-            tessera_components::icon_button::IconButtonVariant::FilledTonal
+            tessera_components::md3::icon_button::IconButtonVariant::FilledTonal
         } else {
-            tessera_components::icon_button::IconButtonVariant::Standard
+            tessera_components::md3::icon_button::IconButtonVariant::Standard
         })
         .width(if tonal {
             IconButtonWidth::Uniform
@@ -534,14 +536,14 @@ fn labeling_annotation(geometry: State<SpaceGeometry>, selected: State<bool>) {
                     "ui-add-to-favorites"
                 }))
                 .color(tint)
-                .style(tessera_components::theme::TextStyle {
+                .style(tessera_components::md3::theme::TextStyle {
                     font_weight: 700,
                     ..type_style(16.0, 20.0)
                 });
                 gap(Dp(8.0));
                 text(I18N.text("ui-role")).style(type_style(14.0, 20.0));
                 text(I18N.text("ui-button")).color(tint).style(
-                    tessera_components::theme::TextStyle {
+                    tessera_components::md3::theme::TextStyle {
                         font_weight: 700,
                         ..type_style(16.0, 20.0)
                     },

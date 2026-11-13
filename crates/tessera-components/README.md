@@ -5,7 +5,12 @@
 [readme-cn-badge]: https://img.shields.io/badge/README-简体中文-blue.svg?style=for-the-badge&logo=readme
 [readme-cn-url]: https://github.com/tessera-ui/tessera/blob/main/crates/tessera-components/docs/README_CN.md
 
-`tessera-components` provides a set of basic UI components for building common user interfaces. This includes buttons, text, layout containers, and more.
+`tessera-components` provides Tessera's official components. The crate root
+contains layout containers, images, and other primitives that are independent
+of a design system. Each design system owns its components, typography,
+scrolling, and interaction feedback: `md3` implements Material Design 3, and
+`experiment::hig` contains experimental Apple Human Interface Guidelines
+components. The component sections below refer to modules in `md3`.
 
 ## Material defaults
 

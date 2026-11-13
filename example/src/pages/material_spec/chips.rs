@@ -7,15 +7,17 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
-    button::button,
-    chip::{ChipShapeStyle, ChipStyle, ChipVariant, chip},
     column::column,
     flow_row::flow_row,
-    material_icons::filled,
+    md3::{
+        button::button,
+        chip::{ChipShapeStyle, ChipStyle, ChipVariant, chip},
+        material_icons::filled,
+        text::text,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
     shape_def::Shape,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, tessera, use_context};

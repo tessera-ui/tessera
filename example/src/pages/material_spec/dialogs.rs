@@ -3,22 +3,24 @@ use std::collections::BTreeMap;
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
-    button::button,
-    checkbox::checkbox,
     column::column,
-    dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
-    icon::icon,
     image::image,
-    material_icons::filled,
-    menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+    md3::{
+        button::button,
+        checkbox::checkbox,
+        dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
+        icon::icon,
+        material_icons::filled,
+        menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+        text::text,
+        text_field::text_field,
+        text_input::TextInputController,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    text_field::text_field,
-    text_input::TextInputController,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
@@ -1565,7 +1567,7 @@ fn event_dialog(
     saved: State<bool>,
     discard: State<DialogController>,
     close: Callback,
-    dialog: Option<tessera_components::dialog::DialogScope>,
+    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
     dialog_provider()
         .role(DialogRole::AlertDialog)
@@ -1900,7 +1902,11 @@ fn basic_figure(measurements: bool) {
         });
 }
 
-fn dialog_type_style(size: f64, line: f64, scale: f64) -> tessera_components::theme::TextStyle {
+fn dialog_type_style(
+    size: f64,
+    line: f64,
+    scale: f64,
+) -> tessera_components::md3::theme::TextStyle {
     let mut style = type_style(size, line);
     style.font_size = Dp(style.font_size.0 * scale);
     style.line_height = style.line_height.map(|height| Dp(height.0 * scale));

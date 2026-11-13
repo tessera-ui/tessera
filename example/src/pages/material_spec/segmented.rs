@@ -6,16 +6,18 @@
 //! segments.
 
 use tessera_components::{
-    button::button,
     column::column,
     flow_row::flow_row,
-    material_icons::filled,
-    painter::Painter,
-    segmented_buttons::{
-        SegmentedButtonDefaults, multi_choice_segmented_button_row, segmented_button,
-        single_choice_segmented_button_row,
+    md3::{
+        button::button,
+        material_icons::filled,
+        segmented_buttons::{
+            SegmentedButtonDefaults, multi_choice_segmented_button_row, segmented_button,
+            single_choice_segmented_button_row,
+        },
+        text::text,
     },
-    text::text,
+    painter::Painter,
 };
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{Callback, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera};
@@ -169,7 +171,7 @@ fn segments(
     show_icons: bool,
     show_checks: bool,
     height: Dp,
-    selection_mode: tessera_components::segmented_buttons::SegmentedButtonSelectionMode,
+    selection_mode: tessera_components::md3::segmented_buttons::SegmentedButtonSelectionMode,
 ) {
     for (index, name) in LABELS.into_iter().enumerate() {
         let painter = show_icons.then(|| segment_icon(index));

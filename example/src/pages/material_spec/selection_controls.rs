@@ -6,18 +6,20 @@
 
 use tessera_components::{
     alignment::CrossAxisAlignment,
-    button::button,
-    checkbox::checkbox,
     column::column,
     flow_row::flow_row,
-    icon::icon,
-    material_icons::filled,
+    md3::{
+        button::button,
+        checkbox::checkbox,
+        icon::icon,
+        material_icons::filled,
+        surface::{SurfaceStyle, surface},
+        switch::switch,
+        text::text,
+        theme::MaterialTheme,
+    },
     row::row,
     spacer::spacer,
-    surface::{SurfaceStyle, surface},
-    switch::switch,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -539,7 +541,7 @@ fn measurement_table(is_switch: bool) {
                     .enumerate()
                     .filter(|(column, text)| *column != 0 || !text.is_empty())
                     .map(
-                        move |(column, text)| tessera_components::text_table::TextTableCell {
+                        move |(column, text)| tessera_components::md3::text_table::TextTableCell {
                             text: text.into(),
                             row: index + 1,
                             column,

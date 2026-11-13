@@ -5,8 +5,10 @@
 //! Explore action hierarchy, selection, menu behavior and keyboard access.
 
 use tessera_components::{
-    button::button, column::column, modifier::ModifierExt as _, shape_def::Shape, text::text,
-    theme::MaterialTheme,
+    column::column,
+    md3::{button::button, text::text, theme::MaterialTheme},
+    modifier::ModifierExt as _,
+    shape_def::Shape,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Callback, Dp, Modifier, RenderSlot, accesskit::Role, tessera, use_context};

@@ -300,9 +300,6 @@ fn glass_uniforms(
         ripple_strength: render.ripple_strength.unwrap_or(0.0),
         contrast: render.contrast.unwrap_or(1.0),
         feedback: render.feedback,
-        border_width: render
-            .border
-            .as_ref()
-            .map_or(0.0, |border| border.width.0 as f32),
+        border_width: render.border_width.0 as f32,
     }
 }

@@ -1,20 +1,22 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    badge::{badge, badge_with_content},
     boxed::boxed,
     column::column,
-    extended_floating_action_button::extended_floating_action_button,
-    floating_action_button::FloatingActionButtonElevation,
-    icon::icon,
-    material_icons::{Asset, filled, outlined},
+    md3::{
+        badge::{badge, badge_with_content},
+        extended_floating_action_button::extended_floating_action_button,
+        floating_action_button::FloatingActionButtonElevation,
+        icon::icon,
+        material_icons::{Asset, filled, outlined},
+        navigation_rail::{navigation_rail, navigation_rail_item},
+        surface::surface,
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
-    navigation_rail::{navigation_rail, navigation_rail_item},
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
@@ -342,7 +344,7 @@ fn specimen_item(
     badge_series: bool,
     selected: State<usize>,
     geometry: State<Geometry>,
-    rail_scope: tessera_components::navigation_rail::NavigationRailScope,
+    rail_scope: tessera_components::md3::navigation_rail::NavigationRailScope,
 ) {
     let name = if named {
         super::super::navigation::NAMES[index.min(4)].to_string()

@@ -8,13 +8,15 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     flow_row::flow_row,
-    icon_button::{IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button},
-    material_icons::filled,
-    menus::{MenuController, MenuPlacement, menu_item, menu_provider},
+    md3::{
+        icon_button::{IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button},
+        material_icons::filled,
+        menus::{MenuController, MenuPlacement, menu_item, menu_provider},
+        text::text,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
     shape_def::Shape,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

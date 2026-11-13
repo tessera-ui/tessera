@@ -2,16 +2,18 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     flow_row::flow_row,
-    icon_button::{
-        IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
+    md3::{
+        icon_button::{
+            IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
+        },
+        material_icons::{filled, outlined},
+        text::text,
+        theme::{MaterialTheme, material_theme},
     },
-    material_icons::{filled, outlined},
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

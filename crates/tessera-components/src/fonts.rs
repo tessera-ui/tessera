@@ -11,7 +11,7 @@ use tessera_ui::{EntryRegistry, LoadState, Resource, Source, TesseraPackage};
 
 pub use tessera_ui::FontAsset as Font;
 
-use crate::{text::write_font_system, theme::TextStyle};
+use crate::pipelines::text::pipeline::write_font_system;
 
 /// An entry package supplying fonts on demand.
 pub struct Fonts(
@@ -132,7 +132,7 @@ fn registry() -> Rc<RefCell<FontRegistry>> {
 ///
 /// Returns `None` while any of them is loading; otherwise a value that changes
 /// only when a font relevant to `text` is installed.
-pub(crate) fn prepare(text: &str, style: TextStyle) -> Option<u64> {
+pub(crate) fn prepare(text: &str, family: Option<&'static str>) -> Option<u64> {
     let registry = registry();
     let mut registry = registry.borrow_mut();
     let FontRegistry {
@@ -159,7 +159,6 @@ pub(crate) fn prepare(text: &str, style: TextStyle) -> Option<u64> {
         }
         false
     });
-    let family = style.font_family;
     let mut key = 0;
     for font in sources.iter().filter(|font| needed(font, family, text)) {
         let index = match requests

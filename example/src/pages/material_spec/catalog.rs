@@ -2,11 +2,13 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     flow_row::flow_row,
-    lazy_list::{LazyListController, lazy_column},
-    scrollable::{ScrollBarBehavior, ScrollableController},
+    md3::{
+        lazy_list::{LazyListController, lazy_column},
+        scrollable::{ScrollBarBehavior, ScrollableController},
+        surface::surface,
+        text::text,
+    },
     shape_def::Shape,
-    surface::surface,
-    text::text,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_shard::RouterController;
@@ -567,7 +569,7 @@ fn component_card(component: Component, index: usize, on_open: CallbackWith<usiz
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
 
-    use tessera_components::{side_sheet::SideSheetController, theme::material_theme};
+    use tessera_components::md3::{side_sheet::SideSheetController, theme::material_theme};
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
         accesskit::{Action, Node, Rect, Role, Toggled},
@@ -598,7 +600,7 @@ mod tests {
             column()
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
-                    tessera_components::app_bar::top_app_bar()
+                    tessera_components::md3::app_bar::top_app_bar()
                         .title("Material Design 3")
                         .navigation_icon(move || {
                             crate::app::navigation_button(router, drawer);

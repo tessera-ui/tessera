@@ -3,21 +3,23 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     flow_row::flow_row,
-    icon::icon,
-    material_icons::filled,
+    md3::{
+        icon::icon,
+        material_icons::filled,
+        slider::{
+            SliderController, SliderOrientation, SliderSize, SliderValueIndicatorVisibility,
+            centered_slider, range_slider, slider, slider_value_indicator_provider,
+        },
+        surface::surface,
+        text::text,
+        text_field::text_field,
+        text_input::TextInputController,
+        theme::{MaterialColorScheme, MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     painter::Painter,
     row::row,
     shape_def::Shape,
-    slider::{
-        SliderController, SliderOrientation, SliderSize, SliderValueIndicatorVisibility,
-        centered_slider, range_slider, slider, slider_value_indicator_provider,
-    },
-    surface::surface,
-    text::text,
-    text_field::text_field,
-    text_input::TextInputController,
-    theme::{MaterialColorScheme, MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -688,7 +690,7 @@ fn configuration_slider(
     indicator: bool,
     end_stop: bool,
 
-    value_indicator_host: Option<tessera_components::slider::SliderValueIndicatorHost>,
+    value_indicator_host: Option<tessera_components::md3::slider::SliderValueIndicatorHost>,
 ) {
     let value = remember(|| 0.5_f32);
     boxed()
@@ -1069,7 +1071,7 @@ fn state_specimen(
     width: Dp,
     dark: bool,
 
-    value_indicator_host: Option<tessera_components::slider::SliderValueIndicatorHost>,
+    value_indicator_host: Option<tessera_components::md3::slider::SliderValueIndicatorHost>,
 ) {
     let value = remember(|| 0.5_f32);
     let scale = width.0 / 512.0;
@@ -1791,6 +1793,7 @@ fn size_annotation_geometry(
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod size_figure_tests {
+    use tessera_components::md3::modifier::ModifierExt as _;
 
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
@@ -1803,10 +1806,10 @@ mod size_figure_tests {
     #[tessera]
     fn narrow_configuration_fixture(
         output: tessera_ui::testing::TestProbe<
-            Option<State<tessera_components::scrollable::ScrollableController>>,
+            Option<State<tessera_components::md3::scrollable::ScrollableController>>,
         >,
     ) {
-        let scroll = remember(tessera_components::scrollable::ScrollableController::default);
+        let scroll = remember(tessera_components::md3::scrollable::ScrollableController::default);
         output.set(Some(scroll));
         material_theme().child(move || {
             boxed()
@@ -1847,7 +1850,7 @@ mod size_figure_tests {
         assert_eq!(control.y0, 156.875);
         let scroll = output.get().unwrap();
         let before =
-            scroll.with(tessera_components::scrollable::ScrollableController::child_position);
+            scroll.with(tessera_components::md3::scrollable::ScrollableController::child_position);
         let start = PxPosition::from_f32_xy(
             ((control.x0 + control.x1) * 0.5) as f32,
             ((control.y0 + control.y1) * 0.5) as f32,
@@ -1948,7 +1951,7 @@ mod size_figure_tests {
             "the surrounding figure must remain distinct from the inverse indicator surface"
         );
         assert_eq!(
-            scroll.with(tessera_components::scrollable::ScrollableController::child_position),
+            scroll.with(tessera_components::md3::scrollable::ScrollableController::child_position),
             before
         );
     }

@@ -2,15 +2,17 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     column::column,
-    icon::icon,
     image::image,
-    material_icons::filled,
+    md3::{
+        icon::icon,
+        material_icons::filled,
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

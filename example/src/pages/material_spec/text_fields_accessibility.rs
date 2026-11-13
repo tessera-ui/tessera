@@ -1,17 +1,19 @@
 use tessera_components::{
     boxed::boxed,
     column::column,
-    icon_button::{IconButtonColorStyle, icon_button},
     image::image,
-    material_icons::filled,
-    menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+    md3::{
+        icon_button::{IconButtonColorStyle, icon_button},
+        material_icons::filled,
+        menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+        text::text,
+        text_field::{TextFieldContextMenu, text_field},
+        text_input::TextInputController,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    text_field::{TextFieldContextMenu, text_field},
-    text_input::TextInputController,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

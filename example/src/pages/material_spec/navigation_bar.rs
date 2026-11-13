@@ -5,13 +5,15 @@
 //! Compare destination counts, label behavior, badges and selection feedback.
 
 use tessera_components::{
-    badge::{badge_with_content, badged_box},
-    button::button,
     column::column,
     flow_row::flow_row,
-    navigation_bar::{NavigationBarLabelBehavior, navigation_bar, navigation_bar_item},
-    text::text,
-    theme::{MaterialTheme, material_theme},
+    md3::{
+        badge::{badge_with_content, badged_box},
+        button::button,
+        navigation_bar::{NavigationBarLabelBehavior, navigation_bar, navigation_bar_item},
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Dp, Modifier, RenderSlot, accesskit::Role, remember, tessera, use_context};

@@ -1,4 +1,9 @@
-//! Basic components for the Tessera UI framework.
+//! Official components for the Tessera UI framework.
+//!
+//! The crate root provides layout and content primitives shared by every
+//! design system. Design-system components live in their own modules:
+//! [`md3`] implements Material Design 3, and [`experiment::hig`] contains
+//! experimental Apple Human Interface Guidelines components.
 //!
 //! Built-in labels follow the language registered with the application entry.
 //!
@@ -8,7 +13,7 @@
 //! at application entry.
 //!
 //! ```no_run
-//! use tessera_components::theme::{MaterialTheme, material_theme};
+//! use tessera_components::md3::theme::{MaterialTheme, material_theme};
 //!
 //! #[tessera_ui::tessera]
 //! fn app() {
@@ -39,8 +44,8 @@
 //! # use tessera_ui::tessera;
 //! # #[tessera]
 //! # fn component() {
-//! use tessera_components::{button::button, text::text, text_input::text_input};
-//! # use tessera_components::theme::{MaterialTheme, material_theme};
+//! use tessera_components::md3::{button::button, text::text, text_input::text_input};
+//! # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 //! # material_theme()
 //! #     .theme(|| MaterialTheme::default())
 //! #     .child(|| {
@@ -69,54 +74,20 @@
 #![recursion_limit = "512"]
 
 mod animation;
-pub mod app_bar;
-pub mod badge;
-pub mod bottom_sheet;
 pub mod boxed;
-pub mod button;
-pub mod button_groups;
-pub mod card;
-pub mod carousel;
-pub mod checkbox;
-mod checkmark;
-pub mod chip;
 pub mod column;
-pub mod date_picker;
-pub mod dialog;
-pub mod divider;
-pub mod extended_floating_action_button;
-pub mod floating_action_button;
-pub mod floating_action_button_menu;
+pub mod experiment;
 pub mod flow_column;
 pub mod flow_row;
-pub mod fluid_glass;
-pub mod fluid_switch;
 pub mod fonts;
-pub mod glass_button;
-pub mod glass_progress;
-pub mod glass_slider;
-pub mod glass_switch;
-pub mod icon;
-pub mod icon_button;
 pub mod image;
 pub mod image_vector;
 pub mod interaction_state;
 mod layout_flex;
-pub mod lazy_grid;
-pub mod lazy_list;
 mod lazy_shared;
-pub mod lazy_staggered_grid;
-pub mod list_item;
-pub mod loading_indicator;
-pub mod material_icons;
-pub mod menus;
+pub mod md3;
 mod modal_focus;
 pub mod modifier;
-pub mod navigation_bar;
-pub mod navigation_drawer;
-#[cfg(all(test, not(target_family = "wasm")))]
-mod navigation_focus_tests;
-pub mod navigation_rail;
 mod nested_scroll;
 mod overlay_semantics;
 mod padding_utils;
@@ -124,35 +95,9 @@ pub mod pager;
 pub mod painter;
 pub mod pipelines;
 pub mod pos_misc;
-pub mod progress;
-pub mod pull_refresh;
-pub mod radio_button;
 pub mod res;
-pub mod ripple_state;
 pub mod row;
-pub mod scaffold;
-pub mod scrollable;
-pub mod search;
-pub mod segmented_buttons;
-pub mod shadow;
-pub mod side_sheet;
-pub mod slider;
-pub mod snackbar;
 pub mod spacer;
-pub mod split_buttons;
-pub mod surface;
-pub mod switch;
-pub mod tabs;
-pub mod text;
-mod text_edit_core;
-pub mod text_field;
-pub mod text_input;
-pub mod text_table;
-pub mod theme;
-pub mod time_picker;
-pub mod toolbar;
-pub mod tooltip;
-pub mod wavy_progress;
 
 #[cfg(test)]
 mod test_utils;
@@ -164,9 +109,6 @@ use tessera_ui::{
 };
 
 pub use tessera_foundation::{alignment, shape_def};
-
-pub use pipelines::shape::command::RippleProps;
-pub use ripple_state::RippleState;
 
 /// Render module for registering all Tessera component pipelines.
 #[derive(Default, Clone, PartialEq, Copy)]
@@ -197,15 +139,3 @@ impl TesseraPackage for ComponentsPackage {
         registry.add_module(TesseraComponents);
     }
 }
-
-#[cfg(test)]
-mod overlay_motion_tests;
-
-#[cfg(test)]
-mod sheet_drag_tests;
-
-#[cfg(all(test, not(target_family = "wasm")))]
-mod scaled_controls_tests;
-
-#[cfg(all(test, not(target_family = "wasm")))]
-mod overlay_precision_tests;

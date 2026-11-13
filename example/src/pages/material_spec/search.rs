@@ -3,17 +3,19 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     flow_row::flow_row,
-    icon::icon,
-    icon_button::icon_button,
-    list_item::list_item,
-    material_icons::filled,
+    md3::{
+        icon::icon,
+        icon_button::icon_button,
+        list_item::list_item,
+        material_icons::filled,
+        search::{SearchBarColors, SearchBarController, docked_search_bar, search_bar},
+        text::text,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
     row::row,
-    search::{SearchBarColors, SearchBarController, docked_search_bar, search_bar},
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -1162,7 +1164,7 @@ fn keyboard() {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
 
-    use tessera_components::theme::material_theme;
+    use tessera_components::md3::theme::material_theme;
     use tessera_ui::{MOUSE_POINTER_ID, PressKeyEventType, PxPosition, testing::UiTest};
 
     use super::*;

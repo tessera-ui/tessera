@@ -201,10 +201,15 @@ impl KeyboardInputModifierNode for ArticleTabKeyboard {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use std::{env, process::Command};
+    use tessera_components::md3::modifier::ModifierExt as _;
 
     use tessera_components::{
-        alignment::Alignment, boxed::boxed, column::column, row::row,
-        scrollable::ScrollableController, spacer::spacer, text::text,
+        alignment::Alignment,
+        boxed::boxed,
+        column::column,
+        md3::{scrollable::ScrollableController, text::text},
+        row::row,
+        spacer::spacer,
     };
     use tessera_ui::{
         Dp, FocusDirection, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Action,

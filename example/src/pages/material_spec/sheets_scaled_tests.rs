@@ -1,6 +1,9 @@
 use tessera_components::{
-    alignment::Alignment, boxed::boxed, column::column, scrollable::ScrollableController,
-    spacer::spacer, theme::material_theme,
+    alignment::Alignment,
+    boxed::boxed,
+    column::column,
+    md3::{modifier::ModifierExt as _, scrollable::ScrollableController, theme::material_theme},
+    spacer::spacer,
 };
 use tessera_ui::{
     CursorEventContent, GestureState, MOUSE_POINTER_ID, PlacementModifierNode, PointerChange,

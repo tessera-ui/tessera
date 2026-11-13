@@ -1,17 +1,19 @@
 use tessera_components::{
     alignment::{Alignment, MainAxisAlignment},
     boxed::boxed,
-    button::button,
-    card::{CardVariant, card},
-    carousel::{CarouselVariant, carousel},
     column::column,
     flow_row::flow_row,
+    md3::{
+        button::button,
+        card::{CardVariant, card},
+        carousel::{CarouselVariant, carousel},
+        text::text,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, tessera, use_context};

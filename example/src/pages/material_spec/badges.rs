@@ -1,20 +1,23 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    badge::{badge, badge_with_content, badged_box},
     boxed::boxed,
-    button::button,
     column::column,
     flow_row::flow_row,
-    icon::icon,
-    material_icons::filled,
-    modifier::ModifierExt as _,
-    navigation_bar::{
-        NavigationBarIconPosition, NavigationBarLabelBehavior, navigation_bar, navigation_bar_item,
+    md3::{
+        badge::{badge, badge_with_content, badged_box},
+        button::button,
+        icon::icon,
+        material_icons::filled,
+        navigation_bar::{
+            NavigationBarIconPosition, NavigationBarLabelBehavior, navigation_bar,
+            navigation_bar_item,
+        },
+        navigation_rail::{navigation_rail, navigation_rail_item},
+        text::text,
+        theme::MaterialTheme,
     },
-    navigation_rail::{navigation_rail, navigation_rail_item},
+    modifier::ModifierExt as _,
     shape_def::Shape,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -819,7 +822,7 @@ fn readable_badge_navigation() {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod form_article_tests {
 
-    use tessera_components::theme::material_theme;
+    use tessera_components::md3::theme::material_theme;
     use tessera_ui::{
         accesskit::{Action, NodeId},
         testing::UiTest,

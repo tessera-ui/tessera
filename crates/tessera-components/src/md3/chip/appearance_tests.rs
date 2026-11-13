@@ -1,0 +1,274 @@
+//! Chip interaction colors and elevation rendering regressions.
+//!
+//! ## Usage
+//!
+//! Preserve chip shadows and state colors during pointer and focus changes.
+
+use std::time::Duration;
+
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
+use tessera_ui::{
+    Color, Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State, accesskit::Action,
+    focus, remember, tessera, testing::UiTest,
+};
+
+use crate::{
+    alignment::{Alignment, CrossAxisAlignment},
+    boxed::boxed,
+    md3::{
+        material_icons::filled,
+        surface::{SurfaceStyle, surface},
+        theme::{MaterialTheme, material_theme},
+    },
+    modifier::ModifierExt as _,
+    row::row,
+    spacer::spacer,
+};
+
+use super::{ChipDefaults, ChipStyle, ChipVariant, chip, tests::rect};
+
+#[derive(Clone, Copy, PartialEq)]
+struct Settings {
+    variant: ChipVariant,
+    style: ChipStyle,
+    selected: bool,
+    enabled: bool,
+    reference: Dp,
+    custom: bool,
+}
+
+fn tagged(name: &str) -> Modifier {
+    Modifier::new().semantics(SemanticsArgs {
+        test_tag: Some(name.into()),
+        ..Default::default()
+    })
+}
+
+#[tessera]
+fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
+    let settings = remember(|| Settings {
+        variant: ChipVariant::Assist,
+        style: ChipStyle::Elevated,
+        selected: false,
+        enabled: true,
+        reference: Dp(1.0),
+        custom: false,
+    });
+    probe.set(Some(settings));
+    material_theme()
+        .theme(|| {
+            let mut theme = MaterialTheme::default();
+            theme.color_scheme.primary = Color::RED;
+            theme.color_scheme.on_surface = Color::BLACK;
+            theme.color_scheme.on_surface_variant = Color::GREEN;
+            theme.color_scheme.outline_variant = Color::BLUE;
+            theme
+        })
+        .child(move || {
+            row()
+                .modifier(
+                    Modifier::new()
+                        .fill_max_size()
+                        .background(Color::WHITE)
+                        .padding_all(Dp(32.0)),
+                )
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .children(move || {
+                    let config = settings.get();
+                    let custom = config.custom.then(|| {
+                        let mut colors = ChipDefaults::colors(
+                            &MaterialTheme::default().color_scheme,
+                            config.variant,
+                            config.style,
+                        );
+                        colors.label_color = Color::GREEN;
+                        colors.leading_icon_color = Color::BLUE;
+                        colors.selected_leading_icon_color = Color::BLUE;
+                        colors
+                    });
+                    chip()
+                        .shape(ChipDefaults::shape())
+                        .variant(config.variant)
+                        .style(config.style)
+                        .selected(config.selected)
+                        .enabled(config.enabled)
+                        .colors_optional(custom)
+                        .modifier(tagged("chip").width(Dp(180.0)))
+                        .accessibility_label("Chip action")
+                        .label("Sample chip")
+                        .leading_icon(filled::HOME_SVG)
+                        .on_click(|| {});
+                    spacer().modifier(Modifier::new().width(Dp(32.0)));
+                    boxed()
+                        .modifier(tagged("reference").size(Dp(180.0), Dp(48.0)))
+                        .alignment(Alignment::Center)
+                        .children(move || {
+                            surface()
+                                .modifier(Modifier::new().size(Dp(180.0), Dp(32.0)))
+                                .shape(ChipDefaults::shape())
+                                .style(SurfaceStyle::Filled {
+                                    color: Color::WHITE,
+                                })
+                                .elevation(settings.get().reference);
+                        });
+                });
+        });
+}
+
+fn shadow(renderer: &UiTest, key: &str) -> Vec<u8> {
+    let [x, y, width, _] = rect(renderer, key);
+    let pixels = renderer.read_pixels();
+    let mut strip = Vec::new();
+    for py in y + 41..y + 63 {
+        let start = ((py as u32 * renderer.physical_size().width + x as u32) * 4) as usize;
+        strip.extend_from_slice(&pixels[start..start + width as usize * 4]);
+    }
+    strip
+}
+
+fn assert_shadow(renderer: &UiTest, elevated: bool) {
+    let actual = shadow(renderer, "chip");
+    let expected = shadow(renderer, "reference");
+    let differences: Vec<_> = actual
+        .iter()
+        .zip(&expected)
+        .enumerate()
+        .filter(|(_, (a, b))| a != b)
+        .take(10)
+        .map(|(i, (a, b))| (i, *a, *b))
+        .collect();
+    assert!(
+        differences.is_empty(),
+        "chip {:?}, reference {:?}, first differences {:?}",
+        rect(renderer, "chip"),
+        rect(renderer, "reference"),
+        differences
+    );
+    assert_eq!(
+        actual.chunks_exact(4).any(|pixel| pixel[..3] != [255; 3]),
+        elevated
+    );
+}
+
+fn count_icon(renderer: &UiTest, color: [u8; 3]) -> usize {
+    let [x, y, _, height] = rect(renderer, "Sample chip");
+    let pixels = renderer.read_pixels();
+    let mut count = 0;
+    for py in y + height / 2 - 9..y + height / 2 + 9 {
+        for px in x - 26..x - 8 {
+            let offset = ((py as u32 * renderer.physical_size().width + px as u32) * 4) as usize;
+            if pixels[offset..offset + 3]
+                .iter()
+                .zip(color)
+                .all(|(a, b)| a.abs_diff(b) <= 2)
+            {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+fn check_appearance() {
+    let probe = tessera_ui::testing::TestProbe::default();
+    let mut renderer = UiTest::new()
+        .viewport(600, 160)
+        .frame_step(Duration::from_millis(10))
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    renderer.frames(5);
+    let settings = probe.get().unwrap();
+    let point = PxPosition::from_f32_xy(120.0, 56.0);
+    let outside = PxPosition::from_f32_xy(580.0, 140.0);
+    assert_shadow(&renderer, true);
+    for variant in [
+        ChipVariant::Assist,
+        ChipVariant::Suggestion,
+        ChipVariant::Filter,
+        ChipVariant::Input,
+    ] {
+        settings.with_mut(|s| {
+            s.variant = variant;
+            s.reference = Dp(3.0);
+        });
+        renderer.pointer_move(MOUSE_POINTER_ID, point);
+        renderer.frames(5);
+        assert_ne!(shadow(&renderer, "chip"), shadow(&renderer, "reference"));
+        renderer.frames(20);
+        assert_shadow(&renderer, true);
+        settings.with_mut(|s| {
+            s.enabled = false;
+            s.reference = Dp::ZERO;
+        });
+        renderer.frames(2);
+        assert_shadow(&renderer, false);
+        settings.with_mut(|s| {
+            s.enabled = true;
+            s.reference = Dp(1.0);
+        });
+        renderer.pointer_move(MOUSE_POINTER_ID, outside);
+        renderer.frames(20);
+        assert_shadow(&renderer, true);
+    }
+    settings.with_mut(|s| {
+        s.variant = ChipVariant::Filter;
+        s.style = ChipStyle::Flat;
+        s.selected = true;
+        s.reference = Dp(1.0);
+    });
+    renderer.pointer_move(MOUSE_POINTER_ID, point);
+    renderer.frames(20);
+    assert_shadow(&renderer, true);
+    settings.with_mut(|s| s.reference = Dp::ZERO);
+    renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.frames(20);
+    assert_shadow(&renderer, false);
+    renderer.pointer_move(MOUSE_POINTER_ID, outside);
+    renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
+    focus::clear_focus(true);
+    settings.with_mut(|s| {
+        s.variant = ChipVariant::Input;
+        s.selected = false;
+    });
+    renderer.frames(30);
+    assert!(count_icon(&renderer, [0, 255, 0]) > 20);
+    renderer.pointer_move(MOUSE_POINTER_ID, point);
+    renderer.frames(5);
+    assert!(count_icon(&renderer, [246, 80, 0]) > 20);
+    settings.with_mut(|s| s.custom = true);
+    renderer.frames(5);
+    assert!(count_icon(&renderer, [0, 80, 246]) > 20);
+    settings.with_mut(|s| s.custom = false);
+    renderer.pointer_move(MOUSE_POINTER_ID, outside);
+    let id = renderer
+        .accessibility_snapshot()
+        .unwrap()
+        .nodes
+        .into_iter()
+        .find(|(_, node)| node.label() == Some("Chip action"))
+        .unwrap()
+        .0;
+    assert!(renderer.accessibility_action(id, Action::Focus));
+    renderer.frames(10);
+    assert!(count_icon(&renderer, [243, 89, 0]) > 20);
+    let [x, y, _, _] = rect(&renderer, "chip");
+    let pixels = renderer.read_pixels();
+    let offset = (((y + 8) as u32 * renderer.physical_size().width + (x + 90) as u32) * 4) as usize;
+    let [red, green, blue]: [u8; 3] = pixels[offset..offset + 3].try_into().unwrap();
+    assert!(
+        green > red.saturating_add(50) && green > blue.saturating_add(50),
+        "focus outline must use the green variant role, got {red}, {green}, {blue}"
+    );
+    settings.with_mut(|s| s.enabled = false);
+    renderer.frames(2);
+    assert!(count_icon(&renderer, [206, 206, 206]) > 20);
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn native_chip_shadows_colors_and_disabled_transitions() {
+    crate::test_utils::run_isolated_test(
+        "md3::chip::appearance_tests::native_chip_shadows_colors_and_disabled_transitions",
+        check_appearance,
+    );
+}

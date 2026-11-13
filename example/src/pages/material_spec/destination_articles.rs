@@ -5,8 +5,11 @@
 //! Identify labeled elements in navigation diagrams.
 
 use tessera_components::{
-    alignment::Alignment, boxed::boxed, modifier::ModifierExt as _, shape_def::Shape, text::text,
-    theme::MaterialTheme,
+    alignment::Alignment,
+    boxed::boxed,
+    md3::{text::text, theme::MaterialTheme},
+    modifier::ModifierExt as _,
+    shape_def::Shape,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, tessera, use_context};

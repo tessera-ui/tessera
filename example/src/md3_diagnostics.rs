@@ -12,12 +12,14 @@ use std::{
 
 use tessera_components::{
     boxed::boxed,
+    md3::{
+        navigation_rail::{navigation_rail, navigation_rail_item},
+        surface::surface,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
-    navigation_rail::{navigation_rail, navigation_rail_item},
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{Color, Dp, Modifier, PxRect, modifier::FocusModifierExt as _, tessera};
 use wasm_bindgen::prelude::wasm_bindgen;

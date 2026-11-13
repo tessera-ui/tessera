@@ -1,23 +1,25 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
-    button::button,
     column::column,
-    dialog::{DialogController, dialog_provider},
     flow_row::flow_row,
-    icon_button::icon_button,
-    material_icons::filled,
+    md3::{
+        button::button,
+        dialog::{DialogController, dialog_provider},
+        icon_button::icon_button,
+        material_icons::filled,
+        surface::surface,
+        text::text,
+        theme::{MaterialTheme, material_theme},
+        time_picker::{
+            TimePickerController, TimePickerDisplayMode, TimePickerLayout, TimePickerSelection,
+            time_picker, time_picker_dialog,
+        },
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
-    text::text,
-    theme::{MaterialTheme, material_theme},
-    time_picker::{
-        TimePickerController, TimePickerDisplayMode, TimePickerLayout, TimePickerSelection,
-        time_picker, time_picker_dialog,
-    },
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -358,7 +360,7 @@ fn picker_surface(
     #[prop(into)] label: String,
     modal: Option<State<DialogController>>,
     committed: Option<State<(u8, u8)>>,
-    dialog: Option<tessera_components::dialog::DialogScope>,
+    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -395,7 +397,7 @@ fn picker_contents(
     #[prop(into)] cancel_label: String,
     modal: Option<State<DialogController>>,
     committed: Option<State<(u8, u8)>>,
-    dialog: Option<tessera_components::dialog::DialogScope>,
+    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
     time_picker_dialog()
         .dialog_optional(dialog)

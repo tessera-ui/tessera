@@ -1,13 +1,15 @@
 use tessera_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
-    button::button,
     column::column,
-    icon::icon,
-    material_icons::filled,
-    menus::{MenuController, MenuItemSelectionMode, menu_item, menu_provider},
+    md3::{
+        button::button,
+        icon::icon,
+        material_icons::filled,
+        menus::{MenuController, MenuItemSelectionMode, menu_item, menu_provider},
+        text::text,
+    },
     row::row,
-    text::text,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{

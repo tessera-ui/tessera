@@ -1,7 +1,12 @@
 use tessera_components::{
-    alignment::Alignment, boxed::boxed, button::button, icon::icon, image::image,
-    material_icons::filled, modifier::ModifierExt as _, row::row, shape_def::Shape, spacer::spacer,
-    text::text, theme::MaterialTheme,
+    alignment::Alignment,
+    boxed::boxed,
+    image::image,
+    md3::{button::button, icon::icon, material_icons::filled, text::text, theme::MaterialTheme},
+    modifier::ModifierExt as _,
+    row::row,
+    shape_def::Shape,
+    spacer::spacer,
 };
 use tessera_foundation::modifier::{
     InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs,

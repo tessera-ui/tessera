@@ -1,5 +1,7 @@
 use tessera_components::{
-    boxed::boxed, column::column, dialog::DialogController, theme::material_theme,
+    boxed::boxed,
+    column::column,
+    md3::{dialog::DialogController, theme::material_theme},
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
@@ -39,7 +41,7 @@ fn modal_example_fixture(
     let input = remember(|| true);
     output.set(Some((source, open)));
     material_theme().child(move || {
-        tessera_components::dialog::dialog_provider()
+        tessera_components::md3::dialog::dialog_provider()
             .controller(open)
             .padding(Dp::ZERO)
             .on_close_request(move || open.with_mut(DialogController::close))

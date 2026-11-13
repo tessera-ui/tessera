@@ -9,13 +9,15 @@ use std::collections::BTreeMap;
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
-    icon_button::icon_button,
-    material_icons::filled,
+    md3::{
+        icon_button::icon_button,
+        material_icons::filled,
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

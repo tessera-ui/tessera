@@ -7,17 +7,19 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
-    button::{ButtonShape, ButtonSize, ButtonVariant, button},
     column::column,
     flow_row::flow_row,
-    icon::icon,
-    material_icons::{Asset, filled},
+    md3::{
+        button::{ButtonShape, ButtonSize, ButtonVariant, button},
+        icon::icon,
+        material_icons::{Asset, filled},
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{
     InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs,

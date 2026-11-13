@@ -2,12 +2,11 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
+    md3::{text::text, theme::MaterialTheme},
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{ModifierExt as _, Padding};
 use tessera_ui::{Color, Dp, Modifier, tessera, use_context};

@@ -4,15 +4,17 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     flow_row::flow_row,
-    icon_button::{
-        IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
+    md3::{
+        icon_button::{
+            IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
+        },
+        material_icons::filled,
+        text::text,
+        theme::MaterialTheme,
     },
-    material_icons::filled,
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

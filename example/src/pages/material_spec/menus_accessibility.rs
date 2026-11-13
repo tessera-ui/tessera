@@ -2,16 +2,19 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     column::column,
-    icon::icon,
-    material_icons::filled,
-    menus::{
-        MenuAnchor, MenuColorStyle, MenuController, MenuItemSelectionMode, menu_item, menu_provider,
+    md3::{
+        icon::icon,
+        material_icons::filled,
+        menus::{
+            MenuAnchor, MenuColorStyle, MenuController, MenuItemSelectionMode, menu_item,
+            menu_provider,
+        },
+        surface::surface,
+        text::text,
+        theme::MaterialTheme,
     },
     modifier::ModifierExt as _,
     shape_def::Shape,
-    surface::surface,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
@@ -282,7 +285,7 @@ pub(super) fn labeling() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use tessera_components::theme::material_theme;
+    use tessera_components::md3::theme::material_theme;
     use tessera_ui::{MOUSE_POINTER_ID, PressKeyEventType, accesskit::Toggled, testing::UiTest};
 
     use super::*;

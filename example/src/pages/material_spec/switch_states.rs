@@ -8,13 +8,15 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     column::column,
-    icon::icon,
-    material_icons::filled,
+    md3::{
+        icon::icon,
+        material_icons::filled,
+        switch::switch,
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     shape_def::Shape,
-    switch::switch,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{

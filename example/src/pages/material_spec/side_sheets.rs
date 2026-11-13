@@ -3,22 +3,24 @@ mod figures;
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
-    button::{ButtonSize, button},
-    checkbox::checkbox,
     column::column,
-    icon::icon,
-    icon_button::icon_button,
-    material_icons::filled,
+    md3::{
+        button::{ButtonSize, button},
+        checkbox::checkbox,
+        icon::icon,
+        icon_button::icon_button,
+        material_icons::filled,
+        side_sheet::{
+            SideSheetController, SideSheetPosition, modal_side_sheet_provider,
+            standard_side_sheet_provider,
+        },
+        text::text,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
-    side_sheet::{
-        SideSheetController, SideSheetPosition, modal_side_sheet_provider,
-        standard_side_sheet_provider,
-    },
     spacer::spacer,
-    text::text,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_shard::RouterController;

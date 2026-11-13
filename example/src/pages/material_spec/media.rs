@@ -4,10 +4,9 @@ use tessera_components::{
     column::column,
     fonts::{Font, Fonts},
     image::image,
+    md3::{surface::surface, text::text},
     row::row,
     shape_def::Shape,
-    surface::surface,
-    text::text,
 };
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Dp, Modifier, accesskit::Role, tessera};

@@ -1,0 +1,129 @@
+//! Native pull-to-refresh gesture regressions.
+//!
+//! ## Usage
+//!
+//! Keep threshold, reversal and custom indicator behavior on real scroll input.
+
+use tessera_ui::{PxPosition, testing::UiTest};
+
+use crate::md3::{
+    modifier::ModifierExt as _, scrollable::ScrollableController, text::text, theme::material_theme,
+};
+
+use super::*;
+
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    requests: Option<State<usize>>,
+    controller: Option<State<PullRefreshController>>,
+}
+
+#[tessera]
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
+    let requests = remember(|| 0_usize);
+    let controller = remember(PullRefreshController::new);
+    let scroll = remember(ScrollableController::new);
+    observed.with_mut(|handles| handles.requests = Some(requests));
+    observed.with_mut(|handles| handles.controller = Some(controller));
+    material_theme().child(move || {
+        boxed()
+            .modifier(Modifier::new().fill_max_size())
+            .alignment(Alignment::TopStart)
+            .children(move || {
+                pull_refresh()
+                    .modifier(Modifier::new().size(Dp(300.0), Dp(300.0)))
+                    .controller(controller)
+                    .indicator_size(Dp(48.0))
+                    .on_refresh(move || {
+                        requests.with_mut(|requests| *requests += 1);
+                        controller.with_mut(|controller| controller.set_refreshing(true));
+                    })
+                    .indicator(|| {
+                        text("Custom refresh indicator");
+                    })
+                    .child(move || {
+                        boxed()
+                            .modifier(Modifier::new().fill_max_size().vertical_scroll(scroll))
+                            .children(|| {
+                                boxed()
+                                    .modifier(Modifier::new().fill_max_width().height(Dp(600.0)))
+                                    .children(|| {
+                                        text("Refreshable content");
+                                    });
+                            });
+                    });
+            });
+    });
+}
+
+fn drag(renderer: &mut UiTest, positions: &[f32]) {
+    let point = |y| PxPosition::from_f32_xy(150.0, y);
+    renderer.touch_start(1, point(30.0));
+    renderer.frames(1);
+    for &y in positions {
+        renderer.touch_move(1, point(y));
+        renderer.frames(1);
+    }
+    renderer.touch_end(1);
+    renderer.frames(32);
+}
+
+#[test]
+#[ignore = "Requires a native GPU adapter"]
+fn native_pull_refresh_uses_scroll_threshold_and_reversal_with_custom_indicator() {
+    let observed = tessera_ui::testing::TestProbe::default();
+    let mut renderer = UiTest::new()
+        .viewport(400, 400)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(observed.clone()));
+    renderer.frames(8);
+    let requests = observed.get().requests.unwrap();
+    let controller = observed.get().controller.unwrap();
+    renderer.touch_start(2, PxPosition::from_f32_xy(150.0, 30.0));
+    renderer.frames(1);
+    renderer.touch_move(2, PxPosition::from_f32_xy(150.0, 260.0));
+    renderer.frames(1);
+    assert!(controller.with(PullRefreshController::progress) > 1.0);
+    renderer.touch_cancel(2);
+    renderer.frames(48);
+    assert_eq!(requests.get(), 0, "a cancelled contact must not refresh");
+    assert_eq!(
+        controller.with(PullRefreshController::position),
+        Px(0),
+        "cancellation retracts the custom indicator"
+    );
+    drag(&mut renderer, &[60.0, 110.0]);
+    assert_eq!(requests.get(), 0, "a short drag must not refresh");
+    assert!(!controller.with(PullRefreshController::refreshing));
+    assert_eq!(controller.with(PullRefreshController::position), Px(0));
+    drag(&mut renderer, &[60.0, 260.0, 80.0]);
+    assert_eq!(
+        requests.get(),
+        0,
+        "reversing below the threshold cancels the pull"
+    );
+    drag(&mut renderer, &[60.0, 270.0]);
+    assert_eq!(
+        requests.get(),
+        1,
+        "releasing beyond the threshold refreshes once"
+    );
+    assert!(controller.with(PullRefreshController::refreshing));
+    let tree = renderer.accessibility_snapshot().unwrap();
+    let indicator = tree
+        .nodes
+        .iter()
+        .find(|(_, node)| node.label() == Some("Custom refresh indicator"))
+        .expect("the custom indicator is actually rendered");
+    let bounds = indicator.1.bounds().unwrap();
+    assert!(
+        bounds.y0 >= 0.0 && bounds.y1 <= 300.0,
+        "custom indicator follows the refresh offset: {bounds:?}"
+    );
+    drag(&mut renderer, &[60.0, 270.0]);
+    assert_eq!(requests.get(), 1, "a running refresh rejects another pull");
+    controller.with_mut(|controller| controller.set_refreshing(false));
+    renderer.frames(48);
+    assert!(!controller.with(PullRefreshController::refreshing));
+    assert_eq!(controller.with(PullRefreshController::position), Px(0));
+}

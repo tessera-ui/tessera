@@ -4,7 +4,7 @@
 //!
 //! Keep interactive figure dialogs above the complete article viewport.
 
-use tessera_components::dialog::{DialogController, DialogScope, dialog_provider};
+use tessera_components::md3::dialog::{DialogController, DialogScope, dialog_provider};
 use tessera_ui::{Callback, Dp, RenderSlot, State, tessera};
 
 use crate::res::I18N;

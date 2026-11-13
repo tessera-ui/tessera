@@ -8,7 +8,7 @@ use tessera_ui::{
 #[tessera]
 fn fixture() {
     super::super::super::media::load_fonts();
-    tessera_components::theme::material_theme().child(|| {
+    tessera_components::md3::theme::material_theme().child(|| {
         tessera_components::column::column().children(|| {
             super::states();
         });

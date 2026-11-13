@@ -5,11 +5,13 @@
 //! Inspect common, color and size tokens beside a live themed control.
 
 use tessera_components::{
-    button::button,
     flow_row::flow_row,
-    icon_button::{IconButtonShape, IconButtonSize, IconButtonVariant, icon_button},
-    material_icons::filled,
-    text::text,
+    md3::{
+        button::button,
+        icon_button::{IconButtonShape, IconButtonSize, IconButtonVariant, icon_button},
+        material_icons::filled,
+        text::text,
+    },
 };
 use tessera_ui::{Dp, remember, tessera};
 
@@ -146,7 +148,7 @@ fn common_rows() -> Vec<Vec<String>> {
 }
 
 fn size_rows(size: IconButtonSize) -> Vec<Vec<String>> {
-    use tessera_components::icon_button::IconButtonWidth;
+    use tessera_components::md3::icon_button::IconButtonWidth;
     rows(vec![
         ("ui-container-height", format!("{}dp", size.height().0)),
         ("ui-icon-size", format!("{}dp", size.icon_size().0)),

@@ -2,8 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Attach pointer/keyboard handling with accessibility and ripple feedback to
-//! subtrees.
+//! Attach pointer and keyboard handling with accessibility actions to subtrees.
 
 use tessera_foundation::{
     gesture::{LongPressRecognizer, TapRecognizer},

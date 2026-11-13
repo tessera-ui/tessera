@@ -1,47 +1,29 @@
-//! Material modifier extensions for basic components.
+//! Drawing and stateful interaction modifier extensions.
 //!
 //! ## Usage
 //!
-//! Attach backgrounds, borders, shadows, scrolling, and ripple interactions to any subtree.
+//! Attach backgrounds, borders, and clickable, toggleable, or selectable behavior to any subtree.
 
 #[cfg(test)]
 mod insets_tests;
 mod interaction;
-mod shadow;
 mod visual;
 
 use tessera_foundation::modifier::{ClickableArgs, SelectableArgs, ToggleableArgs};
-use tessera_ui::{Color, Dp, Modifier, State, modifier::ModifierCapabilityExt as _};
+use tessera_ui::{Color, Dp, Modifier, modifier::ModifierCapabilityExt as _};
 
-use crate::{scrollable::ScrollableController, shape_def::Shape, theme::MaterialColorScheme};
+use crate::shape_def::Shape;
 
 use interaction::{apply_clickable_modifier, apply_selectable_modifier, apply_toggleable_modifier};
 use visual::{BackgroundModifierNode, BorderModifierNode};
-
-pub use shadow::ShadowArgs;
 
 pub(crate) use interaction::{
     DisabledToggleSemantics, apply_combined_clickable_modifier, with_keyboard_input,
     with_pointer_input,
 };
 
-/// Material extensions for composing drawing, scrolling, and ripple
-/// interaction behavior around component subtrees.
+/// Extensions for drawing and stateful interaction around component subtrees.
 pub trait ModifierExt {
-    /// Makes this node a vertical scroll viewport driven by `controller`.
-    fn vertical_scroll(self, controller: State<ScrollableController>) -> Modifier;
-
-    /// Makes this node a horizontal scroll viewport driven by `controller`.
-    fn horizontal_scroll(self, controller: State<ScrollableController>) -> Modifier;
-
-    /// Makes this node a scroll viewport on the selected axes.
-    fn scroll(
-        self,
-        controller: State<ScrollableController>,
-        vertical: bool,
-        horizontal: bool,
-    ) -> Modifier;
-
     /// Draws a background behind the subtree.
     fn background(self, color: Color) -> Modifier;
 
@@ -61,38 +43,17 @@ pub trait ModifierExt {
     /// Draws a border stroke above the subtree using a custom shape.
     fn border_with_shape(self, width: Dp, color: Color, shape: Shape) -> Modifier;
 
-    /// Adds a shadow with advanced configuration options.
-    fn shadow(self, scheme: &MaterialColorScheme, args: &ShadowArgs) -> Modifier;
-
-    /// Makes the subtree clickable with optional ripple feedback and an
-    /// accessibility click action.
+    /// Makes the subtree clickable with an accessibility click action.
     fn clickable(self, args: ClickableArgs) -> Modifier;
 
-    /// Makes the subtree toggleable with optional ripple/state-layer feedback.
+    /// Makes the subtree toggleable.
     fn toggleable(self, args: ToggleableArgs) -> Modifier;
 
-    /// Makes the subtree selectable with optional ripple/state-layer feedback.
+    /// Makes the subtree selectable.
     fn selectable(self, args: SelectableArgs) -> Modifier;
 }
 
 impl ModifierExt for Modifier {
-    fn vertical_scroll(self, controller: State<ScrollableController>) -> Modifier {
-        crate::scrollable::apply_scroll_modifier(self, controller, true, false)
-    }
-
-    fn horizontal_scroll(self, controller: State<ScrollableController>) -> Modifier {
-        crate::scrollable::apply_scroll_modifier(self, controller, false, true)
-    }
-
-    fn scroll(
-        self,
-        controller: State<ScrollableController>,
-        vertical: bool,
-        horizontal: bool,
-    ) -> Modifier {
-        crate::scrollable::apply_scroll_modifier(self, controller, vertical, horizontal)
-    }
-
     fn background(self, color: Color) -> Modifier {
         self.background_with_shape(color, Shape::RECTANGLE)
     }
@@ -133,10 +94,6 @@ impl ModifierExt for Modifier {
             color,
             shape,
         })
-    }
-
-    fn shadow(self, scheme: &MaterialColorScheme, args: &ShadowArgs) -> Modifier {
-        shadow::apply_shadow_modifier(self, scheme, args.clone())
     }
 
     fn clickable(self, args: ClickableArgs) -> Modifier {

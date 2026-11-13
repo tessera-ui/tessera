@@ -1381,17 +1381,17 @@ impl<'db> CallAnalyzer<'db> {
 
     fn builtin_render_slot_argument(receiver: &str, method: &str) -> Option<usize> {
         match receiver {
-            "tessera_components::app_bar::TopAppBarBuilder" if method == "action" => Some(0),
-            "tessera_components::button_groups::ButtonGroupsBuilder" if method == "child" => {
+            "tessera_components::md3::app_bar::TopAppBarBuilder" if method == "action" => Some(0),
+            "tessera_components::md3::button_groups::ButtonGroupsBuilder" if method == "child" => {
                 Some(0)
             }
-            "tessera_components::tabs::TabBuilder" if method == "title" => Some(0),
-            "tessera_components::lazy_list::LazyColumnBuilder"
-            | "tessera_components::lazy_list::LazyRowBuilder"
-            | "tessera_components::lazy_grid::LazyVerticalGridBuilder"
-            | "tessera_components::lazy_grid::LazyHorizontalGridBuilder"
-            | "tessera_components::lazy_staggered_grid::LazyVerticalStaggeredGridBuilder"
-            | "tessera_components::lazy_staggered_grid::LazyHorizontalStaggeredGridBuilder" => {
+            "tessera_components::md3::tabs::TabBuilder" if method == "title" => Some(0),
+            "tessera_components::md3::lazy_list::LazyColumnBuilder"
+            | "tessera_components::md3::lazy_list::LazyRowBuilder"
+            | "tessera_components::md3::lazy_grid::LazyVerticalGridBuilder"
+            | "tessera_components::md3::lazy_grid::LazyHorizontalGridBuilder"
+            | "tessera_components::md3::lazy_staggered_grid::LazyVerticalStaggeredGridBuilder"
+            | "tessera_components::md3::lazy_staggered_grid::LazyHorizontalStaggeredGridBuilder" => {
                 match method {
                     "item" | "sticky_header" => Some(0),
                     "item_with_key"
@@ -2110,7 +2110,7 @@ fn test_functions_are_plain() { child(); }
     fn builtin_render_setters_color_content_without_coloring_keys_or_actions() {
         let diagnostics = diagnostics_for(
             r#"
-use tessera_components::{app_bar::top_app_bar, button_groups::button_groups, lazy_grid::{GridCells, lazy_vertical_grid}, lazy_list::lazy_column, tabs::tab};
+use tessera_components::md3::{app_bar::top_app_bar, button_groups::button_groups, lazy_grid::{GridCells, lazy_vertical_grid}, lazy_list::lazy_column, tabs::tab};
 
 #[tessera_ui::tessera]
 fn child() {}

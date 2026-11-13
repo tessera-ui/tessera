@@ -9,9 +9,11 @@ use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     column::column,
+    md3::{
+        text::text,
+        theme::{MaterialTheme, TextStyle},
+    },
     modifier::ModifierExt as _,
-    text::text,
-    theme::{MaterialTheme, TextStyle},
 };
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, tessera, use_context};

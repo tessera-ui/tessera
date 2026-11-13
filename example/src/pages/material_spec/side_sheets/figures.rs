@@ -1,17 +1,19 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
-    button::{ButtonSize, button},
     column::column,
-    icon::icon,
-    icon_button::icon_button,
-    material_icons::filled,
+    md3::{
+        button::{ButtonSize, button},
+        icon::icon,
+        icon_button::icon_button,
+        material_icons::filled,
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{

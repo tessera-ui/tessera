@@ -7,12 +7,14 @@
 //! states.
 
 use tessera_components::{
-    button::button,
     column::column,
     flow_row::flow_row,
-    progress::{circular_progress_indicator, linear_progress_indicator},
-    text::text,
-    wavy_progress::{circular_wavy_progress_indicator, linear_wavy_progress_indicator},
+    md3::{
+        button::button,
+        progress::{circular_progress_indicator, linear_progress_indicator},
+        text::text,
+        wavy_progress::{circular_wavy_progress_indicator, linear_wavy_progress_indicator},
+    },
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Dp, Modifier, RenderSlot, launch_once, remember, tessera, with_frame_time};

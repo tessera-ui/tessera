@@ -5,7 +5,7 @@ use tessera_ui::{
     render::{DrawCommand, SampleRegion},
 };
 
-use crate::{fluid_glass::GlassBorder, shape_def::Shape};
+use crate::shape_def::Shape;
 
 /// Render-only arguments consumed by the fluid glass draw pipeline.
 #[derive(Clone, PartialEq)]
@@ -28,8 +28,8 @@ pub(crate) struct FluidGlassRenderArgs {
     pub(crate) ripple_alpha: Option<f32>,
     /// Strength multiplier for the ripple distortion.
     pub(crate) ripple_strength: Option<f32>,
-    /// Optional border defining the outline thickness for the glass.
-    pub(crate) border: Option<GlassBorder>,
+    /// Outline thickness of the glass.
+    pub(crate) border_width: Px,
     pub(crate) material_tone: Option<[f32; 4]>,
     pub(crate) blur_sigma_px: f32,
     pub(crate) pixels_per_dp: f32,

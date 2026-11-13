@@ -1,24 +1,26 @@
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
-    button::button,
-    chip::chip,
     column::column,
+    experiment::hig::glass::{GlassAppearance, GlassBorder, GlassMaterial, glass},
     flow_row::flow_row,
-    fluid_glass::{GlassAppearance, GlassBorder, GlassMaterial, fluid_glass},
-    lazy_list::lazy_column,
+    md3::{
+        button::button,
+        chip::chip,
+        lazy_list::lazy_column,
+        scrollable::{ScrollBarBehavior, ScrollableController, ScrollbarDefaults, scrollbar_v},
+        slider::slider,
+        surface::surface,
+        switch::switch,
+        text::text,
+        text_field::text_field,
+        text_input::TextInputController,
+        theme::MaterialTheme,
+    },
     modifier::ModifierExt as _,
     row::row,
-    scrollable::{ScrollBarBehavior, ScrollableController, ScrollbarDefaults, scrollbar_v},
     shape_def::Shape,
-    slider::slider,
     spacer::spacer,
-    surface::surface,
-    switch::switch,
-    text::text,
-    text_field::text_field,
-    text_input::TextInputController,
-    theme::MaterialTheme,
 };
 use tessera_foundation::modifier::{DragDelta, DraggableArgs, ModifierExt as _};
 use tessera_shard::shard;
@@ -568,7 +570,7 @@ fn glass_lens(
         None => theme.with(|theme| theme.color_scheme.is_dark),
     };
     let ripple = |parameter| values.manual_ripple.then(|| values.value(parameter));
-    let lens = fluid_glass()
+    let lens = glass()
         .modifier(
             Modifier::new()
                 .size(width, height)
@@ -589,7 +591,11 @@ fn glass_lens(
                 }),
         )
         .material(MATERIALS[values.material].1)
-        .appearance_optional(appearance)
+        .appearance(if dark {
+            GlassAppearance::Dark
+        } else {
+            GlassAppearance::Light
+        })
         .shape_optional(values.shape())
         .blur_radius_optional(values.custom_blur.then(|| values.dp(Number::Blur)))
         .border_optional(

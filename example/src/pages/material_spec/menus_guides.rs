@@ -2,17 +2,19 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
     column::column,
-    divider::horizontal_divider,
     flow_row::flow_row,
-    icon::icon,
-    material_icons::filled,
-    menus::{MenuColorStyle, MenuItemSelectionMode, MenuPosition, menu_group, menu_item},
+    md3::{
+        divider::horizontal_divider,
+        icon::icon,
+        material_icons::filled,
+        menus::{MenuColorStyle, MenuItemSelectionMode, MenuPosition, menu_group, menu_item},
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    },
     modifier::ModifierExt as _,
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    text::text,
-    theme::{MaterialTheme, material_theme},
 };
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera, use_context};

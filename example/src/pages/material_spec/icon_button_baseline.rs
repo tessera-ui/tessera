@@ -5,11 +5,13 @@
 //! Compare deprecated baseline geometry with current Expressive controls.
 
 use tessera_components::{
-    button::button,
     flow_row::flow_row,
-    icon_button::{IconButtonVariant, icon_button},
-    material_icons::filled,
-    text::text,
+    md3::{
+        button::button,
+        icon_button::{IconButtonVariant, icon_button},
+        material_icons::filled,
+        text::text,
+    },
 };
 use tessera_ui::{Dp, remember, tessera};
 
