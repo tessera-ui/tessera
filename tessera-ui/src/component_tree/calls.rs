@@ -122,6 +122,10 @@ impl CallTable {
         self.index.get(&key).copied()
     }
 
+    pub(super) fn live_logic_id(&self, key: u64) -> Option<u64> {
+        self.id(key).map(|id| self.records[id].logic_id)
+    }
+
     fn parent_of_new_call(&self, id: Option<CallId>) -> Option<CallId> {
         match id {
             Some(id) if self.replay_root == Some(id) => self.records[id].parent,
@@ -385,6 +389,8 @@ impl ComponentTree {
                 let record = &mut self.calls.records[id];
                 record.parent = parent;
                 record.logic_id = logic_id;
+                // A re-executed call owns only the node it emits this time.
+                record.node = None;
                 (
                     id,
                     std::mem::take(&mut record.children),

@@ -892,3 +892,42 @@ fn replay_refreshes_retained_descendants_when_semantic_and_focus_ancestry_change
         "Retained semantics must refresh inherited tooltip context"
     );
 }
+
+#[tessera]
+fn optional_leaf(visible: State<bool>) {
+    if visible.get() {
+        crate::layout::layout(Overlap).modifier(Modifier::new().push_semantics(Tag {
+            key: "optional".into(),
+            label: "Optional".into(),
+        }));
+    }
+}
+
+#[tessera]
+fn optional_leaf_host(probe: ReplayProbe) {
+    let visible = remember(|| true);
+    probe.armed.set(Some(visible));
+    crate::layout::layout(Overlap).child(move || optional_leaf(visible));
+}
+
+#[test]
+fn a_call_that_stops_emitting_its_node_still_observes_its_state() {
+    let probe = ReplayProbe::default();
+    let mut session = UiTest::new()
+        .content(|| optional_leaf_host(probe.clone()))
+        .viewport(100, 100);
+    session.frame();
+    let visible = probe.armed.get().expect("visibility state");
+    for shown in [false, true, false, true] {
+        visible.set(shown);
+        session.advance(std::time::Duration::from_millis(8));
+        assert_eq!(
+            semantic_reading_order(&session),
+            if shown {
+                vec!["Optional"]
+            } else {
+                Vec::<&str>::new()
+            },
+        );
+    }
+}

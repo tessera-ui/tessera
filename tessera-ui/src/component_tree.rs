@@ -923,12 +923,16 @@ impl ComponentTree {
             let instance_key = old.get().instance_key;
             let instance_logic_id = old.get().instance_logic_id;
             let previous = self.metadatas.remove(&old_id);
-            let logic_id_survives = retained.logic_ids.contains(&instance_logic_id)
+            // A live call that now emits no node keeps its identity and state.
+            let call_survives = self.calls.live_logic_id(instance_key) == Some(instance_logic_id);
+            let logic_id_survives = call_survives
+                || retained.logic_ids.contains(&instance_logic_id)
                 || rebuilt_index.as_ref().map_or_else(
                     || rebuilt.iter().any(|&(_, id)| id == instance_logic_id),
                     |index| index.logic_ids.contains(&instance_logic_id),
                 );
-            let key_survives = retained.keys.contains(&instance_key)
+            let key_survives = call_survives
+                || retained.keys.contains(&instance_key)
                 || rebuilt_index.as_ref().map_or_else(
                     || rebuilt.iter().any(|&(key, _)| key == instance_key),
                     |index| index.keys.contains(&instance_key),
@@ -938,10 +942,12 @@ impl ComponentTree {
             }
             if !key_survives {
                 removed_instance_keys.insert(instance_key);
+            } else if self.node_ids_by_instance_key.get(&instance_key) == Some(&old_id) {
+                self.node_ids_by_instance_key.remove(&instance_key);
             } else if instance_key != 0
                 && let Some(previous) = previous
+                && let Some(&new_id) = self.node_ids_by_instance_key.get(&instance_key)
             {
-                let new_id = self.node_ids_by_instance_key[&instance_key];
                 let new = &self.tree[new_id];
                 let input_geometry_changed =
                     !old.get().modifier.input_geometry_eq(&new.get().modifier);
