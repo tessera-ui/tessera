@@ -12,9 +12,13 @@ env:
   CARGO_TERM_COLOR: always
   TESSERA_COLOR_CHECK_TIMEOUT_SECS: 900
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  build_and_test:
-    name: Desktop (${{ matrix.os }})
+  test:
+    name: Test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -24,66 +28,113 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - run: git -C crates/tessera-cosmic-text lfs pull
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           components: rustfmt, rust-src, rust-analyzer
           target: wasm32-unknown-unknown
-      - name: Check all targets
-        run: cargo tessera check --workspace --all-targets --verbose
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,rust-script,cargo-packager
-      - name: Test and package example
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-          export XDG_RUNTIME_DIR="$RUNNER_TEMP"
-          git -C crates/tessera-cosmic-text lfs pull
-          cargo nextest run --workspace --run-ignored all --no-fail-fast --test-threads 2
-          cargo test --workspace --doc
-          rust-script scripts/release-package.rs --check
-          cargo tessera package -p example --formats deb
-          rust-script scripts/check-package.rs deb target/packages/example
-      - name: Check scripts and formatting
-        if: runner.os == 'Linux'
-        run: |
-          rust-script --test scripts/check-mobile.rs
-          rust-script --test scripts/check-package.rs
-          rust-script --test scripts/test-apple-ime.rs
-          rust-script --test scripts/analyze-profiler.rs
-          rust-script --test scripts/check-imports.rs
-          rust-script --test scripts/release-package.rs
-          rust-script scripts/check-imports.rs --check
-      - name: Test and package Windows example
-        if: runner.os == 'Windows'
-        run: |
-          cargo test -p tessera-ui -p tessera-components --lib
-          cargo tessera package -p example --formats nsis
-      - name: Inspect the Windows installer
-        if: runner.os == 'Windows'
-        run: rust-script scripts/check-package.rs windows target/packages/example
-      - name: Package and inspect the macOS example
-        if: runner.os == 'macOS'
-        run: |
-          cargo tessera package -p example --formats app
-          rust-script scripts/check-package.rs macos target/packages/example/*.app
-      - name: Package and inspect the iOS Simulator example
-        if: runner.os == 'macOS'
-        run: |
-          cargo tessera ios build -p example --profiling-output acceptance.jsonl
-          rust-script scripts/check-package.rs ios target/packages/example/ios/*/example.app
-      - name: Verify Apple IME and iOS application lifecycle
-        if: runner.os == 'macOS'
-        run: |
-          rust-script scripts/test-apple-ime.rs target/packages/example/ios/*/example.app
-      - name: Retain iOS acceptance diagnostics
-        if: failure() && runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+          tool: cargo-nextest
+      - name: Check all targets
+        run: cargo tessera check --workspace --all-targets --verbose
+      - name: Run tests
+        env:
+          XDG_RUNTIME_DIR: ${{ runner.temp }}
+        run: cargo nextest run --workspace --no-fail-fast
+
+  render:
+    name: Render tests (${{ matrix.shard }}/3)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
-          name: ios-acceptance-diagnostics
-          path: target/mobile-acceptance
-          if-no-files-found: ignore
+          submodules: recursive
+      - run: git -C crates/tessera-cosmic-text lfs pull
+      - run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Run GPU tests with software Vulkan
+        env:
+          XDG_RUNTIME_DIR: ${{ runner.temp }}
+        run: >
+          cargo nextest run --workspace --run-ignored only --no-fail-fast
+          --test-threads 2 --partition hash:${{ matrix.shard }}/3
+
+  package:
+    name: Package (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            format: deb
+            platform: deb
+            artifact: target/packages/example
+          - os: windows-latest
+            format: nsis
+            platform: windows
+            artifact: target/packages/example
+          - os: macos-latest
+            format: app
+            platform: macos
+            artifact: target/packages/example/*.app
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rust-src, rust-analyzer
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: rust-script,cargo-packager
+      - name: Verify packaged sources and scaffolds
+        env:
+          XDG_RUNTIME_DIR: ${{ runner.temp }}
+        run: rust-script scripts/release-package.rs --check
+      - name: Package the example
+        run: cargo tessera package -p example --formats ${{ matrix.format }}
+      - name: Inspect the package
+        run: rust-script scripts/check-package.rs ${{ matrix.platform }} ${{ matrix.artifact }}
+
+  scripts:
+    name: Scripts, doctests and formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: git -C crates/tessera-cosmic-text lfs pull
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: rust-script
+      - name: Test scripts
+        run: |
+          for script in $(grep -l '^fn main' scripts/*.rs); do
+            rust-script --test "$script"
+          done
+      - name: Check imports and formatting
+        run: rust-script scripts/check-imports.rs --check
+      - name: Run doctests
+        run: cargo test --workspace --doc
 
   check_minimal_versions:
     name: Check minimal dependency versions
@@ -122,6 +173,34 @@ jobs:
           cargo tessera web build --release -p example
           rust-script scripts/check-package.rs web example/gen/web
           node scripts/check-web-wasm.mjs example/gen/web/pkg-web/example_lib_bg.wasm
+
+  check_ios:
+    name: Check iOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rust-src, rust-analyzer
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: rust-script
+      - name: Build and inspect the iOS Simulator example
+        run: |
+          cargo tessera ios build -p example --profiling-output acceptance.jsonl
+          rust-script scripts/check-package.rs ios target/packages/example/ios/*/example.app
+      - name: Verify Apple IME and iOS application lifecycle
+        run: rust-script scripts/test-apple-ime.rs target/packages/example/ios/*/example.app
+      - name: Retain iOS acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-acceptance-diagnostics
+          path: target/mobile-acceptance
+          if-no-files-found: ignore
 
   check_android:
     name: Check Android
