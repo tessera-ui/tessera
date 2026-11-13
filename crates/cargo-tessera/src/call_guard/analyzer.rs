@@ -677,11 +677,12 @@ impl<'db> CallAnalyzer<'db> {
             }
         }
         let allow_entry_point_new = self.is_entry_function(&function);
-        let color = if self.is_tessera_function(&function) {
-            ContextColor::Tessera
-        } else {
-            ContextColor::Plain
-        };
+        let color =
+            if self.is_tessera_function(&function) || self.is_runtime_api_function(&function) {
+                ContextColor::Tessera
+            } else {
+                ContextColor::Plain
+            };
         self.walk_node(body.syntax(), color, allow_entry_point_new);
     }
 
@@ -874,6 +875,14 @@ impl<'db> CallAnalyzer<'db> {
             return false;
         };
         self.is_tessera_function_def(def)
+    }
+
+    // A Tessera-only API runs only in Tessera contexts, so its own body is one.
+    fn is_runtime_api_function(&self, function: &ast::Fn) -> bool {
+        self.is_free_function(function)
+            && self.sema.to_fn_def(function).is_some_and(|def| {
+                Self::runtime_api_for_canonical_path(&self.function_path(def)).is_some()
+            })
     }
 
     fn is_free_function(&self, function: &ast::Fn) -> bool {
