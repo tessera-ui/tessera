@@ -111,7 +111,8 @@ objc2-app-kit = { version = "0.3", default-features = false }
 objc2-foundation = { version = "0.3.2", default-features = false }
 objc2-quartz-core = { version = "0.3.2", default-features = false }
 objc2-ui-kit = { version = "0.3", default-features = false }
-once-cell-regex = "0.2"
+# 0.2.0 lacks the `byte_regex!` macro used by tessera-mobile.
+once-cell-regex = "0.2.1"
 os_info = "3.15"
 os_pipe = "1.2.2"
 owo-colors = "4.4"
