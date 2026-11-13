@@ -19,6 +19,7 @@ child sizes when only placement inputs changed.
 `layout` compares the policy with the one already stored on the node. An equal
 policy is discarded; a changed policy replaces the stored value once, so
 re-executing a component does not clone or allocate an unchanged policy.
+`LayoutNode::draw` treats the node's drawing the same way.
 
 Policies are configuration. If measurement intentionally mutates interior state
 that must not affect later comparisons, wrap the policy so the node keeps a

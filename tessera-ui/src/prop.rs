@@ -401,12 +401,39 @@ pub trait Prop: Clone + 'static {
     /// Compare current props with another props value.
     fn prop_eq(&self, other: &Self) -> bool;
     /// Execute the component with these props.
-    fn run_component(self: Rc<Self>);
+    fn run_component(props: ComponentProps<Self>);
+}
+
+/// Props of one component execution: freshly declared, or shared with the
+/// replay snapshot.
+#[doc(hidden)]
+pub enum ComponentProps<P> {
+    Owned(P),
+    Shared(Rc<P>),
+}
+
+impl<P> ComponentProps<P> {
+    pub(crate) fn into_shared(self) -> Rc<P> {
+        match self {
+            Self::Owned(props) => Rc::new(props),
+            Self::Shared(props) => props,
+        }
+    }
+}
+
+impl<P> std::ops::Deref for ComponentProps<P> {
+    type Target = P;
+
+    fn deref(&self) -> &P {
+        match self {
+            Self::Owned(props) => props,
+            Self::Shared(props) => props,
+        }
+    }
 }
 
 pub(crate) trait ErasedComponent {
     fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
     fn equals(&self, other: &dyn ErasedComponent) -> bool;
     fn run(self: Rc<Self>);
 }
@@ -419,17 +446,30 @@ where
         self
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn equals(&self, other: &dyn ErasedComponent) -> bool {
         let Some(other) = other.as_any().downcast_ref::<T>() else {
             return false;
         };
         self.prop_eq(other)
     }
+
     fn run(self: Rc<Self>) {
-        self.run_component();
+        T::run_component(ComponentProps::Shared(self));
+    }
+}
+
+/// Declared props taken out of the pending table for one execution.
+pub(crate) trait PendingProps {
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn run(&mut self);
+}
+
+impl<P: Prop> PendingProps for Option<P> {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self.as_mut().expect("pending props")
+    }
+
+    fn run(&mut self) {
+        P::run_component(ComponentProps::Owned(self.take().expect("pending props")));
     }
 }

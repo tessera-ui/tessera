@@ -614,8 +614,8 @@ fn generate_prop_like_impls(
                 <Self as ::core::cmp::PartialEq>::eq(self, other)
             }
 
-            fn run_component(self: ::std::rc::Rc<Self>) {
-                #component_impl(&self);
+            fn run_component(props: #crate_path::__private::ComponentProps<Self>) {
+                #component_impl(props);
             }
         }
     }
@@ -1119,9 +1119,9 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #builder_ident { props: __tessera_call }
             }
 
-            fn #impl_ident #item_generics(__tessera_props: &::std::rc::Rc<#props_ident #ty_generics>) #where_clause {
+            fn #impl_ident #item_generics(__tessera_props: #crate_path::__private::ComponentProps<#props_ident #ty_generics>) #where_clause {
                 #prop_assert_tokens
-                let __tessera_scope = #begin_scope(
+                let (__tessera_scope, __tessera_props) = #begin_scope(
                     stringify!(#fn_name),
                     #component_type_id_tokens,
                     __tessera_props,

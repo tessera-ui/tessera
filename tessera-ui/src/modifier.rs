@@ -25,10 +25,7 @@ use self::storage::{Chain as ModifierElement, NodeRef};
 
 pub use self::attached::{ModifierNodeContext, ModifierNodeId};
 
-pub(crate) use self::{
-    attached::{AttachedModifierChain, flush_lifecycle},
-    storage::OwnedNode,
-};
+pub(crate) use self::attached::{AttachedModifierChain, flush_lifecycle};
 
 macro_rules! modifier_lifecycle {
     () => {

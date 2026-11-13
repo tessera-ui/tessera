@@ -99,3 +99,8 @@ tempfile.workspace = true
 name = "slot_table"
 harness = false
 required-features = ["testing"]
+
+[[bench]]
+name = "component_call"
+harness = false
+required-features = ["testing"]

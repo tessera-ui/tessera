@@ -5,22 +5,22 @@
 //! Configure declared component uses before the runtime expands their content.
 
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     cell::RefCell,
     collections::VecDeque,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    rc::Rc,
 };
 
-use rustc_hash::FxHasher;
+use rustc_hash::{FxHashMap, FxHasher};
 use slotmap::{SlotMap, new_key_type};
+use smallvec::SmallVec;
 
 use crate::{
     NodeId, RuntimeSession, RuntimeSessionId,
     context::{ContextMap, with_context_map},
     execution_context::{OrderFrame, with_execution_context_mut},
-    prop::{ErasedComponent, Prop},
+    prop::{PendingProps, Prop},
     runtime::{
         GroupPath, TesseraRuntime, ensure_build_phase_at, reserve_component_identity_in,
         with_replay_scope,
@@ -29,12 +29,27 @@ use crate::{
 };
 
 type PropUpdate = Box<dyn FnOnce(&mut dyn Any)>;
+// Most declarations configure at most a couple of content or callback props.
+type PropUpdates = SmallVec<[(&'static str, usize, PropUpdate); 2]>;
 
 const MAX_RECYCLED_QUEUE_CAPACITY: usize = 256;
 
 struct PendingCall {
     declaration: PendingDeclaration,
     configuration: PendingConfiguration,
+}
+
+impl PendingCall {
+    fn execute(self) {
+        let PendingConfiguration { props, updates } = self.configuration;
+        (props.execute)(self.declaration, updates, props.index);
+    }
+
+    fn discard(self) {
+        let PendingConfiguration { props, updates } = self.configuration;
+        drop(updates);
+        (props.discard)(props.index);
+    }
 }
 
 struct PendingDeclaration {
@@ -50,12 +65,89 @@ struct PendingDeclaration {
 }
 
 struct PendingConfiguration {
-    props: Rc<dyn ErasedComponent>,
-    updates: Vec<(&'static str, usize, PropUpdate)>,
+    props: PropsSlot,
+    updates: PropUpdates,
 }
 
-fn pending_props_mut(props: &mut Rc<dyn ErasedComponent>) -> &mut dyn ErasedComponent {
-    Rc::get_mut(props).expect("pending props have a single owner")
+/// Declared props stored in the per-type slab until execution.
+#[derive(Clone, Copy)]
+struct PropsSlot {
+    index: u32,
+    execute: fn(PendingDeclaration, PropUpdates, u32),
+    discard: fn(u32),
+}
+
+fn execute_pending<P: Prop>(declaration: PendingDeclaration, updates: PropUpdates, index: u32) {
+    let props = with_pending_calls(|calls| calls.borrow_mut().props.slab::<P>().take(index));
+    execute_call(declaration, updates, &mut Some(props));
+}
+
+fn discard_pending<P: Prop>(index: u32) {
+    let props = with_pending_calls(|calls| calls.borrow_mut().props.slab::<P>().take(index));
+    drop(props);
+}
+
+struct PropSlab<P> {
+    values: Vec<Option<P>>,
+    free: Vec<u32>,
+}
+
+impl<P> PropSlab<P> {
+    fn insert(&mut self, props: P) -> u32 {
+        if let Some(index) = self.free.pop() {
+            self.values[index as usize] = Some(props);
+            return index;
+        }
+        let index = u32::try_from(self.values.len()).expect("pending props capacity exhausted");
+        self.values.push(Some(props));
+        index
+    }
+
+    fn get_mut(&mut self, index: u32) -> &mut P {
+        self.values[index as usize]
+            .as_mut()
+            .expect("pending props are present")
+    }
+
+    fn lend(&mut self, index: u32) -> P {
+        self.values[index as usize]
+            .take()
+            .expect("pending props are present")
+    }
+
+    fn restore(&mut self, index: u32, props: P) {
+        self.values[index as usize] = Some(props);
+    }
+
+    fn release(&mut self, index: u32) {
+        self.free.push(index);
+    }
+
+    fn take(&mut self, index: u32) -> P {
+        let props = self.lend(index);
+        self.release(index);
+        props
+    }
+}
+
+/// Pending props are stored by value so a declaration that is skipped as
+/// unchanged never allocates.
+#[derive(Default)]
+struct PropSlabs(FxHashMap<TypeId, Box<dyn Any>>);
+
+impl PropSlabs {
+    fn slab<P: Prop>(&mut self) -> &mut PropSlab<P> {
+        self.0
+            .entry(TypeId::of::<P>())
+            .or_insert_with(|| {
+                Box::new(PropSlab::<P> {
+                    values: Vec::new(),
+                    free: Vec::new(),
+                })
+            })
+            .downcast_mut()
+            .expect("prop slab type")
+    }
 }
 
 new_key_type! {
@@ -77,20 +169,57 @@ struct PendingEntry {
 #[derive(Default)]
 struct PendingCalls {
     calls: SlotMap<PendingKey, PendingEntry>,
+    props: PropSlabs,
     scopes: Vec<VecDeque<PendingToken>>,
     recycled_queues: Vec<VecDeque<PendingToken>>,
     next_serial: u64,
+    epoch: u64,
+}
+
+fn pending_entry(
+    calls: &mut SlotMap<PendingKey, PendingEntry>,
+    token: PendingToken,
+) -> Option<&mut PendingEntry> {
+    calls
+        .get_mut(token.key)
+        .filter(|entry| entry.serial == token.serial)
+}
+
+#[track_caller]
+fn pending_configuration(
+    calls: &mut SlotMap<PendingKey, PendingEntry>,
+    token: PendingToken,
+) -> &mut PendingConfiguration {
+    pending_entry(calls, token)
+        .and_then(|entry| entry.configuration.as_mut())
+        .unwrap_or_else(|| panic!("component call {} is no longer Pending", token.serial))
 }
 
 impl PendingCalls {
-    fn entry_mut(&mut self, token: PendingToken) -> Option<&mut PendingEntry> {
-        self.calls
-            .get_mut(token.key)
-            .filter(|entry| entry.serial == token.serial)
+    fn push(&mut self, declaration: PendingDeclaration, props: PropsSlot) -> PendingToken {
+        let serial = self
+            .next_serial
+            .checked_add(1)
+            .expect("component call token space exhausted");
+        self.next_serial = serial;
+        let key = self.calls.insert(PendingEntry {
+            serial,
+            declaration,
+            configuration: Some(PendingConfiguration {
+                props,
+                updates: SmallVec::new(),
+            }),
+        });
+        let token = PendingToken { key, serial };
+        self.scopes
+            .last_mut()
+            .expect("active build fragment")
+            .push_back(token);
+        token
     }
 
     fn remove(&mut self, token: PendingToken) -> Option<PendingCall> {
-        self.entry_mut(token)?;
+        pending_entry(&mut self.calls, token)?;
         let entry = self.calls.remove(token.key)?;
         Some(PendingCall {
             declaration: entry.declaration,
@@ -140,16 +269,13 @@ impl<P: Prop> ComponentCall<P> {
         F: FnOnce(&mut P),
     {
         let session = self.owning_session();
-        let mut guard =
-            begin_configuration(&session.runtime_globals().component_calls.pending, self.id);
+        let mut guard = ConfigurationGuard::<P>::begin(
+            &session.runtime_globals().component_calls.pending,
+            self.id,
+        );
         let configuration = guard.configuration.as_mut().expect("active configuration");
         configuration.updates.retain(|entry| entry.0 != property);
-        update(
-            pending_props_mut(&mut configuration.props)
-                .as_any_mut()
-                .downcast_mut::<P>()
-                .expect("registered component props type"),
-        );
+        update(guard.props.as_mut().expect("active configuration"));
     }
 
     /// Assign a generated value property without detaching its pending call.
@@ -161,23 +287,24 @@ impl<P: Prop> ComponentCall<P> {
         let session = self.owning_session();
         let calls = &session.runtime_globals().component_calls.pending;
         let mut pending = calls.borrow_mut();
-        let configuration = pending
-            .entry_mut(self.id)
-            .and_then(|entry| entry.configuration.as_mut())
-            .unwrap_or_else(|| panic!("component call {} is no longer Pending", self.id.serial));
-        if !configuration.updates.is_empty() {
+        let PendingCalls {
+            calls: entries,
+            props,
+            ..
+        } = &mut *pending;
+        let configuration = pending_configuration(entries, self.id);
+        if configuration
+            .updates
+            .iter()
+            .any(|entry| entry.0 == property)
+        {
             drop(pending);
             let mut previous = None;
             self.configure(property, |props| previous = Some(update(props)));
             drop(previous);
             return;
         }
-        let previous = update(
-            pending_props_mut(&mut configuration.props)
-                .as_any_mut()
-                .downcast_mut::<P>()
-                .expect("registered component props type"),
-        );
+        let previous = update(props.slab::<P>().get_mut(configuration.props.index));
         drop(pending);
         drop(previous);
     }
@@ -230,7 +357,7 @@ impl<P: Prop> ComponentCall<P> {
             let (id, call) =
                 take_next_call(calls).expect("render-slot call must belong to the active fragment");
             if let Some(call) = call {
-                execute_call(call);
+                call.execute();
             }
             if id == self.id {
                 break;
@@ -249,10 +376,7 @@ fn store_update(
 ) {
     let previous = {
         let mut calls = calls.borrow_mut();
-        let configuration = calls
-            .entry_mut(id)
-            .and_then(|entry| entry.configuration.as_mut())
-            .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial));
+        let configuration = pending_configuration(&mut calls.calls, id);
         if append {
             let occurrence = configuration
                 .updates
@@ -278,31 +402,61 @@ fn store_update(
     drop(previous);
 }
 
-struct ConfigurationGuard<'a> {
+/// Detaches a pending configuration and its props so the update may register
+/// more calls.
+struct ConfigurationGuard<'a, P: Prop> {
     calls: &'a RefCell<PendingCalls>,
     id: PendingToken,
+    epoch: u64,
     configuration: Option<PendingConfiguration>,
+    props: Option<P>,
 }
 
-#[track_caller]
-fn begin_configuration(calls: &RefCell<PendingCalls>, id: PendingToken) -> ConfigurationGuard<'_> {
-    let configuration = calls
-        .borrow_mut()
-        .entry_mut(id)
-        .and_then(|entry| entry.configuration.take())
-        .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial));
-    ConfigurationGuard {
-        calls,
-        id,
-        configuration: Some(configuration),
+impl<'a, P: Prop> ConfigurationGuard<'a, P> {
+    #[track_caller]
+    fn begin(calls: &'a RefCell<PendingCalls>, id: PendingToken) -> Self {
+        let mut pending = calls.borrow_mut();
+        let PendingCalls {
+            calls: entries,
+            props,
+            epoch,
+            ..
+        } = &mut *pending;
+        let configuration = pending_entry(entries, id)
+            .and_then(|entry| entry.configuration.take())
+            .unwrap_or_else(|| panic!("component call {} is no longer Pending", id.serial));
+        let props = props.slab::<P>().lend(configuration.props.index);
+        Self {
+            calls,
+            id,
+            epoch: *epoch,
+            configuration: Some(configuration),
+            props: Some(props),
+        }
     }
 }
 
-impl Drop for ConfigurationGuard<'_> {
+impl<P: Prop> Drop for ConfigurationGuard<'_, P> {
     fn drop(&mut self) {
-        if let Some(entry) = self.calls.borrow_mut().entry_mut(self.id) {
-            entry.configuration = self.configuration.take();
+        let mut pending = self.calls.borrow_mut();
+        let PendingCalls {
+            calls: entries,
+            props,
+            epoch,
+            ..
+        } = &mut *pending;
+        let configuration = self.configuration.take().expect("active configuration");
+        let index = configuration.props.index;
+        if let Some(entry) = pending_entry(entries, self.id) {
+            entry.configuration = Some(configuration);
+            props
+                .slab::<P>()
+                .restore(index, self.props.take().expect("active configuration"));
+        } else if *epoch == self.epoch {
+            // The call was committed or abandoned while detached.
+            props.slab::<P>().release(index);
         }
+        drop(pending);
     }
 }
 
@@ -313,69 +467,59 @@ pub fn register_component_call<P: Prop>(
     component_type_id: u64,
     props: P,
 ) -> ComponentCall<P> {
-    let (session, id) = register_erased_call(name, component_type_id, Rc::new(props));
+    let session = RuntimeSession::current().expect("a runtime session must be active");
+    let declaration = declare_call(&session, name, component_type_id);
+    let mut pending = session
+        .runtime_globals()
+        .component_calls
+        .pending
+        .borrow_mut();
+    let index = pending.props.slab::<P>().insert(props);
+    let id = pending.push(
+        declaration,
+        PropsSlot {
+            index,
+            execute: execute_pending::<P>,
+            discard: discard_pending::<P>,
+        },
+    );
     ComponentCall {
-        session,
+        session: session.identity(),
         id,
         marker: PhantomData,
     }
 }
 
 #[track_caller]
-fn register_erased_call(
+fn declare_call(
+    session: &RuntimeSession,
     name: &'static str,
     component_type_id: u64,
-    props: Rc<dyn ErasedComponent>,
-) -> (RuntimeSessionId, PendingToken) {
-    let session = RuntimeSession::current().expect("a runtime session must be active");
+) -> PendingDeclaration {
     let mut context = session.execution_context().borrow_mut();
     ensure_build_phase_at(context.phase_stack.last().copied());
     let globals = session.runtime_globals();
-    let mut pending = globals.component_calls.pending.borrow_mut();
-    let declaration = {
-        assert!(
-            !pending.scopes.is_empty(),
-            "component declarations require an active build fragment"
-        );
-        let identity = reserve_component_identity_in(&mut context, component_type_id);
-        let parent = globals.with_runtime(|runtime| runtime.component_tree.current_build_node_id());
-        PendingDeclaration {
-            name,
-            parent,
-            execution_parent: context.node_context_stack.last().copied(),
-            identity,
-            prop_owner: context.instance_logic_id_stack.last().copied().unwrap_or(0),
-            creator: context
-                .current_component_instance_stack
-                .last()
-                .copied()
-                .unwrap_or(0),
-            group_path: context.group_path,
-            key_override: context.instance_key_override,
-            context: context.context_map.clone(),
-        }
-    };
-    drop(context);
-    let serial = pending
-        .next_serial
-        .checked_add(1)
-        .expect("component call token space exhausted");
-    pending.next_serial = serial;
-    let key = pending.calls.insert(PendingEntry {
-        serial,
-        declaration,
-        configuration: Some(PendingConfiguration {
-            props,
-            updates: Vec::new(),
-        }),
-    });
-    let token = PendingToken { key, serial };
-    pending
-        .scopes
-        .last_mut()
-        .expect("active build fragment")
-        .push_back(token);
-    (session.identity(), token)
+    assert!(
+        !globals.component_calls.pending.borrow().scopes.is_empty(),
+        "component declarations require an active build fragment"
+    );
+    let identity = reserve_component_identity_in(&mut context, component_type_id);
+    let parent = globals.with_runtime(|runtime| runtime.component_tree.current_build_node_id());
+    PendingDeclaration {
+        name,
+        parent,
+        execution_parent: context.node_context_stack.last().copied(),
+        identity,
+        prop_owner: context.instance_logic_id_stack.last().copied().unwrap_or(0),
+        creator: context
+            .current_component_instance_stack
+            .last()
+            .copied()
+            .unwrap_or(0),
+        group_path: context.group_path,
+        key_override: context.instance_key_override,
+        context: context.context_map.clone(),
+    }
 }
 
 struct ScopeGuard {
@@ -401,7 +545,7 @@ impl Drop for ScopeGuard {
                 context.order_frame_stack.pop();
             });
         }
-        drop(abandoned);
+        abandoned.into_iter().for_each(PendingCall::discard);
     }
 }
 
@@ -434,7 +578,7 @@ pub(crate) fn commit_pending() {
     with_pending_calls(|calls| {
         while let Some((_, call)) = take_next_call(calls) {
             if let Some(call) = call {
-                execute_call(call);
+                call.execute();
             }
         }
     });
@@ -483,7 +627,11 @@ impl Drop for PropScopeGuard {
     }
 }
 
-fn execute_call(call: PendingCall) {
+fn execute_call(
+    declaration: PendingDeclaration,
+    updates: PropUpdates,
+    props: &mut dyn PendingProps,
+) {
     let PendingDeclaration {
         name,
         parent,
@@ -494,8 +642,7 @@ fn execute_call(call: PendingCall) {
         group_path,
         key_override,
         context,
-    } = call.declaration;
-    let PendingConfiguration { mut props, updates } = call.configuration;
+    } = declaration;
     let _parent_guard = ParentGuard {
         queue: TesseraRuntime::with_mut(|runtime| {
             runtime.component_tree.replace_build_parent(parent)
@@ -533,7 +680,7 @@ fn execute_call(call: PendingCall) {
                     group_path,
                     key_override,
                 };
-                update(pending_props_mut(&mut props).as_any_mut());
+                update(props.as_any_mut());
             }
         });
     }
@@ -547,22 +694,23 @@ pub(crate) fn reset_pending_calls() {
             scope.clear();
         }
         calls.recycled_queues.clear();
-        std::mem::take(&mut calls.calls)
+        calls.epoch = calls.epoch.wrapping_add(1);
+        (
+            std::mem::take(&mut calls.calls),
+            std::mem::take(&mut calls.props),
+        )
     });
     drop(removed);
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        panic::{AssertUnwindSafe, catch_unwind},
-        rc::Rc,
-    };
+    use std::panic::{AssertUnwindSafe, catch_unwind};
 
     use crate::{
         RenderSlot,
         execution_context::reset_execution_context,
-        prop::Prop,
+        prop::{ComponentProps, Prop},
         runtime::{GroupGuard, RuntimePhase, push_phase, reset_slots},
     };
 
@@ -580,10 +728,11 @@ mod tests {
             self.value == other.value && self.slot == other.slot
         }
 
-        fn run_component(self: Rc<Self>) {
-            self.recorder
+        fn run_component(props: ComponentProps<Self>) {
+            props
+                .recorder
                 .observed
-                .with_mut(|values| values.push((self.value, self.slot)));
+                .with_mut(|values| values.push((props.value, props.slot)));
         }
     }
 
@@ -682,7 +831,7 @@ mod tests {
             fn prop_eq(&self, _other: &Self) -> bool {
                 true
             }
-            fn run_component(self: Rc<Self>) {}
+            fn run_component(_: ComponentProps<Self>) {}
         }
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();

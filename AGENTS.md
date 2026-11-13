@@ -38,7 +38,7 @@ programming contract; the guidelines below also govern framework implementation.
 - Inside the component function:
   - Compose child components to build the complete component tree
   - Use `Modifier` chains for node-local behavior such as layout modifiers, input, semantics, drawing, and focus
-  - Use `layout(policy)` with a `LayoutPolicy` to arrange children and `LayoutModifier` for wrapping layout modifiers. `layout` compares the policy with the node's stored value and stores it only when it changed.
+  - Use `layout(policy)` with a `LayoutPolicy` to arrange children and `LayoutModifier` for wrapping layout modifiers. `layout` compares the policy with the node's stored value and stores it only when it changed; `LayoutNode::draw` does the same for the node's drawing. Pending props are stored by value and moved to the heap only when they differ from the replay snapshot.
   - A component call does not occupy a tree node: its identity, state, and replay snapshot live on a call record. Only the `layout(policy)` and `group()` primitives emit nodes, so a component that wraps one `layout` call costs one node. `#[tessera]` takes no arguments; Tessera crates alias themselves with `extern crate self as ...;`
   - Modifiers attach only to the node emitted by the executing primitive. Use `group()` to attach semantics, focus, or input to content laid out by an enclosing layout.
   - The `__private` module of `tessera_ui` serves official macro expansions only. `cargo tessera check` rejects other uses outside the defining crate (T0005); expose a public API instead.

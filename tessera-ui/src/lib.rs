@@ -114,9 +114,7 @@ pub use crate::{
     },
     geometry::{FloatRect, LayoutCoordinates, LocalToWindow, scaled_box},
     keyboard_state::KeyboardEvent,
-    layout::{
-        DrawModifierHandle, LayoutResult, NoopDrawModifier, RenderInput, RenderMetadataMut, Stack,
-    },
+    layout::{LayoutResult, NoopDrawModifier, RenderInput, RenderMetadataMut, Stack},
     modifier::{
         BuildModifierNode, CursorModifierNode, DrawModifierContent, DrawModifierContext,
         DrawModifierNode, ImeInputModifierNode, KeyboardInputModifierNode, LayoutModifier,

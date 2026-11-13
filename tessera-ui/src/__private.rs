@@ -3,7 +3,7 @@
 pub use crate::{
     component_call::{ComponentCall, register_component_call, with_pending_scope},
     layout::layout,
-    prop::Prop,
+    prop::{ComponentProps, Prop},
     runtime::{
         CurrentComponentInstanceGuard, GroupGuard, NodeContextGuard, PathGroupGuard, PhaseGuard,
         RuntimePhase, begin_component_node, push_current_component_instance_key, push_current_node,

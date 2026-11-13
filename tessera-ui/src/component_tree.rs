@@ -653,6 +653,7 @@ pub(crate) struct ReplayReplaceContext {
 pub(crate) struct PreviousBuildNode {
     pub(crate) modifier: Modifier,
     pub(crate) policy: LayoutPolicyHandle,
+    pub(crate) draw: crate::layout::DrawModifierHandle,
     fn_name: &'static str,
     children_scale: f32,
     same_parent: bool,
@@ -666,7 +667,6 @@ pub(crate) struct NodeInput<'a, P = crate::layout::Stack> {
     pub(crate) instance_logic_id: u64,
     pub(crate) instance_key: u64,
     pub(crate) policy: &'a P,
-    pub(crate) draw: crate::layout::DrawModifierHandle,
 }
 
 impl<P> NodeInput<'_, P>
@@ -684,7 +684,6 @@ where
             instance_key: self.instance_key,
             layout_policy_input: policy,
             layout_node,
-            draw_node: self.draw,
             ..ComponentNode::new(self.fn_name, self.role)
         }
     }
@@ -1101,7 +1100,7 @@ impl ComponentTree {
         // Attachment repopulates the remaining node-local state.
         let interaction = old.interaction.take();
         old.layout_coordinate_space = false;
-        old.draw_node = input.draw;
+        let previous_draw = std::mem::take(&mut old.draw_node);
         let previous_policy = old.layout_policy_input.clone();
         if old.layout_policy_input.update_if_changed(input.policy) {
             old.layout_node = old
@@ -1113,6 +1112,7 @@ impl ComponentTree {
         let mut previous = PreviousBuildNode {
             modifier: std::mem::take(&mut old.modifier),
             policy: previous_policy,
+            draw: previous_draw,
             fn_name: std::mem::replace(&mut old.fn_name, input.fn_name),
             children_scale: std::mem::replace(&mut old.children_scale, 1.0),
             same_parent,
@@ -6403,7 +6403,6 @@ mod tests {
             instance_logic_id: key,
             instance_key: key,
             policy: &crate::layout::Stack,
-            draw: crate::layout::DrawModifierHandle::default(),
         });
         tree.emit_call_node(id, previous);
         id

@@ -82,6 +82,7 @@ struct SlotEntry {
     generation: u64,
     value: Option<Rc<dyn Any>>,
     last_alive_epoch: u64,
+    derived: Option<(ContextMap, ContextMap)>,
 }
 
 #[derive(Default)]
@@ -573,6 +574,7 @@ where
                 generation: 0,
                 value: Some(cell(value)),
                 last_alive_epoch: epoch,
+                derived: None,
             });
             table.index_slot(slot_key, slot);
             (slot, 0, false)
@@ -584,14 +586,25 @@ where
         }
     }
 
-    let map = current_context_map().update(
-        type_id,
-        ContextSnapshotEntry {
-            slot,
-            generation,
-            key: slot_key,
-        },
-    );
+    let binding = ContextSnapshotEntry {
+        slot,
+        generation,
+        key: slot_key,
+    };
+    let base = current_context_map();
+    // Reusing the derived map keeps descendant snapshots pointer-equal.
+    let map = with_slot_table_mut(|table| {
+        let entry = &mut table.entries[slot as usize];
+        if let Some((cached_base, derived)) = &entry.derived
+            && cached_base.ptr_eq(&base)
+            && derived.get(&type_id) == Some(&binding)
+        {
+            return derived.clone();
+        }
+        let derived = base.update(type_id, binding);
+        entry.derived = Some((base, derived.clone()));
+        derived
+    });
     with_context_map(map, f)
 }
 
@@ -612,7 +625,6 @@ where
             .map(|entry| Context::new(entry.slot, entry.generation))
     })
 }
-// (legacy comment removed)
 
 #[cfg(test)]
 mod tests {
@@ -669,6 +681,7 @@ mod tests {
                     generation: 0,
                     value: Some(Rc::new(ReadOnDrop)),
                     last_alive_epoch: 0,
+                    derived: None,
                 });
                 table.index_slot(key, 0);
                 table.begin_epoch();
@@ -774,6 +787,7 @@ mod tests {
                     generation: 2,
                     value: Some(Rc::new(RefCell::new(42_u8))),
                     last_alive_epoch: 1,
+                    derived: None,
                 });
                 table.index_slot(key, 0);
             });
@@ -819,12 +833,14 @@ mod tests {
                     generation: 9,
                     value: None,
                     last_alive_epoch: 0,
+                    derived: None,
                 });
                 table.entries.push(SlotEntry {
                     key,
                     generation: 4,
                     value: Some(Rc::new(RefCell::new(7_u16))),
                     last_alive_epoch: 2,
+                    derived: None,
                 });
                 table.index_slot(key, 1);
             });

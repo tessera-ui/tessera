@@ -459,11 +459,24 @@ impl ComponentTree {
         self.calls.records[id].name
     }
 
-    pub(crate) fn set_emitted_node_draw(&mut self, draw: crate::layout::DrawModifierHandle) {
-        let id = self
-            .executing_call_node()
+    /// Keeps the previous drawing when it equals `draw`.
+    pub(crate) fn set_emitted_node_draw<N>(&mut self, draw: N)
+    where
+        N: crate::modifier::DrawModifierNode + PartialEq,
+    {
+        let emitted = self
+            .calls
+            .active
+            .last_mut()
+            .and_then(|call| call.emitted.as_mut())
             .expect("draw configures the node emitted by the current component");
-        self.tree[id].get_mut().draw_node = draw;
+        let previous = emitted
+            .previous
+            .as_mut()
+            .map(|previous| std::mem::take(&mut previous.draw))
+            .filter(|previous| previous.matches(&draw));
+        self.tree[emitted.id].get_mut().draw_node =
+            previous.unwrap_or_else(|| crate::layout::DrawModifierHandle::new(draw));
     }
 
     /// Returns the node emitted by the executing call, if any.

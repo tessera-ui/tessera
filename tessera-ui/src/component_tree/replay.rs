@@ -5,6 +5,7 @@
 //! Preserve interaction and semantics when retained controls move.
 
 use rustc_hash::FxHashMap as HashMap;
+use smallvec::SmallVec;
 
 use crate::{
     NodeId,
@@ -41,7 +42,8 @@ struct Ancestor {
 
 #[derive(Default, PartialEq, Eq)]
 struct ConsumerAncestry {
-    order: Vec<usize>,
+    // Retained roots are captured every frame; typical depths stay inline.
+    order: SmallVec<[usize; 32]>,
     semantics: Vec<(u64, bool, Option<String>)>,
     focus: Vec<(FocusHandleId, FocusRegistrationKind)>,
     coordinate_space: Option<u64>,

@@ -973,17 +973,45 @@ where
     }
 }
 
-/// Type-erased draw modifier handle consumed by [`layout`].
-///
-/// Most callers do not construct this type directly. Instead, pass any
-/// [`DrawModifierNode`] to the `draw(...)` builder method and rely on the
-/// `From<T>` conversion.
 #[derive(Clone, Default)]
-pub struct DrawModifierHandle {
-    node: Option<crate::modifier::OwnedNode<dyn ErasedDrawModifierNode>>,
+pub(crate) struct DrawModifierHandle {
+    node: Option<std::rc::Rc<dyn ErasedDrawModifierNode>>,
 }
 
 impl DrawModifierHandle {
+    pub(crate) fn new<N>(node: N) -> Self
+    where
+        N: DrawModifierNode + PartialEq,
+    {
+        if TypeId::of::<N>() == TypeId::of::<NoopDrawModifier>() {
+            return Self::default();
+        }
+        Self {
+            node: Some(std::rc::Rc::new(node)),
+        }
+    }
+
+    pub(crate) fn matches<N>(&self, candidate: &N) -> bool
+    where
+        N: DrawModifierNode + PartialEq,
+    {
+        match &self.node {
+            Some(node) => node
+                .as_any()
+                .downcast_ref::<N>()
+                .is_some_and(|node| node == candidate),
+            None => TypeId::of::<N>() == TypeId::of::<NoopDrawModifier>(),
+        }
+    }
+
+    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
+        match (&self.node, &other.node) {
+            (None, None) => true,
+            (Some(lhs), Some(rhs)) => std::rc::Rc::ptr_eq(lhs, rhs),
+            _ => false,
+        }
+    }
+
     pub(crate) fn has_node(&self) -> bool {
         self.node.is_some()
     }
@@ -1010,25 +1038,11 @@ impl PartialEq for DrawModifierHandle {
         match (&self.node, &other.node) {
             (None, None) => true,
             (Some(lhs), Some(rhs)) => lhs.dyn_eq(rhs.as_ref()),
-            (Some(node), None) | (None, Some(node)) => node.as_any().is::<NoopDrawModifier>(),
+            _ => false,
         }
     }
 }
 
-impl<N> From<N> for DrawModifierHandle
-where
-    N: DrawModifierNode + PartialEq,
-{
-    fn from(node: N) -> Self {
-        Self {
-            node: Some(crate::modifier::OwnedNode::new(node, |node| {
-                node as &dyn ErasedDrawModifierNode
-            })),
-        }
-    }
-}
-
-/// Type-erased draw modifier node used by [`DrawModifierHandle`].
 trait ErasedDrawModifierNode {
     fn as_any(&self) -> &dyn Any;
     fn node(&self) -> &dyn DrawModifierNode;
@@ -1120,8 +1134,9 @@ pub struct LayoutNode {
 
 impl LayoutNode {
     /// Records the node's drawing; defaults to [`NoopDrawModifier`].
-    pub fn draw(self, draw: impl Into<DrawModifierHandle>) -> Self {
-        set_emitted_node_draw(draw.into());
+    /// An equal drawing from the previous build is kept without reallocation.
+    pub fn draw(self, draw: impl DrawModifierNode + PartialEq) -> Self {
+        set_emitted_node_draw(draw);
         self
     }
 

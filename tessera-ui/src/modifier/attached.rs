@@ -220,6 +220,8 @@ struct Link {
 #[derive(Default)]
 pub(crate) struct AttachedModifierChain {
     current: Modifier,
+    base: Modifier,
+    draw: crate::layout::DrawModifierHandle,
     owner: u64,
     session: u128,
     slots: SlotMap<Slot, Link>,
@@ -248,10 +250,15 @@ impl AttachedModifierChain {
         modifier: Modifier,
         draw: crate::layout::DrawModifierHandle,
     ) {
-        let modifier = modifier.with_terminal_draw(draw);
-        if self.current.element.is_same(&modifier.element) && self.owner == owner {
+        if self.owner == owner
+            && self.base.element.is_same(&modifier.element)
+            && self.draw.ptr_eq(&draw)
+        {
             return;
         }
+        self.base = modifier.clone();
+        self.draw = draw.clone();
+        let modifier = modifier.with_terminal_draw(draw);
         assert!(
             self.owner == owner || self.order.is_empty(),
             "modifier chain changed owner"

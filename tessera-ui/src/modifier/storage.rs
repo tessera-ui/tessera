@@ -80,45 +80,6 @@ impl Fragment {
     }
 }
 
-pub(crate) struct OwnedNode<T: ?Sized> {
-    pointer: NodeRef<T>,
-    owner: Rc<Fragment>,
-}
-
-impl<T: ?Sized> OwnedNode<T> {
-    pub(crate) fn new<N: 'static>(node: N, erase: fn(&N) -> &T) -> Self {
-        let mut owner = Fragment::default();
-        let pointer = owner.allocate(node, erase);
-        Self {
-            pointer,
-            owner: Rc::new(owner),
-        }
-    }
-}
-
-impl<T: ?Sized> Clone for OwnedNode<T> {
-    fn clone(&self) -> Self {
-        Self {
-            pointer: NodeRef(self.pointer.0),
-            owner: self.owner.clone(),
-        }
-    }
-}
-
-impl<T: ?Sized> Deref for OwnedNode<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        self.pointer.as_ref()
-    }
-}
-
-impl<T: ?Sized> AsRef<T> for OwnedNode<T> {
-    fn as_ref(&self) -> &T {
-        self
-    }
-}
-
 impl Drop for Fragment {
     fn drop(&mut self) {
         let mut pending = SmallVec::<[Chain; 4]>::new();
