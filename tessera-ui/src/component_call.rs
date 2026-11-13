@@ -139,16 +139,20 @@ struct PropSlabs(FxHashMap<TypeId, Box<dyn Any>>);
 
 impl PropSlabs {
     fn slab<P: Prop>(&mut self) -> &mut PropSlab<P> {
-        self.0
-            .entry(TypeId::of::<P>())
-            .or_insert_with(|| {
-                Box::new(PropSlab::<P> {
-                    values: Vec::new(),
-                    free: Vec::new(),
-                })
+        fn create<P: 'static>() -> Box<dyn Any> {
+            Box::new(PropSlab::<P> {
+                values: Vec::new(),
+                free: Vec::new(),
             })
+        }
+        self.erased(TypeId::of::<P>(), create::<P>)
             .downcast_mut()
             .expect("prop slab type")
+    }
+
+    #[inline(never)]
+    fn erased(&mut self, type_id: TypeId, create: fn() -> Box<dyn Any>) -> &mut dyn Any {
+        self.0.entry(type_id).or_insert_with(create).as_mut()
     }
 }
 

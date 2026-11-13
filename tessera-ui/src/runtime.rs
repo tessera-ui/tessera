@@ -188,13 +188,13 @@ impl SlotEntry {
         &mut self,
         slot: SlotHandle,
         epoch: u64,
-        init: &mut Option<impl FnOnce() -> T>,
+        init: &mut dyn FnMut() -> T,
     ) -> (Rc<T>, u64) {
         debug_assert_eq!(self.key.type_id, TypeId::of::<T>());
         debug_assert!(self.alive);
         self.last_alive_epoch = epoch;
         let value = self.value.get_or_insert_with(|| {
-            let value = Rc::new(init.take().expect("functor slot initialized once")());
+            let value = Rc::new(init());
             self.generation = self.generation.wrapping_add(1);
             value
         });
@@ -582,10 +582,12 @@ type CallbackWithCell<T, R> = FunctorCell<dyn Fn(T) -> R, crate::CallbackWith<T,
 type RenderSlotCell = FunctorCell<dyn Fn(), crate::RenderSlot>;
 type RenderSlotWithCell<T> = FunctorCell<dyn Fn(T), crate::RenderSlotWith<T>>;
 
+// Callback and slot closures are distinct types at every call site, so the
+// per-closure generic parts stay minimal and delegate to erased helpers.
 impl<D: ?Sized, K> FunctorCell<D, K> {
-    fn new<F: 'static>(current: F, erase: fn(Rc<F>) -> Rc<D>) -> Self {
+    fn new(current: Rc<D>, type_id: TypeId) -> Self {
         Self {
-            current: RefCell::new((erase(Rc::new(current)), TypeId::of::<F>())),
+            current: RefCell::new((current, type_id)),
             kind: PhantomData,
         }
     }
@@ -594,24 +596,34 @@ impl<D: ?Sized, K> FunctorCell<D, K> {
     /// Capture-free closures of the same type are unchanged; a uniquely held
     /// closure of the same type is overwritten in place.
     fn update<F: 'static>(&self, next: F, erase: fn(Rc<F>) -> Rc<D>) -> bool {
-        let mut current = self.current.borrow_mut();
-        if current.1 == TypeId::of::<F>() {
-            if std::mem::size_of::<F>() == 0 {
+        let type_id = TypeId::of::<F>();
+        if std::mem::size_of::<F>() == 0 {
+            if self.current.borrow().1 == type_id {
                 return false;
             }
-            if let Some(stored) = Rc::get_mut(&mut current.0) {
-                // SAFETY: the stored type id proves the erased value is an `F`.
-                let stored = unsafe { &mut *(stored as *mut D).cast::<F>() };
-                let previous = std::mem::replace(stored, next);
-                drop(current);
-                drop(previous);
-                return true;
-            }
+        } else if let Some(stored) = self.unique(type_id) {
+            // SAFETY: the type id proves the uniquely held value is an `F`,
+            // and nothing can share it before this write.
+            drop(unsafe { std::ptr::replace(stored.cast::<F>(), next) });
+            return true;
         }
-        let previous = std::mem::replace(&mut *current, (erase(Rc::new(next)), TypeId::of::<F>()));
-        drop(current);
-        drop(previous);
+        self.replace(erase(Rc::new(next)), type_id);
         true
+    }
+
+    #[inline(never)]
+    fn unique(&self, type_id: TypeId) -> Option<*mut D> {
+        let mut current = self.current.borrow_mut();
+        if current.1 != type_id {
+            return None;
+        }
+        Rc::get_mut(&mut current.0).map(|stored| stored as *mut D)
+    }
+
+    #[inline(never)]
+    fn replace(&self, next: Rc<D>, type_id: TypeId) {
+        let previous = std::mem::replace(&mut *self.current.borrow_mut(), (next, type_id));
+        drop(previous);
     }
 
     fn shared(&self) -> Rc<D> {
@@ -2730,16 +2742,43 @@ pub fn begin_component_node<P: Prop>(
     component_type_id: u64,
     props: ComponentProps<P>,
 ) -> (ComponentNodeScope, ComponentProps<P>) {
+    let mut props = Some(props);
+    let scope = begin_erased_component_node(name, component_type_id, &mut props);
+    (scope, props.expect("component props"))
+}
+
+/// Props of the call being entered, shared with its replay snapshot on demand.
+trait ScopeProps {
+    fn erased(&self) -> &dyn ErasedComponent;
+    fn share(&mut self) -> Rc<dyn ErasedComponent>;
+}
+
+impl<P: Prop> ScopeProps for Option<ComponentProps<P>> {
+    fn erased(&self) -> &dyn ErasedComponent {
+        &**self.as_ref().expect("component props")
+    }
+
+    fn share(&mut self) -> Rc<dyn ErasedComponent> {
+        let shared = self.take().expect("component props").into_shared();
+        *self = Some(ComponentProps::Shared(shared.clone()));
+        shared
+    }
+}
+
+fn begin_erased_component_node(
+    name: &'static str,
+    component_type_id: u64,
+    props: &mut dyn ScopeProps,
+) -> ComponentNodeScope {
     let (mut context, instance_logic_id, instance_key) =
         ComponentBuildContext::begin(component_type_id);
     let pending_dirty = consume_pending_build_invalidation(instance_key);
     let dirty = pending_dirty || is_instance_key_build_dirty(instance_key);
-    let (host, retained, props) = TesseraRuntime::with_mut(move |runtime| {
-        let mut props = props;
+    let (host, retained) = TesseraRuntime::with_mut(|runtime| {
         let tree = &mut runtime.component_tree;
         let (call, update) = tree.locate_call(instance_key, |previous, executed| {
             if previous.instance_logic_id != instance_logic_id
-                || !previous.replay.equals(&*props as &dyn ErasedComponent)
+                || !previous.replay.equals(props.erased())
             {
                 return SnapshotUpdate::Replace;
             }
@@ -2772,30 +2811,28 @@ pub fn begin_component_node<P: Prop>(
             }),
             SnapshotUpdate::Replace => {
                 // Only changed props are moved to the heap.
-                let replay = props.into_shared();
+                let replay = props.share();
                 let snapshot = with_execution_context(|context| ReplayNodeSnapshot {
                     instance_logic_id,
                     group_path: context.group_path,
                     instance_key_override: context.instance_key_override,
                     context: context.context_map.clone(),
-                    replay: replay.clone(),
+                    replay,
                 });
-                props = ComponentProps::Shared(replay);
                 tree.store_call_snapshot(id, snapshot);
             }
         }
         let host = tree
             .current_build_node_id()
             .expect("component calls execute inside a host node");
-        (host, retained, props)
+        (host, retained)
     });
     context.enter_node(host, instance_logic_id, name);
-    let scope = ComponentNodeScope {
+    ComponentNodeScope {
         instance_logic_id,
         retained,
         _context: context,
-    };
-    (scope, props)
+    }
 }
 /// Emits the tree node owned by the executing call.
 pub(crate) fn emit_node<P>(role: NodeRole, policy: &P)
@@ -3392,11 +3429,7 @@ pub(crate) fn ensure_build_phase_at(phase: Option<RuntimePhase>) {
     }
 }
 
-fn remember_functor_cell<T, F>(init: F) -> (Rc<T>, FunctorHandle)
-where
-    T: 'static,
-    F: FnOnce() -> T,
-{
+fn remember_functor_cell<T: 'static>(init: &mut dyn FnMut() -> T) -> (Rc<T>, FunctorHandle) {
     ensure_build_phase();
     let (instance_logic_id, slot_hash) = compute_functor_slot_key();
     let slot_key = SlotKey {
@@ -3407,15 +3440,14 @@ where
         type_id: TypeId::of::<T>(),
     };
 
-    let mut init = Some(init);
     let (value, slot, generation) = with_slot_order(&slot_key, |table, mut cursor| {
         let epoch = table.epoch;
         if let Some(slot) = table.locate_slot(&slot_key, cursor.as_deref_mut()) {
-            let (value, generation) = table.entries[slot].reuse_functor(slot, epoch, &mut init);
+            let (value, generation) = table.entries[slot].reuse_functor(slot, epoch, init);
             return (value, slot, generation);
         }
 
-        let value = Rc::new(init.take().expect("functor slot initialized once")());
+        let value = Rc::new(init());
         let generation = 1;
         let slot = table.entries.insert(SlotEntry {
             key: slot_key,
@@ -3475,14 +3507,23 @@ pub(crate) fn remember_callback_handle<F>(handler: F) -> FunctorHandle
 where
     F: Fn() + 'static,
 {
-    let mut handler = Some(handler);
-    let (cell, handle) = remember_functor_cell(|| {
-        CallbackCell::new(handler.take().expect("callback handler"), |f| f)
-    });
-    if let Some(handler) = handler {
-        cell.update(handler, |f| f);
-    }
+    let (cell, handle) = remember_callback_cell();
+    cell.update(handler, |f| f);
     handle
+}
+
+// A new cell starts with a placeholder whose type no closure shares, so the
+// first update installs the real closure without a per-closure initializer.
+fn remember_callback_cell() -> (Rc<CallbackCell>, FunctorHandle) {
+    remember_functor_cell(&mut || CallbackCell::new(Rc::new(|| {}), TypeId::of::<()>()))
+}
+
+fn remember_render_slot_cell() -> (Rc<RenderSlotCell>, FunctorHandle, u64) {
+    let creator_instance_key = current_replay_boundary_instance_key_from_scope()
+        .unwrap_or_else(|| panic!("RenderSlot handles must be created during a component build"));
+    let (cell, handle) =
+        remember_functor_cell(&mut || RenderSlotCell::new(Rc::new(|| {}), TypeId::of::<()>()));
+    (cell, handle, creator_instance_key)
 }
 
 pub(crate) fn invoke_callback_handle(handle: FunctorHandle) {
@@ -3494,15 +3535,8 @@ pub(crate) fn remember_render_slot_handle<F>(render: F) -> FunctorHandle
 where
     F: Fn() + 'static,
 {
-    let creator_instance_key = current_replay_boundary_instance_key_from_scope()
-        .unwrap_or_else(|| panic!("RenderSlot handles must be created during a component build"));
-    let mut render = Some(render);
-    let (cell, handle) = remember_functor_cell(|| {
-        RenderSlotCell::new(render.take().expect("render slot content"), |f| f)
-    });
-    if let Some(render) = render
-        && cell.update(render, |f| f)
-    {
+    let (cell, handle, creator_instance_key) = remember_render_slot_cell();
+    if cell.update(render, |f| f) {
         invalidate_render_slot_readers(handle, creator_instance_key);
     }
     handle
@@ -3522,13 +3556,10 @@ where
         current_replay_boundary_instance_key_from_scope().unwrap_or_else(|| {
             panic!("RenderSlotWith handles must be created during a component build")
         });
-    let mut render = Some(render);
-    let (cell, handle) = remember_functor_cell(|| {
-        RenderSlotWithCell::<T>::new(render.take().expect("render slot content"), |f| f)
+    let (cell, handle) = remember_functor_cell(&mut || {
+        RenderSlotWithCell::<T>::new(Rc::new(|_: T| {}), TypeId::of::<()>())
     });
-    if let Some(render) = render
-        && cell.update(render, |f| f)
-    {
+    if cell.update(render, |f| f) {
         invalidate_render_slot_readers(handle, creator_instance_key);
     }
     handle
@@ -3548,13 +3579,13 @@ where
     R: 'static,
     F: Fn(T) -> R + 'static,
 {
-    let mut handler = Some(handler);
-    let (cell, handle) = remember_functor_cell(|| {
-        CallbackWithCell::<T, R>::new(handler.take().expect("callback handler"), |f| f)
+    let (cell, handle) = remember_functor_cell(&mut || {
+        CallbackWithCell::<T, R>::new(
+            Rc::new(|_: T| -> R { unreachable!("placeholder callback") }),
+            TypeId::of::<()>(),
+        )
     });
-    if let Some(handler) = handler {
-        cell.update(handler, |f| f);
-    }
+    cell.update(handler, |f| f);
     handle
 }
 
