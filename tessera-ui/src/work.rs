@@ -162,7 +162,9 @@ mod collector {
     feature = "testing",
     all(feature = "headless", not(target_family = "wasm"))
 ))]
-pub use collector::{FrameWork, WorkExecution, WorkTotals};
+pub use collector::{FrameWork, WorkTotals};
+#[cfg(any(test, feature = "testing"))]
+pub use collector::WorkExecution;
 #[cfg(any(
     test,
     feature = "testing",
