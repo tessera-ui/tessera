@@ -19,6 +19,7 @@ use layout::{
     MinimumInteractiveModifierNode, OffsetModifierNode, PaddingModifierNode,
     RequiredSizeModifierNode, WeightParentDataModifierNode,
 };
+use visual::{AlphaModifierNode, ClipModifierNode, ShapeClipModifierNode};
 
 pub use interaction::{
     ClickableArgs, DragDelta, DraggableArgs, InteractionState, InteractionVisualState,
@@ -28,8 +29,6 @@ pub use layout::{
     AlignmentParentData, MinimumInteractiveComponentEnforcement, Padding, WeightParentData,
 };
 pub use semantics::SemanticsArgs;
-
-use visual::{AlphaModifierNode, ClipModifierNode, ShapeClipModifierNode};
 
 /// Shared modifier extensions that are not tied to a specific design system.
 pub trait ModifierExt {

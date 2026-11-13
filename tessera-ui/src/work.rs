@@ -163,14 +163,15 @@ mod collector {
     all(feature = "headless", not(target_family = "wasm"))
 ))]
 pub use collector::{FrameWork, WorkTotals};
-#[cfg(any(test, feature = "testing"))]
-pub use collector::WorkExecution;
 #[cfg(any(
     test,
     feature = "testing",
     all(feature = "headless", not(target_family = "wasm"))
 ))]
 pub(crate) use collector::{begin, finish, record, record_policy};
+
+#[cfg(any(test, feature = "testing"))]
+pub use collector::WorkExecution;
 
 #[cfg(not(any(
     test,

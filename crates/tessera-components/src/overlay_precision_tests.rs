@@ -13,8 +13,7 @@ use tessera_ui::{
     accesskit::{Node, NodeId, Rect, Role},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
-    testing::UiTest,
-    testing::WorkPhase,
+    testing::{UiTest, WorkPhase},
     time::Instant,
 };
 

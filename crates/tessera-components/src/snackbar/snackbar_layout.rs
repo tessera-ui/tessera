@@ -4,12 +4,11 @@
 //!
 //! Keep message text and actions aligned as notifications resize.
 
+use tessera_foundation::modifier::Padding;
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult, MeasurementError, Px,
     PxPosition, layout::MeasureScope,
 };
-
-use tessera_foundation::modifier::Padding;
 
 use super::SnackbarDefaults;
 

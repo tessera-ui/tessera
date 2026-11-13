@@ -19,13 +19,13 @@ use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera, use_
 
 use crate::res::I18N;
 
-pub(super) use super::super::article_helpers::caption;
-
 use super::{
     ACCENT, INK,
     annotations::{self, Geometry, dotted, relative, watch},
     gap, panel, spec_table, subheading, type_style,
 };
+
+pub(super) use super::super::article_helpers::caption;
 
 const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
 const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);

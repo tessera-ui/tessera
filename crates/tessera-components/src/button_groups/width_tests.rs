@@ -9,8 +9,7 @@ use tessera_foundation::modifier::{InteractionVisualState, ModifierExt as _, Sem
 use tessera_ui::{
     Dp, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, Node, NodeId, Rect, Role, Toggled},
-    layout::Stack,
-    layout::layout,
+    layout::{Stack, layout},
     remember, tessera,
     testing::{TestProbe, UiTest},
 };

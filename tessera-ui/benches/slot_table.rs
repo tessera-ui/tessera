@@ -9,11 +9,9 @@ use std::{
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use tessera_ui::{
     State,
-    layout::Stack,
-    layout::layout,
+    layout::{Stack, layout},
     remember, remember_with_key, tessera,
-    testing::TestProbe,
-    testing::{self},
+    testing::{self, TestProbe},
 };
 
 #[tessera]

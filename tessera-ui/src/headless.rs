@@ -1,7 +1,5 @@
 //! Offscreen rendering, input injection, and resource observations.
 
-pub use crate::runtime::FrameClockDiagnostics;
-
 use std::{
     io::{BufRead, BufReader, Write},
     num::NonZero,
@@ -45,6 +43,8 @@ use crate::{
     },
     time::Instant,
 };
+
+pub use crate::runtime::FrameClockDiagnostics;
 
 #[cfg(feature = "profiling")]
 use crate::profiler::{

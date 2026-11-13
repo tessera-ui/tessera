@@ -5,7 +5,12 @@
 //! Name dialogs and hide background controls while a modal is visible.
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-use tessera_ui::{Modifier, RenderSlot, accesskit::Role, layout::Stack, layout::layout, tessera};
+use tessera_ui::{
+    Modifier, RenderSlot,
+    accesskit::Role,
+    layout::{Stack, layout},
+    tessera,
+};
 
 pub(crate) fn dialog_semantics(modifier: Modifier, label: Option<String>, modal: bool) -> Modifier {
     dialog_semantics_with_role(modifier, label, modal, Role::Dialog)

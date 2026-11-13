@@ -1,7 +1,10 @@
 use std::sync::LazyLock;
 
 use tessera_i18n::{Catalog, I18n, fluent_templates, langid};
-use tessera_ui::{EntryRegistry, State, remember, tessera, testing::{TestProbe, UiTest}};
+use tessera_ui::{
+    EntryRegistry, State, remember, tessera,
+    testing::{TestProbe, UiTest},
+};
 
 fluent_templates::static_loader! {
     static LOCALES = {

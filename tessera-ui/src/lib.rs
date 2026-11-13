@@ -37,6 +37,7 @@ pub mod system_back;
 pub use session::{
     RuntimeSession, RuntimeSessionGuard, RuntimeSessionId, WeakRuntimeSession, runtime_resource,
 };
+
 pub(crate) use session::{local_runtime_resource, shared_runtime_resource};
 
 mod component_tree;
@@ -82,11 +83,10 @@ pub mod time;
 
 pub use accesskit;
 pub use tessera_macros::{entry, lint, tessera};
-
-pub(crate) use crate::thread_utils::SendSync;
-pub(crate) use indextree::NodeId;
 pub use wgpu;
 pub use winit;
+
+pub(crate) use indextree::NodeId;
 
 pub use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
@@ -133,6 +133,8 @@ pub use crate::{
         remember_with_key, retain, retain_with_key,
     },
 };
+
+pub(crate) use crate::thread_utils::SendSync;
 
 use ime_state::ImeState;
 

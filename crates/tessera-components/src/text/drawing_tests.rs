@@ -6,8 +6,7 @@ use tessera_ui::{
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
-    testing::WorkPhase,
-    testing::{TestProbe, UiTest},
+    testing::{TestProbe, UiTest, WorkPhase},
 };
 
 use crate::{

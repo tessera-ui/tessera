@@ -9,11 +9,11 @@ mod controller;
 mod destination;
 mod home;
 
+use tessera_ui::{State, use_context};
+
 pub use controller::RouterController;
 pub use destination::RouterDestination;
 pub use home::shard_home;
-
-use tessera_ui::{State, use_context};
 
 /// Returns the router rendering the current page.
 ///

@@ -29,13 +29,13 @@ use tessera_ui::{
 
 use crate::res::I18N;
 
-pub(super) use super::article_helpers::{badge, prose};
-
 use super::{
     ACCENT,
     article::{ArticlePage, SpecSection, article},
     gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
+
+pub(super) use super::article_helpers::{badge, prose};
 
 const STYLES: [ButtonVariant; 5] = [
     ButtonVariant::Elevated,

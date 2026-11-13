@@ -3,14 +3,14 @@ use crate::{
     winit::{event_loop::ActiveEventLoop, window::Window},
 };
 
-#[cfg(target_os = "android")]
-use crate::winit::platform::android::{ActiveEventLoopExtAndroid, activity::AndroidApp};
+#[cfg(any(not(target_family = "wasm"), test))]
+use crate::Insets;
 
 #[cfg(any(target_os = "android", target_os = "macos", target_os = "ios", test))]
 use crate::Dp;
 
-#[cfg(any(not(target_family = "wasm"), test))]
-use crate::Insets;
+#[cfg(target_os = "android")]
+use crate::winit::platform::android::{ActiveEventLoopExtAndroid, activity::AndroidApp};
 
 #[cfg(target_family = "wasm")]
 mod web;

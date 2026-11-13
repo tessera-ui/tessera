@@ -4,12 +4,11 @@
 //!
 //! Keep list content consistent across layout and state changes.
 
+use tessera_foundation::modifier::Padding;
 use tessera_ui::{
     ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult, MeasurementError, Px, PxPosition,
     layout::MeasureScope,
 };
-
-use tessera_foundation::modifier::Padding;
 
 use super::{ListItemDefaults, ListItemVerticalAlignment};
 

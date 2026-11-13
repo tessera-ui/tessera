@@ -24,6 +24,7 @@ use smallvec::SmallVec;
 use self::storage::{Chain as ModifierElement, NodeRef};
 
 pub use self::attached::{ModifierNodeContext, ModifierNodeId};
+
 pub(crate) use self::{
     attached::{AttachedModifierChain, flush_lifecycle},
     storage::OwnedNode,

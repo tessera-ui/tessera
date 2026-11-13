@@ -23,6 +23,7 @@ use super::{
     article_helpers::{bullets, caption, do_dont, legend, prose},
     gap, panel, spec_table, subheading, type_style,
 };
+
 const ITEMS: [(&str, &str); 3] = [
     ("ui-new-document", "ui-document"),
     ("ui-new-folder", "ui-folder"),

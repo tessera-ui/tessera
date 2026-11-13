@@ -44,6 +44,7 @@ use crate::{
 mod model;
 
 pub use model::{Model, ModelInit, ModelStore, ModelStoreScope};
+
 pub(crate) use model::{ModelScope, inject_model};
 
 #[derive(Clone, Copy)]

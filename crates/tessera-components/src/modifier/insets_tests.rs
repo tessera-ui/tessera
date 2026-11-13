@@ -1,8 +1,7 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, Insets, Modifier, State, WindowInsets, WindowInsetsController, remember, tessera,
-    testing::WorkPhase,
-    testing::{TestProbe, UiTest},
+    testing::{TestProbe, UiTest, WorkPhase},
 };
 
 use crate::boxed::boxed;
