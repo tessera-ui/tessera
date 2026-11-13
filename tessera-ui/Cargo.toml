@@ -35,6 +35,7 @@ rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 slotmap.workspace = true
+smallbox.workspace = true
 smallvec.workspace = true
 tessera-macros.workspace = true
 tracing.workspace = true

@@ -6833,6 +6833,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "smallbox"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8d91712aabb2e735436c02f70d990d8b2241f42dd092a973694e198ea95fc93"
+
+[[package]]
 name = "smallvec"
 version = "1.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7492,6 +7498,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slotmap",
+ "smallbox",
  "smallvec",
  "tempfile",
  "tessera-accesskit-winit",

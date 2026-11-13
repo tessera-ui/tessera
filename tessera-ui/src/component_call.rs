@@ -14,6 +14,7 @@ use std::{
 
 use rustc_hash::{FxHashMap, FxHasher};
 use slotmap::{SlotMap, new_key_type};
+use smallbox::{SmallBox, smallbox, space::S4};
 use smallvec::SmallVec;
 
 use crate::{
@@ -28,7 +29,8 @@ use crate::{
     session::with_runtime_globals,
 };
 
-type PropUpdate = Box<dyn FnOnce(&mut dyn Any)>;
+// Typical callback and content captures stay inline.
+type PropUpdate = SmallBox<dyn FnMut(&mut dyn Any), S4>;
 // Most declarations configure at most a couple of content or callback props.
 type PropUpdates = SmallVec<[(&'static str, usize, PropUpdate); 2]>;
 
@@ -333,8 +335,10 @@ impl<P: Prop> ComponentCall<P> {
         F: FnOnce(&mut P) + 'static,
     {
         let session = self.owning_session();
-        let update: PropUpdate = Box::new(move |props| {
-            update(
+        // `SmallBox` cannot call `dyn FnOnce` by value; each update runs once.
+        let mut update = Some(update);
+        let update: PropUpdate = smallbox!(move |props: &mut dyn Any| {
+            (update.take().expect("property update runs once"))(
                 props
                     .downcast_mut::<P>()
                     .expect("registered component props type"),
@@ -661,7 +665,7 @@ fn execute_call(
     // Pending declarations execute before this build can recycle context slots.
     if !updates.is_empty() {
         with_context_map(context.clone(), || {
-            for (property, occurrence, update) in updates {
+            for (property, occurrence, mut update) in updates {
                 let mut hasher = FxHasher::default();
                 (identity, name, property, occurrence).hash(&mut hasher);
                 let (group_path, key_override) = with_execution_context_mut(|context| {
