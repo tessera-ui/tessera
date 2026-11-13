@@ -29,6 +29,9 @@ struct CallRecord {
     logic_id: u64,
     name: &'static str,
     node: Option<NodeId>,
+    /// Children declared before `node` was emitted; their output precedes it
+    /// in the host.
+    leading: usize,
     children: CallIds,
     snapshot: Option<ReplayNodeSnapshot>,
     /// Build epoch in which `snapshot` was last replaced.
@@ -45,6 +48,7 @@ impl CallRecord {
             logic_id,
             name,
             node: None,
+            leading: 0,
             children: CallIds::new(),
             snapshot: None,
             snapshot_epoch: 0,
@@ -150,41 +154,56 @@ impl CallTable {
 
     fn output(&self, id: CallId, output: &mut CallOutput) {
         let record = &self.records[id];
-        match record.node {
-            Some(node) => output.push(node),
-            None => {
-                for &child in &record.children {
-                    self.output(child, output);
-                }
-            }
+        let hosted = match record.node {
+            Some(_) => &record.children[..record.leading],
+            None => &record.children[..],
+        };
+        for &child in hosted {
+            self.output(child, output);
         }
+        output.extend(record.node);
+    }
+
+    /// Whether `child` is laid out inside the node emitted by `parent`.
+    fn inside_node(&self, parent: CallId, child: CallId) -> bool {
+        let record = &self.records[parent];
+        record.node.is_some() && !record.children[..record.leading].contains(&child)
     }
 
     pub(super) fn host(&self, id: CallId) -> Option<NodeId> {
-        let mut parent = self.records.get(id)?.parent?;
+        let mut id = id;
         loop {
-            let record = self.records.get(parent)?;
-            if let Some(node) = record.node {
-                return Some(node);
+            let parent = self.records.get(id)?.parent?;
+            if self.inside_node(parent, id) {
+                return self.records[parent].node;
             }
-            parent = record.parent?;
+            id = parent;
         }
     }
 
     /// First node emitted after `id` in composition order within its host.
     fn anchor_after(&self, mut id: CallId) -> Option<NodeId> {
         while let Some(parent) = self.records[id].parent {
-            let siblings = &self.records[parent].children;
-            let index = siblings.iter().position(|&sibling| sibling == id)?;
+            let record = &self.records[parent];
+            let index = record.children.iter().position(|&sibling| sibling == id)?;
+            let inside = self.inside_node(parent, id);
+            let end = if record.node.is_some() && !inside {
+                record.leading
+            } else {
+                record.children.len()
+            };
             let mut output = CallOutput::new();
-            for &sibling in &siblings[index + 1..] {
+            for &sibling in &record.children[index + 1..end] {
                 self.output(sibling, &mut output);
                 if let Some(&first) = output.first() {
                     return Some(first);
                 }
             }
-            if self.records[parent].node.is_some() {
+            if inside {
                 return None;
+            }
+            if let Some(node) = record.node {
+                return Some(node);
             }
             id = parent;
         }
@@ -391,6 +410,7 @@ impl ComponentTree {
                 record.logic_id = logic_id;
                 // A re-executed call owns only the node it emits this time.
                 record.node = None;
+                record.leading = 0;
                 (
                     id,
                     std::mem::take(&mut record.children),
@@ -450,7 +470,9 @@ impl ComponentTree {
             .last_mut()
             .expect("layout nodes are emitted by an executing call");
         assert!(call.emitted.is_none(), "a call emits at most one node");
-        self.calls.records[call.id].node = Some(id);
+        let record = &mut self.calls.records[call.id];
+        record.node = Some(id);
+        record.leading = record.children.len();
         call.emitted = Some(EmittedNode { id, previous });
     }
 

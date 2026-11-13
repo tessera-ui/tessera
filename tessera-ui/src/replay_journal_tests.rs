@@ -931,3 +931,38 @@ fn a_call_that_stops_emitting_its_node_still_observes_its_state() {
         );
     }
 }
+
+#[tessera]
+fn tagged_leaf(label: String) {
+    crate::layout::layout(Overlap).modifier(Modifier::new().push_semantics(Tag {
+        key: label.clone(),
+        label,
+    }));
+}
+
+#[tessera]
+fn leading_content_host(probe: ReplayProbe) {
+    let version = remember(|| 0_u32);
+    probe.version.set(Some(version));
+    crate::layout::layout(Overlap).child(move || {
+        tagged_leaf("Before".to_owned());
+        crate::layout::layout(RevisionedOverlap(version.get())).child(|| {
+            tagged_leaf("Inside".to_owned());
+        });
+    });
+}
+
+#[test]
+fn replaying_content_keeps_retained_calls_declared_before_its_node() {
+    let probe = ReplayProbe::default();
+    let mut session = UiTest::new()
+        .content(|| leading_content_host(probe.clone()))
+        .viewport(100, 100);
+    session.frame();
+    let version = probe.version.get().expect("version state");
+    for revision in 1..3 {
+        version.set(revision);
+        session.advance(std::time::Duration::from_millis(8));
+        assert_eq!(semantic_reading_order(&session), ["Before", "Inside"]);
+    }
+}
