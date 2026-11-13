@@ -125,7 +125,7 @@ proc-macro2 = "1.0.106"
 quote = "1.0.45"
 syn = "3.0"
 # rust-analyzer library crates are published in lockstep and must match exactly.
-ra_ap_base_db = "=0.0.358"
+ra_ap_base_db = "=0.0.360"
 ra_ap_cfg = "=0.0.358"
 ra_ap_hir = "=0.0.358"
 ra_ap_hir_def = "=0.0.358"
