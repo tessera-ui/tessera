@@ -2844,6 +2844,10 @@ pub trait ModifierExt {}
         fn new(source: &str) -> Self {
             let directory = tempfile::tempdir().expect("isolated checker fixture");
             let root = directory.path().to_path_buf();
+            // Cargo reports canonical package paths; macOS temporary
+            // directories live behind the `/var` symlink.
+            #[cfg(unix)]
+            let root = root.canonicalize().expect("canonical fixture root");
             fs::create_dir_all(root.join("src")).expect("fixture src directory should be created");
             fs::create_dir_all(root.join(".cargo"))
                 .expect("fixture config directory should be created");

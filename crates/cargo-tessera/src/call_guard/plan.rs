@@ -425,6 +425,10 @@ mod tests {
         fn new() -> Self {
             let directory = tempfile::tempdir().expect("isolated checker fixture");
             let root = directory.path().to_path_buf();
+            // Cargo reports canonical package paths; macOS temporary
+            // directories live behind the `/var` symlink.
+            #[cfg(unix)]
+            let root = root.canonicalize().expect("canonical fixture root");
             fs::create_dir_all(&root).expect("fixture directory");
             fs::write(root.join("Cargo.toml"), "[workspace]\nresolver = \"3\"\nmembers = [\"app\", \"widgets\", \"optional-widgets\", \"build-widgets\", \"target-widgets\", \"unrelated\", \"tessera-ui\"]\ndefault-members = [\"app\"]\n").expect("workspace manifest");
             for name in [
