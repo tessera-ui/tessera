@@ -16,61 +16,64 @@ name = "cargo-tessera"
 path = "src/main.rs"
 
 [dependencies]
-aho-corasick.workspace = true
-annotate-snippets.workspace = true
-anyhow.workspace = true
-cargo_metadata.workspace = true
-cargo_mobile2 = { workspace = true, features = ["native-tls"] }
-clap = { workspace = true, features = ["derive", "cargo"] }
-comfy-table.workspace = true
-console.workspace = true
-csv.workspace = true
-dirs.workspace = true
-globset.workspace = true
-handlebars.workspace = true
-heck.workspace = true
-hex.workspace = true
-image = { workspace = true, features = ["png"] }
-include_dir.workspace = true
-indicatif.workspace = true
-inquire = { workspace = true, features = ["crossterm", "editor"] }
-interprocess.workspace = true
-notify.workspace = true
-owo-colors.workspace = true
-plist.workspace = true
-ra_ap_base_db.workspace = true
-ra_ap_cfg.workspace = true
-ra_ap_hir.workspace = true
-ra_ap_hir_def.workspace = true
-ra_ap_hir_expand.workspace = true
-ra_ap_ide.workspace = true
-ra_ap_intern.workspace = true
-ra_ap_load-cargo.workspace = true
-ra_ap_project_model.workspace = true
-ra_ap_span.workspace = true
-ra_ap_syntax.workspace = true
-ra_ap_vfs.workspace = true
-ratatui = { workspace = true, features = ["crossterm", "layout-cache", "underline-color"] }
-rustfix.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true, features = ["unbounded_depth"] }
-sha2.workspace = true
-tempfile.workspace = true
-tessera-build.workspace = true
-text-size = { workspace = true, features = ["serde"] }
-toml.workspace = true
-unicode-ident.workspace = true
-unicode-properties.workspace = true
-unicode-width.workspace = true
-wasm-bindgen-cli-support.workspace = true
+aho-corasick = "1.1.5"
+annotate-snippets = "0.12.18"
+anyhow = "1.0.104"
+cargo_metadata = "0.23.1"
+cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", version = "0.1.0", default-features = false, features = ["native-tls"] }
+clap = { version = "4.6.7", features = ["derive", "cargo"] }
+comfy-table = "8.0.1"
+console = "0.16.6"
+csv = "1.4.0"
+dirs = "7.0.0"
+globset = "0.4.21"
+handlebars = "6.4.4"
+heck = "0.5.0"
+hex = "0.4.3"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+include_dir = "0.7.4"
+indicatif = "0.18.6"
+inquire = { version = "0.9.4", default-features = false, features = ["crossterm", "editor"] }
+interprocess = "2.4.8"
+notify = "8.2.2"
+owo-colors = "4.4.0"
+plist = "1.10.3"
+# These rust-analyzer crates exchange internal types and must stay on one release.
+ra_ap_base_db = "=0.0.358"
+ra_ap_cfg = "=0.0.358"
+ra_ap_hir = "=0.0.358"
+ra_ap_hir_def = "=0.0.358"
+ra_ap_hir_expand = "=0.0.358"
+ra_ap_ide = "=0.0.358"
+ra_ap_intern = "=0.0.358"
+ra_ap_load-cargo = "=0.0.358"
+ra_ap_project_model = "=0.0.358"
+ra_ap_span = "=0.0.358"
+ra_ap_syntax = "=0.0.358"
+ra_ap_vfs = "=0.0.358"
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "layout-cache", "underline-color"] }
+rustfix = "0.9.4"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["unbounded_depth"] }
+sha2 = "0.11.1"
+tempfile = "3.27.0"
+tessera-build = { path = "../tessera-build", version = "0.1.0" }
+text-size = { version = "1.1.1", features = ["serde"] }
+toml = "1.2.1"
+# The rust-analyzer lexer requires these exact Unicode releases.
+unicode-ident = "=1.0.24"
+unicode-properties = { version = "=0.1.4", default-features = false }
+unicode-width = "0.2.3"
+# Keep this aligned with the workspace's wasm-bindgen for web builds.
+wasm-bindgen-cli-support = "0.2.130"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_System_Pipes"] }
+windows-sys = { version = "0.61.2", features = ["Win32_System_Pipes"] }
 
 [target.'cfg(unix)'.dependencies]
-libc.workspace = true
+libc = "0.2.191"
 
 [dev-dependencies]
-tessera-components.workspace = true
-tessera-foundation.workspace = true
-tessera-ui.workspace = true
+tessera-components = { path = "../tessera-components", version = "2.7.0" }
+tessera-foundation = { path = "../tessera-foundation", version = "0.1.0" }
+tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }

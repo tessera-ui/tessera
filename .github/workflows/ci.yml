@@ -147,6 +147,8 @@ jobs:
         with:
           toolchain: nightly
           cache: false
+      - name: Isolate library dependency floors from the CLI
+        run: sed -i '/^    "crates\/cargo-tessera",$/d' Cargo.toml
       - name: Resolve direct dependencies to their minimum versions
         run: cargo +nightly update -Z direct-minimal-versions
       - name: Check all targets
