@@ -182,7 +182,7 @@ fn assert_ink(renderer: &UiTest, tag: &str, expected: [u8; 4]) {
     assert_eq!(&pixels[offset..offset + 4], &expected);
 }
 
-fn check(samples: u32) {
+fn check() {
     for (scale, width, height, lead_height, trail_height) in [
         (1.0, 240, 56, 24, 16),
         (1.25, 300, 70, 30, 20),
@@ -194,7 +194,6 @@ fn check(samples: u32) {
         let mut renderer = UiTest::new()
             .viewport(640, 400)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(move || fixture(probe.clone()));
         renderer.frames(8);
@@ -284,18 +283,9 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn list_item_context_updates_selection_disabled_input_and_resize_msaa1() {
+fn list_item_context_updates_selection_disabled_input_and_resize() {
     crate::test_utils::run_isolated_test(
-        "list_item::native_tests::list_item_context_updates_selection_disabled_input_and_resize_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn list_item_context_updates_selection_disabled_input_and_resize_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "list_item::native_tests::list_item_context_updates_selection_disabled_input_and_resize_msaa4",
-        || check(4),
+        "list_item::native_tests::list_item_context_updates_selection_disabled_input_and_resize",
+        check,
     );
 }

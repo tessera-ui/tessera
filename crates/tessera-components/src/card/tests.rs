@@ -226,14 +226,13 @@ fn action(renderer: &mut UiTest, id: NodeId, action: Action) {
     renderer.frames(12);
 }
 
-fn check_cards(samples: u32) {
+fn check_cards() {
     let probe = tessera_ui::testing::TestProbe::default();
     let observed = probe.clone();
     let mut renderer = UiTest::new()
         .viewport(540, 540)
         .scale_factor(1.5)
-        .samples(samples)
-        .frame_step(Duration::from_millis(if samples == 4 { 50 } else { 16 }))
+        .frame_step(Duration::from_millis(16))
         .rendered(crate::TesseraComponents)
         .content(move || fixture(observed.clone()));
     renderer.frames(1);
@@ -516,15 +515,6 @@ fn check_cards(samples: u32) {
 fn gpu_card_variants_interactions_and_disabled_semantics() {
     crate::test_utils::run_isolated_test(
         "card::tests::gpu_card_variants_interactions_and_disabled_semantics",
-        || check_cards(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_card_variants_interactions_and_disabled_semantics_msaa() {
-    crate::test_utils::run_isolated_test(
-        "card::tests::gpu_card_variants_interactions_and_disabled_semantics_msaa",
-        || check_cards(4),
+        check_cards,
     );
 }

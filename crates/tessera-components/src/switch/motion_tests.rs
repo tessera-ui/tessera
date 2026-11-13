@@ -71,13 +71,12 @@ fn thumb(renderer: &UiTest) -> [i64; 4] {
     panic!("placed thumb not found");
 }
 
-fn check_motion(samples: u32) {
+fn check_motion() {
     let probe = TestProbe::default();
     let observed = probe.clone();
     let mut renderer = UiTest::new()
         .viewport(200, 140)
         .scale_factor(2.0)
-        .samples(samples)
         .frame_step(Duration::from_millis(10))
         .rendered(crate::TesseraComponents)
         .content(move || fixture(probe.clone()));
@@ -174,18 +173,9 @@ fn check_motion(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn switch_spatial_motion_press_release_and_idle_msaa1() {
+fn switch_spatial_motion_press_release_and_idle() {
     crate::test_utils::run_isolated_test(
-        "switch::motion_tests::switch_spatial_motion_press_release_and_idle_msaa1",
-        || check_motion(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn switch_spatial_motion_press_release_and_idle_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "switch::motion_tests::switch_spatial_motion_press_release_and_idle_msaa4",
-        || check_motion(4),
+        "switch::motion_tests::switch_spatial_motion_press_release_and_idle",
+        check_motion,
     );
 }

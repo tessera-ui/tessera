@@ -198,7 +198,7 @@ pub fn floating_toolbar(
             };
             tessera_ui::layout::layout(FloatingToolbarLayout { orientation })
                 .modifier(modifier.padding_all(Dp(8.0)))
-                .child_shared(actions);
+                .child(actions);
         });
 }
 
@@ -325,7 +325,7 @@ pub fn docked_toolbar(
         .accessibility_label_optional(accessibility_label)
         .child(move || {
             tessera_ui::layout::layout(DockedToolbarLayout)
-                .child_shared(content.unwrap_or_else(RenderSlot::empty));
+                .child(content.unwrap_or_else(RenderSlot::empty));
         });
 }
 

@@ -140,14 +140,13 @@ fn tap(renderer: &mut UiTest, point: PxPosition) {
     renderer.frames(60);
 }
 
-fn check(samples: u32) {
+fn check() {
     for scale in [1.0, 1.5] {
         let probe = TestProbe::default();
         let observed = probe.clone();
         let mut renderer = UiTest::new()
             .viewport((400.0 * scale) as u32, (320.0 * scale) as u32)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(move || fixture(probe.clone()));
         renderer.frames(8);
@@ -193,18 +192,9 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn scrolled_list_reflow_preserves_visible_pixels_and_pointer_bounds_msaa1() {
+fn scrolled_list_reflow_preserves_visible_pixels_and_pointer_bounds() {
     crate::test_utils::run_isolated_test(
-        "list_item::reflow_tests::scrolled_list_reflow_preserves_visible_pixels_and_pointer_bounds_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn scrolled_list_reflow_preserves_visible_pixels_and_pointer_bounds_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "list_item::reflow_tests::scrolled_list_reflow_preserves_visible_pixels_and_pointer_bounds_msaa4",
-        || check(4),
+        "list_item::reflow_tests::scrolled_list_reflow_preserves_visible_pixels_and_pointer_bounds",
+        check,
     );
 }

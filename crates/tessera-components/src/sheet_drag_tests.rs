@@ -228,7 +228,7 @@ fn drag_handle(renderer: &mut UiTest, scale: f64) -> PxPosition {
     end
 }
 
-fn check(samples: u32) {
+fn check() {
     for kind in [
         Kind::Bottom,
         Kind::Start,
@@ -241,7 +241,6 @@ fn check(samples: u32) {
             let mut renderer = UiTest::new()
                 .viewport(800, 600)
                 .scale_factor(scale)
-                .samples(samples)
                 .frame_step(Duration::from_millis(10))
                 .rendered(crate::TesseraComponents)
                 .content(|| fixture(kind, observed.clone()));
@@ -520,18 +519,9 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn drag_release_cancellation_dismissal_and_reversal_msaa1() {
+fn drag_release_cancellation_dismissal_and_reversal() {
     crate::test_utils::run_isolated_test(
-        "sheet_drag_tests::drag_release_cancellation_dismissal_and_reversal_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn drag_release_cancellation_dismissal_and_reversal_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "sheet_drag_tests::drag_release_cancellation_dismissal_and_reversal_msaa4",
-        || check(4),
+        "sheet_drag_tests::drag_release_cancellation_dismissal_and_reversal",
+        check,
     );
 }

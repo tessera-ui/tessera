@@ -119,12 +119,10 @@ fn time_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
 
 fn renderer<Output: 'static>(
     entry: fn(tessera_ui::testing::TestProbe<FixtureHandles>) -> Output,
-    samples: u32,
     observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
 ) -> UiTest<'static> {
     let mut renderer = UiTest::new()
         .viewport(300, 360)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content({
             let observed = observed.clone();
@@ -166,13 +164,13 @@ fn pixel(pixels: &[u8], x: usize, y: usize) -> [u8; 4] {
     pixels[(y * 300 + x) * 4..][..4].try_into().unwrap()
 }
 
-fn save_pixels(renderer: &UiTest, pixels: &[u8], name: &str, samples: u32) {
+fn save_pixels(renderer: &UiTest, pixels: &[u8], name: &str) {
     if let Some(directory) = std::env::var_os("TESSERA_SCALE_QA_DIR") {
         let directory = std::path::PathBuf::from(directory);
         std::fs::create_dir_all(&directory).unwrap();
         let size = renderer.physical_size();
         tessera_ui::headless::write_png_file(
-            directory.join(format!("{name}-msaa{samples}.png")),
+            directory.join(format!("{name}.png")),
             size.width,
             size.height,
             pixels,
@@ -187,116 +185,109 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
     crate::test_utils::run_isolated_test(
         "scaled_controls_tests::scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clipping",
         || {
-            for samples in [1, 4] {
-                let observed = tessera_ui::testing::TestProbe::default();
-                let mut renderer = renderer(field_fixture, samples, &observed);
-                let field = coordinates(&renderer, "field");
-                assert_eq!(field.local_size.width, Px(240));
-                assert_eq!(field.local_size.height, Px(56));
-                assert_eq!(
-                    field.window_bounds(),
-                    FloatRect {
-                        x: 10.25,
-                        y: 20.5,
-                        width: 150.0,
-                        height: 35.0
-                    }
-                );
-                let icon = coordinates(&renderer, "icon").window_bounds();
-                assert_eq!((icon.width, icon.height), (15.0, 15.0));
-                assert_eq!(
-                    icon.x + icon.width * 0.5 - field.window_bounds().x,
-                    15.0,
-                    "the native 48px leading slot occupies 30 window pixels"
-                );
-                let (input, node) = control(&renderer, "Scaled outlined editor", Role::TextInput);
-                let editor_bounds = node.bounds().unwrap();
-                assert_eq!(editor_bounds.x0 - f64::from(field.window_bounds().x), 32.5);
-                assert!(editor_bounds.x1 <= 160.25 && editor_bounds.y1 <= 55.5);
-                let pixels = renderer.read_pixels();
-                save_pixels(&renderer, &pixels, "scaled-field-initial", samples);
-                let background = pixel(&pixels, 2, 2);
-                let label = control(&renderer, "Label", Role::Label).1.bounds().unwrap();
-                assert_eq!(
-                    pixel(&pixels, 19, 20),
-                    background,
-                    "the pixel inside the scaled floating label notch preserves the parent: {label:?}"
-                );
-                assert_ne!(
-                    pixel(&pixels, 130, 21),
-                    background,
-                    "the scaled top outline remains painted"
-                );
-                click(
-                    &mut renderer,
-                    PxPosition::from_f32_xy(
-                        (editor_bounds.x1 - 2.0) as f32,
-                        ((editor_bounds.y0 + editor_bounds.y1) * 0.5) as f32,
-                    ),
-                );
-                assert_eq!(renderer.accessibility_snapshot().unwrap().focus, input);
-                renderer.inject_ime_event(Ime::Commit("!".into()));
-                renderer.frames(4);
-                assert_eq!(
-                    observed.get().editor.unwrap().with(|editor| editor.text()),
-                    "Input!"
-                );
-                assert_eq!(
-                    control(&renderer, "Scaled outlined editor", Role::TextInput)
-                        .1
-                        .value(),
-                    Some("Input!")
-                );
-                save_pixels(
-                    &renderer,
-                    &renderer.read_pixels(),
-                    "scaled-field-focused",
-                    samples,
-                );
-                focus::clear_focus(true);
-                renderer.frames(4);
-                assert!(
-                    !observed
-                        .get()
-                        .editor
-                        .unwrap()
-                        .with(|editor| editor.focus_handler().is_focused()),
-                    "focus must be cleared before the unclipped hit-test control"
-                );
-                click(&mut renderer, PxPosition::from_f32_xy(11.25, 21.5));
-                assert!(
-                    observed
-                        .get()
-                        .editor
-                        .unwrap()
-                        .with(|editor| editor.focus_handler().is_focused()),
-                    "the same corner reaches the native field before ancestor clipping"
-                );
-                focus::clear_focus(true);
-                observed.get().clipped.unwrap().set(true);
-                renderer.frames(4);
-                assert!(
-                    !observed
-                        .get()
-                        .editor
-                        .unwrap()
-                        .with(|editor| editor.focus_handler().is_focused()),
-                    "focus must be cleared before testing the clipped corner"
-                );
-                click(&mut renderer, PxPosition::from_f32_xy(11.25, 21.5));
-                assert!(
-                    !observed
-                        .get()
-                        .editor
-                        .unwrap()
-                        .with(|editor| editor.focus_handler().is_focused()),
-                    "a point in the rounded ancestor's clipped corner cannot focus its native field"
-                );
-                assert_eq!(
-                    coordinates(&renderer, "field").window_bounds(),
-                    field.window_bounds()
-                );
-            }
+            let observed = tessera_ui::testing::TestProbe::default();
+            let mut renderer = renderer(field_fixture, &observed);
+            let field = coordinates(&renderer, "field");
+            assert_eq!(field.local_size.width, Px(240));
+            assert_eq!(field.local_size.height, Px(56));
+            assert_eq!(
+                field.window_bounds(),
+                FloatRect {
+                    x: 10.25,
+                    y: 20.5,
+                    width: 150.0,
+                    height: 35.0
+                }
+            );
+            let icon = coordinates(&renderer, "icon").window_bounds();
+            assert_eq!((icon.width, icon.height), (15.0, 15.0));
+            assert_eq!(
+                icon.x + icon.width * 0.5 - field.window_bounds().x,
+                15.0,
+                "the native 48px leading slot occupies 30 window pixels"
+            );
+            let (input, node) = control(&renderer, "Scaled outlined editor", Role::TextInput);
+            let editor_bounds = node.bounds().unwrap();
+            assert_eq!(editor_bounds.x0 - f64::from(field.window_bounds().x), 32.5);
+            assert!(editor_bounds.x1 <= 160.25 && editor_bounds.y1 <= 55.5);
+            let pixels = renderer.read_pixels();
+            save_pixels(&renderer, &pixels, "scaled-field-initial");
+            let background = pixel(&pixels, 2, 2);
+            let label = control(&renderer, "Label", Role::Label).1.bounds().unwrap();
+            assert_eq!(
+                pixel(&pixels, 19, 20),
+                background,
+                "the pixel inside the scaled floating label notch preserves the parent: {label:?}"
+            );
+            assert_ne!(
+                pixel(&pixels, 130, 21),
+                background,
+                "the scaled top outline remains painted"
+            );
+            click(
+                &mut renderer,
+                PxPosition::from_f32_xy(
+                    (editor_bounds.x1 - 2.0) as f32,
+                    ((editor_bounds.y0 + editor_bounds.y1) * 0.5) as f32,
+                ),
+            );
+            assert_eq!(renderer.accessibility_snapshot().unwrap().focus, input);
+            renderer.inject_ime_event(Ime::Commit("!".into()));
+            renderer.frames(4);
+            assert_eq!(
+                observed.get().editor.unwrap().with(|editor| editor.text()),
+                "Input!"
+            );
+            assert_eq!(
+                control(&renderer, "Scaled outlined editor", Role::TextInput)
+                    .1
+                    .value(),
+                Some("Input!")
+            );
+            save_pixels(&renderer, &renderer.read_pixels(), "scaled-field-focused");
+            focus::clear_focus(true);
+            renderer.frames(4);
+            assert!(
+                !observed
+                    .get()
+                    .editor
+                    .unwrap()
+                    .with(|editor| editor.focus_handler().is_focused()),
+                "focus must be cleared before the unclipped hit-test control"
+            );
+            click(&mut renderer, PxPosition::from_f32_xy(11.25, 21.5));
+            assert!(
+                observed
+                    .get()
+                    .editor
+                    .unwrap()
+                    .with(|editor| editor.focus_handler().is_focused()),
+                "the same corner reaches the native field before ancestor clipping"
+            );
+            focus::clear_focus(true);
+            observed.get().clipped.unwrap().set(true);
+            renderer.frames(4);
+            assert!(
+                !observed
+                    .get()
+                    .editor
+                    .unwrap()
+                    .with(|editor| editor.focus_handler().is_focused()),
+                "focus must be cleared before testing the clipped corner"
+            );
+            click(&mut renderer, PxPosition::from_f32_xy(11.25, 21.5));
+            assert!(
+                !observed
+                    .get()
+                    .editor
+                    .unwrap()
+                    .with(|editor| editor.focus_handler().is_focused()),
+                "a point in the rounded ancestor's clipped corner cannot focus its native field"
+            );
+            assert_eq!(
+                coordinates(&renderer, "field").window_bounds(),
+                field.window_bounds()
+            );
         },
     );
 }
@@ -307,67 +298,65 @@ fn scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state(
     crate::test_utils::run_isolated_test(
         "scaled_controls_tests::scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state",
         || {
-            for samples in [1, 4] {
-                let observed = tessera_ui::testing::TestProbe::default();
-                let mut renderer = renderer(time_fixture, samples, &observed);
-                assert_eq!(
-                    coordinates(&renderer, "time-picker")
-                        .local_to_window
-                        .scale(),
-                    0.625
-                );
-                let dial = control(&renderer, "Hours", Role::Group).1.bounds().unwrap();
-                assert_eq!((dial.width(), dial.height()), (160.0, 160.0));
-                let (digit, node) = control(&renderer, "Hour 3 of 12", Role::Button);
-                let bounds = node.bounds().unwrap();
-                assert_eq!((bounds.width(), bounds.height()), (30.0, 30.0));
-                let before = renderer.read_pixels();
-                save_pixels(&renderer, &before, "scaled-time-before", samples);
-                assert!(renderer.accessibility_action(digit, Action::Focus));
-                renderer.frames(3);
-                assert_eq!(
-                    observed
-                        .get()
-                        .time
-                        .unwrap()
-                        .with(TimePickerController::hour),
-                    10,
-                    "accessibility focus must not activate a clock digit"
-                );
-                click(
-                    &mut renderer,
-                    PxPosition::from_f32_xy(
-                        ((bounds.x0 + bounds.x1) * 0.5) as f32,
-                        ((bounds.y0 + bounds.y1) * 0.5) as f32,
-                    ),
-                );
-                assert_eq!(
-                    observed
-                        .get()
-                        .time
-                        .unwrap()
-                        .with(TimePickerController::hour),
-                    3
-                );
-                assert_eq!(
-                    observed
-                        .get()
-                        .time
-                        .unwrap()
-                        .with(TimePickerController::minute),
-                    8
-                );
-                let after = renderer.read_pixels();
-                save_pixels(&renderer, &after, "scaled-time-after", samples);
-                let changed = (dial.y0.ceil() as usize..dial.y1.floor() as usize).any(|y| {
-                    (dial.x0.ceil() as usize..dial.x1.floor() as usize)
-                        .any(|x| pixel(&before, x, y) != pixel(&after, x, y))
-                });
-                assert!(
-                    changed,
-                    "the real clock dial must repaint after the physical selection"
-                );
-            }
+            let observed = tessera_ui::testing::TestProbe::default();
+            let mut renderer = renderer(time_fixture, &observed);
+            assert_eq!(
+                coordinates(&renderer, "time-picker")
+                    .local_to_window
+                    .scale(),
+                0.625
+            );
+            let dial = control(&renderer, "Hours", Role::Group).1.bounds().unwrap();
+            assert_eq!((dial.width(), dial.height()), (160.0, 160.0));
+            let (digit, node) = control(&renderer, "Hour 3 of 12", Role::Button);
+            let bounds = node.bounds().unwrap();
+            assert_eq!((bounds.width(), bounds.height()), (30.0, 30.0));
+            let before = renderer.read_pixels();
+            save_pixels(&renderer, &before, "scaled-time-before");
+            assert!(renderer.accessibility_action(digit, Action::Focus));
+            renderer.frames(3);
+            assert_eq!(
+                observed
+                    .get()
+                    .time
+                    .unwrap()
+                    .with(TimePickerController::hour),
+                10,
+                "accessibility focus must not activate a clock digit"
+            );
+            click(
+                &mut renderer,
+                PxPosition::from_f32_xy(
+                    ((bounds.x0 + bounds.x1) * 0.5) as f32,
+                    ((bounds.y0 + bounds.y1) * 0.5) as f32,
+                ),
+            );
+            assert_eq!(
+                observed
+                    .get()
+                    .time
+                    .unwrap()
+                    .with(TimePickerController::hour),
+                3
+            );
+            assert_eq!(
+                observed
+                    .get()
+                    .time
+                    .unwrap()
+                    .with(TimePickerController::minute),
+                8
+            );
+            let after = renderer.read_pixels();
+            save_pixels(&renderer, &after, "scaled-time-after");
+            let changed = (dial.y0.ceil() as usize..dial.y1.floor() as usize).any(|y| {
+                (dial.x0.ceil() as usize..dial.x1.floor() as usize)
+                    .any(|x| pixel(&before, x, y) != pixel(&after, x, y))
+            });
+            assert!(
+                changed,
+                "the real clock dial must repaint after the physical selection"
+            );
         },
     );
 }

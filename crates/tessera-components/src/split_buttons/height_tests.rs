@@ -107,14 +107,13 @@ fn filled_rows(pixels: &[u8], width: usize, bounds: Rect) -> (usize, usize) {
     )
 }
 
-fn check_height_recovery(samples: u32, scale: f64) {
+fn check_height_recovery(scale: f64) {
     let width = (650.0 * scale) as u32;
     let probe = TestProbe::<Option<State<Settings>>>::default();
     let observed = probe.clone();
     let mut renderer = UiTest::new()
         .viewport(width, (500.0 * scale) as u32)
         .scale_factor(scale)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(move || fixture().probe(probe.clone()));
     renderer.frames(4);
@@ -180,12 +179,12 @@ fn check_height_recovery(samples: u32, scale: f64) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn synchronized_visual_heights_and_touch_targets_msaa1() {
-    check_height_recovery(1, 1.0);
+fn synchronized_visual_heights_and_touch_targets() {
+    check_height_recovery(1.0);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn synchronized_visual_heights_and_touch_targets_msaa4_fractional_density() {
-    check_height_recovery(4, 1.5);
+fn synchronized_visual_heights_and_touch_targets_fractional_density() {
+    check_height_recovery(1.5);
 }

@@ -6,7 +6,7 @@
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Callback, CallbackWith, Dp, Modifier, Px, PxPosition, State, accesskit::Role,
+    Callback, CallbackWith, Color, Dp, Modifier, Px, PxPosition, State, accesskit::Role,
     modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
@@ -27,7 +27,7 @@ use crate::{
     spacer::spacer,
     surface::surface,
     text::text,
-    theme::{MaterialAlpha, MaterialTheme},
+    theme::{MaterialAlpha, MaterialTheme, TextStyle},
 };
 
 use super::{
@@ -408,6 +408,56 @@ fn cells(month: YearMonth, first: Weekday) -> [CalendarDate; 42] {
 }
 
 #[tessera]
+fn weekday_header_grid_docked(first: Weekday, text_style: TextStyle, text_color: Color) {
+    tessera_ui::layout::layout(DateGridLayout {
+        columns: DATE_COLUMNS,
+        row_height: DATE_CELL_SIZE,
+    })
+    .child(move || {
+        for weekday in weekday_sequence(first) {
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                .children(move || {
+                    text(weekday_narrow_label(weekday))
+                        .style(text_style)
+                        .color(text_color);
+                });
+        }
+    });
+}
+
+#[tessera]
+fn date_cells_grid_docked(
+    state: State<DatePickerController>,
+    today: CalendarDate,
+    keyboard: CalendarKeyboard,
+    change: CallbackWith<CalendarDate>,
+    first: Weekday,
+) {
+    let snapshot = state.with(DatePickerController::snapshot);
+    tessera_ui::layout::layout(DateGridLayout {
+        columns: DATE_COLUMNS,
+        row_height: DATE_CELL_SIZE,
+    })
+    .modifier(
+        Modifier::new()
+            .focus_restorer(None, Some(keyboard.focus_requester()))
+            .semantics(SemanticsArgs {
+                role: Some(Role::Group),
+                label: Some(super::format_month_year(snapshot.displayed_month)),
+                merge_descendants: true,
+                ..Default::default()
+            }),
+    )
+    .child(move || {
+        for date in cells(snapshot.displayed_month, first) {
+            day(state, date, today, keyboard, change);
+        }
+    });
+}
+
+#[tessera]
 fn calendar(
     state: State<DatePickerController>,
     first: Weekday,
@@ -415,7 +465,6 @@ fn calendar(
     change: CallbackWith<CalendarDate>,
     focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
-    let snapshot = state.with(DatePickerController::snapshot);
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let owner = CalendarOwner::Single(state);
     let initial_date = owner.initial_date(today);
@@ -429,41 +478,12 @@ fn calendar(
     column()
         .modifier(Modifier::new().fill_max_width().height(Dp(336.0)))
         .children(move || {
-            tessera_ui::layout::layout(DateGridLayout {
-                columns: DATE_COLUMNS,
-                row_height: DATE_CELL_SIZE,
-            })
-            .child(move || {
-                for weekday in weekday_sequence(first) {
-                    boxed()
-                        .alignment(Alignment::Center)
-                        .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-                        .children(move || {
-                            text(weekday_narrow_label(weekday))
-                                .style(theme.typography.body_large)
-                                .color(theme.color_scheme.on_surface);
-                        });
-                }
-            });
-            tessera_ui::layout::layout(DateGridLayout {
-                columns: DATE_COLUMNS,
-                row_height: DATE_CELL_SIZE,
-            })
-            .modifier(
-                Modifier::new()
-                    .focus_restorer(None, Some(keyboard.focus_requester()))
-                    .semantics(SemanticsArgs {
-                        role: Some(Role::Group),
-                        label: Some(super::format_month_year(snapshot.displayed_month)),
-                        merge_descendants: true,
-                        ..Default::default()
-                    }),
-            )
-            .child(move || {
-                for date in cells(snapshot.displayed_month, first) {
-                    day(state, date, today, keyboard, change);
-                }
-            });
+            weekday_header_grid_docked(
+                first,
+                theme.typography.body_large,
+                theme.color_scheme.on_surface,
+            );
+            date_cells_grid_docked(state, today, keyboard, change, first);
         });
 }
 

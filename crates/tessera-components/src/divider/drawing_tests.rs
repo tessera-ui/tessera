@@ -137,7 +137,7 @@ fn assert_pixel_near(actual: [u8; 4], expected: [u8; 4]) {
     );
 }
 
-fn check(samples: u32) {
+fn check() {
     for (scale, width, thickness, double, inset, gap, height) in [
         (1.0, 80, 1, 2, 16, 4, 32),
         (1.25, 100, 1, 3, 20, 5, 40),
@@ -148,7 +148,6 @@ fn check(samples: u32) {
         let mut renderer = UiTest::new()
             .viewport(200, 200)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(observed.clone()));
         renderer.frames(3);
@@ -269,19 +268,18 @@ fn check(samples: u32) {
             allocations
         );
     }
-    check_fractional_placement(samples);
-    check_constrained_strokes(samples);
+    check_fractional_placement();
+    check_constrained_strokes();
 }
 
 fn interior_pixel(renderer: &UiTest, pixels: &[u8], x: i64, y: i64) -> [u8; 4] {
     pixel(renderer, pixels, x + 4, y + 4)
 }
 
-fn check_fractional_placement(samples: u32) {
+fn check_fractional_placement() {
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(20, 20)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fractional_fixture(observed.clone()));
     renderer.frames(3);
@@ -324,19 +322,10 @@ fn check_fractional_placement(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn divider_insets_hairlines_theme_changes_and_resize_msaa1() {
+fn divider_insets_hairlines_theme_changes_and_resize() {
     crate::test_utils::run_isolated_test(
-        "divider::drawing_tests::divider_insets_hairlines_theme_changes_and_resize_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn divider_insets_hairlines_theme_changes_and_resize_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "divider::drawing_tests::divider_insets_hairlines_theme_changes_and_resize_msaa4",
-        || check(4),
+        "divider::drawing_tests::divider_insets_hairlines_theme_changes_and_resize",
+        check,
     );
 }
 
@@ -369,10 +358,9 @@ fn constrained_fixture() {
         });
 }
 
-fn check_constrained_strokes(samples: u32) {
+fn check_constrained_strokes() {
     let mut renderer = UiTest::new()
         .viewport(20, 20)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(constrained_fixture);
     renderer.frames(3);

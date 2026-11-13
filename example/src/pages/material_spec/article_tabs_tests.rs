@@ -124,210 +124,204 @@ fn assert_pixel(renderer: &UiTest, title: &str, y: f64, expected: [u8; 3]) {
 #[test]
 #[ignore = "requires a native GPU adapter for article tab pixels and actual input"]
 fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
-    for samples in [1, 4] {
-        let output = tessera_ui::testing::TestProbe::default();
-        let mut renderer = UiTest::new()
-            .viewport(1000, 160)
-            .samples(samples)
-            .rendered(crate::TestPipelines)
-            .content(|| fixture(output.clone()));
-        renderer.frames(8);
-        let initial = geometry(&renderer);
-        assert_pixel(&renderer, "Overview", 8.0, [248, 241, 246]);
-        assert_pixel(&renderer, "Specs", 8.0, [220, 218, 245]);
-        let normal_icon = ink(&renderer, 0, false);
-        let overview = center(tab(&renderer, "Overview").1.bounds().unwrap());
-        renderer.pointer_move(MOUSE_POINTER_ID, overview);
-        renderer.frames(4);
-        assert_pixel(&renderer, "Overview", 8.0, [234, 227, 233]);
-        let hover_icon = ink(&renderer, 0, false);
-        assert_ne!(
-            hover_icon, normal_icon,
-            "hover must use the real heavier icon outline"
-        );
-        assert_eq!(
-            geometry(&renderer),
-            initial,
-            "hover font grade must preserve label advances and target IDs"
-        );
-        renderer.pointer_press(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
-        renderer.frames(4);
-        assert_pixel(&renderer, "Overview", 8.0, [227, 220, 227]);
-        assert_eq!(
-            I18N.text(output.get().unwrap().0.get()),
-            "Specs",
-            "press must not activate"
-        );
-        assert_eq!(
-            geometry(&renderer),
-            initial,
-            "pressed font grade must preserve layout"
-        );
-        renderer.pointer_release(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
-        renderer.frames(14);
-        assert_eq!(I18N.text(output.get().unwrap().0.get()), "Overview");
-        assert_pixel(&renderer, "Overview", 8.0, [205, 203, 228]);
-        let selected_icon = ink(&renderer, 0, false);
-        assert!(
-            selected_icon.len() > hover_icon.len(),
-            "selected info uses the filled glyph"
-        );
-        let selected_label = ink(&renderer, 0, true);
-        assert_eq!(
-            geometry(&renderer),
-            initial,
-            "selection must preserve targets"
-        );
-        renderer.pointer_press(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
-        renderer.frames(4);
-        assert_pixel(&renderer, "Overview", 8.0, [197, 195, 220]);
-        assert_ne!(
-            ink(&renderer, 0, true),
-            selected_label,
-            "pressed grade must change label ink at fixed advances"
-        );
-        renderer.pointer_release(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
-        renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(990.0, 150.0));
-        renderer.frames(4);
-        let guidelines = tab(&renderer, "Guidelines");
-        assert!(renderer.accessibility_action(guidelines.0, Action::Focus));
-        renderer.frames(4);
-        assert_eq!(
-            renderer.accessibility_snapshot().unwrap().focus,
-            guidelines.0
-        );
-        assert_eq!(
-            I18N.text(output.get().unwrap().0.get()),
-            "Overview",
-            "focus alone must not activate"
-        );
-        assert_pixel(&renderer, "Guidelines", 1.0, [28, 27, 29]);
-        assert_pixel(&renderer, "Guidelines", 3.0, [255, 255, 255]);
-        let guidelines_center = center(guidelines.1.bounds().unwrap());
-        renderer.pointer_move(MOUSE_POINTER_ID, guidelines_center);
-        renderer.frames(4);
-        assert_pixel(&renderer, "Guidelines", 1.0, [255, 255, 255]);
-        assert_pixel(&renderer, "Guidelines", 3.0, [234, 227, 233]);
-        assert_eq!(
-            geometry(&renderer),
-            initial,
-            "focus strokes must not move content"
-        );
-        renderer.frames(4);
-        assert_eq!(
-            renderer
-                .work()
-                .phase(tessera_ui::testing::WorkPhase::Measure)
-                .count(),
-            0
-        );
-        assert_eq!(
-            renderer
-                .work()
-                .phase(tessera_ui::testing::WorkPhase::Paint)
-                .count(),
-            0,
-            "resting tabs must not repaint"
-        );
-    }
+    let output = tessera_ui::testing::TestProbe::default();
+    let mut renderer = UiTest::new()
+        .viewport(1000, 160)
+        .rendered(crate::TestPipelines)
+        .content(|| fixture(output.clone()));
+    renderer.frames(8);
+    let initial = geometry(&renderer);
+    assert_pixel(&renderer, "Overview", 8.0, [248, 241, 246]);
+    assert_pixel(&renderer, "Specs", 8.0, [220, 218, 245]);
+    let normal_icon = ink(&renderer, 0, false);
+    let overview = center(tab(&renderer, "Overview").1.bounds().unwrap());
+    renderer.pointer_move(MOUSE_POINTER_ID, overview);
+    renderer.frames(4);
+    assert_pixel(&renderer, "Overview", 8.0, [234, 227, 233]);
+    let hover_icon = ink(&renderer, 0, false);
+    assert_ne!(
+        hover_icon, normal_icon,
+        "hover must use the real heavier icon outline"
+    );
+    assert_eq!(
+        geometry(&renderer),
+        initial,
+        "hover font grade must preserve label advances and target IDs"
+    );
+    renderer.pointer_press(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
+    renderer.frames(4);
+    assert_pixel(&renderer, "Overview", 8.0, [227, 220, 227]);
+    assert_eq!(
+        I18N.text(output.get().unwrap().0.get()),
+        "Specs",
+        "press must not activate"
+    );
+    assert_eq!(
+        geometry(&renderer),
+        initial,
+        "pressed font grade must preserve layout"
+    );
+    renderer.pointer_release(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
+    renderer.frames(14);
+    assert_eq!(I18N.text(output.get().unwrap().0.get()), "Overview");
+    assert_pixel(&renderer, "Overview", 8.0, [205, 203, 228]);
+    let selected_icon = ink(&renderer, 0, false);
+    assert!(
+        selected_icon.len() > hover_icon.len(),
+        "selected info uses the filled glyph"
+    );
+    let selected_label = ink(&renderer, 0, true);
+    assert_eq!(
+        geometry(&renderer),
+        initial,
+        "selection must preserve targets"
+    );
+    renderer.pointer_press(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
+    renderer.frames(4);
+    assert_pixel(&renderer, "Overview", 8.0, [197, 195, 220]);
+    assert_ne!(
+        ink(&renderer, 0, true),
+        selected_label,
+        "pressed grade must change label ink at fixed advances"
+    );
+    renderer.pointer_release(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
+    renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(990.0, 150.0));
+    renderer.frames(4);
+    let guidelines = tab(&renderer, "Guidelines");
+    assert!(renderer.accessibility_action(guidelines.0, Action::Focus));
+    renderer.frames(4);
+    assert_eq!(
+        renderer.accessibility_snapshot().unwrap().focus,
+        guidelines.0
+    );
+    assert_eq!(
+        I18N.text(output.get().unwrap().0.get()),
+        "Overview",
+        "focus alone must not activate"
+    );
+    assert_pixel(&renderer, "Guidelines", 1.0, [28, 27, 29]);
+    assert_pixel(&renderer, "Guidelines", 3.0, [255, 255, 255]);
+    let guidelines_center = center(guidelines.1.bounds().unwrap());
+    renderer.pointer_move(MOUSE_POINTER_ID, guidelines_center);
+    renderer.frames(4);
+    assert_pixel(&renderer, "Guidelines", 1.0, [255, 255, 255]);
+    assert_pixel(&renderer, "Guidelines", 3.0, [234, 227, 233]);
+    assert_eq!(
+        geometry(&renderer),
+        initial,
+        "focus strokes must not move content"
+    );
+    renderer.frames(4);
+    assert_eq!(
+        renderer
+            .work()
+            .phase(tessera_ui::testing::WorkPhase::Measure)
+            .count(),
+        0
+    );
+    assert_eq!(
+        renderer
+            .work()
+            .phase(tessera_ui::testing::WorkPhase::Paint)
+            .count(),
+        0,
+        "resting tabs must not repaint"
+    );
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter for timed selection motion and frame work"]
 fn article_selection_pill_animates_with_clock_without_measuring_or_moving_targets() {
-    for samples in [1, 4] {
-        let output = tessera_ui::testing::TestProbe::default();
-        let mut renderer = UiTest::new()
-            .viewport(1000, 160)
-            .samples(samples)
-            .rendered(crate::TestPipelines)
-            .content(|| fixture(output.clone()));
-        renderer.frames(8);
+    let output = tessera_ui::testing::TestProbe::default();
+    let mut renderer = UiTest::new()
+        .viewport(1000, 160)
+        .rendered(crate::TestPipelines)
+        .content(|| fixture(output.clone()));
+    renderer.frames(8);
+    assert_eq!(
+        renderer
+            .work()
+            .phase(tessera_ui::testing::WorkPhase::Measure)
+            .count(),
+        0
+    );
+    assert_eq!(renderer.diagnostics().dirty_nodes_param, 0);
+    assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
+    let initial = geometry(&renderer);
+    let bounds = tab(&renderer, "Overview").1.bounds().unwrap();
+    let point = center(bounds);
+    renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(990.0, 150.0));
+    renderer.frames(1);
+    assert_eq!(I18N.text(output.get().unwrap().0.get()), "Overview");
+    assert_pixel(&renderer, "Overview", 8.0, [248, 241, 246]);
+    let edge = |renderer: &UiTest| {
+        let rgba = renderer.read_pixels();
+        let x = (bounds.x0 + bounds.width() * 0.97).floor() as usize;
+        let y = ((bounds.y0 + bounds.y1) * 0.5).floor() as usize;
+        let offset = (y * 1000 + x) * 4;
+        <[u8; 3]>::try_from(&rgba[offset..offset + 3]).unwrap()
+    };
+    assert_eq!(edge(&renderer), [248, 241, 246]);
+    for frame in 1..=13 {
+        renderer.frames(1);
+        let diagnostics = renderer.diagnostics();
         assert_eq!(
             renderer
                 .work()
                 .phase(tessera_ui::testing::WorkPhase::Measure)
-                .count(),
-            0
-        );
-        assert_eq!(renderer.diagnostics().dirty_nodes_param, 0);
-        assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
-        let initial = geometry(&renderer);
-        let bounds = tab(&renderer, "Overview").1.bounds().unwrap();
-        let point = center(bounds);
-        renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-        renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(990.0, 150.0));
-        renderer.frames(1);
-        assert_eq!(I18N.text(output.get().unwrap().0.get()), "Overview");
-        assert_pixel(&renderer, "Overview", 8.0, [248, 241, 246]);
-        let edge = |renderer: &UiTest| {
-            let rgba = renderer.read_pixels();
-            let x = (bounds.x0 + bounds.width() * 0.97).floor() as usize;
-            let y = ((bounds.y0 + bounds.y1) * 0.5).floor() as usize;
-            let offset = (y * 1000 + x) * 4;
-            <[u8; 3]>::try_from(&rgba[offset..offset + 3]).unwrap()
-        };
-        assert_eq!(edge(&renderer), [248, 241, 246]);
-        for frame in 1..=13 {
-            renderer.frames(1);
-            let diagnostics = renderer.diagnostics();
-            assert_eq!(
-                renderer
-                    .work()
-                    .phase(tessera_ui::testing::WorkPhase::Measure)
-                    .count(),
-                0,
-                "animation frame{frame} must not measure"
-            );
-
-            assert_eq!(
-                diagnostics.dirty_nodes_param, 0,
-                "animation frame{frame} must not invalidate layout inputs"
-            );
-
-            assert_eq!(
-                diagnostics.geometry_nodes_updated, 0,
-                "animation frame{frame} must not place nodes"
-            );
-            assert_eq!(
-                geometry(&renderer),
-                initial,
-                "animation frame{frame} must preserve targets"
-            );
-            if frame == 7 {
-                assert_pixel(&renderer, "Overview", 8.0, [223, 221, 245]);
-                assert_eq!(
-                    edge(&renderer),
-                    [248, 241, 246],
-                    "100ms pill has not yet reached its final horizontal extent"
-                );
-            }
-        }
-        assert_pixel(&renderer, "Overview", 8.0, [220, 218, 245]);
-        assert_eq!(
-            edge(&renderer),
-            [220, 218, 245],
-            "200ms pill reaches its complete original capsule extent"
-        );
-        renderer.frames(3);
-        assert_eq!(
-            renderer
-                .work()
-                .phase(tessera_ui::testing::WorkPhase::Paint)
                 .count(),
             0,
-            "completed motion must not repaint"
+            "animation frame{frame} must not measure"
+        );
+
+        assert_eq!(
+            diagnostics.dirty_nodes_param, 0,
+            "animation frame{frame} must not invalidate layout inputs"
+        );
+
+        assert_eq!(
+            diagnostics.geometry_nodes_updated, 0,
+            "animation frame{frame} must not place nodes"
         );
         assert_eq!(
-            renderer
-                .work()
-                .phase(tessera_ui::testing::WorkPhase::Measure)
-                .count(),
-            0
+            geometry(&renderer),
+            initial,
+            "animation frame{frame} must preserve targets"
         );
-        assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
+        if frame == 7 {
+            assert_pixel(&renderer, "Overview", 8.0, [223, 221, 245]);
+            assert_eq!(
+                edge(&renderer),
+                [248, 241, 246],
+                "100ms pill has not yet reached its final horizontal extent"
+            );
+        }
     }
+    assert_pixel(&renderer, "Overview", 8.0, [220, 218, 245]);
+    assert_eq!(
+        edge(&renderer),
+        [220, 218, 245],
+        "200ms pill reaches its complete original capsule extent"
+    );
+    renderer.frames(3);
+    assert_eq!(
+        renderer
+            .work()
+            .phase(tessera_ui::testing::WorkPhase::Paint)
+            .count(),
+        0,
+        "completed motion must not repaint"
+    );
+    assert_eq!(
+        renderer
+            .work()
+            .phase(tessera_ui::testing::WorkPhase::Measure)
+            .count(),
+        0
+    );
+    assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
 }
 
 #[test]

@@ -218,14 +218,13 @@ fn click(renderer: &mut UiTest, point: PxPosition) {
     renderer.frames(8);
 }
 
-fn check_geometry(samples: u32, scale: f64) {
+fn check_geometry(scale: f64) {
     let width = (600.0 * scale) as u32;
     let height = (600.0 * scale) as u32;
     let probe = FixtureProbes::default();
     let mut renderer = UiTest::new()
         .viewport(width, height)
         .scale_factor(scale)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(probe.clone()));
     renderer.frames(8);
@@ -447,20 +446,14 @@ fn check_geometry(samples: u32, scale: f64) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn expressive_geometry_and_toggle_input_msaa1() {
-    check_geometry(1, 1.0);
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn expressive_geometry_and_toggle_input_msaa4() {
-    check_geometry(4, 1.0);
+fn expressive_geometry_and_toggle_input() {
+    check_geometry(1.0);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn expressive_geometry_and_toggle_input_at_fractional_density() {
-    check_geometry(4, 1.5);
+    check_geometry(1.5);
 }
 
 #[test]

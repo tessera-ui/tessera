@@ -32,6 +32,18 @@ use super::{
     button_groups,
 };
 
+#[tessera]
+fn icon_with_tag(test_tag: String) {
+    layout(Stack)
+        .modifier(Modifier::new().semantics(SemanticsArgs {
+            test_tag: Some(test_tag),
+            ..Default::default()
+        }))
+        .child(|| {
+            icon().painter(filled::HOME_SVG);
+        });
+}
+
 const SIZES: [ButtonGroupsSize; 5] = [
     ButtonGroupsSize::ExtraSmall,
     ButtonGroupsSize::Small,
@@ -143,18 +155,7 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
                                         row()
                                             .cross_axis_alignment(CrossAxisAlignment::Center)
                                             .children(move || {
-                                                layout(Stack)
-                                                    .modifier(Modifier::new().semantics(
-                                                        SemanticsArgs {
-                                                            test_tag: Some(format!(
-                                                                "icon-{index}-{item}"
-                                                            )),
-                                                            ..Default::default()
-                                                        },
-                                                    ))
-                                                    .child(|| {
-                                                        icon().painter(filled::HOME_SVG);
-                                                    });
+                                                icon_with_tag(format!("icon-{index}-{item}"));
                                                 spacer().modifier(Modifier::new().width(Dp(8.0)));
                                                 text(format!("G{index} {item}"));
                                             });
@@ -236,14 +237,13 @@ fn pixel(renderer: &UiTest, x: i64, y: i64) -> [u8; 4] {
         .unwrap()
 }
 
-fn check_group_metrics(samples: u32) {
+fn check_group_metrics() {
     for scale in [1.0, 1.5] {
         let probe = TestProbe::default();
         let observed = probe.clone();
         let mut renderer = UiTest::new()
             .viewport(1800, 1200)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(move || fixture(probe.clone()));
         renderer.frames(10);
@@ -731,18 +731,9 @@ fn check_group_metrics(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn native_connected_group_sizes_context_selection_and_resize_msaa1() {
+fn native_connected_group_sizes_context_selection_and_resize() {
     crate::test_utils::run_isolated_test(
-        "button_groups::native_tests::native_connected_group_sizes_context_selection_and_resize_msaa1",
-        || check_group_metrics(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn native_connected_group_sizes_context_selection_and_resize_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "button_groups::native_tests::native_connected_group_sizes_context_selection_and_resize_msaa4",
-        || check_group_metrics(4),
+        "button_groups::native_tests::native_connected_group_sizes_context_selection_and_resize",
+        check_group_metrics,
     );
 }

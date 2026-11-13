@@ -84,7 +84,7 @@ pub fn flow_column(
         max_lines,
     })
     .modifier(modifier)
-    .child_shared(children.unwrap_or_else(RenderSlot::empty));
+    .child(children.unwrap_or_else(RenderSlot::empty));
 }
 
 #[cfg(test)]

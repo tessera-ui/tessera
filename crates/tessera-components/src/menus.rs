@@ -696,6 +696,13 @@ pub fn menu_provider(
 }
 
 #[tessera]
+fn menu_main_slot(focus_scope: FocusScopeNode, content: RenderSlot) {
+    layout(Stack)
+        .modifier(Modifier::new().focus_scope(Some(focus_scope)))
+        .child(content);
+}
+
+#[tessera]
 fn menu_provider_content(provider: Option<MenuProviderConfig>) {
     let provider_args = provider.unwrap_or_default();
     let controller = provider_args.controller.expect("menu controller");
@@ -831,9 +838,7 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
     })
     .modifier(modifier)
     .child(move || {
-        layout(Stack)
-            .modifier(Modifier::new().focus_scope(Some(main_focus_scope)))
-            .child_shared(main_content);
+        menu_main_slot(main_focus_scope, main_content);
         if is_open {
             let bounds = bounds;
             if parent_request.is_none() {

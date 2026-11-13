@@ -90,14 +90,14 @@ fn tap(renderer: &mut UiTest, point: PxPosition) {
     renderer.frames(8);
 }
 
-fn save(renderer: &mut UiTest, name: &str, samples: u32) {
+fn save(renderer: &mut UiTest, name: &str) {
     if let Some(directory) = std::env::var_os("TESSERA_TIME_QA_DIR") {
         let directory = std::path::PathBuf::from(directory);
         std::fs::create_dir_all(&directory).expect("QA directory");
         let size = renderer.physical_size();
         let pixels = renderer.read_pixels();
         tessera_ui::headless::write_png_file(
-            directory.join(format!("{name}-msaa{samples}.png")),
+            directory.join(format!("{name}.png")),
             size.width,
             size.height,
             &pixels,
@@ -106,12 +106,11 @@ fn save(renderer: &mut UiTest, name: &str, samples: u32) {
     }
 }
 
-fn check_accessibility(samples: u32) {
+fn check_accessibility() {
     let output = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(600, 1000)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(output.clone()));
     renderer.frames(8);
@@ -160,7 +159,7 @@ fn check_accessibility(samples: u32) {
         control(&renderer, "PM", Role::RadioButton).1.toggled(),
         Some(Toggled::True)
     );
-    save(&mut renderer, "portrait", samples);
+    save(&mut renderer, "portrait");
     let initial = renderer.read_pixels();
     let header = control(&renderer, "Hour", Role::Button).0;
     action(&mut renderer, header, Action::Focus);
@@ -278,7 +277,7 @@ fn check_accessibility(samples: u32) {
     let midnight = control(&renderer, "Hour 0 of 24", Role::Button).0;
     action(&mut renderer, midnight, Action::Click);
     assert_eq!(state.with(TimePickerController::hour), 0);
-    save(&mut renderer, "24-hour", samples);
+    save(&mut renderer, "24-hour");
 
     let minute = control(&renderer, "Minute", Role::Button).0;
     action(&mut renderer, minute, Action::Click);
@@ -378,7 +377,7 @@ fn check_accessibility(samples: u32) {
     renderer.inject_ime_event(Ime::Commit("56".to_owned()));
     renderer.frames(8);
     assert_eq!(state.with(TimePickerController::minute), 56);
-    save(&mut renderer, "input", samples);
+    save(&mut renderer, "input");
     let toggle = control(&renderer, "Switch to clock", Role::Button).0;
     action(&mut renderer, toggle, Action::Click);
     control(&renderer, "Minute 55 of 60", Role::Button);
@@ -436,7 +435,7 @@ fn check_accessibility(samples: u32) {
         14,
         "the hit target extends below the visual group"
     );
-    save(&mut renderer, "horizontal", samples);
+    save(&mut renderer, "horizontal");
     renderer.resize(600, 1000);
     renderer.frames(8);
     assert_eq!(control(&renderer, "PM", Role::RadioButton).0, pm);
@@ -462,7 +461,7 @@ fn check_accessibility(samples: u32) {
     let seven = control(&renderer, "Hour 19 of 24", Role::Button).0;
     action(&mut renderer, seven, Action::Click);
     assert_eq!(state.with(TimePickerController::hour), 19);
-    save(&mut renderer, "horizontal-24-hour", samples);
+    save(&mut renderer, "horizontal-24-hour");
 }
 
 #[test]
@@ -470,15 +469,6 @@ fn check_accessibility(samples: u32) {
 fn gpu_clock_values_periods_focus_and_actions() {
     crate::test_utils::run_isolated_test(
         "time_picker::accessibility_tests::gpu_clock_values_periods_focus_and_actions",
-        || check_accessibility(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_clock_values_periods_focus_and_actions_msaa() {
-    crate::test_utils::run_isolated_test(
-        "time_picker::accessibility_tests::gpu_clock_values_periods_focus_and_actions_msaa",
-        || check_accessibility(4),
+        check_accessibility,
     );
 }

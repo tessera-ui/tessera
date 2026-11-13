@@ -149,68 +149,65 @@ fn assert_geometry(renderer: &UiTest, scene: usize, scale: f32) {
 }
 
 fn exercise(scenes: &[usize]) {
-    for samples in [1, 4] {
-        for &scene in scenes {
-            let output = tessera_ui::testing::TestProbe::default();
-            let mut renderer = UiTest::new()
-                .viewport(640, 800)
-                .samples(samples)
-                .rendered(crate::TestPipelines)
-                .content(|| fixture(scene, output.clone()));
-            renderer.frames(16);
-            renderer.inject_pointer(
-                PointerChange::new(
-                    renderer.frame_origin() + renderer.frame_time(),
-                    MOUSE_POINTER_ID,
-                    CursorEventContent::Scroll(ScrollEventContent {
-                        delta_x: 0.0,
-                        delta_y: -140.0,
-                        unit: ScrollDeltaUnit::Pixel,
-                        source: ScrollEventSource::Wheel,
-                    }),
-                    GestureState::default(),
-                )
-                .with_position(PxPosition::from_f32_xy(40.0, 100.0)),
-            );
-            renderer.frames(120);
-            assert_eq!(
-                output
-                    .get()
-                    .unwrap()
-                    .with(|scroll| scroll.child_position().y),
-                -140.0
-            );
-            assert_geometry(&renderer, scene, 0.625);
-            renderer.resize(512, 800);
-            renderer.frames(16);
-            assert_geometry(&renderer, scene, 0.5);
-            let (label, expected_notice, width) = match scene {
-                0 => ("Accept", "Accepted", 80.0),
-                1 => ("Action 1", "Accepted", 84.0),
-                2 => ("Accept color dialog", "Color dialog accepted", 88.0),
-                3..=5 => ("Save spec event", "Event saved", 64.0),
-                _ => ("Overview basic confirm", "Basic dialog accepted", 112.0),
-            };
-            let bounds = node(&renderer, label, Role::Button).bounds().unwrap();
-            assert_eq!((bounds.width(), bounds.height()), (width * 0.5, 20.0));
-            let position = PxPosition::from_f32_xy(
-                ((bounds.x0 + bounds.x1) * 0.5) as f32,
-                ((bounds.y0 + bounds.y1) * 0.5) as f32,
-            );
-            renderer.pointer_move(MOUSE_POINTER_ID, position);
-            renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-            renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-            renderer.frames(4);
-            assert!(
-                renderer
-                    .inspect_accessibility()
-                    .unwrap()
-                    .nodes()
-                    .iter()
-                    .any(|(_, node)| crate::has_label(&node, expected_notice)),
-                "the activated action publishes its notice"
-            );
-        }
+    for &scene in scenes {
+        let output = tessera_ui::testing::TestProbe::default();
+        let mut renderer = UiTest::new()
+            .viewport(640, 800)
+            .rendered(crate::TestPipelines)
+            .content(|| fixture(scene, output.clone()));
+        renderer.frames(16);
+        renderer.inject_pointer(
+            PointerChange::new(
+                renderer.frame_origin() + renderer.frame_time(),
+                MOUSE_POINTER_ID,
+                CursorEventContent::Scroll(ScrollEventContent {
+                    delta_x: 0.0,
+                    delta_y: -140.0,
+                    unit: ScrollDeltaUnit::Pixel,
+                    source: ScrollEventSource::Wheel,
+                }),
+                GestureState::default(),
+            )
+            .with_position(PxPosition::from_f32_xy(40.0, 100.0)),
+        );
+        renderer.frames(120);
+        assert_eq!(
+            output
+                .get()
+                .unwrap()
+                .with(|scroll| scroll.child_position().y),
+            -140.0
+        );
+        assert_geometry(&renderer, scene, 0.625);
+        renderer.resize(512, 800);
+        renderer.frames(16);
+        assert_geometry(&renderer, scene, 0.5);
+        let (label, expected_notice, width) = match scene {
+            0 => ("Accept", "Accepted", 80.0),
+            1 => ("Action 1", "Accepted", 84.0),
+            2 => ("Accept color dialog", "Color dialog accepted", 88.0),
+            3..=5 => ("Save spec event", "Event saved", 64.0),
+            _ => ("Overview basic confirm", "Basic dialog accepted", 112.0),
+        };
+        let bounds = node(&renderer, label, Role::Button).bounds().unwrap();
+        assert_eq!((bounds.width(), bounds.height()), (width * 0.5, 20.0));
+        let position = PxPosition::from_f32_xy(
+            ((bounds.x0 + bounds.x1) * 0.5) as f32,
+            ((bounds.y0 + bounds.y1) * 0.5) as f32,
+        );
+        renderer.pointer_move(MOUSE_POINTER_ID, position);
+        renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        renderer.frames(4);
+        assert!(
+            renderer
+                .inspect_accessibility()
+                .unwrap()
+                .nodes()
+                .iter()
+                .any(|(_, node)| crate::has_label(&node, expected_notice)),
+            "the activated action publishes its notice"
+        );
     }
 }
 

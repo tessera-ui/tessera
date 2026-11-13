@@ -409,7 +409,7 @@ impl Drop for ScopeGuard {
 pub fn with_pending_scope<R>(build: impl FnOnce() -> R) -> R {
     let _guard = begin_pending_scope();
     let result = build();
-    drain_pending_scope();
+    commit_pending();
     result
 }
 
@@ -430,7 +430,7 @@ fn begin_pending_scope() -> ScopeGuard {
     ScopeGuard { root_order_frame }
 }
 
-fn drain_pending_scope() {
+pub(crate) fn commit_pending() {
     with_pending_calls(|calls| {
         while let Some((_, call)) = take_next_call(calls) {
             if let Some(call) = call {

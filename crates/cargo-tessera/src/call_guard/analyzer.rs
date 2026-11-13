@@ -37,6 +37,7 @@ use super::{
 mod lint_levels;
 mod lints;
 mod model_init;
+mod node_emission;
 mod private_api;
 
 const RENDER_SLOT_TYPE_PATH: &str = "tessera_ui::prop::RenderSlot";
@@ -64,6 +65,8 @@ const PUBLIC_LAUNCH_ONCE_PATH: &str = "tessera_ui::launch_once";
 const USE_ROUTER_PATH: &str = "tessera_shard::router::use_router";
 const PUBLIC_USE_ROUTER_PATH: &str = "tessera_shard::use_router";
 const KEY_PATH: &str = "tessera_ui::runtime::key";
+const LAYOUT_PATH: &str = "tessera_ui::layout::layout";
+const GROUP_PATH: &str = "tessera_ui::layout::group";
 const PUBLIC_KEY_PATH: &str = "tessera_ui::key";
 const RUNTIME_MODULE_PATH_PREFIX: &str = "tessera_ui::runtime::";
 const RENDER_SLOT_NEW_PATH: &str = "tessera_ui::prop::RenderSlot::new";
@@ -76,6 +79,12 @@ const CORE_OPTION_TYPE_PATH: &str = "core::option::Option";
 const STD_OPTION_TYPE_PATH: &str = "std::option::Option";
 const CORE_INTO_TRAIT_PATH: &str = "core::convert::Into";
 const STD_INTO_TRAIT_PATH: &str = "std::convert::Into";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Carrier {
+    Content,
+    Root,
+}
 
 impl<'db> CallAnalyzer<'db> {
     pub(crate) fn new(
@@ -683,6 +692,9 @@ impl<'db> CallAnalyzer<'db> {
             } else {
                 ContextColor::Plain
             };
+        if color == ContextColor::Tessera {
+            self.check_node_emissions(body.syntax(), 1);
+        }
         self.walk_node(body.syntax(), color, allow_entry_point_new);
     }
 
@@ -690,11 +702,16 @@ impl<'db> CallAnalyzer<'db> {
         let Some(body) = closure.body() else {
             return;
         };
-        let color = if self.is_tessera_carrier_closure(&closure) {
+        let carrier = self.carrier_kind(&closure);
+        let color = if carrier.is_some() {
             ContextColor::Tessera
         } else {
             ContextColor::Plain
         };
+        if let Some(carrier) = carrier {
+            let limit = if carrier == Carrier::Root { 0 } else { 1 };
+            self.check_node_emissions(body.syntax(), limit);
+        }
         if color == ContextColor::Tessera
             && let Some(diagnostic) = self.redundant_render_slot(&closure)
         {
@@ -975,6 +992,8 @@ impl<'db> CallAnalyzer<'db> {
             LAUNCH_ONCE_PATH | PUBLIC_LAUNCH_ONCE_PATH => Some(TesseraRuntimeApi::LaunchOnce),
             USE_ROUTER_PATH | PUBLIC_USE_ROUTER_PATH => Some(TesseraRuntimeApi::UseRouter),
             KEY_PATH | PUBLIC_KEY_PATH => Some(TesseraRuntimeApi::Key),
+            LAYOUT_PATH => Some(TesseraRuntimeApi::Layout),
+            GROUP_PATH => Some(TesseraRuntimeApi::Group),
             path => {
                 let name = path.rsplit("::").next().unwrap_or(path);
                 if path.starts_with(RUNTIME_MODULE_PATH_PREFIX) && is_internal_runtime_name(name) {
@@ -1126,16 +1145,12 @@ impl<'db> CallAnalyzer<'db> {
         self.module_def_canonical_path(ModuleDef::from(trait_))
     }
 
-    fn is_tessera_carrier_closure(&self, closure: &ast::ClosureExpr) -> bool {
-        self.is_direct_tessera_carrier_closure(closure)
-    }
-
-    fn is_direct_tessera_carrier_closure(&self, closure: &ast::ClosureExpr) -> bool {
+    fn carrier_kind(&self, closure: &ast::ClosureExpr) -> Option<Carrier> {
         let closure_range = closure.syntax().text_range();
         let mut current = closure.syntax().parent();
         while let Some(node) = current {
             if ast::ClosureExpr::can_cast(node.kind()) {
-                return false;
+                return None;
             }
             if let Some(block) = ast::BlockExpr::cast(node.clone()) {
                 if block.async_token().is_some()
@@ -1148,7 +1163,7 @@ impl<'db> CallAnalyzer<'db> {
                             !tail.syntax().text_range().contains_range(closure_range)
                         })
                 {
-                    return false;
+                    return None;
                 }
             }
             if let Some(call) = ast::CallExpr::cast(node.clone()) {
@@ -1157,13 +1172,18 @@ impl<'db> CallAnalyzer<'db> {
                         .args()
                         .position(|arg| arg.syntax().text_range().contains_range(closure_range))
                 }) else {
-                    return false;
+                    return None;
                 };
                 if index == 0 && self.call_is_box_constructor(&call) {
                     current = node.parent();
                     continue;
                 }
-                return self.call_takes_tessera_carrier_closure_at(&call, index);
+                if index == 0 && self.call_is_build_entry(&call) {
+                    return Some(Carrier::Root);
+                }
+                return self
+                    .call_takes_tessera_carrier_closure_at(&call, index)
+                    .then_some(Carrier::Content);
             }
             if let Some(call) = ast::MethodCallExpr::cast(node.clone()) {
                 let Some(index) = call.arg_list().and_then(|arg_list| {
@@ -1171,17 +1191,20 @@ impl<'db> CallAnalyzer<'db> {
                         .args()
                         .position(|arg| arg.syntax().text_range().contains_range(closure_range))
                 }) else {
-                    return false;
+                    return None;
                 };
-                return self.method_call_takes_render_slot_setter_at(&call, index)
+                if self.method_call_is_build_entry_at(&call, index) {
+                    return Some(Carrier::Root);
+                }
+                return (self.method_call_takes_render_slot_setter_at(&call, index)
                     || self.method_call_takes_render_slot_closure_at(&call, index)
-                    || self.method_call_takes_pending_property_at(&call, index)
-                    || self.method_call_is_build_entry_at(&call, index);
+                    || self.method_call_takes_pending_property_at(&call, index))
+                .then_some(Carrier::Content);
             }
             current = node.parent();
         }
 
-        false
+        None
     }
 
     fn call_takes_tessera_carrier_closure_at(&self, call: &ast::CallExpr, index: usize) -> bool {

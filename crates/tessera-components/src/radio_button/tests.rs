@@ -103,12 +103,11 @@ fn assert_checked(renderer: &UiTest, labels: &[&str]) {
     assert_eq!(checked, labels);
 }
 
-fn check_managed_group(samples: u32) {
+fn check_managed_group() {
     let observed = TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(320, 400)
         .scale_factor(1.25)
-        .samples(samples)
         .frame_step(Duration::from_millis(16))
         .rendered(crate::TesseraComponents)
         .content(|| managed_fixture(observed.clone()));
@@ -164,19 +163,10 @@ fn check_managed_group(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn native_radio_groups_follow_caller_selection_and_release_removed_choices_msaa1() {
+fn native_radio_groups_follow_caller_selection_and_release_removed_choices() {
     crate::test_utils::run_isolated_test(
-        "radio_button::tests::native_radio_groups_follow_caller_selection_and_release_removed_choices_msaa1",
-        || check_managed_group(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn native_radio_groups_follow_caller_selection_and_release_removed_choices_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "radio_button::tests::native_radio_groups_follow_caller_selection_and_release_removed_choices_msaa4",
-        || check_managed_group(4),
+        "radio_button::tests::native_radio_groups_follow_caller_selection_and_release_removed_choices",
+        check_managed_group,
     );
 }
 
@@ -275,12 +265,11 @@ fn center_pixel(renderer: &UiTest, node: &Node) -> [u8; 4] {
         .unwrap()
 }
 
-fn check_radios(samples: u32) {
+fn check_radios() {
     let observed = TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(300, 440)
         .scale_factor(1.5)
-        .samples(samples)
         .frame_step(Duration::from_millis(16))
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
@@ -479,18 +468,9 @@ fn check_radios(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn native_radio_disabled_semantics_and_wrapped_navigation_msaa1() {
+fn native_radio_disabled_semantics_and_wrapped_navigation() {
     crate::test_utils::run_isolated_test(
-        "radio_button::tests::native_radio_disabled_semantics_and_wrapped_navigation_msaa1",
-        || check_radios(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn native_radio_disabled_semantics_and_wrapped_navigation_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "radio_button::tests::native_radio_disabled_semantics_and_wrapped_navigation_msaa4",
-        || check_radios(4),
+        "radio_button::tests::native_radio_disabled_semantics_and_wrapped_navigation",
+        check_radios,
     );
 }

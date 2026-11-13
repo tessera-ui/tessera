@@ -86,12 +86,11 @@ fn click(renderer: &mut UiTest, label: &str, role: Role) {
     renderer.frames(4);
 }
 
-fn renderer(scene: usize, samples: u32) -> UiTest<'static> {
+fn renderer(scene: usize) -> UiTest<'static> {
     let probe = TestProbe::default();
     let observed = probe.clone();
     let mut renderer = UiTest::new()
         .viewport(640, 800)
-        .samples(samples)
         .rendered(crate::TestPipelines)
         .content(move || fixture(scene, probe.clone()));
     renderer.frames(16);
@@ -185,79 +184,75 @@ fn assert_figure(renderer: &UiTest, scene: usize, width: f32) {
 #[test]
 #[ignore = "requires a native GPU adapter for fractional sheet diagram geometry"]
 fn sheet_diagrams_keep_markers_on_native_geometry_after_resize() {
-    for samples in [1, 4] {
-        for scene in 0..2 {
-            let mut renderer = renderer(scene, samples);
-            assert_figure(&renderer, scene, 640.0);
-            renderer.resize(512, 800);
-            renderer.frames(16);
-            assert_figure(&renderer, scene, 512.0);
-        }
+    for scene in 0..2 {
+        let mut renderer = renderer(scene);
+        assert_figure(&renderer, scene, 640.0);
+        renderer.resize(512, 800);
+        renderer.frames(16);
+        assert_figure(&renderer, scene, 512.0);
     }
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter for scaled music and filter controls"]
 fn narrow_sheet_contexts_keep_playback_photo_updates_and_reopened_filter_state() {
-    for samples in [1, 4] {
-        let mut music = renderer(2, samples);
-        music.resize(512, 800);
-        music.frames(16);
-        let pause = node(&music, "Pause", Role::Button).bounds().unwrap();
-        assert!((pause.width() - 48.0 * 512.0 / 676.0).abs() < 0.001);
-        click(&mut music, "Pause", Role::Button);
-        node(&music, "Play", Role::Button);
-        click(&mut music, "Play", Role::Button);
-        node(&music, "Pause", Role::Button);
-        let before = music.read_pixels();
-        click(&mut music, "Next track", Role::Button);
-        let after = music.read_pixels();
-        let scale: f64 = 512.0 / 676.0;
-        let (x0, x1) = (
-            (10.25 + 132.0 * scale).ceil() as usize,
-            (10.25 + 196.0 * scale).floor() as usize,
-        );
-        let (y0, y1) = (
-            (80.5 + 140.0 * scale).ceil() as usize,
-            (80.5 + 208.0 * scale).floor() as usize,
-        );
-        let changed = (y0..y1)
-            .flat_map(|y| (x0..x1).map(move |x| (y * 512 + x) * 4))
-            .filter(|&i| before[i..i + 4] != after[i..i + 4])
-            .count();
-        assert!(
-            changed > (x1 - x0) * (y1 - y0) / 10,
-            "Next must update the real cropped cover photo"
-        );
-        drop(music);
-        let mut filters = renderer(3, samples);
-        filters.resize(512, 800);
-        filters.frames(16);
+    let mut music = renderer(2);
+    music.resize(512, 800);
+    music.frames(16);
+    let pause = node(&music, "Pause", Role::Button).bounds().unwrap();
+    assert!((pause.width() - 48.0 * 512.0 / 676.0).abs() < 0.001);
+    click(&mut music, "Pause", Role::Button);
+    node(&music, "Play", Role::Button);
+    click(&mut music, "Play", Role::Button);
+    node(&music, "Pause", Role::Button);
+    let before = music.read_pixels();
+    click(&mut music, "Next track", Role::Button);
+    let after = music.read_pixels();
+    let scale: f64 = 512.0 / 676.0;
+    let (x0, x1) = (
+        (10.25 + 132.0 * scale).ceil() as usize,
+        (10.25 + 196.0 * scale).floor() as usize,
+    );
+    let (y0, y1) = (
+        (80.5 + 140.0 * scale).ceil() as usize,
+        (80.5 + 208.0 * scale).floor() as usize,
+    );
+    let changed = (y0..y1)
+        .flat_map(|y| (x0..x1).map(move |x| (y * 512 + x) * 4))
+        .filter(|&i| before[i..i + 4] != after[i..i + 4])
+        .count();
+    assert!(
+        changed > (x1 - x0) * (y1 - y0) / 10,
+        "Next must update the real cropped cover photo"
+    );
+    drop(music);
+    let mut filters = renderer(3);
+    filters.resize(512, 800);
+    filters.frames(16);
+    assert_eq!(
+        node(&filters, "Events", Role::CheckBox).toggled(),
+        Some(Toggled::False)
+    );
+    click(&mut filters, "Events", Role::CheckBox);
+    click(&mut filters, "Projects", Role::CheckBox);
+    click(&mut filters, "Close filters", Role::Button);
+    assert!(
+        filters
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .iter()
+            .all(|(_, n)| n.role() != Role::CheckBox)
+    );
+    click(&mut filters, "Open filters", Role::Button);
+    for (label, selected) in [("Events", true), ("Projects", false), ("Reminders", true)] {
         assert_eq!(
-            node(&filters, "Events", Role::CheckBox).toggled(),
-            Some(Toggled::False)
+            node(&filters, label, Role::CheckBox).toggled(),
+            Some(if selected {
+                Toggled::True
+            } else {
+                Toggled::False
+            })
         );
-        click(&mut filters, "Events", Role::CheckBox);
-        click(&mut filters, "Projects", Role::CheckBox);
-        click(&mut filters, "Close filters", Role::Button);
-        assert!(
-            filters
-                .accessibility_snapshot()
-                .unwrap()
-                .nodes
-                .iter()
-                .all(|(_, n)| n.role() != Role::CheckBox)
-        );
-        click(&mut filters, "Open filters", Role::Button);
-        for (label, selected) in [("Events", true), ("Projects", false), ("Reminders", true)] {
-            assert_eq!(
-                node(&filters, label, Role::CheckBox).toggled(),
-                Some(if selected {
-                    Toggled::True
-                } else {
-                    Toggled::False
-                })
-            );
-        }
     }
 }

@@ -161,13 +161,12 @@ fn assert_pixel(renderer: &UiTest, x: u32, y: u32, color: Color, context: &str) 
     );
 }
 
-fn check_states(samples: u32) {
+fn check_states() {
     let probe = TestProbe::<Option<State<Settings>>>::default();
     let observed = probe.clone();
     let mut renderer = UiTest::new()
         .viewport(200, 140)
         .scale_factor(2.0)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(move || fixture().probe(probe.clone()));
     renderer.frames(30);
@@ -444,18 +443,9 @@ fn check_states(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn switch_theme_state_pixels_and_passive_semantics_msaa1() {
+fn switch_theme_state_pixels_and_passive_semantics() {
     crate::test_utils::run_isolated_test(
-        "switch::state_tests::switch_theme_state_pixels_and_passive_semantics_msaa1",
-        || check_states(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn switch_theme_state_pixels_and_passive_semantics_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "switch::state_tests::switch_theme_state_pixels_and_passive_semantics_msaa4",
-        || check_states(4),
+        "switch::state_tests::switch_theme_state_pixels_and_passive_semantics",
+        check_states,
     );
 }

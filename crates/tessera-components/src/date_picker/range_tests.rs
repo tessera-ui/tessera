@@ -139,12 +139,11 @@ fn nested_fixture(
     });
 }
 
-fn check_nested_scroll(samples: u32) {
+fn check_nested_scroll() {
     let output = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(600, 950)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| nested_fixture(output.clone()));
     renderer.frames(8);
@@ -356,12 +355,11 @@ fn assert_color(renderer: &UiTest, x: f64, y: f64, expected: [u8; 3]) {
     }
 }
 
-fn check_range(samples: u32) {
+fn check_range() {
     let output = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(600, 950)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(output.clone()));
     renderer.frames(8);
@@ -639,29 +637,14 @@ fn check_range(samples: u32) {
 fn gpu_date_range_nested_scroll_preserves_outer_position() {
     crate::test_utils::run_isolated_test(
         "date_picker::range::tests::gpu_date_range_nested_scroll_preserves_outer_position",
-        || check_nested_scroll(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_date_range_nested_scroll_preserves_outer_position_msaa() {
-    crate::test_utils::run_isolated_test(
-        "date_picker::range::tests::gpu_date_range_nested_scroll_preserves_outer_position_msaa",
-        || check_nested_scroll(4),
+        check_nested_scroll,
     );
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn gpu_date_range_selection_scrolling_input_and_resize() {
-    check_range(1);
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_date_range_selection_scrolling_input_and_resize_msaa() {
-    check_range(4);
+    check_range();
 }
 
 #[tessera]

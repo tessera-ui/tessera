@@ -112,13 +112,12 @@ fn pixel(renderer: &UiTest, x: i64, y: i64, color: [u8; 3]) {
     );
 }
 
-fn check_avatars(samples: u32) {
+fn check_avatars() {
     for scale in [1.0, 1.25, 1.5, 2.0] {
         let probe = tessera_ui::testing::TestProbe::default();
         let mut renderer = UiTest::new()
             .viewport(440, 200)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(probe.clone()));
         renderer.frames(5);
@@ -183,18 +182,9 @@ fn check_avatars(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn input_avatars_crop_clip_preserve_colors_and_restore_icon_spacing_msaa1() {
+fn input_avatars_crop_clip_preserve_colors_and_restore_icon_spacing() {
     crate::test_utils::run_isolated_test(
-        "chip::avatar_tests::input_avatars_crop_clip_preserve_colors_and_restore_icon_spacing_msaa1",
-        || check_avatars(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn input_avatars_crop_clip_preserve_colors_and_restore_icon_spacing_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "chip::avatar_tests::input_avatars_crop_clip_preserve_colors_and_restore_icon_spacing_msaa4",
-        || check_avatars(4),
+        "chip::avatar_tests::input_avatars_crop_clip_preserve_colors_and_restore_icon_spacing",
+        check_avatars,
     );
 }

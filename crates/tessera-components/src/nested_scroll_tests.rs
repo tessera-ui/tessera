@@ -126,7 +126,7 @@ fn replaceable_scroll_owner(
     };
     tessera_ui::layout::layout(tessera_ui::layout::Stack)
         .modifier(modifier)
-        .child_shared(content);
+        .child(content);
 }
 
 #[tessera]

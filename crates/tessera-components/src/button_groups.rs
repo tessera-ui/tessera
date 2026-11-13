@@ -581,7 +581,7 @@ pub fn button_groups(
                                     padding: ButtonSize::from(size).content_padding(),
                                     compress: style == ButtonGroupsStyle::Standard,
                                 })
-                                .child_shared(child_closure);
+                                .child(child_closure);
                             });
                         });
                 });

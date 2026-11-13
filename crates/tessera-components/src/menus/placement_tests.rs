@@ -92,12 +92,11 @@ fn panel(renderer: &UiTest) -> Rect {
         .expect("bounds")
 }
 
-fn check_placement(samples: u32) {
+fn check_placement() {
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(900, 900)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(3);
@@ -227,11 +226,5 @@ fn check_placement(samples: u32) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn gpu_menu_tracks_current_anchors_and_flips_before_overlapping_them() {
-    check_placement(1);
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_menu_tracks_current_anchors_and_flips_before_overlapping_them_msaa() {
-    check_placement(4);
+    check_placement();
 }

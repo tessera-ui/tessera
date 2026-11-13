@@ -71,13 +71,12 @@ fn node(renderer: &UiTest, label: &str, role: Role) -> Node {
     node.clone()
 }
 
-fn check(samples: u32) {
+fn check() {
     for scale in [1.0, 1.25, 1.5, 2.0] {
         let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = UiTest::new()
             .viewport(800, 600)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(observed.clone()));
         renderer.frames(4);
@@ -181,18 +180,9 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn snackbar_measured_wrapping_action_rows_and_zero_width_recover_msaa1() {
+fn snackbar_measured_wrapping_action_rows_and_zero_width_recover() {
     crate::test_utils::run_isolated_test(
-        "snackbar::geometry_tests::snackbar_measured_wrapping_action_rows_and_zero_width_recover_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn snackbar_measured_wrapping_action_rows_and_zero_width_recover_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "snackbar::geometry_tests::snackbar_measured_wrapping_action_rows_and_zero_width_recover_msaa4",
-        || check(4),
+        "snackbar::geometry_tests::snackbar_measured_wrapping_action_rows_and_zero_width_recover",
+        check,
     );
 }

@@ -146,12 +146,11 @@ fn pixel(pixels: &[u8], x: f64, y: f64) -> u8 {
     pixels[(y as usize * 900 + x as usize) * 4]
 }
 
-fn check_shadows(samples: u32) {
+fn check_shadows() {
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(900, 900)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(4);
@@ -266,16 +265,7 @@ fn check_shadows(samples: u32) {
 fn gpu_menu_shadows_extend_beyond_group_and_panel_edges() {
     crate::test_utils::run_isolated_test(
         "menus::shadow_tests::gpu_menu_shadows_extend_beyond_group_and_panel_edges",
-        || check_shadows(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_menu_shadows_extend_beyond_group_and_panel_edges_msaa() {
-    crate::test_utils::run_isolated_test(
-        "menus::shadow_tests::gpu_menu_shadows_extend_beyond_group_and_panel_edges_msaa",
-        || check_shadows(4),
+        check_shadows,
     );
 }
 
@@ -295,12 +285,11 @@ fn inside_group(rect: Rect, index: usize, x: f64, y: f64) -> bool {
     dx * dx + dy * dy <= (radius + 1.0).powi(2)
 }
 
-fn check_corner_shadows(samples: u32) {
+fn check_corner_shadows() {
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(900, 900)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(4);
@@ -370,15 +359,6 @@ fn check_corner_shadows(samples: u32) {
 fn gpu_menu_corner_shadows_match_unclipped_surfaces() {
     crate::test_utils::run_isolated_test(
         "menus::shadow_tests::gpu_menu_corner_shadows_match_unclipped_surfaces",
-        || check_corner_shadows(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_menu_corner_shadows_match_unclipped_surfaces_msaa() {
-    crate::test_utils::run_isolated_test(
-        "menus::shadow_tests::gpu_menu_corner_shadows_match_unclipped_surfaces_msaa",
-        || check_corner_shadows(4),
+        check_corner_shadows,
     );
 }

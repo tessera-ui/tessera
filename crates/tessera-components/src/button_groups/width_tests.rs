@@ -137,7 +137,7 @@ fn check_widths(renderer: &UiTest, widths: [f64; 3], scale: f64, gap: f64) {
     }
 }
 
-fn check_press_widths(samples: u32) {
+fn check_press_widths() {
     for scale in [1.0, 1.5] {
         let clicks = TestProbe::new(0usize);
         let settings_observed = TestProbe::default();
@@ -145,7 +145,6 @@ fn check_press_widths(samples: u32) {
         let mut renderer = UiTest::new()
             .viewport(800, 180)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(fixture_settings.clone(), clicks.clone()));
         renderer.frames(12);
@@ -392,18 +391,9 @@ fn check_press_widths(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn standard_width_exchange_preserves_content_pixels_and_input_msaa1() {
+fn standard_width_exchange_preserves_content_pixels_and_input() {
     crate::test_utils::run_isolated_test(
-        "button_groups::width_tests::standard_width_exchange_preserves_content_pixels_and_input_msaa1",
-        || check_press_widths(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn standard_width_exchange_preserves_content_pixels_and_input_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "button_groups::width_tests::standard_width_exchange_preserves_content_pixels_and_input_msaa4",
-        || check_press_widths(4),
+        "button_groups::width_tests::standard_width_exchange_preserves_content_pixels_and_input",
+        check_press_widths,
     );
 }

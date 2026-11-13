@@ -69,11 +69,10 @@ fn assert_retained_frames(renderer: &mut UiTest, frames: u32) {
     }
 }
 
-fn check_stationary_ripple(samples: u32) {
+fn check_stationary_ripple() {
     let clicks = tessera_ui::testing::TestProbe::new(0usize);
     let mut renderer = UiTest::new()
         .viewport(240, 120)
-        .samples(samples)
         .frame_step(Duration::from_millis(20))
         .rendered(crate::TesseraComponents)
         .content(|| fixture(clicks.clone()));
@@ -138,18 +137,9 @@ fn check_stationary_ripple(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn stationary_noop_button_ripple_advances_finishes_and_restarts_msaa1() {
+fn stationary_noop_button_ripple_advances_finishes_and_restarts() {
     crate::test_utils::run_isolated_test(
-        "surface::ripple_tests::stationary_noop_button_ripple_advances_finishes_and_restarts_msaa1",
-        || check_stationary_ripple(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn stationary_noop_button_ripple_advances_finishes_and_restarts_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "surface::ripple_tests::stationary_noop_button_ripple_advances_finishes_and_restarts_msaa4",
-        || check_stationary_ripple(4),
+        "surface::ripple_tests::stationary_noop_button_ripple_advances_finishes_and_restarts",
+        check_stationary_ripple,
     );
 }

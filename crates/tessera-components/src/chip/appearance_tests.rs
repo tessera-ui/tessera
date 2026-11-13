@@ -167,11 +167,10 @@ fn count_icon(renderer: &UiTest, color: [u8; 3]) -> usize {
     count
 }
 
-fn check_appearance(samples: u32) {
+fn check_appearance() {
     let probe = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(600, 160)
-        .samples(samples)
         .frame_step(Duration::from_millis(10))
         .rendered(crate::TesseraComponents)
         .content(|| fixture(probe.clone()));
@@ -265,18 +264,9 @@ fn check_appearance(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn native_chip_shadows_colors_and_disabled_transitions_msaa1() {
+fn native_chip_shadows_colors_and_disabled_transitions() {
     crate::test_utils::run_isolated_test(
-        "chip::appearance_tests::native_chip_shadows_colors_and_disabled_transitions_msaa1",
-        || check_appearance(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn native_chip_shadows_colors_and_disabled_transitions_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "chip::appearance_tests::native_chip_shadows_colors_and_disabled_transitions_msaa4",
-        || check_appearance(4),
+        "chip::appearance_tests::native_chip_shadows_colors_and_disabled_transitions",
+        check_appearance,
     );
 }

@@ -169,12 +169,11 @@ fn click(renderer: &mut UiTest, label: &str) {
     renderer.frames(4);
 }
 
-fn check_bar(samples: u32) {
+fn check_bar() {
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(540, 600)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(8);
@@ -342,15 +341,6 @@ fn check_bar(samples: u32) {
 fn gpu_app_bar_variants_geometry_colors_input_and_resize() {
     crate::test_utils::run_isolated_test(
         "app_bar::tests::gpu_app_bar_variants_geometry_colors_input_and_resize",
-        || check_bar(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_app_bar_variants_geometry_colors_input_and_resize_msaa() {
-    crate::test_utils::run_isolated_test(
-        "app_bar::tests::gpu_app_bar_variants_geometry_colors_input_and_resize_msaa",
-        || check_bar(4),
+        check_bar,
     );
 }

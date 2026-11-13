@@ -42,5 +42,5 @@ pub(crate) fn overlay_background(content: RenderSlot, blocked: bool) {
     } else {
         Modifier::new()
     };
-    layout(Stack).modifier(modifier).child_shared(content);
+    layout(Stack).modifier(modifier).child(content);
 }

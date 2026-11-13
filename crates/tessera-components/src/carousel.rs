@@ -1723,11 +1723,10 @@ mod tests {
         renderer.frames(3);
     }
 
-    fn check_native_carousel(samples: u32) {
+    fn check_native_carousel() {
         let probe = Probe::default();
         let mut renderer = UiTest::new()
             .viewport(500, 300)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(probe.clone()));
         renderer.frames(8);
@@ -1739,14 +1738,14 @@ mod tests {
             let directory = std::path::PathBuf::from(directory);
             std::fs::create_dir_all(&directory).expect("carousel QA directory");
             tessera_ui::headless::write_png_file(
-                directory.join(format!("carousel-content-msaa{samples}.png")),
+                directory.join("carousel-content.png"),
                 500,
                 300,
                 &initial,
             )
             .expect("carousel QA image");
             std::fs::write(
-                directory.join(format!("carousel-snapshot-msaa{samples}.json")),
+                directory.join("carousel-snapshot.json"),
                 renderer.snapshot().to_string(),
             )
             .expect("snapshot file");
@@ -2267,14 +2266,8 @@ mod tests {
 
     #[test]
     #[ignore = "Requires a native GPU adapter"]
-    fn native_carousel_masks_input_and_dynamic_props_at_one_sample() {
-        check_native_carousel(1);
-    }
-
-    #[test]
-    #[ignore = "Requires a native GPU adapter"]
-    fn native_carousel_masks_input_and_dynamic_props_at_four_samples() {
-        check_native_carousel(4);
+    fn native_carousel_masks_input_and_dynamic_props() {
+        check_native_carousel();
     }
 
     #[tessera]
@@ -2339,7 +2332,6 @@ mod tests {
         let mut renderer = UiTest::new()
             .viewport(1316, 1307)
             .scale_factor(1.5)
-            .samples(4)
             .rendered(crate::TesseraComponents)
             .content(|| responsive_feed(probe.clone()));
         renderer.frames(20);

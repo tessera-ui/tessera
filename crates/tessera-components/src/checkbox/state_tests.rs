@@ -123,13 +123,12 @@ fn action(renderer: &mut UiTest, action: Action) -> bool {
     renderer.accessibility_action(renderer.accessibility_node("Selection").0, action)
 }
 
-fn check_states(samples: u32) {
+fn check_states() {
     let palettes = palettes();
     let probe = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(200, 160)
         .scale_factor(2.0)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(probe.clone()));
     renderer.frames(30);
@@ -352,18 +351,9 @@ fn check_states(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn checkbox_light_dark_validation_colors_and_semantics_msaa1() {
+fn checkbox_light_dark_validation_colors_and_semantics() {
     crate::test_utils::run_isolated_test(
-        "checkbox::state_tests::checkbox_light_dark_validation_colors_and_semantics_msaa1",
-        || check_states(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn checkbox_light_dark_validation_colors_and_semantics_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "checkbox::state_tests::checkbox_light_dark_validation_colors_and_semantics_msaa4",
-        || check_states(4),
+        "checkbox::state_tests::checkbox_light_dark_validation_colors_and_semantics",
+        check_states,
     );
 }

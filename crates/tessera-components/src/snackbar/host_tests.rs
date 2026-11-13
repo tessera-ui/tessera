@@ -97,13 +97,12 @@ fn show(
     renderer.frames(3);
 }
 
-fn check(samples: u32) {
+fn check() {
     for scale in [1.0, 1.5] {
         let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = UiTest::new()
             .viewport(800, 600)
             .scale_factor(scale)
-            .samples(samples)
             .frame_step(Duration::from_millis(100))
             .rendered(crate::TesseraComponents)
             .content(|| fixture(observed.clone()));
@@ -201,19 +200,10 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn host_actions_queue_timeout_and_unavailable_origins_restore_focus_msaa1() {
+fn host_actions_queue_timeout_and_unavailable_origins_restore_focus() {
     crate::test_utils::run_isolated_test(
-        "snackbar::host_tests::host_actions_queue_timeout_and_unavailable_origins_restore_focus_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn host_actions_queue_timeout_and_unavailable_origins_restore_focus_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "snackbar::host_tests::host_actions_queue_timeout_and_unavailable_origins_restore_focus_msaa4",
-        || check(4),
+        "snackbar::host_tests::host_actions_queue_timeout_and_unavailable_origins_restore_focus",
+        check,
     );
 }
 

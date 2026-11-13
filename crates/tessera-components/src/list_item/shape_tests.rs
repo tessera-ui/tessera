@@ -212,7 +212,7 @@ fn ink(patch: &[u8]) -> u64 {
         .sum()
 }
 
-fn check(samples: u32) {
+fn check() {
     for scale in [1.0, 1.5] {
         let clicks = TestProbe::<usize>::default();
         let clicks_observed = clicks.clone();
@@ -221,7 +221,6 @@ fn check(samples: u32) {
         let mut renderer = UiTest::new()
             .viewport(320, 1000)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(move || fixture(probe.clone(), clicks.clone()));
         renderer.frames(8);
@@ -389,18 +388,9 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn grouped_list_shapes_follow_input_and_finish_motion_msaa1() {
+fn grouped_list_shapes_follow_input_and_finish_motion() {
     crate::test_utils::run_isolated_test(
-        "list_item::shape_tests::grouped_list_shapes_follow_input_and_finish_motion_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn grouped_list_shapes_follow_input_and_finish_motion_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "list_item::shape_tests::grouped_list_shapes_follow_input_and_finish_motion_msaa4",
-        || check(4),
+        "list_item::shape_tests::grouped_list_shapes_follow_input_and_finish_motion",
+        check,
     );
 }

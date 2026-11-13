@@ -70,13 +70,12 @@ fn padded_text_fixture(probe: TestProbe<FixtureHandles>) {
     });
 }
 
-fn check_padded_drawing(samples: u32) {
+fn check_padded_drawing() {
     let probe = TestProbe::default();
     let observed = probe.clone();
     let mut renderer = UiTest::new()
         .viewport(480, 240)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(move || padded_text_fixture(probe.clone()));
     renderer.frames(4);
@@ -127,16 +126,7 @@ fn check_padded_drawing(samples: u32) {
 fn padded_text_and_ordered_backgrounds_match_nested_containers() {
     crate::test_utils::run_isolated_test(
         "text::drawing_tests::padded_text_and_ordered_backgrounds_match_nested_containers",
-        || check_padded_drawing(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn padded_text_and_ordered_backgrounds_match_nested_containers_msaa() {
-    crate::test_utils::run_isolated_test(
-        "text::drawing_tests::padded_text_and_ordered_backgrounds_match_nested_containers_msaa",
-        || check_padded_drawing(4),
+        check_padded_drawing,
     );
 }
 

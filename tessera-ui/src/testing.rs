@@ -1155,13 +1155,17 @@ mod tests {
     }
 
     #[tessera]
+    fn measure_revision_node(#[prop(into)] tag: String, revision: State<u8>) {
+        crate::layout::layout(MeasureRevisionPolicy(revision))
+            .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
+    }
+
+    #[tessera]
     fn transparent_dirty_siblings(revision: State<u8>) {
         let stable = remember(|| 0_u8);
-        for (tag, revision) in [("left", revision), ("right", revision), ("stable", stable)] {
-            crate::layout::layout(MeasureRevisionPolicy(revision)).modifier(
-                Modifier::new().push_semantics(TestTagSemanticsModifier { tag: tag.into() }),
-            );
-        }
+        measure_revision_node("left", revision);
+        measure_revision_node("right", revision);
+        measure_revision_node("stable", stable);
     }
 
     #[tessera]
@@ -1220,6 +1224,28 @@ mod tests {
     }
 
     #[tessera]
+    fn measure_watcher_node(width: State<i32>, observed_width: State<i32>) {
+        crate::layout::layout(MeasureOnlyWidthPolicy { width }).modifier(
+            Modifier::new().on_layout_size_changed(move |size: crate::PxSize| {
+                if observed_width.get() != size.width.0 {
+                    observed_width.set(size.width.0);
+                }
+            }),
+        );
+    }
+
+    #[tessera]
+    fn observed_size_node(observed_width: State<i32>) {
+        crate::layout::layout(FixedSizePolicy {
+            width: observed_width.get(),
+            height: 20,
+        })
+        .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
+            tag: "layout-dependent-build".into(),
+        }));
+    }
+
+    #[tessera]
     fn layout_dependent_build_fixture(probe: MeasureProbe) {
         let width = remember(|| 40);
         let observed_width = remember(|| 0);
@@ -1234,20 +1260,8 @@ mod tests {
                 );
             }
         });
-        crate::layout::layout(MeasureOnlyWidthPolicy { width }).modifier(
-            Modifier::new().on_layout_size_changed(move |size: crate::PxSize| {
-                if observed_width.get() != size.width.0 {
-                    observed_width.set(size.width.0);
-                }
-            }),
-        );
-        crate::layout::layout(FixedSizePolicy {
-            width: observed_width.get(),
-            height: 20,
-        })
-        .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
-            tag: "layout-dependent-build".into(),
-        }));
+        measure_watcher_node(width, observed_width);
+        observed_size_node(observed_width);
     }
 
     #[test]
@@ -2628,14 +2642,19 @@ mod tests {
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag: tag.into() }));
     }
 
+    #[tessera]
+    fn policy_snapshot_root(probe: super::TestProbe<Option<State<bool>>>) {
+        crate::layout::layout(crate::layout::Stack)
+            .child(move || policy_snapshot_fixture(probe.clone()));
+    }
+
     #[test]
     fn measurement_local_policy_mutation_does_not_invalidate_a_semantics_only_replay() {
         let probe = super::TestProbe::default();
         let mut session = UiTest::new()
             .content(|| {
                 let probe = probe.clone();
-                crate::layout::layout(crate::layout::Stack)
-                    .child(move || policy_snapshot_fixture(probe.clone()));
+                policy_snapshot_root(probe);
             })
             .viewport(100, 100);
         session.frame().node("original").size(20, 10);

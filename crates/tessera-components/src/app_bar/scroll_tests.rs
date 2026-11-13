@@ -191,13 +191,12 @@ fn touch(renderer: &mut UiTest, content: CursorEventContent, state: GestureState
     renderer.frames(1);
 }
 
-fn check_scrolling(samples: u32) {
+fn check_scrolling() {
     let observed = tessera_ui::testing::TestProbe::default();
     let fixture_observed = observed.clone();
     let mut renderer = UiTest::new()
         .viewport(600, 900)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(move || fixture(fixture_observed.clone()));
     renderer.frames(8);
@@ -470,15 +469,6 @@ fn check_scrolling(samples: u32) {
 fn gpu_app_bar_nested_scrolling_snap_color_and_inertia() {
     crate::test_utils::run_isolated_test(
         "app_bar::scroll_tests::gpu_app_bar_nested_scrolling_snap_color_and_inertia",
-        || check_scrolling(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_app_bar_nested_scrolling_snap_color_and_inertia_msaa() {
-    crate::test_utils::run_isolated_test(
-        "app_bar::scroll_tests::gpu_app_bar_nested_scrolling_snap_color_and_inertia_msaa",
-        || check_scrolling(4),
+        check_scrolling,
     );
 }

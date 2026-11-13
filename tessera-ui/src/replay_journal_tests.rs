@@ -692,13 +692,18 @@ fn optional_pointer_fixture(probe: ReplayProbe) {
     crate::layout::layout(Overlap).modifier(modifier);
 }
 
+#[tessera]
+fn overlap_root(probe: ReplayProbe) {
+    crate::layout::layout(Overlap).child(move || optional_pointer_fixture(probe.clone()));
+}
+
 #[test]
 fn retained_layout_leaves_pointer_index_when_its_last_handler_is_removed() {
     let probe = ReplayProbe::default();
     let mut session = UiTest::new()
         .content(|| {
             let probe = probe.clone();
-            crate::layout::layout(Overlap).child(move || optional_pointer_fixture(probe.clone()));
+            overlap_root(probe);
         })
         .viewport(100, 100);
     session.frame();

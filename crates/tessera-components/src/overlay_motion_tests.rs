@@ -134,7 +134,7 @@ fn green(renderer: &UiTest, node: &Node) -> u8 {
     renderer.read_pixels()[(y * width + x) * 4 + 1]
 }
 
-fn check(samples: u32) {
+fn check() {
     for kind in [
         Kind::Dialog,
         Kind::Bottom,
@@ -148,7 +148,6 @@ fn check(samples: u32) {
             let mut renderer = UiTest::new()
                 .viewport(800, 600)
                 .scale_factor(scale)
-                .samples(samples)
                 .frame_step(Duration::from_millis(10))
                 .rendered(crate::TesseraComponents)
                 .content(|| fixture(kind, output.clone()));
@@ -246,17 +245,9 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn overlay_reversal_preserves_pixels_geometry_and_restores_the_scene_msaa1() {
+fn overlay_reversal_preserves_pixels_geometry_and_restores_the_scene() {
     crate::test_utils::run_isolated_test(
-        "overlay_motion_tests::overlay_reversal_preserves_pixels_geometry_and_restores_the_scene_msaa1",
-        || check(1),
-    );
-}
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn overlay_reversal_preserves_pixels_geometry_and_restores_the_scene_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "overlay_motion_tests::overlay_reversal_preserves_pixels_geometry_and_restores_the_scene_msaa4",
-        || check(4),
+        "overlay_motion_tests::overlay_reversal_preserves_pixels_geometry_and_restores_the_scene",
+        check,
     );
 }

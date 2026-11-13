@@ -1087,11 +1087,10 @@ mod tests {
         renderer.frames(8);
     }
 
-    fn check_sizes(samples: u32) {
+    fn check_sizes() {
         let probe = FixtureProbes::default();
         let mut renderer = UiTest::new()
             .viewport(400, 640)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(probe.clone()));
         renderer.frames(8);
@@ -1103,14 +1102,14 @@ mod tests {
             let directory = std::path::PathBuf::from(directory);
             std::fs::create_dir_all(&directory).unwrap();
             tessera_ui::headless::write_png_file(
-                directory.join(format!("button-sizes-msaa{samples}.png")),
+                directory.join("button-sizes.png"),
                 400,
                 640,
                 &pixels,
             )
             .unwrap();
             std::fs::write(
-                directory.join(format!("button-sizes-msaa{samples}.json")),
+                directory.join("button-sizes.json"),
                 renderer.snapshot().to_string(),
             )
             .unwrap();
@@ -1363,11 +1362,10 @@ mod tests {
         }
     }
 
-    fn check_shape_and_toggle_input(samples: u32) {
+    fn check_shape_and_toggle_input() {
         let probe = FixtureProbes::default();
         let mut renderer = UiTest::new()
             .viewport(400, 640)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(probe.clone()));
         renderer.frames(8);
@@ -1521,7 +1519,7 @@ mod tests {
             let directory = std::path::PathBuf::from(directory);
             std::fs::create_dir_all(&directory).unwrap();
             tessera_ui::headless::write_png_file(
-                directory.join(format!("button-square-msaa{samples}.png")),
+                directory.join("button-square.png"),
                 400,
                 640,
                 &square,
@@ -1532,26 +1530,14 @@ mod tests {
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
-    fn expressive_shape_toggle_semantics_and_input_msaa1() {
-        check_shape_and_toggle_input(1);
+    fn expressive_shape_toggle_semantics_and_input() {
+        check_shape_and_toggle_input();
     }
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
-    fn expressive_shape_toggle_semantics_and_input_msaa4() {
-        check_shape_and_toggle_input(4);
-    }
-
-    #[test]
-    #[ignore = "requires a native GPU adapter"]
-    fn expressive_size_geometry_typography_outline_and_disabled_layout_msaa1() {
-        check_sizes(1);
-    }
-
-    #[test]
-    #[ignore = "requires a native GPU adapter"]
-    fn expressive_size_geometry_typography_outline_and_disabled_layout_msaa4() {
-        check_sizes(4);
+    fn expressive_size_geometry_typography_outline_and_disabled_layout() {
+        check_sizes();
     }
     #[test]
     #[ignore = "requires a native GPU adapter"]

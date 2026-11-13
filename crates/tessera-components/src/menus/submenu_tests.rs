@@ -148,11 +148,10 @@ fn open(renderer: &mut UiTest, observed: &tessera_ui::testing::TestProbe<Fixture
     click(renderer, "Share");
 }
 
-fn check_submenu_chain(samples: u32) {
+fn check_submenu_chain() {
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(1000, 700)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(3);
@@ -333,13 +332,7 @@ fn check_submenu_chain(samples: u32) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn gpu_submenus_escape_parent_clip_and_close_the_complete_chain() {
-    check_submenu_chain(1);
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_submenus_escape_parent_clip_and_close_the_complete_chain_msaa() {
-    check_submenu_chain(4);
+    check_submenu_chain();
 }
 
 #[tessera]

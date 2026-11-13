@@ -219,24 +219,23 @@ fn assert_pixel(renderer: &UiTest, x: i64, y: i64, color: Color) {
     );
 }
 
-fn check_rendering(samples: u32) {
+fn check_rendering() {
     for (scale, expected) in [
         (1.0, [24, 6, 14, 16, 24]),
         (1.25, [30, 8, 18, 20, 30]),
         (1.5, [36, 9, 21, 24, 36]),
         (2.0, [48, 12, 28, 32, 48]),
     ] {
-        check_density(samples, scale, expected);
+        check_density(scale, expected);
     }
 }
 
-fn check_density(samples: u32, scale: f64, expected: [i64; 5]) {
+fn check_density(scale: f64, expected: [i64; 5]) {
     let [anchor, dot_size, vertical, line, large_line] = expected;
     let probe = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(240, 240)
         .scale_factor(scale)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(probe.clone()));
     renderer.frames(5);
@@ -340,18 +339,9 @@ fn check_density(samples: u32, scale: f64, expected: [i64; 5]) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn badge_theme_geometry_semantics_and_pointer_passthrough_msaa1() {
+fn badge_theme_geometry_semantics_and_pointer_passthrough() {
     crate::test_utils::run_isolated_test(
-        "badge::tests::badge_theme_geometry_semantics_and_pointer_passthrough_msaa1",
-        || check_rendering(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn badge_theme_geometry_semantics_and_pointer_passthrough_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "badge::tests::badge_theme_geometry_semantics_and_pointer_passthrough_msaa4",
-        || check_rendering(4),
+        "badge::tests::badge_theme_geometry_semantics_and_pointer_passthrough",
+        check_rendering,
     );
 }

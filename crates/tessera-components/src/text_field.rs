@@ -678,6 +678,18 @@ impl tessera_ui::LayoutPolicy for OutlineSliceLayout {
 }
 
 #[tessera]
+fn outline_slice(origin: PxPosition, size: PxSize, color: Color, width: Dp, shape: Shape) {
+    tessera_ui::layout::layout(OutlineSliceLayout { size, origin })
+        .modifier(Modifier::new().clip_shape(Shape::RECTANGLE))
+        .child(move || {
+            surface()
+                .style(SurfaceStyle::Outlined { color, width })
+                .shape(shape)
+                .block_input(false);
+        });
+}
+
+#[tessera]
 fn outlined_border(
     geometry: OutlineGeometry,
     padding: Dp,
@@ -716,14 +728,7 @@ fn outlined_border(
             PxPosition::ZERO,
             PxPosition::new(right, Px::ZERO),
         ] {
-            tessera_ui::layout::layout(OutlineSliceLayout { size, origin })
-                .modifier(Modifier::new().clip_shape(Shape::RECTANGLE))
-                .child(move || {
-                    surface()
-                        .style(SurfaceStyle::Outlined { color, width })
-                        .shape(shape)
-                        .block_input(false);
-                });
+            outline_slice(origin, size, color, width, shape);
         }
     });
 }

@@ -189,18 +189,17 @@ fn indicator_ink(renderer: &UiTest) -> usize {
     count
 }
 
-fn check_segments(samples: u32) {
+fn check_segments() {
     for scale in [1.0, 1.25, 1.5, 2.0] {
-        check_segments_at_density(samples, scale);
+        check_segments_at_density(scale);
     }
 }
 
-fn check_segments_at_density(samples: u32, scale: f64) {
+fn check_segments_at_density(scale: f64) {
     let observed = TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(900, 600)
         .scale_factor(scale)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(8);
@@ -379,18 +378,9 @@ fn check_segments_at_density(samples: u32, scale: f64) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn native_segment_selection_focus_live_typography_and_narrow_recovery_msaa1() {
+fn native_segment_selection_focus_live_typography_and_narrow_recovery() {
     crate::test_utils::run_isolated_test(
-        "segmented_buttons::tests::native_segment_selection_focus_live_typography_and_narrow_recovery_msaa1",
-        || check_segments(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn native_segment_selection_focus_live_typography_and_narrow_recovery_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "segmented_buttons::tests::native_segment_selection_focus_live_typography_and_narrow_recovery_msaa4",
-        || check_segments(4),
+        "segmented_buttons::tests::native_segment_selection_focus_live_typography_and_narrow_recovery",
+        check_segments,
     );
 }

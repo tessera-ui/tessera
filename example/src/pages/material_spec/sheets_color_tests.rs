@@ -90,10 +90,9 @@ struct CloseReference {
     ink: [Vec<(usize, [u8; 4])>; 2],
 }
 
-fn calibrate_close(samples: u32, modal: bool, width: u32, scale: f32) -> CloseReference {
+fn calibrate_close(modal: bool, width: u32, scale: f32) -> CloseReference {
     let mut renderer = UiTest::new()
         .viewport(width, 1000)
-        .samples(samples)
         .rendered(crate::TestPipelines)
         .content(move || close_calibration_fixture(scale, modal));
     renderer.frames(8);
@@ -348,85 +347,82 @@ fn assert_geometry(renderer: &UiTest, side: bool, scale: f32) {
 #[test]
 #[ignore = "requires a native GPU adapter for combined sheet color diagrams and physical clicks"]
 fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and_resized() {
-    for samples in [1, 4] {
-        for (side, modal) in [(false, true), (true, false), (true, true)] {
-            let probe = TestProbe::<FixtureHandles>::default();
-            let observed = probe.clone();
-            let close_references = side.then(|| {
-                [
-                    calibrate_close(samples, modal, 640, 0.625),
-                    calibrate_close(samples, modal, 512, 0.5),
-                ]
-            });
-            let mut renderer = UiTest::new()
-                .viewport(640, 1000)
-                .samples(samples)
-                .rendered(crate::TestPipelines)
-                .content(move || fixture(side, modal, probe.clone()));
-            renderer.frames(16);
-            renderer.inject_pointer(
-                PointerChange::new(
-                    renderer.frame_origin() + renderer.frame_time(),
-                    MOUSE_POINTER_ID,
-                    CursorEventContent::Scroll(ScrollEventContent {
-                        delta_x: 0.0,
-                        delta_y: -100.0,
-                        unit: ScrollDeltaUnit::Pixel,
-                        source: ScrollEventSource::Wheel,
-                    }),
-                    GestureState::default(),
+    for (side, modal) in [(false, true), (true, false), (true, true)] {
+        let probe = TestProbe::<FixtureHandles>::default();
+        let observed = probe.clone();
+        let close_references = side.then(|| {
+            [
+                calibrate_close(modal, 640, 0.625),
+                calibrate_close(modal, 512, 0.5),
+            ]
+        });
+        let mut renderer = UiTest::new()
+            .viewport(640, 1000)
+            .rendered(crate::TestPipelines)
+            .content(move || fixture(side, modal, probe.clone()));
+        renderer.frames(16);
+        renderer.inject_pointer(
+            PointerChange::new(
+                renderer.frame_origin() + renderer.frame_time(),
+                MOUSE_POINTER_ID,
+                CursorEventContent::Scroll(ScrollEventContent {
+                    delta_x: 0.0,
+                    delta_y: -100.0,
+                    unit: ScrollDeltaUnit::Pixel,
+                    source: ScrollEventSource::Wheel,
+                }),
+                GestureState::default(),
+            )
+            .with_position(PxPosition::from_f32_xy(40.0, 100.0)),
+        );
+        renderer.frames(120);
+        assert_eq!(
+            observed
+                .get()
+                .scroll
+                .unwrap()
+                .with(|scroll| scroll.child_position().y),
+            -100.0
+        );
+        assert_geometry(&renderer, side, 0.625);
+        assert_pixels(
+            &renderer,
+            side,
+            modal,
+            close_references.as_ref().map(|values| &values[0]),
+        );
+        renderer.resize(512, 1000);
+        renderer.frames(16);
+        assert_geometry(&renderer, side, 0.5);
+        assert_pixels(
+            &renderer,
+            side,
+            modal,
+            close_references.as_ref().map(|values| &values[1]),
+        );
+        if side {
+            for dark in [false, true] {
+                observed.get().notice.unwrap().set(String::new());
+                let bounds = node(
+                    &renderer,
+                    &format!("{} sheet color close", if dark { "Dark" } else { "Light" }),
+                    Role::Button,
                 )
-                .with_position(PxPosition::from_f32_xy(40.0, 100.0)),
-            );
-            renderer.frames(120);
-            assert_eq!(
-                observed
-                    .get()
-                    .scroll
-                    .unwrap()
-                    .with(|scroll| scroll.child_position().y),
-                -100.0
-            );
-            assert_geometry(&renderer, side, 0.625);
-            assert_pixels(
-                &renderer,
-                side,
-                modal,
-                close_references.as_ref().map(|values| &values[0]),
-            );
-            renderer.resize(512, 1000);
-            renderer.frames(16);
-            assert_geometry(&renderer, side, 0.5);
-            assert_pixels(
-                &renderer,
-                side,
-                modal,
-                close_references.as_ref().map(|values| &values[1]),
-            );
-            if side {
-                for dark in [false, true] {
-                    observed.get().notice.unwrap().set(String::new());
-                    let bounds = node(
-                        &renderer,
-                        &format!("{} sheet color close", if dark { "Dark" } else { "Light" }),
-                        Role::Button,
-                    )
-                    .bounds()
-                    .unwrap();
-                    assert_eq!((bounds.width(), bounds.height()), (24.0, 24.0));
-                    let point = PxPosition::from_f32_xy(
-                        ((bounds.x0 + bounds.x1) / 2.0) as f32,
-                        ((bounds.y0 + bounds.y1) / 2.0) as f32,
-                    );
-                    renderer.pointer_move(MOUSE_POINTER_ID, point);
-                    renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-                    renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
-                    renderer.frames(4);
-                    assert_eq!(
-                        I18N.text(observed.get().notice.unwrap().get()),
-                        "Sheet close action selected"
-                    );
-                }
+                .bounds()
+                .unwrap();
+                assert_eq!((bounds.width(), bounds.height()), (24.0, 24.0));
+                let point = PxPosition::from_f32_xy(
+                    ((bounds.x0 + bounds.x1) / 2.0) as f32,
+                    ((bounds.y0 + bounds.y1) / 2.0) as f32,
+                );
+                renderer.pointer_move(MOUSE_POINTER_ID, point);
+                renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+                renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+                renderer.frames(4);
+                assert_eq!(
+                    I18N.text(observed.get().notice.unwrap().get()),
+                    "Sheet close action selected"
+                );
             }
         }
     }

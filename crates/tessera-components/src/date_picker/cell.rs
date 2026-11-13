@@ -22,7 +22,7 @@ use crate::{
     shape_def::{ResolvedShape, Shape},
     surface::record_focus_indicator,
     text::text,
-    theme::{MaterialAlpha, MaterialTheme},
+    theme::{MaterialAlpha, MaterialTheme, TextStyle},
 };
 
 use super::{
@@ -188,33 +188,17 @@ pub fn date_picker_day(
             }),
     )
     .child(move || {
-        let label = label.clone();
         if range_band.is_some() {
-            layout(Stack).modifier(Modifier::new().background(scheme.secondary_container));
+            day_band_bg(scheme.secondary_container);
         }
-        tessera_ui::layout::layout(CalendarDayLayout {
-            fractional_center: true,
-            range_band: None,
-        })
-        .modifier(
-            Modifier::new()
-                .size(DATE_VISUAL_SIZE, DATE_VISUAL_SIZE)
-                .push_draw(CalendarFocusIndicator {
-                    visible: focus.is_focus_visible(),
-                    shape: Shape::Ellipse,
-                    color: scheme.secondary,
-                }),
-        )
-        .draw(visual)
-        .child(move || {
-            text(label.clone())
-                .modifier(Modifier::new().semantics(SemanticsArgs {
-                    hidden: true,
-                    ..Default::default()
-                }))
-                .style(theme.typography.body_large)
-                .color(color);
-        });
+        day_circle(
+            visual,
+            scheme.secondary,
+            focus.is_focus_visible(),
+            label.clone(),
+            theme.typography.body_large,
+            color,
+        );
     });
 }
 
@@ -354,6 +338,45 @@ pub fn date_picker_year(
                         });
                 });
         });
+}
+
+#[tessera]
+fn day_band_bg(color: Color) {
+    layout(Stack).modifier(Modifier::new().background(color));
+}
+
+#[tessera]
+fn day_circle(
+    visual: CalendarCellVisual,
+    focus_color: Color,
+    focus_visible: bool,
+    #[prop(into)] label: String,
+    typography: TextStyle,
+    color: Color,
+) {
+    layout(CalendarDayLayout {
+        fractional_center: true,
+        range_band: None,
+    })
+    .modifier(
+        Modifier::new()
+            .size(DATE_VISUAL_SIZE, DATE_VISUAL_SIZE)
+            .push_draw(CalendarFocusIndicator {
+                visible: focus_visible,
+                shape: Shape::Ellipse,
+                color: focus_color,
+            }),
+    )
+    .draw(visual)
+    .child(move || {
+        text(label.clone())
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                hidden: true,
+                ..Default::default()
+            }))
+            .style(typography)
+            .color(color);
+    });
 }
 
 #[derive(Clone, PartialEq)]

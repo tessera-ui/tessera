@@ -40,6 +40,7 @@ use crate::{
     ripple_state::{RippleSpec, RippleState},
     row::row,
     shape_def::{RoundedCorner, Shape},
+    spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
     theme::{ContentColor, MaterialTheme},
@@ -847,7 +848,7 @@ fn navigation_rail_content(
                     .children(move || {
                         header.render();
                     });
-                layout(Stack).modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
+                spacer().modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
             }
 
             if let Some(content) = content {

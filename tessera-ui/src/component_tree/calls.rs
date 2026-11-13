@@ -456,9 +456,14 @@ impl ComponentTree {
             .last()
             .expect("nodes are emitted by an executing call")
             .id;
-        self.calls.records[id]
-            .parent
-            .map_or("layout", |parent| self.calls.records[parent].name)
+        self.calls.records[id].name
+    }
+
+    pub(crate) fn set_emitted_node_draw(&mut self, draw: crate::layout::DrawModifierHandle) {
+        let id = self
+            .executing_call_node()
+            .expect("draw configures the node emitted by the current component");
+        self.tree[id].get_mut().draw_node = draw;
     }
 
     /// Returns the node emitted by the executing call, if any.

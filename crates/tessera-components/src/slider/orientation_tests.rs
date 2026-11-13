@@ -367,12 +367,11 @@ fn drag(renderer: &mut UiTest, from: PxPosition, to: PxPosition) {
     renderer.frames(2);
 }
 
-fn check_orientation(samples: u32) {
+fn check_orientation() {
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(500, 500)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(2);
@@ -958,23 +957,14 @@ fn check_controlled_steps(
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn vertical_slider_pixels_pointer_semantics_and_length_recovery_msaa1() {
+fn vertical_slider_pixels_pointer_semantics_and_length_recovery() {
     crate::test_utils::run_isolated_test(
-        "slider::orientation_tests::vertical_slider_pixels_pointer_semantics_and_length_recovery_msaa1",
-        || check_orientation(1),
+        "slider::orientation_tests::vertical_slider_pixels_pointer_semantics_and_length_recovery",
+        check_orientation,
     );
 }
 
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn vertical_slider_pixels_pointer_semantics_and_length_recovery_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "slider::orientation_tests::vertical_slider_pixels_pointer_semantics_and_length_recovery_msaa4",
-        || check_orientation(4),
-    );
-}
-
-fn check_value_indicators(samples: u32) {
+fn check_value_indicators() {
     use super::SliderValueIndicatorVisibility as Visibility;
 
     let observed = tessera_ui::testing::TestProbe::default();
@@ -982,7 +972,6 @@ fn check_value_indicators(samples: u32) {
     let mut renderer = UiTest::new()
         .viewport(500, 500)
         .scale_factor(1.5)
-        .samples(samples)
         .frame_step(std::time::Duration::from_millis(20))
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
@@ -1267,19 +1256,10 @@ fn check_value_indicators(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa1() {
+fn slider_value_indicators_follow_handles_props_visibility_and_lifetime() {
     crate::test_utils::run_isolated_test(
-        "slider::orientation_tests::slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa1",
-        || check_value_indicators(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "slider::orientation_tests::slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa4",
-        || check_value_indicators(4),
+        "slider::orientation_tests::slider_value_indicators_follow_handles_props_visibility_and_lifetime",
+        check_value_indicators,
     );
 }
 

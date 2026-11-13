@@ -2689,6 +2689,11 @@ mod tests {
     }
 
     #[crate::tessera]
+    fn focus_leaf_node() {
+        crate::layout::layout(FocusLeafLayout);
+    }
+
+    #[crate::tessera]
     fn cold_geometry_fixture(probe: ColdProbe) {
         let observed = remember(|| None::<PxRect>);
         let output = probe.clone();
@@ -2702,7 +2707,7 @@ mod tests {
                 }
             }))
             .child(move || {
-                crate::layout::layout(FocusLeafLayout);
+                focus_leaf_node();
                 if observed.get().is_some() {
                     cold_geometry_child(probe.child.clone());
                 }

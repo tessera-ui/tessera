@@ -112,12 +112,11 @@ fn assert_values(renderer: &UiTest, checked: bool) {
     }
 }
 
-fn check_controls(samples: u32) {
+fn check_controls() {
     let probe = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(320, 480)
         .scale_factor(1.5)
-        .samples(samples)
         .frame_step(Duration::from_millis(16))
         .rendered(crate::TesseraComponents)
         .content(|| fixture(probe.clone()));
@@ -317,18 +316,9 @@ fn check_controls(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn native_disabled_boolean_controls_retain_semantics_values_and_targets_msaa1() {
+fn native_disabled_boolean_controls_retain_semantics_values_and_targets() {
     crate::test_utils::run_isolated_test(
-        "checkbox::accessibility_tests::native_disabled_boolean_controls_retain_semantics_values_and_targets_msaa1",
-        || check_controls(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn native_disabled_boolean_controls_retain_semantics_values_and_targets_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "checkbox::accessibility_tests::native_disabled_boolean_controls_retain_semantics_values_and_targets_msaa4",
-        || check_controls(4),
+        "checkbox::accessibility_tests::native_disabled_boolean_controls_retain_semantics_values_and_targets",
+        check_controls,
     );
 }

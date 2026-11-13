@@ -162,7 +162,7 @@ pub fn row(
         cross_axis_alignment,
     })
     .modifier(modifier)
-    .child_shared(children.unwrap_or_else(RenderSlot::empty));
+    .child(children.unwrap_or_else(RenderSlot::empty));
 }
 
 fn measure_weighted_row(

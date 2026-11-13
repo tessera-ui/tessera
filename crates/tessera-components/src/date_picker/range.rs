@@ -8,8 +8,9 @@ use std::ops::RangeInclusive;
 
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Dp, FocusProperties, FocusRequester, FocusScopeNode, Modifier,
-    RenderSlotWith, State, modifier::FocusModifierExt as _, remember, tessera, use_context,
+    AxisConstraint, CallbackWith, Color, Dp, FocusProperties, FocusRequester, FocusScopeNode,
+    Modifier, RenderSlotWith, State, modifier::FocusModifierExt as _, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -27,7 +28,7 @@ use crate::{
     text::text,
     text_field::text_field,
     text_input::TextInputController,
-    theme::MaterialTheme,
+    theme::{MaterialTheme, TextStyle},
 };
 
 use super::{
@@ -483,6 +484,27 @@ pub fn date_range_picker(
 }
 
 #[tessera]
+fn weekday_header_range(first_day: Weekday, text_style: TextStyle, text_color: Color) {
+    tessera_ui::layout::layout(DateGridLayout {
+        columns: DATE_COLUMNS,
+        row_height: DATE_CELL_SIZE,
+    })
+    .child(move || {
+        for day in weekday_sequence(first_day) {
+            surface()
+                .style(tessera_ui::Color::TRANSPARENT.into())
+                .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                .content_alignment(Alignment::Center)
+                .child(move || {
+                    text(weekday_narrow_label(day))
+                        .style(text_style)
+                        .color(text_color);
+                });
+        }
+    });
+}
+
+#[tessera]
 fn range_calendar(
     state: State<DateRangePickerController>,
     first_day: Weekday,
@@ -536,23 +558,11 @@ fn range_calendar(
         .padding_symmetric(Dp(12.0), Dp::ZERO)
         .focus_restorer(Some(focus_scope), Some(viewport_focus));
     column().modifier(modifier).children(move || {
-        tessera_ui::layout::layout(DateGridLayout {
-            columns: DATE_COLUMNS,
-            row_height: DATE_CELL_SIZE,
-        })
-        .child(move || {
-            for day in weekday_sequence(first_day) {
-                surface()
-                    .style(tessera_ui::Color::TRANSPARENT.into())
-                    .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-                    .content_alignment(Alignment::Center)
-                    .child(move || {
-                        text(weekday_narrow_label(day))
-                            .style(theme.typography.body_large)
-                            .color(theme.color_scheme.on_surface);
-                    });
-            }
-        });
+        weekday_header_range(
+            first_day,
+            theme.typography.body_large,
+            theme.color_scheme.on_surface,
+        );
         lazy_column()
             .modifier(
                 keyboard.viewport_modifier(

@@ -21,8 +21,7 @@ use crate::{
     },
     px::PxPosition,
     render_graph::RenderFragment,
-    runtime::emit_node,
-    tessera,
+    runtime::{emit_node, set_emitted_node_draw},
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -1056,28 +1055,21 @@ where
     }
 }
 
-/// # layout
+/// Emits the layout node of the current component, measuring and placing its
+/// children with `policy`.
 ///
-/// Emit a layout node that measures and places its children with `policy`.
-///
-/// ## Usage
-///
-/// Build containers and controls that arrange child content.
-///
-/// ## Parameters
-///
-/// - `policy` - measures the children and places them; use [`Stack`] to stack
-///   them at the origin
-/// - `draw` - draw modifier recording the node's drawing, defaulting to
-///   [`NoopDrawModifier`]
-/// - `modifier` - node-local modifier chain
-/// - `child` - content laid out by this node
+/// Each component, slot, or build closure emits at most one node, by calling
+/// either `layout` or [`group`] once; `cargo tessera check` rejects code that
+/// could emit more (T0007). Configure the returned node immediately. Content
+/// declared after this call, including [`LayoutNode::child`], is laid out by
+/// this node. Use [`Stack`] to stack children at the origin.
 ///
 /// Re-executing with an equal policy keeps the node's stored policy; a changed
 /// policy replaces it once. Wrap policies that mutate interior state during
 /// measurement in [`crate::modifier::StatefulLayoutPolicy`].
 ///
-/// ## Examples
+/// # Examples
+///
 /// ```
 /// use tessera_ui::{
 ///     Modifier, NoopDrawModifier, RenderSlot,
@@ -1089,45 +1081,25 @@ where
 ///     layout(Stack)
 ///         .draw(NoopDrawModifier)
 ///         .modifier(modifier)
-///         .child(move || child.render());
+///         .child(child);
 /// }
 /// ```
-#[tessera]
-pub fn layout<P>(
-    #[prop(borrow)] policy: P,
-    #[prop(into)] draw: Option<DrawModifierHandle>,
-    modifier: Option<Modifier>,
-    child: Option<RenderSlot>,
-) where
+pub fn layout<P>(policy: P) -> LayoutNode
+where
     P: LayoutPolicy + Clone + PartialEq,
 {
-    emit_node(
-        NodeRole::Layout,
-        policy,
-        draw.unwrap_or_default(),
-        modifier.unwrap_or_default(),
-    );
-    if let Some(child) = child {
-        child.render();
-    }
+    emit_node(NodeRole::Layout, &policy);
+    LayoutNode { _private: () }
 }
 
-/// # group
+/// Attaches node-local semantics, focus, or input to the current component's
+/// content without introducing a layout boundary.
 ///
-/// Attach node-local semantics, focus, or input to child content without
-/// introducing a layout boundary.
+/// Children are measured and placed by the nearest enclosing layout node. Like
+/// [`layout`], it emits the current component's single node.
 ///
-/// ## Usage
+/// # Examples
 ///
-/// Group table rows or other content whose children are measured and placed by
-/// an enclosing layout.
-///
-/// ## Parameters
-///
-/// - `modifier` - semantics, focus, and input modifiers for the grouped content
-/// - `child` - content laid out by the nearest enclosing layout node
-///
-/// ## Examples
 /// ```
 /// use tessera_ui::{Modifier, layout::group};
 ///
@@ -1136,19 +1108,52 @@ pub fn layout<P>(
 ///     group().modifier(modifier).child(|| {});
 /// }
 /// ```
-#[tessera]
-pub fn group(modifier: Option<Modifier>, child: Option<RenderSlot>) {
-    emit_node(
-        NodeRole::Group,
-        &Stack,
-        DrawModifierHandle::default(),
-        modifier.unwrap_or_default(),
-    );
-    if let Some(child) = child {
-        child.render();
+pub fn group() -> GroupNode {
+    emit_node(NodeRole::Group, &Stack);
+    GroupNode { _private: () }
+}
+
+/// The node emitted by [`layout`].
+pub struct LayoutNode {
+    _private: (),
+}
+
+impl LayoutNode {
+    /// Records the node's drawing; defaults to [`NoopDrawModifier`].
+    pub fn draw(self, draw: impl Into<DrawModifierHandle>) -> Self {
+        set_emitted_node_draw(draw.into());
+        self
+    }
+
+    /// Attaches a node-local modifier chain.
+    pub fn modifier(self, modifier: Modifier) -> Self {
+        modifier.attach();
+        self
+    }
+
+    /// Expands the content laid out by this node.
+    pub fn child(self, child: impl Into<RenderSlot>) {
+        child.into().render();
     }
 }
 
+/// The node emitted by [`group`].
+pub struct GroupNode {
+    _private: (),
+}
+
+impl GroupNode {
+    /// Attaches semantics, focus, and input modifiers for the grouped content.
+    pub fn modifier(self, modifier: Modifier) -> Self {
+        modifier.attach();
+        self
+    }
+
+    /// Expands the grouped content.
+    pub fn child(self, child: impl Into<RenderSlot>) {
+        child.into().render();
+    }
+}
 /// Stacks children at the origin and sizes the node to their bounding box.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Stack;

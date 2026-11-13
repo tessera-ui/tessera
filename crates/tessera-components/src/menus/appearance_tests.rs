@@ -166,13 +166,12 @@ fn assert_color(pixels: &[u8], width: usize, x: f64, y: f64, color: Color) {
     }
 }
 
-fn check_appearance(samples: u32) {
+fn check_appearance() {
     let scale = 1.5;
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(750, 900)
         .scale_factor(scale)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(4);
@@ -305,11 +304,5 @@ fn check_appearance(samples: u32) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn gpu_expressive_menu_groups_reserve_text_and_restore_pixels() {
-    check_appearance(1);
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_expressive_menu_groups_reserve_text_and_restore_pixels_msaa() {
-    check_appearance(4);
+    check_appearance();
 }

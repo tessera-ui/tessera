@@ -645,11 +645,68 @@ fn time_number(state: State<TimePickerController>, field: TimePickerSelection, i
 }
 
 #[tessera]
-fn time_period_selector(state: State<TimePickerController>, input: bool) {
+fn period_visual_layer(
+    state: State<TimePickerController>,
+    input: bool,
+    interactions: [State<InteractionState>; 2],
+) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
     let scheme = theme.color_scheme;
+    let period = state.with(TimePickerController::period);
+    tessera_ui::layout::layout(PeriodVisualMeasure { input })
+        .modifier(
+            Modifier::new()
+                .clip_shape(theme.shapes.small)
+                .semantics(SemanticsArgs::clear()),
+        )
+        .child(move || {
+            for (index, (label, value)) in [("md3-am", DayPeriod::Am), ("md3-pm", DayPeriod::Pm)]
+                .into_iter()
+                .enumerate()
+            {
+                let selected = value == period;
+                surface()
+                    .style(
+                        if selected {
+                            scheme.tertiary_container
+                        } else {
+                            Color::TRANSPARENT
+                        }
+                        .into(),
+                    )
+                    .shape(Shape::RECTANGLE)
+                    .interaction_state(interactions[index])
+                    .show_ripple(false)
+                    .block_input(false)
+                    .content_alignment(Alignment::Center)
+                    .child(move || {
+                        text(I18N.text(label))
+                            .style(theme.typography.title_medium)
+                            .color(if selected {
+                                scheme.on_tertiary_container
+                            } else {
+                                scheme.on_surface_variant
+                            });
+                    });
+            }
+            surface()
+                .shape(theme.shapes.small)
+                .block_input(false)
+                .style(SurfaceStyle::Outlined {
+                    color: scheme.outline,
+                    width: Dp(1.0),
+                });
+            surface()
+                .shape(Shape::RECTANGLE)
+                .block_input(false)
+                .style(scheme.outline.into());
+        });
+}
+
+#[tessera]
+fn time_period_selector(state: State<TimePickerController>, input: bool) {
     let period = state.with(TimePickerController::period);
     let requesters = remember(|| [FocusRequester::new(), FocusRequester::new()]).get();
     let interactions = [
@@ -665,55 +722,7 @@ fn time_period_selector(state: State<TimePickerController>, input: bool) {
             ..Default::default()
         }))
         .child(move || {
-            tessera_ui::layout::layout(PeriodVisualMeasure { input })
-                .modifier(
-                    Modifier::new()
-                        .clip_shape(theme.shapes.small)
-                        .semantics(SemanticsArgs::clear()),
-                )
-                .child(move || {
-                    for (index, (label, value)) in
-                        [("md3-am", DayPeriod::Am), ("md3-pm", DayPeriod::Pm)]
-                            .into_iter()
-                            .enumerate()
-                    {
-                        let selected = value == period;
-                        surface()
-                            .style(
-                                if selected {
-                                    scheme.tertiary_container
-                                } else {
-                                    Color::TRANSPARENT
-                                }
-                                .into(),
-                            )
-                            .shape(Shape::RECTANGLE)
-                            .interaction_state(interactions[index])
-                            .show_ripple(false)
-                            .block_input(false)
-                            .content_alignment(Alignment::Center)
-                            .child(move || {
-                                text(I18N.text(label))
-                                    .style(theme.typography.title_medium)
-                                    .color(if selected {
-                                        scheme.on_tertiary_container
-                                    } else {
-                                        scheme.on_surface_variant
-                                    });
-                            });
-                    }
-                    surface()
-                        .shape(theme.shapes.small)
-                        .block_input(false)
-                        .style(SurfaceStyle::Outlined {
-                            color: scheme.outline,
-                            width: Dp(1.0),
-                        });
-                    surface()
-                        .shape(Shape::RECTANGLE)
-                        .block_input(false)
-                        .style(scheme.outline.into());
-                });
+            period_visual_layer(state, input, interactions);
             for (index, (label, value)) in [("md3-am", DayPeriod::Am), ("md3-pm", DayPeriod::Pm)]
                 .into_iter()
                 .enumerate()

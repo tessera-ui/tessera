@@ -428,7 +428,7 @@ fn open(renderer: &mut UiTest, kind: Kind, settings: State<Settings>) {
     }
 }
 
-fn check(samples: u32) {
+fn check() {
     for kind in [
         Kind::Dialog,
         Kind::BottomSheet,
@@ -440,7 +440,6 @@ fn check(samples: u32) {
             let mut renderer = UiTest::new()
                 .viewport(960, 480)
                 .scale_factor(scale)
-                .samples(samples)
                 .frame_step(Duration::from_millis(20))
                 .rendered(crate::TesseraComponents)
                 .content(|| fixture(kind, output.clone()));
@@ -634,7 +633,7 @@ fn check(samples: u32) {
     }
 }
 
-fn check_full_screen(samples: u32) {
+fn check_full_screen() {
     let kind = Kind::FullScreenDialog;
     for scale in [1.0, 1.5] {
         for width in [390, 960] {
@@ -643,7 +642,6 @@ fn check_full_screen(samples: u32) {
             let mut renderer = UiTest::new()
                 .viewport(width, 640)
                 .scale_factor(scale)
-                .samples(samples)
                 .frame_step(Duration::from_millis(20))
                 .rendered(crate::TesseraComponents)
                 .content(move || fixture(kind, probe.clone()));
@@ -733,7 +731,6 @@ fn check_full_screen(samples: u32) {
     let probe = output.clone();
     let mut renderer = UiTest::new()
         .viewport(960, 640)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(move || fixture(kind, probe.clone()));
     renderer.frames(4);
@@ -801,23 +798,12 @@ fn explicit_alert_dialog_role_preserves_modal_controls_and_focus_restoration() {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn dialog_and_sheet_restore_after_exit_and_preserve_input_ownership_msaa1() {
+fn dialog_and_sheet_restore_after_exit_and_preserve_input_ownership() {
     crate::test_utils::run_isolated_test(
-        "modal_focus::tests::dialog_and_sheet_restore_after_exit_and_preserve_input_ownership_msaa1",
+        "modal_focus::tests::dialog_and_sheet_restore_after_exit_and_preserve_input_ownership",
         || {
-            check(1);
-            check_full_screen(1);
-        },
-    );
-}
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn dialog_and_sheet_restore_after_exit_and_preserve_input_ownership_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "modal_focus::tests::dialog_and_sheet_restore_after_exit_and_preserve_input_ownership_msaa4",
-        || {
-            check(4);
-            check_full_screen(4);
+            check();
+            check_full_screen();
         },
     );
 }

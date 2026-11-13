@@ -91,7 +91,7 @@ pub fn boxed(
     let modifier = modifier.unwrap_or_default();
     tessera_ui::layout::layout(BoxedLayout { alignment })
         .modifier(modifier)
-        .child_shared(children.unwrap_or_else(RenderSlot::empty));
+        .child(children.unwrap_or_else(RenderSlot::empty));
 }
 
 #[derive(Clone, PartialEq)]

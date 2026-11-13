@@ -143,14 +143,13 @@ fn verify(renderer: &UiTest, settings: &Settings, ids: &[NodeId; 3]) {
     assert_eq!(read_only.role(), role);
 }
 
-fn check(samples: u32) {
+fn check() {
     for scale in [1.0, 1.5] {
         let probe = TestProbe::<Option<State<Settings>>>::default();
         let observed = probe.clone();
         let mut renderer = UiTest::new()
             .viewport(600, 540)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(move || fixture().probe(probe.clone()));
         renderer.frames(4);
@@ -245,18 +244,9 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn selection_modes_request_latest_controlled_values_and_preserve_roles_msaa1() {
+fn selection_modes_request_latest_controlled_values_and_preserve_roles() {
     crate::test_utils::run_isolated_test(
-        "list_item::selection_tests::selection_modes_request_latest_controlled_values_and_preserve_roles_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn selection_modes_request_latest_controlled_values_and_preserve_roles_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "list_item::selection_tests::selection_modes_request_latest_controlled_values_and_preserve_roles_msaa4",
-        || check(4),
+        "list_item::selection_tests::selection_modes_request_latest_controlled_values_and_preserve_roles",
+        check,
     );
 }

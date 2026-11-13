@@ -86,7 +86,7 @@ pub fn flow_row(
         max_lines,
     })
     .modifier(modifier)
-    .child_shared(children.unwrap_or_else(RenderSlot::empty));
+    .child(children.unwrap_or_else(RenderSlot::empty));
 }
 
 #[cfg(test)]

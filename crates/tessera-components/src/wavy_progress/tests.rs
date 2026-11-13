@@ -267,13 +267,12 @@ fn reference_wave_coverage(image: &[u8]) {
     );
 }
 
-fn check_pixels_and_motion(samples: u32) {
+fn check_pixels_and_motion() {
     let probe = TestProbe::<Option<State<Settings>>>::default();
     let observed = probe.clone();
     let mut renderer = UiTest::new()
         .viewport(600, 120)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(move || fixture().probe(probe.clone()));
     renderer.frames(3);
@@ -507,19 +506,10 @@ fn check_pixels_and_motion(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn gpu_linear_waves_match_quadratic_coverage_motion_and_semantics_msaa1() {
+fn gpu_linear_waves_match_quadratic_coverage_motion_and_semantics() {
     crate::test_utils::run_isolated_test(
-        "wavy_progress::tests::gpu_linear_waves_match_quadratic_coverage_motion_and_semantics_msaa1",
-        || check_pixels_and_motion(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_linear_waves_match_quadratic_coverage_motion_and_semantics_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "wavy_progress::tests::gpu_linear_waves_match_quadratic_coverage_motion_and_semantics_msaa4",
-        || check_pixels_and_motion(4),
+        "wavy_progress::tests::gpu_linear_waves_match_quadratic_coverage_motion_and_semantics",
+        check_pixels_and_motion,
     );
 }
 
@@ -582,13 +572,12 @@ fn circular_timing_runs_all_four_rotation_steps_and_preserves_holds() {
     assert!(!clock.needs_frames());
 }
 
-fn check_circular_pixels_and_motion(samples: u32) {
+fn check_circular_pixels_and_motion() {
     let probe = TestProbe::<Option<State<Settings>>>::default();
     let observed = probe.clone();
     let mut renderer = UiTest::new()
         .viewport(600, 120)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(move || fixture().circular(true).probe(probe.clone()));
     renderer.frames(3);
@@ -768,18 +757,9 @@ fn check_circular_pixels_and_motion(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn gpu_circular_waves_cover_motion_transparency_semantics_and_resize_msaa1() {
+fn gpu_circular_waves_cover_motion_transparency_semantics_and_resize() {
     crate::test_utils::run_isolated_test(
-        "wavy_progress::tests::gpu_circular_waves_cover_motion_transparency_semantics_and_resize_msaa1",
-        || check_circular_pixels_and_motion(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_circular_waves_cover_motion_transparency_semantics_and_resize_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "wavy_progress::tests::gpu_circular_waves_cover_motion_transparency_semantics_and_resize_msaa4",
-        || check_circular_pixels_and_motion(4),
+        "wavy_progress::tests::gpu_circular_waves_cover_motion_transparency_semantics_and_resize",
+        check_circular_pixels_and_motion,
     );
 }

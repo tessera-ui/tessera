@@ -118,11 +118,10 @@ fn assert_shape(renderer: &UiTest, expected: [bool; 3]) {
     assert_eq!(corners(renderer), expected.repeat(4));
 }
 
-fn check_shapes(samples: u32) {
+fn check_shapes() {
     let probe = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(220, 140)
-        .samples(samples)
         .frame_step(Duration::from_millis(10))
         .rendered(crate::TesseraComponents)
         .content(|| fixture(probe.clone()));
@@ -177,18 +176,9 @@ fn check_shapes(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn expressive_chip_selection_press_and_fixed_shapes_msaa1() {
+fn expressive_chip_selection_press_and_fixed_shapes() {
     crate::test_utils::run_isolated_test(
-        "chip::shape_tests::expressive_chip_selection_press_and_fixed_shapes_msaa1",
-        || check_shapes(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn expressive_chip_selection_press_and_fixed_shapes_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "chip::shape_tests::expressive_chip_selection_press_and_fixed_shapes_msaa4",
-        || check_shapes(4),
+        "chip::shape_tests::expressive_chip_selection_press_and_fixed_shapes",
+        check_shapes,
     );
 }

@@ -78,13 +78,12 @@ fn action(renderer: &mut UiTest, target: NodeId, action: Action) {
     renderer.frames(2);
 }
 
-fn check(samples: u32) {
+fn check() {
     for scale in [1.0, 1.5] {
         let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = UiTest::new()
             .viewport(800, 420)
             .scale_factor(scale)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(observed.clone()));
         renderer.frames(3);
@@ -119,19 +118,10 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn snackbar_status_and_named_actions_preserve_existing_focus_msaa1() {
+fn snackbar_status_and_named_actions_preserve_existing_focus() {
     crate::test_utils::run_isolated_test(
-        "snackbar::accessibility_tests::snackbar_status_and_named_actions_preserve_existing_focus_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn snackbar_status_and_named_actions_preserve_existing_focus_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "snackbar::accessibility_tests::snackbar_status_and_named_actions_preserve_existing_focus_msaa4",
-        || check(4),
+        "snackbar::accessibility_tests::snackbar_status_and_named_actions_preserve_existing_focus",
+        check,
     );
 }
 

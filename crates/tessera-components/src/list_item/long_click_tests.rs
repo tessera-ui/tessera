@@ -191,7 +191,7 @@ fn release(renderer: &mut UiTest, point: PxPosition) {
     renderer.frames(3);
 }
 
-fn check(samples: u32) {
+fn check() {
     for scale in [1.0, 1.5] {
         let probe = TestProbe::default();
         let observed = probe.clone();
@@ -200,7 +200,6 @@ fn check(samples: u32) {
         let mut renderer = UiTest::new()
             .viewport((480.0 * scale) as u32, (400.0 * scale) as u32)
             .scale_factor(scale)
-            .samples(samples)
             .frame_step(Duration::from_millis(50))
             .rendered(crate::TesseraComponents)
             .content(move || fixture(probe.clone(), events.clone()));
@@ -379,18 +378,9 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn long_actions_fire_stationary_suppress_clicks_and_cancel_with_input_changes_msaa1() {
+fn long_actions_fire_stationary_suppress_clicks_and_cancel_with_input_changes() {
     crate::test_utils::run_isolated_test(
-        "list_item::long_click_tests::long_actions_fire_stationary_suppress_clicks_and_cancel_with_input_changes_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn long_actions_fire_stationary_suppress_clicks_and_cancel_with_input_changes_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "list_item::long_click_tests::long_actions_fire_stationary_suppress_clicks_and_cancel_with_input_changes_msaa4",
-        || check(4),
+        "list_item::long_click_tests::long_actions_fire_stationary_suppress_clicks_and_cancel_with_input_changes",
+        check,
     );
 }

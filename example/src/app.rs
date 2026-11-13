@@ -405,55 +405,51 @@ mod tests {
             renderer.frames(24);
         }
 
-        for sample_count in [1, 4] {
-            let session = tessera_ui::RuntimeSession::new();
-            let _session = session.enter();
-            let mut registry = tessera_ui::EntryRegistry::new();
-            registry.register_package(tessera_components::ComponentsPackage);
-            registry.register_package(crate::res::i18n());
-            registry.register_package(crate::pages::FONTS);
-            registry.register_package(crate::pages::custom_shader::CustomShaderPackage);
-            let navigation = TestProbe::default();
-            let observed = navigation.clone();
-            let mut renderer = tessera_ui::testing::UiTest::new()
-                .viewport(1200, 800)
-                .samples(sample_count)
-                .rendered(registry.finish())
-                .content(move || app_fixture(observed.clone()));
-            renderer.frames(8);
-            let handles = navigation.get().unwrap();
-            for label in [
-                "Home",
-                "Glass components",
-                "Custom shader",
-                "Material components",
-            ] {
-                if !handles.directory.with(SideSheetController::is_open) {
-                    click(&mut renderer, "Open navigation drawer");
-                }
-                click(&mut renderer, "Material components");
-                assert!(
-                    handles
-                        .router
-                        .with(RouterController::current_is::<MaterialComponentsPageDestination>)
-                );
+        let session = tessera_ui::RuntimeSession::new();
+        let _session = session.enter();
+        let mut registry = tessera_ui::EntryRegistry::new();
+        registry.register_package(tessera_components::ComponentsPackage);
+        registry.register_package(crate::res::i18n());
+        registry.register_package(crate::pages::FONTS);
+        registry.register_package(crate::pages::custom_shader::CustomShaderPackage);
+        let navigation = TestProbe::default();
+        let observed = navigation.clone();
+        let mut renderer = tessera_ui::testing::UiTest::new()
+            .viewport(1200, 800)
+            .rendered(registry.finish())
+            .content(move || app_fixture(observed.clone()));
+        renderer.frames(8);
+        let handles = navigation.get().unwrap();
+        for label in [
+            "Home",
+            "Glass components",
+            "Custom shader",
+            "Material components",
+        ] {
+            if !handles.directory.with(SideSheetController::is_open) {
                 click(&mut renderer, "Open navigation drawer");
-                click(&mut renderer, label);
-                assert!(handles.router.with(|router| match label {
-                    "Home" => router.current_is::<HomePageDestination>(),
-                    "Glass components" => router.current_is::<GlassComponentsPageDestination>(),
-                    "Custom shader" => router.current_is::<CustomShaderPageDestination>(),
-                    "Material components" =>
-                        router.current_is::<MaterialComponentsPageDestination>(),
-                    _ => unreachable!(),
-                }));
-                assert!(
-                    renderer
-                        .read_pixels()
-                        .chunks_exact(4)
-                        .any(|pixel| pixel[3] > 0)
-                );
             }
+            click(&mut renderer, "Material components");
+            assert!(
+                handles
+                    .router
+                    .with(RouterController::current_is::<MaterialComponentsPageDestination>)
+            );
+            click(&mut renderer, "Open navigation drawer");
+            click(&mut renderer, label);
+            assert!(handles.router.with(|router| match label {
+                "Home" => router.current_is::<HomePageDestination>(),
+                "Glass components" => router.current_is::<GlassComponentsPageDestination>(),
+                "Custom shader" => router.current_is::<CustomShaderPageDestination>(),
+                "Material components" => router.current_is::<MaterialComponentsPageDestination>(),
+                _ => unreachable!(),
+            }));
+            assert!(
+                renderer
+                    .read_pixels()
+                    .chunks_exact(4)
+                    .any(|pixel| pixel[3] > 0)
+            );
         }
     }
 

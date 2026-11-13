@@ -61,13 +61,12 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
         });
 }
 
-fn check_appearance(samples: u32) {
+fn check_appearance() {
     for density in [2.0, 1.0, 1.25, 1.5] {
         let probe = tessera_ui::testing::TestProbe::default();
         let mut renderer = UiTest::new()
             .viewport(160, 160)
             .scale_factor(density)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(probe.clone()));
         renderer.frames(30);
@@ -202,18 +201,9 @@ fn check_appearance(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn checkbox_density_geometry_and_interaction_colors_msaa1() {
+fn checkbox_density_geometry_and_interaction_colors() {
     crate::test_utils::run_isolated_test(
-        "checkbox::appearance_tests::checkbox_density_geometry_and_interaction_colors_msaa1",
-        || check_appearance(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn checkbox_density_geometry_and_interaction_colors_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "checkbox::appearance_tests::checkbox_density_geometry_and_interaction_colors_msaa4",
-        || check_appearance(4),
+        "checkbox::appearance_tests::checkbox_density_geometry_and_interaction_colors",
+        check_appearance,
     );
 }

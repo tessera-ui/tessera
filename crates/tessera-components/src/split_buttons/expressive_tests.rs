@@ -166,7 +166,7 @@ fn click(renderer: &mut UiTest, rect: Rect) {
     renderer.frames(5);
 }
 
-fn check_sizes_and_shrink(samples: u32, scale: f64) {
+fn check_sizes_and_shrink(scale: f64) {
     let probe = TestProbe::default();
     let observed = probe.clone();
     let styles = TestProbe::default();
@@ -174,7 +174,6 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
     let mut renderer = UiTest::new()
         .viewport((750.0 * scale) as u32, (750.0 * scale) as u32)
         .scale_factor(scale)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(move || fixture(probe.clone(), styles.clone()));
     renderer.frames(8);
@@ -297,18 +296,12 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn expressive_sizes_and_trailing_width_priority_msaa1() {
-    check_sizes_and_shrink(1, 1.0);
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn expressive_sizes_and_trailing_width_priority_msaa4() {
-    check_sizes_and_shrink(4, 1.0);
+fn expressive_sizes_and_trailing_width_priority() {
+    check_sizes_and_shrink(1.0);
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn expressive_sizes_and_trailing_width_priority_fractional_density() {
-    check_sizes_and_shrink(4, 1.5);
+    check_sizes_and_shrink(1.5);
 }

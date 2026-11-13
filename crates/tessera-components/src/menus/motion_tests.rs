@@ -134,12 +134,11 @@ fn corner(renderer: &mut UiTest, bounds: Rect) -> u8 {
     renderer.read_pixels()[(y * width + x) * 4]
 }
 
-fn check_motion(samples: u32) {
+fn check_motion() {
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(1500, 1000)
         .scale_factor(1.5)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(4);
@@ -310,11 +309,5 @@ fn check_motion(samples: u32) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn gpu_menu_hover_focus_branch_intent_and_container_motion() {
-    check_motion(1);
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_menu_hover_focus_branch_intent_and_container_motion_msaa() {
-    check_motion(4);
+    check_motion();
 }

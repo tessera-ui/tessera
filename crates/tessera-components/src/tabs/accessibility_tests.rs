@@ -209,18 +209,13 @@ fn control(renderer: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
         })
 }
 
-fn check_tabs(samples: u32) {
+fn check_tabs() {
     let observed = TestProbe::default();
     let fixture_observed = observed.clone();
     let mut renderer = UiTest::new()
         .viewport(900, 600)
         .scale_factor(1.5)
-        .samples(samples)
-        .frame_step(if samples == 4 {
-            Duration::from_millis(50)
-        } else {
-            Duration::from_nanos(16_666_667)
-        })
+        .frame_step(Duration::from_nanos(16_666_667))
         .rendered(crate::TesseraComponents)
         .content(move || fixture(fixture_observed.clone()));
     renderer.frames(12);
@@ -369,19 +364,10 @@ fn check_tabs(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn gpu_tabs_semantics_focus_and_geometry_msaa() {
-    crate::test_utils::run_isolated_test(
-        "tabs::accessibility_tests::gpu_tabs_semantics_focus_and_geometry_msaa",
-        || check_tabs(4),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
 fn gpu_tabs_semantics_focus_and_geometry() {
     crate::test_utils::run_isolated_test(
         "tabs::accessibility_tests::gpu_tabs_semantics_focus_and_geometry",
-        || check_tabs(1),
+        check_tabs,
     );
 }
 

@@ -2843,11 +2843,13 @@ pub fn begin_component_node<P: Prop>(
         _context: context,
     }
 }
-/// Emits the tree node owned by the executing call and attaches its modifiers.
-pub(crate) fn emit_node<P>(role: NodeRole, policy: &P, draw: DrawModifierHandle, modifier: Modifier)
+/// Emits the tree node owned by the executing call.
+pub(crate) fn emit_node<P>(role: NodeRole, policy: &P)
 where
     P: crate::modifier::LayoutPolicy + Clone + PartialEq,
 {
+    // Earlier declarations of this call precede the node in the tree.
+    crate::component_call::commit_pending();
     let (instance_key, instance_logic_id) = with_execution_context(|context| {
         (
             context
@@ -2870,7 +2872,7 @@ where
             instance_logic_id,
             instance_key,
             policy,
-            draw,
+            draw: DrawModifierHandle::default(),
         });
         tree.emit_call_node(id, previous);
         id
@@ -2881,7 +2883,11 @@ where
             .last_mut()
             .expect("component calls enter a node context") = id;
     });
-    modifier.attach();
+}
+
+/// Replaces the drawing of the node emitted by the executing call.
+pub(crate) fn set_emitted_node_draw(draw: DrawModifierHandle) {
+    TesseraRuntime::with_mut(|runtime| runtime.component_tree.set_emitted_node_draw(draw));
 }
 
 /// Push the current component instance key for the active execution scope.

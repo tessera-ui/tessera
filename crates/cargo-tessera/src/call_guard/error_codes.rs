@@ -13,16 +13,18 @@ pub enum ErrorCode {
     LintConfiguration = 4,
     PrivateApi = 5,
     ModelState = 6,
+    NodeEmission = 7,
 }
 
 impl ErrorCode {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::ComponentCall,
         Self::RuntimeCall,
         Self::UnresolvedCall,
         Self::LintConfiguration,
         Self::PrivateApi,
         Self::ModelState,
+        Self::NodeEmission,
     ];
 
     pub fn explanation(self) -> &'static str {
@@ -33,6 +35,7 @@ impl ErrorCode {
             Self::LintConfiguration => include_str!("error_codes/T0004.md"),
             Self::PrivateApi => include_str!("error_codes/T0005.md"),
             Self::ModelState => include_str!("error_codes/T0006.md"),
+            Self::NodeEmission => include_str!("error_codes/T0007.md"),
         }
     }
 }

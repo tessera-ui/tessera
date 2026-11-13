@@ -87,12 +87,11 @@ fn named(renderer: &UiTest, label: &str) -> (NodeId, Node) {
         .unwrap_or_else(|| panic!("missing {label}"))
 }
 
-fn check(samples: u32) {
+fn check() {
     let probe = TestProbe::<Option<State<bool>>>::default();
     let observed = probe.clone();
     let mut renderer = UiTest::new()
         .viewport(480, 240)
-        .samples(samples)
         .rendered(crate::TesseraComponents)
         .content(move || fixture().probe(probe.clone()));
     renderer.frames(3);
@@ -158,18 +157,9 @@ fn check(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn caller_text_semantics_survive_defaults_and_explicit_label_updates_msaa1() {
+fn caller_text_semantics_survive_defaults_and_explicit_label_updates() {
     crate::test_utils::run_isolated_test(
-        "text::semantics_tests::caller_text_semantics_survive_defaults_and_explicit_label_updates_msaa1",
-        || check(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn caller_text_semantics_survive_defaults_and_explicit_label_updates_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "text::semantics_tests::caller_text_semantics_survive_defaults_and_explicit_label_updates_msaa4",
-        || check(4),
+        "text::semantics_tests::caller_text_semantics_survive_defaults_and_explicit_label_updates",
+        check,
     );
 }

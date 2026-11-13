@@ -1578,10 +1578,9 @@ mod tests {
         });
     }
 
-    fn check_transparent_state_layers(samples: u32) {
+    fn check_transparent_state_layers() {
         let mut renderer = tessera_ui::testing::UiTest::new()
             .viewport(200, 240)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(transparent_state_layers_fixture);
         for frames in [2, 8] {
@@ -1593,7 +1592,7 @@ mod tests {
                 assert_eq!(
                     &pixels[actual..actual + 4],
                     &pixels[reference..reference + 4],
-                    "transparent state layer, MSAA {samples}, y={y}, frames={frames}"
+                    "transparent state layer, y={y}, frames={frames}"
                 );
             }
         }
@@ -1720,13 +1719,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
-    fn transparent_state_layers_match_direct_alpha_rendering_msaa1() {
-        check_transparent_state_layers(1);
-    }
-
-    #[test]
-    #[ignore = "requires a native GPU adapter"]
-    fn transparent_state_layers_match_direct_alpha_rendering_msaa4() {
-        check_transparent_state_layers(4);
+    fn transparent_state_layers_match_direct_alpha_rendering() {
+        check_transparent_state_layers();
     }
 }

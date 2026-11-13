@@ -86,12 +86,11 @@ fn fill(renderer: &UiTest) -> [u8; 4] {
         .unwrap()
 }
 
-fn check_motion(samples: u32) {
+fn check_motion() {
     let probe = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(160, 160)
         .scale_factor(2.0)
-        .samples(samples)
         .frame_step(Duration::from_millis(10))
         .rendered(crate::TesseraComponents)
         .content(|| fixture(probe.clone()));
@@ -168,18 +167,9 @@ fn check_motion(samples: u32) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn checkbox_spatial_and_color_motion_retargeting_and_idle_msaa1() {
+fn checkbox_spatial_and_color_motion_retargeting_and_idle() {
     crate::test_utils::run_isolated_test(
-        "checkbox::motion_tests::checkbox_spatial_and_color_motion_retargeting_and_idle_msaa1",
-        || check_motion(1),
-    );
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn checkbox_spatial_and_color_motion_retargeting_and_idle_msaa4() {
-    crate::test_utils::run_isolated_test(
-        "checkbox::motion_tests::checkbox_spatial_and_color_motion_retargeting_and_idle_msaa4",
-        || check_motion(4),
+        "checkbox::motion_tests::checkbox_spatial_and_color_motion_retargeting_and_idle",
+        check_motion,
     );
 }

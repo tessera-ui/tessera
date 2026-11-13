@@ -501,60 +501,55 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn gpu_loading_shapes_match_supersampled_cubic_references() {
-        for sample_count in [1, 4] {
-            let probe = TestProbe::default();
-            let mut renderer = UiTest::new()
-                .viewport(64, 64)
-                .samples(sample_count)
-                .rendered(crate::TesseraComponents)
-                .content(|| shape_fixture(probe.clone()));
-            renderer.frames(2);
-            for sequence in 0..8 {
-                for progress in [0.0, 0.5, 1.086] {
-                    let pose = Pose {
-                        sequence,
-                        progress,
-                        rotation: 37.0,
-                    };
-                    probe.get().unwrap().set(pose);
-                    renderer.frames(2);
-                    let pixels = renderer.read_pixels();
-                    let reference = reference_coverage(pose);
-                    let total: f32 = reference.iter().sum();
-                    if let Some(directory) = std::env::var_os("TESSERA_LOADING_QA_DIR") {
-                        let directory = std::path::Path::new(&directory);
-                        std::fs::create_dir_all(directory).unwrap();
-                        let comparison = image::RgbaImage::from_fn(192, 64, |x, y| {
-                            let i = (y as usize * 64) + x as usize % 64;
-                            let actual = pixels[i * 4 + 3] as f32 / 255.0;
-                            let expected = reference[i];
-                            let value = if x < 64 {
-                                actual
-                            } else if x < 128 {
-                                expected
-                            } else {
-                                (actual - expected).abs() * 4.0
-                            };
-                            let channel = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
-                            image::Rgba([channel, channel, channel, 255])
-                        });
-                        comparison
-                            .save(directory.join(format!(
-                                "loading-shape-{sequence}-{progress}-msaa{sample_count}.png"
-                            )))
-                            .unwrap();
-                    }
-                    let error: f32 = pixels
-                        .chunks_exact(4)
-                        .zip(reference)
-                        .map(|(pixel, expected)| (pixel[3] as f32 / 255.0 - expected).abs())
-                        .sum();
-                    assert!(
-                        error / total < 0.025,
-                        "sequence {sequence}, progress {progress}, MSAA {sample_count}: coverage error {}",
-                        error / total
-                    );
+        let probe = TestProbe::default();
+        let mut renderer = UiTest::new()
+            .viewport(64, 64)
+            .rendered(crate::TesseraComponents)
+            .content(|| shape_fixture(probe.clone()));
+        renderer.frames(2);
+        for sequence in 0..8 {
+            for progress in [0.0, 0.5, 1.086] {
+                let pose = Pose {
+                    sequence,
+                    progress,
+                    rotation: 37.0,
+                };
+                probe.get().unwrap().set(pose);
+                renderer.frames(2);
+                let pixels = renderer.read_pixels();
+                let reference = reference_coverage(pose);
+                let total: f32 = reference.iter().sum();
+                if let Some(directory) = std::env::var_os("TESSERA_LOADING_QA_DIR") {
+                    let directory = std::path::Path::new(&directory);
+                    std::fs::create_dir_all(directory).unwrap();
+                    let comparison = image::RgbaImage::from_fn(192, 64, |x, y| {
+                        let i = (y as usize * 64) + x as usize % 64;
+                        let actual = pixels[i * 4 + 3] as f32 / 255.0;
+                        let expected = reference[i];
+                        let value = if x < 64 {
+                            actual
+                        } else if x < 128 {
+                            expected
+                        } else {
+                            (actual - expected).abs() * 4.0
+                        };
+                        let channel = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+                        image::Rgba([channel, channel, channel, 255])
+                    });
+                    comparison
+                        .save(directory.join(format!("loading-shape-{sequence}-{progress}.png")))
+                        .unwrap();
                 }
+                let error: f32 = pixels
+                    .chunks_exact(4)
+                    .zip(reference)
+                    .map(|(pixel, expected)| (pixel[3] as f32 / 255.0 - expected).abs())
+                    .sum();
+                assert!(
+                    error / total < 0.025,
+                    "sequence {sequence}, progress {progress}: coverage error {}",
+                    error / total
+                );
             }
         }
     }

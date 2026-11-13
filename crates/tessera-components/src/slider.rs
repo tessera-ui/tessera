@@ -2694,11 +2694,10 @@ mod tests {
         assert_eq!(observed.get().range.unwrap().get(), (0.5, 0.75));
     }
 
-    fn check_centered_slider_gaps(samples: u32) {
+    fn check_centered_slider_gaps() {
         let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = UiTest::new()
             .viewport(400, 300)
-            .samples(samples)
             .rendered(crate::TesseraComponents)
             .content(|| fixture(observed.clone()));
         for frames in [2, 12] {
@@ -2708,16 +2707,8 @@ mod tests {
             let background = pixel(300, 72);
             for y in 65..79 {
                 for (left, right) in [(135, 144), (136, 143)] {
-                    assert_eq!(
-                        pixel(left, y),
-                        background,
-                        "left gap, MSAA {samples}, {frames} frames"
-                    );
-                    assert_eq!(
-                        pixel(right, y),
-                        background,
-                        "right gap, MSAA {samples}, {frames} frames"
-                    );
+                    assert_eq!(pixel(left, y), background, "left gap, {frames} frames");
+                    assert_eq!(pixel(right, y), background, "right gap, {frames} frames");
                 }
                 assert_ne!(pixel(140, y), background, "vertical handle remains visible");
             }
@@ -2726,14 +2717,8 @@ mod tests {
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
-    fn centered_slider_gaps_before_and_after_caching_msaa1() {
-        check_centered_slider_gaps(1);
-    }
-
-    #[test]
-    #[ignore = "requires a native GPU adapter"]
-    fn centered_slider_gaps_before_and_after_caching_msaa4() {
-        check_centered_slider_gaps(4);
+    fn centered_slider_gaps_before_and_after_caching() {
+        check_centered_slider_gaps();
     }
 
     #[test]
