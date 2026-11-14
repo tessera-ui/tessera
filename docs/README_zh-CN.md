@@ -36,7 +36,7 @@ tessera 是一个专注于性能与可扩展性的跨平台 UI 库。
 - 跨平台支持（TODO：移动端和平台特定功能）
 - 现代化性能分析系统
 
-tessera是一个实验性的框架，如果您在使用过程中遇到任何问题，请随时[提交 issue](https://github.com/tessera-ui/tessera/issues)。
+如果您在使用过程中遇到任何问题，请随时[提交 issue](https://github.com/tessera-ui/tessera/issues)。
 
 ## 概览
 

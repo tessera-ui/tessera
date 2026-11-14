@@ -36,7 +36,7 @@ Tessera is a cross-platform UI library focused on performance and extensibility.
 - Cross-platform support(TODO for mobile and platform-specific features)
 - Modern performance profiling system
 
-Tessera is an experimental framework. If you encounter any issues, please feel free to [submit an issue](https://github.com/tessera-ui/tessera/issues).
+If you encounter any issues, please feel free to [submit an issue](https://github.com/tessera-ui/tessera/issues).
 
 ## Overview
 
