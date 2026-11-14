@@ -16,19 +16,12 @@
 | Run on Android | `cargo tessera android dev --device DEVICE_ID` |
 
 Use `cargo tessera check -D warnings` to treat Tessera lint warnings as errors.
-Repeated checks reuse unchanged crate indexes and diagnostics; use `-v` to see reuse.
-Build scripts and macros must declare external file and environment inputs to Cargo.
-`cargo tessera fix` checks workspace safety, applies `MachineApplicable` Tessera
-suggestions, runs `cargo fix`, and rechecks the result. Review `MaybeIncorrect`
-suggestions manually. Cargo's `--allow-dirty`, `--allow-staged`, and `--allow-no-vcs`
-flags remain available.
+Review `MaybeIncorrect` suggestions manually.
 Select individual lints by name, such as `-A tessera::redundant_render_slot`.
-The `tessera::named_modifier_ext_import` lint suggests `use ...::ModifierExt as _;`
-for modifier extension traits imported only for their methods.
 Use `#[tessera_ui::lint(allow(tessera::redundant_render_slot))]` on an item or
 inline module tree for source overrides. Use `allow`, `warn`, `deny`, or `forbid`;
 nested settings override inherited levels unless forbidden.
-`--force-warn` and `--cap-lints` remain command-line controls.
+`--force-warn` and `--cap-lints` are command-line only.
 
 Set `name`, `identifier`, and `icon` in `tessera-app.toml` for every platform.
 Use a square SVG (recommended, with outlined text and embedded resources) or PNG
@@ -49,6 +42,5 @@ cargo tessera profiling analyze target/headless.jsonl --top 30
 Pass `--debug-dirty-overlay` to desktop `dev` or `build` to display dirty replay
 regions. Profiling reports component build, layout, render preparation, encoding,
 and submission CPU costs. Set `TESSERA_GPU_TIMING=1` for supported native windowed
-or offscreen GPU timestamp capture; `TESSERA_HEADLESS_GPU_TIMING` remains an alias.
-That mode waits for readback each frame, so measure frame cadence in a separate
+or offscreen GPU timestamp capture. That mode waits for readback each frame, so measure frame cadence in a separate
 run with GPU timing disabled.

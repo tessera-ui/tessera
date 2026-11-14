@@ -63,10 +63,6 @@ pub enum BottomSheetExpansion {
 }
 
 /// Controller for [`bottom_sheet_provider`], managing visibility and height.
-///
-/// This controller can be created by the application and passed through
-/// `bottom_sheet_provider().controller(...)`. It is used to control the
-/// visibility and selected height of the sheet programmatically.
 #[derive(Clone, PartialEq)]
 pub struct BottomSheetController {
     is_open: bool,
@@ -100,9 +96,7 @@ impl BottomSheetController {
 
     /// Initiates the animation to open the bottom sheet.
     ///
-    /// If the sheet is already open, this has no effect. If the sheet is
-    /// currently closing, it will reverse direction and start opening from
-    /// its current position.
+    /// No-op if already open; reverses an in-progress close.
     pub fn open(&mut self) {
         if !self.is_open {
             self.motion.request(true);
@@ -114,9 +108,7 @@ impl BottomSheetController {
 
     /// Initiates the animation to close the bottom sheet.
     ///
-    /// If the sheet is already closed, this has no effect. If the sheet is
-    /// currently opening, it will reverse direction and start closing from
-    /// its current position.
+    /// No-op if already closed; reverses an in-progress open.
     pub fn close(&mut self) {
         if self.is_open {
             self.motion.request(false);

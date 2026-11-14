@@ -9,9 +9,9 @@
 
 ## 开发工具
 
-如果您需要为 `tessera` 做代码贡献，除最新 nightly rust 以外，强烈建议安装以下工具:
+如果您需要为 `tessera` 做代码贡献，除最新 stable rust 以外，强烈建议安装以下工具:
 
-- [`rust-script`](https://rust-script.org/#installation) 我们用它来运行[一些 rust 脚本](scripts)。对开发有帮助。
+- [`rust-script`](https://rust-script.org/#installation) 我们用它来运行[一些 rust 脚本](../scripts)。对开发有帮助。
 
 ## 代码贡献规范
 
@@ -21,21 +21,12 @@
 
 您可以通过以下二种方式之一来设置您的开发环境：
 
-1. **Nix (推荐)**: 在 Linux 和 macOS 上一键完成环境配置。
-2. **手动设置**: 手动安装rust和其他依赖。
+1. **手动设置**: 自行安装 Rust 和系统依赖。
+2. **Nix**: 在 Linux 和 macOS 上使用 `flake.nix` 提供的开发 shell。
 
-### 选项 A - Nix 包管理器 (推荐)
+### 选项 A - 手动设置
 
-如果您安装了 [Nix](https://nixos.org/download.html)，您可以通过运行以下命令来获取一个包含所有依赖的开发环境：
-
-```bash
-nix develop            # 桌面开发 shell
-nix develop .#android  # 安卓开发 shell
-```
-
-### 选项 B - 手动设置
-
-如果您倾向于手动设置环境，请按照下面对应您的操作系统的说明进行操作。
+请按照下面对应您的操作系统的说明进行操作。
 
 #### 1. 安装 Rust
 
@@ -78,6 +69,15 @@ Vulkan SDK 是**可选的**。仅当您需要进行着色器验证或调试时�
 
 如果您需要，可以从 [vulkan.lunarg.com](https://vulkan.lunarg.com/) 下载，运行安装程序，并按照其安装后的说明进行操作。
 
+### 选项 B - Nix 包管理器
+
+如果您安装了 [Nix](https://nixos.org/download.html)，您可以通过运行以下命令来获取一个包含所有依赖的开发环境：
+
+```bash
+nix develop            # 桌面开发 shell
+nix develop .#android  # 安卓开发 shell
+```
+
 ### 代码使用的语言
 
 任何代码、包括在代码中的文档(如 `rustdoc` 注释)和注释都必须使用英语编写，除非功能上有必要专门指出这个词。
@@ -87,35 +87,17 @@ Vulkan SDK 是**可选的**。仅当您需要进行着色器验证或调试时�
 - 请确保您的代码格式符合本项目规范，规则如下
 
   - `rustfmt edition 2024` 默认规则
-  - `5条 use 导入规则`：
-    1. 导入分为四组，严格按照以下顺序排列：
-       - 第 1 组：标准库（`std`、`core`、`alloc`）
-       - 第 2 组：第三方 crate
-       - 第 3 组：当前 crate 根（`crate::`）
-       - 第 4 组：当前 crate 的子模块（`super::`、`self::`）
-    2. 不同组之间必须有且仅有一个空行。
-    3. 同组内的导入必须连续排列，中间不得有空行。
-    4. 每组内的导入需按字母顺序排序。
-    5. 同一根路径下的导入应合并为一个 `use` 语句。
+  - 导入：std / 第三方 / `crate::` / `super::`/`self::` 分组，组间一个空行，组内排序，同根路径合并（由 `scripts/check-imports.rs` 强制执行）。
 
 - 格式化工具
 
-  - 您可以使用 `cargo fmt` 命令来格式化代码。这会自动应用上述的第一条格式化规范。
-  - 但是，建议(于项目根目录下)始终使用
+  - 在项目根目录运行以下命令修复导入并调用 `rustfmt`，包括 `cargo fmt` 会跳过的脚本文件；加 `--check` 仅检查不修改文件：
 
     ```bash
     rust-script scripts/check-imports.rs .
     ```
 
-  - 如需纯检查模式（不修改文件），请使用：
-
-    ```bash
-    rust-script scripts/check-imports.rs --check .
-    ```
-
-    来检查和修复导入规则，它还会顺便调用`rustfmt`进行格式化。因为它会直接应用上述的所有格式化规范，并且不会忽略脚本文件（而 `cargo fmt` 只会格式化 `Cargo.toml` 管理的内容）。
-
-  - Nix 用户：只需在 `nix develop` 环境中输入 `fmt` 即可——这是一个智能别名，可以从任何目录运行上述相同的命令。
+  - Nix 用户：在 `nix develop` 中输入 `fmt` 可从任意目录运行同一命令。
 
 ### 提交规范
 
@@ -126,17 +108,6 @@ Vulkan SDK 是**可选的**。仅当您需要进行着色器验证或调试时�
   - 您的代码通过了所有测试(`cargo test`)。
   - 您已更新相关文档（如果适用）。
   - 您的代码符合[代码检查规范](#代码检查)。
-
-## 安卓构建特别说明
-
-由于 `NativeActivity` 的限制，为安卓构建需要一些特殊的考量。当前通过 `cargo tessera android` 进行初始化、构建与运行。
-
-- **先决条件**: 确保您已正确设置 Android SDK/NDK，并且 `adb` 可用。
-- **初始化**: 先执行 `cargo tessera android init` 生成 Gradle 项目。
-- **运行与构建**:
-  - 运行：`cargo tessera android dev --device <device_id>`
-  - 构建：`cargo tessera android build --format apk`
-- **Nix 用户**: 安卓开发 shell (`nix develop .#android`) 已预配置 Android SDK/NDK 和常用工具。
 
 ## 文档贡献规范
 
@@ -162,6 +133,17 @@ Vulkan SDK 是**可选的**。仅当您需要进行着色器验证或调试时�
 
 - 对本仓库的直接提交/pr 规范请查看[提交规范](#提交规范)
 - 对相关仓库，如官网、Wiki 等的提交，请遵循各自仓库的贡献指南。
+
+## 安卓构建特别说明
+
+安卓项目通过 `cargo tessera android` 进行初始化、构建与运行。
+
+- **先决条件**: 确保您已正确设置 Android SDK/NDK 和 Gradle 8.14 支持的 JDK（17 或 21），并且 `adb` 可用。
+- **初始化**: 先执行 `cargo tessera android init` 生成 Gradle 项目。
+- **运行与构建**:
+  - 运行：`cargo tessera android dev --device <device_id>`
+  - 构建：`cargo tessera android build --format apk`
+- **Nix 用户**: 安卓开发 shell (`nix develop .#android`) 已预配置 Android SDK/NDK、JDK 和 Rust 安卓目标。
 
 ## 许可证
 

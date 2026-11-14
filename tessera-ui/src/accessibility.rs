@@ -1,15 +1,8 @@
-//! # Accessibility Support
-//!
-//! This module provides accessibility infrastructure for Tessera UI using
-//! AccessKit. It enables screen readers and other assistive technologies to
-//! interact with Tessera applications.
+//! Accessibility support for screen readers and other assistive technologies.
 //!
 //! ## Usage
 //!
-//! Accessibility metadata is typically attached through semantics and
-//! interaction modifiers in higher-level component crates. Framework internals
-//! may also write accessibility state directly while building node-local
-//! modifier chains.
+//! Attach accessibility metadata through semantics and interaction modifiers.
 
 mod tree_builder;
 
@@ -83,9 +76,6 @@ impl AccessibilityPadding {
 }
 
 /// Semantic information for an accessibility node.
-///
-/// This structure contains all the metadata that assistive technologies need
-/// to understand and interact with a UI component.
 #[derive(Debug, Clone)]
 pub struct AccessibilityNode {
     /// The role of this node (button, text input, etc.)
@@ -129,7 +119,7 @@ pub struct AccessibilityNode {
     /// Custom accessibility key provided by the component
     pub key: Option<String>,
     /// Whether to merge child semantics into this node. When false, child
-    /// semantics are ignored, similar to Compose's `clearAndSetSemantics`.
+    /// semantics are ignored.
     pub merge_descendants: bool,
     /// Optional padding applied to the semantic bounds without affecting
     /// layout.

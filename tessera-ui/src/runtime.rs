@@ -1,4 +1,4 @@
-//! This module provides the global runtime state management for tessera.
+//! Runtime state, components, and tasks.
 
 use std::{
     any::{Any, TypeId},
@@ -1789,7 +1789,7 @@ where
         })
     }
 
-    /// Get a cloned value. Requires `T: Clone`.
+    /// Returns a clone of the value.
     pub fn get(&self) -> T
     where
         T: Clone,
@@ -3314,9 +3314,7 @@ impl Drop for GroupGuard {
 /// RAII guard for path-only control-flow groups, primarily used for loop
 /// bodies.
 ///
-/// Unlike [`GroupGuard`], this guard does not create a new local order frame.
-/// Repeated iterations therefore continue consuming sibling call indices from
-/// the surrounding component scope instead of restarting from zero each time.
+/// Iterations share the enclosing scope's call order.
 pub struct PathGroupGuard {
     previous: GroupPath,
     #[cfg(debug_assertions)]

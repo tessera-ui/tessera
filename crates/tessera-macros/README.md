@@ -36,13 +36,12 @@ button_component()
 
 ## Configuration Handles
 
-Generated `*Builder` handles can be saved and passed to helpers. Dropping a
-handle has no effect on the declaration. Setters reject committed and stale
-handles. Zero-parameter and parameterized components share this model.
+Generated `*Builder` handles can be saved and passed to helpers until the
+component commits.
 
 Slots remain deferred content that their parent controls. See
 [component calls](../../docs/COMPONENT_CALLS.md) for execution and lifetime details.
 
 ## License
 
-This project is licensed under the same terms as the main Tessera framework. See the [LICENSE](https://github.com/tessera-ui/tessera/blob/main/LICENSE) file for details.
+This project is licensed under the same terms as the main Tessera framework. See [LICENSE-MIT](https://github.com/tessera-ui/tessera/blob/main/LICENSE-MIT) and [LICENSE-APACHE](https://github.com/tessera-ui/tessera/blob/main/LICENSE-APACHE) for details.

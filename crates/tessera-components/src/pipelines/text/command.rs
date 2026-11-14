@@ -24,11 +24,9 @@ impl DrawCommand for TextCommand {
 /// Describes size constraints for a text draw
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct TextConstraint {
-    /// Maximum width of the text
-    /// If None, it will be calculated by the text renderer
+    /// Maximum width of the text; `None` is unbounded.
     pub max_width: Option<f32>,
-    /// Maximum height of the text
-    /// If None, it will be calculated by the text renderer
+    /// Maximum height of the text; `None` is unbounded.
     pub max_height: Option<f32>,
     /// Keep text on one line and ellipsize horizontal overflow.
     pub single_line: bool,

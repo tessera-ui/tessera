@@ -36,8 +36,6 @@ use crate::{
     shape_def::{RoundedCorner, Shape},
 };
 
-/// State structure for the text input, managing text content, cursor,
-/// selection, and editing logic.
 pub use crate::md3::text_edit_core::{
     DisplayTransform, TextEditorController as TextInputController,
     TransformedText as DisplayTransformText,
@@ -223,30 +221,16 @@ pub(crate) struct TextInputProps {
     pub on_change: CallbackWith<String, String>,
     /// Called when the user submits a single-line field with the Enter key.
     pub on_submit: Callback,
-    /// Minimum width in density-independent pixels. Defaults to 120dp if not
-    /// specified.
     pub min_width: Option<Dp>,
-    /// Minimum height in density-independent pixels. Defaults to line height +
-    /// padding if not specified.
     pub min_height: Option<Dp>,
-    /// Background color of the text input (RGBA). Defaults to light gray.
     pub background_color: Option<Color>,
-    /// Border width in Dp. Defaults to 1.0 Dp.
     pub border_width: Dp,
-    /// Border color (RGBA). Defaults to gray.
     pub border_color: Option<Color>,
-    /// The shape of the text input container.
     pub shape: Shape,
-    /// Padding inside the text input. Defaults to 5.0 Dp.
     pub padding: Dp,
-    /// Border color when focused (RGBA). Defaults to blue.
     pub focus_border_color: Option<Color>,
-    /// Border width when focused. Defaults to the unfocused border width.
     pub focus_border_width: Option<Dp>,
-    /// Background color when focused (RGBA). Defaults to white.
     pub focus_background_color: Option<Color>,
-    /// Color for text selection highlight (RGBA). Defaults to light blue with
-    /// transparency.
     pub selection_color: Option<Color>,
     /// Color of the text content. Defaults to the theme on-surface color.
     pub text_color: Option<Color>,
@@ -258,16 +242,13 @@ pub(crate) struct TextInputProps {
     pub accessibility_description: Option<String>,
     /// Initial text content.
     pub initial_text: Option<String>,
-    /// Font size in Dp. Defaults to 14.0.
     pub font_size: Dp,
-    /// Line height in Dp. Defaults to None (1.2x font size).
     pub line_height: Option<Dp>,
     /// Optional typography override for editable text.
     pub style: Option<TextStyle>,
     /// Whether the editor behaves as a single-line field.
     ///
-    /// When `true`, text does not wrap and the internal text buffer uses
-    /// horizontal scrolling semantics.
+    /// Text does not wrap and scrolls horizontally.
     pub single_line: bool,
     /// Optional transform applied to text changes before on_change.
     pub input_transform: Option<CallbackWith<String, String>>,
@@ -318,39 +299,6 @@ impl Default for TextInputProps {
     }
 }
 
-/// # text_input
-///
-/// Renders an editable text field with Material outlined styling and colors
-/// resolved from the active theme.
-///
-/// ## Usage
-///
-/// Create an interactive text input for forms, note-taking, or other text
-/// input scenarios.
-///
-/// ## Parameters
-///
-/// - Parameters configure the editor's appearance, layout, transforms, and
-///   controller state.
-///
-/// ## Examples
-///
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::md3::text_input::text_input;
-/// use tessera_ui::Dp;
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-///
-/// # material_theme()
-/// #     .theme(|| MaterialTheme::default())
-/// #     .child(|| {
-/// text_input().padding(Dp(8.0)).initial_text("Hello World");
-/// # });
-/// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
-/// ```
 impl TextInputBuilder {
     /// Set a display-only transform with explicit offset mapping.
     pub fn display_transform_mapped<F>(&self, transform: F) -> Self
@@ -1551,11 +1499,7 @@ fn determine_border_width(args: &TextInputProps, focused: bool) -> Dp {
 
 /// Presets for an already declared text input.
 impl TextInputBuilder {
-    /// Creates a simple text input with default styling.
-    ///
-    /// - Minimum width: 120dp
-    /// - Background: white
-    /// - Border: 1px gray, rounded rectangle
+    /// Plain gray-bordered preset.
     ///
     /// # Example
     ///
@@ -1586,9 +1530,7 @@ impl TextInputBuilder {
             })
     }
 
-    /// Creates a text input with an emphasized border for better visibility.
-    ///
-    /// - Border: 2px, blue focus border
+    /// [`Self::simple`] preset with a blue focus border.
     ///
     /// # Example
     /// ```

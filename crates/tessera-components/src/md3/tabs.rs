@@ -169,10 +169,6 @@ fn clamp_px(value: Px, min: Px, max: Option<Px>) -> Px {
 }
 
 /// Internal runtime state for the tab row.
-///
-/// Holds the animation springs plus a cached copy of the externally owned
-/// selected index. The selected index itself lives in caller-owned `State`;
-/// this struct only mirrors it to drive the indicator and scroll animation.
 #[derive(Clone, PartialEq)]
 struct TabsController {
     density: f64,

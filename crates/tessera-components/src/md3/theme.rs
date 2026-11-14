@@ -21,8 +21,7 @@ const DEFAULT_SEED_ARGB: u32 = 0xFF6750A4;
 /// provided.
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub struct ContentColor {
-    /// Current content color used by text/icons when no explicit tint is
-    /// provided.
+    /// The current content color.
     pub current: Color,
 }
 
@@ -375,8 +374,6 @@ impl MaterialTheme {
 /// ## Usage
 ///
 /// Wrap your app (or a subtree) to configure defaults for Material components.
-/// The theme producer reads current state on each rebuild and updates
-/// descendants when its result changes.
 ///
 /// ## Parameters
 ///

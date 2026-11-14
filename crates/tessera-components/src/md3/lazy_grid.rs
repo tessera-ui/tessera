@@ -107,7 +107,7 @@ impl Default for LazyGridController {
 }
 
 impl LazyGridController {
-    /// Creates a new lazy grid state with default caches.
+    /// Creates a controller.
     pub fn new() -> Self {
         Self {
             cache: LazyGridCache::default(),
@@ -397,7 +397,7 @@ impl tessera_ui::LayoutPolicy for LazyGridLayout {
 /// - `content_padding` - symmetric padding applied around the grid content.
 /// - `max_viewport_main` - optional maximum viewport length reported back to
 ///   parents.
-/// - `controller` - optional external controller for scroll position and cache.
+/// - `controller` - optional external controller.
 /// - item declarations are appended through builder methods like `item` and
 ///   `items`.
 ///
@@ -591,7 +591,7 @@ fn lazy_grid_slots(args: LazyGridSlotsArgs, axis: LazyAxis) {
 /// - `content_padding` - symmetric padding applied around the grid content.
 /// - `max_viewport_main` - optional maximum viewport length reported back to
 ///   parents.
-/// - `controller` - optional external controller for scroll position and cache.
+/// - `controller` - optional external controller.
 /// - item declarations are appended through builder methods like `item` and
 ///   `items`.
 ///

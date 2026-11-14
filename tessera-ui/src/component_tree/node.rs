@@ -231,7 +231,6 @@ pub(crate) struct ComponentNodeMetaData {
     pub rel_position: Option<PxPosition>,
     /// The node's start position, relative to the root window.
     /// Before placement modifiers are applied.
-    /// This will be computed during drawing command's generation.
     /// None if the node is not drawn yet.
     pub base_abs_position: Option<PxPosition>,
     pub local_to_window: Option<crate::LocalToWindow>,
@@ -239,7 +238,6 @@ pub(crate) struct ComponentNodeMetaData {
     pub event_clip_bounds: Option<crate::FloatRect>,
     /// The node's start position, relative to the root window.
     /// After placement modifiers are applied.
-    /// This will be computed during drawing command's generation.
     /// None if the node is not drawn yet.
     pub abs_position: Option<PxPosition>,
     /// Render fragment associated with this node.
@@ -643,9 +641,7 @@ impl GloballyPositionedHandler {
 /// Input for pointer handlers.
 ///
 /// This type carries pointer event payload, local geometry, and event
-/// consumption helpers. Side effects that are not pointer-specific should use
-/// dedicated APIs such as semantics modifiers, hover cursor modifiers, window
-/// action helpers, or the IME session bridge instead of a generic request bag.
+/// consumption helpers.
 pub struct PointerInput<'a> {
     /// Maps this handler's local geometry and displacement units into the
     /// window.
@@ -676,7 +672,7 @@ impl PointerInput<'_> {
         (delta.x, delta.y)
     }
 
-    /// Marks all current pointer changes as consumed.
+    /// Consumes all current non-scroll pointer changes.
     pub fn consume_pointer_changes(&mut self) {
         for change in self.pointer_changes.iter_mut() {
             if matches!(change.content, CursorEventContent::Scroll(_)) {
@@ -700,9 +696,7 @@ impl PointerInput<'_> {
 
     /// Blocks pointer input to other components.
     ///
-    /// Scroll events are never consumed, so the cursor is only hidden from
-    /// ancestors when this dispatch carries non-scroll pointer changes.
-    /// This keeps wheel events reaching ancestor scroll containers.
+    /// Scroll events still reach ancestors.
     pub fn block_cursor(&mut self) {
         let blocks_non_scroll = self.pointer_changes.iter().any(|change| {
             !change.is_consumed() && !matches!(change.content, CursorEventContent::Scroll(_))
@@ -744,8 +738,6 @@ impl PointerInput<'_> {
 /// Input for keyboard handlers.
 ///
 /// This type carries keyboard event payload and event consumption helpers.
-/// IME updates, semantics, and other side effects are exposed through narrower
-/// dedicated APIs rather than a general-purpose request sink.
 pub struct KeyboardInput<'a> {
     /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
@@ -774,8 +766,7 @@ impl KeyboardInput<'_> {
 
 /// Input for IME handlers.
 ///
-/// This type carries IME event payload and event consumption helpers. IME
-/// snapshot publication is performed through [`ImeSession`].
+/// Publish IME state through [`ImeSession`].
 pub struct ImeInput<'a> {
     /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
@@ -864,7 +855,6 @@ impl ImeSession<'_> {
 }
 
 /// A request to the windowing system to open an Input Method Editor (IME).
-/// This is typically used for text input components.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImeRequest {
     /// The size of the area where the IME is requested.

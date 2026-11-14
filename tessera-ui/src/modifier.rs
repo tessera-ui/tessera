@@ -105,7 +105,7 @@ pub trait LayoutPolicy: Any {
     /// Measures the children and returns this node's size and placements.
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
 
-    /// Compares measurement-relevant state for layout dirty tracking.
+    /// Returns whether two values measure identically.
     fn measure_eq(&self, other: &Self) -> bool
     where
         Self: Sized + PartialEq,
@@ -113,7 +113,7 @@ pub trait LayoutPolicy: Any {
         self == other
     }
 
-    /// Compares placement-relevant state for layout dirty tracking.
+    /// Returns whether two values place identically.
     fn placement_eq(&self, other: &Self) -> bool
     where
         Self: Sized + PartialEq,
@@ -131,8 +131,7 @@ pub trait LayoutPolicy: Any {
         false
     }
 
-    /// Recomputes placements from cached child sizes when only placement
-    /// inputs changed.
+    /// Recomputes placements when only placement inputs changed.
     ///
     /// Returning `None` makes the node measure again instead.
     fn place(
@@ -155,7 +154,7 @@ pub trait LayoutModifier: Any {
         child: &mut dyn LayoutModifierChild,
     ) -> Result<LayoutResult, MeasurementError>;
 
-    /// Compares measurement-relevant state for layout dirty tracking.
+    /// Returns whether two values measure identically.
     fn measure_eq(&self, other: &Self) -> bool
     where
         Self: Sized + PartialEq,
@@ -163,7 +162,7 @@ pub trait LayoutModifier: Any {
         self == other
     }
 
-    /// Compares placement-relevant state for layout dirty tracking.
+    /// Returns whether two values place identically.
     fn placement_eq(&self, other: &Self) -> bool
     where
         Self: Sized + PartialEq,
@@ -174,9 +173,7 @@ pub trait LayoutModifier: Any {
 
 /// Explicitly opts a layout policy into a per-node measurement snapshot.
 ///
-/// The wrapped policy is cloned once when its layout node is created or
-/// changed. Stable recomposition retains both the configured policy and its
-/// current measurement snapshot.
+/// Measurement state persists across rebuilds until the policy changes.
 #[derive(Clone)]
 pub struct StatefulLayoutPolicy<P>(pub P);
 
@@ -283,9 +280,8 @@ pub trait BuildModifierNode: Any {
 
 /// Node-owned services available while attaching a stateful modifier.
 ///
-/// Modifier constructors remain reusable values. Their state is allocated when
-/// the chain attaches. State survives rebuilds of the same node and capability;
-/// inserting unrelated modifier types does not change that ownership.
+/// State lives with the node and capability; inserting unrelated modifiers does
+/// not reset it.
 pub struct ModifierBuildContext {
     instance: u64,
     path: Vec<u64>,
@@ -353,11 +349,6 @@ pub trait SemanticsModifierNode: Any {
 pub trait PointerInputModifierNode: Any {
     modifier_lifecycle!();
     /// Handles pointer input for the current node.
-    ///
-    /// Pointer modifiers should operate on pointer-specific event flow and
-    /// local interaction state. Cross-cutting concerns such as semantics,
-    /// hover cursors, and IME publication should use their dedicated modifier
-    /// or session APIs.
     fn on_pointer_input(&self, input: PointerInput<'_>);
 }
 

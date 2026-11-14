@@ -769,9 +769,8 @@ impl HeadlessRenderer {
 
     /// Captures a semantic snapshot of the component tree as JSON.
     ///
-    /// Each node reports its component function name, role, absolute bounds and
-    /// accessibility metadata (role, label, value, key and state flags), which
-    /// is what an automated agent needs to locate and target widgets.
+    /// Each node reports its component name, role, absolute bounds and
+    /// accessibility metadata.
     pub fn snapshot(&self) -> Value {
         let _session = self.session.enter();
         TesseraRuntime::with(|runtime| {
@@ -1228,9 +1227,7 @@ enum WorkerRequest {
 
 /// Encodes tightly packed RGBA8 pixels as a PNG image.
 ///
-/// Uses stored (uncompressed) DEFLATE blocks so no compression dependency is
-/// required; the resulting file is larger than a compressed PNG but fully
-/// valid and readable by any PNG consumer.
+/// Output is valid but uncompressed.
 pub fn encode_png_rgba(width: u32, height: u32, pixels: &[u8]) -> Vec<u8> {
     let row_bytes = width as usize * 4;
     let mut raw = Vec::with_capacity((height as usize) * (1 + row_bytes));

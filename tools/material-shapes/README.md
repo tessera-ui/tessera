@@ -1,8 +1,7 @@
 # Loading shape data
 
 `GenerateLoadingShapes.java` regenerates the loading indicator's matched cubic
-curves. This is an offline asset tool. Building or running Tessera does not need
-Java, Kotlin, Maven, or an SVG parser for these shapes.
+curves. This offline tool is not needed to build or run Tessera.
 
 The shape definitions follow [MaterialShapes.kt](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/MaterialShapes.kt),
 inspected on 2026-10-17. Shape normalization and feature matching use the
@@ -68,4 +67,4 @@ The fixture's SHA-256 is
 Regeneration with the pinned dependencies must reproduce it byte for byte.
 
 The Rust port's attribution is in
-[shapes.NOTICE](../../crates/tessera-components/src/wavy_progress/shapes.NOTICE).
+[shapes.NOTICE](../../crates/tessera-components/src/md3/wavy_progress/shapes.NOTICE).

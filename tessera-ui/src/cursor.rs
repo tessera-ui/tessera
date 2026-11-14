@@ -44,10 +44,6 @@ impl Default for TouchScrollConfig {
 }
 
 /// Central state manager for cursor and touch interactions.
-///
-/// `CursorState` is the main interface for handling all cursor-related events
-/// in the Tessera UI framework. It manages cursor position tracking, pointer
-/// change queuing, and multi-touch support for touch gestures.
 #[derive(Default)]
 pub struct CursorState {
     next_touch_pointer_id: PointerId,
@@ -75,9 +71,7 @@ impl CursorState {
 
     /// Adds a pointer change to the processing queue.
     ///
-    /// Each sample retains its pointer's position when queued. Motion samples
-    /// are compacted above a soft queue limit; scroll deltas and gesture
-    /// boundaries remain available even during a long frame.
+    /// Under backlog, motion samples may coalesce; scrolls and presses are kept.
     pub fn push_event(&mut self, mut event: PointerChange) {
         if event.position_snapshot().is_none() {
             let position = self
@@ -298,10 +292,6 @@ pub(crate) enum PointerPosition {
 }
 
 /// Represents a single pointer change with timing information.
-///
-/// `PointerChange` encapsulates all pointer interactions including
-/// presses, releases, and scroll actions. Each event includes a timestamp for
-/// precise timing and ordering of input events.
 #[derive(Debug, Clone)]
 pub struct PointerChange {
     /// Timestamp indicating when this event occurred.
@@ -312,9 +302,7 @@ pub struct PointerChange {
     pub content: CursorEventContent,
     /// Classification of the gesture associated with this event.
     ///
-    /// Events originating from touch scrolling will mark this as
-    /// [`GestureState::Dragged`], allowing downstream components to
-    /// distinguish tap candidates from scroll gestures.
+    /// Touch scrolling reports [`GestureState::Dragged`].
     pub gesture_state: GestureState,
     /// Whether this change has been consumed by a handler.
     pub(crate) consumed: bool,
@@ -411,9 +399,7 @@ impl PointerChange {
 
 /// Contains scroll movement data for scroll events.
 ///
-/// `ScrollEventContent` represents the amount of scrolling that occurred,
-/// with positive values typically indicating rightward/downward movement
-/// and negative values indicating leftward/upward movement.
+/// Positive values move content right/down.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScrollEventContent {
     /// Horizontal scroll distance in pixels.
@@ -460,10 +446,6 @@ impl ScrollEventContent {
 }
 
 /// Enumeration of all possible cursor event types.
-///
-/// `CursorEventContent` represents the different kinds of interactions
-/// that can occur with cursor or touch input, including button presses,
-/// releases, and scroll actions.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CursorEventContent {
     /// The pointer moved to a new absolute position.

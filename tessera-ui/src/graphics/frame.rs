@@ -153,7 +153,7 @@ impl super::GraphicsDevice {
     }
 
     /// Reuses bindings for buffer ranges, textures and samplers across frames.
-    /// Array bindings are created directly rather than cached.
+    /// Array bindings are not reused.
     pub fn cached_bind_group(&self, descriptor: &wgpu::BindGroupDescriptor<'_>) -> wgpu::BindGroup {
         let entries: Option<Vec<_>> = descriptor
             .entries

@@ -232,10 +232,7 @@ impl DatePickerDefaults {
 /// `None` means every date or year is selectable. A date is selectable only
 /// when it is inside the year range and both predicates allow it.
 ///
-/// [`CallbackWith`] must be created during a component build, so these
-/// setters have to be called from inside a `#[tessera]` component. Closures
-/// passed to [`date_picker`] are turned into callbacks at that component
-/// boundary.
+/// Create predicate callbacks inside a `#[tessera]` component.
 pub struct DatePickerController {
     selected_date: Option<CalendarDate>,
     displayed_month: YearMonth,
@@ -247,10 +244,6 @@ pub struct DatePickerController {
 
 impl DatePickerController {
     /// Creates a date picker state.
-    ///
-    /// `is_selectable_date` and `is_selectable_year` are optional. `None`
-    /// allows every date or year. When a callback is supplied, it must already
-    /// have been created during a component build.
     pub fn new(
         initial_selected_date: Option<CalendarDate>,
         initial_displayed_month: Option<YearMonth>,
@@ -382,10 +375,6 @@ impl DatePickerController {
     }
 
     /// Updates the date predicate.
-    ///
-    /// `None` means every date is selectable. A callback must be created during
-    /// a component build, so call this setter from inside a `#[tessera]`
-    /// component.
     pub fn set_is_selectable_date(
         &mut self,
         is_selectable_date: Option<CallbackWith<CalendarDate, bool>>,
@@ -395,10 +384,6 @@ impl DatePickerController {
     }
 
     /// Updates the year predicate.
-    ///
-    /// `None` means every year is selectable. A callback must be created during
-    /// a component build, so call this setter from inside a `#[tessera]`
-    /// component.
     pub fn set_is_selectable_year(&mut self, is_selectable_year: Option<CallbackWith<i32, bool>>) {
         self.is_selectable_year = is_selectable_year;
         self.clear_unselectable_date();

@@ -89,14 +89,7 @@ pub enum ScrollBarLayout {
     Overlay,
 }
 
-/// Holds the state for a `scrollable` component, managing scroll position and
-/// interaction.
-///
-/// It tracks the current and target scroll positions, the size of the
-/// scrollable content, and focus state.
-///
-/// The scroll position is smoothly interpolated over time to create a fluid
-/// scrolling effect.
+/// Scroll position and viewport state shared with scroll modifiers.
 #[derive(Clone, PartialEq)]
 pub struct ScrollableController {
     density: f64,
@@ -147,7 +140,7 @@ impl Default for ScrollableController {
 }
 
 impl ScrollableController {
-    /// Creates a new `ScrollableController` with default values.
+    /// Creates an unscrolled controller.
     pub fn new() -> Self {
         Self {
             density: tessera_ui::dp::scale_factor(),
@@ -173,10 +166,7 @@ impl ScrollableController {
 
     /// Returns the current child position relative to the scrollable container.
     ///
-    /// This is primarily useful for components that need to implement custom
-    /// virtualization strategies (e.g. lazy lists) and must know the current
-    /// scroll offset. Values are clamped by the scroll logic, so consumers
-    /// can safely derive their offset from the returned position.
+    /// Values are already clamped.
     pub fn child_position(&self) -> PxPosition {
         self.child_position
     }
@@ -747,9 +737,6 @@ impl BuildModifierNode for ScrollBuild {
 /// scroll modifier. Public scrolling is expressed through
 /// `Modifier::vertical_scroll` / `Modifier::horizontal_scroll` from
 /// [`crate::md3::modifier::ModifierExt`].
-///
-/// Retained as a crate-internal helper because it also lays out scrollbar
-/// siblings, which a modifier cannot add.
 #[tessera]
 pub(crate) fn scrollable(
     modifier: Option<Modifier>,

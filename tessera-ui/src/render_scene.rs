@@ -5,8 +5,7 @@ use crate::{
     render::{ComputeCommand, DrawCommand},
 };
 
-/// Defines the sampling requirements for a rendering command that needs a
-/// barrier.
+/// Scene region a command samples.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SampleRegion {
     /// The command needs to sample from the entire previously rendered scene.
@@ -79,10 +78,6 @@ impl SampleRegion {
 }
 
 /// Unified command enum that can represent either a draw or compute operation.
-///
-/// This enum enables the rendering system to process both graphics and compute
-/// commands in a unified pipeline, with proper barrier handling for multi-pass
-/// rendering scenarios.
 pub enum Command {
     /// A graphics rendering command processed by draw pipelines.
     Draw(Box<dyn DrawCommand>),
@@ -106,9 +101,6 @@ impl Command {
     }
 
     /// Returns the barrier requirement for this command.
-    ///
-    /// Commands that need to sample from previously rendered content
-    /// should return a barrier requirement to ensure proper synchronization.
     #[must_use]
     pub fn barrier(&self) -> Option<SampleRegion> {
         match self {

@@ -80,9 +80,8 @@ fn reload(&mut self) -> impl Future<Output = ()> + 'static {
 
 `Model<T>` is a copyable handle. `with` and `with_mut` are not tracked; only
 reads of `State` fields invalidate components. Keep ordinary fields private and
-change them through methods. Like `State`, the handle works on every thread and
-is `Send` and `Sync` when `T: Send`, so background tasks can call model methods
-directly. Calling `with_mut` on a model inside its own `with` or `with_mut`
+change them through methods. Like `State`, it is `Send + Sync` when `T: Send`.
+Calling `with_mut` on a model inside its own `with` or `with_mut`
 panics.
 
 A `Model<T>` component parameter is injected:

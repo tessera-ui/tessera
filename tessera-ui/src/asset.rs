@@ -67,9 +67,7 @@ pub struct FontAsset {
 
 /// Bytes read from a [`Source`] and passed to a resource decoder.
 ///
-/// Packaged assets are borrowed from the application binary or its read-only
-/// resources instead of being copied. Retaining the handle in a decoded value
-/// keeps the data available without a second allocation.
+/// Cloning shares the bytes; packaged assets are not copied.
 #[derive(Clone)]
 pub struct Bytes(BytesData);
 

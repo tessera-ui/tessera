@@ -17,9 +17,7 @@ placements. Implement `LayoutPolicy::place` to recompute placements from cached
 child sizes when only placement inputs changed.
 
 `layout` compares the policy with the one already stored on the node. An equal
-policy is discarded; a changed policy replaces the stored value once, so
-re-executing a component does not clone or allocate an unchanged policy.
-`LayoutNode::draw` treats the node's drawing the same way.
+policy is discarded; `LayoutNode::draw` behaves the same.
 
 Policies are configuration. If measurement intentionally mutates interior state
 that must not affect later comparisons, wrap the policy so the node keeps a
@@ -29,5 +27,3 @@ separate measurement copy:
 tessera_ui::layout::layout(tessera_ui::StatefulLayoutPolicy(tessera_ui::layout::Stack))
     .child(|| {});
 ```
-
-The copy is created when the node is created or its policy changes.

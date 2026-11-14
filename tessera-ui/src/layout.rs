@@ -86,10 +86,7 @@ impl LayoutChild {
 
     /// Probes this child under the given constraint.
     ///
-    /// A later probe or measure of the same child under the same constraint
-    /// reuses this result and does not call into the child again. A different
-    /// constraint is measured normally; only the final [`Self::measure`] is
-    /// recorded for the parent snapshot cache.
+    /// Repeated probes or measures under the same constraint reuse this result.
     pub fn probe(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -104,7 +101,6 @@ impl LayoutChild {
     /// Minimum interactive-size padding is excluded. Other layout constraints
     /// and content padding still apply. Use this to choose shared visual
     /// dimensions before measuring the children normally for interaction.
-    /// Results and metadata are isolated from the normal layout cache.
     pub fn probe_intrinsic(
         &self,
         scope: &mut MeasureScope<'_>,
@@ -190,7 +186,7 @@ pub struct PlacementChild<'a> {
 }
 
 impl<'a> PlacementChild<'a> {
-    /// Returns the cached measured size from the preceding measure pass.
+    /// Returns the child's measured size.
     pub const fn size(&self) -> ComputedData {
         self.size
     }
@@ -572,7 +568,7 @@ impl<'a> LayoutInput<'a> {
     }
 }
 
-/// Cached output from pure layout.
+/// A node's measured size and child placements.
 #[derive(Clone)]
 pub struct LayoutResult {
     /// The computed size for the node.
@@ -1078,8 +1074,7 @@ where
 /// declared after this call, including [`LayoutNode::child`], is laid out by
 /// this node. Use [`Stack`] to stack children at the origin.
 ///
-/// Re-executing with an equal policy keeps the node's stored policy; a changed
-/// policy replaces it once. Wrap policies that mutate interior state during
+/// Wrap policies that mutate interior state during
 /// measurement in [`crate::modifier::StatefulLayoutPolicy`].
 ///
 /// # Examples
@@ -1134,7 +1129,6 @@ pub struct LayoutNode {
 
 impl LayoutNode {
     /// Records the node's drawing; defaults to [`NoopDrawModifier`].
-    /// An equal drawing from the previous build is kept without reallocation.
     pub fn draw(self, draw: impl DrawModifierNode + PartialEq) -> Self {
         set_emitted_node_draw(draw);
         self

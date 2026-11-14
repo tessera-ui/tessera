@@ -18,11 +18,16 @@ programming contract; the guidelines below also govern framework implementation.
 ## 🧠 Project Overview & Structure
 
 - **Project Type**: Rust UI Framework
-- **Core Crates**:
-  - **tessera-ui**: Framework core (component tree, rendering, runtime, basic types Dp/Px, event handling, etc.)
-  - **tessera-foundation**: Shared foundational UI building blocks (alignment, shape definitions, and future common modifier APIs)
+- **Main Crates**:
+  - **tessera-ui**: Framework core (component tree, rendering, runtime, basic types Dp/Px, event handling, resources, async tasks, etc.)
+  - **tessera-foundation**: Shared foundational UI building blocks (alignment, shape definitions, gestures, scroll physics, and the common layout, input, semantics, and clipping modifiers)
   - **tessera-components**: Official components and their shared rendering pipelines. The crate root holds design-system-independent primitives (row, column, boxed, image, pager, etc.); `md3` holds Material Design 3 components; `experiment::hig` holds experimental Apple HIG components
   - **tessera-macros**: The `#[tessera]` procedural macro for simplified component definition
+  - **tessera-platform**: Platform services and plugins
+  - **tessera-shard**: Shard components and routing
+  - **tessera-i18n**: Fluent localization
+  - **tessera-build**: Build-time asset, localization, and application metadata generation
+  - **cargo-tessera**: The CLI for scaffolding, development, checks, packaging, and headless rendering; `tessera-mobile` is its mobile build library
   - **example**: Example project demonstrating framework usage
 
 **Module Path Convention**: All modules must use the `src/module_name.rs` pattern. Do not use `src/module_name/mod.rs`.
@@ -40,11 +45,11 @@ programming contract; the guidelines below also govern framework implementation.
 ### Component Model & #[tessera] Macro
 
 - Components are stateless Rust functions annotated with `#[tessera]`. Persistent UI state is created with `remember` (returned as `State<T>`) and can be passed around as `State<T>`.
-- Remembered resource destructors may update other still-live state. Slot cleanup must remove entries and release the slot-table borrow before dropping their values. Resource cleanup must check `State::is_alive` before accessing an owner that may already have been removed; liveness checks return false during runtime thread teardown.
+- Release slot-table borrows before dropping remembered values; destructors must check `State::is_alive` before touching other state.
 - Inside the component function:
   - Compose child components to build the complete component tree
   - Use `Modifier` chains for node-local behavior such as layout modifiers, input, semantics, drawing, and focus
-  - Use `layout(policy)` with a `LayoutPolicy` to arrange children and `LayoutModifier` for wrapping layout modifiers. `layout` compares the policy with the node's stored value and stores it only when it changed; `LayoutNode::draw` does the same for the node's drawing. Pending props are stored by value and moved to the heap only when they differ from the replay snapshot.
+  - Use `layout(policy)` with a `LayoutPolicy` to arrange children and `LayoutModifier` for wrapping layout modifiers.
   - A component call does not occupy a tree node: its identity, state, and replay snapshot live on a call record. Only the `layout(policy)` and `group()` primitives emit nodes, so a component that wraps one `layout` call costs one node. `#[tessera]` takes no arguments; Tessera crates alias themselves with `extern crate self as ...;`
   - Modifiers attach only to the node emitted by the executing primitive. Use `group()` to attach semantics, focus, or input to content laid out by an enclosing layout.
   - The `__private` module of `tessera_ui` serves official macro expansions only. `cargo tessera check` rejects other uses outside the defining crate (T0005); expose a public API instead.
@@ -54,20 +59,15 @@ programming contract; the guidelines below also govern framework implementation.
 
 - Truly zero-config components may use `#[tessera] pub fn component()` with no parameters.
 - Configurable components must use a single public entrypoint declared with named owned parameters: `#[tessera] pub fn component(foo: Foo, bar: Bar, ...)`.
-- A component entry immediately registers one use and returns its typed configuration handle. Registration fixes declaration ownership, order, and stable identity. Configure the same Pending use with chaining, saved handles, or ordinary configuration helpers, including across groups.
-- The runtime finalizes props when execution starts and completes dynamically registered descendants before layout. Saving, moving, dropping, or forgetting a handle has no execution or cancellation effect. Modifying a committed or stale handle panics.
-- Generated `*Builder` types are configuration handles; they do not execute component bodies from `Drop`. Scope restoration and resource cleanup guards may still use `Drop`.
-- Keep child content in `RenderSlot` / `RenderSlotWith`. Controlled slot expansion can commit earlier Pending calls in the current fragment, so handle validity is per call rather than per frame. See [component calls](docs/COMPONENT_CALLS.md).
-- Pass required values at entry, such as `text("Title")`; configure optional props with named setters.
+- A component entry registers one use and returns its configuration handle (the generated `*Builder`); configure it by chaining, saving it, or passing it to helpers. Modifying a committed or stale handle panics. See [component calls](docs/COMPONENT_CALLS.md).
+- Keep child content in `RenderSlot` / `RenderSlotWith`.
+- Pass required values at entry as non-`Option` parameters, such as `text("Title")`; configure optional props with named setters.
 - Do not introduce public wrapper variants (`*_with_controller`, `*_impl`, or extra public forwarding layers).
 - Component parameters must use owned types satisfying the generated props model's `Clone + 'static` requirements. Component props and remembered values are UI-session-local and do not need `Send + Sync`.
-- `#[tessera]` parameter-level `#[default(...)]` is not supported. Do not introduce it in new or migrated code.
 - For parameters with optional/default behavior, use `Option<T>` and resolve defaults explicitly in the component body (for example, `unwrap_or`, `unwrap_or_else`, or an explicit `if let Some(...)` fallback).
-- Keep truly required parameters as non-`Option` constructor parameters.
 - For optional external controllers, use `Option<State<...>>`; when `None`, create internal state with `remember`.
-- Callback parameters should use `Callback` / `CallbackWith<...>`; callback closures may capture UI-thread-local values.
-- Slot parameters should use `RenderSlot` / slot wrappers as needed by signature; slot closures may capture UI-thread-local values.
-- The parameter type is the single source of truth for the generated builder surface; there is no per-prop helper attribute:
+- Callback parameters use `Callback` / `CallbackWith<...>`; slot parameters use `RenderSlot` / `RenderSlotWith<...>`.
+- The parameter type is the single source of truth for the generated builder surface:
   - `Callback` / `CallbackWith<...>` parameters get a closure setter plus a `<name>_shared(impl Into<...>)` setter.
   - `RenderSlot` / `RenderSlotWith<...>` parameters get a closure setter plus a `<name>_shared(impl Into<...>)` setter.
   - every other parameter gets a plain value setter.
@@ -75,13 +75,12 @@ programming contract; the guidelines below also govern framework implementation.
   - `into` — declare the setter (and the required constructor parameter) as `impl Into<T>`.
   - `skip_setter` — do not generate a builder setter for this field.
   - `skip_eq` — exclude this field from the generated props `PartialEq`.
-- Do not add `#[prop(skip_setter)]` to `Option<T>` just to keep builder setters "clean". The macro already generates setters that accept `T` and store `Some(T)`.
 - Prefer `#[prop(into)]` for public `Option<T>` fields whose inner type has a useful conversion surface.
-- Reserve `#[prop(skip_setter)]` for true internal plumbing fields that must not appear in the public builder surface. Do not use it on public authoring parameters that should already be expressible through the macro-generated setters.
+- Reserve `#[prop(skip_setter)]` for internal plumbing fields; `Option<T>` setters already accept `T`.
 - Exception: when a public builder needs a deliberately custom semantic surface (for example, mutually exclusive modes such as `title(...)` vs `label(...)`), use hidden backing fields with `#[prop(skip_setter)]` and expose explicit hand-written semantic setters instead of leaking mechanical field setters.
-- `Callback`/`RenderSlot` are immutable handles in practice; do not rely on closure hot-swap semantics. Their closures execute in the owning UI session and do not require `Send + Sync`.
+- `Callback`/`RenderSlot` are immutable handles; do not rely on closure hot-swap semantics.
 - If callback behavior depends on changing values, capture `State<T>` (or other stable handles) and read latest values at call time.
-- Do not add runtime callback/slot helper wrappers (`callback`, `callback_with`, `render_slot`, `render_slot_with`); construct handles directly via `Callback::new`, `CallbackWith::new`, `RenderSlot::new`, and `RenderSlotWith::new`.
+- Construct handles with `Callback::new`, `CallbackWith::new`, `RenderSlot::new`, and `RenderSlotWith::new`; do not add helper wrappers.
 
 ### Tessera Color Checking Design
 
@@ -93,28 +92,23 @@ programming contract; the guidelines below also govern framework implementation.
   - free functions annotated with `#[tessera]`, or a project-approved alias that lowers to a Tessera component free function such as `#[shard]`;
   - the bodies of recognized Tessera-only API free functions, such as `tessera_shard::use_router`;
   - closures carried directly by `RenderSlot`, `RenderSlotWith`, or generated setters and required constructor arguments for parameters declared as RenderSlot types (including `impl Into<RenderSlot>` / `impl Into<RenderSlotWith<...>>`);
-  - root build closures passed to `EntryPoint::new`, `HeadlessRenderer::new`, `testing::UiTest::content`, or `Renderer::run` / `run_with_config` / `run_web_with_config`. A semantically resolved `Box::new` can transparently carry this closure into the root argument; ordinary helper wrappers remain uncolored;
-  - the build closure of `key`, the child build closure of `provide_context`, and private Pending-property materializers passed to `ComponentCall::append` / `configure_deferred`, which execute in the declaration's restored build scope. Initializer factories and immediate plain property updates remain ordinary Rust;
+  - root build closures passed to `EntryPoint::new`, `HeadlessRenderer::new`, `testing::UiTest::content`, or `Renderer::run` / `run_with_config` / `run_web_with_config`;
+  - the build closures of `key` and `provide_context`, and deferred Pending-property materializers;
   - content closures in the approved built-in render setters listed in [component calls](docs/COMPONENT_CALLS.md#built-in-render-setters). Their key providers and action callbacks remain uncolored.
 - All other executable contexts are uncolored by default: ordinary free functions, impl methods, trait methods/default methods, local functions, callbacks, event handlers, async tasks, iterator closures, `Option`/`Result` combinator closures, and arbitrary higher-order function closures.
-- Color does not propagate through helpers. A helper called by a Tessera-colored component remains uncolored unless the helper itself is a Tessera-colored free function. A helper that calls a Tessera component or Tessera-only API is invalid; it is not implicitly promoted to Tessera.
-- The core rule is one-way: Tessera-colored contexts may call uncolored functions, but uncolored contexts must not call Tessera-colored free functions or Tessera-only APIs.
+- Color is one-way and does not propagate: colored contexts may call uncolored code, but uncolored code, including helpers called from components and closures written inside them, must not call Tessera-colored functions or Tessera-only APIs.
 - `State::new` creates model-owned state and is valid only in model initializers: `ModelInit::init` implementations and closures passed directly to `ModelStore::model`. `cargo tessera check` rejects other calls (T0006); like color, this does not propagate through helpers.
-- Tessera-only APIs such as `remember`, `remember_with_key`, `retain`, `retain_with_key`, `provide_context`, `use_context`, `launch`, `launch_once`, `key`, `RenderSlot::new`, `RenderSlotWith::new`, and internal current-instance/group/slot APIs require a Tessera-colored context. They do not color the ordinary function that calls them; calling them from an uncolored function or closure is invalid.
-- Closures do not inherit Tessera color merely because they are written inside a Tessera-colored function. Only a closure passed directly to a recognized Tessera carrier, such as `RenderSlot::new`, a generated render-slot parameter, or an approved built-in render setter, is checked as a Tessera closure.
+- Tessera-only APIs such as `remember`, `remember_with_key`, `retain`, `retain_with_key`, `provide_context`, `use_context`, `launch`, `launch_once`, `key`, `RenderSlot::new`, `RenderSlotWith::new`, and internal current-instance/group/slot APIs require a Tessera-colored context.
 - `RenderSlot` and `RenderSlotWith` are Tessera functors: their carried closures are delayed Tessera fragments and may only be executed by the Tessera runtime at controlled build/replay boundaries.
-- Do not introduce custom closure carriers that can execute Tessera code unless the carrier is explicitly added to the color-checker specification. Unknown higher-order functions must be treated as uncolored boundaries.
-- A plain lexical block can return a carrier closure as its tail value. This preserves the closure's carrier context without coloring initializer statements, nested ordinary closures, or async/const/generator blocks.
-- A color-check diagnostic is a false positive only when the reported expression is actually inside a Tessera-colored free-function body or a recognized Tessera carrier closure. Reports for helper functions, ordinary closures, callbacks, iterator combinators, `unwrap_or_else`, `then`, or event handlers are not false positives merely because those constructs appear syntactically inside a component.
+- Do not introduce custom closure carriers that can execute Tessera code unless the carrier is explicitly added to the color-checker specification.
 - The checker must use the `rust-analyzer` analysis crates as its semantic frontend and must run them as library crates from `cargo-tessera`; it must not depend on an LSP server process, `syn`, heuristic fallback parsing, `rustc_private`, or macro/build-script generated color metadata.
-- The checker must fail closed when rust-analyzer cannot resolve semantic information that is needed to classify a Tessera-sensitive call. Diagnostics should report the specific invalid uncolored boundary and call target, for example a Tessera component or `remember` call inside an ordinary closure, rather than saying only that metadata is missing.
+- The checker must fail closed when rust-analyzer cannot resolve semantic information that is needed to classify a Tessera-sensitive call. Diagnostics name the invalid uncolored boundary and call target.
 
 ### Component Tree & Node Metadata
 
 - The component tree is managed internally by `ComponentTree` and node metadata structures, supporting layout, rendering, and event dispatch.
 - Accessibility updates flatten layout and group nodes without semantics. Preserve explicit semantic nodes, their order, bounds, actions, and focus; synthesize only the root window node.
-- Publish item selection separately from checked/toggled state. Accessibility focus actions must request the registered focus target without invoking its activation callback.
-- Newly attached global-position observers must receive the first valid window rectangle even if another observer already watched the same unchanged node. Existing observers should run only when the rectangle changes.
+- Publish item selection separately from checked/toggled state. Accessibility focus actions must not activate their target.
 
 ---
 
@@ -122,17 +116,15 @@ programming contract; the guidelines below also govern framework implementation.
 
 - Use `Constraint` and interval-based `AxisConstraint` to describe size constraints.
 - Layout policies measure direct child layout nodes through handle-based APIs such as `MeasureScope`, `LayoutChild`, and `LayoutResult`.
-- `LayoutChild::probe_intrinsic` probes natural content dimensions in isolated metadata and caches. It excludes minimum interactive-size padding while preserving visual sizing and content padding. Use normal `measure` to publish final layout and retain interaction bounds; intrinsic probes must not replace normal measurement.
+- `LayoutChild::probe_intrinsic` probes natural content dimensions without publishing layout; it must not replace normal `measure`.
 - `place_node` is used to position child nodes.
-- Measuring a layout child does not place it. An unplaced layout node hides its entire subtree from drawing, input geometry, semantics, and keyboard focus. Hiding the active target releases focus and capture. Placed targets outside a scroll viewport remain eligible for keyboard focus and reveal; group nodes remain transparent to placed descendants. Cached layouts must clear placements that are no longer present.
-- Default layout: If no layout policy is attached to the current node, `DefaultLayoutPolicy` stacks children at (0,0), and the container size is the minimal bounding rectangle.
-- Keep direct layout adjacency and layout metadata across frames. Refresh adjacency when composition changes; a measurement cache hit must not restore an unchanged subtree or enumerate unrelated siblings to find dirty descendants.
-- Track composition, measurement, placement, transforms, paint, and pointer-state reads separately. Frame consumers (focus, pointer input, position observers, the render scene, and accessibility) must update from structural and geometry journals. Full snapshots are appropriate for explicit inspection and initial accessibility publication; normal accessibility frames publish deltas. See [incremental frame maintenance](docs/INCREMENTAL_FRAMES.md).
-- Direct layout-child adjacency is persistent and updated at build/replay structure changes. Stable frames must not rebuild these lists or restore cached layout subtrees recursively.
+- Measuring a layout child does not place it. An unplaced layout node hides its entire subtree from drawing, input geometry, semantics, and keyboard focus.
+- `layout::Stack` places children at (0,0) and sizes the node to their bounding rectangle. `group()` nodes do not lay out their children; the enclosing layout measures them.
+- Track composition, measurement, placement, transforms, paint, and pointer-state reads separately. Frame consumers (focus, pointer input, position observers, the render scene, and accessibility) must update from structural and geometry journals. See [incremental frame maintenance](docs/INCREMENTAL_FRAMES.md).
+- Direct layout-child adjacency and layout metadata persist across frames and change only at build/replay structure changes. Stable frames and cache hits must not rebuild these lists or restore subtrees.
 - Keep Compose, Measure, Place, and Paint dependencies separate. State reads during measurement invalidate measurement; placement-only calculations may use `MeasureScope::placement` or `LayoutModifierInput::placement` and must not determine sizes or constraints. Implement `LayoutPolicy::place` when a policy supports cached placement.
-- Draw-only properties must be excluded from both measurement and placement equality. Placement transforms invalidate window geometry without measuring. Parent-data modifiers should implement `equivalent` when their values can be compared so unchanged weights or alignment do not invalidate the parent.
+- Draw-only properties must be excluded from both measurement and placement equality. Placement transforms invalidate window geometry without measuring. Parent-data modifiers should implement `equivalent` when their values can be compared.
 - Keep measured control dimensions in local units and share one inherited `LocalToWindow` transformation across rendering, clipping, pointer input, focus reveal, IME, and accessibility. Use `LayoutCoordinates` for local-size consumers; do not feed window rectangle dimensions back into local layout or drawing. See [local layout coordinates](docs/LOCAL_COORDINATES.md).
-- Canonical pointer samples and gesture histories remain in window coordinates. Convert displacements and nested-scroll remainder through each handler's coordinate space, and apply a scene transformation exactly once.
 
 ---
 
@@ -142,9 +134,9 @@ programming contract; the guidelines below also govern framework implementation.
   - **DrawCommand**: Trait describing renderable objects
   - **DrawablePipeline**/**ComputablePipeline**: GPU rendering/compute logic
   - **PipelineRegistry**: Registers all pipelines at startup
-- Components set draw/compute commands through `RenderInput`, `RenderMetadataMut`, and render policies
-- Draw commands use the measured bounds at their position in the modifier chain. Layout snapshots must preserve wrapped content bounds, including their local origins, when restoring cached layouts or updating placements.
-- The basic components crate provides common pipelines, which must be registered at entry (e.g., `register_pipelines`)
+- Components set draw/compute commands through `RenderInput`, `RenderMetadataMut`, and draw modifiers (`DrawModifierNode`, `LayoutNode::draw`)
+- Draw commands use the measured bounds at their position in the modifier chain.
+- The components crate provides common pipelines; applications register them by adding `tessera_components::ComponentsPackage` to their `EntryPoint`
 
 ### Shape clipping
 
@@ -154,20 +146,12 @@ programming contract; the guidelines below also govern framework implementation.
 - Resolve animated size-relative corners through shared shape definitions so
   fills, outlines, shadows, and clipping use the same measured geometry.
 - `Modifier::clip_shape` clips the node and its descendants without changing
-  measurement. Shape masks preserve fractional placement; integer scissor bounds
-  round outwards. Pointer hit testing must honor the same ancestor shapes.
-- Shape masks are uploaded once per frame into a reusable buffer. Stencil targets
-  are pooled by dimensions and sample count, and active masks are restored after
-  scene-pass boundaries without constraining declared background sampling regions.
-- Retained scene pixels require conservative draw-command opt-in. Damage includes
-  old and new drawing bounds; recreate targets or redraw fully after a skipped
-  changed predecessor, background sampling, or compute work. Preserve MSAA samples
-  outside damage. Target-pixel reuse must not change per-command alpha into group
-  opacity or be presented as an independently compositable layer cache.
+  measurement. Pointer hit testing must honor the same ancestor shapes.
+- Retained scene pixels require conservative draw-command opt-in and must not turn
+  per-command alpha into group opacity; see
+  [incremental frame maintenance](docs/INCREMENTAL_FRAMES.md).
 - Use shared frame-buffer ranges for transient uniforms/storage and pooled scratch
-  leases for filter intermediates. Keep leases until their consumers are recorded;
-  prelude work runs before main-frame commands. Bound idle caches by bytes and age,
-  and account separately for resources retained by cached bind groups.
+  leases for filter intermediates. Bound idle caches by bytes and age.
 - Shape clipping supports up to 255 nested shape masks. `clip_to_bounds` clips do
   not consume stencil levels.
 
@@ -175,9 +159,9 @@ programming contract; the guidelines below also govern framework implementation.
 
 - **SampleRegion**: An enum used by both `DrawCommand` and `ComputeCommand` to declare which part of the previously rendered scene a command samples. `DrawRegion` separately describes where the command draws. This distinction is crucial for effects like blur or glass morphism.
 - `Global`: Samples the entire screen. This is expensive as it requires a full-screen texture copy.
-- `PaddedLocal(PaddingRect)`: Defines a sampling region relative to the component's bounding box plus padding on each side. The draw region, clip stack, and render target bounds determine the scissor rectangle independently.
+- `PaddedLocal(PaddingRect)`: Defines a sampling region relative to the component's bounding box plus padding on each side.
 - `Absolute(PxRect)`: Samples a specific, absolute region of the screen.
-- **Performance Optimization**: Sampled draw passes copy the bounding union of their declared sampling regions into a pooled texture and receive its window rectangle as `scene_rect`. `Global` and explicit scene reads without a declared sampling region copy the full screen. Sampling bounds must expand outward at fractional positions and remain independent of draw clipping. Compute passes filter only the union of their items' sampling and target regions; every batch starts from a copy of its input, so pixels outside dispatched regions keep their prior values, and the result feeds the next sampling draws. **Batching** groups subsequent barrier commands with non-overlapping draw regions into the same render pass, avoiding additional captures. A separate scissor rectangle limits actual drawing for each command.
+- **Performance Optimization**: Sampled draw passes copy only the union of their declared sampling regions and receive its window rectangle as `scene_rect`; `Global` copies the full screen. Sampling bounds are independent of draw clipping. **Batching** groups subsequent barrier commands with non-overlapping draw regions into the same render pass.
 
 ### WebGPU Resource Usage Guidelines
 
@@ -190,31 +174,24 @@ programming contract; the guidelines below also govern framework implementation.
 
 ## 🎯 Event & State Management
 
-- Components are stateless; persistent state is stored via `remember` as `State<T>` and passed via parameters as needed.
-- `State<T>` has one API on every thread and is `Send + Sync` only when `T: Send`. The owning UI thread holds its session's access gate and accesses state without locking; other threads take the gate, which the owner yields only at frame boundaries (`dispatcher::flush`). Do not add per-access allocation, versioned snapshots, or reference-counted values to this path, and never make the UI thread wait on a thread that may access its states.
+- `State<T>` has one API on every thread and is `Send + Sync` only when `T: Send`. The owning UI thread holds its session's access gate and accesses state without locking; other threads take the gate, which the owner yields only at frame boundaries (`dispatcher::flush`). Never make the UI thread wait on a thread that may access its states.
 - Session-local storage (contexts, input and accessibility handlers, router destinations) must not require `Send + Sync`; use `Rc`/`RefCell` rather than `Arc`/locks there.
-- Asynchronous work uses `Task` handles that cancel on drop. `spawn(Dispatcher, future)` takes `Send` futures; `spawn_local(future)` runs `!Send` futures on the current UI session from any code, and `launch`/`launch_once` tie them to a component call. UI-session futures are polled first at the next frame boundary. These APIs and their `Send` requirements are the same on every platform. Models have no async API.
+- Asynchronous work uses `Task` handles that cancel on drop. `spawn(Dispatcher, future)` takes `Send` futures; `spawn_local(future)` runs `!Send` futures on the current UI session from any code, and `launch`/`launch_once` tie them to a component call. UI-session futures are polled first at the next frame boundary.
 - Event handling is attached through modifier-based interaction APIs and other node-local capabilities, using typed closures over the framework input contexts.
-- The typed input contexts are `PointerInput`, `KeyboardInput`, `ImeInput`, and `ClipboardInput`. Clipboard requests share keyboard ordering and focus/layout deferral; asynchronous cut writes must acknowledge success before deleting unchanged selected text.
+- The typed input contexts are `PointerInput`, `KeyboardInput`, `ImeInput`, and `ClipboardInput`. Clipboard requests share keyboard ordering and focus/layout deferral.
 - Treat input contexts as event/consumption surfaces, not generic renderer request bags. Cursor changes, semantics, IME publication, and window-side effects must use their dedicated modifier/controller/session APIs.
 - Mouse, keyboard, and IME events are processed via event queues and must be consumed promptly.
-- Use `focus::request_move_focus` when traversal may need lazy content to be revealed, including Tab exit after popup focus restoration. This traversal is queued after layout and precedes following keys; explicit focus requests, capture, and window blur cancel it. `move_focus` remains an immediate operation on attached targets.
-- Focus cleanup must detach all removed handles before selecting a restoration target. Virtualized controls that unmount focused children should provide a stable local fallback so scrolling does not reveal unrelated controls. Without an explicit scope, removing focus must not activate an unrelated control. A focused `skip_traversal` target still anchors forward and reverse navigation without becoming a traversal destination.
+- Use `focus::request_move_focus` when traversal may need lazy content to be revealed; it runs after layout and before following keys. `move_focus` is immediate on attached targets.
+- Focus cleanup must detach all removed handles before selecting a restoration target. Removing focus must not activate an unrelated control.
 - Preserve each pointer sample's position when queuing it. Dispatch each sample's
   Initial, Main, and Final passes in order before processing the next sample.
-  Captured paths use stable instance identities and survive recomposition;
-  runtime reset clears captures. Independent held pointers retain their own
-  positions during unrelated events and idle frames.
-- Nested click targets must claim tap presses independently of event consumption.
-  Ancestor tap handlers must not activate or take focus for a child's press, while
-  drag and scroll observers must still receive that press to track the gesture.
+  Captured paths use stable instance identities and survive recomposition.
+- A child's tap must not activate or focus ancestor tap handlers; drag and scroll
+  observers still receive the press.
 - Event handlers should be lightweight to avoid blocking the main loop.
-- Gesture slop starts at the sample's recorded press position; only positionless
-  synthetic presses fall back to their first movement sample. Direct and inertial
-  scroll deltas share nested-scroll dispatch, and zero-velocity releases still
-  notify nested-scroll completion. Advance inertia from the framework frame clock.
-- When opening or closing focusable content, use `focus::defer_keyboard_until_layout` to preserve subsequent keys until the new layout and focus callbacks finish. Ordinary text-input updates must not introduce a layout barrier.
-- Settle input and layout-observer state writes through bounded build/layout retries before presentation without repeating frame ticks or consumed input. Keep build-time feedback to already executed boundaries deferred until the next frame, independently of layout settling.
+- Gesture slop starts at the recorded press position. Direct and inertial scroll
+  deltas share nested-scroll dispatch; advance inertia from the framework frame clock.
+- When opening or closing focusable content, use `focus::defer_keyboard_until_layout` to preserve subsequent keys until the new layout and focus callbacks finish.
 
 ---
 
@@ -235,7 +212,6 @@ programming contract; the guidelines below also govern framework implementation.
   - Write library dependency requirements as short caret versions (`"1.16"`, `"0.8"`) so downstream users are not forced onto the newest patch release. Add a patch component only when a fix or API from that patch is required, and keep `0.0.x` crates fully specified. Do not use open or upper-bounded ranges; crates whose types are exchanged must resolve to one shared version, and exact `=` pins require a comment explaining the lockstep requirement. CI checks direct minimal versions.
   - Enforce `rustfmt edition 2024` default rules
   - `use` imports must be grouped in four sections (standard library, third-party crates, crate root, submodules), separated by one blank line, sorted alphabetically within each group, and merged by root path
-  - All code, comments, and documentation comments must be in English (except for rare functional clarifications)
   - Treat `State<T>` (returned by `remember`) and values returned from `use_context::<T>().get()` as cheap `Copy` handles: do **not** call `.clone()` just to pass them into closures.
   - Avoid `*_for_*` “capture helper” variable names (e.g. `state_for_handler`). Prefer capturing the original value directly; if a local alias is needed, keep the same name.
 - **Commit Guidelines**:
@@ -283,15 +259,10 @@ programming contract; the guidelines below also govern framework implementation.
 - Mock external boundaries when necessary, such as platform clipboard access;
   keep the Tessera logic under test real. A fake dependency is acceptable; a
   second implementation of the behavior being tested is not.
-- A test of an IME edit plan does not prove that the plan is applied, composition
-  is cleared, a callback runs, or an input event is consumed. Those claims require
-  invoking the corresponding production path and observing its effects.
 - Test-only accessors may expose production state for observation or arrange a
   fixture. Do not retain obsolete algorithms behind `#[cfg(test)]` solely to keep
   their tests passing, or test transformations implemented only in such helpers.
-- Do not supply the behavior the test claims to verify: a fixture that registers
-  an animation driver cannot prove the component registers it, and assigning a
-  nested animation target cannot prove its owner handles a requested transition.
+- Do not let the fixture supply the behavior the test claims to verify.
 
 ### Tests that must not be added or retained
 
@@ -333,11 +304,8 @@ programming contract; the guidelines below also govern framework implementation.
 - Keep GPU and platform integration tests separate in execution requirements;
   document required adapters or platforms and use explicit opt-in where needed.
   Do not remove rendering coverage simply because it cannot run on every host.
-- Do not mutate process environment variables in a multithreaded unit-test
-  process. Use a child process with its own environment for environment-dependent
-  behavior. Isolate and restore other shared runtime state using test guards.
-- Run tests that change process-global density in isolated child processes so
-  parallel layout tests cannot observe temporary scale factors.
+- Run tests that mutate process environment variables or global density in child
+  processes; restore other shared runtime state with test guards.
 
 ### Review and verification
 
@@ -356,15 +324,7 @@ programming contract; the guidelines below also govern framework implementation.
 
 ## ⚙️ Special Notes
 
-- **example crate**: `example/Cargo.toml` uses `[lib]` pointing to `src/lib.rs` for shared entry logic (including Android) with the name `{package}_lib`, and `[[bin]]` pointing to `src/main.rs` for desktop. `src/lib.rs` must expose `#[tessera_ui::entry] pub fn run() -> EntryPoint`, and `src/main.rs` should only call `{package}_lib::run().run_desktop()` to keep a single startup path and avoid PDB output name collisions.
-
----
-
-## FAQ
-
-- **Module Path**: Always use `src/module_name.rs`, never `mod.rs`
-- **Components must be stateless**; all state is passed via parameters
-- **Events must be consumed promptly** to avoid missing or duplicate handling
+- **example crate**: `example/Cargo.toml` uses `[lib]` pointing to `src/lib.rs` for shared entry logic (including Android) with the name `{package}_lib`, and `[[bin]]` pointing to `src/main.rs` for desktop. `src/lib.rs` must expose `#[tessera_ui::entry] pub fn run() -> EntryPoint`, and `src/main.rs` should only call `{package}_lib::run().run_desktop()` (`run_ios()` on iOS) to keep a single startup path and avoid PDB output name collisions.
 
 ---
 
@@ -421,30 +381,23 @@ Example:
 ///
 /// ## Parameters
 ///
-/// - `is_open` — whether the dialog is currently visible
-/// - `on_dismiss` — callback invoked when the dialog should close
+/// - `controller` — optional external controller for visibility
+/// - `on_close_request` — callback invoked when the dialog should close
 ///
 /// ## Examples
-/// use tessera_components::md3::dialog::DialogProviderState;
-/// let s = DialogProviderState::new();
-/// assert!(!s.is_open());
-/// s.open();
-/// assert!(s.is_open());
-/// s.close();
-/// assert!(!s.is_open());
+/// use tessera_components::md3::dialog::DialogController;
+/// let mut controller = DialogController::new(false);
+/// assert!(!controller.is_open());
+/// controller.open();
+/// assert!(controller.is_open());
+/// controller.close();
+/// assert!(!controller.is_open());
 ```
-
-### Verification and CI
-
-- Add `cargo test --doc` to the CI pipeline to ensure rustdoc examples compile and run.
-- Optionally add a lint script that checks: each `#[tessera] pub fn` has a doc-block
-  containing `## Parameters` and `## Examples` and that modules have 2-line headers.
 
 ### Notes
 
 - Aim for brevity and clarity. Examples should be minimal but assert meaningful behavior.
-- Keep parameter descriptions concise. Reference helper/controller types when useful, but do not
-  force public configuration through `Args` types.
+- Keep parameter descriptions concise. Reference helper/controller types when useful.
 
 ---
 

@@ -15,8 +15,7 @@ row().children(|| {
 });
 ```
 
-The resulting order is Title, Description. Saving, moving, passing, dropping,
-or forgetting a handle leaves that order and the registered uses intact.
+The resulting order is Title, Description. Handles do not affect order.
 Chaining remains the usual concise form: `text("Title").color(RED);`.
 Ordinary helpers can accept a handle and configure it. Declaration ownership,
 control-flow group, key, and stable component identity come from the entry
@@ -29,48 +28,29 @@ run Cargo's compilation checks. Tessera components and runtime APIs must be
 called inside a component or a recognized render-slot closure. Ordinary helpers,
 callbacks, and iterator closures remain uncolored, including inside components.
 
-`--jobs` controls the checker worker count.
-
-The checker checks the selected targets and library dependencies that directly
-use `tessera-ui`, `tessera-foundation`, `tessera-components`, or `tessera-shard` in
-their resolved Cargo dependency graph. Target and feature selection apply to
-this graph; unrelated workspace crates are excluded. Unresolved Tessera-sensitive
-calls fail the check.
+The checker covers the selected targets and their Tessera-dependent libraries;
+unresolved calls fail.
 
 `tessera::redundant_render_slot` warns when a content argument constructs a slot
 merely to forward it through a closure whose only operation is `render`.
-Its default level is `warn`, which permits Cargo to continue. Configure lint
-levels on an item or inline module tree with
-`#[tessera_ui::lint(allow(tessera::redundant_render_slot))]`. Source levels are
-`allow`, `warn`, `deny`, and `forbid`; nested settings override ordinary CLI and
-outer settings unless forbidden.
 
-`tessera::remembered_state_in_model` warns when a `ModelStore::model`
-initializer captures a state created by `remember` or `retain`; that handle keeps
-its component-slot lifetime. Create model-owned state with `State::new` instead.
+`tessera::remembered_state_in_model` warns about remembered state stored in a
+model; see [Models](STATE_AND_ASYNC.md#models).
 
 `tessera::named_modifier_ext_import` warns when a private `use` binds a Tessera
 modifier extension trait (`ModifierExt`, `FocusModifierExt`, `CursorModifierExt`)
 to a name that the file and its child module files never mention. Method calls
 need only the trait in scope, so import it as `use ...::ModifierExt as _;`.
-`cargo tessera fix` applies the `as _` rewrite. Re-exports and imports whose name
-is used, such as trait bounds or fully qualified calls, are not reported.
 
-`cargo tessera check` accepts `-A LINT`, `-W LINT`, `-D LINT`, and
-`--forbid LINT`. Use `warnings` for warning-level lints or `tessera::all` for all
-Tessera lints.
-Flags apply in command-line order; `--forbid` and `--force-warn` lock the
-selected level. `--cap-lints LEVEL` caps levels, including `forbid`, except
-`force-warn`. Tessera call-boundary errors remain unconditional.
+Lint levels follow rustc semantics through `#[tessera_ui::lint(...)]` and
+`-A/-W/-D/--forbid/--force-warn/--cap-lints`; `tessera::all` selects all Tessera
+lints. Call-boundary errors cannot be lowered.
 
 ## Execution and lifetime
 
 Root build callbacks use the same controlled execution model. The callbacks
 accepted by `EntryPoint::new`, `HeadlessRenderer::new`, `testing::UiTest::content`,
-and the `Renderer::run` variants are build fragments. Call checking recognizes
-these APIs by their resolved definitions, including `Box::new` wrapping a root
-callback directly. Ordinary helper functions and event callbacks keep their
-ordinary Rust execution contexts.
+and the `Renderer::run` variants are build fragments.
 
 Each component body is a build fragment. After the body returns, the runtime
 expands the uses declared by that fragment in declaration order. Each use
@@ -103,8 +83,7 @@ row().children(|| {
 });
 ```
 
-A component handle already refers to a registered use. It is not child content
-and has no implicit conversion to a slot, reattachment, or invocation operation.
+A component handle already refers to a registered use. It is not child content.
 Calling `text("Title")` as an argument happens before the receiving function runs.
 
 Pass actions directly as ordinary closures that update state or controllers;
@@ -115,8 +94,7 @@ handles through the matching `_shared` setter.
 Props own their values. Stored callbacks and slots require owned `'static`
 captures and execute in the owning UI session, so their captures need not be
 `Send + Sync`. Keep changing values in `State<T>` and read them when the action
-or content runs. Slot closures can end with a component call:
-its returned handle is discarded after the declaration has been registered.
+or content runs.
 
 ## Built-in render setters
 
@@ -136,8 +114,7 @@ These built-in content arguments carry Tessera build code:
 | Lazy lists | `sticky_header`, `sticky_header_with_key` |
 
 Shared variants accept RenderSlot handles. Key providers and action callbacks
-use ordinary Rust contexts. The CLI resolves the actual receiver type before
-recognizing a built-in content method.
+use ordinary Rust contexts.
 
 The build closure passed to `key` runs as a controlled Tessera fragment.
-Key-provider callbacks and initializer factories remain ordinary Rust closures.
+Initializer factories remain ordinary Rust closures.

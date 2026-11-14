@@ -39,10 +39,6 @@ use crate::{
 /// A Material 3 scrollbar is a rounded thumb over the content; it has no
 /// persistent track. The thumb uses the `on-surface` hue at a low opacity so
 /// it stays legible on both light and dark surfaces.
-///
-/// The opacities are tuned for the renderer's linear-space compositing so the
-/// resting thumb keeps a comparable weight to a Material scrollbar on a light
-/// surface.
 pub struct ScrollbarDefaults;
 
 impl ScrollbarDefaults {
@@ -652,9 +648,7 @@ fn handle_state(
 /// - `scrollbar_controller` — shared interaction state; created internally when
 ///   absent.
 ///
-/// Wheel input follows the attached viewport. A custom track without a viewport
-/// retains tap, drag and accessibility actions and leaves wheel input to
-/// ancestors.
+/// Without a viewport, wheel input passes to ancestors.
 ///
 /// ## Examples
 ///
@@ -730,9 +724,7 @@ pub fn scrollbar_v(
 /// - `scrollbar_controller` — shared interaction state; created internally when
 ///   absent.
 ///
-/// Wheel input follows the attached viewport. A custom track without a viewport
-/// retains tap, drag and accessibility actions and leaves wheel input to
-/// ancestors.
+/// Without a viewport, wheel input passes to ancestors.
 ///
 /// ## Examples
 ///

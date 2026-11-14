@@ -9,9 +9,8 @@ Thank you for your interest in `tessera`! We welcome all forms of contributions,
 
 ## Development Tools
 
-If you need to contribute code to `tessera`, in addition to the latest nightly Rust, it is highly recommended to install the following tools:
+If you need to contribute code to `tessera`, in addition to the latest stable Rust, it is highly recommended to install the following tools:
 
-- [`xbuild`](https://github.com/rust-mobile/xbuild): We use it to build and test the Android version. In the future, it may also be used for iOS compatibility.
 - [`rust-script`](https://rust-script.org/#installation): We use it to run [some rust scripts](scripts). It is helpful for development.
 
 ## Code Contribution Guidelines
@@ -22,21 +21,12 @@ To ensure code quality and consistency, and to keep the repository clean, please
 
 You can set up your development environment in one of two ways:
 
-1. **Nix (Recommended)**: For a one-liner setup on Linux and macOS.
-2. **Manual Setup**: Manually install Rust and other dependencies.
+1. **Manual Setup**: Install Rust and the system dependencies yourself.
+2. **Nix**: Use the development shells provided by `flake.nix` on Linux and macOS.
 
-### Option A - Nix package manager (Recommended)
+### Option A - Manual Setup
 
-If you have [Nix](https://nixos.org/download.html) installed, you can get a development shell with all dependencies ready by running:
-
-```bash
-nix develop            # Desktop dev shell
-nix develop .#android  # Android dev shell
-```
-
-### Option B - Manual Setup
-
-If you prefer to set up your environment manually, follow the instructions for your operating system below.
+Follow the instructions for your operating system below.
 
 #### 1. Install Rust
 
@@ -79,6 +69,15 @@ The Vulkan SDK is **optional**. It is only required if you need to perform shade
 
 If you need it, you can download it from [vulkan.lunarg.com](https://vulkan.lunarg.com/), run the installer, and follow its post-install instructions.
 
+### Option B - Nix package manager
+
+If you have [Nix](https://nixos.org/download.html) installed, you can get a development shell with all dependencies ready by running:
+
+```bash
+nix develop            # Desktop dev shell
+nix develop .#android  # Android dev shell
+```
+
 ### Language for Code
 
 All code, including documentation within the code (like `rustdoc` comments) and comments, must be written in English, unless a feature specifically requires pointing out a word in another language.
@@ -88,35 +87,17 @@ All code, including documentation within the code (like `rustdoc` comments) and 
 - Please ensure your code format complies with the project's specifications. The rules are as follows:
 
   - `rustfmt edition 2024` default rules.
-  - `5 use import rules`:
-    1. Imports are divided into four groups, arranged in the following strict order:
-       - Group 1: Standard library (`std`, `core`, `alloc`)
-       - Group 2: Third-party crates
-       - Group 3: Current crate root (`crate::`)
-       - Group 4: Submodules of the current crate (`super::`, `self::`)
-    2. There must be exactly one blank line between different groups.
-    3. Imports within the same group must be arranged consecutively without any blank lines.
-    4. Imports within each group must be sorted alphabetically.
-    5. Imports from the same root path should be merged into a single `use` statement.
+  - Imports: std / third-party / `crate::` / `super::`/`self::` groups, one blank line apart, sorted, merged by root (enforced by `scripts/check-imports.rs`).
 
 - **Formatting Tools**
 
-  - You can use the `cargo fmt` command to format your code. This will automatically apply the first formatting rule mentioned above.
-  - However, it is recommended to always use the following command (at the project root):
+  - Run this at the project root to fix imports and run `rustfmt`, including on script files that `cargo fmt` skips; add `--check` to check without modifying files:
 
     ```bash
     rust-script scripts/check-imports.rs .
     ```
 
-  - To run it in check-only mode (no file modification), use:
-
-    ```bash
-    rust-script scripts/check-imports.rs --check .
-    ```
-
-  - Nix users: just type `fmt` inside `nix develop` - it's a smart alias that runs the same command above from any directory
-
-    This command checks and fixes import rules, and also calls `rustfmt` for formatting. It directly applies all the formatting rules mentioned above and does not ignore script files (whereas `cargo fmt` only formats what is managed by `Cargo.toml`).
+  - Nix users: `fmt` inside `nix develop` runs the same command from any directory.
 
 ### Commit Guidelines
 
@@ -155,16 +136,14 @@ It is best to pass a markdown lint, but we do not strictly require it. Please en
 
 ## Special Note on Android Builds
 
-Building for Android requires some specific considerations due to the limitations of `NativeActivity`. We use [`xbuild`](https://github.com/rust-mobile/xbuild) to handle the complexity of cross-compilation and packaging.
+Android projects are initialized, run, and built with `cargo tessera android`.
 
-- **Prerequisites**: Ensure you have the Android NDK and SDK correctly set up.
-- **Troubleshooting**: If you encounter issues during an Android build, `xbuild` provides a diagnostic tool. Run the following command to check your environment and identify potential problems:
-
-  ```bash
-  x doctor
-  ```
-
-- **Nix Users**: The Android development shell (`nix develop .#android`) comes with `xbuild` pre-configured.
+- **Prerequisites**: Ensure the Android SDK/NDK and a JDK supported by Gradle 8.14 (17 or 21) are installed, and `adb` is available.
+- **Initialization**: Run `cargo tessera android init` to generate the Gradle project.
+- **Run and build**:
+  - Run: `cargo tessera android dev --device <device_id>`
+  - Build: `cargo tessera android build --format apk`
+- **Nix Users**: The Android development shell (`nix develop .#android`) provides the Android SDK/NDK, JDK, and Rust Android targets.
 
 ## License
 

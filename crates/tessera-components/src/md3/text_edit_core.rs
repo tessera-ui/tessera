@@ -68,8 +68,8 @@ pub struct TransformedText {
 }
 
 impl TransformedText {
-    /// Creates a transformed text model using heuristics to derive offset
-    /// mapping from the raw and transformed strings.
+    /// Derives an approximate offset mapping; use explicit mapping for complex
+    /// transforms.
     pub fn from_strings(raw: &str, text: String) -> Self {
         let raw_boundaries = char_boundary_offsets(raw);
         let transformed_boundaries = char_boundary_offsets(&text);
@@ -358,12 +358,8 @@ fn extend_selection_range(origin: &Range<usize>, target: &Range<usize>) -> TextS
     }
 }
 
-/// Definition of a rectangular selection highlight
+/// Selection highlight rectangle in pixels.
 #[derive(Clone, Debug, PartialEq)]
-/// Defines a rectangular region for text selection highlighting.
-///
-/// Used internally to represent the geometry of a selection highlight in pixel
-/// coordinates.
 pub struct RectDef {
     /// The x-coordinate (in pixels) of the rectangle's top-left corner.
     pub x: Px,
@@ -1801,13 +1797,7 @@ impl TextLayoutState {
     }
 }
 
-/// Core text editing state, shared between components
-/// Core state for text editing, including content, selection, cursor, and
-/// interaction state.
-///
-/// This struct manages the text buffer, selection, cursor position, focus, and
-/// user interaction state. It is designed to be shared between UI components
-/// via a `TextEditorController`.
+/// Shared text, selection, cursor, and focus state for an editor.
 pub struct TextEditorController {
     fonts: Option<u64>,
     line_height: Px,
@@ -1985,23 +1975,13 @@ impl TextEditorController {
     /// Creates a new `TextEditorController` with the given font size and
     /// optional line height.
     ///
-    /// # Arguments
-    ///
-    /// * `size` - Font size in Dp.
-    /// * `line_height` - Optional line height in Dp. If `None`, uses 1.2x the
-    ///   font size.
+    /// `line_height` defaults to 1.2× `size`.
     pub fn new(size: Dp, line_height: Option<Dp>) -> Self {
         Self::with_selection_color(size, line_height, Color::new(0.5, 0.7, 1.0, 0.4))
     }
 
     /// Creates a new `TextEditorController` with a custom selection highlight
     /// color.
-    ///
-    /// # Arguments
-    ///
-    /// * `size` - Font size in Dp.
-    /// * `line_height` - Optional line height in Dp.
-    /// * `selection_color` - Color used for selection highlight.
     pub fn with_selection_color(size: Dp, line_height: Option<Dp>, selection_color: Color) -> Self {
         let final_line_height = line_height.unwrap_or(Dp(size.0 * 1.2));
         let line_height_px: Px = final_line_height.into();
@@ -2567,23 +2547,7 @@ impl TextEditorController {
         true
     }
 
-    /// Map keyboard events to text editing actions
-    /// Maps a keyboard event to a list of text editing actions for the editor.
-    ///
-    /// This function translates keyboard input (including modifiers) into
-    /// editing actions such as character insertion, deletion, and navigation.
-    ///
-    /// Clipboard shortcuts are handled at a higher layer so they stay on the
-    /// unified edit pipeline instead of bypassing controller state.
-    ///
-    /// # Arguments
-    ///
-    /// * `key_event` - The keyboard event to map.
-    /// * `key_modifiers` - The current keyboard modifier state.
-    ///
-    /// # Returns
-    ///
-    /// An optional vector of `glyphon::Action` to be applied to the editor.
+    /// Maps a key event to editor actions; clipboard shortcuts are not mapped.
     pub fn map_key_event_to_action(
         &mut self,
         key_event: tessera_ui::KeyboardEvent,

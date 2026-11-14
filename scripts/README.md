@@ -16,4 +16,4 @@ rust-script scripts/check-imports.rs --help
 
 Run script regression tests with `rust-script --test scripts/<name>.rs`.
 Package inspection uses native tools (`dpkg-deb`, `7z`, Android SDK tools, or Xcode)
-for the selected platform; no Python packages are required.
+for the selected platform.

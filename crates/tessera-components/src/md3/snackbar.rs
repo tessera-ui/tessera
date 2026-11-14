@@ -337,12 +337,12 @@ impl SnackbarDefaults {
         Color::new(0.95, 0.95, 0.95, 1.0)
     }
 
-    /// Default action label color derived from the current theme.
+    /// Default action label color.
     pub fn action_color() -> Color {
         Color::new(0.7, 0.8, 1.0, 1.0)
     }
 
-    /// Default dismiss action color derived from the current theme.
+    /// Default dismiss action color.
     pub fn dismiss_action_color() -> Color {
         Color::new(0.95, 0.95, 0.95, 1.0)
     }

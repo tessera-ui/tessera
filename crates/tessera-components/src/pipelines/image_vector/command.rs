@@ -69,7 +69,6 @@ impl Hash for ImageVectorData {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VectorTintMode {
     /// Multiplies the tint color with the image color.
-    /// This is the default behavior.
     /// Result = Image * Tint
     #[default]
     Multiply,

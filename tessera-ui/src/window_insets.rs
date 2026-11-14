@@ -179,7 +179,7 @@ impl WindowInsetsController {
     }
 
     /// Publishes safe-area and keyboard lengths in density-independent units.
-    /// Unchanged values preserve cached builds and measurements.
+    /// Unchanged values cause no invalidation.
     pub fn set(self, system_bars: Insets, ime: Insets) {
         self.0.set_if_changed((system_bars, ime));
     }

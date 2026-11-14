@@ -1,9 +1,7 @@
 # Local layout coordinates
 
 Native controls measure and edit their content in local physical pixels. A
-uniform scale changes how those coordinates appear in the window; it does not
-change process density, rebuild a control from an image, or replace its input
-and accessibility behavior.
+uniform scale changes only how those coordinates map to the window.
 
 ## Authoring a scaled subtree
 
@@ -27,8 +25,7 @@ Do not additionally scale their individual authoring values.
 ## Shared geometry
 
 `LocalToWindow` represents a uniform scale followed by a fractional
-translation. Its constructor rejects nonfinite, nonpositive, and noninvertible
-scales. A parent transformation composes with a child's transformation once.
+translation. A parent transformation composes with a child's transformation once.
 
 `LayoutCoordinates` contains the unscaled `local_size` and the authoritative
 `local_to_window` transformation. Its window bounds are a `FloatRect`.
@@ -46,10 +43,7 @@ Pipelines map local geometry into the render target once. Fragment-space shape
 calculations must use the inverse transformation where appropriate; changing
 only the vertex positions does not scale line widths or fragment-space shapes.
 Text rendering scales glyph placement and glyph rasterization together.
-
-Atlas generation uses its own identity coordinate space. Drawing an atlas
-entry applies the scene transformation once. Physical caches must account for
-scale or bypass an incompatible cached entry.
+Physical caches, such as atlases, must account for scale.
 
 Local drawing and sampling padding scale with the command. Explicit absolute
 sampling regions and global sampling already describe window coordinates.
@@ -61,13 +55,11 @@ Canonical pointer samples, captured pointer positions, and gesture histories
 remain in window coordinates. A stationary pointer must not acquire movement
 when an ancestor moves or scales. Handlers receive an inverse-mapped local
 cursor position. Native drag consumers convert observed displacements into
-their local controller units; integer drag callbacks retain rounding remainder
-in window units so repeated small movements do not drift.
+their local controller units.
 
-Wheel lines are normalized before crossing a scale boundary. Scroll handlers
-consume local displacement and return their remainder to window units before
-ancestor delivery. Nested scroll connections also map requests, consumption,
-and fling velocity through each provider's own coordinate space.
+Scroll handlers consume local displacement and return their remainder to window
+units before ancestor delivery. Nested scroll connections also map requests,
+consumption, and fling velocity through each provider's own coordinate space.
 
 Focus reveal converts precise window bounds into the reveal container's local
 units before changing its scroll offsets. IME anchors map through the same
@@ -77,14 +69,10 @@ actions, selection, and focus behavior.
 
 ## Geometry observers
 
-- `on_globally_positioned` retains its previous integer behavior at scale one
-  and reports an outward integer envelope for a scaled node.
+- `on_globally_positioned` reports outward integer bounds.
 - `on_globally_positioned_precise` reports exact fractional window bounds.
 - `on_local_to_window` reports changes to the transformation.
 - `on_layout_coordinates` reports local dimensions and their transformation.
 
-Every newly attached observer receives its first valid geometry even when
-another observer already watched the unchanged node. Existing observers run
-only when their own observed value changes. A local-size consumer, such as an
-outline or a sheet drag extent, must use local dimensions rather than a window
-rectangle's dimensions.
+New observers receive the current value; others run only on change. Local-size
+consumers must use local dimensions rather than a window rectangle's dimensions.

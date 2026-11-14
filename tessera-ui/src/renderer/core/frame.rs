@@ -1122,10 +1122,7 @@ fn apply_clip_to_batch_rect(
     (clipped_rect, true)
 }
 
-/// Determine whether `next_type_id` (with potential clipping) can be merged
-/// into the current batch. Equivalent to the negation of the original flush
-/// condition: merge allowed when last_command_type_id == Some(next_type_id) or
-/// last_command_type_id is None.
+/// Whether `next_type_id` can join the current batch.
 fn can_merge_into_batch(last_command_type_id: &Option<TypeId>, next_type_id: TypeId) -> bool {
     match last_command_type_id {
         Some(l) => *l == next_type_id,

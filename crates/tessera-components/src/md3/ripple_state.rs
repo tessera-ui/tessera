@@ -86,11 +86,7 @@ fn ease_out_cubic(t: f32) -> f32 {
     1.0 - (1.0 - t).powi(3)
 }
 
-/// # RippleState
-///
-/// Manage ripple animations and hover state for interactive UI components.
-/// Use with `remember` to create persistent state across frames.
-///
+/// Ripple animation and hover state for interactive controls.
 pub struct RippleState {
     animation: Option<RippleAnimationState>,
     is_hovered: bool,
@@ -100,8 +96,6 @@ pub struct RippleState {
 }
 
 impl Default for RippleState {
-    /// Creates a new `RippleState` with all fields initialized to their default
-    /// values.
     fn default() -> Self {
         Self::new()
     }

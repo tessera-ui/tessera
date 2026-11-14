@@ -71,11 +71,6 @@ pub enum SideSheetPosition {
 
 /// Controller for side sheet providers, managing open/closed state.
 ///
-/// This controller can be created by the application and passed to the
-/// [`modal_side_sheet_provider`] or
-/// [`standard_side_sheet_provider`]. It is used to control the
-/// visibility of the sheet programmatically.
-///
 /// # Example
 ///
 /// ```
@@ -111,9 +106,7 @@ impl SideSheetController {
 
     /// Initiates the animation to open the side sheet.
     ///
-    /// If the sheet is already open this has no effect. If it is currently
-    /// closing, the animation will reverse direction and start opening from the
-    /// current animated position.
+    /// No-op if already open; reverses an in-progress close.
     pub fn open(&mut self) {
         if !self.is_open {
             self.motion.request(true);
@@ -125,9 +118,7 @@ impl SideSheetController {
 
     /// Initiates the animation to close the side sheet.
     ///
-    /// If the sheet is already closed this has no effect. If it is currently
-    /// opening, the animation will reverse direction and start closing from the
-    /// current animated position.
+    /// No-op if already closed; reverses an in-progress open.
     pub fn close(&mut self) {
         if self.is_open {
             self.motion.request(false);

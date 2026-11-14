@@ -1056,9 +1056,6 @@ impl ComponentTree {
     }
 
     /// Add a new node to the tree
-    /// Nodes now store their intrinsic constraints in their metadata.
-    /// The `node_component` itself primarily holds the layout policy, render
-    /// policy, and handlers.
     pub(crate) fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
         let instance_key = node_component.instance_key;
         let needs_geometry = node_component.role == NodeRole::Layout || self.node_queue.is_empty();

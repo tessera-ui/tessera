@@ -25,9 +25,7 @@ stdout response. Name a worker with `spawn`, then address it through `session`:
 ```
 
 Use `snapshot` for component bounds and accessibility labels, values, and state.
-Use `resources` to wait for GPU completion and inspect held GPU handles, allocated
-bytes, allocator reservations, and grouped graphics work. Sample worker process
-memory through the PID returned by `list`; reservations are not resident VRAM.
+Use `resources` to inspect GPU usage after completion.
 Apply queued input with `render` before reading updated output. Use `text` with a
 `text` field for focused-editor input, and `input` with `kind: "scroll"` plus
 `delta_x` / `delta_y` for scrolling. Input positions are window coordinates.
@@ -42,10 +40,9 @@ Each render advances the virtual clock by the configured frame step. See
 
 For in-process Rust tests, enable `testing` and use `testing::UiTest`.
 `UiTest::new().content(fixture)` runs layout-only frames; add `headless` and call
-`rendered(modules)` to render on the GPU. Advance virtual time with `frames(n)`,
+`rendered(module)` to render on the GPU. Advance virtual time with `frames(n)`,
 `advance(duration)`, or `settle()`. Give each fixture explicit props and
 `TestProbe` observations. Query actual component coordinates with `frame().node(tag)`
 or `inspect_components()` and published semantics with `inspect_accessibility()`.
-Use `work()` for executed phases and frame-clock and graphics diagnostics for
-scheduling and resource observations. Inject named keyboard input with `press_key`;
+Inject named keyboard input with `press_key`;
 use pixels and input for rendering and interaction assertions.

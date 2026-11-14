@@ -38,8 +38,7 @@ mod width_tests;
 
 mod width_motion;
 
-/// According to the Material 3 spec, the [`button_groups`] component supports
-/// two styles: `Standard` and `Connected`.
+/// Button group visual style.
 #[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub enum ButtonGroupsStyle {
     /// Buttons have spacing between them and do not need to be the same width.
@@ -49,8 +48,7 @@ pub enum ButtonGroupsStyle {
     Connected,
 }
 
-/// According to the Material 3 spec, the [`button_groups`] component supports
-/// two selection modes: `Single` and `Multiple`.
+/// Button group selection mode.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ButtonGroupsSelectionMode {
     /// Only one button can be selected at a time.
@@ -60,8 +58,7 @@ pub enum ButtonGroupsSelectionMode {
     Multiple,
 }
 
-/// According to the Material 3 spec, the [`button_groups`] component supports
-/// a series of sizes.
+/// Button group size.
 #[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub enum ButtonGroupsSize {
     /// Extra small size.

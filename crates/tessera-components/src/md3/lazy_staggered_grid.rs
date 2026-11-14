@@ -46,7 +46,7 @@ impl Default for LazyStaggeredGridController {
 }
 
 impl LazyStaggeredGridController {
-    /// Creates a new staggered grid state with default caches.
+    /// Creates a controller.
     pub fn new() -> Self {
         Self {
             cache: StaggeredGridCache::default(),
@@ -98,7 +98,7 @@ impl LazyStaggeredGridContent {
 /// - `content_padding` - symmetric padding applied around the grid content.
 /// - `max_viewport_main` - optional maximum viewport length reported back to
 ///   parents.
-/// - `controller` - optional external controller for scroll position and cache.
+/// - `controller` - optional external controller.
 /// - item declarations are appended through builder methods like `item` and
 ///   `items`.
 ///
@@ -292,7 +292,7 @@ fn lazy_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs, axis: LazyAxis) {
 /// - `content_padding` - symmetric padding applied around the grid content.
 /// - `max_viewport_main` - optional maximum viewport length reported back to
 ///   parents.
-/// - `controller` - optional external controller for scroll position and cache.
+/// - `controller` - optional external controller.
 /// - item declarations are appended through builder methods like `item` and
 ///   `items`.
 ///

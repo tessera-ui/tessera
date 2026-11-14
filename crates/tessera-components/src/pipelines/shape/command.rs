@@ -41,7 +41,6 @@ pub enum ShapeCommand {
         /// Corner radii of the rectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
         /// G2 exponent per corner (tl, tr, br, bl).
-        /// k=2.0 results in standard G1 circular corners.
         corner_g2: [f32; 4],
         /// Width of the border
         border_width: f32,
@@ -53,7 +52,6 @@ pub enum ShapeCommand {
         /// Corner radii of therectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
         /// G2 exponent per corner (tl, tr, br, bl).
-        /// k=2.0 results in standard G1 circular corners.
         corner_g2: [f32; 4],
         /// Ripple effect properties
         ripple: RippleProps,
@@ -65,7 +63,6 @@ pub enum ShapeCommand {
         /// Corner radii of the rectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
         /// G2 exponent per corner (tl, tr, br, bl).
-        /// k=2.0 results in standard G1 circular corners.
         corner_g2: [f32; 4],
         /// Width of the border
         border_width: f32,
@@ -93,7 +90,6 @@ pub enum ShapeCommand {
         /// Corner radii of the rectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
         /// G2 exponent per corner (tl, tr, br, bl).
-        /// k=2.0 results in standard G1 circular corners.
         corner_g2: [f32; 4],
         /// Width of the border
         border_width: f32,
@@ -107,7 +103,6 @@ pub enum ShapeCommand {
         /// Corner radii of the rectangle (tl, tr, br, bl)
         corner_radii: [f32; 4],
         /// G2 exponent per corner (tl, tr, br, bl).
-        /// k=2.0 results in standard G1 circular corners.
         corner_g2: [f32; 4],
         /// Width of the border
         border_width: f32,

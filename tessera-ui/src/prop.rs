@@ -2,8 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Internal prop comparison and replay support used by generated component
-//! props.
+//! Stable callback and render-slot handles for component props.
 
 use std::{any::Any, marker::PhantomData, ptr, rc::Rc};
 
@@ -84,8 +83,6 @@ impl Default for Callback {
 ///
 /// The handle remains stable across recomposition. Capture [`State`](crate::State) handles
 /// and read their values when the callback runs to observe ongoing changes.
-///
-/// This is useful for value-change handlers and similar one-argument callbacks.
 pub struct CallbackWith<T, R = ()> {
     repr: CallbackWithRepr<T, R>,
 }
@@ -396,7 +393,7 @@ impl<T> PartialEq for RenderSlotWith<T> {
 
 impl<T> Eq for RenderSlotWith<T> {}
 
-/// Internal component props contract used by replay and prop comparison.
+/// Props of a generated component.
 pub trait Prop: Clone + 'static {
     /// Compare current props with another props value.
     fn prop_eq(&self, other: &Self) -> bool;
@@ -404,8 +401,7 @@ pub trait Prop: Clone + 'static {
     fn run_component(props: ComponentProps<Self>);
 }
 
-/// Props of one component execution: freshly declared, or shared with the
-/// replay snapshot.
+/// Props of one component execution.
 #[doc(hidden)]
 pub enum ComponentProps<P> {
     Owned(P),

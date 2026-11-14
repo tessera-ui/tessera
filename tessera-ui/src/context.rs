@@ -466,7 +466,7 @@ where
         f(&value)
     }
 
-    /// Get a cloned value. Requires `T: Clone`.
+    /// Returns a clone of the value.
     pub fn get(&self) -> T
     where
         T: Clone,

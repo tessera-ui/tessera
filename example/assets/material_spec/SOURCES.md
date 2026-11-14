@@ -5,9 +5,9 @@ Material Design makes its imagery available under CC BY 4.0 or Apache 2.0:
 https://m3.material.io/get-started
 https://creativecommons.org/licenses/by/4.0/
 
-Illustrations are copied without modifications, except `components.png`, which is downscaled from 3840×2160 to 2000×1125. Runtime layout crops them to the displayed viewport.
+## Photographs
 
-Photograph references retrieved on 2026-10-23 supply only clipped photographs in native figures.
+Photographs, retrieved on 2026-10-23 and 2026-10-24, supply only the photograph regions of native figures; text, controls, and framing are rendered natively. Sheet crops are pixel rectangles of the 1352×640 music-player figure.
 
 | File | Source page | Original image |
 | --- | --- | --- |
@@ -18,6 +18,17 @@ Photograph references retrieved on 2026-10-23 supply only clipped photographs in
 | text-field-accessibility-affixes.png | https://m3.material.io/components/text-fields/accessibility | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flx32leg0-7.png?alt=media |
 | text-field-accessibility-error.png | https://m3.material.io/components/text-fields/accessibility | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flx32lojq-8.png?alt=media |
 | text-field-accessibility-required.png | https://m3.material.io/components/text-fields/accessibility | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flx32mlzg-11.png?alt=media |
+| sheets-player-album-1.png | https://m3.material.io/components/bottom-sheets/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flvp7ubva-9.png?alt=media crop (302, 0)-(604, 248) |
+| sheets-player-album-2.png | https://m3.material.io/components/bottom-sheets/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flvp7ubva-9.png?alt=media crop (636, 0)-(938, 248) |
+| sheets-player-album-3.png | https://m3.material.io/components/bottom-sheets/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flvp7ubva-9.png?alt=media crop (972, 0)-(1088, 248) |
+| sheets-player-cover.png | https://m3.material.io/components/bottom-sheets/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flvp7ubva-9.png?alt=media crop (264, 280)-(392, 416) |
+| icon-context-appbar.png | https://m3.material.io/components/icon-buttons/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Fm0c0xugp-14.png?alt=media |
+| icon-context-label.png | https://m3.material.io/components/icon-buttons/accessibility | https://lh3.googleusercontent.com/Veran4xIuwOjaUK-TME0CkyE4D03sjgbC1O1fGyyeie01_pz6s0p7PoibSPSPzTNT7bmFKJy4kG40AnFtMviria4wR7kDBMlNQI6OuqqES8tBQ=s0 |
+| icon-context-density.png | https://m3.material.io/components/icon-buttons/accessibility | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Fm0c1h7ba-4.png?alt=media |
+
+## Component illustrations
+
+Illustrations are unmodified, except `components.png`, downscaled from 3840×2160 to 2000×1125.
 
 | File | Source page | Original image |
 | --- | --- | --- |
@@ -108,14 +119,9 @@ The grade axis is 0. Font names were changed for the derived subsets.
 | toolbars-thumbnail.png | https://m3.material.io/components/toolbars/overview | https://lh3.googleusercontent.com/kcVM-X9-2CyzVmQJ4b10cVNV7bI6L9n55SMCwUPX3zvwfR_z7um4DKlkxO9r9p1r3r5pR3kcKbgzRMUajcaL2tz6f8s42oKs86jalA50cos=s1120 |
 | tooltips-thumbnail.png | https://m3.material.io/components/tooltips/overview | https://lh3.googleusercontent.com/Y92BitS75oTUgWYpp5Cv1tooP2GJDGdE0P8TC3mtdxN9XukpjzpLctURn5cJ21i6K_yOtdBBb9cXMuZ1IVBEq-xqH0aPIy6TMItO-oD637bD=s1120 |
 
-| sheets-player-album-1.png | https://m3.material.io/components/bottom-sheets/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flvp7ubva-9.png?alt=media - artwork-only crop (302, 0)-(604, 248) from the 1352 x 640 standard music-player figure, retrieved on 2026-10-24; text, controls and device framing are rendered natively. |
-| sheets-player-album-2.png | https://m3.material.io/components/bottom-sheets/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flvp7ubva-9.png?alt=media - artwork-only crop (636, 0)-(938, 248) from the 1352 x 640 standard music-player figure, retrieved on 2026-10-24; text, controls and device framing are rendered natively. |
-| sheets-player-album-3.png | https://m3.material.io/components/bottom-sheets/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flvp7ubva-9.png?alt=media - artwork-only crop (972, 0)-(1088, 248) from the 1352 x 640 standard music-player figure, retrieved on 2026-10-24; text, controls and device framing are rendered natively. |
-| sheets-player-cover.png | https://m3.material.io/components/bottom-sheets/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Flvp7ubva-9.png?alt=media - artwork-only crop (264, 280)-(392, 416) from the 1352 x 640 standard music-player figure, retrieved on 2026-10-24; text, controls and device framing are rendered natively. |
-
 ## Article tab grade instances
 
-The Example Sans Tabs fonts are renamed Latin subsets and static instances of Google Sans v14.000 by Google, derived from the same OFL source listed above. They retain the original copyright and license metadata and are distributed under GoogleSans-OFL.txt. The original variable source uses optical size 18 and weight 500 for these instances. Each family has its own name so selecting a grade does not change font weight or require synthetic bolding.
+The Example Sans Tabs fonts are renamed Latin subsets and static instances of Google Sans v14.000 by Google, derived from the same OFL source listed above. They retain the original copyright and license metadata and are distributed under GoogleSans-OFL.txt.
 
 | File | Family | Optical size | Weight | Grade |
 | --- | --- | --- | --- | --- |
@@ -124,8 +130,4 @@ The Example Sans Tabs fonts are renamed Latin subsets and static instances of Go
 | ExampleSansTabsSelected.ttf | Example Sans Tabs Selected | 18 | 500 | 125 |
 | ExampleSansTabsPressed.ttf | Example Sans Tabs Pressed | 18 | 500 | -50 |
 
-The existing Example Sans Display at weight 475 and Example Sans Text at weight 400 instances are unchanged. The dedicated tab subsets contain Latin U+0020 through U+00FF; text outside this subset uses normal font fallback.
-
-| icon-context-appbar.png | https://m3.material.io/components/icon-buttons/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Fm0c0xugp-14.png?alt=media — only the restaurant photograph region is displayed; controls, text and device framing are native. |
-| icon-context-label.png | https://m3.material.io/components/icon-buttons/accessibility | https://lh3.googleusercontent.com/Veran4xIuwOjaUK-TME0CkyE4D03sjgbC1O1fGyyeie01_pz6s0p7PoibSPSPzTNT7bmFKJy4kG40AnFtMviria4wR7kDBMlNQI6OuqqES8tBQ=s0 — only the food photograph region is displayed; labels, controls, framing and annotations are native. |
-| icon-context-density.png | https://m3.material.io/components/icon-buttons/accessibility | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Fm0c1h7ba-4.png?alt=media — only the avatar and restaurant photograph regions are displayed; card, controls, framing and annotations are native. |
+Tab subsets cover U+0020–U+00FF.

@@ -3,8 +3,7 @@ use tessera_ui::{
     render::{ComputeCommand, SampleRegion},
 };
 
-/// A synchronous command to execute a gaussian blur.
-/// `BlurCommand` describes a single directional blur pass.
+/// One directional Gaussian blur pass.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlurCommand {
     /// Blur radius.
@@ -14,7 +13,7 @@ pub struct BlurCommand {
 }
 
 impl BlurCommand {
-    /// Convenience helper for building a horizontal blur pass.
+    /// Horizontal pass.
     pub fn horizontal(radius: f32) -> Self {
         Self {
             radius,
@@ -22,7 +21,7 @@ impl BlurCommand {
         }
     }
 
-    /// Convenience helper for building a vertical blur pass.
+    /// Vertical pass.
     pub fn vertical(radius: f32) -> Self {
         Self {
             radius,

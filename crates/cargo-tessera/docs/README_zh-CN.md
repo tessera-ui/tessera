@@ -1,6 +1,6 @@
 # cargo-tessera
 
-`cargo-tessera` 是 Tessera UI 的命令行工具，用于快速创建项目、启动开发服务器以及构建桌面 / Android 版本。
+Tessera UI 框架的命令行工具，用于项目脚手架、开发与构建。
 
 ## 安装
 
@@ -23,10 +23,7 @@ cd my-app
 cargo tessera dev
 ```
 
-`cargo tessera dev` 会持续监听 `src/`、`Cargo.toml` 以及（若存在）`build.rs`，保存后立即重建并重启应用。加上 `--verbose` 可查看底层 `cargo` 命令。
-
-桌面性能记录中的 `frame_total_ns` 包含无障碍更新发布及光标／输入法请求的应用耗时。
-Headless 会话不会执行这些平台操作；如果无窗口测量没有复现卡顿，应对照桌面性能记录。
+`cargo tessera dev` 会在源码、清单、应用配置或资源变化时重建并重启应用。加上 `--verbose` 可查看底层 `cargo` 命令。
 
 ### 构建发布版本
 
@@ -80,13 +77,6 @@ cargo tessera android build --release --format apk
 cargo tessera android dev --device 8cd1353b
 ```
 
-## 命令速览
-
-- `cargo tessera new <name>`：创建 Tessera 项目
-- `cargo tessera dev`：启动桌面自动重建 / 重启开发
-- `cargo tessera build`：桌面构建（支持 `--release` / `--target`）
-- `cargo tessera android <build|dev>`：Android 构建与运行辅助
-
 ## 许可证
 
-Tessera 采用 [MIT 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE) 或 [Apache 2.0 许可证](https://github.com/tessera-ui/tessera/blob/main/LICENSE)双重许可。
+Tessera 采用 [MIT 许可证](../../../LICENSE-MIT) 或 [Apache 2.0 许可证](../../../LICENSE-APACHE)双重许可。

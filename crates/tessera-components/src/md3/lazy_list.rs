@@ -29,10 +29,8 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 
 /// Persistent state for lazy list components.
 ///
-/// This controller holds both the scroll position ([`ScrollableController`])
-/// and the item measurement cache. When retained across navigation (via
-/// [`retain`] or [`retain_with_key`]), both the scroll position and cached
-/// measurements will be preserved, ensuring correct layout when remounting.
+/// Retain it with [`retain`] or [`retain_with_key`] to keep scroll position
+/// and item sizes across remounts.
 ///
 /// [`retain`]: tessera_ui::retain
 /// [`retain_with_key`]: tessera_ui::retain_with_key
@@ -45,7 +43,7 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 ///
 /// #[tessera]
 /// fn scrollable_page(page_id: String) {
-///     // Both scroll position and measurement cache persist across navigation
+///     // Persists across navigation.
 ///     let controller = retain_with_key(page_id.clone(), LazyListController::new);
 ///     lazy_column().controller(controller).items(100, |i| {
 ///         let _ = i;
@@ -109,8 +107,7 @@ impl Default for LazyListController {
 }
 
 impl LazyListController {
-    /// Creates a new lazy list controller with default scroll position and
-    /// empty cache.
+    /// Creates an unscrolled controller.
     pub fn new() -> Self {
         Self {
             scroll: ScrollableController::new(),
@@ -149,10 +146,8 @@ impl LazyListController {
 
     /// Reveals an item at an offset from the viewport start.
     ///
-    /// Earlier unmeasured items use the list estimate. The requested item is
-    /// composed and measured before its final visible placement is published.
-    /// Requests outside the current item range are ignored. Later wheel input
-    /// continues from the request rather than being overwritten by it.
+    /// Unmeasured items before it use the estimate. Out-of-range requests are
+    /// ignored.
     ///
     /// # Panics
     ///
@@ -235,13 +230,12 @@ impl LazyListContent {
 /// # lazy_column
 ///
 /// A vertically scrolling list that only renders items visible in the viewport.
+/// Remeasurement keeps the first visible item anchored.
 ///
 /// ## Usage
 ///
 /// Display a long, vertical list of items without incurring the performance
 /// cost of rendering every item at once.
-/// Remeasurement preserves the first item start visible in the viewport. If no
-/// item start is visible, the partially visible item retains its offset.
 ///
 /// ## Parameters
 ///

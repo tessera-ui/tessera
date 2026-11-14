@@ -82,7 +82,7 @@ pub struct SemanticsArgs {
 }
 
 impl SemanticsArgs {
-    /// Convenience for `clearAndSetSemantics` behavior (no descendant merge).
+    /// Semantics that do not merge descendants.
     pub fn clear() -> Self {
         Self {
             merge_descendants: false,

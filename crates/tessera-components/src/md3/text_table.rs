@@ -117,8 +117,7 @@ impl From<TextStyle> for ShapingStyleKey {
 /// - `header_background`, `divider_color` — heading fill and row-rule colors
 ///
 /// Columns adapt to measured text. Narrow columns use the text component's
-/// wrapping behavior. Physical-pixel rounding preserves the total allocated
-/// width without gaps. Cells are read in row and column order. Grids cannot
+/// wrapping behavior. Cells are read in row and column order. Grids cannot
 /// exceed 1,048,576 positions.
 ///
 /// ## Examples

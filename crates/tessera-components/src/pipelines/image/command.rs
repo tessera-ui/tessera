@@ -7,8 +7,8 @@ use tessera_ui::render::DrawCommand;
 
 /// Image pixel data for rendering.
 ///
-/// Prefer [`ImageData::from_rgba`] to construct image content. Cloning shares
-/// pixel storage; independently allocated images compare by dimensions and pixels.
+/// Prefer [`ImageData::from_rgba`] to construct image content. Images compare
+/// by size and pixels; clones share storage.
 #[derive(Debug, Clone)]
 pub struct ImageData {
     /// Premultiplied sRGB RGBA pixels.
