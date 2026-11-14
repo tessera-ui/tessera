@@ -7,6 +7,9 @@ edition.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[package.metadata.tessera.release]
+previous-names = ["tessera-ui-shard"]
+
 [dependencies]
 parking_lot.workspace = true
 tessera-macros.workspace = true

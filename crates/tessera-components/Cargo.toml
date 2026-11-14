@@ -8,6 +8,9 @@ homepage.workspace = true
 description = "Basic components for tessera-ui, using md3e design principles."
 build = "build.rs"
 
+[package.metadata.tessera.release]
+previous-names = ["tessera-ui-basic-components"]
+
 [dependencies]
 bytemuck.workspace = true
 encase.workspace = true

@@ -73,21 +73,40 @@ fn run(command: &mut Command) -> Result<()> {
     Ok(())
 }
 
-fn latest(package: &str, root: &std::path::Path) -> Result<Option<(String, Version)>> {
-    let prefix = format!("{package}-v");
-    Ok(output(Command::new("git").current_dir(root).args([
-        "tag",
-        "--list",
-        &format!("{prefix}*"),
-    ]))?
-    .lines()
-    .filter_map(|tag| {
-        Some((
-            tag.to_owned(),
-            Version::parse(tag.strip_prefix(&prefix)?).ok()?,
-        ))
-    })
-    .max_by(|a, b| a.1.cmp(&b.1)))
+/// Returns the newest release tag of a package, including tags published under
+/// its previous names.
+fn latest(names: &[&str], root: &std::path::Path) -> Result<Option<(String, Version)>> {
+    let mut latest = None::<(String, Version)>;
+    for name in names {
+        let prefix = format!("{name}-v");
+        for tag in output(Command::new("git").current_dir(root).args([
+            "tag",
+            "--list",
+            &format!("{prefix}*"),
+        ]))?
+        .lines()
+        {
+            if let Some(version) = tag
+                .strip_prefix(&prefix)
+                .and_then(|version| Version::parse(version).ok())
+                && latest.as_ref().is_none_or(|(_, newest)| version > *newest)
+            {
+                latest = Some((tag.to_owned(), version));
+            }
+        }
+    }
+    Ok(latest)
+}
+
+/// Names under which a package was released before, from
+/// `package.metadata.tessera.release.previous-names`.
+fn previous_names(package: &cargo_metadata::Package) -> Vec<&str> {
+    package.metadata["tessera"]["release"]["previous-names"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|name| name.as_str())
+        .collect()
 }
 
 fn next(mut version: Version, major: bool, minor: bool) -> Version {
@@ -142,7 +161,10 @@ fn plan(metadata: &Metadata, major: &[String]) -> Result<BTreeMap<String, Releas
     let mut releases = BTreeMap::new();
     let mut previous = BTreeMap::new();
     for (name, package) in &packages {
-        let tag = latest(name, metadata.workspace_root.as_std_path())?;
+        let names = std::iter::once(name.as_str())
+            .chain(previous_names(package))
+            .collect::<Vec<_>>();
+        let tag = latest(&names, metadata.workspace_root.as_std_path())?;
         let range = tag
             .as_ref()
             .map_or_else(|| "HEAD".to_owned(), |(tag, _)| format!("{tag}..HEAD"));
@@ -715,12 +737,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn release_plans_follow_build_and_target_dependencies_and_preserve_paths() {
+    fn release_plans_follow_dependencies_and_previous_names_and_preserve_paths() {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path();
         fs::write(
             root.join("Cargo.toml"),
-            "[workspace]\nmembers=['leaf','middle','app','new','vendor']\nresolver='3'\n",
+            "[workspace]\nmembers=['leaf','middle','app','new','vendor','moved']\nresolver='3'\n",
         )
         .unwrap();
         for (name, version, dependencies) in [
@@ -737,6 +759,11 @@ mod tests {
             ),
             ("new", "0.4.0", ""),
             ("vendor", "0.2.0", ""),
+            (
+                "moved",
+                "2.0.0",
+                "[package.metadata.tessera.release]\nprevious-names=['old-moved']\n",
+            ),
         ] {
             let package = root.join(name);
             fs::create_dir_all(package.join("src")).unwrap();
@@ -760,12 +787,16 @@ mod tests {
             "leaf-v1.3.0-rc.1",
             "middle-v1.0.0",
             "app-v1.0.0",
+            "old-moved-v2.0.0",
         ] {
             git(&["tag", tag]);
         }
         fs::write(root.join("leaf/src/lib.rs"), "pub fn changed() {}\n").unwrap();
         git(&["add", "."]);
         git(&["commit", "-qm", "fix: update leaf"]);
+        fs::write(root.join("moved/src/lib.rs"), "pub fn renamed() {}\n").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-qm", "feat!: rework moved"]);
         git(&["-C", "vendor", "init", "-q"]);
         let metadata = MetadataCommand::new()
             .manifest_path(root.join("Cargo.toml"))
@@ -777,6 +808,7 @@ mod tests {
             ("middle", "1.0.1"),
             ("app", "1.0.1"),
             ("new", "0.4.0"),
+            ("moved", "3.0.0"),
         ] {
             assert_eq!(releases[name].version, Version::parse(version).unwrap());
         }
