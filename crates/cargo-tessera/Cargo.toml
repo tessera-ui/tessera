@@ -15,6 +15,14 @@ include = ["Cargo.toml", "README.md", "src/**", "templates/**", "skills/**"]
 name = "cargo-tessera"
 path = "src/main.rs"
 
+# Dependency requirements written into generated projects. The release script
+# updates them with the packages they name.
+[package.metadata.tessera.scaffold]
+tessera-build = "0.1.0"
+tessera-components = "2.7.0"
+tessera-foundation = "0.1.0"
+tessera-ui = "2.5.0"
+
 [dependencies]
 aho-corasick = "1.1.5"
 annotate-snippets = "0.12.18"

@@ -318,6 +318,19 @@ fn prepare(metadata: &Metadata, releases: &BTreeMap<String, Release>) -> Result<
             }
         }
         update_dependencies(doc.as_item_mut(), &versions)?;
+        if let Some(scaffold) = doc
+            .get_mut("package")
+            .and_then(|package| package.get_mut("metadata"))
+            .and_then(|metadata| metadata.get_mut("tessera"))
+            .and_then(|tessera| tessera.get_mut("scaffold"))
+            .and_then(Item::as_table_like_mut)
+        {
+            for (name, requirement) in scaffold.iter_mut() {
+                if let Some(version) = versions.get(name.get()) {
+                    *requirement = value(version.to_string());
+                }
+            }
+        }
         if original != doc.to_string() {
             fs::write(path, doc.to_string())?;
             files.push(path.to_string_lossy().into_owned());

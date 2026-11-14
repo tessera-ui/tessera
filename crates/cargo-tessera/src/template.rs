@@ -6,21 +6,19 @@ use include_dir::{Dir, DirEntry};
 
 pub fn dependency_versions() -> Result<serde_json::Value> {
     let manifest: toml::Value = toml::from_str(include_str!("../Cargo.toml"))?;
+    let scaffold = manifest
+        .get("package")
+        .and_then(|package| package.get("metadata"))
+        .and_then(|metadata| metadata.get("tessera"))
+        .and_then(|tessera| tessera.get("scaffold"))
+        .and_then(toml::Value::as_table)
+        .context("Missing scaffold dependency versions")?;
     let mut versions = serde_json::Map::new();
-    for section in ["dependencies", "dev-dependencies"] {
-        for (name, dependency) in manifest[section]
-            .as_table()
-            .context("Missing dependency table")?
-        {
-            if name.starts_with("tessera-") {
-                if let Some(version) = dependency
-                    .as_str()
-                    .or_else(|| dependency.get("version").and_then(toml::Value::as_str))
-                {
-                    versions.insert(name.replace('-', "_"), version.into());
-                }
-            }
-        }
+    for (name, version) in scaffold {
+        let version = version
+            .as_str()
+            .with_context(|| format!("Invalid scaffold version for {name}"))?;
+        versions.insert(name.replace('-', "_"), version.into());
     }
     Ok(versions.into())
 }
@@ -206,10 +204,18 @@ fn mark_gradlew_executable_with_git(out_path: &Path) {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use crate::commands::{new, plugin};
 
     #[test]
-    fn scaffolds_generate_manifests_without_installing_skills() {
+    fn scaffolds_require_workspace_versions_without_installing_skills() {
+        let packages = cargo_metadata::MetadataCommand::new()
+            .manifest_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.toml"))
+            .no_deps()
+            .exec()
+            .expect("workspace metadata")
+            .packages;
         let root = tempfile::tempdir().expect("create isolated scaffold directory");
         for (kind, generate) in [
             ("app", new::execute as fn(&str, &str) -> anyhow::Result<()>),
@@ -224,7 +230,39 @@ mod tests {
                 generate(project.to_str().expect("UTF-8 project path"), template)
                     .expect("generate scaffold");
 
-                assert!(project.join("Cargo.toml").is_file());
+                let manifest: toml::Value = toml::from_str(
+                    &fs::read_to_string(project.join("Cargo.toml")).expect("scaffold manifest"),
+                )
+                .expect("valid scaffold manifest");
+                let mut required = 0;
+                for section in ["dependencies", "build-dependencies"] {
+                    let Some(dependencies) = manifest.get(section).and_then(toml::Value::as_table)
+                    else {
+                        continue;
+                    };
+                    for (name, dependency) in dependencies
+                        .iter()
+                        .filter(|(name, _)| name.starts_with("tessera-"))
+                    {
+                        let requirement = dependency
+                            .as_str()
+                            .or_else(|| dependency.get("version").and_then(toml::Value::as_str))
+                            .expect("scaffold dependency version");
+                        let package = packages
+                            .iter()
+                            .find(|package| package.name.as_str() == name)
+                            .expect("scaffold dependency is a workspace package");
+                        assert!(
+                            cargo_metadata::semver::VersionReq::parse(requirement)
+                                .expect("valid scaffold requirement")
+                                .matches(&package.version),
+                            "{kind}-{template}: {name} {requirement} must accept {}",
+                            package.version
+                        );
+                        required += 1;
+                    }
+                }
+                assert!(required > 0, "{kind}-{template} requires Tessera packages");
                 assert!(!project.join(".agents").exists());
             }
         }
