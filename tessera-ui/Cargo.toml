@@ -47,6 +47,9 @@ parking_lot = { workspace = true, features = ["deadlock_detection"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "net", "io-util"] }
 tracing-subscriber = { workspace = true, features = ["ansi", "env-filter", "fmt", "smallvec", "std", "tracing-log"] }
 
+[target.'cfg(not(any(target_family = "wasm", target_os = "android")))'.dependencies]
+memmap2.workspace = true
+
 [target.'cfg(target_family = "unix")'.dependencies]
 libc.workspace = true
 

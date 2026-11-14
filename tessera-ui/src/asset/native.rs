@@ -1,4 +1,18 @@
-use std::{io, path::PathBuf};
+use std::{fs::File, io, path::PathBuf, sync::Arc};
+
+use super::{Bytes, BytesData};
+
+/// Maps a packaged platform asset into memory.
+pub(super) fn map(asset: &str) -> io::Result<Bytes> {
+    let file = File::open(path(asset)?)?;
+    if file.metadata()?.len() == 0 {
+        return Ok(Vec::new().into());
+    }
+    // SAFETY: platform assets live in the application's read-only resources
+    // and are not modified while the application runs.
+    let map = unsafe { memmap2::Mmap::map(&file)? };
+    Ok(Bytes(BytesData::Mapped(Arc::new(map))))
+}
 
 pub(super) fn path(asset: &str) -> io::Result<PathBuf> {
     let executable = std::env::current_exe()?;

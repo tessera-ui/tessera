@@ -1,6 +1,35 @@
-use std::{io, sync::Arc};
+use std::{io, ptr::NonNull, sync::Arc};
 
-pub(super) fn read(path: &str) -> io::Result<Arc<[u8]>> {
+use super::{Bytes, BytesData};
+
+/// An open Android asset whose buffer stays valid until it is closed.
+pub(super) struct AssetBuffer {
+    asset: NonNull<crate::ndk_sys::AAsset>,
+    data: NonNull<u8>,
+    len: usize,
+}
+
+// SAFETY: the buffer is immutable and only read after opening; the asset is
+// closed exactly once when the last handle drops.
+unsafe impl Send for AssetBuffer {}
+unsafe impl Sync for AssetBuffer {}
+
+impl AssetBuffer {
+    pub(super) fn bytes(&self) -> &[u8] {
+        // SAFETY: `AAsset_getBuffer` returned `len` readable bytes that stay
+        // valid until the asset is closed in `drop`.
+        unsafe { std::slice::from_raw_parts(self.data.as_ptr(), self.len) }
+    }
+}
+
+impl Drop for AssetBuffer {
+    fn drop(&mut self) {
+        unsafe { crate::ndk_sys::AAsset_close(self.asset.as_ptr()) };
+    }
+}
+
+/// Opens a packaged asset and borrows the buffer the asset manager provides.
+pub(super) fn read(path: &str) -> io::Result<Bytes> {
     use crate::jni::{JavaVM, objects::JObject};
     use std::ffi::CString;
 
@@ -52,54 +81,33 @@ pub(super) fn read(path: &str) -> io::Result<Arc<[u8]>> {
             format!("Invalid asset path `{path}`: {err}"),
         )
     })?;
-    let asset = unsafe {
+    let asset = NonNull::new(unsafe {
         crate::ndk_sys::AAssetManager_open(
             manager,
             c_path.as_ptr(),
             crate::ndk_sys::AASSET_MODE_BUFFER as i32,
         )
-    };
-    if asset.is_null() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("Asset not found: {path}"),
-        ));
-    }
+    })
+    .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("Asset not found: {path}")))?;
 
-    let length = unsafe { crate::ndk_sys::AAsset_getLength64(asset) };
-    if length < 0 {
-        unsafe {
-            crate::ndk_sys::AAsset_close(asset);
+    let length = unsafe { crate::ndk_sys::AAsset_getLength64(asset.as_ptr()) };
+    let buffer = unsafe { crate::ndk_sys::AAsset_getBuffer(asset.as_ptr()) };
+    match (
+        usize::try_from(length),
+        NonNull::new(buffer.cast_mut().cast::<u8>()),
+    ) {
+        (Ok(len), Some(data)) => Ok(Bytes(BytesData::Android(Arc::new(AssetBuffer {
+            asset,
+            data,
+            len,
+        })))),
+        (Ok(0), None) => {
+            unsafe { crate::ndk_sys::AAsset_close(asset.as_ptr()) };
+            Ok(Vec::new().into())
         }
-        return Err(io::Error::other(format!(
-            "Invalid asset length for `{path}`"
-        )));
-    }
-
-    let mut bytes = vec![0u8; length as usize];
-    let mut offset = 0usize;
-    while offset < bytes.len() {
-        let read = unsafe {
-            crate::ndk_sys::AAsset_read(
-                asset,
-                bytes[offset..].as_mut_ptr().cast(),
-                (bytes.len() - offset) as _,
-            )
-        };
-        if read <= 0 {
-            break;
+        _ => {
+            unsafe { crate::ndk_sys::AAsset_close(asset.as_ptr()) };
+            Err(io::Error::other(format!("cannot read asset `{path}`")))
         }
-        offset += read as usize;
     }
-    unsafe {
-        crate::ndk_sys::AAsset_close(asset);
-    }
-
-    if offset != bytes.len() {
-        return Err(io::Error::new(
-            io::ErrorKind::UnexpectedEof,
-            format!("incomplete asset: {path}"),
-        ));
-    }
-    Ok(Arc::from(bytes))
 }

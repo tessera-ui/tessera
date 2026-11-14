@@ -93,6 +93,7 @@ lyon_geom = "1.0.19"
 lyon_path = "1.0.19"
 lyon_tessellation = "1.0"
 material-color-utilities = "1.0.0-dev.18"
+memmap2 = "0.9"
 ndk-context = "0.1.1"
 ndk-sys = "0.6"
 objc2 = { version = "0.6.5", default-features = false }

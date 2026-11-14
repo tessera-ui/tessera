@@ -7456,6 +7456,7 @@ dependencies = [
  "jni 0.21.1",
  "js-sys",
  "libc",
+ "memmap2",
  "ndk-context",
  "ndk-sys",
  "objc2 0.6.5",

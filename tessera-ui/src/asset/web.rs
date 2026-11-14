@@ -1,10 +1,12 @@
-use std::{io, sync::Arc};
+use std::io;
 
 use js_sys::Uint8Array;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
-pub(super) async fn read(path: &str) -> io::Result<Arc<[u8]>> {
+use super::Bytes;
+
+pub(super) async fn read(path: &str) -> io::Result<Bytes> {
     let window = web_sys::window().ok_or_else(|| io::Error::other("missing window"))?;
     let base = window
         .document()
@@ -34,7 +36,7 @@ pub(super) async fn read(path: &str) -> io::Result<Arc<[u8]>> {
     let buffer = JsFuture::from(response.array_buffer().map_err(js_error)?)
         .await
         .map_err(js_error)?;
-    Ok(Arc::from(Uint8Array::new(&buffer).to_vec()))
+    Ok(Uint8Array::new(&buffer).to_vec().into())
 }
 
 fn js_error(error: JsValue) -> io::Error {

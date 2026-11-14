@@ -67,9 +67,9 @@ pub struct FontAsset {
 
 /// Bytes read from a [`Source`] and passed to a resource decoder.
 ///
-/// Embedded assets are borrowed from the application binary instead of being
-/// copied. Retaining the handle in a decoded value keeps the data available
-/// without a second allocation.
+/// Packaged assets are borrowed from the application binary or its read-only
+/// resources instead of being copied. Retaining the handle in a decoded value
+/// keeps the data available without a second allocation.
 #[derive(Clone)]
 pub struct Bytes(BytesData);
 
@@ -77,6 +77,11 @@ pub struct Bytes(BytesData);
 enum BytesData {
     Static(&'static [u8]),
     Shared(Arc<[u8]>),
+    Owned(Arc<Vec<u8>>),
+    #[cfg(not(any(target_family = "wasm", target_os = "android")))]
+    Mapped(Arc<memmap2::Mmap>),
+    #[cfg(target_os = "android")]
+    Android(Arc<android::AssetBuffer>),
 }
 
 impl Deref for Bytes {
@@ -86,6 +91,11 @@ impl Deref for Bytes {
         match &self.0 {
             BytesData::Static(bytes) => bytes,
             BytesData::Shared(bytes) => bytes,
+            BytesData::Owned(bytes) => bytes,
+            #[cfg(not(any(target_family = "wasm", target_os = "android")))]
+            BytesData::Mapped(bytes) => bytes,
+            #[cfg(target_os = "android")]
+            BytesData::Android(bytes) => bytes.bytes(),
         }
     }
 }
@@ -116,7 +126,7 @@ impl From<Arc<[u8]>> for Bytes {
 
 impl From<Vec<u8>> for Bytes {
     fn from(bytes: Vec<u8>) -> Self {
-        Self(BytesData::Shared(bytes.into()))
+        Self(BytesData::Owned(Arc::new(bytes)))
     }
 }
 
@@ -376,11 +386,9 @@ impl Source {
                 bytes: Some(bytes), ..
             }) => Ok((*bytes).into()),
             #[cfg(target_os = "android")]
-            Self::Asset(asset) => android::read(asset.path).map(Bytes::from),
+            Self::Asset(asset) => android::read(asset.path),
             #[cfg(not(target_os = "android"))]
-            Self::Asset(asset) => native::path(asset.path)
-                .and_then(std::fs::read)
-                .map(Bytes::from),
+            Self::Asset(asset) => native::map(asset.path),
             Self::Memory(bytes) => Ok(Arc::clone(bytes).into()),
         }
     }
@@ -391,7 +399,7 @@ impl Source {
             Self::Asset(Asset {
                 bytes: Some(bytes), ..
             }) => Ok((*bytes).into()),
-            Self::Asset(asset) => web::read(asset.path).await.map(Bytes::from),
+            Self::Asset(asset) => web::read(asset.path).await,
             Self::Memory(bytes) => Ok(Arc::clone(bytes).into()),
         }
     }
@@ -458,6 +466,25 @@ mod tests {
                 LoadState::Failed(_)
             ));
         });
+    }
+
+    #[cfg(not(any(target_family = "wasm", target_os = "android")))]
+    #[test]
+    fn platform_assets_are_mapped_from_the_resource_directory() {
+        let resources = std::env::current_exe()
+            .expect("test executable")
+            .with_extension("resources");
+        let file = resources.join("mapped-test-asset");
+        std::fs::create_dir_all(&resources).expect("resource directory");
+        std::fs::write(&file, b"platform").expect("platform asset");
+        let bytes = Source::Asset(Asset::platform("mapped-test-asset"))
+            .read()
+            .expect("platform asset");
+        assert_eq!(&*bytes, b"platform");
+        assert!(matches!(bytes.0, BytesData::Mapped(_)));
+        drop(bytes);
+        std::fs::remove_file(&file).expect("remove platform asset");
+        let _ = std::fs::remove_dir(&resources);
     }
 
     #[cfg(not(target_family = "wasm"))]
