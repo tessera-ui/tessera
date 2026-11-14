@@ -4,14 +4,22 @@
 //! [`FontStylesheet`] at its entry. Web builds bundle a startup font and load
 //! additional fonts from a CDN.
 
+#[cfg(target_family = "wasm")]
+mod web;
+
 use std::{borrow::Cow, cell::RefCell, io, rc::Rc, sync::Arc};
 
 use glyphon::fontdb::{self, Database, FaceInfo};
-use tessera_ui::{EntryRegistry, LoadState, Resource, Source, TesseraPackage, asset::Bytes};
+use tessera_ui::{
+    Asset, Dispatcher, EntryRegistry, LoadState, Resource, TesseraPackage, asset::Bytes, on,
+};
 
 pub use tessera_ui::FontAsset as Font;
 
 use crate::pipelines::text::pipeline::write_font_system;
+
+#[cfg(target_family = "wasm")]
+use web::fetch;
 
 /// An entry package supplying fonts on demand.
 pub struct Fonts(
@@ -22,6 +30,9 @@ pub struct Fonts(
 /// An entry package supplying the fonts declared by a CSS stylesheet's
 /// `@font-face` rules, such as a web font CDN. Each rule's file is fetched when
 /// text uses a character in its `unicode-range`.
+///
+/// Remote fonts are available on the web. Other platforms report the
+/// stylesheet as unavailable; package fonts with [`Fonts`] instead.
 pub struct FontStylesheet(
     /// Stylesheet URL.
     pub &'static str,
@@ -36,7 +47,7 @@ impl TesseraPackage for Fonts {
             if !registry
                 .sources
                 .iter()
-                .any(|source| source.source == font.source)
+                .any(|source| source.origin == font.origin)
             {
                 registry.sources.push(font);
             }
@@ -72,9 +83,30 @@ struct FontFace {
     ranges: Vec<(u32, u32)>,
 }
 
+#[derive(Clone, PartialEq)]
+enum FontOrigin {
+    Asset(Asset),
+    Url(Arc<str>),
+}
+
+impl FontOrigin {
+    fn load(&self) -> Resource<Arc<[FaceInfo]>> {
+        match self {
+            Self::Asset(asset) => Resource::load(*asset, parse_font),
+            Self::Url(url) => {
+                let url = Arc::clone(url);
+                Resource::spawn_local(async move {
+                    let bytes = fetch(&url).await?;
+                    on(Dispatcher::Default, async move { parse_font(bytes) }).await
+                })
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 struct FontSource {
-    source: Source,
+    origin: FontOrigin,
     family: Cow<'static, str>,
     fallback: Cow<'static, [(u32, u32)]>,
     coverage: Cow<'static, [(u32, u32)]>,
@@ -83,7 +115,7 @@ struct FontSource {
 impl From<Font> for FontSource {
     fn from(font: Font) -> Self {
         Self {
-            source: font.asset.into(),
+            origin: FontOrigin::Asset(font.asset),
             family: font.family.into(),
             fallback: font.fallback.into(),
             coverage: font.coverage.into(),
@@ -145,7 +177,10 @@ pub(crate) fn prepare(text: &str, family: Option<&'static str>) -> Option<u64> {
     stylesheets.retain_mut(|sheet| {
         match sheet
             .faces
-            .get_or_insert_with(|| Resource::load(sheet.url, parse_stylesheet))
+            .get_or_insert_with(|| {
+                let url = sheet.url;
+                Resource::spawn_local(async move { parse_stylesheet(fetch(url).await?) })
+            })
             .get()
         {
             LoadState::Loading => {
@@ -163,13 +198,13 @@ pub(crate) fn prepare(text: &str, family: Option<&'static str>) -> Option<u64> {
     for font in sources.iter().filter(|font| needed(font, family, text)) {
         let index = match requests
             .iter()
-            .position(|request| request.font.source == font.source)
+            .position(|request| request.font.origin == font.origin)
         {
             Some(index) => index,
             None => {
                 requests.push(FontRequest {
                     font: font.clone(),
-                    faces: Resource::load(font.source.clone(), parse_font),
+                    faces: font.origin.load(),
                     installed: None,
                 });
                 requests.len() - 1
@@ -247,6 +282,14 @@ fn parse_font(bytes: Bytes) -> io::Result<Arc<[FaceInfo]>> {
     Ok(faces)
 }
 
+#[cfg(not(target_family = "wasm"))]
+async fn fetch(url: &str) -> io::Result<Bytes> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        format!("remote font {url} requires the web platform"),
+    ))
+}
+
 fn parse_stylesheet(bytes: Bytes) -> io::Result<Arc<[FontFace]>> {
     let css = std::str::from_utf8(&bytes).map_err(io::Error::other)?;
     Ok(css
@@ -299,7 +342,7 @@ impl FontFace {
             format!("{base}{}", self.src.trim_start_matches("./"))
         };
         FontSource {
-            source: url.into(),
+            origin: FontOrigin::Url(url.into()),
             family: self.family.clone().into(),
             fallback: self.ranges.clone().into(),
             coverage: self.ranges.clone().into(),
@@ -327,13 +370,15 @@ mod tests {
             .iter()
             .map(|face| face.font("https://cdn.test/sans/index.css"))
             .collect::<Vec<_>>();
-        assert!(fonts[0].source == Source::from("https://cdn.test/sans/files/latin.woff2"));
+        assert!(
+            fonts[0].origin == FontOrigin::Url("https://cdn.test/sans/files/latin.woff2".into())
+        );
         assert_eq!(fonts[0].family, "Example Sans");
         assert_eq!(
             *fonts[0].coverage,
             [(0, 0xff), (0x400, 0x4ff), (0x2014, 0x2014)]
         );
-        assert!(fonts[1].source == Source::from("https://cdn.test/other.ttf"));
+        assert!(fonts[1].origin == FontOrigin::Url("https://cdn.test/other.ttf".into()));
         assert_eq!(*fonts[1].coverage, [(0, 0x10ffff)]);
     }
 }

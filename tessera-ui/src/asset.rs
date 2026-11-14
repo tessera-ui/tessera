@@ -9,7 +9,6 @@ use std::{
     hash::{Hash, Hasher},
     io,
     ops::Deref,
-    path::{Path, PathBuf},
     rc::{Rc, Weak},
     sync::Arc,
 };
@@ -47,12 +46,10 @@ pub struct Asset {
 /// Where a resource's bytes come from.
 #[derive(Clone)]
 pub enum Source {
-    /// A generated asset.
+    /// A generated asset packaged with the application.
     Asset(Asset),
-    /// A file path, or a URL on the web.
-    Path(Arc<str>),
-    /// Bytes in memory. Equal bytes share one resource.
-    Bytes(Arc<[u8]>),
+    /// Bytes the application already holds. Equal bytes share one resource.
+    Memory(Arc<[u8]>),
 }
 
 /// A font resource and the Unicode ranges that request it as a fallback.
@@ -345,8 +342,7 @@ impl std::fmt::Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Asset(asset) => asset.fmt(f),
-            Self::Path(path) => path.fmt(f),
-            Self::Bytes(bytes) => write!(f, "{} bytes", bytes.len()),
+            Self::Memory(bytes) => write!(f, "{} bytes", bytes.len()),
         }
     }
 }
@@ -355,8 +351,7 @@ impl PartialEq for Source {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Asset(a), Self::Asset(b)) => a == b,
-            (Self::Path(a), Self::Path(b)) => a == b,
-            (Self::Bytes(a), Self::Bytes(b)) => Arc::ptr_eq(a, b) || a == b,
+            (Self::Memory(a), Self::Memory(b)) => Arc::ptr_eq(a, b) || a == b,
             _ => false,
         }
     }
@@ -368,8 +363,7 @@ impl Hash for Source {
         std::mem::discriminant(self).hash(state);
         match self {
             Self::Asset(asset) => asset.hash(state),
-            Self::Path(path) => path.hash(state),
-            Self::Bytes(bytes) => bytes.hash(state),
+            Self::Memory(bytes) => bytes.hash(state),
         }
     }
 }
@@ -387,8 +381,7 @@ impl Source {
             Self::Asset(asset) => native::path(asset.path)
                 .and_then(std::fs::read)
                 .map(Bytes::from),
-            Self::Path(path) => std::fs::read(&**path).map(Bytes::from),
-            Self::Bytes(bytes) => Ok(Arc::clone(bytes).into()),
+            Self::Memory(bytes) => Ok(Arc::clone(bytes).into()),
         }
     }
 
@@ -399,8 +392,7 @@ impl Source {
                 bytes: Some(bytes), ..
             }) => Ok((*bytes).into()),
             Self::Asset(asset) => web::read(asset.path).await.map(Bytes::from),
-            Self::Path(path) => web::read(path).await.map(Bytes::from),
-            Self::Bytes(bytes) => Ok(Arc::clone(bytes).into()),
+            Self::Memory(bytes) => Ok(Arc::clone(bytes).into()),
         }
     }
 }
@@ -417,14 +409,9 @@ macro_rules! source_from {
 
 source_from! {
     Asset => |asset| Self::Asset(asset),
-    &str => |path| Self::Path(path.into()),
-    String => |path| Self::Path(path.into()),
-    Arc<str> => |path| Self::Path(path),
-    &Path => |path| Self::Path(path.to_string_lossy().into()),
-    PathBuf => |path| Self::Path(path.to_string_lossy().into()),
-    &[u8] => |bytes| Self::Bytes(bytes.into()),
-    Vec<u8> => |bytes| Self::Bytes(bytes.into()),
-    Arc<[u8]> => |bytes| Self::Bytes(bytes),
+    &[u8] => |bytes| Self::Memory(bytes.into()),
+    Vec<u8> => |bytes| Self::Memory(bytes.into()),
+    Arc<[u8]> => |bytes| Self::Memory(bytes),
 }
 
 #[cfg(test)]
@@ -446,8 +433,6 @@ mod tests {
     #[cfg(not(any(target_family = "wasm", target_os = "android")))]
     #[test]
     fn sources_decode_off_the_ui_thread_and_share_live_results() {
-        let file = tempfile::NamedTempFile::new().expect("new succeeds in the test fixture");
-        std::fs::write(file.path(), b"file").expect("path succeeds in the test fixture");
         crate::RuntimeSession::new().run(|| {
             static EMBEDDED: &[u8] = b"original";
             let asset = Asset::embedded("test/shared", EMBEDDED);
@@ -466,10 +451,6 @@ mod tests {
             let memory = Resource::load(b"bytes".to_vec(), upper);
             assert_eq!(memory, Resource::load(&b"bytes"[..], upper));
             assert!(matches!(delivered(&memory), LoadState::Ready(bytes) if &*bytes == b"BYTES"));
-            let LoadState::Ready(bytes) = delivered(&Resource::load(file.path(), Ok)) else {
-                panic!("file")
-            };
-            assert_eq!(&*bytes, b"file");
             assert!(matches!(
                 delivered(&Resource::<()>::load(asset, |_| Err(io::Error::other(
                     "invalid"

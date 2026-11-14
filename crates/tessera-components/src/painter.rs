@@ -3,11 +3,7 @@
 //! ## Usage
 //!
 //! Pass one painter value into image-like and icon-like components.
-use std::{
-    io,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{io, sync::Arc};
 
 use tessera_ui::{Asset, LoadState, Resource, Source, asset::Bytes};
 
@@ -62,17 +58,7 @@ macro_rules! painter_from_source {
     )*};
 }
 
-painter_from_source!(
-    Source,
-    Asset,
-    &str,
-    String,
-    &Path,
-    PathBuf,
-    &[u8],
-    Vec<u8>,
-    Arc<[u8]>
-);
+painter_from_source!(Source, Asset, &[u8], Vec<u8>, Arc<[u8]>);
 
 impl Painter {
     pub(crate) fn resolve(self) -> Option<Self> {

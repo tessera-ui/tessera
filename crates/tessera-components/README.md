@@ -186,7 +186,7 @@ offscreen.
 
 `text`, `text_input`, and `text_field` accept typography through `.style(...)`.
 Text uses system fonts; web builds load them from a CDN. Register `Fonts` or
-`FontStylesheet` at the entry for custom fonts. `MaterialTypography` supplies font weight and letter spacing as well
+`FontStylesheet` (web) at the entry for custom fonts. `MaterialTypography` supplies font weight and letter spacing as well
 as size and line height. Use `theme.typography.emphasized()` to obtain the
 emphasized type scale. Custom `TextStyle` literals should inherit a theme role or
 include `..Default::default()` to initialize the additional font properties.

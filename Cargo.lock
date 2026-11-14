@@ -7277,6 +7277,7 @@ dependencies = [
  "etagere",
  "glam",
  "image",
+ "js-sys",
  "lru 0.19.0",
  "lyon_geom",
  "lyon_path",
@@ -7295,6 +7296,9 @@ dependencies = [
  "unicode-linebreak",
  "unicode-segmentation",
  "usvg",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "wuff",
 ]
 
