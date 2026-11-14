@@ -130,12 +130,12 @@ impl RenderCore {
             required_features,
             required_limits: required_limits.clone(),
             label: None,
-            // Fixed blocks keep upload heaps from growing after transient staging,
-            // and are large enough that full-window MSAA and stencil targets are
-            // suballocated, so resizes reuse heap memory instead of creating
-            // dedicated heaps.
+            // Fixed blocks keep upload heaps from growing after transient staging.
+            // They stay small because retained target sizes already make
+            // full-window reallocations rare; larger blocks reserve memory at idle
+            // and stay fragmented after resizes.
             memory_hints: wgpu::MemoryHints::Manual {
-                suballocated_device_memory_block_size: 64 << 20..64 << 20,
+                suballocated_device_memory_block_size: 8 << 20..8 << 20,
             },
             trace: wgpu::Trace::Off,
             experimental_features: wgpu::ExperimentalFeatures::default(),
