@@ -63,7 +63,7 @@ cargo tessera ios build -p my-app --release --device \
 `resources`，路径相对于包目录。
 `IPHONEOS_DEPLOYMENT_TARGET` 可覆盖默认的 iOS 15 最低版本。
 
-### Android 构建（实验性）
+### Android 构建
 
 请确保已安装 Android SDK/NDK，并且 `adb` 已加入 PATH。
 

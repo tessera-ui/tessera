@@ -138,8 +138,6 @@ Vulkan SDK 是**可选的**。仅当您需要进行着色器验证或调试时�
   - 构建：`cargo tessera android build --format apk`
 - **Nix 用户**: 安卓开发 shell (`nix develop .#android`) 已预配置 Android SDK/NDK 和常用工具。
 
-请注意，安卓支持仍处于实验阶段，您可能会遇到一些问题。
-
 ## 文档贡献规范
 
 为了确保文档的清晰和一致性，保证项目的协作可能，请遵循以下规范：

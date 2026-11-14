@@ -239,7 +239,7 @@ resources = "ios/resources"
 
 Set `IPHONEOS_DEPLOYMENT_TARGET` to override the default iOS 15 minimum.
 
-### Build for Android (experimental)
+### Build for Android
 
 Make sure Android SDK/NDK are installed and `adb` is available in your PATH.
 

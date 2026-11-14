@@ -166,8 +166,6 @@ Building for Android requires some specific considerations due to the limitation
 
 - **Nix Users**: The Android development shell (`nix develop .#android`) comes with `xbuild` pre-configured.
 
-Please note that Android support is still experimental and you might encounter issues.
-
 ## License
 
 We assume that your contributions follow the project's dual-license terms. This project is dual-licensed under the [MIT License](LICENSE-MIT) or the [Apache License 2.0](LICENSE-APACHE). You can choose either license.
