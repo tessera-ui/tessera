@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "A cross-platform declarative & functional UI library for rust, focused on performance and extensibility."
+description = "A fast, GPU-first Rust UI framework that is declarative and reactive."
 readme = "../README.md"
 
 [features]

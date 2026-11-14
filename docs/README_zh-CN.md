@@ -13,7 +13,7 @@
 [![CI][ci-badge]][ci-url]
 ![License](https://img.shields.io/badge/License-MIT%2FApache%202.0-blue.svg?style=for-the-badge)
 
-tessera 是一个专注于性能与可扩展性的跨平台 UI 库。
+快速、GPU 优先的 Rust UI 框架，声明式且响应式。
 
 </div>
 
@@ -28,94 +28,66 @@ tessera 是一个专注于性能与可扩展性的跨平台 UI 库。
 
 ## 特性
 
-- 简单，易用的声明式、函数式编程模型
-- 基于约束的布局系统
-- 实现任意视觉效果(自定义着色器的原生支持)
-- 独立的基本组件库(包括text_input，scrollable和更多)
-- 基于句柄的布局与测量 API
-- 跨平台支持（TODO：移动端和平台特定功能）
-- 现代化性能分析系统
+- **[跨平台支持](https://tessera-ui.github.io/zhHans/guide/platforms)**：支持 Windows、macOS、Linux、Android、iOS 和 Web。
+- **[平台插件](https://tessera-ui.github.io/zhHans/guide/plugins)**：编写平台插件，调用平台特有的 API。
+- **[响应式](https://tessera-ui.github.io/zhHans/guide/state)**：无需维护复杂的状态通知。
+- **[自定义着色器](https://tessera-ui.github.io/zhHans/guide/drawing)**：用插件式着色器编写一切效果，内置组件库也不例外。
+- **[现代的脚手架](https://tessera-ui.github.io/zhHans/guide/cli)**：仅需 `cargo-tessera` 便可完成一切操作。
+- **[纯粹的 Rust](https://tessera-ui.github.io/zhHans/guide/thinking-in-tessera)**：纯粹的 Rust 语法，0% RSX。
 
 如果您在使用过程中遇到任何问题，请随时[提交 issue](https://github.com/tessera-ui/tessera/issues)。
 
-## 概览
-
-- [体验 Web 示例](https://tessera-ui.github.io/tessera/example/)
-
-tessera 采用采用声明式编程范式，设计灵感来自于现代 UI 框架，如 react 和 compose。
-
-我们从声明一个 UI 组件开始：
-
-```rust
-use tessera_ui::tessera;
-
-#[tessera]
-fn app() {
-    // 组件逻辑
-}
-```
-
-编写它的ui逻辑
+## 写一个函数，剩下的交给 Tessera 绘制
 
 ```rust
 use tessera_components::{
+    alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::column,
-    md3::{button::button, surface::surface, text::text},
+    md3::{button::button, surface::surface, text::text, theme::material_theme},
 };
 use tessera_foundation::modifier::ModifierExt as _;
-use tessera_ui::{Modifier, tessera};
+use tessera_ui::{Dp, Modifier, remember, tessera};
 
 #[tessera]
-fn app() {
-    surface()
-        .modifier(Modifier::new().fill_max_size())
-        .child(|| {
-            column().children(|| {
-                button().filled().on_click(|| {}).child(|| {
-                    text("+");
-                });
-                text("Count: 0");
-                button().filled().on_click(|| {}).child(|| {
-                    text("-");
-                });
-            });
-        });
-}
-```
-
-下一步，为了实际实现counter我们需要使用remember功能记忆计数器的状态
-
-```rust
-use tessera_components::{
-    column::column,
-    md3::{button::button, surface::surface, text::text},
-};
-use tessera_foundation::modifier::ModifierExt as _;
-use tessera_ui::{Modifier, remember, tessera};
-
-#[tessera]
-fn app() {
+pub fn app() {
     let count = remember(|| 0i32);
-    surface()
-        .modifier(Modifier::new().fill_max_size())
-        .child(move || {
-            column().children(move || {
-                button()
-                    .filled()
-                    .on_click(move || count.with_mut(|c| *c += 1))
-                    .child(|| text("+"));
-                let label = format!("Count: {}", count.get());
-                text(label);
-                button()
-                    .filled()
-                    .on_click(move || count.with_mut(|c| *c -= 1))
-                    .child(|| text("-"));
+
+    material_theme().child(move || {
+        surface()
+            .modifier(Modifier::new().fill_max_size())
+            .child(move || {
+                column()
+                    .modifier(Modifier::new().fill_max_size())
+                    .main_axis_alignment(MainAxisAlignment::Center)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move || {
+                        text(count.get().to_string()).size(Dp(40.0));
+                        button()
+                            .filled()
+                            .on_click(move || count.with_mut(|c| *c += 1))
+                            .child(|| text("Increment"));
+                    });
             });
-        });
+    });
 }
 ```
 
-这就是一个完整的计数器应用程序！进一步的细节请参考[快速开始指南](https://tessera-ui.github.io/zhHans/guide/getting-started.html)。
+界面是关于状态的 Rust 函数。Tessera 按需执行它们来构建每帧，并通过 GPU 在
+Vulkan、Metal、DirectX 12 或 WebGPU 上绘制。没有 HTML，没有 CSS，没有 WebView。
+
+调用组件会登记一次 UI 使用，并返回带类型的配置句柄。句柄、延迟子内容和执行顺序详见
+[组件调用](COMPONENT_CALLS.md)。
+
+## 创建项目
+
+```sh
+cargo install cargo-tessera
+cargo tessera new my-app
+cd my-app && cargo tessera dev
+```
+
+更多内容请参考[快速开始指南](https://tessera-ui.github.io/zhHans/guide/getting-started)，
+或[体验 Web 示例](https://tessera-ui.github.io/tessera/example/)。
 
 ## 贡献
 

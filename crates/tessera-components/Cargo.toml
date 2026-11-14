@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Basic components for tessera-ui, using md3e design principles."
+description = "Official components for tessera-ui, including Material Design 3."
 build = "build.rs"
 
 [package.metadata.tessera.release]

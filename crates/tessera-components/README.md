@@ -1,4 +1,4 @@
-# Tessera basic components
+# Tessera components
 
 [![简体中文][readme-cn-badge]][readme-cn-url]
 

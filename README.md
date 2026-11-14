@@ -13,7 +13,7 @@
 [![CI][ci-badge]][ci-url]
 ![License](https://img.shields.io/badge/License-MIT%2FApache%202.0-blue.svg?style=for-the-badge)
 
-Tessera is a cross-platform UI library focused on performance and extensibility.
+A fast, GPU-first Rust UI framework that is declarative and reactive.
 
 </div>
 
@@ -28,61 +28,68 @@ Tessera is a cross-platform UI library focused on performance and extensibility.
 
 ## Features
 
-- Simple, easy-to-use declarative and functional programming model
-- Constraint-based layout system
-- Achieve any visual effect (native support for custom shaders)
-- Standalone basic component library (including `text_input`, `scrollable`, and more)
-- Handle-based layout and measurement API
-- Cross-platform support(TODO for mobile and platform-specific features)
-- Modern performance profiling system
+- **[Cross-platform](https://tessera-ui.github.io/guide/platforms)**: runs on Windows, macOS, Linux, Android, iOS and the web.
+- **[Platform plugins](https://tessera-ui.github.io/guide/plugins)**: write a platform plugin to call APIs only one platform has.
+- **[Reactive](https://tessera-ui.github.io/guide/state)**: no state notifications to keep in sync by hand.
+- **[Bring your own shader](https://tessera-ui.github.io/guide/drawing)**: every effect is a pluggable shader, the built-in component library included.
+- **[Modern scaffolding](https://tessera-ui.github.io/guide/cli)**: `cargo-tessera` is all you need, for everything.
+- **[Pure Rust](https://tessera-ui.github.io/guide/thinking-in-tessera)**: plain Rust syntax, 0% RSX.
 
 If you encounter any issues, please feel free to [submit an issue](https://github.com/tessera-ui/tessera/issues).
 
-## Overview
-
-- [Try the Web Demo](https://tessera-ui.github.io/tessera/example/)
-
-Tessera uses a declarative programming paradigm inspired by modern UI frameworks such as React and Compose.
-
-Calling a component registers one UI use and returns a typed configuration
-handle. Chain setters or save the handle and configure it before execution;
-declaration order follows entry calls. The runtime expands component bodies
-during build, before layout and drawing. Pass deferred child content through
-`RenderSlot` closures. See [component calls](docs/COMPONENT_CALLS.md).
-
-Use `remember` to store state in a counter:
+## Write a function. Tessera draws the rest.
 
 ```rust
 use tessera_components::{
+    alignment::{CrossAxisAlignment, MainAxisAlignment},
     column::column,
-    md3::{button::button, surface::surface, text::text},
+    md3::{button::button, surface::surface, text::text, theme::material_theme},
 };
 use tessera_foundation::modifier::ModifierExt as _;
-use tessera_ui::{Modifier, remember, tessera};
+use tessera_ui::{Dp, Modifier, remember, tessera};
 
 #[tessera]
-fn app() {
+pub fn app() {
     let count = remember(|| 0i32);
-    surface()
-        .modifier(Modifier::new().fill_max_size())
-        .child(move || {
-            column().children(move || {
-                button()
-                    .filled()
-                    .on_click(move || count.with_mut(|c| *c += 1))
-                    .child(|| text("+"));
-                let label = format!("Count: {}", count.get());
-                text(label);
-                button()
-                    .filled()
-                    .on_click(move || count.with_mut(|c| *c -= 1))
-                    .child(|| text("-"));
+
+    material_theme().child(move || {
+        surface()
+            .modifier(Modifier::new().fill_max_size())
+            .child(move || {
+                column()
+                    .modifier(Modifier::new().fill_max_size())
+                    .main_axis_alignment(MainAxisAlignment::Center)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move || {
+                        text(count.get().to_string()).size(Dp(40.0));
+                        button()
+                            .filled()
+                            .on_click(move || count.with_mut(|c| *c += 1))
+                            .child(|| text("Increment"));
+                    });
             });
-        });
+    });
 }
 ```
 
-This is a complete counter application! For more details, please refer to the [Quick Start Guide](https://tessera-ui.github.io/guide/getting-started.html).
+The UI is a Rust function of state. Tessera runs these functions as needed to
+build each frame, then draws it on the GPU using Vulkan, Metal, DirectX 12 or
+WebGPU. No HTML, no CSS, no WebView.
+
+Calling a component registers one UI use and returns a typed configuration
+handle. See [component calls](docs/COMPONENT_CALLS.md) for how handles,
+deferred child content, and execution order work.
+
+## Start a project
+
+```sh
+cargo install cargo-tessera
+cargo tessera new my-app
+cd my-app && cargo tessera dev
+```
+
+See the [getting started guide](https://tessera-ui.github.io/guide/getting-started)
+for more, or [try the web demo](https://tessera-ui.github.io/tessera/example/).
 
 ## Contributing
 
