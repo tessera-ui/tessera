@@ -81,7 +81,6 @@ structopt = { workspace = true, optional = true }
 textwrap = { workspace = true, features = ["terminal_size"] }
 thiserror.workspace = true
 toml = { workspace = true, features = ["preserve_order"] }
-which.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
@@ -97,6 +96,9 @@ ureq = { workspace = true, features = ["gzip"] }
 
 [target."cfg(unix)".dependencies]
 libc.workspace = true
+
+[target."cfg(windows)".dependencies]
+which.workspace = true
 
 [target."cfg(windows)".dependencies.windows]
 workspace = true

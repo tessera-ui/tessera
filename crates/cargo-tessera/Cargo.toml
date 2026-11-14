@@ -74,6 +74,5 @@ windows-sys = { version = "0.61.2", features = ["Win32_System_Pipes"] }
 libc = "0.2.191"
 
 [dev-dependencies]
-tessera-components = { path = "../tessera-components", version = "2.7.0" }
 tessera-foundation = { path = "../tessera-foundation", version = "0.1.0" }
 tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
