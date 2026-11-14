@@ -216,6 +216,11 @@ jobs:
           toolchain: stable
           components: rust-src, rust-analyzer
           target: aarch64-linux-android,x86_64-linux-android
+      # The generated Gradle 8.14 project does not run on newer default JDKs.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         id: setup-ndk
