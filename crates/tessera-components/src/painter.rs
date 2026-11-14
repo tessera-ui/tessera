@@ -9,7 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use tessera_ui::{Asset, LoadState, Resource, Source};
+use tessera_ui::{Asset, LoadState, Resource, Source, asset::Bytes};
 
 use crate::{
     image::{ImageData, decode_raster},
@@ -87,7 +87,7 @@ impl Painter {
     }
 }
 
-fn decode(bytes: Arc<[u8]>) -> io::Result<Decoded> {
+fn decode(bytes: Bytes) -> io::Result<Decoded> {
     decode_vector(&bytes)
         .map(Decoded::Vector)
         .or_else(|vector| {

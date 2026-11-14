@@ -7,7 +7,7 @@
 use std::{borrow::Cow, cell::RefCell, io, rc::Rc, sync::Arc};
 
 use glyphon::fontdb::{self, Database, FaceInfo};
-use tessera_ui::{EntryRegistry, LoadState, Resource, Source, TesseraPackage};
+use tessera_ui::{EntryRegistry, LoadState, Resource, Source, TesseraPackage, asset::Bytes};
 
 pub use tessera_ui::FontAsset as Font;
 
@@ -230,8 +230,8 @@ fn needed(font: &FontSource, family: Option<&str>, text: &str) -> bool {
         })
 }
 
-fn parse_font(bytes: Arc<[u8]>) -> io::Result<Arc<[FaceInfo]>> {
-    let bytes: Arc<[u8]> = if bytes.starts_with(b"wOF2") {
+fn parse_font(bytes: Bytes) -> io::Result<Arc<[FaceInfo]>> {
+    let bytes = if bytes.starts_with(b"wOF2") {
         wuff::decompress_woff2(&bytes)
             .map_err(|error| io::Error::other(format!("{error:?}")))?
             .into()
@@ -247,7 +247,7 @@ fn parse_font(bytes: Arc<[u8]>) -> io::Result<Arc<[FaceInfo]>> {
     Ok(faces)
 }
 
-fn parse_stylesheet(bytes: Arc<[u8]>) -> io::Result<Arc<[FontFace]>> {
+fn parse_stylesheet(bytes: Bytes) -> io::Result<Arc<[FontFace]>> {
     let css = std::str::from_utf8(&bytes).map_err(io::Error::other)?;
     Ok(css
         .split("@font-face")
@@ -322,7 +322,7 @@ mod tests {
             }
             @font-face { font-family: "Other"; src: url("https://cdn.test/other.ttf"); }
         "#;
-        let fonts = parse_stylesheet(Arc::from(&css[..]))
+        let fonts = parse_stylesheet(Bytes::from(&css[..]))
             .unwrap()
             .iter()
             .map(|face| face.font("https://cdn.test/sans/index.css"))

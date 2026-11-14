@@ -7,6 +7,7 @@ use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
     io,
+    ops::Deref,
     path::{Path, PathBuf},
     rc::{Rc, Weak},
     sync::Arc,
@@ -66,6 +67,61 @@ pub struct FontAsset {
     pub coverage: &'static [(u32, u32)],
 }
 
+/// Bytes read from a [`Source`] and passed to a resource decoder.
+///
+/// Embedded assets are borrowed from the application binary instead of being
+/// copied. Retaining the handle in a decoded value keeps the data available
+/// without a second allocation.
+#[derive(Clone)]
+pub struct Bytes(BytesData);
+
+#[derive(Clone)]
+enum BytesData {
+    Static(&'static [u8]),
+    Shared(Arc<[u8]>),
+}
+
+impl Deref for Bytes {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        match &self.0 {
+            BytesData::Static(bytes) => bytes,
+            BytesData::Shared(bytes) => bytes,
+        }
+    }
+}
+
+impl AsRef<[u8]> for Bytes {
+    fn as_ref(&self) -> &[u8] {
+        self
+    }
+}
+
+impl std::fmt::Debug for Bytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} bytes", self.len())
+    }
+}
+
+impl From<&'static [u8]> for Bytes {
+    fn from(bytes: &'static [u8]) -> Self {
+        Self(BytesData::Static(bytes))
+    }
+}
+
+impl From<Arc<[u8]>> for Bytes {
+    fn from(bytes: Arc<[u8]>) -> Self {
+        Self(BytesData::Shared(bytes))
+    }
+}
+
+impl From<Vec<u8>> for Bytes {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self(BytesData::Shared(bytes.into()))
+    }
+}
+
 /// A shared resource lifetime. Retain it while observing its loading state.
 #[derive(Clone)]
 pub struct Resource<T: 'static>(Rc<ResourceEntry<T>>);
@@ -96,7 +152,7 @@ impl<T: Clone + Send + 'static> Resource<T> {
     /// returned handle while using the resource; live requests for the same
     /// source and decoder share one result, and completion invalidates the
     /// builds and measurements that observed it.
-    pub fn load(source: impl Into<Source>, decode: fn(Arc<[u8]>) -> io::Result<T>) -> Self {
+    pub fn load(source: impl Into<Source>, decode: fn(Bytes) -> io::Result<T>) -> Self {
         let source = source.into();
         let cache = local_runtime_resource::<ResourceCache<T>>();
         let key = (source.clone(), decode as usize);
@@ -277,31 +333,31 @@ impl Hash for Source {
 
 impl Source {
     #[cfg(not(target_family = "wasm"))]
-    fn read(&self) -> io::Result<Arc<[u8]>> {
+    fn read(&self) -> io::Result<Bytes> {
         match self {
             Self::Asset(Asset {
                 bytes: Some(bytes), ..
-            }) => Ok(Arc::from(*bytes)),
+            }) => Ok((*bytes).into()),
             #[cfg(target_os = "android")]
-            Self::Asset(asset) => android::read(asset.path),
+            Self::Asset(asset) => android::read(asset.path).map(Bytes::from),
             #[cfg(not(target_os = "android"))]
             Self::Asset(asset) => native::path(asset.path)
                 .and_then(std::fs::read)
-                .map(Arc::from),
-            Self::Path(path) => std::fs::read(&**path).map(Arc::from),
-            Self::Bytes(bytes) => Ok(Arc::clone(bytes)),
+                .map(Bytes::from),
+            Self::Path(path) => std::fs::read(&**path).map(Bytes::from),
+            Self::Bytes(bytes) => Ok(Arc::clone(bytes).into()),
         }
     }
 
     #[cfg(target_family = "wasm")]
-    async fn read(&self) -> io::Result<Arc<[u8]>> {
+    async fn read(&self) -> io::Result<Bytes> {
         match self {
             Self::Asset(Asset {
                 bytes: Some(bytes), ..
-            }) => Ok(Arc::from(*bytes)),
-            Self::Asset(asset) => web::read(asset.path).await,
-            Self::Path(path) => web::read(path).await,
-            Self::Bytes(bytes) => Ok(Arc::clone(bytes)),
+            }) => Ok((*bytes).into()),
+            Self::Asset(asset) => web::read(asset.path).await.map(Bytes::from),
+            Self::Path(path) => web::read(path).await.map(Bytes::from),
+            Self::Bytes(bytes) => Ok(Arc::clone(bytes).into()),
         }
     }
 }
@@ -339,7 +395,7 @@ mod tests {
         resource.get()
     }
 
-    fn upper(bytes: Arc<[u8]>) -> io::Result<Arc<[u8]>> {
+    fn upper(bytes: Bytes) -> io::Result<Arc<[u8]>> {
         assert_eq!(std::thread::current().name(), Some("tessera-io"));
         Ok(Arc::from(bytes.to_ascii_uppercase()))
     }
@@ -350,7 +406,14 @@ mod tests {
         let file = tempfile::NamedTempFile::new().expect("new succeeds in the test fixture");
         std::fs::write(file.path(), b"file").expect("path succeeds in the test fixture");
         crate::RuntimeSession::new().run(|| {
-            let asset = Asset::embedded("test/shared", b"original");
+            static EMBEDDED: &[u8] = b"original";
+            let asset = Asset::embedded("test/shared", EMBEDDED);
+            let LoadState::Ready(address) =
+                delivered(&Resource::load(asset, |bytes| Ok(bytes.as_ptr() as usize)))
+            else {
+                panic!("embedded bytes")
+            };
+            assert_eq!(address, EMBEDDED.as_ptr() as usize);
             let decoded = Resource::load(asset, upper);
             let LoadState::Ready(bytes) = delivered(&decoded) else {
                 panic!("decoded asset")
