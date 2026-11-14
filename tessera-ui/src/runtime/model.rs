@@ -60,12 +60,12 @@ impl ModelScope {
         Self(Rc::new(OwnerLease::new()))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "testing"))]
     pub(crate) fn is_alive(&self) -> bool {
         !self.0.closed.get() && crate::session::is_open(self.0.session)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "testing"))]
     pub(crate) fn close(&self) {
         self.0.close();
     }

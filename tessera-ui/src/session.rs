@@ -124,7 +124,7 @@ pub(crate) fn with_inactive_session<R>(session: u128, access: impl FnOnce() -> R
     Some(output)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "testing"))]
 pub(crate) fn is_open(session: u128) -> bool {
     gate_entry(session).is_some()
 }
