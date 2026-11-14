@@ -110,9 +110,13 @@ pub fn spawn(dispatcher: Dispatcher, future: impl Future<Output = ()> + Send + '
     }
 }
 
-/// Runs a `!Send` future on the current UI session, starting after the current
-/// frame's work.
-pub(crate) fn spawn_local(future: impl Future<Output = ()> + 'static) -> Task {
+/// Runs `future` on the current UI session's thread; dropping the returned
+/// [`Task`] cancels it.
+///
+/// The future may hold values that cannot leave this thread and is first
+/// polled after the current frame's work. Unlike [`crate::launch`], it is not
+/// tied to a component call.
+pub fn spawn_local(future: impl Future<Output = ()> + 'static) -> Task {
     let session = crate::dispatcher::register_current();
     let (abort, future) = abortable(future);
     let schedule = insert_task(Box::pin(future));

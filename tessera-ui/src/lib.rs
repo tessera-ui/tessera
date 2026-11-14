@@ -29,7 +29,7 @@ mod dispatcher;
 mod graphics;
 mod work;
 
-pub use async_dispatch::{Dispatcher, Task, on, spawn, with_frame_time};
+pub use async_dispatch::{Dispatcher, Task, on, spawn, spawn_local, with_frame_time};
 
 mod session;
 pub mod system_back;

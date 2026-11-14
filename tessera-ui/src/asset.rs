@@ -5,6 +5,7 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
+    future::Future,
     hash::{Hash, Hasher},
     io,
     ops::Deref,
@@ -122,19 +123,24 @@ impl From<Vec<u8>> for Bytes {
     }
 }
 
-/// A shared resource lifetime. Retain it while observing its loading state.
+/// A value produced asynchronously and observed by the UI.
+///
+/// Reading [`Resource::get`] during a build or measurement tracks the value;
+/// completion invalidates those readers. Retain the handle while using the
+/// value: dropping the last handle cancels unfinished work.
 #[derive(Clone)]
 pub struct Resource<T: 'static>(Rc<ResourceEntry<T>>);
 
 struct ResourceEntry<T: 'static> {
-    source: Source,
+    label: String,
     _owner: crate::runtime::ModelScope,
     state: State<LoadState<T>>,
+    task: RefCell<Option<crate::Task>>,
 }
 
 impl<T> std::fmt::Debug for Resource<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Resource").field(&self.0.source).finish()
+        f.debug_tuple("Resource").field(&self.0.label).finish()
     }
 }
 
@@ -146,38 +152,70 @@ impl<T> PartialEq for Resource<T> {
 impl<T> Eq for Resource<T> {}
 
 impl<T: Clone + Send + 'static> Resource<T> {
-    /// Requests a decoded resource in the active UI session.
+    /// Reads `source` and decodes it on [`crate::Dispatcher::Io`].
     ///
-    /// Reading and decoding run on [`crate::Dispatcher::Io`]. Retain the
-    /// returned handle while using the resource; live requests for the same
-    /// source and decoder share one result, and completion invalidates the
-    /// builds and measurements that observed it.
+    /// Live requests for the same source and decoder share one result.
     pub fn load(source: impl Into<Source>, decode: fn(Bytes) -> io::Result<T>) -> Self {
         let source = source.into();
         let cache = local_runtime_resource::<ResourceCache<T>>();
         let key = (source.clone(), decode as usize);
-        let resource = {
+        if let Some(entry) = cache.0.borrow().get(&key).and_then(Weak::upgrade) {
+            return Resource(entry);
+        }
+        let resource = Self::pending(format!("{source:?}"));
+        {
             let mut entries = cache.0.borrow_mut();
-            if let Some(entry) = entries.get(&key).and_then(Weak::upgrade) {
-                return Resource(entry);
-            }
             entries.retain(|_, entry| entry.strong_count() > 0);
-            let owner = crate::runtime::ModelScope::new();
-            let state = owner.own_state(LoadState::Loading);
-            let entry = Rc::new(ResourceEntry {
-                source: source.clone(),
-                _owner: owner,
-                state,
-            });
-            entries.insert(key, Rc::downgrade(&entry));
-            Resource(entry)
-        };
-        let state = resource.0.state;
+            entries.insert(key, Rc::downgrade(&resource.0));
+        }
+        #[cfg(target_family = "wasm")]
+        resource.run_local(async move { source.read().await.and_then(decode) });
+        #[cfg(not(target_family = "wasm"))]
+        resource.run(async move { source.read().and_then(decode) });
+        resource
+    }
+
+    /// Produces the value from `future` on [`crate::Dispatcher::Io`].
+    pub fn spawn(future: impl Future<Output = io::Result<T>> + Send + 'static) -> Self {
+        let resource = Self::pending(std::any::type_name::<T>().to_owned());
+        resource.run(future);
+        resource
+    }
+
+    /// Produces the value from `future` on the current UI session's thread.
+    ///
+    /// The future may hold values that cannot leave this thread. Move
+    /// expensive computation to another dispatcher with [`crate::on`].
+    pub fn spawn_local(future: impl Future<Output = io::Result<T>> + 'static) -> Self {
+        let resource = Self::pending(std::any::type_name::<T>().to_owned());
+        resource.run_local(future);
+        resource
+    }
+
+    /// Returns the loading state and tracks it in the current build or
+    /// measurement.
+    pub fn get(&self) -> LoadState<T> {
+        self.0.state.get()
+    }
+
+    fn pending(label: String) -> Self {
+        let owner = crate::runtime::ModelScope::new();
+        let state = owner.own_state(LoadState::Loading);
+        Self(Rc::new(ResourceEntry {
+            label,
+            _owner: owner,
+            state,
+            task: RefCell::new(None),
+        }))
+    }
+
+    fn deliverer(&self) -> impl FnOnce(io::Result<T>) + Send + 'static {
+        let state = self.0.state;
         let session = crate::dispatcher::register_current();
-        let label = format!("{source:?}");
+        let label = self.0.label.clone();
         // Results return through the session queue so a UI thread waiting for
         // loads never blocks the delivery.
-        let deliver = move |result: io::Result<T>| {
+        move |result| {
             crate::dispatcher::dispatch_to_session(session, move || {
                 if !state.is_alive() {
                     return;
@@ -190,29 +228,25 @@ impl<T: Clone + Send + 'static> Resource<T> {
                     }
                 });
             });
-        };
-        #[cfg(target_family = "wasm")]
-        crate::async_dispatch::spawn_local(async move {
-            deliver(source.read().await.and_then(decode));
-        })
-        .detach();
-        #[cfg(not(target_family = "wasm"))]
-        {
-            let in_flight = shared_runtime_resource::<InFlight>();
-            *in_flight.0.lock() += 1;
-            let loading = Loading(in_flight);
-            crate::spawn(crate::Dispatcher::Io, async move {
-                let _loading = loading;
-                deliver(source.read().and_then(decode));
-            })
-            .detach();
         }
-        resource
     }
 
-    /// Observes loading state on the owning UI thread and tracks build or measurement.
-    pub fn get(&self) -> LoadState<T> {
-        self.0.state.get()
+    fn run(&self, future: impl Future<Output = io::Result<T>> + Send + 'static) {
+        let deliver = self.deliverer();
+        #[cfg(not(target_family = "wasm"))]
+        let loading = Loading::start();
+        let task = crate::spawn(crate::Dispatcher::Io, async move {
+            #[cfg(not(target_family = "wasm"))]
+            let _loading = loading;
+            deliver(future.await);
+        });
+        self.0.task.replace(Some(task));
+    }
+
+    fn run_local(&self, future: impl Future<Output = io::Result<T>> + 'static) {
+        let deliver = self.deliverer();
+        let task = crate::spawn_local(async move { deliver(future.await) });
+        self.0.task.replace(Some(task));
     }
 }
 
@@ -230,6 +264,15 @@ struct InFlight(parking_lot::Mutex<usize>, parking_lot::Condvar);
 
 #[cfg(not(target_family = "wasm"))]
 struct Loading(Arc<InFlight>);
+
+#[cfg(not(target_family = "wasm"))]
+impl Loading {
+    fn start() -> Self {
+        let in_flight = shared_runtime_resource::<InFlight>();
+        *in_flight.0.lock() += 1;
+        Self(in_flight)
+    }
+}
 
 #[cfg(not(target_family = "wasm"))]
 impl Drop for Loading {
@@ -433,6 +476,48 @@ mod tests {
                 )))),
                 LoadState::Failed(_)
             ));
+        });
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    fn spawned_values_deliver_on_their_dispatchers_and_stop_with_their_last_handle() {
+        struct Dropped(std::sync::mpsc::Sender<()>);
+        impl Drop for Dropped {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
+            }
+        }
+
+        crate::RuntimeSession::new().run(|| {
+            let background =
+                Resource::spawn(async { Ok(std::thread::current().name().map(str::to_owned)) });
+            assert!(matches!(
+                delivered(&background),
+                LoadState::Ready(Some(name)) if name == "tessera-io"
+            ));
+
+            let ui_thread = std::thread::current().id();
+            let local = Rc::new(7);
+            let value = Resource::spawn_local(async move {
+                assert_eq!(std::thread::current().id(), ui_thread);
+                Ok(*local)
+            });
+            assert!(matches!(value.get(), LoadState::Loading));
+            crate::dispatcher::flush();
+            crate::dispatcher::flush();
+            assert!(matches!(value.get(), LoadState::Ready(7)));
+
+            let (sender, dropped) = std::sync::mpsc::channel();
+            let guard = Dropped(sender);
+            let unfinished = Resource::<()>::spawn(async move {
+                let _guard = guard;
+                std::future::pending().await
+            });
+            drop(unfinished);
+            dropped
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .expect("dropping the last handle cancels the work");
         });
     }
 }
