@@ -12,15 +12,18 @@
     - environment variables
     - handy dev‑shell aliases (e.g. `fmt`)
 
-  Quick start: see “Getting Started with Nix” in README.md or CONTRIBUTING.md.
+  Quick start: see “Getting Started with Nix” in CONTRIBUTING.md.
 */
 {
   description = "Tessera UI dev env (desktop default, Android optional)";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -41,7 +44,16 @@
           config.android_sdk.accept_license = true; # silence license prompt
         };
 
-        rust = pkgs.rust-bin.stable.latest.default;
+        # `cargo tessera check` analyzes the standard library sources.
+        rustWith =
+          targets:
+          pkgs.rust-bin.stable.latest.default.override {
+            extensions = [
+              "rust-src"
+              "rust-analyzer"
+            ];
+            targets = [ "wasm32-unknown-unknown" ] ++ targets;
+          };
 
         gfx = with pkgs; [
           wayland
@@ -54,14 +66,28 @@
           vulkan-headers
         ];
 
-        sharedPkgs = with pkgs; [ rust-script ] ++ gfx;
+        sharedPkgs =
+          with pkgs;
+          [
+            pkg-config
+            openssl
+            rust-script
+            binaryen
+            git-lfs
+          ]
+          ++ gfx;
 
-        # Android payload (only for android shell)
+        # Matches the Android Gradle plugin and NDK used by generated projects.
+        ndkVersion = "28.2.13676358";
         android = pkgs.androidenv.composeAndroidPackages {
           platformVersions = [ "34" ];
-          buildToolsVersions = [ "34.0.0" ];
-          abiVersions = [ "arm64-v8a" ];
+          buildToolsVersions = [ "35.0.0" ];
+          abiVersions = [
+            "arm64-v8a"
+            "x86_64"
+          ];
           includeNDK = true;
+          ndkVersions = [ ndkVersion ];
           includeEmulator = false;
         };
         sdkRoot = "${android.androidsdk}/libexec/android-sdk";
@@ -78,7 +104,7 @@
               root="$PRJ_ROOT"
               echo "Not in git repo, using PRJ_ROOT"
             fi
-            ( cd "$root" && rust-script scripts/check-imports.rs . --fix "$@" )
+            ( cd "$root" && rust-script scripts/check-imports.rs "$@" )
           }
           export -f fmt
         '';
@@ -87,11 +113,7 @@
         devShells = {
           # desktop‑only shell
           default = pkgs.mkShell {
-            buildInputs = [
-              rust
-              pkgs.pkg-config
-            ]
-            ++ sharedPkgs;
+            buildInputs = [ (rustWith [ ]) ] ++ sharedPkgs;
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath gfx;
             shellHook = ''
               echo "Setting up fmt command..."
@@ -103,30 +125,25 @@
           # full blown android shell
           android = pkgs.mkShell {
             buildInputs = [
-              pkgs.rustup
-              pkgs.pkg-config
+              (rustWith [
+                "aarch64-linux-android"
+                "x86_64-linux-android"
+              ])
               android.androidsdk
-              pkgs.cargo-ndk
+              pkgs.jdk21
             ]
             ++ sharedPkgs;
 
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath gfx;
-            PKG_CONFIG_PATH = pkgs.lib.makeSearchPath "lib/pkgconfig" [ pkgs.openssl.dev ];
+            ANDROID_HOME = sdkRoot;
+            ANDROID_NDK_HOME = "${sdkRoot}/ndk/${ndkVersion}";
+            NDK_HOME = "${sdkRoot}/ndk/${ndkVersion}";
+            JAVA_HOME = pkgs.jdk21.home;
 
             shellHook = ''
               echo "Setting up fmt command..."
               ${sharedShellHook}
-
-              echo "Setting up env vars..."
-              export ANDROID_HOME=${sdkRoot}
-              export ANDROID_NDK_HOME=$ANDROID_HOME/ndk-bundle
-              export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
-
-              echo "Setting up rust toolchain..."
-              # ensure a minimal stable toolchain + std‑lib for Android
-              rustup --quiet toolchain install stable || true
-              rustup --quiet target add aarch64-linux-android || true
-
+              export PATH="$PATH:$ANDROID_HOME/platform-tools"
               echo "Android shell ready (adb / NDK / cargo tessera android)."
             '';
           };

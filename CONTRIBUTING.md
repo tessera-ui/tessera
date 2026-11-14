@@ -9,9 +9,8 @@ Thank you for your interest in `tessera`! We welcome all forms of contributions,
 
 ## Development Tools
 
-If you need to contribute code to `tessera`, in addition to the latest nightly Rust, it is highly recommended to install the following tools:
+If you need to contribute code to `tessera`, in addition to the latest stable Rust, it is highly recommended to install the following tools:
 
-- [`xbuild`](https://github.com/rust-mobile/xbuild): We use it to build and test the Android version. In the future, it may also be used for iOS compatibility.
 - [`rust-script`](https://rust-script.org/#installation): We use it to run [some rust scripts](scripts). It is helpful for development.
 
 ## Code Contribution Guidelines
@@ -155,16 +154,14 @@ It is best to pass a markdown lint, but we do not strictly require it. Please en
 
 ## Special Note on Android Builds
 
-Building for Android requires some specific considerations due to the limitations of `NativeActivity`. We use [`xbuild`](https://github.com/rust-mobile/xbuild) to handle the complexity of cross-compilation and packaging.
+Android projects are initialized, run, and built with `cargo tessera android`.
 
-- **Prerequisites**: Ensure you have the Android NDK and SDK correctly set up.
-- **Troubleshooting**: If you encounter issues during an Android build, `xbuild` provides a diagnostic tool. Run the following command to check your environment and identify potential problems:
-
-  ```bash
-  x doctor
-  ```
-
-- **Nix Users**: The Android development shell (`nix develop .#android`) comes with `xbuild` pre-configured.
+- **Prerequisites**: Ensure the Android SDK/NDK and a JDK supported by Gradle 8.14 (17 or 21) are installed, and `adb` is available.
+- **Initialization**: Run `cargo tessera android init` to generate the Gradle project.
+- **Run and build**:
+  - Run: `cargo tessera android dev --device <device_id>`
+  - Build: `cargo tessera android build --format apk`
+- **Nix Users**: The Android development shell (`nix develop .#android`) provides the Android SDK/NDK, JDK, and Rust Android targets.
 
 ## License
 

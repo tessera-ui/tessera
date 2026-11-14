@@ -9,7 +9,7 @@
 
 ## 开发工具
 
-如果您需要为 `tessera` 做代码贡献，除最新 nightly rust 以外，强烈建议安装以下工具:
+如果您需要为 `tessera` 做代码贡献，除最新 stable rust 以外，强烈建议安装以下工具:
 
 - [`rust-script`](https://rust-script.org/#installation) 我们用它来运行[一些 rust 脚本](scripts)。对开发有帮助。
 
@@ -131,12 +131,12 @@ Vulkan SDK 是**可选的**。仅当您需要进行着色器验证或调试时�
 
 由于 `NativeActivity` 的限制，为安卓构建需要一些特殊的考量。当前通过 `cargo tessera android` 进行初始化、构建与运行。
 
-- **先决条件**: 确保您已正确设置 Android SDK/NDK，并且 `adb` 可用。
+- **先决条件**: 确保您已正确设置 Android SDK/NDK 和 Gradle 8.14 支持的 JDK（17 或 21），并且 `adb` 可用。
 - **初始化**: 先执行 `cargo tessera android init` 生成 Gradle 项目。
 - **运行与构建**:
   - 运行：`cargo tessera android dev --device <device_id>`
   - 构建：`cargo tessera android build --format apk`
-- **Nix 用户**: 安卓开发 shell (`nix develop .#android`) 已预配置 Android SDK/NDK 和常用工具。
+- **Nix 用户**: 安卓开发 shell (`nix develop .#android`) 已预配置 Android SDK/NDK、JDK 和 Rust 安卓目标。
 
 ## 文档贡献规范
 

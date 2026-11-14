@@ -1,0 +1,46 @@
+name: Verify Nix shells
+
+on:
+  push:
+    branches:
+      - diag/nix
+
+jobs:
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: git -C crates/tessera-cosmic-text lfs pull
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Lock inputs
+        run: nix flake update
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flake-lock
+          path: flake.lock
+      - name: Desktop shell
+        run: |
+          nix develop --command bash -c '
+            set -e
+            rustc --version
+            cargo --version
+            rust-analyzer --version
+            wasm-opt --version
+            pkg-config --modversion openssl
+            type fmt
+            cargo check -p cargo-tessera -p example
+          '
+      - name: Android shell
+        run: |
+          nix develop .#android --command bash -c '
+            set -e
+            java -version
+            echo "$ANDROID_HOME"
+            ls "$ANDROID_NDK_HOME"
+            ls "$ANDROID_HOME/build-tools" "$ANDROID_HOME/platforms"
+            rustup --version || true
+            ls "$(rustc --print sysroot)/lib/rustlib"
+            cargo run -p cargo-tessera -- tessera android build --format apk -p example --arch arm64
+          '
