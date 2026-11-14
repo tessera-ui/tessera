@@ -58,10 +58,10 @@
         gfx = with pkgs; [
           wayland
           libxkbcommon
-          xorg.libX11
-          xorg.libXcursor
-          xorg.libXrandr
-          xorg.libXi
+          libx11
+          libxcursor
+          libxrandr
+          libxi
           vulkan-loader
           vulkan-headers
         ];
@@ -136,6 +136,8 @@
 
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath gfx;
             ANDROID_HOME = sdkRoot;
+            # Gradle rejects a different inherited SDK location.
+            ANDROID_SDK_ROOT = sdkRoot;
             ANDROID_NDK_HOME = "${sdkRoot}/ndk/${ndkVersion}";
             NDK_HOME = "${sdkRoot}/ndk/${ndkVersion}";
             JAVA_HOME = pkgs.jdk21.home;
