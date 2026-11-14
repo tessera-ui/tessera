@@ -254,6 +254,10 @@ mod tests {
             std::io::stdout().flush().unwrap();
             let mut input = String::new();
             std::io::stdin().read_line(&mut input).unwrap();
+            // On macOS, a thread blocked on stdin can observe EOF while its
+            // process is being killed. Only a process that keeps running
+            // reports that its input closed first.
+            std::thread::sleep(std::time::Duration::from_millis(500));
             println!("worker-eof");
             return;
         }
@@ -283,12 +287,16 @@ mod tests {
                 break;
             }
         }
+        assert!(
+            worker.try_wait().unwrap().is_none(),
+            "worker exited before its owner was dropped"
+        );
         drop(worker);
         let mut remaining = String::new();
         std::io::Read::read_to_string(&mut output, &mut remaining).unwrap();
         assert!(
             !remaining.contains("worker-eof"),
-            "worker outlived its owner"
+            "worker outlived its owner; remaining output:\n{remaining}"
         );
     }
 }
