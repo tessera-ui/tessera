@@ -43,7 +43,12 @@ pub(crate) fn load(
     previous: Option<LoadedWorkspace>,
 ) -> Result<LoadedWorkspace> {
     let root = AbsPathBuf::assert_utf8(env::current_dir()?.join(root));
-    let (messages, checked) = run_cargo_check(options, AsRef::<Path>::as_ref(&root))?;
+    let manifest = ProjectManifest::discover_single(&root)?;
+    let (messages, checked) = run_cargo_check(
+        options,
+        AsRef::<Path>::as_ref(&root),
+        manifest.manifest_path().as_ref(),
+    )?;
     let messages = deterministic_build_script_runs(&messages);
     let mut native_artifacts = Vec::new();
     let mut out_dirs = Vec::new();
@@ -105,7 +110,6 @@ pub(crate) fn load(
         proc_macro_processes: super::worker_count(options.jobs)?.clamp(1, 4),
     };
 
-    let manifest = ProjectManifest::discover_single(&root)?;
     let mut project = ProjectWorkspace::load(manifest, &cargo_config, &|_| {})?;
     watchdog::progress();
     // rust-analyzer would otherwise run Cargo again from the workspace root,
@@ -394,8 +398,16 @@ fn deterministic_build_script_runs(messages: &[u8]) -> Vec<u8> {
 ///
 /// Cargo's status output is discarded except for lock waits, which would
 /// otherwise make the checker appear to hang.
-fn run_cargo_check(options: &CheckOptions<'_>, root: &Path) -> Result<(Vec<u8>, bool)> {
-    let command = build_script_command(options);
+fn run_cargo_check(
+    options: &CheckOptions<'_>,
+    root: &Path,
+    manifest: &Path,
+) -> Result<(Vec<u8>, bool)> {
+    let mut command = build_script_command(options);
+    // Package IDs embed the manifest path as given. rust-analyzer passes its
+    // manifest explicitly, while a working directory may already be resolved
+    // through symlinks, so both must name the same manifest.
+    command.extend(["--manifest-path".to_string(), manifest.display().to_string()]);
     let mut child = Command::new(&command[0])
         .args(&command[1..])
         .current_dir(root)
