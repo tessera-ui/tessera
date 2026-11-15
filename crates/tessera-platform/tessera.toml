@@ -1,0 +1,4 @@
+#:schema https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera.schema.json
+
+[plugin.android]
+module = "tessera_platform"

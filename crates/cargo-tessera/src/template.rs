@@ -30,7 +30,7 @@ pub fn write_project_guidance(out_root: &Path) -> Result<()> {
     )
 }
 
-fn write_if_changed(path: &Path, new_bytes: &[u8]) -> Result<()> {
+pub(crate) fn write_if_changed(path: &Path, new_bytes: &[u8]) -> Result<()> {
     match fs::read(path) {
         Ok(existing) if existing == new_bytes => return Ok(()),
         Ok(_) => {}

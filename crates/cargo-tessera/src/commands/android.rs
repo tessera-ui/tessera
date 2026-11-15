@@ -12,10 +12,7 @@ use cargo_mobile2::{
     ChildHandle,
     android::{
         self, PROJECT_TEMPLATE as ANDROID_TEMPLATE_DIR,
-        config::{
-            Config as AndroidConfig, DEFAULT_VULKAN_VALIDATION, Metadata as AndroidMetadata,
-            Raw as RawAndroidConfig,
-        },
+        config::{Config as AndroidConfig, Metadata as AndroidMetadata, Raw as RawAndroidConfig},
         device::Device,
         env::Env as AndroidEnv,
         target::Target,
@@ -37,7 +34,7 @@ use tessera_build::{
 
 use crate::{
     call_guard, output,
-    template::{write_template_dir, write_template_file},
+    template::{write_if_changed, write_template_dir, write_template_file},
 };
 
 use super::{
@@ -51,7 +48,7 @@ use super::{
 
 const DEFAULT_ARCH: &str = "arm64";
 const DEFAULT_MIN_SDK_VERSION: u32 = 24;
-const DEFAULT_ANDROID_ACTIVITY: &str = ".TesseraGameActivity";
+const ANDROID_ACTIVITY: &str = "com.tessera.TesseraGameActivity";
 const DEFAULT_ANDROID_THEME_PARENT: &str = "Theme.AppCompat.Light.NoActionBar";
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -60,22 +57,12 @@ pub enum AndroidFormat {
     Aab,
 }
 
-impl AndroidFormat {
-    fn from_config(value: &str) -> Option<Self> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "apk" => Some(AndroidFormat::Apk),
-            "aab" => Some(AndroidFormat::Aab),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct BuildOptions {
     pub release: bool,
-    pub arch: Option<String>,
+    pub arch: String,
     pub package: Option<String>,
-    pub format: Option<AndroidFormat>,
+    pub format: AndroidFormat,
     pub profiling_output: Option<String>,
     pub debug_dirty_overlay: bool,
     pub asset_backend: Option<AssetBackend>,
@@ -84,9 +71,9 @@ pub struct BuildOptions {
 #[derive(Debug, Clone)]
 pub struct DevOptions {
     pub release: bool,
-    pub arch: Option<String>,
+    pub arch: String,
     pub package: Option<String>,
-    pub device: Option<String>,
+    pub device: String,
     pub profiling_output: Option<String>,
     pub debug_dirty_overlay: bool,
     pub asset_backend: Option<AssetBackend>,
@@ -111,7 +98,6 @@ struct AndroidContext {
     profiling_output: Option<String>,
     debug_dirty_overlay: bool,
     asset_backend: AssetBackend,
-    activity: String,
     config: AndroidConfig,
     metadata: AndroidMetadata,
     identity: AppConfig,
@@ -152,10 +138,10 @@ impl AndroidContext {
     fn from_build_opts(opts: BuildOptions) -> Result<Self> {
         Self::from_opts(AndroidContextOpts {
             release: opts.release,
-            arch: opts.arch,
+            arch: Some(opts.arch),
             package: opts.package,
             device: None,
-            format: opts.format,
+            format: Some(opts.format),
             profiling_output: opts.profiling_output,
             debug_dirty_overlay: opts.debug_dirty_overlay,
             asset_backend_override: opts.asset_backend,
@@ -165,9 +151,9 @@ impl AndroidContext {
     fn from_dev_opts(opts: DevOptions) -> Result<Self> {
         Self::from_opts(AndroidContextOpts {
             release: opts.release,
-            arch: opts.arch,
+            arch: Some(opts.arch),
             package: opts.package,
-            device: opts.device,
+            device: Some(opts.device),
             format: None,
             profiling_output: opts.profiling_output,
             debug_dirty_overlay: opts.debug_dirty_overlay,
@@ -210,27 +196,16 @@ impl AndroidContext {
             Manifest::load()?
         };
 
+        manifest.reject_platform_metadata()?;
         let manifest_package = manifest.package_name();
-        let manifest_cfg = manifest.android().unwrap_or_default();
 
         let package_name = package.or(manifest_package).ok_or_else(|| {
             anyhow!(
                 "Unable to determine workspace package. Provide --package or run in a package directory."
             )
         })?;
-
-        let format = format
-            .or_else(|| {
-                manifest_cfg
-                    .format
-                    .as_deref()
-                    .and_then(AndroidFormat::from_config)
-            })
-            .unwrap_or(AndroidFormat::Apk);
-
-        let arch = arch
-            .or_else(|| manifest_cfg.arch.clone())
-            .or_else(|| Some(DEFAULT_ARCH.to_string()));
+        let format = format.unwrap_or(AndroidFormat::Apk);
+        let arch = arch.or_else(|| Some(DEFAULT_ARCH.to_string()));
 
         let root_dir = package_dir
             .clone()
@@ -253,7 +228,6 @@ impl AndroidContext {
         let version = version.to_string();
         let target_dir = cargo_metadata.target_directory.into_std_path_buf();
 
-        let tessera_permissions = collect_tessera_permissions(&root_dir, package_dir.as_ref())?;
         let lib_name = manifest
             .lib_name()
             .unwrap_or_else(|| package_name.replace('-', "_"));
@@ -272,7 +246,7 @@ impl AndroidContext {
             });
 
         let raw_android = RawAndroidConfig {
-            min_sdk_version: Some(manifest_cfg.min_sdk.unwrap_or(DEFAULT_MIN_SDK_VERSION)),
+            min_sdk_version: Some(DEFAULT_MIN_SDK_VERSION),
             project_dir: Some("gen/android".to_string()),
             no_default_features: None,
             features: None,
@@ -282,12 +256,6 @@ impl AndroidContext {
             .context("Failed to build Android config")?;
         let profiling_output = profiling_output
             .map(|path| normalize_android_profiling_output_path(&path, config.app().identifier()));
-
-        let app_permissions = map_tessera_permissions(&tessera_permissions)?;
-        let mut merged_permissions = manifest_cfg.permissions.clone().unwrap_or_default();
-        merged_permissions.extend(app_permissions);
-        merged_permissions.sort();
-        merged_permissions.dedup();
 
         let mut cargo_args = Vec::new();
         let mut cargo_features = Vec::new();
@@ -310,21 +278,10 @@ impl AndroidContext {
         );
 
         let metadata = AndroidMetadata {
-            supported: true,
-            no_default_features: false,
             cargo_args: (!cargo_args.is_empty()).then_some(cargo_args),
             features: (!cargo_features.is_empty()).then_some(cargo_features),
-            app_sources: None,
-            app_plugins: manifest_cfg.app_plugins.clone(),
-            project_dependencies: manifest_cfg.project_dependencies.clone(),
-            app_dependencies: manifest_cfg.app_dependencies.clone(),
-            app_dependencies_platform: manifest_cfg.app_dependencies_platform.clone(),
-            asset_packs: None,
-            app_activity_name: Some(DEFAULT_ANDROID_ACTIVITY.to_string()),
-            app_permissions: Some(merged_permissions),
-            app_theme_parent: Some(DEFAULT_ANDROID_THEME_PARENT.to_string()),
             env_vars: (!env_vars.is_empty()).then_some(env_vars),
-            vulkan_validation: None,
+            ..AndroidMetadata::default()
         };
 
         Ok(Self {
@@ -337,7 +294,6 @@ impl AndroidContext {
             profiling_output,
             debug_dirty_overlay,
             asset_backend,
-            activity: DEFAULT_ANDROID_ACTIVITY.to_string(),
             config,
             metadata,
             identity,
@@ -449,16 +405,15 @@ fn android_runtime_env(ctx: &AndroidContext) -> Result<AndroidEnv> {
         ))
 }
 
-pub fn init(skip_targets_install: bool) -> Result<()> {
+/// Generates the Android project, or regenerates its editable files with `force`.
+pub fn init(force: bool, skip_targets_install: bool) -> Result<()> {
     let ctx = AndroidContext::from_init()?;
-    let android_plugins = collect_android_plugins(&ctx)?;
-    let android_plugin_modules = collect_android_plugin_modules(&android_plugins);
-
+    let project_dir = ctx.config.project_dir();
     let project_exists = ctx.config.project_dir_exists();
-    if project_exists {
+    if project_exists && !force {
         output::warn(format!(
-            "android project already exists at {}",
-            display_path(&ctx.config.project_dir())
+            "android project already exists at {}; pass --force to regenerate its editable files",
+            display_path(&project_dir)
         ));
     }
 
@@ -466,33 +421,23 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
         Target::install_all().map_err(|err| anyhow!("Failed to install Android targets: {err}"))?;
     }
 
-    let mut handlebars = Handlebars::new();
-    handlebars.register_escape_fn(handlebars::no_escape);
-    register_helpers(&mut handlebars);
-    let data = build_android_template_data(&ctx, &android_plugin_modules)?;
-
-    if !project_exists {
+    if !project_exists || force {
+        let mut handlebars = Handlebars::new();
+        handlebars.register_escape_fn(handlebars::no_escape);
+        register_helpers(&mut handlebars);
         write_template_dir(
             &ANDROID_TEMPLATE_DIR,
-            ctx.config.project_dir().as_path(),
+            project_dir.as_path(),
             &handlebars,
-            &data,
+            &android_template_data(&ctx)?,
         )?;
-
-        let asset_dir = ctx.config.project_dir().join("app/src/main/assets");
-        fs::create_dir_all(&asset_dir)
-            .with_context(|| format!("Failed to create assets dir {}", asset_dir.display()))?;
     }
-
     sync_android_project(&ctx)?;
 
-    if !project_exists {
+    if !project_exists || force {
         output::status(
             "Generated",
-            format!(
-                "android project at {}",
-                display_path(&ctx.config.project_dir())
-            ),
+            format!("android project at {}", display_path(&project_dir)),
         );
     }
     Ok(())
@@ -513,33 +458,11 @@ fn register_helpers(handlebars: &mut Handlebars<'static>) {
             .join(", ")
     });
 
-    handlebars_helper!(snake_case: |s: str| {
-        s.chars()
-            .map(|c| {
-                if c == '-' || c == ' ' {
-                    '_'
-                } else {
-                    c.to_ascii_lowercase()
-                }
-            })
-            .collect::<String>()
-    });
-
-    handlebars_helper!(html_escape: |s: str| {
-        s.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('\"', "&quot;")
-            .replace('\'', "&#x27;")
-    });
-
     handlebars.register_helper("quote-and-join", Box::new(quote_and_join));
     handlebars.register_helper(
         "quote-and-join-colon-prefix",
         Box::new(quote_and_join_colon_prefix),
     );
-    handlebars.register_helper("snake-case", Box::new(snake_case));
-    handlebars.register_helper("html-escape", Box::new(html_escape));
 }
 
 pub fn build(opts: BuildOptions) -> Result<()> {
@@ -668,8 +591,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
     for file in [
         "Cargo.toml",
         "build.rs",
-        "tessera-app.toml",
-        "tessera-config.toml",
+        "tessera.toml",
     ] {
         let path = watch_dir.join(file);
         if path.exists() {
@@ -813,7 +735,7 @@ fn run_once(
             filter,
             false,
             false,
-            ctx.activity.clone(),
+            ANDROID_ACTIVITY.to_string(),
         )
         .map_err(|err| anyhow!("Failed to run on device: {err}"))
 }
@@ -838,56 +760,8 @@ fn display_path(path: &Path) -> String {
     }
 }
 
-fn collect_android_plugin_modules(plugins: &[AndroidPlugin]) -> Vec<String> {
-    plugins.iter().map(|plugin| plugin.module.clone()).collect()
-}
-
-fn build_android_template_data(
-    ctx: &AndroidContext,
-    android_plugin_modules: &[String],
-) -> Result<Value> {
-    let app_dir = ctx.config.project_dir().join("app");
-    let root_dir_rel = util::relativize_path(ctx.config.app().root_dir(), app_dir);
-    let root_dir_rel = replace_path_separator(root_dir_rel.into_os_string())
-        .to_string_lossy()
-        .into_owned();
-
-    let app = serde_json::to_value(ctx.config.app())
-        .context("Failed to serialize app metadata for templates")?;
-
-    let asset_packs: Vec<String> = ctx
-        .metadata
-        .asset_packs
-        .as_ref()
-        .map(|packs| packs.iter().map(|pack| pack.name.clone()).collect())
-        .unwrap_or_default();
-    let has_asset_packs = !asset_packs.is_empty();
-    let app_permissions = ctx.metadata.app_permissions.clone().unwrap_or_default();
-    let app_activity_name = ctx
-        .metadata
-        .app_activity_name
-        .clone()
-        .unwrap_or_else(|| DEFAULT_ANDROID_ACTIVITY.to_string());
-    let app_theme_parent = ctx
-        .metadata
-        .app_theme_parent
-        .clone()
-        .unwrap_or_else(|| DEFAULT_ANDROID_THEME_PARENT.to_string());
-
-    let mut project_dependencies = ctx
-        .metadata
-        .project_dependencies
-        .clone()
-        .unwrap_or_default();
-    if !android_plugin_modules.is_empty() {
-        let kotlin_plugin = "org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.21".to_string();
-        if !project_dependencies.iter().any(|dep| dep == &kotlin_plugin) {
-            project_dependencies.push(kotlin_plugin);
-        }
-    }
-    project_dependencies.sort();
-    project_dependencies.dedup();
-
+/// Values rendered into the editable project files at initialization.
+fn android_template_data(ctx: &AndroidContext) -> Result<Value> {
     let mut abi_list = Vec::new();
     let mut arch_list = Vec::new();
     let mut target_list = Vec::new();
@@ -896,111 +770,125 @@ fn build_android_template_data(
         arch_list.push(target.arch.to_string());
         target_list.push(target.triple.to_string());
     }
-
     Ok(json!({
-        "app": app,
-        "version": ctx.version,
-        "version-code": ctx.version_code,
-        "app-icon": ctx.identity.icon.is_some(),
-        "android": {
-            "min-sdk-version": ctx.config.min_sdk_version(),
-        },
-        "root-dir-rel": root_dir_rel,
-        "android-app-plugins": ctx.metadata.app_plugins.clone().unwrap_or_default(),
-        "android-project-dependencies": project_dependencies,
-        "android-app-dependencies": ctx.metadata.app_dependencies.clone().unwrap_or_default(),
-        "android-app-dependencies-platform": ctx
-            .metadata
-            .app_dependencies_platform
-            .clone()
-            .unwrap_or_default(),
-        "android-plugin-modules": android_plugin_modules,
-        "android-app-permissions": app_permissions,
-        "android-app-activity-name": app_activity_name,
-        "android-app-theme-parent": app_theme_parent,
-        "has-code": true,
-        "asset-packs": asset_packs,
-        "has-asset-packs": has_asset_packs,
-        "android-vulkan-validation": ctx
-            .metadata
-            .vulkan_validation
-            .unwrap_or(DEFAULT_VULKAN_VALIDATION),
+        "app": serde_json::to_value(ctx.config.app())
+            .context("Failed to serialize app metadata for templates")?,
+        "android-app-theme-parent": DEFAULT_ANDROID_THEME_PARENT,
         "abi_list": abi_list,
         "arch_list": arch_list,
         "target_list": target_list,
     }))
 }
 
+/// Regenerates the files cargo-tessera maintains inside the Android project.
 fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
-    let android_plugins = collect_android_plugins(ctx)?;
-    let android_plugin_modules = collect_android_plugin_modules(&android_plugins);
+    let project_dir = ctx.config.project_dir();
+    let plugins = collect_android_plugins(ctx)?;
 
     let mut handlebars = Handlebars::new();
     handlebars.register_escape_fn(handlebars::no_escape);
     register_helpers(&mut handlebars);
-    let data = build_android_template_data(ctx, &android_plugin_modules)?;
+    let data = android_template_data(ctx)?;
+    for template in [
+        "buildSrc/build.gradle.kts.hbs",
+        "buildSrc/src/main/kotlin/BuildTask.kt.hbs",
+        "buildSrc/src/main/kotlin/RustPlugin.kt.hbs",
+    ] {
+        write_template_file(
+            &ANDROID_TEMPLATE_DIR,
+            Path::new(template),
+            project_dir.as_path(),
+            &handlebars,
+            &data,
+        )?;
+    }
 
-    let project_dir = ctx.config.project_dir();
-    write_template_file(
-        &ANDROID_TEMPLATE_DIR,
-        Path::new("build.gradle.kts.hbs"),
-        project_dir.as_path(),
-        &handlebars,
-        &data,
-    )?;
-    write_template_file(
-        &ANDROID_TEMPLATE_DIR,
-        Path::new("settings.gradle.hbs"),
-        project_dir.as_path(),
-        &handlebars,
-        &data,
-    )?;
-    write_template_file(
-        &ANDROID_TEMPLATE_DIR,
-        Path::new("buildSrc/build.gradle.kts.hbs"),
-        project_dir.as_path(),
-        &handlebars,
-        &data,
-    )?;
-    write_template_file(
-        &ANDROID_TEMPLATE_DIR,
-        Path::new("buildSrc/src/main/kotlin/BuildTask.kt.hbs"),
-        project_dir.as_path(),
-        &handlebars,
-        &data,
-    )?;
-    write_template_file(
-        &ANDROID_TEMPLATE_DIR,
-        Path::new("buildSrc/src/main/kotlin/RustPlugin.kt.hbs"),
-        project_dir.as_path(),
-        &handlebars,
-        &data,
-    )?;
-    write_template_file(
-        &ANDROID_TEMPLATE_DIR,
-        Path::new("app/src/main/AndroidManifest.xml.hbs"),
-        project_dir.as_path(),
-        &handlebars,
-        &data,
-    )?;
-    write_template_file(
-        &ANDROID_TEMPLATE_DIR,
-        Path::new("app/build.gradle.kts.hbs"),
-        project_dir.as_path(),
-        &handlebars,
-        &data,
-    )?;
-    write_template_file(
-        &ANDROID_TEMPLATE_DIR,
-        Path::new("app/src/main/java/TesseraGameActivity.java.hbs"),
-        project_dir.as_path(),
-        &handlebars,
-        &data,
-    )?;
+    let rust_root = util::relativize_path(ctx.config.app().root_dir(), project_dir.join("app"));
+    let rust_root = replace_path_separator(rust_root.into_os_string())
+        .to_string_lossy()
+        .into_owned();
+    let mut properties = String::from(GENERATED_HEADER.replace("//", "#"));
+    for (key, value) in [
+        ("applicationId", ctx.config.app().identifier().to_string()),
+        ("versionCode", ctx.version_code.to_string()),
+        ("versionName", ctx.version.clone()),
+        ("libName", ctx.config.app().lib_name()),
+        ("rustRoot", rust_root),
+    ] {
+        properties.push_str(&format!("{key}={}\n", escape_property(&value)));
+    }
+    write_if_changed(&project_dir.join("tessera.properties"), properties.as_bytes())?;
 
-    app_assets::android(&ctx.identity, &project_dir.join("app/src/main/tessera-res"))?;
-    sync_android_plugins(&project_dir, &android_plugins)?;
+    let mut settings = GENERATED_HEADER.to_string();
+    let mut dependencies = format!("{GENERATED_HEADER}dependencies {{\n");
+    for plugin in &plugins {
+        settings.push_str(&format!(
+            "include ':plugins:{0}'\nproject(':plugins:{0}').projectDir = file('{PLUGIN_DIR}/{0}')\n",
+            plugin.module
+        ));
+        dependencies.push_str(&format!(
+            "    add(\"implementation\", project(\":plugins:{}\"))\n",
+            plugin.module
+        ));
+    }
+    dependencies.push_str("}\n");
+    write_if_changed(&project_dir.join("tessera.settings.gradle"), settings.as_bytes())?;
+    write_if_changed(
+        &project_dir.join("tessera.build.gradle.kts"),
+        dependencies.as_bytes(),
+    )?;
+    sync_android_plugins(&project_dir, &plugins)?;
+
+    let resources = project_dir.join("app/src/main/tessera-res");
+    if resources.exists() {
+        fs::remove_dir_all(&resources)
+            .with_context(|| format!("Failed to remove {}", resources.display()))?;
+    }
+    app_assets::android(&ctx.identity, &resources)?;
+
+    warn_unreferenced_generated_files(&project_dir);
     Ok(())
+}
+
+const GENERATED_HEADER: &str =
+    "// @generated by cargo-tessera from tessera.toml and Cargo.toml; do not edit.\n";
+const PLUGIN_DIR: &str = "tessera-plugins";
+
+fn escape_property(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('=', "\\=")
+        .replace(':', "\\:")
+}
+
+/// Warns when an edited project no longer reads a maintained file.
+fn warn_unreferenced_generated_files(project_dir: &Path) {
+    for (file, generated, effect) in [
+        (
+            "settings.gradle",
+            "tessera.settings.gradle",
+            "plugin modules are not included",
+        ),
+        (
+            "app/build.gradle.kts",
+            "tessera.properties",
+            "the application ID, version, and Rust project location from tessera.toml and Cargo.toml are not applied",
+        ),
+        (
+            "app/build.gradle.kts",
+            "tessera.build.gradle.kts",
+            "plugin module dependencies are not added",
+        ),
+    ] {
+        let references = fs::read_to_string(project_dir.join(file))
+            .is_ok_and(|contents| contents.contains(generated));
+        if !references {
+            output::warn(format!(
+                "gen/android/{file} does not reference {generated}, so {effect}; \
+                 run `cargo tessera android init --force` to regenerate it"
+            ));
+        }
+    }
 }
 
 fn collect_android_plugins(ctx: &AndroidContext) -> Result<Vec<AndroidPlugin>> {
@@ -1017,8 +905,7 @@ fn collect_android_plugins(ctx: &AndroidContext) -> Result<Vec<AndroidPlugin>> {
             .plugin
             .as_ref()
             .and_then(|plugin| plugin.android.as_ref())
-            .and_then(|android| android.module.as_ref())
-            .cloned();
+            .map(|android| android.module.clone());
         let Some(module) = module else {
             continue;
         };
@@ -1044,23 +931,6 @@ fn collect_android_plugins(ctx: &AndroidContext) -> Result<Vec<AndroidPlugin>> {
 
     plugins.sort_by(|a, b| a.module.cmp(&b.module));
     Ok(plugins)
-}
-
-fn collect_tessera_permissions(
-    root_dir: &Path,
-    package_dir: Option<&PathBuf>,
-) -> Result<Vec<String>> {
-    let packages = collect_resolved_packages(root_dir, package_dir)?;
-    let mut permissions = Vec::new();
-    for package in packages {
-        let Some(config) = load_tessera_config_from_dir(&package.dir)? else {
-            continue;
-        };
-        permissions.extend(config.permissions);
-    }
-    permissions.sort();
-    permissions.dedup();
-    Ok(permissions)
 }
 
 fn collect_resource_dirs(root_dir: &Path, package_dir: Option<&PathBuf>) -> Result<Vec<PathBuf>> {
@@ -1141,20 +1011,22 @@ fn collect_existing_android_libs(ctx: &AndroidContext, profile: Profile) -> Vec<
     paths
 }
 
+// Plugin sources are copied because Gradle writes build output into each
+// module directory, which may be a read-only Cargo registry checkout.
 fn sync_android_plugins(project_dir: &Path, plugins: &[AndroidPlugin]) -> Result<()> {
+    let plugins_dir = project_dir.join(PLUGIN_DIR);
+    if plugins_dir.exists() {
+        fs::remove_dir_all(&plugins_dir)
+            .with_context(|| format!("Failed to remove {}", plugins_dir.display()))?;
+    }
     if plugins.is_empty() {
         return Ok(());
     }
-    let plugins_dir = project_dir.join("plugins");
     fs::create_dir_all(&plugins_dir)
         .with_context(|| format!("Failed to create {}", plugins_dir.display()))?;
 
     for plugin in plugins {
         let target_dir = plugins_dir.join(&plugin.module);
-        if target_dir.exists() {
-            fs::remove_dir_all(&target_dir)
-                .with_context(|| format!("Failed to remove {}", target_dir.display()))?;
-        }
         copy_dir_all(&plugin.source_dir, &target_dir).with_context(|| {
             format!(
                 "Failed to copy plugin module {} to {}",
@@ -1211,12 +1083,16 @@ impl Manifest {
         self.lib.as_ref().and_then(|l| l.name.clone())
     }
 
-    fn android(&self) -> Option<AndroidManifestConfig> {
-        self.package
+    fn reject_platform_metadata(&self) -> Result<()> {
+        let tessera = self
+            .package
             .as_ref()
-            .and_then(|p| p.metadata.as_ref())
-            .and_then(|m| m.tessera.as_ref())
-            .and_then(|t| t.android.clone())
+            .and_then(|package| package.metadata.as_ref())
+            .and_then(|metadata| metadata.tessera.as_ref());
+        if let Some(tessera) = tessera {
+            reject_legacy_platform_metadata(tessera)?;
+        }
+        Ok(())
     }
 }
 
@@ -1238,46 +1114,25 @@ struct MetadataSection {
 
 #[derive(Debug, Deserialize)]
 struct TesseraMetadata {
-    android: Option<AndroidManifestConfig>,
+    android: Option<toml::Value>,
+    ios: Option<toml::Value>,
 }
 
-#[derive(Debug, Deserialize, Default, Clone)]
-struct AndroidManifestConfig {
-    arch: Option<String>,
-    format: Option<String>,
-    min_sdk: Option<u32>,
-    permissions: Option<Vec<String>>,
-    app_plugins: Option<Vec<String>>,
-    project_dependencies: Option<Vec<String>>,
-    app_dependencies: Option<Vec<String>>,
-    app_dependencies_platform: Option<Vec<String>>,
-}
-
-fn map_tessera_permissions(perms: &[String]) -> Result<Vec<String>> {
-    let mut mapped = Vec::new();
-    for perm in perms {
-        match perm.as_str() {
-            "notifications" => mapped.push("android.permission.POST_NOTIFICATIONS".to_string()),
-            "camera" => mapped.push("android.permission.CAMERA".to_string()),
-            "microphone" => mapped.push("android.permission.RECORD_AUDIO".to_string()),
-            "location" => {
-                mapped.push("android.permission.ACCESS_COARSE_LOCATION".to_string());
-                mapped.push("android.permission.ACCESS_FINE_LOCATION".to_string());
-            }
-            "bluetooth" => {
-                mapped.push("android.permission.BLUETOOTH_CONNECT".to_string());
-                mapped.push("android.permission.BLUETOOTH_SCAN".to_string());
-            }
-            other => {
-                return Err(anyhow!(
-                    "Unknown tessera permission '{other}' in tessera-config.toml"
-                ));
-            }
-        }
-    }
-    mapped.sort();
-    mapped.dedup();
-    Ok(mapped)
+fn reject_legacy_platform_metadata(metadata: &TesseraMetadata) -> Result<()> {
+    anyhow::ensure!(
+        metadata.android.is_none(),
+        "`[package.metadata.tessera.android]` is no longer read. Edit the generated Android \
+         project instead: `minSdk`, Gradle plugins, and dependencies in \
+         gen/android/app/build.gradle.kts, permissions in \
+         gen/android/app/src/main/AndroidManifest.xml. Pass `--arch` and `--format` on the \
+         command line"
+    );
+    anyhow::ensure!(
+        metadata.ios.is_none(),
+        "`[package.metadata.tessera.ios]` is no longer read. Run `cargo tessera apple init` \
+         and edit the generated Xcode project in gen/apple instead"
+    );
+    Ok(())
 }
 
 #[cfg(test)]

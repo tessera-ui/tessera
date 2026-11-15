@@ -5,9 +5,8 @@ use std::{
 };
 
 use aho_corasick::AhoCorasick;
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Context, Result, anyhow};
 use cargo_metadata::MetadataCommand;
-use globset::{Glob, GlobSet, GlobSetBuilder};
 use tessera_build::{
     asset_namespace, load_tessera_config_from_dir, platform_asset_path, prepare_assets,
     resolve_assets_dir,
@@ -26,7 +25,7 @@ pub(super) struct PlatformAssetCandidate {
     pub(super) platform_path: String,
     pub(super) source_path: PathBuf,
     pub(super) target_path: PathBuf,
-    pub(super) always_copy: bool,
+    pub(super) keep: bool,
 }
 
 pub(super) fn sync_assets(
@@ -40,7 +39,7 @@ pub(super) fn sync_assets(
     let mut count = 0;
     let mut bytes = 0;
     for asset in candidates.iter().filter(|asset| {
-        asset.always_copy || used.is_none_or(|paths| paths.contains(&asset.platform_path))
+        asset.keep || used.is_none_or(|paths| paths.contains(&asset.platform_path))
     }) {
         let parent = asset
             .target_path
@@ -78,10 +77,6 @@ pub(super) fn collect_platform_asset_candidates(
             ));
         }
 
-        let tree_shaking_exclude_matcher = build_tree_shaking_exclude_matcher(
-            assets.tree_shaking_exclude_patterns(),
-            &package.name,
-        )?;
         let namespace = asset_namespace(&package.name, &package.version);
         for asset in prepare_assets(&assets_dir, assets)? {
             let source_path = asset.source;
@@ -97,30 +92,13 @@ pub(super) fn collect_platform_asset_candidates(
                 platform_path,
                 source_path,
                 target_path,
-                always_copy: tree_shaking_exclude_matcher.is_match(&relative_path),
+                keep: asset.keep,
             });
         }
     }
 
     candidates.sort_by(|left, right| left.platform_path.cmp(&right.platform_path));
     Ok(candidates)
-}
-
-fn build_tree_shaking_exclude_matcher(patterns: &[String], package: &str) -> Result<GlobSet> {
-    let mut builder = GlobSetBuilder::new();
-    for pattern in patterns {
-        let normalized = pattern.trim().replace('\\', "/");
-        let normalized = normalized.strip_prefix("./").unwrap_or(&normalized);
-        ensure!(
-            !normalized.is_empty(),
-            "Empty asset exclusion pattern in {package}"
-        );
-        builder.add(
-            Glob::new(normalized)
-                .with_context(|| format!("Invalid asset pattern {pattern} in {package}"))?,
-        );
-    }
-    Ok(builder.build()?)
 }
 
 pub(super) fn collect_used_platform_asset_paths(

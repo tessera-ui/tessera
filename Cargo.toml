@@ -71,6 +71,7 @@ fluent-bundle = "0.16"
 fluent-templates = { version = "0.15", default-features = false }
 futures-util = "0.3"
 futures-channel = "0.3"
+globset = "0.4"
 handlebars = "6.4"
 hashbrown = { version = "0.17.1", default-features = false }
 heck = "0.5"

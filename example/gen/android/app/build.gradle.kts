@@ -1,27 +1,27 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("rust")
 }
 
+// Application identity, version, and Rust project location, maintained by
+// cargo-tessera from tessera.toml and Cargo.toml.
+val tessera = Properties().apply {
+    rootProject.file("tessera.properties").reader().use(::load)
+}
+
 android {
-    namespace="com.tessera.example"
+    namespace = "com.tessera.example"
     sourceSets.getByName("main").res.srcDir("src/main/tessera-res")
     compileSdk = 34
     defaultConfig {
-        applicationId = "com.tessera.example"
+        applicationId = tessera.getProperty("applicationId")
         minSdk = 24
         targetSdk = 34
-        versionCode = 1001
-        versionName = "0.1.0"
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    sourceSets.getByName("main") {
-        // Vulkan validation layers
-        val ndkHome = System.getenv("NDK_HOME")
-        jniLibs.srcDir("${ndkHome}/sources/third_party/vulkan/src/build-android/jniLibs")
+        versionCode = tessera.getProperty("versionCode").toInt()
+        versionName = tessera.getProperty("versionName")
+        manifestPlaceholders["tesseraLibName"] = tessera.getProperty("libName")
     }
     buildTypes {
         getByName("debug") {
@@ -37,7 +37,7 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
-             proguardFiles(
+            proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
                     .toList().toTypedArray()
@@ -47,7 +47,7 @@ android {
 }
 
 rust {
-    rootDirRel = "../../../"
+    rootDirRel = tessera.getProperty("rustRoot")
     profilingOutput = System.getenv("TESSERA_PROFILING_OUTPUT")
     debugDirtyOverlay = System.getenv("TESSERA_DEBUG_DIRTY_OVERLAY") == "1"
 }
@@ -56,5 +56,7 @@ dependencies {
     implementation("androidx.activity:activity:1.8.0")
     implementation("androidx.games:games-activity:4.4.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation(project(":plugins:tessera_platform"))
 }
+
+// Plugin module dependencies, maintained by cargo-tessera.
+apply(from = rootProject.file("tessera.build.gradle.kts"))

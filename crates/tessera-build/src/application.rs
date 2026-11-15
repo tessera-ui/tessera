@@ -16,9 +16,9 @@ use quote::quote;
 use resvg::{tiny_skia, usvg};
 use serde::Deserialize;
 
-/// Application metadata from `tessera-app.toml`.
+/// Application identity from the `[app]` table of `tessera.toml`.
 #[derive(Debug, Clone, Deserialize, Default)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct AppConfig {
     /// Display name; defaults to the Cargo package name.
     pub name: String,
@@ -31,16 +31,15 @@ pub struct AppConfig {
 impl AppConfig {
     /// Loads and validates application metadata, resolving the icon path.
     pub fn load(project: &Path, package_name: &str) -> Result<Self> {
-        let path = project.join("tessera-app.toml");
-        let mut config: Self = match fs::read_to_string(&path) {
-            Ok(source) => {
-                toml::from_str(&source).with_context(|| format!("Invalid {}", path.display()))?
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Self::default(),
-            Err(error) => {
-                return Err(error).with_context(|| format!("Failed to read {}", path.display()));
-            }
-        };
+        let config = crate::load_tessera_config_from_dir(project)?;
+        Self::resolve(
+            project,
+            package_name,
+            config.and_then(|config| config.app).unwrap_or_default(),
+        )
+    }
+
+    fn resolve(project: &Path, package_name: &str, mut config: Self) -> Result<Self> {
         if config.name.is_empty() {
             config.name = package_name.into();
         }
@@ -79,9 +78,12 @@ impl AppConfig {
         Ok(config)
     }
 
-    /// Loads the configured icon, if present.
-    pub fn load_icon(&self) -> Result<Option<AppIcon>> {
-        self.icon.as_deref().map(AppIcon::load).transpose()
+    /// Loads the configured icon, or the Tessera logo when none is configured.
+    pub fn load_icon(&self) -> Result<AppIcon> {
+        match self.icon.as_deref() {
+            Some(path) => AppIcon::load(path),
+            None => AppIcon::tessera(),
+        }
     }
 
     /// Linux launcher ID and executable name.
@@ -91,7 +93,10 @@ impl AppConfig {
 }
 
 /// A square icon source rendered independently at each output resolution.
-pub struct AppIcon(IconSource);
+pub struct AppIcon {
+    source: IconSource,
+    background: [u8; 4],
+}
 
 enum IconSource {
     Svg(usvg::Tree),
@@ -103,6 +108,25 @@ impl AppIcon {
     pub fn load(path: &Path) -> Result<Self> {
         let bytes =
             fs::read(path).with_context(|| format!("Failed to read icon {}", path.display()))?;
+        Self::decode(path, &bytes, [255, 255, 255, 255])
+    }
+
+    /// The Tessera logo used when an application configures no icon.
+    pub fn tessera() -> Result<Self> {
+        Self::decode(
+            Path::new("tessera.svg"),
+            include_bytes!("../assets/default-icon.svg"),
+            [0xEE, 0xF2, 0xFF, 0xFF],
+        )
+    }
+
+    /// Opaque color placed behind the icon where a platform requires an opaque
+    /// or layered launcher icon.
+    pub fn background(&self) -> [u8; 4] {
+        self.background
+    }
+
+    fn decode(path: &Path, bytes: &[u8], background: [u8; 4]) -> Result<Self> {
         let source = match path
             .extension()
             .and_then(|ext| ext.to_str())
@@ -111,7 +135,7 @@ impl AppIcon {
         {
             Some("svg") => {
                 let xml =
-                    std::str::from_utf8(&bytes).context("SVG application icon must be UTF-8")?;
+                    std::str::from_utf8(bytes).context("SVG application icon must be UTF-8")?;
                 let document = usvg::roxmltree::Document::parse(xml)
                     .context("Invalid SVG application icon")?;
                 for node in document.descendants().filter(|node| node.is_element()) {
@@ -137,7 +161,7 @@ impl AppIcon {
                     },
                     ..Default::default()
                 };
-                let tree = usvg::Tree::from_data(&bytes, &options)
+                let tree = usvg::Tree::from_data(bytes, &options)
                     .context("Invalid SVG application icon")?;
                 ensure!(
                     tree.size().width() == tree.size().height(),
@@ -147,7 +171,7 @@ impl AppIcon {
             }
             Some("png") => {
                 let image =
-                    image::load_from_memory_with_format(&bytes, ImageFormat::Png)?.into_rgba8();
+                    image::load_from_memory_with_format(bytes, ImageFormat::Png)?.into_rgba8();
                 ensure!(
                     image.width() == image.height(),
                     "Application icon must be square"
@@ -159,7 +183,7 @@ impl AppIcon {
                 path.display()
             ),
         };
-        Ok(Self(source))
+        Ok(Self { source, background })
     }
 
     /// Renders straight-alpha RGBA pixels at the requested size.
@@ -168,7 +192,7 @@ impl AppIcon {
             (1..=4096).contains(&size),
             "Icon output size must be between 1 and 4096 pixels"
         );
-        match &self.0 {
+        match &self.source {
             IconSource::Png(image) => Ok(image::imageops::resize(
                 image,
                 size,
@@ -215,9 +239,15 @@ impl AppIcon {
     }
 }
 
-pub(super) fn generate(project: &Path, output: &Path, package_name: &str) -> Result<TokenStream> {
-    crate::rerun_if_optional_file_changed(project, &project.join("tessera-app.toml"));
-    let config = AppConfig::load(project, package_name)?;
+pub(super) fn generate(
+    project: &Path,
+    output: &Path,
+    package_name: &str,
+    tessera: Option<&crate::TesseraConfig>,
+) -> Result<TokenStream> {
+    let declared = tessera.and_then(|config| config.app.clone());
+    let is_application = declared.is_some();
+    let config = AppConfig::resolve(project, package_name, declared.unwrap_or_default())?;
     let name = &config.name;
     let target_os = std::env::var("CARGO_CFG_TARGET_OS")?;
     let identifier = if target_os == "linux" {
@@ -225,30 +255,25 @@ pub(super) fn generate(project: &Path, output: &Path, package_name: &str) -> Res
     } else {
         config.identifier.clone()
     };
-    let mut icon = quote!(None);
     if let Some(source) = &config.icon {
         println!("cargo:rerun-if-changed={}", source.display());
     }
     let source = config.load_icon()?;
-    if let Some(source) = &source {
-        let rgba = output.join("app-icon.rgba");
-        fs::write(&rgba, source.render(256)?.as_raw())?;
-        let rgba = rgba.to_string_lossy();
-        icon = quote!(Some(
-            tessera_ui::winit::window::Icon::from_rgba(include_bytes!(#rgba).to_vec(), 256, 256,)
-                .expect("Invalid generated application icon")
-        ));
-    }
-    if target_os == "windows" && project.join("tessera-app.toml").is_file() {
+    let rgba = output.join("app-icon.rgba");
+    fs::write(&rgba, source.render(256)?.as_raw())?;
+    let rgba = rgba.to_string_lossy();
+    let icon = quote!(Some(
+        tessera_ui::winit::window::Icon::from_rgba(include_bytes!(#rgba).to_vec(), 256, 256,)
+            .expect("Invalid generated application icon")
+    ));
+    if target_os == "windows" && is_application {
         let mut resource = String::from("#pragma code_page(65001)\n");
-        if let Some(icon) = &source {
-            let ico = output.join("app-icon.ico");
-            icon.write_ico(&ico)?;
-            resource.push_str(&format!(
-                "1 ICON \"{}\"\n",
-                ico.to_string_lossy().replace('\\', "/")
-            ));
-        }
+        let ico = output.join("app-icon.ico");
+        source.write_ico(&ico)?;
+        resource.push_str(&format!(
+            "1 ICON \"{}\"\n",
+            ico.to_string_lossy().replace('\\', "/")
+        ));
         let version = std::env::var("CARGO_PKG_VERSION")?;
         let numeric = version
             .split(['.', '-', '+'])
@@ -299,7 +324,7 @@ END
         embed_resource::compile(&rc, embed_resource::NONE).manifest_required()?;
     }
     Ok(quote! {
-        /// Returns application defaults from `tessera-app.toml`.
+        /// Returns application defaults from `tessera.toml`.
         pub fn application() -> tessera_ui::renderer::TesseraConfig {
             #[cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))]
             let icon = #icon;
@@ -374,9 +399,12 @@ mod tests {
         let config = AppConfig::load(directory.path(), "my-app")?;
         assert_eq!(config.name, "my-app");
         assert_eq!(config.identifier, "com.tessera.myapp");
-        let path = directory.path().join("tessera-app.toml");
+        let icon = config.load_icon()?;
+        assert_eq!(icon.background(), [0xEE, 0xF2, 0xFF, 0xFF]);
+        assert!(icon.render(64)?.pixels().any(|pixel| pixel.0[3] == 255));
+        let path = directory.path().join("tessera.toml");
         for identifier in ["single", "com.1app", "com.my-app", "com.my_app", "com..app"] {
-            fs::write(&path, format!("identifier = {identifier:?}"))?;
+            fs::write(&path, format!("[app]\nidentifier = {identifier:?}"))?;
             assert!(
                 AppConfig::load(directory.path(), "app").is_err(),
                 "{identifier}"

@@ -11,6 +11,7 @@ description = "Build-time utilities for Tessera projects"
 anyhow.workspace = true
 embed-resource.workspace = true
 fluent-templates = { workspace = true, features = ["walkdir"] }
+globset.workspace = true
 hex.workspace = true
 image = { workspace = true, features = ["png", "ico"] }
 prettyplease.workspace = true

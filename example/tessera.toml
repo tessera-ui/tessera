@@ -1,0 +1,13 @@
+#:schema https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera.schema.json
+
+[app]
+name = "Tessera Example"
+identifier = "com.tessera.example"
+icon = "../assets/logo.svg"
+
+[assets]
+dir = "assets"
+keep = ["material_spec/SOURCES.md", "material_spec/GoogleSans-OFL.txt"]
+
+[i18n]
+fallback = "en"

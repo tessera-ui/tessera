@@ -93,36 +93,49 @@ cargo tessera package -p my-app --release
 
 Choose formats with `--formats nsis,wix` (Windows), `app,dmg` (macOS), or
 `deb,appimage,pacman` (Linux). Use `--bin` for packages with multiple executables.
-Set shared application metadata in `tessera-app.toml`:
+Packages are written to `target/packages/<package>`. Use
+`[package.metadata.packager]` in `Cargo.toml` for
+[signing, installer settings, and additional resources](https://docs.crabnebula.dev/packager/configuration/);
+the application name, identifier, version, and icon come from `tessera.toml`
+and Cargo.
+
+### Configuration
+
+Each package may have a `tessera.toml` next to its `Cargo.toml`:
 
 ```toml
-name = "My App"
+[app]                       # read only from the package being built
+name = "My App"             # default: the Cargo package name
 identifier = "com.example.myapp"
 icon = "icon.svg"
+
+[assets]                    # enables assets for this package
+dir = "assets"              # default: "assets"
+embed = ["fonts/*.ttf"]     # always embedded in the binary
+keep = ["licenses/**"]      # delivered even without a reference in the binary
+
+[i18n]
+dir = "locales"             # default: "locales"
+fallback = "en"
+
+[plugin.android]            # plugin packages only
+module = "my_plugin"        # Gradle library in the package's android directory
 ```
 
-`name` defaults to the Cargo package name. `identifier` is a reverse-domain name
-with ASCII alphanumeric segments starting with letters. Paths are relative to the
-package root. Icons must be square:
-
-| Source | Guidance |
-| --- | --- |
-| SVG | Recommended: scales to every output size. Convert text to paths and embed external resources. |
-| PNG | Supported raster alternative; use at least 1024 × 1024 pixels. |
-
-Tessera generates every platform icon format from this source.
-
-The standard `tessera_build::build()` generates `res::application()`. Use it as
-renderer defaults (`..res::application()`) to apply the display name, desktop
-window icon, and launcher identifier. New projects include this setup.
+Unknown keys are errors. `identifier` is a reverse-domain name with ASCII
+alphanumeric segments starting with letters. Patterns are globs relative to the
+asset directory; `*` does not cross directories, `**` does. Icons must be
+square: SVG is recommended (convert text to paths and embed external
+resources); PNG should be at least 1024 × 1024 pixels. Tessera generates every
+platform icon format from it, and `res::application()` applies the name, icon,
+and identifier to the desktop window.
 
 Versions come from Cargo. Android `versionCode` is
 `major * 1_000_000 + minor * 1_000 + patch + 1`.
 
-Packages are written to `target/packages/<package>`. Binary and resource paths
-are supplied automatically. Use `[package.metadata.packager]` for
-[signing, installer settings, and additional resources](https://docs.crabnebula.dev/packager/configuration/).
-Shared names, identifiers, versions, and configured icons take precedence.
+Platform settings such as permissions, SDK versions, entitlements, and signing
+are written in each platform's own files: the generated Gradle and Xcode
+projects, or `[package.metadata.packager]` for desktop packages.
 
 ### Fix diagnostics
 
@@ -146,11 +159,11 @@ Optional CSV export:
 cargo tessera profiling analyze profiles/dev.jsonl --csv profiles/components.csv
 ```
 
-Android pull + analyze in one step:
+Android pull + analyze in one step (the application ID defaults to
+`[app] identifier`; pass `--app-id` to override it):
 
 ```bash
 cargo tessera profiling analyze-android \
-  --package com.example.my_app \
   --device 8cd1353b \
   --remote-path files/tessera-profiler.jsonl \
   --pull-to profiles/android.jsonl
@@ -195,20 +208,40 @@ Set `IPHONEOS_DEPLOYMENT_TARGET` to override the default iOS 15 minimum.
 
 ### Build for Android
 
-Make sure Android SDK/NDK are installed and `adb` is available in your PATH.
-
-Android helpers live under the dedicated subcommand:
+Install the Android SDK and NDK, a JDK supported by Gradle 8.14 (17 or 21), and
+make `adb` available in your PATH.
 
 ```bash
-# Initialize the Android Gradle project (required once)
+# Generate the Gradle project in gen/android (once)
 cargo tessera android init
 
-# Build APK/AAB via Gradle
+# Build an APK or AAB
 cargo tessera android build --release --format apk
 
-# Run the app on a device/emulator (device id is required)
+# Install and run on a device, redeploying when sources change
 cargo tessera android dev --device 8cd1353b
 ```
+
+`gen/android` belongs to your project: commit it and edit it like any Android
+project. Declare permissions in `app/src/main/AndroidManifest.xml`, and set
+`minSdk`, Gradle plugins, and dependencies in `app/build.gradle.kts`.
+cargo-tessera does not modify these files after `init`.
+
+On every Android command, cargo-tessera rewrites the files it maintains, which
+the generated `.gitignore` excludes:
+
+| File | Contents | Referenced from |
+| --- | --- | --- |
+| `tessera.properties` | Application ID, version, library name, Rust project path | `app/build.gradle.kts` |
+| `tessera.settings.gradle` | Plugin modules from Cargo dependencies | `settings.gradle` |
+| `tessera.build.gradle.kts` | Plugin module dependencies | `app/build.gradle.kts` |
+| `buildSrc/`, `tessera-plugins/` | Rust build integration and plugin sources | Gradle |
+| `app/src/main/tessera-res/` | Application name and icons | `AndroidManifest.xml` |
+| `app/src/main/assets/tessera/` | Platform assets | APK assets |
+
+A fresh clone needs one cargo-tessera Android command before Android Studio
+can sync. `cargo tessera android init --force` regenerates the editable files,
+replacing local changes, for example after a template update.
 
 ## License
 

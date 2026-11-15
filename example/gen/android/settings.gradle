@@ -1,5 +1,4 @@
 include ':app'
 
-include ':plugins:tessera_platform'
-project(':plugins:tessera_platform').projectDir = file('plugins/tessera_platform')
-
+// Plugin modules from Cargo dependencies, maintained by cargo-tessera.
+apply from: 'tessera.settings.gradle'

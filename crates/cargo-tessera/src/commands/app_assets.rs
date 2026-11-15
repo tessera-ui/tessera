@@ -12,7 +12,7 @@ use tessera_build::application::{AppConfig, AppIcon};
 fn png(icon: &AppIcon, path: &Path, size: u32, opaque: bool) -> Result<()> {
     let mut pixels = icon.render(size)?;
     if opaque {
-        let mut background = RgbaImage::from_pixel(size, size, Rgba([255, 255, 255, 255]));
+        let mut background = RgbaImage::from_pixel(size, size, Rgba(icon.background()));
         imageops::overlay(&mut background, &pixels, 0, 0);
         pixels = background;
     }
@@ -27,14 +27,8 @@ fn png(icon: &AppIcon, path: &Path, size: u32, opaque: bool) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn desktop(
-    config: &AppConfig,
-    output: &Path,
-    macos: bool,
-) -> Result<Option<Vec<PathBuf>>> {
-    let Some(icon) = config.load_icon()? else {
-        return Ok(None);
-    };
+pub(super) fn desktop(config: &AppConfig, output: &Path, macos: bool) -> Result<Vec<PathBuf>> {
+    let icon = config.load_icon()?;
     fs::create_dir_all(output)?;
     let mut paths = Vec::new();
     for size in [16, 32, 64, 128, 256, 512, 1024] {
@@ -46,7 +40,7 @@ pub(super) fn desktop(
     let ico = output.join("icon.ico");
     icon.write_ico(&ico)?;
     paths.push(ico);
-    Ok(Some(paths))
+    Ok(paths)
 }
 
 pub(super) fn android(config: &AppConfig, resources: &Path) -> Result<()> {
@@ -59,9 +53,14 @@ pub(super) fn android(config: &AppConfig, resources: &Path) -> Result<()> {
             "<resources><string name=\"tessera_app_name\" formatted=\"false\">\"{name}\"</string></resources>\n"
         ),
     )?;
-    let Some(icon) = config.load_icon()? else {
-        return Ok(());
-    };
+    let icon = config.load_icon()?;
+    let [red, green, blue, _] = icon.background();
+    fs::write(
+        values.join("colors.xml"),
+        format!(
+            "<resources><color name=\"tessera_icon_background\">#{red:02X}{green:02X}{blue:02X}</color></resources>\n"
+        ),
+    )?;
     for (density, size, adaptive) in [
         ("mdpi", 48, 108),
         ("hdpi", 72, 162),
@@ -101,7 +100,7 @@ pub(super) fn android(config: &AppConfig, resources: &Path) -> Result<()> {
             directory.join("tessera_icon.xml"),
             format!(
                 r#"<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@android:color/white" />
+    <background android:drawable="@color/tessera_icon_background" />
     <foreground android:drawable="@drawable/tessera_icon_foreground" />
     {monochrome}
 </adaptive-icon>
@@ -112,11 +111,12 @@ pub(super) fn android(config: &AppConfig, resources: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn ios(config: &AppConfig, output: &Path) -> Result<Option<PathBuf>> {
-    let Some(icon) = config.load_icon()? else {
-        return Ok(None);
-    };
-    let catalog = output.join("Assets.xcassets");
+/// Writes an asset catalog whose `AppIcon` serves the iOS and macOS targets.
+pub(super) fn apple(config: &AppConfig, catalog: &Path) -> Result<()> {
+    let icon = config.load_icon()?;
+    if catalog.exists() {
+        fs::remove_dir_all(catalog)?;
+    }
     let directory = catalog.join("AppIcon.appiconset");
     fs::create_dir_all(&directory)?;
     let info = json!({"version": 1, "author": "tessera"});
@@ -126,23 +126,30 @@ pub(super) fn ios(config: &AppConfig, output: &Path) -> Result<Option<PathBuf>> 
     )?;
     let mut images = Vec::new();
     let mut rendered = HashSet::new();
-    for (idiom, size, scales) in [
-        ("iphone", 20.0, &[2, 3][..]),
-        ("iphone", 29.0, &[2, 3][..]),
-        ("iphone", 40.0, &[2, 3][..]),
-        ("iphone", 60.0, &[2, 3][..]),
-        ("ipad", 20.0, &[1, 2][..]),
-        ("ipad", 29.0, &[1, 2][..]),
-        ("ipad", 40.0, &[1, 2][..]),
-        ("ipad", 76.0, &[1, 2][..]),
-        ("ipad", 83.5, &[2][..]),
-        ("ios-marketing", 1024.0, &[1][..]),
+    // iOS icons are opaque; macOS icons keep their transparency.
+    for (idiom, size, scales, opaque) in [
+        ("iphone", 20.0, &[2, 3][..], true),
+        ("iphone", 29.0, &[2, 3][..], true),
+        ("iphone", 40.0, &[2, 3][..], true),
+        ("iphone", 60.0, &[2, 3][..], true),
+        ("ipad", 20.0, &[1, 2][..], true),
+        ("ipad", 29.0, &[1, 2][..], true),
+        ("ipad", 40.0, &[1, 2][..], true),
+        ("ipad", 76.0, &[1, 2][..], true),
+        ("ipad", 83.5, &[2][..], true),
+        ("ios-marketing", 1024.0, &[1][..], true),
+        ("mac", 16.0, &[1, 2][..], false),
+        ("mac", 32.0, &[1, 2][..], false),
+        ("mac", 128.0, &[1, 2][..], false),
+        ("mac", 256.0, &[1, 2][..], false),
+        ("mac", 512.0, &[1, 2][..], false),
     ] {
         for scale in scales {
             let pixels = (size * f64::from(*scale)) as u32;
-            let filename = format!("icon-{pixels}.png");
-            if rendered.insert(pixels) {
-                png(&icon, &directory.join(&filename), pixels, true)?;
+            let prefix = if opaque { "icon" } else { "mac" };
+            let filename = format!("{prefix}-{pixels}.png");
+            if rendered.insert(filename.clone()) {
+                png(&icon, &directory.join(&filename), pixels, opaque)?;
             }
             images.push(json!({"idiom": idiom, "size": format!("{size}x{size}"), "scale": format!("{scale}x"), "filename": filename}));
         }
@@ -151,7 +158,7 @@ pub(super) fn ios(config: &AppConfig, output: &Path) -> Result<Option<PathBuf>> 
         directory.join("Contents.json"),
         serde_json::to_vec(&json!({"images": images, "info": info}))?,
     )?;
-    Ok(Some(catalog))
+    Ok(())
 }
 
 pub(super) fn web(config: &AppConfig, version: &str, host: &Path) -> Result<String> {
@@ -159,16 +166,15 @@ pub(super) fn web(config: &AppConfig, version: &str, host: &Path) -> Result<Stri
     fs::create_dir_all(&output)?;
     let mut icons = Vec::new();
     let mut tags = String::new();
-    if let Some(icon) = config.load_icon()? {
-        for size in [180, 192, 512] {
-            png(&icon, &output.join(format!("icon-{size}.png")), size, false)?;
-        }
-        for size in [192, 512] {
-            icons.push(json!({"src": format!("icon-{size}.png"), "sizes": format!("{size}x{size}"), "type": "image/png", "purpose": "any"}));
-        }
-        icon.write_ico(&output.join("favicon.ico"))?;
-        tags.push_str("<link rel=\"icon\" href=\"./app/favicon.ico\">\n<link rel=\"apple-touch-icon\" href=\"./app/icon-180.png\">\n");
+    let icon = config.load_icon()?;
+    for size in [180, 192, 512] {
+        png(&icon, &output.join(format!("icon-{size}.png")), size, false)?;
     }
+    for size in [192, 512] {
+        icons.push(json!({"src": format!("icon-{size}.png"), "sizes": format!("{size}x{size}"), "type": "image/png", "purpose": "any"}));
+    }
+    icon.write_ico(&output.join("favicon.ico"))?;
+    tags.push_str("<link rel=\"icon\" href=\"./app/favicon.ico\">\n<link rel=\"apple-touch-icon\" href=\"./app/icon-180.png\">\n");
     fs::write(
         output.join("manifest.webmanifest"),
         serde_json::to_vec(&json!({
@@ -190,14 +196,12 @@ mod tests {
         let root = directory.path();
         fs::write(root.join("icon.svg"), r##"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><path d="M2 2H6V6H2Z" fill="#ff0000" opacity=".5"/></svg>"##).unwrap();
         fs::write(
-            root.join("tessera-app.toml"),
-            "name = \"Reader & Notes\"\nidentifier = \"org.example.reader\"\nicon = \"icon.svg\"\n",
+            root.join("tessera.toml"),
+            "[app]\nname = \"Reader & Notes\"\nidentifier = \"org.example.reader\"\nicon = \"icon.svg\"\n",
         )
         .unwrap();
         let config = AppConfig::load(root, "fixture").unwrap();
-        let paths = desktop(&config, &root.join("desktop"), false)
-            .unwrap()
-            .unwrap();
+        let paths = desktop(&config, &root.join("desktop"), false).unwrap();
         let ico = paths.last().unwrap();
         let windows = image::open(ico).unwrap().into_rgba8();
         assert_eq!(windows.dimensions(), (256, 256));
@@ -223,15 +227,18 @@ mod tests {
             (48, 48)
         );
 
-        let catalog = ios(&config, root)
-            .unwrap()
-            .unwrap()
-            .join("AppIcon.appiconset");
+        apple(&config, &root.join("Tessera.xcassets")).unwrap();
+        let catalog = root.join("Tessera.xcassets/AppIcon.appiconset");
         let metadata: serde_json::Value =
             serde_json::from_slice(&fs::read(catalog.join("Contents.json")).unwrap()).unwrap();
         for entry in metadata["images"].as_array().unwrap() {
             let image = image::open(catalog.join(entry["filename"].as_str().unwrap())).unwrap();
-            assert_eq!(image.color(), image::ColorType::Rgb8);
+            let expected = if entry["idiom"] == "mac" {
+                image::ColorType::Rgba8
+            } else {
+                image::ColorType::Rgb8
+            };
+            assert_eq!(image.color(), expected);
         }
         let marketing = image::open(catalog.join("icon-1024.png"))
             .unwrap()

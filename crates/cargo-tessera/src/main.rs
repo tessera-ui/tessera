@@ -6,7 +6,7 @@ use tessera_build::AssetBackend;
 
 use commands::{
     android::{self, AndroidFormat},
-    ios, plugin, web,
+    apple, plugin, web,
 };
 
 mod call_guard;
@@ -43,25 +43,24 @@ enum TesseraCommands {
     Skill(SkillArgs),
     /// Create a new Tessera project
     New {
-        /// Name of the project (optional, will prompt if not provided)
+        /// Project directory name (prompted when omitted)
         name: Option<String>,
-        /// Use a specific template
-        #[arg(short, long)]
+        /// Project template (prompted when omitted)
+        #[arg(short, long, value_parser = ["basic", "blank"])]
         template: Option<String>,
     },
-    /// Start development server with auto rebuild/restart
+    /// Run the desktop app and rebuild it when sources change
     Dev {
-        /// Enable verbose output
+        /// Show the underlying cargo commands
         #[arg(short, long)]
         verbose: bool,
-        /// Specify package to run
+        /// Package to build or run
         #[arg(short, long)]
         package: Option<String>,
-        /// Enable release mode
+        /// Build with the release profile
         #[arg(short, long)]
         release: bool,
-        /// Enable profiling output and write records to this JSONL file
-        /// (desktop only)
+        /// Write profiler records to this JSONL file
         #[arg(long, value_name = "FILE")]
         profiling_output: Option<PathBuf>,
         /// Show a live, top-like component profiler in the dev terminal
@@ -77,22 +76,21 @@ enum TesseraCommands {
     /// Run a non-interactive, session-based headless debug server over JSONL
     /// stdio
     Headless(HeadlessArgs),
-    /// Build the project for release (native targets)
+    /// Build the desktop app
     Build {
-        /// Build in release mode
+        /// Build with the release profile
         #[arg(short, long)]
         release: bool,
-        /// Target triple (passed to cargo build)
+        /// Target triple
         #[arg(short, long)]
         target: Option<String>,
-        /// Specify package to build
+        /// Package to build or run
         #[arg(short, long)]
         package: Option<String>,
-        /// Select an executable
+        /// Executable to build
         #[arg(long)]
         bin: Option<String>,
-        /// Enable profiling output and write records to this JSONL file
-        /// (desktop only)
+        /// Write profiler records to this JSONL file
         #[arg(long, value_name = "FILE")]
         profiling_output: Option<PathBuf>,
         /// Overlay dirty replay regions with a translucent debug color
@@ -102,16 +100,21 @@ enum TesseraCommands {
         #[arg(long, value_enum)]
         asset_backend: Option<AssetBackendArg>,
     },
-    /// Build an application installer or desktop bundle
+    /// Build desktop installers and bundles with cargo-packager
     Package {
+        /// Build with the release profile
         #[arg(short, long)]
         release: bool,
+        /// Target triple
         #[arg(short, long)]
         target: Option<String>,
+        /// Package to build or run
         #[arg(short, long)]
         package: Option<String>,
+        /// Executable to package
         #[arg(long)]
         bin: Option<String>,
+        /// Package formats (comma-separated; default: the platform default)
         #[arg(short, long, value_delimiter = ',', value_parser = ["default", "all", "nsis", "wix", "app", "dmg", "deb", "appimage", "pacman"])]
         formats: Vec<String>,
     },
@@ -135,22 +138,27 @@ enum TesseraCommands {
         #[command(subcommand)]
         command: ProfilingCommands,
     },
-    /// Android-specific build and development commands
+    /// Android project, build, and device commands
     Android {
         #[command(subcommand)]
         command: AndroidCommands,
     },
-    /// iOS application builds and packaging
+    /// Xcode project commands for iOS and macOS
+    Apple {
+        #[command(subcommand)]
+        command: AppleCommands,
+    },
+    /// iOS builds through the Xcode project
     Ios {
         #[command(subcommand)]
         command: IosCommands,
     },
-    /// Web-specific initialization and development commands
+    /// Web host, build, and development server commands
     Web {
         #[command(subcommand)]
         command: WebCommands,
     },
-    /// Create a new Tessera plugin
+    /// Tessera plugin commands
     Plugin {
         #[command(subcommand)]
         command: PluginCommands,
@@ -158,21 +166,30 @@ enum TesseraCommands {
 }
 
 #[derive(Subcommand)]
+enum AppleCommands {
+    /// Generate the Xcode project in gen/apple
+    Init(apple::InitOptions),
+    #[command(hide = true)]
+    RustBuild,
+}
+
+#[derive(Subcommand)]
 enum IosCommands {
-    Build(ios::BuildOptions),
+    /// Build a simulator app, or a device IPA with --device
+    Build(apple::IosBuildOptions),
 }
 
 #[derive(Args)]
 pub(crate) struct CheckArgs {
     #[command(flatten)]
     lints: LintArgs,
-    /// Select a package
+    /// Package to check
     #[arg(short, long)]
     package: Option<String>,
     /// Target triple
     #[arg(short, long)]
     target: Option<String>,
-    /// Use release mode
+    /// Check with the release profile
     #[arg(short, long)]
     release: bool,
     /// Select only this package's library
@@ -332,48 +349,54 @@ struct SkillArgs {
 
 #[derive(Subcommand)]
 enum AndroidCommands {
-    /// Initialize Android project (Gradle) for Tessera app
+    /// Generate the Gradle project in gen/android
     Init {
-        /// Skip installing Rust targets automatically
+        /// Regenerate the editable project files, replacing local changes
+        #[arg(long)]
+        force: bool,
+        /// Do not install the Android Rust targets
         #[arg(long)]
         skip_targets_install: bool,
     },
-    /// Build Android artifacts using Gradle
+    /// Build an APK or AAB
     Build(AndroidBuildArgs),
-    /// Run/install the app on an Android device via Gradle
+    /// Install and run the app on a device, redeploying when sources change
     Dev(AndroidDevArgs),
-    /// Build Rust library for a single Android target (used by Gradle)
+    #[command(hide = true)]
     RustBuild(AndroidRustBuildArgs),
 }
 
 #[derive(Subcommand)]
 enum WebCommands {
-    /// Initialize minimal browser host and wasm entry support for a Tessera app
+    /// Generate the browser host in gen/web
     Init {
-        /// Override package/binary name (-p)
+        /// Package to build or run
         #[arg(long, short)]
         package: Option<String>,
     },
-    /// Build a Tessera app for the browser
+    /// Build the app for the browser
     Build {
-        /// Build in release mode
+        /// Build with the release profile
         #[arg(long, short)]
         release: bool,
-        /// Override package/binary name (-p)
+        /// Package to build or run
         #[arg(long, short)]
         package: Option<String>,
-        /// Features to activate for Tessera checking and the web build
+        /// Features to activate
         #[arg(short = 'F', long, value_delimiter = ',')]
         features: Vec<String>,
     },
-    /// Rebuild and serve a Tessera app for browser development
+    /// Serve the app locally and rebuild it when sources change
     Dev {
-        /// Build in release mode
+        /// Build with the release profile
         #[arg(long, short)]
         release: bool,
-        /// Override package/binary name (-p)
+        /// Package to build or run
         #[arg(long, short)]
         package: Option<String>,
+        /// Features to activate
+        #[arg(short = 'F', long, value_delimiter = ',')]
+        features: Vec<String>,
         /// Port for the local static file server
         #[arg(long, default_value_t = 8000)]
         port: u16,
@@ -384,10 +407,10 @@ enum WebCommands {
 enum PluginCommands {
     /// Create a new Tessera plugin
     New {
-        /// Name of the plugin (optional, will prompt if not provided)
+        /// Plugin directory name (prompted when omitted)
         name: Option<String>,
-        /// Use a specific template
-        #[arg(short, long)]
+        /// Plugin template (prompted when omitted)
+        #[arg(short, long, value_parser = ["basic", "android"])]
         template: Option<String>,
     },
 }
@@ -415,11 +438,14 @@ enum ProfilingCommands {
         #[arg(long, value_name = "FILE")]
         csv: Option<PathBuf>,
     },
-    /// Pull profiler JSONL from Android via adb and analyze it
+    /// Pull profiler JSONL from an Android device and analyze it
     AnalyzeAndroid {
-        /// Android app package name (applicationId)
+        /// Android application ID (default: `[app] identifier` of the package)
         #[arg(long)]
-        package: String,
+        app_id: Option<String>,
+        /// Package whose application ID is used
+        #[arg(short, long)]
+        package: Option<String>,
         /// Device id from `adb devices`
         #[arg(long, short)]
         device: Option<String>,
@@ -448,6 +474,8 @@ enum ProfilingCommands {
     },
 }
 
+const ANDROID_ARCHES: [&str; 4] = ["arm64", "arm", "x86", "x86_64"];
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
 enum AssetBackendArg {
     Embed,
@@ -465,11 +493,10 @@ impl AssetBackendArg {
 
 #[derive(Args)]
 struct HeadlessArgs {
-    /// Package to run as headless workers (defaults to the workspace root
-    /// package)
+    /// Package to build or run
     #[arg(long, short)]
     package: Option<String>,
-    /// Build workers in release mode
+    /// Build with the release profile
     #[arg(long, short)]
     release: bool,
     /// Default offscreen width in physical pixels for new sessions
@@ -481,26 +508,26 @@ struct HeadlessArgs {
     /// Virtual frame step in milliseconds for new sessions
     #[arg(long, default_value_t = 16)]
     frame_time_ms: u32,
-    /// Enable profiling output and write records to this JSONL file
+    /// Write profiler records to this JSONL file
     #[arg(long, value_name = "FILE")]
     profiling_output: Option<PathBuf>,
 }
 
 #[derive(Args)]
 struct AndroidBuildArgs {
-    /// Build in release mode
+    /// Build with the release profile
     #[arg(long, short)]
     release: bool,
-    /// Override CPU architecture (default from metadata or arm64)
-    #[arg(long)]
-    arch: Option<String>,
-    /// Override package/binary name (-p)
+    /// CPU architecture
+    #[arg(long, default_value = "arm64", value_parser = ANDROID_ARCHES)]
+    arch: String,
+    /// Package to build or run
     #[arg(long, short)]
     package: Option<String>,
-    /// Override artifact format (apk or aab)
-    #[arg(long, short, value_enum)]
-    format: Option<AndroidFormat>,
-    /// Enable profiling and write JSONL inside app sandbox at this path
+    /// Artifact format
+    #[arg(long, short, value_enum, default_value_t = AndroidFormat::Apk)]
+    format: AndroidFormat,
+    /// Write profiler records to this path inside the app sandbox
     #[arg(long, value_name = "REMOTE_PATH")]
     profiling_output: Option<String>,
     /// Overlay dirty replay regions with a translucent debug color
@@ -513,19 +540,19 @@ struct AndroidBuildArgs {
 
 #[derive(Args)]
 struct AndroidDevArgs {
-    /// Run in release mode
+    /// Build with the release profile
     #[arg(long, short)]
     release: bool,
-    /// Override CPU architecture
-    #[arg(long)]
-    arch: Option<String>,
-    /// Override package/binary name (-p)
+    /// CPU architecture
+    #[arg(long, default_value = "arm64", value_parser = ANDROID_ARCHES)]
+    arch: String,
+    /// Package to build or run
     #[arg(long, short)]
     package: Option<String>,
-    /// Device id from `adb devices`
+    /// Device serial from `adb devices`
     #[arg(long, short)]
-    device: Option<String>,
-    /// Enable profiling and write JSONL inside app sandbox at this path
+    device: String,
+    /// Write profiler records to this path inside the app sandbox
     #[arg(long, value_name = "REMOTE_PATH")]
     profiling_output: Option<String>,
     /// Overlay dirty replay regions with a translucent debug color
@@ -538,15 +565,12 @@ struct AndroidDevArgs {
 
 #[derive(Args)]
 struct AndroidRustBuildArgs {
-    /// Build in release mode
     #[arg(long, short)]
     release: bool,
-    /// Target triple (e.g. aarch64-linux-android)
     target: String,
-    /// Override package/binary name (-p)
     #[arg(long, short)]
     package: Option<String>,
-    /// Enable profiling and write JSONL inside app sandbox at this path
+    /// Write profiler records to this path inside the app sandbox
     #[arg(long, value_name = "REMOTE_PATH")]
     profiling_output: Option<String>,
     /// Overlay dirty replay regions with a translucent debug color
@@ -701,6 +725,7 @@ fn run() -> Result<()> {
                     )?;
                 }
                 ProfilingCommands::AnalyzeAndroid {
+                    app_id,
                     package,
                     device,
                     remote_path,
@@ -715,9 +740,13 @@ fn run() -> Result<()> {
                     if top == 0 {
                         bail!("--top must be greater than 0");
                     }
+                    let app_id = match app_id {
+                        Some(app_id) => app_id,
+                        None => commands::application_identifier(package.as_deref())?,
+                    };
                     commands::profiling::analyze_android(
                         commands::profiling::AnalyzeAndroidOptions {
-                            package: &package,
+                            package: &app_id,
                             device: device.as_deref(),
                             remote_path: remote_path.as_deref(),
                             pull_to: &pull_to,
@@ -732,9 +761,10 @@ fn run() -> Result<()> {
             },
             TesseraCommands::Android { command } => match command {
                 AndroidCommands::Init {
+                    force,
                     skip_targets_install,
                 } => {
-                    commands::android::init(skip_targets_install)?;
+                    commands::android::init(force, skip_targets_install)?;
                 }
                 AndroidCommands::Build(build_args) => {
                     android::build(android::BuildOptions {
@@ -769,8 +799,12 @@ fn run() -> Result<()> {
                     })?;
                 }
             },
+            TesseraCommands::Apple { command } => match command {
+                AppleCommands::Init(options) => apple::init(options)?,
+                AppleCommands::RustBuild => apple::rust_build()?,
+            },
             TesseraCommands::Ios { command } => match command {
-                IosCommands::Build(options) => ios::build(options)?,
+                IosCommands::Build(options) => apple::ios_build(options)?,
             },
             TesseraCommands::Web { command } => match command {
                 WebCommands::Init { package } => {
@@ -786,9 +820,10 @@ fn run() -> Result<()> {
                 WebCommands::Dev {
                     release,
                     package,
+                    features,
                     port,
                 } => {
-                    web::dev(release, package.as_deref(), port)?;
+                    web::dev(release, package.as_deref(), &features, port)?;
                 }
             },
         },

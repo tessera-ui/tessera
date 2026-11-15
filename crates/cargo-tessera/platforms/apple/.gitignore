@@ -1,0 +1,5 @@
+# Maintained by cargo-tessera on every Apple command.
+/tessera.xcconfig
+/Tessera.xcassets/
+xcuserdata/
+/build/

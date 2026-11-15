@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.kotlin
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
@@ -13,6 +14,12 @@ build
 jniLibs
 .cxx
 local.properties
-/app/src/main/assets/tessera/
 
+# Maintained by cargo-tessera on every Android command.
+/tessera.properties
+/tessera.settings.gradle
+/tessera.build.gradle.kts
+/buildSrc/
+/tessera-plugins/
+/app/src/main/assets/tessera/
 /app/src/main/tessera-res/

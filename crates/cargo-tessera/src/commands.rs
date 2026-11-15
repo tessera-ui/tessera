@@ -1,4 +1,5 @@
 pub mod android;
+pub mod apple;
 mod app_assets;
 mod application;
 mod assets;
@@ -6,7 +7,6 @@ pub mod build;
 pub mod check;
 pub mod dev;
 pub mod headless;
-pub mod ios;
 pub mod new;
 pub mod package;
 pub mod plugin;
@@ -32,6 +32,27 @@ pub fn find_package_dir(package_name: &str) -> Result<PathBuf> {
         .and_then(|package| package.manifest_path.parent())
         .map(|path| path.to_path_buf().into_std_path_buf())
         .ok_or_else(|| anyhow!("Package '{package_name}' not found in workspace"))
+}
+
+/// Returns the `[app] identifier` of `package`, or of the current package.
+pub fn application_identifier(package: Option<&str>) -> Result<String> {
+    let metadata = cargo_metadata::MetadataCommand::new().no_deps().exec()?;
+    let package = match package {
+        Some(name) => metadata
+            .packages
+            .iter()
+            .find(|candidate| candidate.name.as_str() == name),
+        None => metadata.root_package(),
+    }
+    .ok_or_else(|| anyhow!("Select a package with --package or pass --app-id"))?;
+    let directory = package
+        .manifest_path
+        .parent()
+        .ok_or_else(|| anyhow!("Missing package directory"))?;
+    Ok(
+        tessera_build::application::AppConfig::load(directory.as_std_path(), &package.name)?
+            .identifier,
+    )
 }
 
 pub fn prompt_name(kind: &'static str, placeholder: &str) -> Result<String> {

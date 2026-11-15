@@ -5,6 +5,7 @@ buildscript {
     }
     dependencies {
         classpath("com.android.tools.build:gradle:8.10.1")
+        // Plugin modules may be written in Kotlin.
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.21")
     }
 }
@@ -19,4 +20,3 @@ allprojects {
 tasks.register("clean").configure {
     delete("build")
 }
-

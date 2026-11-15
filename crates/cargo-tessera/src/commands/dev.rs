@@ -239,8 +239,7 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
     for file in [
         "Cargo.toml",
         "build.rs",
-        "tessera-app.toml",
-        "tessera-config.toml",
+        "tessera.toml",
     ] {
         let path = package_dir.join(file);
         if path.exists() {

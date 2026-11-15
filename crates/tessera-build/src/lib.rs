@@ -2,8 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Load `tessera-config.toml` and generate resource bindings in build
-//! scripts.
+//! Load `tessera.toml` and generate resource bindings in build scripts.
 
 #![deny(
     missing_docs,
@@ -19,7 +18,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail, ensure};
+use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 use serde::Deserialize;
@@ -30,8 +30,8 @@ mod localization;
 
 /// Environment variable selecting the asset backend (`embed` or `platform`).
 pub const ASSET_BACKEND_ENV: &str = "TESSERA_ASSET_BACKEND";
-/// The conventional filename for Tessera project configurations.
-pub const TESSERA_CONFIG_FILE: &str = "tessera-config.toml";
+/// The Tessera configuration file at a package root.
+pub const TESSERA_CONFIG_FILE: &str = "tessera.toml";
 /// Generated Rust source filename written under `OUT_DIR`.
 pub const GENERATED_ASSET_FILE: &str = "tessera_assets.rs";
 
@@ -78,22 +78,23 @@ impl std::str::FromStr for AssetBackend {
     }
 }
 
-/// Configuration schema loaded from `tessera-config.toml`.
+/// Configuration schema loaded from `tessera.toml`.
 #[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct TesseraConfig {
-    /// Permissions requested by the package.
-    #[serde(default)]
-    pub permissions: Vec<String>,
-    /// Asset collection and filtering configuration.
+    /// Application identity, read only from the package being built.
+    pub app: Option<application::AppConfig>,
+    /// Assets delivered with this package.
     pub assets: Option<AssetsConfig>,
-    /// Plugin wrapper generation settings.
-    pub plugin: Option<PluginConfig>,
-    /// Localization catalog settings.
+    /// Localization catalogs of this package.
     pub i18n: Option<I18nConfig>,
+    /// Platform modules contributed by a plugin package.
+    pub plugin: Option<PluginConfig>,
 }
 
 /// Embedded localization catalogs and their fallback language.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct I18nConfig {
     /// Catalog directory relative to the package root. Defaults to `locales`.
     pub dir: Option<String>,
@@ -101,50 +102,36 @@ pub struct I18nConfig {
     pub fallback: String,
 }
 
-/// Asset directory and filtering configuration.
+/// Asset directory and delivery rules.
 #[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct AssetsConfig {
-    /// Asset paths embedded in the binary on every target.
-    #[serde(default)]
-    pub embed: Vec<String>,
     /// Asset directory relative to the package root. Defaults to `assets`.
     pub dir: Option<String>,
-    /// Tree-shaking rules for retaining matched platform assets.
-    pub tree_shaking: Option<AssetsTreeShakingConfig>,
-}
-
-impl AssetsConfig {
-    /// Returns configured exclusion patterns or an empty slice.
-    pub fn tree_shaking_exclude_patterns(&self) -> &[String] {
-        self.tree_shaking
-            .as_ref()
-            .map_or(&[], |tree_shaking| tree_shaking.exclude.as_slice())
-    }
-}
-
-/// Tree-shaking rules applied during asset discovery.
-#[derive(Debug, Clone, Deserialize, Default)]
-pub struct AssetsTreeShakingConfig {
-    /// Patterns of asset paths to keep even when platform tree shaking finds no
-    /// references.
+    /// Glob patterns, relative to the asset directory, of assets embedded in
+    /// the binary on every target.
     #[serde(default)]
-    pub exclude: Vec<String>,
+    pub embed: Vec<String>,
+    /// Glob patterns of platform assets delivered even when no reference to
+    /// them is found in the binary.
+    #[serde(default)]
+    pub keep: Vec<String>,
 }
 
-/// Plugin-specific configuration options.
+/// Platform modules contributed by a plugin package.
 #[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct PluginConfig {
-    /// Android-specific plugin integration settings.
+    /// Android library module built from the package's `android` directory.
     pub android: Option<PluginAndroidConfig>,
 }
 
-/// Android plugin integration metadata.
-#[derive(Debug, Clone, Deserialize, Default)]
+/// Android library module of a plugin package.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct PluginAndroidConfig {
-    /// Android module path used by generated plugin glue code.
-    pub module: Option<String>,
-    /// Java/Kotlin package name used for Android integration.
-    pub package: Option<String>,
+    /// Gradle module name.
+    pub module: String,
 }
 
 #[derive(Debug, Clone)]
@@ -161,6 +148,8 @@ struct AssetEntry {
 pub struct PreparedAsset {
     /// Whether this asset is embedded on every target.
     pub embedded: bool,
+    /// Whether this platform asset is delivered without a binary reference.
+    pub keep: bool,
     /// Source file.
     pub source: PathBuf,
     /// Logical path relative to the configured asset directory.
@@ -169,17 +158,36 @@ pub struct PreparedAsset {
 
 /// Prepares configured assets for embedding or platform delivery.
 pub fn prepare_assets(root: &Path, config: &AssetsConfig) -> Result<Vec<PreparedAsset>> {
+    let embed = asset_patterns(&config.embed, "embed")?;
+    let keep = asset_patterns(&config.keep, "keep")?;
     asset_files(root)?
         .into_iter()
         .map(|source| {
             let relative = normalize_asset_path(source.strip_prefix(root)?);
             Ok(PreparedAsset {
-                embedded: config.embed.contains(&relative),
+                embedded: embed.is_match(&relative),
+                keep: keep.is_match(&relative),
                 source,
                 relative,
             })
         })
         .collect()
+}
+
+fn asset_patterns(patterns: &[String], key: &str) -> Result<GlobSet> {
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        let normalized = pattern.trim().replace('\\', "/");
+        let normalized = normalized.strip_prefix("./").unwrap_or(&normalized);
+        ensure!(!normalized.is_empty(), "Empty pattern in `assets.{key}`");
+        builder.add(
+            GlobBuilder::new(normalized)
+                .literal_separator(true)
+                .build()
+                .with_context(|| format!("Invalid pattern `{pattern}` in `assets.{key}`"))?,
+        );
+    }
+    Ok(builder.build()?)
 }
 
 #[derive(Debug, Default)]
@@ -228,10 +236,23 @@ impl ModuleNode {
     }
 }
 
-/// Loads `tessera-config.toml` from a package directory.
+/// Loads `tessera.toml` from a package directory.
 ///
 /// Returns `Ok(None)` when the config file does not exist.
 pub fn load_tessera_config_from_dir(dir: &Path) -> Result<Option<TesseraConfig>> {
+    for (legacy, section) in [
+        ("tessera-app.toml", "`[app]`"),
+        ("tessera-config.toml", "`[assets]`, `[i18n]`, and `[plugin]`"),
+    ] {
+        let legacy = dir.join(legacy);
+        ensure!(
+            !legacy.exists(),
+            "{} is no longer read; move its settings to {section} in {}. Platform \
+             permissions are declared in the Android manifest and Xcode project instead",
+            legacy.display(),
+            dir.join(TESSERA_CONFIG_FILE).display()
+        );
+    }
     let path = dir.join(TESSERA_CONFIG_FILE);
     if !path.exists() {
         return Ok(None);
@@ -279,8 +300,8 @@ pub fn resolve_resource_dirs(
 /// Generates application defaults, asset bindings, and localization catalogs.
 ///
 /// The generated file is written to `OUT_DIR/tessera_assets.rs`. Creating a
-/// previously absent `tessera-config.toml` or `tessera-app.toml` takes effect
-/// once the package's `Cargo.toml` changes.
+/// previously absent `tessera.toml` takes effect once the package's
+/// `Cargo.toml` changes.
 pub fn build() -> Result<()> {
     let manifest_dir = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").context("Missing CARGO_MANIFEST_DIR for build script")?,
@@ -318,7 +339,8 @@ pub fn build() -> Result<()> {
     }
 
     let mut generated = generate_asset_file(&entries, backend)?;
-    let application = application::generate(&manifest_dir, &out_dir, &package_name)?;
+    let application =
+        application::generate(&manifest_dir, &out_dir, &package_name, config.as_ref())?;
     generated.push_str(&prettyplease::unparse(&syn::parse2::<syn::File>(
         application,
     )?));
@@ -629,5 +651,46 @@ mod tests {
             assert_eq!(mangle_module_name(keyword), format!("{keyword}_"));
         }
         assert_eq!(mangle_module_name("images"), "images");
+    }
+
+    #[test]
+    fn asset_globs_select_embedded_and_kept_assets() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        for file in ["fonts/a.ttf", "fonts/nested/b.ttf", "licenses/x/OFL.txt", "logo.svg"] {
+            let path = root.path().join(file);
+            fs::create_dir_all(path.parent().context("asset directory")?)?;
+            fs::write(path, file)?;
+        }
+        let config: AssetsConfig =
+            toml::from_str("embed = [\"fonts/*.ttf\"]\nkeep = [\"./licenses/**\"]")?;
+        let assets = prepare_assets(root.path(), &config)?
+            .into_iter()
+            .map(|asset| (asset.relative, asset.embedded, asset.keep))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            assets,
+            [
+                ("fonts/a.ttf".to_string(), true, false),
+                ("fonts/nested/b.ttf".to_string(), false, false),
+                ("licenses/x/OFL.txt".to_string(), false, true),
+                ("logo.svg".to_string(), false, false),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn configuration_rejects_unknown_keys_and_legacy_files() -> Result<()> {
+        let package = tempfile::tempdir()?;
+        let config = package.path().join(TESSERA_CONFIG_FILE);
+        fs::write(&config, "[assets]\nembedded = []\n")?;
+        let error = load_tessera_config_from_dir(package.path()).unwrap_err();
+        assert!(format!("{error:#}").contains("unknown field `embedded`"));
+
+        fs::write(&config, "[assets]\n")?;
+        fs::write(package.path().join("tessera-config.toml"), "")?;
+        let error = load_tessera_config_from_dir(package.path()).unwrap_err();
+        assert!(error.to_string().contains("tessera-config.toml is no longer read"));
+        Ok(())
     }
 }
