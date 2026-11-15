@@ -38,9 +38,10 @@ pub(super) fn sync_assets(
     }
     let mut count = 0;
     let mut bytes = 0;
-    for asset in candidates.iter().filter(|asset| {
-        asset.keep || used.is_none_or(|paths| paths.contains(&asset.platform_path))
-    }) {
+    for asset in candidates
+        .iter()
+        .filter(|asset| asset.keep || used.is_none_or(|paths| paths.contains(&asset.platform_path)))
+    {
         let parent = asset
             .target_path
             .parent()

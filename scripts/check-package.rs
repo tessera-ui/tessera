@@ -78,8 +78,10 @@ impl App {
             .parent()
             .context("Missing repository root")?
             .join("example");
-        let app: toml::Value =
-            toml::from_str::<toml::Value>(&fs::read_to_string(example.join("tessera.toml"))?)?["app"].clone();
+        let app: toml::Value = toml::from_str::<toml::Value>(&fs::read_to_string(
+            example.join("tessera.toml"),
+        )?)?["app"]
+            .clone();
         let cargo: toml::Value = toml::from_str(&fs::read_to_string(example.join("Cargo.toml"))?)?;
         let string = |value: &toml::Value| -> Result<String> {
             Ok(value

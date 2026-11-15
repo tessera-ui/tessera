@@ -1,6 +1,6 @@
 pub mod android;
-pub mod apple;
 mod app_assets;
+pub mod apple;
 mod application;
 mod assets;
 pub mod build;

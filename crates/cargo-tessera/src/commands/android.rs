@@ -588,11 +588,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
         ));
     }
 
-    for file in [
-        "Cargo.toml",
-        "build.rs",
-        "tessera.toml",
-    ] {
+    for file in ["Cargo.toml", "build.rs", "tessera.toml"] {
         let path = watch_dir.join(file);
         if path.exists() {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;
@@ -817,7 +813,10 @@ fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
     ] {
         properties.push_str(&format!("{key}={}\n", escape_property(&value)));
     }
-    write_if_changed(&project_dir.join("tessera.properties"), properties.as_bytes())?;
+    write_if_changed(
+        &project_dir.join("tessera.properties"),
+        properties.as_bytes(),
+    )?;
 
     let mut settings = GENERATED_HEADER.to_string();
     let mut dependencies = format!("{GENERATED_HEADER}dependencies {{\n");
@@ -832,7 +831,10 @@ fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
         ));
     }
     dependencies.push_str("}\n");
-    write_if_changed(&project_dir.join("tessera.settings.gradle"), settings.as_bytes())?;
+    write_if_changed(
+        &project_dir.join("tessera.settings.gradle"),
+        settings.as_bytes(),
+    )?;
     write_if_changed(
         &project_dir.join("tessera.build.gradle.kts"),
         dependencies.as_bytes(),

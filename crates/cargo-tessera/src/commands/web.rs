@@ -166,11 +166,7 @@ pub fn dev(release: bool, package: Option<&str>, features: &[String], port: u16)
         bail!("Source directory not found: {}", src_path.display());
     }
 
-    for file in [
-        "Cargo.toml",
-        "build.rs",
-        "tessera.toml",
-    ] {
+    for file in ["Cargo.toml", "build.rs", "tessera.toml"] {
         let path = project_dir.join(file);
         if path.exists() {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;
@@ -878,24 +874,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn application_metadata_updates_preserve_the_web_host() {
+    fn application_metadata_updates_only_the_maintained_block() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("index.html");
-        fs::write(&path, "<!doctype html><html><head><title>Old</title><style>canvas{display:block}</style></head><body><canvas></canvas></body></html>").unwrap();
+        let page = "<!doctype html><html><head>\n    <!-- tessera-app -->\n    <!-- /tessera-app -->\n    <style>canvas{display:block}</style>\n</head><body><canvas></canvas></body></html>";
+        fs::write(&path, page).unwrap();
         let mut config = AppConfig::load(directory.path(), "reader").unwrap();
         config.name = "Reader & Notes".into();
         sync_web_application(&config, "1.2.3", directory.path()).unwrap();
         let first = fs::read_to_string(&path).unwrap();
         sync_web_application(&config, "1.2.3", directory.path()).unwrap();
         assert_eq!(first, fs::read_to_string(&path).unwrap());
-        assert!(first.contains("<title>Reader &amp; Notes</title>"));
+        assert!(first.contains("    <title>Reader &amp; Notes</title>\n"));
         assert!(first.contains("<style>canvas{display:block}</style>"));
         assert!(first.contains("<body><canvas></canvas></body>"));
         config.name = "New Name".into();
         sync_web_application(&config, "1.2.3", directory.path()).unwrap();
-        let html = fs::read_to_string(path).unwrap();
+        let html = fs::read_to_string(&path).unwrap();
         assert_eq!(html.matches("<title>").count(), 1);
         assert!(html.contains("<title>New Name</title>"));
+
+        fs::write(&path, "<html><head><title>Mine</title></head></html>").unwrap();
+        let error = sync_web_application(&config, "1.2.3", directory.path()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("must contain `<!-- tessera-app -->`")
+        );
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "<html><head><title>Mine</title></head></html>"
+        );
     }
 
     #[test]

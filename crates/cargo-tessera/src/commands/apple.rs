@@ -152,9 +152,8 @@ fn sync_project(app: &Application) -> Result<()> {
 /// Reads the build settings Xcode exports to run script phases.
 pub fn rust_build() -> Result<()> {
     let setting = |name: &str| {
-        env::var(name).map_err(|_| {
-            anyhow!("{name} is not set; this command runs from an Xcode build phase")
-        })
+        env::var(name)
+            .map_err(|_| anyhow!("{name} is not set; this command runs from an Xcode build phase"))
     };
     let platform = setting("PLATFORM_NAME")?;
     let configuration = setting("CONFIGURATION")?;
@@ -173,6 +172,11 @@ pub fn rust_build() -> Result<()> {
     // SAFETY: no other threads have been started yet.
     unsafe { env::remove_var("SDKROOT") };
 
+    run(Command::new("rustup")
+        .arg("target")
+        .arg("add")
+        .args(&triples))
+    .context("Install the Rust targets for this Xcode build")?;
     let mut executables = Vec::new();
     for triple in &triples {
         let built = build::execute(
@@ -189,7 +193,11 @@ pub fn rust_build() -> Result<()> {
         .context("Cargo did not produce the selected executable")?;
         executables.push(built);
     }
-    fs::create_dir_all(executable.parent().context("Missing executable directory")?)?;
+    fs::create_dir_all(
+        executable
+            .parent()
+            .context("Missing executable directory")?,
+    )?;
     if let [single] = executables.as_slice() {
         fs::copy(single, &executable)?;
     } else {

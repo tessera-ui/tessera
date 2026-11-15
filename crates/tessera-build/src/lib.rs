@@ -242,7 +242,10 @@ impl ModuleNode {
 pub fn load_tessera_config_from_dir(dir: &Path) -> Result<Option<TesseraConfig>> {
     for (legacy, section) in [
         ("tessera-app.toml", "`[app]`"),
-        ("tessera-config.toml", "`[assets]`, `[i18n]`, and `[plugin]`"),
+        (
+            "tessera-config.toml",
+            "`[assets]`, `[i18n]`, and `[plugin]`",
+        ),
     ] {
         let legacy = dir.join(legacy);
         ensure!(
@@ -656,7 +659,12 @@ mod tests {
     #[test]
     fn asset_globs_select_embedded_and_kept_assets() -> Result<()> {
         let root = tempfile::tempdir()?;
-        for file in ["fonts/a.ttf", "fonts/nested/b.ttf", "licenses/x/OFL.txt", "logo.svg"] {
+        for file in [
+            "fonts/a.ttf",
+            "fonts/nested/b.ttf",
+            "licenses/x/OFL.txt",
+            "logo.svg",
+        ] {
             let path = root.path().join(file);
             fs::create_dir_all(path.parent().context("asset directory")?)?;
             fs::write(path, file)?;
@@ -690,7 +698,11 @@ mod tests {
         fs::write(&config, "[assets]\n")?;
         fs::write(package.path().join("tessera-config.toml"), "")?;
         let error = load_tessera_config_from_dir(package.path()).unwrap_err();
-        assert!(error.to_string().contains("tessera-config.toml is no longer read"));
+        assert!(
+            error
+                .to_string()
+                .contains("tessera-config.toml is no longer read")
+        );
         Ok(())
     }
 }
