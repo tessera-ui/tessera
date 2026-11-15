@@ -396,15 +396,9 @@ impl AndroidContext {
     }
 }
 
-fn run_android_call_guard(ctx: &AndroidContext, target: Option<&str>) -> Result<()> {
-    let target = if let Some(target) = target {
-        ctx.target_by_name_or_triple(target)?.triple
-    } else {
-        ctx.targets()?
-            .first()
-            .ok_or_else(|| anyhow!("No Android Rust targets are available"))?
-            .triple
-    };
+// Gradle checks each target when it invokes `rust-build`.
+fn run_android_call_guard(ctx: &AndroidContext, target: &str) -> Result<()> {
+    let target = ctx.target_by_name_or_triple(target)?.triple;
     let features = ctx.metadata.features().unwrap_or_default();
     call_guard::run(call_guard::CheckOptions {
         target_selection: call_guard::TargetSelection::lib_only(),
@@ -550,7 +544,6 @@ fn register_helpers(handlebars: &mut Handlebars<'static>) {
 
 pub fn build(opts: BuildOptions) -> Result<()> {
     let ctx = AndroidContext::from_build_opts(opts)?;
-    run_android_call_guard(&ctx, None)?;
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
             "Android project not initialized. Run `cargo tessera android init` first."
@@ -614,7 +607,6 @@ pub fn build(opts: BuildOptions) -> Result<()> {
 
 pub fn dev(opts: DevOptions) -> Result<()> {
     let ctx = AndroidContext::from_dev_opts(opts.clone())?;
-    run_android_call_guard(&ctx, None)?;
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
             "Android project not initialized. Run `cargo tessera android init` first."
@@ -764,7 +756,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
 pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
     let target_name = opts.target.clone();
     let ctx = AndroidContext::from_rust_build_opts(opts)?;
-    run_android_call_guard(&ctx, Some(&target_name))?;
+    run_android_call_guard(&ctx, &target_name)?;
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
             "Android project not initialized. Run `cargo tessera android init` first."
