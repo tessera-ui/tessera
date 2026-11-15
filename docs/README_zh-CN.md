@@ -37,7 +37,7 @@
 
 如果您在使用过程中遇到任何问题，请随时[提交 issue](https://github.com/tessera-ui/tessera/issues)。
 
-## 写一个函数，剩下的交给 Tessera 绘制
+## 概览
 
 ```rust
 use tessera_components::{
@@ -72,11 +72,7 @@ pub fn app() {
 }
 ```
 
-界面是关于状态的 Rust 函数。Tessera 按需执行它们来构建每帧，并通过 GPU 在
-Vulkan、Metal、DirectX 12 或 WebGPU 上绘制。没有 HTML，没有 CSS，没有 WebView。
-
-调用组件会登记一次 UI 使用，并返回带类型的配置句柄。句柄、延迟子内容和执行顺序详见
-[组件调用](COMPONENT_CALLS.md)。
+这就是一个完整的计数器应用程序！进一步的细节请参考[快速开始指南](https://tessera-ui.github.io/zhHans/guide/getting-started.html)。
 
 ## 创建项目
 

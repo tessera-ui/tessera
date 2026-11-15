@@ -37,7 +37,7 @@ A fast, GPU-first Rust UI framework that is declarative and reactive.
 
 If you encounter any issues, please feel free to [submit an issue](https://github.com/tessera-ui/tessera/issues).
 
-## Write a function. Tessera draws the rest.
+## Overview
 
 ```rust
 use tessera_components::{
@@ -72,13 +72,7 @@ pub fn app() {
 }
 ```
 
-The UI is a Rust function of state. Tessera runs these functions as needed to
-build each frame, then draws it on the GPU using Vulkan, Metal, DirectX 12 or
-WebGPU. No HTML, no CSS, no WebView.
-
-Calling a component registers one UI use and returns a typed configuration
-handle. See [component calls](docs/COMPONENT_CALLS.md) for how handles,
-deferred child content, and execution order work.
+This is a complete counter application! For more details, please refer to the [Quick Start Guide](https://tessera-ui.github.io/guide/getting-started.html).
 
 ## Start a project
 
