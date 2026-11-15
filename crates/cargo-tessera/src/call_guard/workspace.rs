@@ -407,7 +407,10 @@ fn run_cargo_check(
     // Package IDs embed the manifest path as given. rust-analyzer passes its
     // manifest explicitly, while a working directory may already be resolved
     // through symlinks, so both must name the same manifest.
-    command.extend(["--manifest-path".to_string(), manifest.display().to_string()]);
+    command.extend([
+        "--manifest-path".to_string(),
+        manifest.display().to_string(),
+    ]);
     let mut child = Command::new(&command[0])
         .args(&command[1..])
         .current_dir(root)
