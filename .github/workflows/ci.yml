@@ -77,17 +77,14 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            format: deb
-            platform: deb
-            artifact: target/packages/example
+            formats: deb,appimage,pacman
+            checks: deb appimage pacman
           - os: windows-latest
-            format: nsis
-            platform: windows
-            artifact: target/packages/example
+            formats: nsis,wix
+            checks: windows msi
           - os: macos-latest
-            format: app
-            platform: macos
-            artifact: target/packages/example/*.app
+            formats: app,dmg
+            checks: macos dmg
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -107,9 +104,18 @@ jobs:
           XDG_RUNTIME_DIR: ${{ runner.temp }}
         run: rust-script scripts/release-package.rs --check
       - name: Package the example
-        run: cargo tessera package -p example --formats ${{ matrix.format }}
-      - name: Inspect the package
-        run: rust-script scripts/check-package.rs ${{ matrix.platform }} ${{ matrix.artifact }}
+        env:
+          # Run AppImage tools without FUSE.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: cargo tessera package -p example --formats ${{ matrix.formats }}
+      - name: Inspect the packages
+        shell: bash
+        run: |
+          for check in ${{ matrix.checks }}; do
+            artifact=target/packages/example
+            if [ "$check" = macos ]; then artifact=$(echo target/packages/example/*.app); fi
+            rust-script scripts/check-package.rs "$check" "$artifact"
+          done
 
   scripts:
     name: Scripts, doctests and formatting
@@ -246,6 +252,8 @@ jobs:
           rust-script scripts/check-package.rs android example/gen/android/app/build/outputs/apk
           cargo tessera android build --format apk -p example --arch x86_64 --profiling-output files/acceptance.jsonl
           rust-script scripts/check-package.rs android example/gen/android/app/build/outputs/apk
+          cargo tessera android build --format aab -p example --arch arm64
+          rust-script scripts/check-package.rs aab example/gen/android/app/build/outputs/bundle
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

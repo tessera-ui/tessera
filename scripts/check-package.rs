@@ -45,10 +45,15 @@ mod process;
 #[derive(Clone, Copy, ValueEnum)]
 enum Platform {
     Deb,
+    Appimage,
+    Pacman,
     Windows,
+    Msi,
     Macos,
+    Dmg,
     Ios,
     Android,
+    Aab,
     Web,
 }
 
@@ -237,9 +242,14 @@ fn deb(app: &App, directory: &Path, scratch: &Path) -> Result<()> {
         .arg("--extract")
         .arg(package)
         .arg(scratch))?;
+    desktop_entry(app, scratch)
+}
+
+/// Checks the desktop entry, launcher, and icons of an extracted Linux package.
+fn desktop_entry(app: &App, root: &Path) -> Result<()> {
     let launcher = app.identifier.replace('.', "-");
     let desktop =
-        fs::read_to_string(scratch.join(format!("usr/share/applications/{launcher}.desktop")))?;
+        fs::read_to_string(root.join(format!("usr/share/applications/{launcher}.desktop")))?;
     let mut in_entry = false;
     let mut entry = BTreeMap::new();
     for line in desktop.lines().map(str::trim) {
@@ -265,15 +275,154 @@ fn deb(app: &App, directory: &Path, scratch: &Path) -> Result<()> {
         launcher.as_str(),
     )?;
     ensure!(
-        scratch.join("usr/bin").join(&launcher).is_file(),
+        root.join("usr/bin").join(&launcher).is_file(),
         "Missing desktop executable"
     );
     let icon = entry.get("Icon").context("Missing desktop icon")?;
-    let icons = paths(&scratch.join(format!("usr/share/icons/hicolor/*x*/apps/{icon}.png")))?;
+    let icons = paths(&root.join(format!("usr/share/icons/hicolor/*x*/apps/{icon}.png")))?;
     ensure!(!icons.is_empty(), "Missing desktop icon {icon}");
     for icon in icons {
         app.icon_file(&icon, None)?;
     }
+    Ok(())
+}
+
+fn appimage(app: &App, directory: &Path, scratch: &Path) -> Result<()> {
+    let image = one(paths(&directory.join("*.AppImage"))?)?;
+    run(Command::new("chmod").arg("+x").arg(&image))?;
+    run(Command::new(fs::canonicalize(&image)?)
+        .arg("--appimage-extract")
+        .current_dir(scratch))?;
+    desktop_entry(app, &scratch.join("squashfs-root"))
+}
+
+fn pacman(app: &App, directory: &Path, scratch: &Path) -> Result<()> {
+    let package = one(paths(&directory.join("*.pkg.tar.*"))?)?;
+    run(Command::new("tar")
+        .arg("-xf")
+        .arg(&package)
+        .arg("-C")
+        .arg(scratch))?;
+    let info = fs::read_to_string(scratch.join(".PKGINFO"))?;
+    let field = |key: &str| {
+        info.lines()
+            .find_map(|line| line.strip_prefix(&format!("{key} = ")))
+            .with_context(|| format!("Missing pacman {key}"))
+    };
+    ensure!(!field("pkgname")?.is_empty(), "Empty pacman package name");
+    let version = field("pkgver")?;
+    ensure!(
+        version.starts_with(&app.version),
+        "pacman pkgver: expected {}, got {version}",
+        app.version
+    );
+    desktop_entry(app, scratch)
+}
+
+fn msi(app: &App, directory: &Path, scratch: &Path) -> Result<()> {
+    let installer = one(paths(&directory.join("*.msi"))?)?;
+    let installer = fs::canonicalize(installer)?;
+    let property = |name: &str| {
+        run(Command::new("powershell").args([
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "$installer = New-Object -ComObject WindowsInstaller.Installer; \
+                 $database = $installer.OpenDatabase('{}', 0); \
+                 $view = $database.OpenView(\"SELECT Value FROM Property WHERE Property = '{name}'\"); \
+                 $view.Execute(); $view.Fetch().StringData(1)",
+                installer.display()
+            ),
+        ]))
+    };
+    equal(
+        "MSI ProductName",
+        property("ProductName")?.trim(),
+        app.name.as_str(),
+    )?;
+    equal(
+        "MSI ProductVersion",
+        property("ProductVersion")?.trim(),
+        app.numeric_version.as_str(),
+    )?;
+    // An administrative installation unpacks the files without installing.
+    let target = scratch.join("msi");
+    run(Command::new("msiexec")
+        .arg("/a")
+        .arg(&installer)
+        .arg("/qn")
+        .arg(format!("TARGETDIR={}", target.display())))?;
+    let executable = format!("{}.exe", app.binary);
+    let found = WalkDir::new(&target)
+        .into_iter()
+        .filter_map(Result::ok)
+        .find(|entry| entry.file_name() == executable.as_str())
+        .context("MSI does not contain the application executable")?;
+    pe_metadata(app, found.path(), true)
+}
+
+fn dmg(app: &App, directory: &Path, scratch: &Path) -> Result<()> {
+    let image = one(paths(&directory.join("*.dmg"))?)?;
+    let mount = scratch.join("dmg");
+    run(Command::new("hdiutil")
+        .args(["attach", "-nobrowse", "-readonly", "-mountpoint"])
+        .arg(&mount)
+        .arg(&image))?;
+    let result = one(paths(&mount.join("*.app"))?).and_then(|bundle| {
+        let copy = scratch.join("bundle");
+        fs::create_dir_all(&copy)?;
+        apple(app, &bundle, &copy, false)
+    });
+    run(Command::new("hdiutil").arg("detach").arg(&mount))?;
+    result
+}
+
+fn aab(app: &App, directory: &Path) -> Result<()> {
+    let bundle = if directory.is_file() {
+        directory.to_owned()
+    } else {
+        one(WalkDir::new(directory)
+            .into_iter()
+            .filter_map(Result::ok)
+            .map(|entry| entry.into_path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "aab"))
+            .collect())?
+    };
+    let mut archive = zip::ZipArchive::new(fs::File::open(&bundle)?)?;
+    let names = archive
+        .file_names()
+        .map(|name| Ok(name?.into_owned()))
+        .collect::<Result<BTreeSet<_>>>()?;
+    let library = format!("lib{}.so", app.library);
+    ensure!(
+        names
+            .iter()
+            .any(|name| name.starts_with("base/lib/") && name.ends_with(&library)),
+        "AAB does not contain {library}"
+    );
+    ensure!(
+        names
+            .iter()
+            .any(|name| name.starts_with("base/assets/tessera/")),
+        "AAB does not contain platform assets"
+    );
+    ensure!(
+        names
+            .iter()
+            .any(|name| name.starts_with("base/res/") && name.contains("tessera_icon")),
+        "AAB does not contain the launcher icon"
+    );
+    let mut manifest = Vec::new();
+    archive
+        .by_name("base/manifest/AndroidManifest.xml")?
+        .read_to_end(&mut manifest)?;
+    ensure!(
+        manifest
+            .windows(app.identifier.len())
+            .any(|window| window == app.identifier.as_bytes()),
+        "AAB manifest does not name {}",
+        app.identifier
+    );
     Ok(())
 }
 
@@ -719,10 +868,15 @@ fn main() -> Result<()> {
     println!("Checking artifacts at {}", cli.artifact.display());
     match cli.platform {
         Platform::Deb => deb(&app, &cli.artifact, scratch.path()),
+        Platform::Appimage => appimage(&app, &cli.artifact, scratch.path()),
+        Platform::Pacman => pacman(&app, &cli.artifact, scratch.path()),
         Platform::Windows => windows(&app, &cli.artifact, scratch.path()),
+        Platform::Msi => msi(&app, &cli.artifact, scratch.path()),
         Platform::Macos => apple(&app, &cli.artifact, scratch.path(), false),
+        Platform::Dmg => dmg(&app, &cli.artifact, scratch.path()),
         Platform::Ios => apple(&app, &cli.artifact, scratch.path(), true),
         Platform::Android => android(&app, &cli.artifact),
+        Platform::Aab => aab(&app, &cli.artifact),
         Platform::Web => web(&app, &cli.artifact),
     }
 }
