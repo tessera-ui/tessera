@@ -161,14 +161,36 @@ impl<'db> CallAnalyzer<'db> {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn check_files(&mut self, lints: &LintOptions) -> Result<()> {
         let mut files = self.local_files.iter().copied().collect::<Vec<_>>();
         files.sort_unstable();
-        for file_id in files {
-            self.analyze_file(file_id)?;
+        for file_id in &files {
+            self.analyze_file(*file_id)?;
         }
-        self.apply_lint_levels(lints);
+        self.apply_lint_levels(lints, &files);
         Ok(())
+    }
+
+    /// Checks one selected file and returns its diagnostics.
+    pub(crate) fn check_file(
+        &mut self,
+        file_id: FileId,
+        lints: &LintOptions,
+    ) -> Result<Vec<Diagnostic>> {
+        // Semantics retains every tree it visits; a fresh one bounds that to a file.
+        self.sema = Semantics::new(self.db);
+        self.analyze_file(file_id)?;
+        let mut files = self
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.file_id)
+            .chain([file_id])
+            .collect::<Vec<_>>();
+        files.sort_unstable();
+        files.dedup();
+        self.apply_lint_levels(lints, &files);
+        Ok(std::mem::take(&mut self.diagnostics))
     }
 
     pub(crate) fn from_index(
@@ -1660,7 +1682,7 @@ fn plain() { foreign_component(); }
                         .iter()
                         .any(|path| Path::new(path).ends_with("src/orphan.rs"))
                 );
-                let dependency_files = analyzer
+                let dependency_files: std::collections::HashSet<_> = analyzer
                     .metadata_files
                     .iter()
                     .copied()
@@ -1668,28 +1690,29 @@ fn plain() { foreign_component(); }
                         Path::new(&analyzer.absolute_path(*file)).ends_with("widgets/src/lib.rs")
                     })
                     .collect();
-                let jobs = [
-                    super::super::AnalysisJob {
-                        index: 0,
-                        name: "fixture".to_string(),
-                        display: "fixture v0.0.0".to_string(),
-                        files: analyzer.local_files.clone(),
-                    },
-                    super::super::AnalysisJob {
-                        index: 1,
-                        name: "widgets".to_string(),
-                        display: "widgets v0.0.0".to_string(),
-                        files: dependency_files,
-                    },
-                ];
                 for workers in [1, 2] {
                     let index = super::super::collect_index_parallel(analyzer, workers)
                         .expect("parallel semantic index");
+                    let jobs = [
+                        super::super::AnalysisJob {
+                            index: 0,
+                            name: "fixture".to_string(),
+                            display: "fixture v0.0.0".to_string(),
+                            files: analyzer.local_files.clone(),
+                            call_index: index.clone(),
+                        },
+                        super::super::AnalysisJob {
+                            index: 1,
+                            name: "widgets".to_string(),
+                            display: "widgets v0.0.0".to_string(),
+                            files: dependency_files.clone(),
+                            call_index: index.clone(),
+                        },
+                    ];
                     let progress = super::super::progress::Progress::new(false);
                     let mut results = super::super::analyze_parallel(
                         analyzer.db,
                         analyzer.vfs,
-                        &index,
                         &jobs,
                         workers,
                         &super::LintOptions::default(),
@@ -2480,11 +2503,7 @@ mod guarded {
 
     #[test]
     fn persistent_cache_tracks_build_inputs_and_target_cfg() {
-        use super::super::{
-            TargetSelection,
-            cache::{Cache, shape},
-            plan::Plan,
-        };
+        use super::super::{TargetSelection, cache::Cache, plan::Plan};
 
         let project = FixtureProject::new(
             r#"
@@ -2553,14 +2572,16 @@ pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
                 let crates =
                     workspace::relevant_crates(db, &loaded.vfs, &selected.target_roots).unwrap();
                 let mut cache = Cache::new(&loaded, &plan, &options);
-                let index = cache.index(&crates, 1).unwrap();
-                let (job, key) = cache.job(selected, 0, &shape(&index), &options).unwrap();
-                let cached = cache.diagnostics(&key);
+                cache.index(&loaded, &crates, 1).unwrap();
+                let (job, key) = cache.job(&loaded, selected, 0, &options).unwrap();
+                let job = cache.analysis_job(&loaded, &job).unwrap();
+                let cached = cache.diagnostics(&loaded, &key);
                 let reused = cached.is_some();
                 let diagnostics = cached.unwrap_or_else(|| {
-                    let mut analyzer = CallAnalyzer::from_index(db, &loaded.vfs, job.files, index);
+                    let mut analyzer =
+                        CallAnalyzer::from_index(db, &loaded.vfs, job.files, job.call_index);
                     analyzer.check_files(&options.lints).unwrap();
-                    cache.save_diagnostics(&key, &analyzer.diagnostics);
+                    cache.save_diagnostics(&loaded, &key, &analyzer.diagnostics);
                     analyzer.diagnostics
                 });
                 (
@@ -2803,14 +2824,21 @@ pub trait ModifierExt {}
             let crates = workspace::relevant_crates(db, &workspace.vfs, &job.target_roots)
                 .expect("fixture crates");
             let mut cache = super::super::cache::Cache::new(&workspace, &plan, &options);
-            let index = cache.index(&crates, 1).expect("fixture index");
-            let files = cache
-                .job(job, 0, &super::super::cache::shape(&index), &options)
-                .expect("fixture job files")
-                .0
-                .files;
-            let metadata_files = index.inactive_code_ranges.keys().copied().collect();
-            let mut analyzer = CallAnalyzer::from_index(db, &workspace.vfs, files, index);
+            cache.index(&workspace, &crates, 1).expect("fixture index");
+            let (job, _) = cache
+                .job(&workspace, job, 0, &options)
+                .expect("fixture job");
+            let job = cache
+                .analysis_job(&workspace, &job)
+                .expect("fixture job files");
+            let metadata_files = job
+                .call_index
+                .inactive_code_ranges
+                .keys()
+                .copied()
+                .collect();
+            let mut analyzer =
+                CallAnalyzer::from_index(db, &workspace.vfs, job.files, job.call_index);
             analyzer.metadata_files = metadata_files;
             analyzer.display_root = project.root().to_path_buf();
             analyzer

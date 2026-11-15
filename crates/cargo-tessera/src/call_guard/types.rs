@@ -81,6 +81,11 @@ pub(crate) struct LoadedWorkspace {
     pub(crate) macro_artifacts: HashMap<FileId, Vec<PathBuf>>,
     pub(crate) native_artifacts: Vec<cargo_metadata::Artifact>,
     pub(crate) cacheable: bool,
+    pub(crate) build_scripts_ok: bool,
+    pub(crate) reload_key: String,
+    pub(crate) out_dirs: Vec<PathBuf>,
+    pub(crate) source_directories: BTreeSet<PathBuf>,
+    pub(crate) rust_files: BTreeSet<PathBuf>,
 }
 
 #[derive(Clone)]

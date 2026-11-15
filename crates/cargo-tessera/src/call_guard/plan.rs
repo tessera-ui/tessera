@@ -3,6 +3,7 @@ use std::{
     env,
     path::{Path, PathBuf},
     process::Command,
+    sync::OnceLock,
 };
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -23,6 +24,8 @@ pub(super) struct CrateJob {
 pub(super) struct Plan {
     pub(super) jobs: Vec<CrateJob>,
     pub(super) target_directory: PathBuf,
+    /// Resolved Cargo metadata, serialized.
+    pub(super) metadata: String,
 }
 
 impl Plan {
@@ -154,6 +157,7 @@ impl Plan {
         jobs.sort_by(|left, right| left.id.cmp(&right.id));
         Ok(Self {
             jobs,
+            metadata: serde_json::to_string(&metadata)?,
             target_directory: metadata.target_directory.into_std_path_buf(),
         })
     }
@@ -279,6 +283,10 @@ fn target_is_selected(target: &Target, selection: &TargetSelection) -> bool {
 }
 
 pub(super) fn host_target() -> Result<String> {
+    static HOST: OnceLock<String> = OnceLock::new();
+    if let Some(host) = HOST.get() {
+        return Ok(host.clone());
+    }
     let output = Command::new("rustc")
         .arg("-vV")
         .output()
@@ -286,10 +294,11 @@ pub(super) fn host_target() -> Result<String> {
     if !output.status.success() {
         bail!("rustc could not report the host target");
     }
-    String::from_utf8(output.stdout)?
+    let host = String::from_utf8(output.stdout)?
         .lines()
         .find_map(|line| line.strip_prefix("host: ").map(str::to_string))
-        .ok_or_else(|| anyhow!("rustc did not report the host target"))
+        .ok_or_else(|| anyhow!("rustc did not report the host target"))?;
+    Ok(HOST.get_or_init(|| host).clone())
 }
 
 #[cfg(test)]

@@ -1,12 +1,13 @@
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     env, fs,
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Result, ensure};
-use ra_ap_base_db::{Crate, SourceDatabase, all_crates};
+use ra_ap_base_db::{Crate, SourceDatabase, SourceRootId, all_crates};
 use ra_ap_cfg::CfgAtom;
 use ra_ap_hir::crate_def_map;
 use ra_ap_hir_expand::proc_macro::ProcMacros;
@@ -42,29 +43,50 @@ pub(super) struct Key {
     input: Option<String>,
 }
 
-pub(super) struct Cache<'a> {
-    workspace: &'a LoadedWorkspace,
-    directory: Option<std::path::PathBuf>,
+pub(super) struct PendingJob {
+    pub(super) position: usize,
+    pub(super) name: String,
+    pub(super) display: String,
+    pub(super) crates: Vec<Crate>,
+}
+
+#[derive(Clone)]
+struct Local {
+    fingerprint: Option<String>,
+    certified: bool,
+}
+
+// Keys are computed on demand so that crates outside the checked dependency
+// graphs are never hashed.
+pub(super) struct Cache {
+    directory: Option<PathBuf>,
+    global: String,
+    cargo: Option<CargoUnits>,
     paths: HashMap<String, FileId>,
-    keys: HashMap<Crate, String>,
-    inputs: HashMap<Crate, Option<String>>,
-    members: HashMap<Crate, HashSet<FileId>>,
+    keys: RefCell<HashMap<Crate, String>>,
+    sources: RefCell<HashMap<SourceRootId, String>>,
+    locals: RefCell<HashMap<Crate, Local>>,
+    inputs: RefCell<HashMap<Crate, Option<String>>>,
+    partials: HashMap<Crate, CallIndex>,
     pub(super) indexed: usize,
 }
 
+fn digest(bytes: &[u8]) -> String {
+    hex::encode(Sha256::digest(bytes))
+}
+
 fn fingerprint(value: impl Serialize) -> String {
-    hex::encode(Sha256::digest(
-        serde_json::to_vec(&value).expect("cache input"),
-    ))
+    digest(&serde_json::to_vec(&value).expect("cache input"))
 }
 
 fn file_hash(path: &Path) -> Option<String> {
-    Some(hex::encode(Sha256::digest(fs::read(path).ok()?)))
+    Some(digest(&fs::read(path).ok()?))
 }
 
-fn cargo_inputs(
-    workspace: &LoadedWorkspace,
-) -> Option<HashMap<(String, Vec<String>, bool), String>> {
+/// Fingerprints of compiled units keyed by source root, features, and test mode.
+type CargoUnits = HashMap<(String, Vec<String>, bool), String>;
+
+fn cargo_inputs(workspace: &LoadedWorkspace) -> Option<CargoUnits> {
     let mut units = HashMap::<_, Vec<_>>::new();
     for artifact in &workspace.native_artifacts {
         let mut features = artifact.features.clone();
@@ -106,119 +128,161 @@ fn cargo_inputs(
     )
 }
 
-impl<'a> Cache<'a> {
+impl Cache {
     pub(super) fn new(
-        workspace: &'a LoadedWorkspace,
+        workspace: &LoadedWorkspace,
         plan: &Plan,
         options: &CheckOptions<'_>,
     ) -> Self {
-        let db = workspace.host.raw_database();
         let cargo = cargo_inputs(workspace);
         let tool = env::current_exe().ok().and_then(|path| file_hash(&path));
         let global = fingerprint((&tool, options.target, options.release));
-        let paths = workspace
-            .vfs
-            .iter()
-            .map(|(file, path)| (path.to_string(), file))
-            .collect();
-        let mut roots = HashMap::new();
-        let mut keys = HashMap::new();
-        let mut local = HashMap::new();
-        let mut certified = HashSet::new();
-        for &krate in all_crates(db).iter() {
-            let data = krate.data(db);
-            let key = fingerprint((
-                &global,
-                workspace.vfs.file_path(data.root_file_id).to_string(),
-                format!(
-                    "{:?}",
-                    (
-                        data.edition,
-                        &data.origin,
-                        &data.crate_attrs,
-                        &data.proc_macro_cwd,
-                        krate.cfg_options(db),
-                        krate.env(db),
-                        krate.workspace_data(db),
-                        krate.extra_data(db)
-                    )
-                ),
-            ));
-            let root = db.file_source_root(data.root_file_id).source_root_id(db);
-            let source = roots.entry(root).or_insert_with(|| {
-                let source = db.source_root(root).source_root(db);
-                let mut files = source
-                    .iter()
-                    .map(|file| {
-                        (
-                            workspace.vfs.file_path(file).to_string(),
-                            fingerprint(db.file_text(file).text(db).as_ref()),
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                files.sort();
-                fingerprint(files)
-            });
-            let artifact = if data.is_proc_macro {
-                let loaded = ProcMacros::get_for_crate(db, krate);
-                if loaded
-                    .as_ref()
-                    .is_some_and(|macros| macros.get_error().is_none())
-                {
-                    workspace
-                        .macro_artifacts
-                        .get(&data.root_file_id)
-                        .and_then(|paths| {
-                            paths
-                                .iter()
-                                .map(|path| file_hash(path))
-                                .collect::<Option<Vec<_>>>()
-                        })
-                        .map(fingerprint)
-                } else {
-                    // Optional macro dependencies can be unbuilt; their load state is an input.
-                    Some(fingerprint((
-                        "unavailable",
-                        loaded.map(|macros| format!("{:?}", macros.get_error())),
-                    )))
-                }
-            } else {
-                Some(String::new())
-            };
-            let cfg = krate.cfg_options(db);
-            let mut features = cfg
-                .into_iter()
-                .filter_map(|atom| match atom {
-                    CfgAtom::KeyValue { key, value } if key.as_str() == "feature" => {
-                        Some(value.to_string())
-                    }
-                    _ => None,
-                })
-                .collect::<Vec<_>>();
-            features.sort();
-            let test = cfg
-                .into_iter()
-                .any(|atom| matches!(atom, CfgAtom::Flag(name) if name.as_str() == "test"));
-            let native = cargo.as_ref().and_then(|units| {
-                units.get(&(
-                    workspace.vfs.file_path(data.root_file_id).to_string(),
-                    features,
-                    test,
-                ))
-            });
-            if native.is_some() || data.origin.is_lang() {
-                certified.insert(krate);
-            }
-            local.insert(
-                krate,
-                artifact.map(|artifact| fingerprint((&key, &*source, artifact, native))),
-            );
-            keys.insert(krate, key);
+        Self {
+            directory: (workspace.cacheable && tool.is_some() && cargo.is_some())
+                .then(|| plan.target_directory.join("tessera-check").join(&global)),
+            global,
+            cargo,
+            paths: workspace
+                .vfs
+                .iter()
+                .map(|(file, path)| (path.to_string(), file))
+                .collect(),
+            keys: RefCell::default(),
+            sources: RefCell::default(),
+            locals: RefCell::default(),
+            inputs: RefCell::default(),
+            partials: HashMap::new(),
+            indexed: 0,
         }
-        let inputs = all_crates(db)
+    }
+
+    fn key(&self, workspace: &LoadedWorkspace, krate: Crate) -> String {
+        if let Some(key) = self.keys.borrow().get(&krate) {
+            return key.clone();
+        }
+        let db = workspace.host.raw_database();
+        let data = krate.data(db);
+        let key = fingerprint((
+            &self.global,
+            workspace.vfs.file_path(data.root_file_id).to_string(),
+            format!(
+                "{:?}",
+                (
+                    data.edition,
+                    &data.origin,
+                    &data.crate_attrs,
+                    &data.proc_macro_cwd,
+                    krate.cfg_options(db),
+                    krate.env(db),
+                    krate.workspace_data(db),
+                    krate.extra_data(db)
+                )
+            ),
+        ));
+        self.keys.borrow_mut().insert(krate, key.clone());
+        key
+    }
+
+    fn source(&self, workspace: &LoadedWorkspace, krate: Crate) -> String {
+        let db = workspace.host.raw_database();
+        let root = db
+            .file_source_root(krate.data(db).root_file_id)
+            .source_root_id(db);
+        if let Some(source) = self.sources.borrow().get(&root) {
+            return source.clone();
+        }
+        let mut files = db
+            .source_root(root)
+            .source_root(db)
             .iter()
-            .map(|&krate| {
-                let mut dependencies = krate
+            .map(|file| {
+                (
+                    workspace.vfs.file_path(file).to_string(),
+                    digest(db.file_text(file).text(db).as_bytes()),
+                )
+            })
+            .collect::<Vec<_>>();
+        files.sort();
+        let source = fingerprint(files);
+        self.sources.borrow_mut().insert(root, source.clone());
+        source
+    }
+
+    fn local(&self, workspace: &LoadedWorkspace, krate: Crate) -> Local {
+        if let Some(local) = self.locals.borrow().get(&krate) {
+            return local.clone();
+        }
+        let db = workspace.host.raw_database();
+        let data = krate.data(db);
+        let artifact = if data.is_proc_macro {
+            let loaded = ProcMacros::get_for_crate(db, krate);
+            if loaded
+                .as_ref()
+                .is_some_and(|macros| macros.get_error().is_none())
+            {
+                workspace
+                    .macro_artifacts
+                    .get(&data.root_file_id)
+                    .and_then(|paths| {
+                        paths
+                            .iter()
+                            .map(|path| file_hash(path))
+                            .collect::<Option<Vec<_>>>()
+                    })
+                    .map(fingerprint)
+            } else {
+                // Optional macro dependencies can be unbuilt; their load state is an input.
+                Some(fingerprint((
+                    "unavailable",
+                    loaded.map(|macros| format!("{:?}", macros.get_error())),
+                )))
+            }
+        } else {
+            Some(String::new())
+        };
+        let cfg = krate.cfg_options(db);
+        let mut features = cfg
+            .into_iter()
+            .filter_map(|atom| match atom {
+                CfgAtom::KeyValue { key, value } if key.as_str() == "feature" => {
+                    Some(value.to_string())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        features.sort();
+        let test = cfg
+            .into_iter()
+            .any(|atom| matches!(atom, CfgAtom::Flag(name) if name.as_str() == "test"));
+        let native = self.cargo.as_ref().and_then(|units| {
+            units.get(&(
+                workspace.vfs.file_path(data.root_file_id).to_string(),
+                features,
+                test,
+            ))
+        });
+        let key = self.key(workspace, krate);
+        let source = self.source(workspace, krate);
+        let local = Local {
+            fingerprint: artifact.map(|artifact| fingerprint((&key, &source, artifact, native))),
+            certified: native.is_some() || data.origin.is_lang(),
+        };
+        self.locals.borrow_mut().insert(krate, local.clone());
+        local
+    }
+
+    fn input(&self, workspace: &LoadedWorkspace, krate: Crate) -> Option<String> {
+        if let Some(input) = self.inputs.borrow().get(&krate) {
+            return input.clone();
+        }
+        let db = workspace.host.raw_database();
+        // The checked crate's Cargo certificate covers its actual dependency units.
+        // rust-analyzer can also expose unbuilt optional or unified-feature variants.
+        let input = self
+            .local(workspace, krate)
+            .certified
+            .then(|| {
+                krate
                     .transitive_deps(db)
                     .into_iter()
                     .map(|dependency| {
@@ -229,54 +293,49 @@ impl<'a> Cache<'a> {
                             .map(|edge| {
                                 (
                                     edge.name.to_string(),
-                                    &keys[&edge.crate_id],
+                                    self.key(workspace, edge.crate_id),
                                     edge.is_prelude(),
                                     edge.is_sysroot(),
                                 )
                             })
                             .collect::<Vec<_>>();
                         edges.sort();
-                        Some((&keys[&dependency], local[&dependency].as_ref()?, edges))
+                        Some((
+                            self.key(workspace, dependency),
+                            self.local(workspace, dependency).fingerprint?,
+                            edges,
+                        ))
                     })
-                    .collect::<Option<Vec<_>>>();
-                if let Some(dependencies) = &mut dependencies {
-                    dependencies.sort();
-                }
-                // The checked crate's Cargo certificate covers its actual dependency units.
-                // rust-analyzer can also expose unbuilt optional or unified-feature variants.
-                (
-                    krate,
-                    dependencies
-                        .filter(|_| certified.contains(&krate))
-                        .map(fingerprint),
-                )
+                    .collect::<Option<Vec<_>>>()
             })
-            .collect();
-        Self {
-            workspace,
-            directory: (workspace.cacheable && tool.is_some() && cargo.is_some())
-                .then(|| plan.target_directory.join("tessera-check").join(&global)),
-            paths,
-            keys,
-            inputs,
-            members: HashMap::new(),
-            indexed: 0,
-        }
+            .flatten()
+            .map(|mut dependencies| {
+                dependencies.sort();
+                fingerprint(dependencies)
+            });
+        self.inputs.borrow_mut().insert(krate, input.clone());
+        input
     }
 
-    pub(super) fn index(&mut self, crates: &HashSet<Crate>, workers: usize) -> Result<CallIndex> {
-        let db = self.workspace.host.raw_database();
-        let mut index = CallIndex {
-            tessera_crates: tessera_crates(db),
-            ..CallIndex::default()
-        };
-        let mut crates = crates.iter().copied().collect::<Vec<_>>();
-        crates.sort_by_key(|krate| &self.keys[krate]);
-        for krate in crates {
+    pub(super) fn index(
+        &mut self,
+        workspace: &LoadedWorkspace,
+        crates: &HashSet<Crate>,
+        workers: usize,
+    ) -> Result<()> {
+        let db = workspace.host.raw_database();
+        let mut crates = crates
+            .iter()
+            .copied()
+            .filter(|krate| !self.partials.contains_key(krate))
+            .map(|krate| (self.key(workspace, krate), krate))
+            .collect::<Vec<_>>();
+        crates.sort();
+        for (name, krate) in crates {
             let key = Key {
                 kind: "index",
-                name: self.keys[&krate].clone(),
-                input: self.inputs[&krate].clone(),
+                name,
+                input: self.input(workspace, krate),
             };
             let cached = self.read::<CallIndex>(&key).and_then(|(mut index, files)| {
                 index.inactive_code_ranges = index
@@ -287,7 +346,7 @@ impl<'a> Cache<'a> {
                         contexts
                             .iter()
                             .flatten()
-                            .all(|range| self.valid_range(file, *range))
+                            .all(|range| valid_range(workspace, file, *range))
                             .then_some((file, contexts))
                     })
                     .collect::<Option<_>>()?;
@@ -315,35 +374,36 @@ impl<'a> Cache<'a> {
                             .map(|file| (file, HashSet::from([krate])))
                             .collect(),
                     };
-                    let analyzer = CallAnalyzer::new(db, &self.workspace.vfs, sources)?;
+                    let analyzer = CallAnalyzer::new(db, &workspace.vfs, sources)?;
                     let index = collect_index_parallel(&analyzer, workers)?;
-                    self.write(&key, &index, index.inactive_code_ranges.keys().copied());
+                    self.write(
+                        workspace,
+                        &key,
+                        &index,
+                        index.inactive_code_ranges.keys().copied(),
+                    );
                     self.indexed += 1;
                     index
                 }
             };
-            self.members.insert(
-                krate,
-                partial.inactive_code_ranges.keys().copied().collect(),
-            );
-            index.merge(partial);
+            self.partials.insert(krate, partial);
         }
-        Ok(index)
+        Ok(())
     }
 
     pub(super) fn job(
         &self,
+        workspace: &LoadedWorkspace,
         job: &CrateJob,
-        index: usize,
-        shape: &str,
+        position: usize,
         options: &CheckOptions<'_>,
-    ) -> Result<(AnalysisJob, Key)> {
-        let db = self.workspace.host.raw_database();
+    ) -> Result<(PendingJob, Key)> {
+        let db = workspace.host.raw_database();
         let roots = job
             .target_roots
             .iter()
             .map(|path| {
-                workspace::file_id_for_path(&self.workspace.vfs, path)
+                workspace::file_id_for_path(&workspace.vfs, path)
                     .with_context(|| format!("rust-analyzer did not load {}", path.display()))
             })
             .collect::<Result<HashSet<_>>>()?;
@@ -360,53 +420,83 @@ impl<'a> Cache<'a> {
         );
         let mut keys = crates
             .iter()
-            .map(|krate| &self.keys[krate])
+            .map(|krate| self.key(workspace, *krate))
             .collect::<Vec<_>>();
         keys.sort();
+        // A job is analyzed against the indexes of its own dependency graph, so
+        // the inputs of its crates determine its diagnostics.
         let mut inputs = crates
             .iter()
-            .map(|krate| self.inputs[krate].clone())
+            .map(|krate| self.input(workspace, *krate))
             .collect::<Option<Vec<_>>>();
         if let Some(inputs) = &mut inputs {
             inputs.sort();
         }
-        let files = crates
-            .iter()
-            .map(|krate| {
-                self.members
-                    .get(krate)
-                    .context("selected crate index is unavailable")
-            })
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .copied()
-            .collect();
         Ok((
-            AnalysisJob {
-                index,
+            PendingJob {
+                position,
                 name: job.name.clone(),
                 display: job.display.clone(),
-                files,
+                crates,
             },
             Key {
                 kind: "diagnostics",
                 name: fingerprint((&job.id, keys)),
-                input: inputs
-                    .map(|inputs| fingerprint((inputs, shape, format!("{:?}", options.lints)))),
+                input: inputs.map(|inputs| fingerprint((inputs, format!("{:?}", options.lints)))),
             },
         ))
     }
 
-    pub(super) fn diagnostics(&self, key: &Key) -> Option<Vec<Diagnostic>> {
+    pub(super) fn analysis_job(
+        &self,
+        workspace: &LoadedWorkspace,
+        job: &PendingJob,
+    ) -> Result<AnalysisJob> {
+        let db = workspace.host.raw_database();
+        let mut files = HashSet::new();
+        for krate in &job.crates {
+            let partial = self
+                .partials
+                .get(krate)
+                .context("selected crate index is unavailable")?;
+            files.extend(partial.inactive_code_ranges.keys().copied());
+        }
+        let mut index = CallIndex {
+            tessera_crates: tessera_crates(db),
+            ..CallIndex::default()
+        };
+        let closure = job
+            .crates
+            .iter()
+            .flat_map(|krate| krate.transitive_deps(db))
+            .collect::<HashSet<_>>();
+        for krate in closure {
+            if let Some(partial) = self.partials.get(&krate) {
+                index.merge(partial.clone());
+            }
+        }
+        Ok(AnalysisJob {
+            index: job.position,
+            name: job.name.clone(),
+            display: job.display.clone(),
+            files,
+            call_index: index,
+        })
+    }
+
+    pub(super) fn diagnostics(
+        &self,
+        workspace: &LoadedWorkspace,
+        key: &Key,
+    ) -> Option<Vec<Diagnostic>> {
         let (mut diagnostics, files) = self.read::<Vec<Diagnostic>>(key)?;
         for diagnostic in &mut diagnostics {
             diagnostic.file_id = *files.get(&diagnostic.file_id)?;
-            if !self.valid_range(diagnostic.file_id, diagnostic.range)
+            if !valid_range(workspace, diagnostic.file_id, diagnostic.range)
                 || diagnostic
                     .boundary
                     .as_ref()
-                    .is_some_and(|(range, _)| !self.valid_range(diagnostic.file_id, *range))
+                    .is_some_and(|(range, _)| !valid_range(workspace, diagnostic.file_id, *range))
             {
                 return None;
             }
@@ -416,7 +506,7 @@ impl<'a> Cache<'a> {
                 .flat_map(|suggestion| &mut suggestion.edits)
             {
                 edit.file_id = *files.get(&edit.file_id)?;
-                if !self.valid_range(edit.file_id, edit.range) {
+                if !valid_range(workspace, edit.file_id, edit.range) {
                     return None;
                 }
             }
@@ -424,7 +514,12 @@ impl<'a> Cache<'a> {
         Some(diagnostics)
     }
 
-    pub(super) fn save_diagnostics(&self, key: &Key, diagnostics: &[Diagnostic]) {
+    pub(super) fn save_diagnostics(
+        &self,
+        workspace: &LoadedWorkspace,
+        key: &Key,
+        diagnostics: &[Diagnostic],
+    ) {
         let files = diagnostics.iter().flat_map(|diagnostic| {
             std::iter::once(diagnostic.file_id).chain(
                 diagnostic
@@ -433,15 +528,7 @@ impl<'a> Cache<'a> {
                     .flat_map(|suggestion| suggestion.edits.iter().map(|edit| edit.file_id)),
             )
         });
-        self.write(key, &diagnostics, files);
-    }
-
-    fn valid_range(&self, file: FileId, range: TextRange) -> bool {
-        let db = self.workspace.host.raw_database();
-        let text = db.file_text(file);
-        let text = text.text(db);
-        text.is_char_boundary(u32::from(range.start()) as usize)
-            && text.is_char_boundary(u32::from(range.end()) as usize)
+        self.write(workspace, key, &diagnostics, files);
     }
 
     fn read<T: DeserializeOwned>(&self, key: &Key) -> Option<(T, HashMap<FileId, FileId>)> {
@@ -450,7 +537,9 @@ impl<'a> Cache<'a> {
             .as_ref()?
             .join(format!("{}-{}.json", key.kind, key.name));
         let record: Record = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
-        if record.input != *key.input.as_ref()? || record.checksum != fingerprint(&record.payload) {
+        if record.input != *key.input.as_ref()?
+            || record.checksum != digest(record.payload.as_bytes())
+        {
             return None;
         }
         let payload: Payload<T> = serde_json::from_str(&record.payload).ok()?;
@@ -467,6 +556,7 @@ impl<'a> Cache<'a> {
 
     fn write<T: Serialize + ?Sized>(
         &self,
+        workspace: &LoadedWorkspace,
         key: &Key,
         value: &T,
         files: impl Iterator<Item = FileId>,
@@ -478,13 +568,13 @@ impl<'a> Cache<'a> {
             let mut files = files
                 .collect::<HashSet<_>>()
                 .into_iter()
-                .map(|file| (file.index(), self.workspace.vfs.file_path(file).to_string()))
+                .map(|file| (file.index(), workspace.vfs.file_path(file).to_string()))
                 .collect::<Vec<_>>();
             files.sort();
             let payload = serde_json::to_string(&Payload { files, value })?;
             let record = Record {
                 input: input.clone(),
-                checksum: fingerprint(&payload),
+                checksum: digest(payload.as_bytes()),
                 payload,
             };
             fs::create_dir_all(directory)?;
@@ -496,11 +586,10 @@ impl<'a> Cache<'a> {
     }
 }
 
-pub(super) fn shape(index: &CallIndex) -> String {
-    fingerprint((
-        &index.tessera_function_names,
-        &index.tessera_function_paths,
-        &index.render_slot_setter_indexes_by_type_path,
-        &index.render_slot_constructor_indexes_by_function_path,
-    ))
+fn valid_range(workspace: &LoadedWorkspace, file: FileId, range: TextRange) -> bool {
+    let db = workspace.host.raw_database();
+    let text = db.file_text(file);
+    let text = text.text(db);
+    text.is_char_boundary(u32::from(range.start()) as usize)
+        && text.is_char_boundary(u32::from(range.end()) as usize)
 }

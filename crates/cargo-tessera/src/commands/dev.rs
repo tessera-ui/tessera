@@ -187,8 +187,9 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
 
     // Call-check diagnostics print straight to the terminal, which would
     // corrupt the live view, so they are skipped while `--top` owns the screen.
+    let mut call_guard = call_guard::Session::default();
     if !reporter.is_tui() {
-        run_call_guard(package, &feature_overrides, release)?;
+        run_call_guard(&mut call_guard, package, &feature_overrides, release)?;
     }
 
     reporter.status("Starting", "dev server (auto rebuild/restart)");
@@ -293,7 +294,7 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
         // running.
         if pending_change && build_child.is_none() && last_change.elapsed() >= debounce_window {
             if !call_guard_current && !reporter.is_tui() {
-                match run_call_guard(package, &feature_overrides, release) {
+                match run_call_guard(&mut call_guard, package, &feature_overrides, release) {
                     Ok(()) => {
                         call_guard_current = true;
                     }
@@ -596,8 +597,13 @@ fn read_output(mut stream: impl OutputPipe, reporter: Reporter, stopped: Receive
     }
 }
 
-fn run_call_guard(package: Option<&str>, features: &[String], release: bool) -> Result<()> {
-    call_guard::run(call_guard::CheckOptions {
+fn run_call_guard(
+    session: &mut call_guard::Session,
+    package: Option<&str>,
+    features: &[String],
+    release: bool,
+) -> Result<()> {
+    session.run(call_guard::CheckOptions {
         features: call_guard::FeatureSelection::Selected {
             features,
             no_default_features: false,

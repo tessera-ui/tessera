@@ -56,9 +56,15 @@ impl Setting {
 }
 
 impl CallAnalyzer<'_> {
-    pub(super) fn apply_lint_levels(&mut self, options: &LintOptions) {
+    /// Applies lint attributes in `files` to the pending diagnostics.
+    pub(super) fn apply_lint_levels(&mut self, options: &LintOptions, files: &[FileId]) {
         let mut settings = Vec::new();
-        for file in self.local_files.clone() {
+        let files = files
+            .iter()
+            .copied()
+            .filter(|file| self.local_files.contains(file))
+            .collect::<Vec<_>>();
+        for file in files {
             let tree = self
                 .sema
                 .parse(EditionedFileId::current_edition(self.db, file));

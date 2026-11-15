@@ -57,8 +57,9 @@ pub fn execute(
     if let Some(fix) = fix {
         check_workspace(&std::env::current_dir()?, fix)?;
     }
-    let check = |fix| {
-        call_guard::run(call_guard::CheckOptions {
+    let mut session = call_guard::Session::default();
+    let mut check = |fix| {
+        session.run(call_guard::CheckOptions {
             package: args.package.as_deref(),
             target: args.target.as_deref(),
             target_selection: call_guard::TargetSelection {

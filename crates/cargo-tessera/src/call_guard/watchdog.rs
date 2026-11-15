@@ -1,4 +1,4 @@
-//! Wall-clock bound for Tessera call checking.
+//! Stall bound for Tessera call checking.
 //!
 //! ## Usage
 //!
@@ -6,21 +6,34 @@
 
 use std::{
     env,
-    sync::mpsc::{self, RecvTimeoutError, Sender},
+    process::Child,
+    sync::{
+        Arc, Mutex, MutexGuard, OnceLock,
+        atomic::{AtomicU64, Ordering},
+        mpsc::{self, RecvTimeoutError, Sender},
+    },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
-/// Environment variable that overrides the wall-clock budget in seconds.
+/// Environment variable that overrides the stall limit in seconds.
 const LIMIT_ENV: &str = "TESSERA_COLOR_CHECK_TIMEOUT_SECS";
 
-/// Default budget for a complete call checking run.
+/// Default time call checking may run without reporting progress.
 const DEFAULT_LIMIT: Duration = Duration::from_secs(300);
 
-/// Exit code used when call checking exceeds its wall-clock budget.
+/// Exit code used when call checking stops making progress.
 const TIMEOUT_EXIT_CODE: i32 = 2;
 
-/// Reads the configured wall-clock budget.
+static EPOCH: OnceLock<Instant> = OnceLock::new();
+static LAST_PROGRESS_MS: AtomicU64 = AtomicU64::new(0);
+static CARGO: Mutex<Vec<Arc<Mutex<Child>>>> = Mutex::new(Vec::new());
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|error| error.into_inner())
+}
+
+/// Reads the configured stall limit.
 ///
 /// A value of `0` disables the bound explicitly; unparsable values fall back to
 /// the default so a malformed environment variable cannot remove the bound.
@@ -35,6 +48,31 @@ pub(super) fn limit_from_env() -> Option<Duration> {
         0 => None,
         seconds => Some(Duration::from_secs(seconds)),
     }
+}
+
+fn elapsed_ms() -> u64 {
+    EPOCH.get_or_init(Instant::now).elapsed().as_millis() as u64
+}
+
+/// Records that call checking made progress.
+pub(super) fn progress() {
+    LAST_PROGRESS_MS.store(elapsed_ms(), Ordering::Relaxed);
+}
+
+/// Lets a stall kill `child` while `action` reads its output.
+///
+/// Returns the child for waiting unless a stall already killed it.
+pub(super) fn with_cargo<T>(child: Child, action: impl FnOnce() -> T) -> (T, Option<Child>) {
+    let child = Arc::new(Mutex::new(child));
+    lock(&CARGO).push(child.clone());
+    let result = action();
+    lock(&CARGO).retain(|registered| !Arc::ptr_eq(registered, &child));
+    let child = Arc::into_inner(child).map(|child| {
+        child
+            .into_inner()
+            .unwrap_or_else(|error| error.into_inner())
+    });
+    (result, child)
 }
 
 /// Keeps a bound alive for as long as call checking is running.
@@ -55,27 +93,38 @@ impl Drop for Watchdog {
     }
 }
 
-/// Arms the wall-clock bound for the current call checking run.
+/// Arms the stall bound for the current call checking run.
 ///
 /// The watcher terminates the process rather than returning an error because a
 /// blocked rust-analyzer load cannot be cancelled cooperatively: the blocked
 /// call owns the main thread and holds no cancellation handle.
 pub(super) fn arm(limit: Option<Duration>) -> Option<Watchdog> {
     let limit = limit?;
+    progress();
     let (finished, receiver) = mpsc::channel();
     let worker = thread::Builder::new()
         .name("tessera-call-guard-watchdog".to_string())
         .spawn(move || {
-            if receiver.recv_timeout(limit) != Err(RecvTimeoutError::Timeout) {
-                return;
+            loop {
+                match receiver.recv_timeout(Duration::from_secs(1)) {
+                    Err(RecvTimeoutError::Timeout) => {}
+                    _ => return,
+                }
+                let idle = elapsed_ms().saturating_sub(LAST_PROGRESS_MS.load(Ordering::Relaxed));
+                if idle < limit.as_millis() as u64 {
+                    continue;
+                }
+                for child in lock(&CARGO).iter() {
+                    let _ = lock(child).kill();
+                }
+                eprintln!(
+                    "error: Tessera call checking made no progress for {}s and was aborted; \
+                     set {} to raise the limit or 0 to disable it",
+                    limit.as_secs(),
+                    LIMIT_ENV
+                );
+                std::process::exit(TIMEOUT_EXIT_CODE);
             }
-            eprintln!(
-                "error: Tessera call checking exceeded its {}s wall-clock budget and was aborted; \
-                 set {} to raise the limit or 0 to disable it",
-                limit.as_secs(),
-                LIMIT_ENV
-            );
-            std::process::exit(TIMEOUT_EXIT_CODE);
         })
         .ok()?;
     Some(Watchdog {
