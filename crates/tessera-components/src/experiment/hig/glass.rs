@@ -39,7 +39,7 @@ pub enum GlassMaterial {
     /// Frosted glass for controls and surfaces that need stronger separation.
     #[default]
     Regular,
-    /// More transparent glass that retains more of the backdrop's color and contrast with less blur.
+    /// More transparent glass that retains more of the backdrop's color and contrast.
     Clear,
     /// A refractive lens with no default blur or tone adjustment.
     Custom,
@@ -57,8 +57,8 @@ pub enum GlassAppearance {
 impl GlassMaterial {
     fn optics(self, appearance: GlassAppearance) -> Option<(Dp, [f32; 4])> {
         let (radius, tone) = match (self, appearance) {
-            (Self::Regular, GlassAppearance::Light) => (13.22, [0.6736, 0.2956, 0.6534, 0.995]),
-            (Self::Regular, GlassAppearance::Dark) => (13.22, [0.1316, 0.2600, 0.6488, 1.0183]),
+            (Self::Regular, GlassAppearance::Light) => (16.0, [0.5900, 0.2956, 0.88, 0.995]),
+            (Self::Regular, GlassAppearance::Dark) => (16.0, [0.1316, 0.2600, 0.6488, 1.0183]),
             (Self::Clear, GlassAppearance::Light) => (4.43, [0.3126, 0.6380, 0.8613, 1.0538]),
             (Self::Clear, GlassAppearance::Dark) => (4.43, [0.1325, 0.6730, 0.9097, 1.0543]),
             (Self::Custom, _) => return None,
