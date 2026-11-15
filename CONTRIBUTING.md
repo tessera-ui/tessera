@@ -101,10 +101,16 @@ All code, including documentation within the code (like `rustdoc` comments) and 
 
 ### Commit Guidelines
 
-- Please ensure your commit messages are clear, concise, and describe the changes made.
-- The commit format must follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) specification. We have no special requirements for the scope; you can omit it, but it is recommended to identify the scope or feature of the change.
-- **Breaking Changes**: If your commit introduces a breaking change, you **MUST** include `BREAKING CHANGE:` in the commit body or footer. This is required because our release script relies on this flag to automatically trigger a **Major** version bump.
-- Before pushing, please ensure:
+Changes reach `main` only through pull requests:
+
+1. Create a short-lived branch from `main`, such as `fix/android-icon`.
+2. Open a pull request against `main`. CI must pass before it can merge.
+3. Pull requests are squash-merged: the pull request title becomes the commit subject on `main`, and the pull request description becomes its body.
+
+- The pull request title must follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) specification, for example `fix(cargo-tessera): keep Android icons opaque`; CI checks it. The scope is optional but recommended.
+- **Breaking Changes**: If a pull request introduces a breaking change, mark the title with `!` (such as `feat(tessera-build)!: ...`) and include `BREAKING CHANGE:` in the pull request description. The release script reads these from the squashed commit to trigger a **Major** version bump.
+- Commits inside the branch are squashed, so their messages are free-form.
+- Before opening a pull request, please ensure:
   - Your code passes all tests (`cargo test`).
   - You have updated relevant documentation (if applicable).
   - Your code complies with the [Code Check Guidelines](#code-checks).
@@ -131,7 +137,7 @@ It is best to pass a markdown lint, but we do not strictly require it. Please en
 
 ### Documentation Commits
 
-- For direct commits/PRs to this repository, please refer to the [Commit Guidelines](#commit-guidelines).
+- For pull requests to this repository, please refer to the [Commit Guidelines](#commit-guidelines).
 - For commits to related repositories, such as the official website, Wiki, etc., please follow their respective contribution guidelines.
 
 ## Special Note on Android Builds
