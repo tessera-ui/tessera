@@ -282,8 +282,8 @@ fn glass_uniforms(
         opacity: render.opacity,
         material_mode: match (render.material_tone.is_some(), render.dark) {
             (false, _) => 0,
-            (true, false) => 1,
-            (true, true) => 2,
+            (true, false) => 1 + u32::from(render.regular) * 4,
+            (true, true) => 2 + u32::from(render.regular) * 4,
         },
         scene_uv,
         scene_size_px: Vec2::new(scene.width.to_f32(), scene.height.to_f32()),

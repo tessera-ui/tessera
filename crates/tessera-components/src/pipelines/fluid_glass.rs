@@ -36,6 +36,7 @@ pub(crate) struct FluidGlassRenderArgs {
     pub(crate) opacity: f32,
     pub(crate) contrast: Option<f32>,
     pub(crate) dark: bool,
+    pub(crate) regular: bool,
     pub(crate) feedback: f32,
 }
 

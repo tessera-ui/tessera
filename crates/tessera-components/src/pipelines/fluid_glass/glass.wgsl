@@ -204,7 +204,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var sample_coord = local_coord;
     if material {
         let edge_width = min(27.0 * pixels_per_dp, 0.6 * min_dimension);
-        let edge_depth = min(44.0 * pixels_per_dp, 0.6 * min_dimension);
+        let edge_refraction = select(1.0, 0.4, (instance.material_mode & 4u) != 0u);
+        let edge_depth = min(44.0 * pixels_per_dp * edge_refraction, 0.6 * min_dimension);
         let edge = clamp(1.0 + sd / edge_width, 0.0, 1.0);
         sample_coord -= shape_eval.yz * edge_depth * pow(edge, 3.9);
     } else {
@@ -232,7 +233,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             let tint = to_srgb(instance.tint_color.rgb);
             let tint_luminance = dot(tint, LUMA);
             let chroma = tint - tint_luminance;
-            let dark = instance.material_mode == 2u;
+            let dark = (instance.material_mode & 2u) != 0u;
             let neutral_shift = select(-0.10, 0.095, dark) + 0.24 * (tint_luminance - 0.5);
             color += (neutral_shift + 0.045 * chroma) * tint_weight;
             color = mix(color, tint, smoothstep(0.35, 1.0, tint_weight));

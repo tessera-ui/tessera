@@ -57,10 +57,10 @@ pub enum GlassAppearance {
 impl GlassMaterial {
     fn optics(self, appearance: GlassAppearance) -> Option<(Dp, [f32; 4])> {
         let (radius, tone) = match (self, appearance) {
-            (Self::Regular, GlassAppearance::Light) => (16.0, [0.5900, 0.2956, 0.88, 0.995]),
-            (Self::Regular, GlassAppearance::Dark) => (16.0, [0.1316, 0.2600, 0.6488, 1.0183]),
-            (Self::Clear, GlassAppearance::Light) => (4.43, [0.3126, 0.6380, 0.8613, 1.0538]),
-            (Self::Clear, GlassAppearance::Dark) => (4.43, [0.1325, 0.6730, 0.9097, 1.0543]),
+            (Self::Regular, GlassAppearance::Light) => (11.0, [0.5900, 0.2956, 0.88, 0.995]),
+            (Self::Regular, GlassAppearance::Dark) => (11.0, [0.1316, 0.2600, 0.6488, 1.0183]),
+            (Self::Clear, GlassAppearance::Light) => (13.22, [0.3126, 0.6380, 0.8613, 1.0538]),
+            (Self::Clear, GlassAppearance::Dark) => (13.22, [0.1325, 0.6730, 0.9097, 1.0543]),
             (Self::Custom, _) => return None,
         };
         Some((Dp(radius), tone))
@@ -72,12 +72,12 @@ mod tests {
     use super::{GlassAppearance, GlassMaterial};
 
     #[test]
-    fn regular_material_blurs_more_than_clear() {
+    fn clear_material_blurs_more_than_regular() {
         for appearance in [GlassAppearance::Light, GlassAppearance::Dark] {
             let regular = GlassMaterial::Regular.optics(appearance).unwrap().0;
             let clear = GlassMaterial::Clear.optics(appearance).unwrap().0;
 
-            assert!(regular > clear);
+            assert!(clear > regular);
         }
     }
 }
@@ -124,6 +124,7 @@ impl Default for FluidGlassRenderArgs {
             opacity: 1.0,
             contrast: None,
             dark: false,
+            regular: false,
             feedback: 0.0,
         }
     }
@@ -447,6 +448,7 @@ pub fn glass(
         opacity: 1.0,
         contrast,
         dark: appearance == GlassAppearance::Dark,
+        regular: material == GlassMaterial::Regular,
         feedback: 0.0,
     };
 
