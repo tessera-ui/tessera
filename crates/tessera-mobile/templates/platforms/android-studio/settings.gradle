@@ -1,0 +1,4 @@
+include ':app'
+
+// Plugin modules from Cargo dependencies, maintained by cargo-tessera.
+apply from: 'tessera.settings.gradle'

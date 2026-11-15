@@ -236,12 +236,7 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
     }
 
     // Watch Cargo.toml and build.rs in the package directory
-    for file in [
-        "Cargo.toml",
-        "build.rs",
-        "tessera-app.toml",
-        "tessera-config.toml",
-    ] {
+    for file in ["Cargo.toml", "build.rs", "tessera.toml"] {
         let path = package_dir.join(file);
         if path.exists() {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;

@@ -124,7 +124,7 @@ pub fn build(release: bool, package: Option<&str>, features: &[String]) -> Resul
     Ok(())
 }
 
-pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
+pub fn dev(release: bool, package: Option<&str>, features: &[String], port: u16) -> Result<()> {
     let project_dir = resolve_project_dir(package)?;
     let metadata = load_project_metadata(&project_dir)?;
 
@@ -136,7 +136,7 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
     output::status("Watching", "for file changes");
     output::note("Refresh the browser after rebuilds.");
 
-    build_project(&project_dir, &metadata, release, &[])?;
+    build_project(&project_dir, &metadata, release, features)?;
 
     let listener = TcpListener::bind(("127.0.0.1", port))
         .with_context(|| format!("Failed to bind development server on port {port}"))?;
@@ -166,12 +166,7 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
         bail!("Source directory not found: {}", src_path.display());
     }
 
-    for file in [
-        "Cargo.toml",
-        "build.rs",
-        "tessera-app.toml",
-        "tessera-config.toml",
-    ] {
+    for file in ["Cargo.toml", "build.rs", "tessera.toml"] {
         let path = project_dir.join(file);
         if path.exists() {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;
@@ -212,7 +207,7 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
         if pending_change && last_change.elapsed() >= BUILD_DEBOUNCE_WINDOW {
             output::status("Building", "web app");
             match load_project_metadata(&project_dir)
-                .and_then(|metadata| build_project(&project_dir, &metadata, release, &[]))
+                .and_then(|metadata| build_project(&project_dir, &metadata, release, features))
             {
                 Ok(()) => output::status(
                     "Finished",
@@ -479,40 +474,38 @@ fn ensure_index_html(project_dir: &Path, metadata: &ProjectMetadata) -> Result<b
     Ok(true)
 }
 
+const APP_BLOCK_START: &str = "<!-- tessera-app -->";
+const APP_BLOCK_END: &str = "<!-- /tessera-app -->";
+
+/// Replaces the cargo-tessera block of the host page with the current title,
+/// icons, and manifest link.
 fn sync_web_application(config: &AppConfig, version: &str, host: &Path) -> Result<()> {
     let tags = app_assets::web(config, version, host)?;
     let path = host.join("index.html");
     let original = fs::read_to_string(&path)?;
-    let mut html = original.clone();
-    let start_marker = "<!-- tessera-app -->";
-    let end_marker = "<!-- /tessera-app -->";
-    if let Some(start) = html.find(start_marker) {
-        let end = html[start..]
-            .find(end_marker)
-            .context("Unclosed Tessera application metadata in index.html")?
-            + start
-            + end_marker.len();
-        let end = end + usize::from(html[end..].starts_with('\n'));
-        html.replace_range(start..end, "");
+    let start = original.find(APP_BLOCK_START).with_context(|| {
+        format!(
+            "{} must contain `{APP_BLOCK_START}` and `{APP_BLOCK_END}` inside <head>; \
+             cargo-tessera writes the title, icons, and manifest link between them",
+            path.display()
+        )
+    })?;
+    let end = original[start..]
+        .find(APP_BLOCK_END)
+        .with_context(|| format!("Unclosed `{APP_BLOCK_START}` in {}", path.display()))?
+        + start;
+    let indent = original[..start]
+        .rsplit('\n')
+        .next()
+        .filter(|prefix| prefix.chars().all(char::is_whitespace))
+        .unwrap_or("");
+    let mut block = format!("{APP_BLOCK_START}\n");
+    let title = format!("<title>{}</title>", handlebars::html_escape(&config.name));
+    for line in std::iter::once(title.as_str()).chain(tags.lines()) {
+        block.push_str(&format!("{indent}{line}\n"));
     }
-    let lower = html.to_ascii_lowercase();
-    if let Some(start) = lower.find("<title>") {
-        let end = lower[start..]
-            .find("</title>")
-            .context("Unclosed title in index.html")?
-            + start
-            + "</title>".len();
-        html.replace_range(start..end, "");
-    }
-    let end = html
-        .to_ascii_lowercase()
-        .find("</head>")
-        .context("Web host index.html must contain </head>")?;
-    let name = handlebars::html_escape(&config.name);
-    html.insert_str(
-        end,
-        &format!("{start_marker}\n<title>{name}</title>\n{tags}\n{end_marker}\n"),
-    );
+    block.push_str(indent);
+    let html = format!("{}{block}{}", &original[..start], &original[end..]);
     if html != original {
         fs::write(path, html)?;
     }
@@ -881,24 +874,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn application_metadata_updates_preserve_the_web_host() {
+    fn application_metadata_updates_only_the_maintained_block() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("index.html");
-        fs::write(&path, "<!doctype html><html><head><title>Old</title><style>canvas{display:block}</style></head><body><canvas></canvas></body></html>").unwrap();
+        let page = "<!doctype html><html><head>\n    <!-- tessera-app -->\n    <!-- /tessera-app -->\n    <style>canvas{display:block}</style>\n</head><body><canvas></canvas></body></html>";
+        fs::write(&path, page).unwrap();
         let mut config = AppConfig::load(directory.path(), "reader").unwrap();
         config.name = "Reader & Notes".into();
         sync_web_application(&config, "1.2.3", directory.path()).unwrap();
         let first = fs::read_to_string(&path).unwrap();
         sync_web_application(&config, "1.2.3", directory.path()).unwrap();
         assert_eq!(first, fs::read_to_string(&path).unwrap());
-        assert!(first.contains("<title>Reader &amp; Notes</title>"));
+        assert!(first.contains("    <title>Reader &amp; Notes</title>\n"));
         assert!(first.contains("<style>canvas{display:block}</style>"));
         assert!(first.contains("<body><canvas></canvas></body>"));
         config.name = "New Name".into();
         sync_web_application(&config, "1.2.3", directory.path()).unwrap();
-        let html = fs::read_to_string(path).unwrap();
+        let html = fs::read_to_string(&path).unwrap();
         assert_eq!(html.matches("<title>").count(), 1);
         assert!(html.contains("<title>New Name</title>"));
+
+        fs::write(&path, "<html><head><title>Mine</title></head></html>").unwrap();
+        let error = sync_web_application(&config, "1.2.3", directory.path()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("must contain `<!-- tessera-app -->`")
+        );
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "<html><head><title>Mine</title></head></html>"
+        );
     }
 
     #[test]

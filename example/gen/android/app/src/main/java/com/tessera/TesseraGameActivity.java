@@ -1,4 +1,4 @@
-package {{app.identifier}};
+package com.tessera;
 
 import android.os.Bundle;
 import android.view.KeyEvent;

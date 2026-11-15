@@ -1,8 +1,0 @@
-[assets]
-dir = "assets"
-
-[assets.tree_shaking]
-exclude = ["*.LICENSE"]
-
-[i18n]
-fallback = "en"

@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera.schema.json",
+  "title": "Tessera package configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Application identity. Read only from the package being built.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Display name on every platform; defaults to the Cargo package name."
+        },
+        "identifier": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)+$",
+          "description": "Reverse-domain application identifier used by every platform."
+        },
+        "icon": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Square SVG (recommended) or PNG relative to the package root. Outline SVG text and embed external resources; PNG should be at least 1024 x 1024."
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Assets delivered with this package.",
+      "properties": {
+        "dir": {
+          "type": "string",
+          "default": "assets",
+          "description": "Asset directory relative to the package root."
+        },
+        "embed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns, relative to dir, of assets embedded in the binary on every target. `*` does not cross directories; use `**` for that."
+        },
+        "keep": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns, relative to dir, of platform assets delivered even when no reference to them is found in the binary."
+        }
+      }
+    },
+    "i18n": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "type": "string",
+          "default": "locales",
+          "description": "Localization catalog directory relative to the package root."
+        },
+        "fallback": {
+          "type": "string",
+          "description": "Fallback language and initial entry language, such as en or zh-CN."
+        }
+      },
+      "required": [
+        "fallback"
+      ]
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Platform modules contributed by a plugin package.",
+      "properties": {
+        "android": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "module": {
+              "type": "string",
+              "description": "Gradle module name of the library in the package's android directory."
+            }
+          },
+          "required": [
+            "module"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -23,10 +23,15 @@ inline module tree for source overrides. Use `allow`, `warn`, `deny`, or `forbid
 nested settings override inherited levels unless forbidden.
 `--force-warn` and `--cap-lints` are command-line only.
 
-Set `name`, `identifier`, and `icon` in `tessera-app.toml` for every platform.
-Use a square SVG (recommended, with outlined text and embedded resources) or PNG
-(prefer at least 1024 × 1024). Versions come from Cargo. Use `..res::application()`
-as renderer defaults to apply the same name, icon, and launcher identity at runtime.
+Set `name`, `identifier`, and `icon` under `[app]` in `tessera.toml` for every
+platform; without an icon, the Tessera logo is used. Use a square SVG
+(recommended, with outlined text and embedded resources) or PNG (prefer at least
+1024 × 1024). Versions come from Cargo. Use `..res::application()` as renderer
+defaults to apply the same name, icon, and launcher identity at runtime.
+
+Write platform settings natively: permissions and SDK levels in the generated
+`gen/android` Gradle project, entitlements and Info.plist keys in the `gen/apple`
+Xcode project, and desktop installer settings in `[package.metadata.packager]`.
 
 The app templates generate a shared library entrypoint and a thin desktop binary.
 Use [headless sessions](headless.md) to render and interact without a window.

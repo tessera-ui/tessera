@@ -88,16 +88,15 @@ pub fn execute(
         )
     };
     let macos = target.ends_with("-apple-darwin");
-    if let Some(icons) = app_assets::desktop(&app.identity, &out.join("icons"), macos)? {
-        if target.contains("windows") {
-            let ico = icons
-                .iter()
-                .find(|path| path.extension().is_some_and(|ext| ext == "ico"))
-                .context("Missing generated Windows icon")?;
-            set_default(&mut app.config, "nsis", "installerIcon", json!(ico))?;
-        }
-        app.config["icons"] = json!(icons);
+    let icons = app_assets::desktop(&app.identity, &out.join("icons"), macos)?;
+    if target.contains("windows") {
+        let ico = icons
+            .iter()
+            .find(|path| path.extension().is_some_and(|ext| ext == "ico"))
+            .context("Missing generated Windows icon")?;
+        set_default(&mut app.config, "nsis", "installerIcon", json!(ico))?;
     }
+    app.config["icons"] = json!(icons);
     let config = &mut app.config;
     config["binaries"] = json!([{ "path": binary, "main": true }]);
     config["binariesDir"] = json!(binary_dir);

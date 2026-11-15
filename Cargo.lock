@@ -7255,6 +7255,7 @@ dependencies = [
  "anyhow",
  "embed-resource",
  "fluent-templates",
+ "globset",
  "hex",
  "image",
  "prettyplease",

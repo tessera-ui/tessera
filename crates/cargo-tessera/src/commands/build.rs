@@ -69,7 +69,7 @@ pub fn execute(
     if target.is_some_and(|target| target.contains("-apple-ios")) {
         command.env(
             "IPHONEOS_DEPLOYMENT_TARGET",
-            super::ios::deployment_target(),
+            super::apple::deployment_target(),
         );
     }
     command

@@ -9,7 +9,7 @@ homepage.workspace = true
 description = "CLI tool for Tessera UI framework - project scaffolding, development server, and build automation"
 keywords = ["gui", "ui", "cli", "tessera"]
 categories = ["command-line-utilities", "gui", "development-tools"]
-include = ["Cargo.toml", "README.md", "src/**", "templates/**", "skills/**"]
+include = ["Cargo.toml", "README.md", "src/**", "templates/**", "platforms/**", "skills/**"]
 
 [[bin]]
 name = "cargo-tessera"

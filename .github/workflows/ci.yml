@@ -190,10 +190,18 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: rust-script
+      - name: Install XcodeGen
+        run: brew install xcodegen
       - name: Build and inspect the iOS Simulator example
         run: |
+          cargo tessera apple init -p example --force
           cargo tessera ios build -p example --profiling-output acceptance.jsonl
           rust-script scripts/check-package.rs ios target/packages/example/ios/*/example.app
+      - name: Build the macOS target of the Xcode project
+        run: >-
+          xcodebuild -project example/gen/apple/example.xcodeproj
+          -scheme example-macOS -configuration Debug
+          -derivedDataPath target/xcode build
       - name: Verify Apple IME and iOS application lifecycle
         run: rust-script scripts/test-apple-ime.rs target/packages/example/ios/*/example.app
       - name: Retain iOS acceptance diagnostics

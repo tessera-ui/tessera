@@ -1,0 +1,8 @@
+#:schema https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera.schema.json
+
+[assets]
+dir = "assets"
+keep = ["*.LICENSE"]
+
+[i18n]
+fallback = "en"
