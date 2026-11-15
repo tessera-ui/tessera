@@ -278,7 +278,9 @@ pub fn resolve_resource_dirs(
 
 /// Generates application defaults, asset bindings, and localization catalogs.
 ///
-/// The generated file is written to `OUT_DIR/tessera_assets.rs`.
+/// The generated file is written to `OUT_DIR/tessera_assets.rs`. Creating a
+/// previously absent `tessera-config.toml` or `tessera-app.toml` takes effect
+/// once the package's `Cargo.toml` changes.
 pub fn build() -> Result<()> {
     let manifest_dir = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").context("Missing CARGO_MANIFEST_DIR for build script")?,
@@ -290,9 +292,8 @@ pub fn build() -> Result<()> {
         env::var("CARGO_PKG_VERSION").context("Missing CARGO_PKG_VERSION for build script")?;
     let backend = AssetBackend::from_env_or_default()?;
 
-    let config_path = manifest_dir.join(TESSERA_CONFIG_FILE);
     println!("cargo:rerun-if-env-changed={ASSET_BACKEND_ENV}");
-    println!("cargo:rerun-if-changed={}", config_path.display());
+    rerun_if_optional_file_changed(&manifest_dir, &manifest_dir.join(TESSERA_CONFIG_FILE));
 
     let config = load_tessera_config_from_dir(&manifest_dir)?;
     let assets_dir = resolve_assets_dir(&manifest_dir, config.as_ref());
@@ -329,6 +330,17 @@ pub fn build() -> Result<()> {
     fs::write(out_dir.join(GENERATED_ASSET_FILE), generated)
         .with_context(|| "Failed to write generated asset file")?;
     Ok(())
+}
+
+// Cargo reruns a build script on every build while a watched path is missing,
+// so an absent optional file is tracked through the package manifest instead.
+fn rerun_if_optional_file_changed(manifest_dir: &Path, path: &Path) {
+    let watched = if path.exists() {
+        path.to_path_buf()
+    } else {
+        manifest_dir.join("Cargo.toml")
+    };
+    println!("cargo:rerun-if-changed={}", watched.display());
 }
 
 /// Lists files recursively beneath an asset directory.

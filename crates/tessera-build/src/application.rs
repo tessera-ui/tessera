@@ -216,10 +216,7 @@ impl AppIcon {
 }
 
 pub(super) fn generate(project: &Path, output: &Path, package_name: &str) -> Result<TokenStream> {
-    println!(
-        "cargo:rerun-if-changed={}",
-        project.join("tessera-app.toml").display()
-    );
+    crate::rerun_if_optional_file_changed(project, &project.join("tessera-app.toml"));
     let config = AppConfig::load(project, package_name)?;
     let name = &config.name;
     let target_os = std::env::var("CARGO_CFG_TARGET_OS")?;
