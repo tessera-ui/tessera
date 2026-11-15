@@ -101,10 +101,16 @@ nix develop .#android  # 安卓开发 shell
 
 ### 提交规范
 
-- 请确保您的提交信息清晰、简洁，并且描述了所做的更改。
-- 提交格式必须遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) 规范。我们对 scope 无特殊要求，你可以不使用 scope，但是建议用于标识更改的范围或功能。
-- **破坏性变更**：如果您的提交引入了破坏性变更，您**必须**在提交正文或页脚中包含 `BREAKING CHANGE:`。这是必须的，因为我们的发布脚本依赖此标志来自动触发**主版本号 (Major)** 更新。
-- 推送前，请确保
+所有更改都通过 pull request 进入 `main`：
+
+1. 从 `main` 创建一个短期分支，例如 `fix/android-icon`。
+2. 向 `main` 发起 pull request，CI 通过后才能合并。
+3. pull request 以 squash 方式合并：pull request 标题成为 `main` 上的提交标题，pull request 描述成为提交正文。
+
+- pull request 标题必须遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) 规范，例如 `fix(cargo-tessera): keep Android icons opaque`，CI 会检查。scope 可以省略，但建议用于标识更改的范围或功能。
+- **破坏性变更**：如果 pull request 引入了破坏性变更，请在标题中加上 `!`（如 `feat(tessera-build)!: ...`），并在 pull request 描述中包含 `BREAKING CHANGE:`。发布脚本从 squash 后的提交读取这些标记，自动触发**主版本号 (Major)** 更新。
+- 分支内的提交会被 squash，其提交信息格式不限。
+- 发起 pull request 前，请确保
   - 您的代码通过了所有测试(`cargo test`)。
   - 您已更新相关文档（如果适用）。
   - 您的代码符合[代码检查规范](#代码检查)。
@@ -131,7 +137,7 @@ nix develop .#android  # 安卓开发 shell
 
 ### 文档提交
 
-- 对本仓库的直接提交/pr 规范请查看[提交规范](#提交规范)
+- 对本仓库的 pull request 规范请查看[提交规范](#提交规范)
 - 对相关仓库，如官网、Wiki 等的提交，请遵循各自仓库的贡献指南。
 
 ## 安卓构建特别说明

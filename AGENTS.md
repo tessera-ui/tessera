@@ -215,8 +215,9 @@ programming contract; the guidelines below also govern framework implementation.
   - Treat `State<T>` (returned by `remember`) and values returned from `use_context::<T>().get()` as cheap `Copy` handles: do **not** call `.clone()` just to pass them into closures.
   - Avoid `*_for_*` “capture helper” variable names (e.g. `state_for_handler`). Prefer capturing the original value directly; if a local alias is needed, keep the same name.
 - **Commit Guidelines**:
-  - Follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) specification
-  - **Breaking Changes**: If a commit introduces a breaking change of public api, you MUST include `BREAKING CHANGE:` in the commit body or footer. This is required to trigger a Major version bump.
+  - Changes reach `main` only through squash-merged pull requests from short-lived branches; `main` rejects direct pushes and requires CI. Open the pull request and enable auto-merge (`gh pr merge --auto --squash`) instead of waiting for CI.
+  - The pull request title becomes the commit subject on `main` and must follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) specification; the description becomes the commit body
+  - **Breaking Changes**: If a pull request introduces a breaking change of public api, mark the title with `!` and include `BREAKING CHANGE:` in the pull request description. This is required to trigger a Major version bump.
   - **Unreleased API changes**: If an API or behavior has never been included in a published release (i.e., it exists only in the working tree or an unmerged branch), you do **not** need to preserve backward compatibility for it. Use git (tags/releases) to confirm whether an API was released; when in doubt, discuss with maintainers before merging.
   - Ensure all tests pass, documentation is updated, and formatting checks are clean before committing
 - **Documentation**:
