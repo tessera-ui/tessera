@@ -124,7 +124,7 @@ module = "my_plugin"        # Gradle library in the package's android directory
 
 Unknown keys are errors. `identifier` is a reverse-domain name with ASCII
 alphanumeric segments starting with letters. Patterns are globs relative to the
-asset directory; `*` does not cross directories, `**` does. Icons must be
+asset directory; `*` does not cross directories, `**` does. Without `icon`, the Tessera logo is used. Icons must be
 square: SVG is recommended (convert text to paths and embed external
 resources); PNG should be at least 1024 × 1024 pixels. Tessera generates every
 platform icon format from it, and `res::application()` applies the name, icon,
@@ -181,30 +181,37 @@ render preparation, encoding, and submission. `TESSERA_GPU_TIMING=1` adds GPU
 timestamps and waits for readback after each frame.
 `TESSERA_HEADLESS_SCALE_FACTOR` sets the scale factor (default 1).
 
-### Build for iOS
+### Build for iOS and macOS with Xcode
 
-On macOS with Xcode installed:
+On macOS with Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+(`brew install xcodegen`):
 
 ```sh
+# Generate the Xcode project in gen/apple (once)
+cargo tessera apple init -p my-app
+
+# Build a simulator app, or a device IPA
 cargo tessera ios build -p my-app
-cargo tessera ios build -p my-app --release --device \
-  --signing-identity "Apple Development: ..." \
-  --provisioning-profile app.mobileprovision
+cargo tessera ios build -p my-app --release --device
 ```
 
-The default target is the host's iOS Simulator. Device builds produce an IPA;
-installation requires a matching certificate, provisioning profile, and entitlements.
-Application names, identifiers, and icons come from `tessera-app.toml`.
-Optional `[package.metadata.tessera.ios]` paths are relative to the package:
+`gen/apple` belongs to your project: commit it and open the `.xcodeproj` in
+Xcode. It contains an iOS and a macOS target. Set the signing team,
+capabilities, and entitlements in Xcode, and add usage descriptions and other
+keys to `iOS/Info.plist` or `macOS/Info.plist`. Device IPAs use
+`ExportOptions.plist`. Both targets run `cargo tessera apple rust-build` as a
+build phase, so building in Xcode also builds the Rust executable and its
+assets.
 
-```toml
-[package.metadata.tessera.ios]
-info-plist = "ios/Info.plist"
-entitlements = "ios/app.entitlements"
-resources = "ios/resources"
-```
+cargo-tessera rewrites `tessera.xcconfig` (bundle identifier, display name,
+version) and `Tessera.xcassets` (app icon) on every Apple command; both are
+excluded by the generated `.gitignore` and referenced by the project. Run any
+Apple command once after a fresh clone. `cargo tessera apple init --force`
+regenerates the editable files, replacing local changes.
 
-Set `IPHONEOS_DEPLOYMENT_TARGET` to override the default iOS 15 minimum.
+Distribute macOS apps outside the App Store with `cargo tessera package`
+(`--formats app,dmg`). For the Mac App Store, archive the macOS target in
+Xcode (Product → Archive).
 
 ### Build for Android
 

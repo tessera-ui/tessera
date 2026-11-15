@@ -2,7 +2,7 @@
 
 Fluent messages with a language controller owned by the Tessera entry.
 
-Configure `tessera-config.toml`:
+Configure `tessera.toml`:
 
 ```toml
 [i18n]
