@@ -5,19 +5,11 @@
 //! Display labels, headings, and other text content.
 use std::sync::Arc;
 
-use parking_lot::Mutex;
-use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Color, ComputedData, Dp, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, accesskit::Role,
-    layout::MeasureScope, modifier::ModifierCapabilityExt as _, remember, tessera, use_context,
-};
+use tessera_ui::{Color, Dp, Modifier, tessera, use_context};
 
 use crate::{
     md3::theme::{ContentColor, MaterialTheme, TextStyle},
-    pipelines::text::{
-        command::{TextCommand, TextConstraint},
-        pipeline::{TextData, TextFormat, TextMeasureInfo},
-    },
+    text_shared::{TextMetrics, text_node},
 };
 
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
@@ -114,193 +106,34 @@ pub fn text(
     };
     let size = size.unwrap_or(resolved_style.font_size);
     let TextContent(content) = content;
-    let semantics = TextSemantics {
-        content: content.clone(),
-        label: accessibility_label,
-        description: accessibility_description,
-    };
     let line_height = line_height
         .or(resolved_style.line_height)
         .unwrap_or(Dp(size.0 * 1.2));
 
-    // A draw-only rebuild can reuse measurement and its glyph buffer.
-    let shaped = remember(|| Arc::new(Mutex::new(None))).get();
-    tessera_ui::layout::layout(TextLayout {
-        text: content,
-        single_line: single_line.unwrap_or(false),
-        style: TextStyle {
+    text_node(
+        content,
+        modifier,
+        color,
+        TextMetrics {
             font_size: size,
-            line_height: Some(line_height),
-            ..resolved_style
+            line_height,
+            weight: resolved_style.font_weight,
+            letter_spacing: resolved_style.letter_spacing,
+            family: resolved_style.font_family,
+            optical_size: None,
+            point_size: None,
         },
-        shaped: shaped.clone(),
-    })
-    .draw(TextDraw { color, shaped })
-    .modifier(modifier.push_semantics(semantics));
-}
-
-#[derive(Clone)]
-struct TextSemantics {
-    content: Arc<str>,
-    label: Option<String>,
-    description: Option<String>,
-}
-
-impl SemanticsModifierNode for TextSemantics {
-    fn apply(
-        &self,
-        accessibility: &mut AccessibilityNode,
-        _: &mut Option<AccessibilityActionHandler>,
-    ) {
-        if accessibility.role.is_none() {
-            accessibility.role = Some(Role::Label);
-        }
-        if let Some(label) = &self.label {
-            accessibility.label = Some(label.clone());
-        } else if accessibility.label.is_none() && !self.content.is_empty() {
-            accessibility.label = Some(self.content.to_string());
-        }
-        if let Some(description) = &self.description {
-            accessibility.description = Some(description.clone());
-        }
-    }
-}
-
-#[derive(Clone)]
-struct TextLayout {
-    text: Arc<str>,
-    single_line: bool,
-    style: TextStyle,
-    shaped: Arc<Mutex<Option<CachedText>>>,
-}
-
-struct CachedText {
-    fonts: Option<u64>,
-    constraint: TextConstraint,
-    data: TextData,
-}
-
-impl PartialEq for TextLayout {
-    fn eq(&self, other: &Self) -> bool {
-        tessera_ui::LayoutPolicy::measure_eq(self, other)
-    }
-}
-
-impl TextLayout {
-    fn measure_text(&self, constraint: TextConstraint) -> TextMeasureInfo {
-        let fonts = crate::fonts::prepare(&self.text, self.style.font_family);
-        let format = TextFormat::from(self.style);
-        let mut cache = self.shaped.lock();
-        match cache.as_mut() {
-            Some(cached)
-                if cached.fonts == fonts
-                    && cached.data.matches_text(&self.text, format)
-                    && cached.constraint.single_line == constraint.single_line =>
-            {
-                if cached.constraint != constraint {
-                    cached.data.relayout(&constraint);
-                    cached.constraint = constraint;
-                }
-            }
-            _ => {
-                *cache = Some(CachedText {
-                    fonts,
-                    constraint: constraint.clone(),
-                    data: TextData::shape_prepared(
-                        self.text.clone(),
-                        Color::WHITE,
-                        format,
-                        constraint,
-                    ),
-                });
-            }
-        }
-        cache
-            .as_ref()
-            .expect("text must be shaped")
-            .data
-            .measure_info()
-    }
-}
-
-impl tessera_ui::LayoutPolicy for TextLayout {
-    fn measure_eq(&self, other: &Self) -> bool {
-        self.text == other.text
-            && self.style == other.style
-            && self.single_line == other.single_line
-    }
-
-    fn placement_eq(&self, other: &Self) -> bool {
-        self.measure_eq(other)
-    }
-
-    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let max_width = input.parent_constraint().width().resolve_max();
-        let max_height = input.parent_constraint().height().resolve_max();
-
-        let info = self.measure_text(TextConstraint {
-            max_width: max_width.map(|px: Px| px.to_f32()),
-            max_height: max_height.map(|px: Px| px.to_f32()),
-            single_line: self.single_line,
-        });
-
-        Ok(LayoutResult::new(ComputedData {
-            width: input.parent_constraint().width().clamp(info.size[0].into()),
-            height: input
-                .parent_constraint()
-                .height()
-                .clamp(info.size[1].into()),
-        }))
-    }
-}
-
-#[derive(Clone)]
-struct TextDraw {
-    color: Color,
-    shaped: Arc<Mutex<Option<CachedText>>>,
-}
-
-impl PartialEq for TextDraw {
-    fn eq(&self, other: &Self) -> bool {
-        self.color == other.color && Arc::ptr_eq(&self.shaped, &other.shaped)
-    }
-}
-
-impl tessera_ui::DrawModifierNode for TextDraw {
-    fn draw(
-        &self,
-        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
-        content: &mut dyn tessera_ui::DrawModifierContent,
-    ) {
-        let input = &mut *ctx.render_input;
-        let Some(mut text_data) = self
-            .shaped
-            .lock()
-            .as_ref()
-            .filter(|cached| cached.fonts.is_some())
-            .map(|cached| cached.data.clone())
-        else {
-            return;
-        };
-        text_data.set_color(self.color);
-
-        let drawable = TextCommand {
-            data: text_data,
-            offset: PxPosition::ZERO,
-        };
-        input
-            .metadata_mut()
-            .fragment_mut()
-            .push_draw_command(drawable);
-        content.draw(input);
-    }
+        single_line.unwrap_or(false),
+    )
+    .label_optional(accessibility_label)
+    .description_optional(accessibility_description);
 }
 
 #[cfg(test)]
 mod tests {
     use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
-        State, provide_context,
+        Px, State, provide_context, remember,
         testing::WorkPhase,
         testing::{TestProbe, UiTest},
     };

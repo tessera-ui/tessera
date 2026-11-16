@@ -33,6 +33,8 @@ struct TextLayoutKey {
     text: Arc<str>,
     metrics: [u32; 3],
     weight: u16,
+    optical_size: Option<glyphon::cosmic_text::FontSize>,
+    point_size: Option<glyphon::cosmic_text::FontSize>,
     family: Option<&'static str>,
     bounds: [Option<u32>; 2],
     single_line: bool,
@@ -49,6 +51,8 @@ impl TextLayoutKey {
             text: Arc::clone(text),
             metrics: [font_size, line_height, font.tracking].map(f32::to_bits),
             weight: font.weight,
+            optical_size: font.optical_size,
+            point_size: font.point_size,
             family: font.family,
             bounds: [constraint.max_width, constraint.max_height]
                 .map(|bound| bound.map(f32::to_bits)),
@@ -175,6 +179,8 @@ pub(crate) fn color_to_glyphon(color: Color) -> glyphon::Color {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct TextFont {
     weight: u16,
+    optical_size: Option<glyphon::cosmic_text::FontSize>,
+    point_size: Option<glyphon::cosmic_text::FontSize>,
     tracking: f32,
     family: Option<&'static str>,
 }
@@ -200,6 +206,8 @@ impl TextFormat {
             line_height: line_height.to_pixels_f32(),
             font: TextFont {
                 weight: weight.clamp(1, 1000),
+                optical_size: None,
+                point_size: None,
                 tracking: if font_size > 0.0 {
                     letter_spacing.to_pixels_f32() / font_size
                 } else {
@@ -212,6 +220,16 @@ impl TextFormat {
 
     pub(crate) fn family(&self) -> Option<&'static str> {
         self.font.family
+    }
+
+    pub(crate) fn with_optical_size(mut self, points: Option<f32>) -> Self {
+        self.font.optical_size = points.map(glyphon::cosmic_text::FontSize::new);
+        self
+    }
+
+    pub(crate) fn with_point_size(mut self, points: Option<f32>) -> Self {
+        self.font.point_size = points.map(glyphon::cosmic_text::FontSize::new);
+        self
     }
 }
 
@@ -555,6 +573,8 @@ impl TextData {
                 line_height: metrics.line_height,
                 font: TextFont {
                     weight: 400,
+                    optical_size: None,
+                    point_size: None,
                     tracking: 0.0,
                     family: None,
                 },
@@ -622,16 +642,22 @@ impl TextData {
         let single_line = (constraint.single_line && text.contains(['\r', '\n']))
             .then(|| text.replace(['\r', '\n'], " "));
         text_buffer.set_size(constraint.max_width, constraint.max_height);
+        let mut attrs = glyphon::Attrs::new()
+            .family(
+                font.family
+                    .map(fontdb::Family::Name)
+                    .unwrap_or(fontdb::Family::SansSerif),
+            )
+            .weight(glyphon::Weight(font.weight))
+            .letter_spacing(font.tracking);
+        attrs.optical_size = font.optical_size;
+        attrs.point_size = font.point_size;
+        if font.point_size.is_some() {
+            attrs.cache_key_flags = glyphon::cosmic_text::CacheKeyFlags::DISABLE_HINTING;
+        }
         text_buffer.set_text(
             single_line.as_deref().unwrap_or(text),
-            &glyphon::Attrs::new()
-                .family(
-                    font.family
-                        .map(fontdb::Family::Name)
-                        .unwrap_or(fontdb::Family::SansSerif),
-                )
-                .weight(glyphon::Weight(font.weight))
-                .letter_spacing(font.tracking),
+            &attrs,
             glyphon::Shaping::Advanced,
             None,
         );
@@ -690,6 +716,49 @@ mod tests {
     use crate::md3::theme::MaterialTypography;
 
     use super::{TextConstraint, TextData, write_font_system};
+
+    #[test]
+    fn optical_size_and_point_size_have_independent_retained_layouts() {
+        let session = tessera_ui::RuntimeSession::new();
+        let _session = session.enter();
+        let format = super::TextFormat::new(
+            tessera_ui::Dp(16.0),
+            tessera_ui::Dp(24.0),
+            400,
+            tessera_ui::Dp(0.0),
+            None,
+        );
+        let shape = |format| {
+            TextData::shape_prepared(
+                "Independent sizing".into(),
+                Color::BLACK,
+                format,
+                TextConstraint::default(),
+            )
+        };
+        let original = shape(format);
+        let optical = shape(format.with_optical_size(Some(17.0)));
+        let tracked = shape(format.with_point_size(Some(13.0)));
+        let combined = shape(
+            format
+                .with_optical_size(Some(17.0))
+                .with_point_size(Some(13.0)),
+        );
+        assert!(!Arc::ptr_eq(&original.layout, &optical.layout));
+        assert!(!Arc::ptr_eq(&original.layout, &tracked.layout));
+        assert!(!Arc::ptr_eq(&optical.layout, &combined.layout));
+        assert!(!Arc::ptr_eq(&tracked.layout, &combined.layout));
+        assert!(Arc::ptr_eq(&original.layout, &shape(format).layout));
+        assert!(Arc::ptr_eq(
+            &combined.layout,
+            &shape(
+                format
+                    .with_optical_size(Some(17.0))
+                    .with_point_size(Some(13.0))
+            )
+            .layout
+        ));
+    }
 
     #[test]
     fn independent_short_text_layouts_share_glyphs_until_constraints_or_fonts_change() {
