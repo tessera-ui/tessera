@@ -6,6 +6,7 @@ mod choice;
 pub mod glass;
 pub mod radio_button;
 pub mod segmented_control;
+pub mod slider;
 pub mod switch;
 pub mod text;
 pub mod theme;
