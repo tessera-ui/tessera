@@ -124,6 +124,7 @@ pub fn text(
             point_size: None,
         },
         single_line.unwrap_or(false),
+        false,
     )
     .label_optional(accessibility_label)
     .description_optional(accessibility_description);

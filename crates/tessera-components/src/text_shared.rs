@@ -12,6 +12,7 @@ use tessera_ui::{
 
 use crate::pipelines::text::{
     command::{TextCommand, TextConstraint},
+    pipeline::perceptual::PerceptualTextCommand,
     pipeline::{TextData, TextFormat, TextMeasureInfo},
 };
 
@@ -33,6 +34,7 @@ pub(crate) fn text_node(
     color: Color,
     metrics: TextMetrics,
     single_line: bool,
+    perceptual: bool,
     label: Option<String>,
     description: Option<String>,
 ) {
@@ -46,10 +48,15 @@ pub(crate) fn text_node(
     layout(TextLayout {
         text: content,
         single_line,
+        perceptual,
         metrics,
         shaped: shaped.clone(),
     })
-    .draw(TextDraw { color, shaped })
+    .draw(TextDraw {
+        color,
+        shaped,
+        perceptual,
+    })
     .modifier(modifier.push_semantics(semantics));
 }
 
@@ -84,6 +91,7 @@ impl SemanticsModifierNode for TextSemantics {
 struct TextLayout {
     text: Arc<str>,
     single_line: bool,
+    perceptual: bool,
     metrics: TextMetrics,
     shaped: Arc<Mutex<Option<CachedText>>>,
 }
@@ -111,7 +119,8 @@ impl TextLayout {
             self.metrics.family,
         )
         .with_optical_size(self.metrics.optical_size)
-        .with_point_size(self.metrics.point_size);
+        .with_point_size(self.metrics.point_size)
+        .with_native_rasterization(self.perceptual);
         let mut cache = self.shaped.lock();
         match cache.as_mut() {
             Some(cached)
@@ -150,6 +159,7 @@ impl tessera_ui::LayoutPolicy for TextLayout {
         self.text == other.text
             && self.metrics == other.metrics
             && self.single_line == other.single_line
+            && self.perceptual == other.perceptual
     }
 
     fn placement_eq(&self, other: &Self) -> bool {
@@ -178,11 +188,14 @@ impl tessera_ui::LayoutPolicy for TextLayout {
 struct TextDraw {
     color: Color,
     shaped: Arc<Mutex<Option<CachedText>>>,
+    perceptual: bool,
 }
 
 impl PartialEq for TextDraw {
     fn eq(&self, other: &Self) -> bool {
-        self.color == other.color && Arc::ptr_eq(&self.shaped, &other.shaped)
+        self.color == other.color
+            && self.perceptual == other.perceptual
+            && Arc::ptr_eq(&self.shaped, &other.shaped)
     }
 }
 
@@ -203,13 +216,20 @@ impl tessera_ui::DrawModifierNode for TextDraw {
             return;
         };
         text_data.set_color(self.color);
-        input
-            .metadata_mut()
-            .fragment_mut()
-            .push_draw_command(TextCommand {
-                data: text_data,
-                offset: PxPosition::ZERO,
-            });
+        if self.perceptual {
+            input
+                .metadata_mut()
+                .fragment_mut()
+                .push_draw_command(PerceptualTextCommand { data: text_data });
+        } else {
+            input
+                .metadata_mut()
+                .fragment_mut()
+                .push_draw_command(TextCommand {
+                    data: text_data,
+                    offset: PxPosition::ZERO,
+                });
+        }
         content.draw(input);
     }
 }

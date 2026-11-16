@@ -65,6 +65,14 @@ pub(super) fn register(context: &mut PipelineContext<'_>) {
     });
 
     context.register_draw_pipeline_factory(|resources| {
+        super::text::pipeline::perceptual::PerceptualTextPipeline::new(
+            resources.device,
+            resources.surface_config.format,
+            resources.sample_count,
+        )
+    });
+
+    context.register_draw_pipeline_factory(|resources| {
         FluidGlassPipeline::new(
             resources.device,
             resources.pipeline_cache,

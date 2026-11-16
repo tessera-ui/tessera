@@ -313,7 +313,7 @@ fn start_glass_feedback(state: State<GlassPress>, center: [f32; 2], timestamp: I
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{experiment::hig::glass::{GlassMaterial, glass}, md3::text::text};
+/// use tessera_components::experiment::hig::{glass::{GlassMaterial, glass}, text::text};
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
