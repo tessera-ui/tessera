@@ -1403,7 +1403,10 @@ pub fn text_field(
         context_menu_long_press.with_mut(LongPressRecognizer::cancel);
     }
     let context_menu_anchor = remember(|| None::<PxPosition>);
-    if menu_policy.enabled && context_menu_long_press.with(LongPressRecognizer::needs_frame) {
+    if menu_policy.enabled
+        && context_menu_anchor.get().is_some()
+        && context_menu_long_press.with(LongPressRecognizer::needs_frame)
+    {
         launch_once(async move {
             loop {
                 let triggered = with_frame_time(|now| {
