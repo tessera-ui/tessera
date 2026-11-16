@@ -54,7 +54,17 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let joint = uniforms.stroke_start_joint.zw * uniforms.rect.zw;
     let end = uniforms.stroke_end_width.xy * uniforms.rect.zw;
     let stroke_distance = min(segment_distance(local, start, joint), segment_distance(local, joint, end));
-    let stroke_alpha = uniforms.stroke_color.a * clamp(uniforms.stroke_end_width.z * 0.5 + 0.5 - stroke_distance, 0.0, 1.0) * coverage;
+    var stroke_coverage = clamp(uniforms.stroke_end_width.z * 0.5 + 0.5 - stroke_distance, 0.0, 1.0);
+    if uniforms.stroke_end_width.w > 0.5 {
+        let grid = floor(local - vec2(0.5)) + vec2(0.5);
+        let fraction = fract(local - vec2(0.5));
+        stroke_coverage = mix(
+            mix(mask_coverage(grid, start, joint, end), mask_coverage(grid + vec2(1.0, 0.0), start, joint, end), fraction.x),
+            mix(mask_coverage(grid + vec2(0.0, 1.0), start, joint, end), mask_coverage(grid + vec2(1.0), start, joint, end), fraction.x),
+            fraction.y,
+        );
+    }
+    let stroke_alpha = uniforms.stroke_color.a * stroke_coverage * coverage;
     if alpha == 0.0 && stroke_alpha == 0.0 { discard; }
     let background = textureLoad(backdrop, vec2<i32>(floor(position.xy - uniforms.viewport_scene.zw)), 0);
     let straight = encode(background.rgb / max(background.a, 0.000001));
@@ -69,4 +79,9 @@ fn segment_distance(point: vec2<f32>, start: vec2<f32>, end: vec2<f32>) -> f32 {
     let line = end - start;
     let fraction = clamp(dot(point - start, line) / max(dot(line, line), 0.000001), 0.0, 1.0);
     return length(point - start - fraction * line);
+}
+
+fn mask_coverage(point: vec2<f32>, start: vec2<f32>, joint: vec2<f32>, end: vec2<f32>) -> f32 {
+    let distance = min(segment_distance(point, start, joint), segment_distance(point, joint, end));
+    return clamp(uniforms.stroke_end_width.z * 0.5 + 0.5 - distance, 0.0, 1.0);
 }

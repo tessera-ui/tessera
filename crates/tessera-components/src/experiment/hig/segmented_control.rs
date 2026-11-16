@@ -133,6 +133,7 @@ impl DrawModifierNode for SegmentFill {
             let x = Dp(0.5).to_pixels_f32() / size.width.to_f32().max(1.0);
             let y = Dp(5.5).to_pixels_f32() / size.height.to_f32().max(1.0);
             PerceptualStroke {
+                raster_mask: false,
                 color,
                 width: Dp(1.0),
                 points: [[x, y], [x, 0.5], [x, 1.0 - y]],

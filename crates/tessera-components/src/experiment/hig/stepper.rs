@@ -256,6 +256,7 @@ impl DrawModifierNode for HalfFill {
                 line: None,
                 edge_smoothness: 1.0,
                 stroke: Some(PerceptualStroke {
+                    raster_mask: false,
                     color: self.ink,
                     width: Dp(1.7),
                     points,
@@ -274,6 +275,7 @@ impl DrawModifierNode for HalfFill {
                 line: None,
                 edge_smoothness: 1.0,
                 stroke: Some(PerceptualStroke {
+                    raster_mask: false,
                     color: self.ink.with_alpha(1.0 / 7.0),
                     width: Dp(1.0),
                     points: [[0.175, y], [0.5, y], [0.825, y]],

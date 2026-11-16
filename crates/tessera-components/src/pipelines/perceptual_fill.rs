@@ -27,6 +27,7 @@ pub(crate) struct PerceptualStroke {
     pub color: Color,
     pub width: Dp,
     pub points: [[f32; 2]; 3],
+    pub raster_mask: bool,
 }
 
 impl DrawCommand for PerceptualFillCommand {
@@ -204,7 +205,7 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
                         stroke.points[2][0],
                         stroke.points[2][1],
                         stroke.width.to_pixels_f32() * geometry.local_to_window.scale(),
-                        0.0,
+                        if stroke.raster_mask { 1.0 } else { 0.0 },
                     ]
                 }),
             ];

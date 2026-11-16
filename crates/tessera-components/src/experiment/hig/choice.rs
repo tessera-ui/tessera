@@ -197,6 +197,7 @@ pub(super) fn choice_control(
     };
     let mark_color = if enabled && active { Color::WHITE } else { ink };
     let stroke = style.mark.map(|mark| PerceptualStroke {
+        raster_mask: false,
         color: mark_color,
         width: Dp(if mark == ChoiceMark::Dot { 5.0 } else { 2.04 }),
         points: match mark {
