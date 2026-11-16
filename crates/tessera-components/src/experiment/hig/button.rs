@@ -4,6 +4,8 @@
 //!
 //! Confirm changes, cancel operations, and invoke commands with pointer or keyboard input.
 
+use std::time::Duration;
+
 use tessera_foundation::modifier::{
     ClickableArgs, InteractionState, ModifierExt as _, Padding, SemanticsArgs,
 };
@@ -11,9 +13,12 @@ use tessera_ui::{
     Callback, Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode,
     FocusRequester, KeyboardInput, KeyboardInputModifierNode, Modifier, RenderSlotWith, State,
     accesskit::Role,
+    launch_once,
     layout::{Stack, layout},
     modifier::{CursorModifierExt as _, ModifierCapabilityExt as _},
-    remember, remember_with_key, tessera, use_context,
+    remember, remember_with_key, tessera,
+    time::Instant,
+    use_context,
     winit::{
         event::ElementState,
         keyboard::{Key, NamedKey},
@@ -23,6 +28,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::Alignment,
+    animation::run_frames,
     boxed::boxed,
     modifier::ModifierExt as _,
     pipelines::perceptual_fill::PerceptualFillCommand,
@@ -42,6 +48,7 @@ mod tests;
 struct DefaultAction {
     callback: Callback,
     pressed: State<bool>,
+    pulse: State<Option<Instant>>,
 }
 
 impl DefaultAction {
@@ -91,6 +98,7 @@ struct ButtonKeyboard {
     enabled: bool,
     callback: Callback,
     pressed: State<bool>,
+    pulse: State<Option<Instant>>,
     scope: Option<ButtonScope>,
     held: State<Option<(NamedKey, DefaultAction)>>,
     scope_only: bool,
@@ -123,12 +131,20 @@ impl KeyboardInputModifierNode for ButtonKeyboard {
                 Some(DefaultAction {
                     callback: self.callback,
                     pressed: self.pressed,
+                    pulse: self.pulse,
                 })
             };
             let Some(action) = action else {
                 cancel_key(self.held);
                 return self.scope_only;
             };
+            if key == NamedKey::Enter {
+                if event.state == ElementState::Pressed {
+                    action.pulse.set(Some(input.timestamp));
+                    action.callback.call();
+                }
+                return false;
+            }
             match event.state {
                 ElementState::Pressed => {
                     if self.held.get().is_none() {
@@ -189,12 +205,14 @@ pub fn button_scope(child: Option<RenderSlotWith<ButtonScope>>) {
         target: remember(|| None),
     };
     let pressed = remember(|| false);
+    let pulse = remember(|| None);
     let held = remember(|| None);
     layout(Stack)
         .modifier(Modifier::new().push_keyboard_input(ButtonKeyboard {
             enabled: true,
             callback: Callback::noop(),
             pressed,
+            pulse,
             scope: Some(scope),
             held,
             scope_only: true,
@@ -239,7 +257,7 @@ impl DrawModifierNode for ButtonBackground {
 
 /// # button
 ///
-/// Invokes an action on pointer release, Space, or a form's default Return key.
+/// Invokes an action on pointer or Space release, or when a form's default Return key is pressed.
 ///
 /// ## Usage
 ///
@@ -300,6 +318,7 @@ pub fn button(
     };
     let held = remember(|| None::<(NamedKey, DefaultAction)>);
     let keyboard_pressed = remember(|| false);
+    let pulse = remember(|| None::<Instant>);
     let callback = on_click.unwrap_or_else(Callback::noop);
     let registration = remember(|| None::<DefaultAction>);
     if let Some(scope) = scope {
@@ -310,6 +329,7 @@ pub fn button(
         let next = (enabled && default_action).then_some(DefaultAction {
             callback,
             pressed: keyboard_pressed,
+            pulse,
         });
         if registration.get() != next {
             registration.set(next);
@@ -329,6 +349,9 @@ pub fn button(
         if keyboard_pressed.get() {
             keyboard_pressed.set(false);
         }
+        if pulse.get().is_some() {
+            pulse.set(None);
+        }
     }
     if held.get().is_some() && !requester.is_focused() {
         cancel_key(held);
@@ -337,8 +360,19 @@ pub fn button(
         .map(|theme| theme.get())
         .unwrap_or_default();
     let dark = theme.appearance == Appearance::Dark;
-    let pressed =
-        enabled && (keyboard_pressed.get() || interaction.with(InteractionState::is_pressed));
+    let pulsing = pulse.get().is_some();
+    if pulsing {
+        launch_once(run_frames(pulse, |pulse, now| {
+            if pulse.is_some_and(|start| {
+                now.saturating_duration_since(start) >= Duration::from_millis(100)
+            }) {
+                *pulse = None;
+            }
+            pulse.is_some()
+        }));
+    }
+    let pressed = enabled
+        && (pulsing || keyboard_pressed.get() || interaction.with(InteractionState::is_pressed));
     let focused = enabled && active && requester.is_focus_visible();
     let fill = if enabled && default_action && active {
         if pressed {
@@ -378,6 +412,7 @@ pub fn button(
             enabled,
             callback,
             pressed: keyboard_pressed,
+            pulse,
             scope,
             held,
             scope_only: false,

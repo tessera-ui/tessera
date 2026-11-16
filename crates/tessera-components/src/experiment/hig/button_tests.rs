@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use tessera_foundation::modifier::{InteractionState, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, FocusRequester, KeyboardEvent, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
@@ -139,12 +141,18 @@ fn check_scoped_keyboard() {
     assert!(ui.run(|| controls.focus.is_focus_visible()));
     ui.press_key(NamedKey::Enter);
     ui.frames(1);
+    assert_eq!(controls.primary.get(), 1);
+    let mut repeated = KeyboardEvent::named(NamedKey::Enter, ElementState::Pressed);
+    repeated.repeat = true;
+    ui.inject_key_event(repeated);
+    ui.frames(1);
+    assert_eq!(controls.primary.get(), 2);
     ui.inject_key_event(KeyboardEvent::named(
         NamedKey::Enter,
         ElementState::Released,
     ));
     ui.frames(1);
-    assert_eq!(controls.primary.get(), 1);
+    assert_eq!(controls.primary.get(), 2);
     assert_eq!(controls.ordinary.get(), 1);
     ui.run(|| controls.sibling_focus.request_focus());
     ui.frames(1);
@@ -156,12 +164,12 @@ fn check_scoped_keyboard() {
         ElementState::Released,
     ));
     ui.frames(1);
-    assert_eq!(controls.primary.get(), 2);
+    assert_eq!(controls.primary.get(), 3);
     controls.show_default.set(false);
     ui.frames(1);
     ui.press_key(NamedKey::Enter);
     ui.frames(1);
-    assert_eq!(controls.primary.get(), 2);
+    assert_eq!(controls.primary.get(), 3);
     assert_eq!(controls.ordinary.get(), 1);
 }
 
@@ -213,6 +221,7 @@ fn check_keyboard_cancellation() {
     ui.frames(1);
     ui.press_key(NamedKey::Enter);
     ui.frames(1);
+    assert_eq!(controls.primary.get(), 1);
     controls.show_default.set(false);
     ui.frames(1);
     ui.inject_key_event(KeyboardEvent::named(
@@ -220,7 +229,7 @@ fn check_keyboard_cancellation() {
         ElementState::Released,
     ));
     ui.frames(1);
-    assert_eq!(controls.primary.get(), 0);
+    assert_eq!(controls.primary.get(), 1);
     assert_eq!(controls.ordinary.get(), 0);
 }
 
@@ -235,9 +244,9 @@ fn focused_space_activates_on_release_and_return_targets_the_scoped_default() {
 
 #[test]
 #[ignore = "requires a native GPU adapter for keyboard dispatch"]
-fn disabling_a_held_button_and_removing_a_held_default_never_activate_on_release() {
+fn disabling_held_space_and_removing_the_default_prevent_later_activation() {
     crate::test_utils::run_isolated_test(
-        "experiment::hig::button::tests::disabling_a_held_button_and_removing_a_held_default_never_activate_on_release",
+        "experiment::hig::button::tests::disabling_held_space_and_removing_the_default_prevent_later_activation",
         check_keyboard_cancellation,
     );
 }
@@ -288,7 +297,10 @@ fn check_accessibility_and_pixels() {
     ui.press_key(NamedKey::Enter);
     ui.frames(2);
     assert_ne!(focused, ui.read_pixels());
-    assert_eq!(controls.primary.get(), 0);
+    assert_eq!(controls.primary.get(), 1);
+    ui.advance(Duration::from_millis(100));
+    ui.frames(1);
+    assert_eq!(focused, ui.read_pixels());
     ui.inject_key_event(KeyboardEvent::named(
         NamedKey::Enter,
         ElementState::Released,
