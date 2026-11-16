@@ -1,6 +1,6 @@
 use tessera_ui::{
-    Color, Dp,
-    render::{DrawCommand, DrawContext, DrawablePipeline, SampleRegion},
+    Color, Dp, Px,
+    render::{DrawCommand, DrawContext, DrawRegion, DrawablePipeline, PaddingRect, SampleRegion},
     wgpu,
 };
 
@@ -12,6 +12,14 @@ pub(crate) struct PerceptualFillCommand {
     pub clip_radius: Option<Dp>,
     pub edge_smoothness: f32,
     pub stroke: Option<PerceptualStroke>,
+    pub line: Option<PerceptualLine>,
+}
+
+#[derive(Clone, PartialEq)]
+pub(crate) struct PerceptualLine {
+    pub vertical: bool,
+    pub width: Dp,
+    pub offset: Dp,
 }
 
 #[derive(Clone, PartialEq)]
@@ -23,7 +31,11 @@ pub(crate) struct PerceptualStroke {
 
 impl DrawCommand for PerceptualFillCommand {
     fn sample_region(&self) -> Option<SampleRegion> {
-        Some(SampleRegion::ZERO_PADDING_LOCAL)
+        Some(SampleRegion::PaddedLocal(self.padding()))
+    }
+
+    fn draw_region(&self) -> DrawRegion {
+        DrawRegion::PaddedLocal(self.padding())
     }
 
     fn apply_opacity(&mut self, opacity: f32) {
@@ -31,6 +43,14 @@ impl DrawCommand for PerceptualFillCommand {
         if let Some(stroke) = &mut self.stroke {
             stroke.color.a *= opacity;
         }
+    }
+}
+
+impl PerceptualFillCommand {
+    fn padding(&self) -> PaddingRect {
+        PaddingRect::uniform(self.line.as_ref().map_or(Px::ZERO, |line| {
+            Px::from(line.width) + Px::from(Dp(line.offset.0.abs())) + Px(1)
+        }))
     }
 }
 
@@ -112,6 +132,25 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
         for (command, geometry) in context.commands {
             let mut origin = geometry.window_origin();
             let mut size = geometry.window_size();
+            if let Some(line) = &command.line {
+                if size[0] <= 0.0 || size[1] <= 0.0 {
+                    continue;
+                }
+                let scale = geometry.local_to_window.scale();
+                let stroke = line.width.to_pixels_f32() * scale;
+                let offset = line.offset.to_pixels_f32() * scale;
+                if line.vertical {
+                    origin.x = (origin.x + size[0] * 0.5).floor() + offset;
+                    size[0] = stroke;
+                    size[1] = (origin.y + size[1]).floor() - origin.y.floor();
+                    origin.y = origin.y.floor();
+                } else {
+                    origin.y = (origin.y + size[1] * 0.5).floor() + offset;
+                    size[1] = stroke;
+                    size[0] = (origin.x + size[0]).floor() - origin.x.floor();
+                    origin.x = origin.x.floor();
+                }
+            }
             let raster_rect = [origin.x, origin.y, size[0], size[1]];
             let [top, right, bottom, left] = command
                 .insets

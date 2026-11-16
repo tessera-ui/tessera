@@ -249,6 +249,7 @@ pub(super) fn choice_control(
                     stroke: stroke.clone(),
                     insets: [Dp(0.0); 4],
                     clip_radius: None,
+                    line: None,
                     edge_smoothness: 1.0,
                 },
                 focused,

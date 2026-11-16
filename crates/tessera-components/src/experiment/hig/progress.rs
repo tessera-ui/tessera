@@ -85,6 +85,7 @@ impl DrawModifierNode for ProgressFill {
                 radii: [radius_x, Dp(4.0)],
                 insets: [Dp(0.0), end_inset, Dp(0.0), Dp(0.0)],
                 clip_radius: self.fraction.map(|_| Dp(4.0)),
+                line: None,
                 edge_smoothness: if self.fraction.is_some() { 1.3 } else { 1.0 },
                 stroke: None,
             });

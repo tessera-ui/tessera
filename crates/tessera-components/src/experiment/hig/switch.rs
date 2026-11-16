@@ -76,6 +76,7 @@ impl DrawModifierNode for Fill {
                 radii: [self.radius; 2],
                 insets: [Dp(0.0); 4],
                 clip_radius: None,
+                line: None,
                 edge_smoothness: 1.0,
                 stroke: None,
             });

@@ -253,6 +253,7 @@ impl DrawModifierNode for HalfFill {
                 radii: [Dp(0.0); 2],
                 insets: [Dp(0.0); 4],
                 clip_radius: None,
+                line: None,
                 edge_smoothness: 1.0,
                 stroke: Some(PerceptualStroke {
                     color: self.ink,
@@ -270,6 +271,7 @@ impl DrawModifierNode for HalfFill {
                 radii: [Dp(0.0); 2],
                 insets: [Dp(0.0); 4],
                 clip_radius: None,
+                line: None,
                 edge_smoothness: 1.0,
                 stroke: Some(PerceptualStroke {
                     color: self.ink.with_alpha(1.0 / 7.0),
