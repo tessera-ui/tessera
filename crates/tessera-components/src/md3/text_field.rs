@@ -5,18 +5,18 @@
 //! Collect short-form inputs like names, passwords, or search queries.
 use glyphon::Action as GlyphonAction;
 use tessera_foundation::{
-    gesture::{ScrollRecognizer, TapRecognizer, TapSettings},
+    gesture::{LongPressRecognizer, LongPressSettings, ScrollRecognizer, TapRecognizer},
     modifier::{InteractionVisualState, ModifierExt as _, Padding},
 };
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
-    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, PxSize, RenderSlot,
-    ScrollDeltaUnit, State,
+    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, CursorEventContent,
+    Dp, LayoutResult, MeasurementError, Modifier, PointerEventPass, PressKeyEventType, Px,
+    PxPosition, PxSize, RenderSlot, ScrollDeltaUnit, State, launch_once,
     layout::{MeasureScope, Stack, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _},
     provide_context, remember,
     scroll::normalize_platform_scroll_delta,
-    tessera, use_context, winit,
+    tessera, use_context, winit, with_frame_time,
 };
 
 use crate::{
@@ -37,7 +37,7 @@ use crate::{
             TextStyle,
         },
     },
-    modifier::with_pointer_input,
+    modifier::{with_pointer_final_input, with_pointer_input, with_pointer_preview_input},
     pos_misc::is_position_inside_bounds,
     res::I18N,
     row::row,
@@ -1393,12 +1393,39 @@ pub fn text_field(
     let render_args = args.clone();
     let focus_tap_recognizer = remember(TapRecognizer::default);
     let scroll_recognizer = remember(ScrollRecognizer::default);
-    let context_menu_tap_recognizer = remember(|| {
-        TapRecognizer::new(TapSettings {
-            button: PressKeyEventType::Right,
+    let context_menu_long_press = remember(|| {
+        LongPressRecognizer::new(LongPressSettings {
+            slop_px: Dp(8.0).to_pixels_f32(),
             ..Default::default()
         })
     });
+    if !menu_policy.enabled && context_menu_long_press.with(LongPressRecognizer::is_active) {
+        context_menu_long_press.with_mut(LongPressRecognizer::cancel);
+    }
+    let context_menu_anchor = remember(|| None::<PxPosition>);
+    if menu_policy.enabled && context_menu_long_press.with(LongPressRecognizer::needs_frame) {
+        launch_once(async move {
+            loop {
+                let triggered = with_frame_time(|now| {
+                    context_menu_long_press.is_alive()
+                        && context_menu_long_press.with_mut(|recognizer| recognizer.advance(now))
+                })
+                .await;
+                if !context_menu_long_press.is_alive() {
+                    break;
+                }
+                if menu_policy.enabled
+                    && triggered
+                    && let Some(anchor) = context_menu_anchor.get()
+                {
+                    menu_controller.with_mut(|menu| menu.open_at(MenuAnchor::at(anchor)));
+                }
+                if !context_menu_long_press.with(LongPressRecognizer::needs_frame) {
+                    break;
+                }
+            }
+        });
+    }
     let modifier_base = if enabled {
         Modifier::new().hover_cursor_icon(winit::window::CursorIcon::Text)
     } else {
@@ -1409,14 +1436,70 @@ pub fn text_field(
             geometry.with_mut(|geometry| geometry.outer = Some(bounds));
         }
     });
+    let modifier_base = with_pointer_preview_input(modifier_base, move |input| {
+        if !menu_policy.enabled || input.pass != PointerEventPass::Initial {
+            return;
+        }
+        let cursor_pos = input.cursor_position_rel;
+        let is_inside = cursor_pos
+            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+            .unwrap_or(false);
+        if input.pointer_changes.iter().any(|change| {
+            matches!(
+                change.content,
+                CursorEventContent::Pressed(PressKeyEventType::Left)
+            )
+        }) {
+            context_menu_anchor.set(cursor_pos);
+        }
+        for change in input.pointer_changes.iter_mut() {
+            if matches!(
+                change.content,
+                CursorEventContent::Pressed(PressKeyEventType::Right)
+            ) && is_inside
+            {
+                if let Some(cursor_pos) = cursor_pos {
+                    menu_controller.with_mut(|menu| {
+                        menu.open_at(MenuAnchor::at(cursor_pos));
+                    });
+                }
+                change.consume();
+            }
+        }
+        let long_press_result = context_menu_long_press.with_mut(|recognizer| {
+            recognizer.update_preview_with_frames(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                is_inside,
+            )
+        });
+        if long_press_result.triggered
+            && let Some(anchor) = context_menu_anchor.get()
+        {
+            menu_controller.with_mut(|menu| menu.open_at(MenuAnchor::at(anchor)));
+        }
+    });
+    let modifier_base = with_pointer_final_input(modifier_base, move |input| {
+        if !menu_policy.enabled {
+            return;
+        }
+        let is_inside = input
+            .cursor_position_rel
+            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+            .unwrap_or(false);
+        context_menu_long_press.with_mut(|recognizer| {
+            recognizer.update_preview_with_frames(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                is_inside,
+            );
+        });
+    });
     let modifier = with_pointer_input(modifier_base, move |mut input| {
         let cursor_pos = input.cursor_position_rel;
         let is_inside = cursor_pos
             .map(|pos| is_position_inside_bounds(input.computed_data, pos))
             .unwrap_or(false);
-        let context_menu_tap_result = context_menu_tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(input.pass, input.pointer_changes.as_mut_slice(), is_inside)
-        });
         let focus_tap_result = focus_tap_recognizer.with_mut(|recognizer| {
             recognizer.update(input.pass, input.pointer_changes.as_mut_slice(), is_inside)
         });
@@ -1431,14 +1514,6 @@ pub fn text_field(
                     enabled,
                     read_only,
                 );
-            }
-
-            if context_menu_tap_result.tapped
-                && let Some(cursor_pos) = cursor_pos
-            {
-                menu_controller.with_mut(|menu| {
-                    menu.open_at(MenuAnchor::at(cursor_pos));
-                });
             }
         }
 
@@ -1678,6 +1753,90 @@ mod tests {
                 .get()
                 .unwrap()
                 .with(|c| c.focus_handler().is_focused())
+        );
+    }
+
+    #[tessera_ui::tessera]
+    fn context_menu_fixture() {
+        use tessera_foundation::modifier::ModifierExt as _;
+
+        let controller = tessera_ui::remember(|| {
+            let mut controller = crate::md3::text_input::TextInputController::new(
+                tessera_ui::Dp(16.0),
+                Some(tessera_ui::Dp(24.0)),
+            );
+            controller.set_text("Existing text");
+            controller
+        });
+        crate::md3::theme::material_theme().child(move || {
+            crate::boxed::boxed()
+                .modifier(tessera_ui::Modifier::new().fill_max_size())
+                .alignment(crate::alignment::Alignment::TopStart)
+                .children(move || {
+                    crate::md3::text_field::text_field()
+                        .outlined()
+                        .modifier(tessera_ui::Modifier::new().fill_max_width())
+                        .controller(controller);
+                });
+        });
+    }
+
+    #[test]
+    fn right_click_opens_context_menu_for_existing_text_at_field_edge() {
+        use tessera_ui::{
+            MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Role, testing::UiTest,
+        };
+
+        let mut session = UiTest::new()
+            .content(context_menu_fixture)
+            .viewport(400, 200);
+        session.frame();
+        let position = PxPosition::from_f32_xy(390.0, 28.0);
+        session.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Right);
+        session.frames(1);
+        session.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Right);
+        session.frames(1);
+
+        let tree = session.accessibility_snapshot().expect("tree");
+        let menu_items = tree
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.role() == Role::MenuItem)
+            .collect::<Vec<_>>();
+        assert!(
+            !menu_items.is_empty(),
+            "right-clicking populated text near the field edge opens its context menu"
+        );
+        assert!(menu_items.iter().all(|(_, node)| {
+            node.bounds()
+                .is_some_and(|bounds| bounds.x0 >= 0.0 && bounds.x1 <= 400.0)
+        }));
+    }
+
+    #[test]
+    fn long_press_opens_context_menu_for_existing_text() {
+        use std::time::Duration;
+
+        use tessera_ui::{
+            MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Role, testing::UiTest,
+        };
+
+        let mut session = UiTest::new()
+            .content(context_menu_fixture)
+            .viewport(400, 200);
+        session.frame();
+        let position = PxPosition::from_f32_xy(100.0, 28.0);
+        session.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        session.frames(1);
+        session.advance(Duration::from_millis(500));
+        session.frames(1);
+
+        let tree = session.accessibility_snapshot().expect("tree");
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem),
+            "holding populated text opens its context menu"
         );
     }
 }
