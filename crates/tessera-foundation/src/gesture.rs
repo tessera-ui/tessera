@@ -508,6 +508,29 @@ impl LongPressRecognizer {
         self.update_frame_inner(pass, pointer_changes, within_bounds, None)
     }
 
+    /// Observes pointer input during the preview pass, before descendants can
+    /// consume it, while retaining final-pass drag cancellation.
+    pub fn update_preview_with_frames(
+        &mut self,
+        pass: PointerEventPass,
+        pointer_changes: &mut [PointerChange],
+        within_bounds: bool,
+    ) -> LongPressResult {
+        if pass == PointerEventPass::Final {
+            return self.update_frame_inner(pass, pointer_changes, within_bounds, None);
+        }
+        if pass != PointerEventPass::Initial {
+            return LongPressResult::default();
+        }
+        self.update_inner(
+            PointerEventPass::Main,
+            pointer_changes,
+            within_bounds,
+            true,
+            None,
+        )
+    }
+
     /// Observes the samples belonging to the supplied tap result, including
     /// consumed releases.
     pub fn update_after_tap(
@@ -1199,6 +1222,22 @@ mod slop_tests {
             assert!(!recognizer.needs_frame());
             assert!(!recognizer.advance(start + Duration::from_secs(2)));
         }
+    }
+
+    #[test]
+    fn preview_long_press_tracks_presses_before_descendants_consume_them() {
+        let start = Instant::now();
+        let mut recognizer = LongPressRecognizer::default();
+        let mut press = [change(
+            CursorEventContent::Pressed(PressKeyEventType::Left),
+            start,
+        )];
+
+        recognizer.update_preview_with_frames(PointerEventPass::Initial, &mut press, true);
+        press[0].consume();
+
+        assert!(recognizer.needs_frame());
+        assert!(recognizer.advance(start + Duration::from_millis(500)));
     }
 
     #[test]

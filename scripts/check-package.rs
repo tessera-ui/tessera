@@ -296,32 +296,31 @@ fn appimage(app: &App, directory: &Path, scratch: &Path) -> Result<()> {
     desktop_entry(app, &scratch.join("squashfs-root"))
 }
 
+// cargo-packager writes the package files as a tarball with a PKGBUILD that
+// makepkg turns into the pacman package.
 fn pacman(app: &App, directory: &Path, scratch: &Path) -> Result<()> {
-    let package = one(paths(&directory.join("*.pkg.tar.*"))?)?;
-    run(Command::new("tar")
-        .arg("-xf")
-        .arg(&package)
-        .arg("-C")
-        .arg(scratch))?;
-    let info = fs::read_to_string(scratch.join(".PKGINFO"))?;
+    let build = fs::read_to_string(directory.join("PKGBUILD"))?;
     let field = |key: &str| {
-        info.lines()
-            .find_map(|line| line.strip_prefix(&format!("{key} = ")))
-            .with_context(|| format!("Missing pacman {key}"))
+        build
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{key}=")))
+            .map(|value| value.trim_matches(['"', '\''].as_slice()))
+            .with_context(|| format!("Missing PKGBUILD {key}"))
     };
     ensure!(!field("pkgname")?.is_empty(), "Empty pacman package name");
-    let version = field("pkgver")?;
-    ensure!(
-        version.starts_with(&app.version),
-        "pacman pkgver: expected {}, got {version}",
-        app.version
-    );
+    equal("PKGBUILD pkgver", field("pkgver")?, app.version.as_str())?;
+    let archive = one(paths(&directory.join("*.tar.gz"))?)?;
+    run(Command::new("tar")
+        .arg("-xzf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(scratch))?;
     desktop_entry(app, scratch)
 }
 
 fn msi(app: &App, directory: &Path, scratch: &Path) -> Result<()> {
     let installer = one(paths(&directory.join("*.msi"))?)?;
-    let installer = fs::canonicalize(installer)?;
+    let installer = std::path::absolute(installer)?;
     let property = |name: &str| {
         run(Command::new("powershell").args([
             "-NoProfile",
