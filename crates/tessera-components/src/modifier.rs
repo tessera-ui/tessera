@@ -18,8 +18,8 @@ use interaction::{apply_clickable_modifier, apply_selectable_modifier, apply_tog
 use visual::{BackgroundModifierNode, BorderModifierNode};
 
 pub(crate) use interaction::{
-    DisabledToggleSemantics, apply_combined_clickable_modifier, with_keyboard_input,
-    with_pointer_final_input, with_pointer_input, with_pointer_preview_input,
+    DisabledToggleSemantics, apply_combined_clickable_modifier, apply_pointer_clickable_modifier,
+    with_keyboard_input, with_pointer_final_input, with_pointer_input, with_pointer_preview_input,
 };
 
 /// Extensions for drawing and stateful interaction around component subtrees.

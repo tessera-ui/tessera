@@ -648,6 +648,7 @@ fn apply_combined_clickable_resolved(
     args: ClickableArgs,
     on_long_click: Option<Callback>,
     click_enabled: bool,
+    keyboard_activation: bool,
 ) -> Modifier {
     let ClickableArgs {
         on_click,
@@ -687,37 +688,38 @@ fn apply_combined_clickable_resolved(
         });
     }
 
-    modifier
-        .push_semantics(ClickableSemanticsModifierNode {
+    modifier = modifier.push_semantics(ClickableSemanticsModifierNode {
+        on_long_click,
+        click_enabled,
+        on_click,
+        enabled,
+        role,
+        label: label.clone(),
+        description: description.clone(),
+        focus_requester,
+    });
+    if keyboard_activation {
+        modifier = modifier.push_keyboard_input(ClickableKeyboardModifierNode {
             on_long_click,
             click_enabled,
             on_click,
             enabled,
-            role,
-            label: label.clone(),
-            description: description.clone(),
             focus_requester,
-        })
-        .push_keyboard_input(ClickableKeyboardModifierNode {
-            on_long_click,
-            click_enabled,
-            on_click,
-            enabled,
-            focus_requester,
-        })
-        .push_pointer_input(ClickablePointerModifierNode {
-            on_long_click,
-            click_enabled,
-            tap_recognizer,
-            long_press_recognizer,
-            on_click,
-            enabled,
-            block_input,
-            on_press,
-            on_release,
-            interaction_state,
-            focus_requester,
-        })
+        });
+    }
+    modifier.push_pointer_input(ClickablePointerModifierNode {
+        on_long_click,
+        click_enabled,
+        tap_recognizer,
+        long_press_recognizer,
+        on_click,
+        enabled,
+        block_input,
+        on_press,
+        on_release,
+        interaction_state,
+        focus_requester,
+    })
 }
 
 fn apply_toggleable_resolved(base: Modifier, args: ToggleableArgs) -> Modifier {
@@ -845,6 +847,7 @@ struct ClickableBuild {
     args: ClickableArgs,
     on_long_click: Option<Callback>,
     click_enabled: bool,
+    keyboard_activation: bool,
 }
 
 impl BuildModifierNode for ClickableBuild {
@@ -863,6 +866,7 @@ impl BuildModifierNode for ClickableBuild {
             args,
             self.on_long_click,
             self.click_enabled,
+            self.keyboard_activation,
         ))
     }
 }
@@ -877,6 +881,16 @@ pub(crate) fn apply_combined_clickable_modifier(
         args,
         on_long_click,
         click_enabled,
+        keyboard_activation: true,
+    })
+}
+
+pub(crate) fn apply_pointer_clickable_modifier(base: Modifier, args: ClickableArgs) -> Modifier {
+    base.push_build(ClickableBuild {
+        args,
+        on_long_click: None,
+        click_enabled: true,
+        keyboard_activation: false,
     })
 }
 
