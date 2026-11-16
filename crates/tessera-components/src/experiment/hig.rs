@@ -7,6 +7,7 @@ pub mod glass;
 pub mod progress;
 pub mod radio_button;
 pub mod segmented_control;
+pub mod separator;
 pub mod slider;
 pub mod stepper;
 pub mod switch;
