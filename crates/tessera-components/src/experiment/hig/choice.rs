@@ -241,6 +241,8 @@ pub(super) fn choice_control(
         .children(move || {
             choice_glyph(
                 PerceptualFillCommand {
+                    outline_width: Dp::ZERO,
+                    snap_to_pixels: false,
                     color: fill,
                     radii: [Dp(if style.role == Role::RadioButton {
                         8.0

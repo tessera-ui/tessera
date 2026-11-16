@@ -248,6 +248,8 @@ impl DrawModifierNode for ButtonBackground {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
+                outline_width: Dp::ZERO,
+                snap_to_pixels: false,
                 color: self.0,
                 radii: [Dp(6.0); 2],
                 insets: [Dp(0.0); 4],

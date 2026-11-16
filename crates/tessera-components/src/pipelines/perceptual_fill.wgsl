@@ -7,6 +7,7 @@ struct Uniforms {
     stroke_color: vec4<f32>,
     stroke_start_joint: vec4<f32>,
     stroke_end_width: vec4<f32>,
+    outline: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var backdrop: texture_2d<f32>;
@@ -42,6 +43,14 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         }
     }
     var coverage = clamp(0.5 - distance / uniforms.corner.z, 0.0, 1.0);
+    if uniforms.outline.x > 0.0 {
+        let inner_half = max(half_size - uniforms.outline.x, vec2(0.0));
+        let inner_radius = max(radii.x - uniforms.outline.x, 0.0);
+        let inner_q = abs(position.xy - uniforms.rect.xy - half_size) - inner_half + inner_radius;
+        let inner_distance = length(max(inner_q, vec2(0.0))) + min(max(inner_q.x, inner_q.y), 0.0) - inner_radius;
+        let inner_coverage = clamp(0.5 - inner_distance / uniforms.corner.z, 0.0, 1.0);
+        coverage = max(coverage - inner_coverage, 0.0);
+    }
     if uniforms.corner.w >= 0.0 {
         let clip_half_size = uniforms.raster_rect.zw * 0.5;
         let clip_q = abs(position.xy - uniforms.raster_rect.xy - clip_half_size) - clip_half_size + uniforms.corner.w;

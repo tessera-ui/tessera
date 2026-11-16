@@ -249,6 +249,8 @@ impl DrawModifierNode for HalfFill {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
+                outline_width: Dp::ZERO,
+                snap_to_pixels: false,
                 color: self.fill,
                 radii: [Dp(0.0); 2],
                 insets: [Dp(0.0); 4],
@@ -268,6 +270,8 @@ impl DrawModifierNode for HalfFill {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
+                outline_width: Dp::ZERO,
+                snap_to_pixels: false,
                 color: Color::TRANSPARENT,
                 radii: [Dp(0.0); 2],
                 insets: [Dp(0.0); 4],

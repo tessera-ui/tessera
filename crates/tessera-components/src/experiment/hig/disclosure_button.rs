@@ -112,6 +112,8 @@ impl DrawModifierNode for Chevron {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
+                outline_width: Dp::ZERO,
+                snap_to_pixels: false,
                 color: Color::TRANSPARENT,
                 radii: [Dp::ZERO; 2],
                 insets: [Dp::ZERO; 4],

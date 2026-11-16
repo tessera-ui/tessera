@@ -127,6 +127,8 @@ impl DrawModifierNode for GroupFill {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
+                outline_width: Dp::ZERO,
+                snap_to_pixels: false,
                 color: self.color,
                 radii: [Dp(12.0); 2],
                 insets: [

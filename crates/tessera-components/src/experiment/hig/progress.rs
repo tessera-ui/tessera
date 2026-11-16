@@ -81,6 +81,8 @@ impl DrawModifierNode for ProgressFill {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
+                outline_width: Dp::ZERO,
+                snap_to_pixels: false,
                 color: self.color,
                 radii: [radius_x, Dp(4.0)],
                 insets: [Dp(0.0), end_inset, Dp(0.0), Dp(0.0)],

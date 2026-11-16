@@ -13,6 +13,8 @@ pub(crate) struct PerceptualFillCommand {
     pub edge_smoothness: f32,
     pub stroke: Option<PerceptualStroke>,
     pub line: Option<PerceptualLine>,
+    pub outline_width: Dp,
+    pub snap_to_pixels: bool,
 }
 
 #[derive(Clone, PartialEq)]
@@ -49,9 +51,13 @@ impl DrawCommand for PerceptualFillCommand {
 
 impl PerceptualFillCommand {
     fn padding(&self) -> PaddingRect {
-        PaddingRect::uniform(self.line.as_ref().map_or(Px::ZERO, |line| {
-            Px::from(line.width) + Px::from(Dp(line.offset.0.abs())) + Px(1)
-        }))
+        PaddingRect::uniform(
+            self.line
+                .as_ref()
+                .map_or(if self.snap_to_pixels { Px(1) } else { Px::ZERO }, |line| {
+                    Px::from(line.width) + Px::from(Dp(line.offset.0.abs())) + Px(1)
+                }),
+        )
     }
 }
 
@@ -133,6 +139,11 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
         for (command, geometry) in context.commands {
             let mut origin = geometry.window_origin();
             let mut size = geometry.window_size();
+            if command.snap_to_pixels {
+                // Flipped raster coordinates need opposite tie directions on the two axes.
+                origin.x = origin.x.round();
+                origin.y = origin.y.floor();
+            }
             if let Some(line) = &command.line {
                 if size[0] <= 0.0 || size[1] <= 0.0 {
                     continue;
@@ -160,6 +171,12 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
             origin.y += top;
             size[0] = (size[0] - left - right).max(0.0);
             size[1] = (size[1] - top - bottom).max(0.0);
+            if command.snap_to_pixels {
+                size = size.map(f32::round);
+                if size[0] <= 0.0 || size[1] <= 0.0 {
+                    continue;
+                }
+            }
             let radii = std::array::from_fn::<_, 2, _>(|axis| {
                 (command.radii[axis].to_pixels_f32() * geometry.local_to_window.scale()).min(
                     if command.radii[0] == command.radii[1] {
@@ -208,6 +225,12 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
                         if stroke.raster_mask { 1.0 } else { 0.0 },
                     ]
                 }),
+                [
+                    command.outline_width.to_pixels_f32() * geometry.local_to_window.scale(),
+                    0.0,
+                    0.0,
+                    0.0,
+                ],
             ];
             let buffer = context
                 .graphics
