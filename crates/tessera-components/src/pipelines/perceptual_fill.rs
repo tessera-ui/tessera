@@ -7,7 +7,9 @@ use tessera_ui::{
 #[derive(Clone, PartialEq)]
 pub(crate) struct PerceptualFillCommand {
     pub color: Color,
-    pub radius: Dp,
+    pub radii: [Dp; 2],
+    pub insets: [Dp; 4],
+    pub clip_radius: Option<Dp>,
     pub edge_smoothness: f32,
     pub stroke: Option<PerceptualStroke>,
 }
@@ -108,11 +110,27 @@ impl PerceptualFillPipeline {
 impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
     fn draw(&mut self, context: &mut DrawContext<'_, '_, '_, PerceptualFillCommand>) {
         for (command, geometry) in context.commands {
-            let origin = geometry.window_origin();
-            let size = geometry.window_size();
-            let radius = (command.radius.to_pixels_f32() * geometry.local_to_window.scale())
-                .min(size[0].min(size[1]) * 0.5);
+            let mut origin = geometry.window_origin();
+            let mut size = geometry.window_size();
+            let raster_rect = [origin.x, origin.y, size[0], size[1]];
+            let [top, right, bottom, left] = command
+                .insets
+                .map(|inset| inset.to_pixels_f32() * geometry.local_to_window.scale());
+            origin.x += left;
+            origin.y += top;
+            size[0] = (size[0] - left - right).max(0.0);
+            size[1] = (size[1] - top - bottom).max(0.0);
+            let radii = std::array::from_fn::<_, 2, _>(|axis| {
+                (command.radii[axis].to_pixels_f32() * geometry.local_to_window.scale()).min(
+                    if command.radii[0] == command.radii[1] {
+                        size[0].min(size[1]) * 0.5
+                    } else {
+                        size[1] * 0.5
+                    },
+                )
+            });
             let uniforms = [
+                raster_rect,
                 [origin.x, origin.y, size[0], size[1]],
                 [
                     context.target_size.width.to_f32(),
@@ -121,7 +139,15 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
                     context.scene_rect.y.to_f32(),
                 ],
                 command.color.to_array(),
-                [radius, command.edge_smoothness, 0.0, 0.0],
+                [
+                    radii[0],
+                    radii[1],
+                    command.edge_smoothness,
+                    command.clip_radius.map_or(-1.0, |radius| {
+                        (radius.to_pixels_f32() * geometry.local_to_window.scale())
+                            .min(raster_rect[2].min(raster_rect[3]) * 0.5)
+                    }),
+                ],
                 command
                     .stroke
                     .as_ref()

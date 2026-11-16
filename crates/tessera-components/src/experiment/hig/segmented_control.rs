@@ -144,7 +144,9 @@ impl DrawModifierNode for SegmentFill {
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
                 color: self.color,
-                radius: Dp(6.0),
+                radii: [Dp(6.0); 2],
+                insets: [Dp(0.0); 4],
+                clip_radius: None,
                 edge_smoothness: 1.0,
                 stroke,
             });

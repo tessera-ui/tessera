@@ -119,7 +119,7 @@ impl DrawModifierNode for Glyph {
 fn choice_glyph(command: PerceptualFillCommand, focused: bool) {
     let mut modifier = Modifier::new().size(Dp(16.0), Dp(16.0));
     if focused {
-        let corner = RoundedCorner::manual(command.radius, 2.0);
+        let corner = RoundedCorner::manual(command.radii[0], 2.0);
         modifier = modifier.border_with_shape(
             Dp(2.0),
             Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(0.6),
@@ -241,12 +241,14 @@ pub(super) fn choice_control(
             choice_glyph(
                 PerceptualFillCommand {
                     color: fill,
-                    radius: Dp(if style.role == Role::RadioButton {
+                    radii: [Dp(if style.role == Role::RadioButton {
                         8.0
                     } else {
                         5.0
-                    }),
+                    }); 2],
                     stroke: stroke.clone(),
+                    insets: [Dp(0.0); 4],
+                    clip_radius: None,
                     edge_smoothness: 1.0,
                 },
                 focused,

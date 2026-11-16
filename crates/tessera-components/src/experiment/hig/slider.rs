@@ -233,7 +233,9 @@ impl DrawModifierNode for Fill {
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
                 color: self.0,
-                radius: self.1,
+                radii: [self.1; 2],
+                insets: [Dp(0.0); 4],
+                clip_radius: None,
                 edge_smoothness: self.2,
                 stroke: None,
             });

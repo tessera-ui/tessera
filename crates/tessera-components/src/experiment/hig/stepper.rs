@@ -250,7 +250,9 @@ impl DrawModifierNode for HalfFill {
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
                 color: self.fill,
-                radius: Dp(0.0),
+                radii: [Dp(0.0); 2],
+                insets: [Dp(0.0); 4],
+                clip_radius: None,
                 edge_smoothness: 1.0,
                 stroke: Some(PerceptualStroke {
                     color: self.ink,
@@ -265,7 +267,9 @@ impl DrawModifierNode for HalfFill {
             .fragment_mut()
             .push_draw_command(PerceptualFillCommand {
                 color: Color::TRANSPARENT,
-                radius: Dp(0.0),
+                radii: [Dp(0.0); 2],
+                insets: [Dp(0.0); 4],
+                clip_radius: None,
                 edge_smoothness: 1.0,
                 stroke: Some(PerceptualStroke {
                     color: self.ink.with_alpha(1.0 / 7.0),

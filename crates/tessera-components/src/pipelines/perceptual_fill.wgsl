@@ -1,4 +1,5 @@
 struct Uniforms {
+    raster_rect: vec4<f32>,
     rect: vec4<f32>,
     viewport_scene: vec4<f32>,
     color: vec4<f32>,
@@ -20,7 +21,7 @@ fn decode(value: vec3<f32>) -> vec3<f32> {
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
     let corners = array<vec2<f32>, 6>(vec2(0.0, 0.0), vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(1.0, 1.0));
-    let window = uniforms.rect.xy + corners[index] * uniforms.rect.zw;
+    let window = uniforms.raster_rect.xy + corners[index] * uniforms.raster_rect.zw;
     let ndc = window / uniforms.viewport_scene.xy * 2.0 - 1.0;
     return vec4(ndc.x, -ndc.y, 0.0, 1.0);
 }
@@ -28,9 +29,25 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 @fragment
 fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let half_size = uniforms.rect.zw * 0.5;
-    let q = abs(position.xy - uniforms.rect.xy - half_size) - half_size + uniforms.corner.x;
-    let distance = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - uniforms.corner.x;
-    let coverage = clamp(0.5 - distance / uniforms.corner.y, 0.0, 1.0);
+    let radii = uniforms.corner.xy;
+    let point = abs(position.xy - uniforms.rect.xy - half_size) - half_size;
+    let q = point + radii;
+    var distance = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - radii.x;
+    if radii.x != radii.y {
+        distance = max(point.x, point.y);
+        if all(q > vec2(0.0)) {
+            let normalized = q / max(radii, vec2(0.000001));
+            let gradient = q / max(radii * radii, vec2(0.000001));
+            distance = length(normalized) * (length(normalized) - 1.0) / max(length(gradient), 0.000001);
+        }
+    }
+    var coverage = clamp(0.5 - distance / uniforms.corner.z, 0.0, 1.0);
+    if uniforms.corner.w >= 0.0 {
+        let clip_half_size = uniforms.raster_rect.zw * 0.5;
+        let clip_q = abs(position.xy - uniforms.raster_rect.xy - clip_half_size) - clip_half_size + uniforms.corner.w;
+        let clip_distance = length(max(clip_q, vec2(0.0))) + min(max(clip_q.x, clip_q.y), 0.0) - uniforms.corner.w;
+        coverage = min(coverage, clamp(0.5 - clip_distance / uniforms.corner.z, 0.0, 1.0));
+    }
     let alpha = uniforms.color.a * coverage;
     let local = position.xy - uniforms.rect.xy;
     let start = uniforms.stroke_start_joint.xy * uniforms.rect.zw;
