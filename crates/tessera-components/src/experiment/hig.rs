@@ -5,6 +5,7 @@ pub mod checkbox;
 mod choice;
 pub mod disclosure_button;
 pub mod glass;
+pub mod group_box;
 pub mod progress;
 pub mod radio_button;
 pub mod segmented_control;
