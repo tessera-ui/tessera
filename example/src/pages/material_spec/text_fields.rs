@@ -2962,6 +2962,7 @@ fn field_measurements(outlined: bool, variant: usize) {
                 )
                 .children(move || {
                     field_dot_grid(1024.0, 300.0, 9.0);
+                    // Keep diagram highlights in the underlay so text-field popups stay above them.
                     boxed()
                         .modifier(Modifier::new().fill_max_size())
                         .children(move || {
@@ -3043,6 +3044,7 @@ fn field_measurement_item(
                         text_field().filled()
                     };
                     field
+                        .background_color(Color::TRANSPARENT)
                         .modifier(
                             watch_in_space(
                                 geometry,
@@ -3276,6 +3278,11 @@ fn field_measurement_annotations(
     controllers: [State<TextInputController>; 2],
     focused: State<[bool; 2]>,
 ) {
+    let surface = use_context::<MaterialTheme>()
+        .unwrap()
+        .get()
+        .color_scheme
+        .surface_container_highest;
     field_measurement_annotation_geometry(
         geometry.with(annotations::space_geometry),
         outlined,
@@ -3285,6 +3292,7 @@ fn field_measurement_annotations(
                 .map(|controller| controller.with(|controller| !controller.text().is_empty())),
             focused: focused.get(),
         },
+        surface,
     );
 }
 
@@ -3294,6 +3302,7 @@ fn field_measurement_annotation_geometry(
     outlined: bool,
     variant: usize,
     display: MeasurementDisplay,
+    surface: Color,
 ) {
     let (Some(root), Some(empty), Some(pop)) = (
         values.get("figure"),
@@ -3303,6 +3312,18 @@ fn field_measurement_annotation_geometry(
         return;
     };
     let mut svg = String::new();
+    if !outlined {
+        for field in [empty, pop] {
+            svg.push_str(&format!(
+                "<rect x='{}' y='{}' width='{}' height='{}' rx='4' fill='{}'/>",
+                field.x,
+                field.y,
+                field.w,
+                field.h,
+                field_svg_color(surface),
+            ));
+        }
+    }
     if variant == 2 {
         for (field, key) in [(empty, "empty-support"), (pop, "populated-support")] {
             let Some(support) = values.get(key).copied() else {
@@ -3373,24 +3394,27 @@ fn field_measurement_annotation_geometry(
             measurement_axis(gap.x, gap.y + gap.h + 12.0, 16.0, false, "16".into()).after(true);
         }
     } else {
-        measurement_axis(
-            empty.x - 12.0,
-            empty.y,
-            empty.h,
-            true,
-            format!("{:.0}", empty.h),
-        );
-        for (field, populated) in [(empty, false), (pop, true)] {
-            field_measurement_native_annotations(
-                values.clone(),
-                outlined,
-                variant,
-                populated,
-                display,
+        {
+            measurement_axis(
+                empty.x - 12.0,
+                empty.y,
+                empty.h,
+                true,
+                format!("{:.0}", empty.h),
             );
+            for populated in [false, true] {
+                field_measurement_native_annotations(
+                    values.clone(),
+                    outlined,
+                    variant,
+                    populated,
+                    display,
+                );
+            }
+        }
+        for (field, populated) in [(empty, false), (pop, true)] {
             let nonempty = display.nonempty[usize::from(populated)];
             let floating = nonempty || display.focused[usize::from(populated)];
-
             let edge = if variant == 1 { 12.0 } else { 16.0 };
             measurement_band(
                 &mut svg,
@@ -3419,7 +3443,6 @@ fn field_measurement_annotation_geometry(
                     h: field.h,
                 },
             );
-
             if variant == 1 {
                 let icon = values
                     .get(if populated {
@@ -3444,7 +3467,6 @@ fn field_measurement_annotation_geometry(
                         h: field.h,
                     },
                 );
-
                 if nonempty {
                     let trailing = Rect {
                         x: field.x + field.w - 36.0,
