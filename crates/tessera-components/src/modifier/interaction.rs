@@ -26,13 +26,14 @@ fn with_focus_state(
     base: Modifier,
     state: Option<State<InteractionState>>,
     focus: State<(bool, u64)>,
+    cancel_press_on_blur: bool,
 ) -> Modifier {
     base.on_focus_changed(move |next: FocusState| {
         let focused = next.has_focus();
         if focus.with(|(current, _)| *current) != focused {
             focus.with_mut(|(current, epoch)| {
                 *current = focused;
-                if !focused {
+                if !focused && cancel_press_on_blur {
                     *epoch = epoch.wrapping_add(1);
                 }
             });
@@ -40,7 +41,7 @@ fn with_focus_state(
         if let Some(state) = state {
             state.with_mut(|state| {
                 state.set_focused(focused);
-                if !focused {
+                if !focused && cancel_press_on_blur {
                     state.release();
                 }
             });
@@ -179,8 +180,8 @@ async fn async_clickable_detector(
         },
         |gesture| match gesture {
             TapGesture::Pressed(down) => {
-                focus_requester.request_focus();
                 if let Some(state) = interaction_state {
+                    focus_requester.request_focus();
                     state.with_mut(|state| state.set_pressed(true));
                 }
                 if let Some(callback) = on_press {
@@ -551,7 +552,7 @@ fn apply_combined_clickable_resolved(
     if enabled {
         modifier = modifier.hover_cursor_icon(CursorIcon::Pointer);
     }
-    modifier = with_focus_state(modifier, interaction_state, focus);
+    modifier = with_focus_state(modifier, interaction_state, focus, on_long_click.is_some());
 
     with_hover_state(modifier, interaction_state, enabled)
         .push_semantics(ClickableSemanticsModifierNode {
@@ -632,7 +633,7 @@ fn apply_toggleable_resolved(
     } else if let Some(interaction_state) = interaction_state {
         reset_disabled_interaction_state(interaction_state);
     }
-    modifier = with_focus_state(modifier, interaction_state, focus);
+    modifier = with_focus_state(modifier, interaction_state, focus, false);
 
     with_hover_state(modifier, interaction_state, enabled)
         .push_semantics(ToggleableSemanticsModifierNode {
@@ -701,7 +702,7 @@ fn apply_selectable_resolved(
     } else if let Some(interaction_state) = interaction_state {
         reset_disabled_interaction_state(interaction_state);
     }
-    modifier = with_focus_state(modifier, interaction_state, focus);
+    modifier = with_focus_state(modifier, interaction_state, focus, false);
 
     with_hover_state(modifier, interaction_state, enabled)
         .push_semantics(SelectableSemanticsModifierNode {
