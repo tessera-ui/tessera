@@ -58,10 +58,10 @@ impl SemanticsModifierNode for ChoiceSemantics {
     }
 }
 
-struct ChoiceKeyboard {
-    enabled: bool,
-    held: State<bool>,
-    activate: Callback,
+pub(super) struct ChoiceKeyboard {
+    pub enabled: bool,
+    pub held: State<bool>,
+    pub activate: Callback,
 }
 
 impl KeyboardInputModifierNode for ChoiceKeyboard {
