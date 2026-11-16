@@ -250,6 +250,7 @@ impl DrawModifierNode for ButtonBackground {
             .push_draw_command(PerceptualFillCommand {
                 color: self.0,
                 radius: Dp(6.0),
+                stroke: None,
             });
         content.draw(context.render_input);
     }

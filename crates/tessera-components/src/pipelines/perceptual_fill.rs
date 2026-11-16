@@ -8,6 +8,14 @@ use tessera_ui::{
 pub(crate) struct PerceptualFillCommand {
     pub color: Color,
     pub radius: Dp,
+    pub stroke: Option<PerceptualStroke>,
+}
+
+#[derive(Clone, PartialEq)]
+pub(crate) struct PerceptualStroke {
+    pub color: Color,
+    pub width: Dp,
+    pub points: [[f32; 2]; 3],
 }
 
 impl DrawCommand for PerceptualFillCommand {
@@ -17,6 +25,9 @@ impl DrawCommand for PerceptualFillCommand {
 
     fn apply_opacity(&mut self, opacity: f32) {
         self.color.a *= opacity;
+        if let Some(stroke) = &mut self.stroke {
+            stroke.color.a *= opacity;
+        }
     }
 }
 
@@ -110,6 +121,26 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
                 ],
                 command.color.to_array(),
                 [radius, 0.0, 0.0, 0.0],
+                command
+                    .stroke
+                    .as_ref()
+                    .map_or([0.0; 4], |stroke| stroke.color.to_array()),
+                command.stroke.as_ref().map_or([0.0; 4], |stroke| {
+                    [
+                        stroke.points[0][0],
+                        stroke.points[0][1],
+                        stroke.points[1][0],
+                        stroke.points[1][1],
+                    ]
+                }),
+                command.stroke.as_ref().map_or([0.0; 4], |stroke| {
+                    [
+                        stroke.points[2][0],
+                        stroke.points[2][1],
+                        stroke.width.to_pixels_f32() * geometry.local_to_window.scale(),
+                        0.0,
+                    ]
+                }),
             ];
             let buffer = context
                 .graphics
