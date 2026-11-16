@@ -706,6 +706,11 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                         ),
                 )
                 .children(move || {
+                    boxed()
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            field_annotations(geometry, measurements);
+                        });
                     column()
                         .modifier(Modifier::new().width(Dp(280.0)))
                         .children(move || {
@@ -783,11 +788,6 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                         ..Default::default()
                                     }),
                             );
-                        });
-                    boxed()
-                        .modifier(Modifier::new().fill_max_size())
-                        .children(move || {
-                            field_annotations(geometry, measurements);
                         });
                 });
         }),
@@ -1802,6 +1802,11 @@ fn field_anatomy_pair(outlined: bool) {
                         ),
                 )
                 .children(move || {
+                    boxed()
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            field_pair_annotations(geometry, outlined);
+                        });
                     row()
                         .main_axis_alignment(MainAxisAlignment::Center)
                         .modifier(
@@ -1814,11 +1819,6 @@ fn field_anatomy_pair(outlined: bool) {
                             field_anatomy_item(false, outlined, geometry);
                             spacer().modifier(Modifier::new().width(Dp(80.0)));
                             field_anatomy_item(true, outlined, geometry);
-                        });
-                    boxed()
-                        .modifier(Modifier::new().fill_max_size())
-                        .children(move || {
-                            field_pair_annotations(geometry, outlined);
                         });
                 });
         }),
@@ -2177,6 +2177,11 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
                         }),
                 )
                 .children(move || {
+                    boxed()
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            field_pair_annotations(geometry, outlined);
+                        });
                     row()
                         .modifier(
                             Modifier::new()
@@ -2232,11 +2237,6 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
                                 .preview_width(Dp(180.0))
                                 .anatomy_geometry(geometry);
                             }
-                        });
-                    boxed()
-                        .modifier(Modifier::new().fill_max_size())
-                        .children(move || {
-                            field_pair_annotations(geometry, outlined);
                         });
                 });
         }),
@@ -2962,6 +2962,17 @@ fn field_measurements(outlined: bool, variant: usize) {
                 )
                 .children(move || {
                     field_dot_grid(1024.0, 300.0, 9.0);
+                    boxed()
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            field_measurement_annotations(
+                                geometry,
+                                outlined,
+                                variant,
+                                controllers,
+                                focused,
+                            );
+                        });
                     row()
                         .main_axis_alignment(MainAxisAlignment::Center)
                         .modifier(
@@ -2986,17 +2997,6 @@ fn field_measurements(outlined: bool, variant: usize) {
                                 true,
                                 geometry,
                                 controllers[1],
-                                focused,
-                            );
-                        });
-                    boxed()
-                        .modifier(Modifier::new().fill_max_size())
-                        .children(move || {
-                            field_measurement_annotations(
-                                geometry,
-                                outlined,
-                                variant,
-                                controllers,
                                 focused,
                             );
                         });
