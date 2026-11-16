@@ -15,6 +15,7 @@ pub(crate) mod image_vector;
 pub(crate) mod linear_wave;
 pub(crate) mod loading_shape;
 pub(crate) mod path_stroke;
+pub(crate) mod perceptual_fill;
 pub(crate) mod progress_arc;
 pub(crate) mod shape;
 pub(crate) mod simple_rect;
