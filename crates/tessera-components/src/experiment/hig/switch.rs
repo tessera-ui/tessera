@@ -74,6 +74,7 @@ impl DrawModifierNode for Fill {
             .push_draw_command(PerceptualFillCommand {
                 color: self.color,
                 radius: self.radius,
+                edge_smoothness: 1.0,
                 stroke: None,
             });
         content.draw(context.render_input);

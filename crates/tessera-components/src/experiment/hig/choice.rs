@@ -247,6 +247,7 @@ pub(super) fn choice_control(
                         5.0
                     }),
                     stroke: stroke.clone(),
+                    edge_smoothness: 1.0,
                 },
                 focused,
             );

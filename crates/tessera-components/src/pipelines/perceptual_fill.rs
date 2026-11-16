@@ -8,6 +8,7 @@ use tessera_ui::{
 pub(crate) struct PerceptualFillCommand {
     pub color: Color,
     pub radius: Dp,
+    pub edge_smoothness: f32,
     pub stroke: Option<PerceptualStroke>,
 }
 
@@ -120,7 +121,7 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
                     context.scene_rect.y.to_f32(),
                 ],
                 command.color.to_array(),
-                [radius, 0.0, 0.0, 0.0],
+                [radius, command.edge_smoothness, 0.0, 0.0],
                 command
                     .stroke
                     .as_ref()

@@ -30,7 +30,7 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let half_size = uniforms.rect.zw * 0.5;
     let q = abs(position.xy - uniforms.rect.xy - half_size) - half_size + uniforms.corner.x;
     let distance = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - uniforms.corner.x;
-    let coverage = clamp(0.5 - distance, 0.0, 1.0);
+    let coverage = clamp(0.5 - distance / uniforms.corner.y, 0.0, 1.0);
     let alpha = uniforms.color.a * coverage;
     let local = position.xy - uniforms.rect.xy;
     let start = uniforms.stroke_start_joint.xy * uniforms.rect.zw;

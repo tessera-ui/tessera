@@ -145,6 +145,7 @@ impl DrawModifierNode for SegmentFill {
             .push_draw_command(PerceptualFillCommand {
                 color: self.color,
                 radius: Dp(6.0),
+                edge_smoothness: 1.0,
                 stroke,
             });
         content.draw(context.render_input);
