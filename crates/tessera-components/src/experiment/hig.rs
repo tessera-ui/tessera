@@ -4,5 +4,6 @@ pub mod button;
 pub mod checkbox;
 mod choice;
 pub mod glass;
+pub mod radio_button;
 pub mod text;
 pub mod theme;
