@@ -5,7 +5,11 @@
 //! Track pointer positions and preserve ordered mouse, touch, and scroll
 //! events.
 
-use std::collections::{HashMap, VecDeque};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet, VecDeque},
+    rc::Rc,
+};
 
 use crate::{PxPosition, time::Instant};
 
@@ -309,6 +313,7 @@ pub struct PointerChange {
     pub(crate) tap_claimed: bool,
     pub(crate) scroll_discrete: Option<bool>,
     pub(crate) sampled_position: PointerPosition,
+    pub(crate) live_consumption: Option<Rc<RefCell<PointerConsumption>>>,
 }
 
 impl PointerChange {
@@ -328,6 +333,7 @@ impl PointerChange {
             consumed: false,
             tap_claimed: false,
             scroll_discrete: None,
+            live_consumption: None,
         }
     }
 
@@ -377,24 +383,42 @@ impl PointerChange {
     /// Marks this change as consumed.
     pub fn consume(&mut self) {
         self.consumed = true;
+        if let Some(consumed) = &self.live_consumption {
+            consumed.borrow_mut().consumed.insert(self.pointer_id);
+        }
     }
 
     /// Returns whether this change has already been consumed.
     pub fn is_consumed(&self) -> bool {
         self.consumed
+            || self
+                .live_consumption
+                .as_ref()
+                .is_some_and(|consumed| consumed.borrow().consumed.contains(&self.pointer_id))
     }
 
-    /// Claims a press for one tap recognizer without consuming the sample.
+    /// Claims a press for one tap detector without consuming the sample.
     ///
     /// Returns `false` for a non-press sample or a press already claimed by
-    /// another recognizer. Drag and scroll observers can still inspect it.
+    /// another detector. Drag and scroll observers can still inspect it.
     pub fn claim_tap_press(&mut self) -> bool {
         if self.tap_claimed || !matches!(self.content, CursorEventContent::Pressed(_)) {
+            return false;
+        }
+        if let Some(consumption) = &self.live_consumption
+            && !consumption.borrow_mut().tap_claimed.insert(self.pointer_id)
+        {
             return false;
         }
         self.tap_claimed = true;
         true
     }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct PointerConsumption {
+    consumed: HashSet<PointerId>,
+    tap_claimed: HashSet<PointerId>,
 }
 
 /// Contains scroll movement data for scroll events.

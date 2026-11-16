@@ -3,12 +3,9 @@
 //! ## Usage
 //!
 //! Use to control a boolean on/off state.
-use tessera_foundation::{
-    gesture::TapRecognizer,
-    modifier::{
-        InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext,
-        SemanticsArgs, ToggleableArgs,
-    },
+use tessera_foundation::modifier::{
+    InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext, SemanticsArgs,
+    ToggleableArgs,
 };
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusRequester,
@@ -385,11 +382,6 @@ pub fn switch(
     } else {
         None
     };
-    let tap_recognizer = if interactive {
-        Some(remember(TapRecognizer::default))
-    } else {
-        None
-    };
 
     switch_content(checked)
         .focus_requester(focus_requester)
@@ -411,7 +403,6 @@ pub fn switch(
         .accessibility_description_optional(accessibility_description)
         .interaction_state_optional(interaction_state)
         .ripple_state_optional(ripple_state)
-        .tap_recognizer_optional(tap_recognizer)
         .child_optional(child);
 }
 
@@ -438,7 +429,6 @@ fn switch_content(
     accessibility_description: Option<String>,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
-    tap_recognizer: Option<State<TapRecognizer>>,
     child: Option<RenderSlot>,
 ) {
     let enabled = enabled.unwrap_or(true);
@@ -508,7 +498,6 @@ fn switch_content(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
-            tap_recognizer,
             ..Default::default()
         };
         modifier = if enabled {

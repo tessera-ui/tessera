@@ -3,12 +3,8 @@
 //! ## Usage
 //!
 //! Use as a base for buttons, cards, or any styled and interactive region.
-use tessera_foundation::{
-    gesture::{LongPressRecognizer, LongPressSettings, TapRecognizer},
-    modifier::{
-        ClickableArgs, InteractionState, InteractionVisualState, ModifierExt as _,
-        PointerEventContext,
-    },
+use tessera_foundation::modifier::{
+    ClickableArgs, InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext,
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint, Dp,
@@ -17,8 +13,8 @@ use tessera_ui::{
     accesskit::{Role, Toggled},
     launch_once,
     layout::{MeasureScope, Stack, layout},
-    modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, remember, tessera, use_context, with_frame_time,
+    modifier::ModifierCapabilityExt as _,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -233,8 +229,6 @@ struct SurfaceResolvedArgs {
 struct SurfaceInputOwner {
     interaction: Option<State<InteractionState>>,
     ripple: Option<State<RippleState>>,
-    tap: Option<State<TapRecognizer>>,
-    long_press: Option<State<LongPressRecognizer>>,
 }
 
 impl SurfaceInputOwner {
@@ -256,16 +250,6 @@ impl SurfaceInputOwner {
                 state.release();
                 state.cancel_animation();
             });
-        }
-        if let Some(state) = self.tap
-            && state.is_alive()
-        {
-            state.with_mut(TapRecognizer::cancel);
-        }
-        if let Some(state) = self.long_press
-            && state.is_alive()
-        {
-            state.with_mut(LongPressRecognizer::cancel);
         }
     }
 }
@@ -1189,11 +1173,6 @@ pub fn surface(
     } else {
         None
     };
-    let tap_recognizer = if interactive {
-        Some(remember(TapRecognizer::default))
-    } else {
-        None
-    };
     let ripple_state = if resolved.show_ripple {
         if let Some(state) = resolved.ripple_state {
             Some(state)
@@ -1205,46 +1184,10 @@ pub fn surface(
     } else {
         None
     };
-    let long_press_recognizer = if resolved.on_long_click.is_some() {
-        let state = remember(|| {
-            LongPressRecognizer::new(LongPressSettings {
-                slop_px: Dp(8.0).to_pixels_f32(),
-                ..Default::default()
-            })
-        });
-        if !interactive && state.with(LongPressRecognizer::is_active) {
-            state.with_mut(LongPressRecognizer::cancel);
-        }
-        if state.with(LongPressRecognizer::needs_frame) {
-            let callback = resolved.on_long_click.expect("long click handler");
-            launch_once(async move {
-                loop {
-                    let triggered = with_frame_time(|now| {
-                        state.is_alive() && state.with_mut(|recognizer| recognizer.advance(now))
-                    })
-                    .await;
-                    if !state.is_alive() {
-                        break;
-                    }
-                    if triggered {
-                        callback.call();
-                    }
-                    if !state.with(LongPressRecognizer::needs_frame) {
-                        break;
-                    }
-                }
-            });
-        }
-        Some(state)
-    } else {
-        None
-    };
-    let owner = if interactive {
+    let _owner = if interactive {
         let input = SurfaceInputOwner {
             interaction: interaction_state,
             ripple: ripple_state,
-            tap: tap_recognizer,
-            long_press: long_press_recognizer,
         };
         let owner = remember(|| SurfaceInputLease(input));
         let previous = owner.with(|lease| lease.0);
@@ -1293,8 +1236,6 @@ pub fn surface(
             interaction_state,
             focus_requester: Some(bound_focus_requester),
             focus_properties: resolved.focus_properties,
-            tap_recognizer,
-            long_press_recognizer,
         };
 
         modifier = apply_combined_clickable_modifier(
@@ -1303,22 +1244,6 @@ pub fn surface(
             resolved.on_long_click,
             resolved.on_click.is_some(),
         );
-        if resolved.on_long_click.is_some() {
-            let owner = owner.expect("interactive surface input owner");
-            modifier = modifier.on_focus_changed(move |focus: tessera_ui::FocusState| {
-                if !focus.has_focus() {
-                    if !owner.is_alive() {
-                        return;
-                    }
-                    let input = owner.with(|lease| lease.0);
-                    if input.long_press.is_some_and(|state| {
-                        state.is_alive() && state.with(LongPressRecognizer::is_active)
-                    }) {
-                        input.release();
-                    }
-                }
-            });
-        }
     } else if resolved.block_input {
         modifier = modifier.block_touch_propagation();
     }

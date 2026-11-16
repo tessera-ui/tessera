@@ -7,8 +7,8 @@
 use std::time::Duration;
 
 use tessera_foundation::{
-    gesture::{DragRecognizer, TapRecognizer},
     modifier::{ClickableArgs, InteractionState, ModifierExt as _, SemanticsArgs},
+    pointer_gestures::{DragAxis, DragGestureConfig, detect_drag_gestures},
     scroll_physics::ScrollVelocityTracker,
 };
 use tessera_ui::{
@@ -39,13 +39,12 @@ use crate::{
         theme::MaterialTheme,
     },
     modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::{ModifierExt as _, with_keyboard_input, with_pointer_input},
+    modifier::{ModifierExt as _, with_keyboard_input},
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,
     },
     overlay_semantics::{dialog_semantics, overlay_background},
-    pos_misc::is_position_inside_bounds,
     res::I18N,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -317,89 +316,66 @@ fn make_keyboard_closure(on_close: Callback) -> Box<dyn Fn(tessera_ui::KeyboardI
     })
 }
 
-/// Handle drag gestures on the bottom sheet.
-fn handle_drag_gestures(
+async fn bottom_sheet_drag_detector(
+    mut scope: tessera_ui::PointerInputScope,
     controller: State<BottomSheetController>,
-    drag_recognizer: State<DragRecognizer>,
     velocity_tracker: State<Option<ScrollVelocityTracker>>,
-    tap_recognizer: State<TapRecognizer>,
     interaction: State<InteractionState>,
-    input: &mut tessera_ui::PointerInput<'_>,
-    on_close: &Callback,
+    on_close: Callback,
 ) {
-    let within_bounds = input
-        .cursor_position_rel
-        .map(|pos| is_position_inside_bounds(input.computed_data, pos))
-        .unwrap_or(false);
-    let now = input.pointer_changes.last().map(|change| change.timestamp);
-    if let Some(now) = now
-        && within_bounds
-        && input.pointer_changes.iter().any(|change| {
-            !change.is_consumed()
-                && matches!(
-                    change.content,
-                    tessera_ui::CursorEventContent::Pressed(tessera_ui::PressKeyEventType::Left)
-                )
-        })
-    {
-        velocity_tracker.set(Some(ScrollVelocityTracker::new(
-            now,
-            Duration::from_millis(90),
-            Duration::from_millis(65),
-        )));
-    }
-    let (drag_result, cancelled) = drag_recognizer.with_mut(|recognizer| {
-        let was_dragging = recognizer.is_dragging();
-        let result = recognizer.update(
-            input.pass,
-            input.pointer_changes.as_mut_slice(),
-            within_bounds,
-        );
-        (
-            result,
-            was_dragging && !recognizer.is_dragging() && !result.ended,
-        )
-    });
-
-    if drag_result.started {
-        tap_recognizer.with_mut(TapRecognizer::cancel);
-        interaction.with_mut(InteractionState::release);
-        controller.with_mut(|c| c.set_dragging(true));
-    }
-
-    if drag_result.updated {
-        let consumed = controller.with_mut(|c| {
-            c.apply_drag_delta(input.local_delta(0.0, drag_result.delta_y.to_f32()).1)
-        });
-        velocity_tracker.with_mut(|tracker| {
-            if let (Some(tracker), Some(now)) = (tracker, now) {
-                let window = input
-                    .local_to_window
-                    .map_vector(PxPosition::from_f32_xy(0.0, consumed));
-                tracker.push_delta(now, window.x, window.y);
+    detect_drag_gestures(
+        &mut scope,
+        DragGestureConfig {
+            axis: Some(DragAxis::Vertical),
+            ..Default::default()
+        },
+        |down| {
+            velocity_tracker.set(Some(ScrollVelocityTracker::new(
+                down.change.timestamp,
+                Duration::from_millis(90),
+                Duration::from_millis(65),
+            )));
+            interaction.with_mut(InteractionState::release);
+            controller.with_mut(|controller| controller.set_dragging(true));
+        },
+        |event, change, delta| {
+            let consumed = controller.with_mut(|controller| controller.apply_drag_delta(delta.y));
+            let window = event
+                .local_to_window
+                .map_vector(PxPosition::from_f32_xy(0.0, consumed));
+            velocity_tracker.with_mut(|tracker| {
+                if let Some(tracker) = tracker {
+                    tracker.push_delta(change.timestamp, window.x, window.y);
+                }
+            });
+        },
+        |event, change| {
+            let velocity = velocity_tracker.with_mut(|tracker| {
+                tracker
+                    .take()
+                    .and_then(|mut tracker| tracker.resolve(change.timestamp))
+                    .map(|velocity| {
+                        event
+                            .local_to_window
+                            .inverse_vector(PxPosition::from_f32_xy(0.0, velocity.y))
+                            .y
+                    })
+                    .unwrap_or(0.0)
+            });
+            if controller.with_mut(|controller| controller.complete_drag(velocity)) {
+                on_close.call();
             }
-        });
-    }
-
-    if drag_result.ended {
-        let velocity = velocity_tracker.with_mut(|tracker| {
-            tracker
-                .take()
-                .zip(now)
-                .and_then(|(mut tracker, now)| tracker.resolve(now))
-                .map(|v| v.y)
-                .unwrap_or(0.0)
-        });
-        let velocity = input.local_delta(0.0, velocity).1;
-        let should_close = controller.with_mut(|c| c.complete_drag(velocity));
-        if should_close {
-            on_close.call();
-        }
-    }
-    if cancelled {
-        velocity_tracker.set(None);
-        controller.with_mut(BottomSheetController::cancel_drag);
-    }
+        },
+        || {
+            if velocity_tracker.is_alive() {
+                velocity_tracker.set(None);
+            }
+            if controller.is_alive() {
+                controller.with_mut(BottomSheetController::cancel_drag);
+            }
+        },
+    )
+    .await;
 }
 
 fn place_bottom_sheet_if_present(
@@ -502,34 +478,21 @@ fn bottom_sheet_drag_handle(
 ) {
     let on_close = on_close.unwrap_or_default();
     let controller = controller.expect("bottom_sheet_drag_handle requires controller");
-    let drag_recognizer = remember(DragRecognizer::default);
     let velocity_tracker = remember(|| None::<ScrollVelocityTracker>);
-    let tap_recognizer = remember(TapRecognizer::default);
     let interaction = remember(InteractionState::new);
-    let modifier = with_pointer_input(
-        Modifier::new().clickable(ClickableArgs {
+    let modifier = Modifier::new()
+        .clickable(ClickableArgs {
             enabled: controller.with(|controller| controller.can_resize),
             label: Some(I18N.text("md3-drag-handle")),
-            block_input: false,
-            tap_recognizer: Some(tap_recognizer),
             interaction_state: Some(interaction),
             on_click: Callback::new(move || {
                 controller.with_mut(BottomSheetController::toggle_expansion)
             }),
             ..Default::default()
-        }),
-        move |mut input| {
-            handle_drag_gestures(
-                controller,
-                drag_recognizer,
-                velocity_tracker,
-                tap_recognizer,
-                interaction,
-                &mut input,
-                &on_close,
-            );
-        },
-    );
+        })
+        .pointer_input((controller, on_close), move |scope| {
+            bottom_sheet_drag_detector(scope, controller, velocity_tracker, interaction, on_close)
+        });
 
     layout(Stack).modifier(modifier).child(move || {
         column()

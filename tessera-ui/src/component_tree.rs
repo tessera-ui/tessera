@@ -7,9 +7,10 @@ mod replay;
 mod scene;
 
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     collections::{BinaryHeap, VecDeque},
     num::NonZero,
+    rc::Rc,
     sync::Arc,
 };
 
@@ -1873,6 +1874,10 @@ impl ComponentTree {
     ) {
         let node_ids_preorder = &plan.preorder;
         let node_ids_postorder = &plan.postorder;
+        let live_consumption = Rc::new(RefCell::new(crate::cursor::PointerConsumption::default()));
+        for change in pointer_changes.iter_mut() {
+            change.live_consumption = Some(live_consumption.clone());
+        }
         let pointer_change_paths = build_pointer_change_paths(
             &self.pointer_index,
             &self.tree,
@@ -3161,7 +3166,7 @@ fn run_pointer_handler_for_node(
     else {
         return;
     };
-    run_pointer_input_for_node(dispatch_ctx, node_id, pass, abs_pos, pointer_handler);
+    run_pointer_input_for_node(dispatch_ctx, node_id, pass, abs_pos, false, pointer_handler);
 }
 
 fn run_pointer_modifier_for_node(
@@ -3171,9 +3176,14 @@ fn run_pointer_modifier_for_node(
     abs_pos_override: PxPosition,
     pointer_modifier: &dyn PointerInputModifierNode,
 ) {
-    run_pointer_input_for_node(dispatch_ctx, node_id, pass, abs_pos_override, |input| {
-        pointer_modifier.on_pointer_input(input)
-    });
+    run_pointer_input_for_node(
+        dispatch_ctx,
+        node_id,
+        pass,
+        abs_pos_override,
+        pointer_modifier.receives_consumed(),
+        |input| pointer_modifier.on_pointer_input(input),
+    );
 }
 
 fn run_pointer_input_for_node<F>(
@@ -3181,6 +3191,7 @@ fn run_pointer_input_for_node<F>(
     node_id: indextree::NodeId,
     pass: PointerEventPass,
     abs_pos_override: PxPosition,
+    receives_consumed: bool,
     dispatch: F,
 ) where
     F: FnOnce(PointerInput<'_>),
@@ -3262,7 +3273,7 @@ fn run_pointer_input_for_node<F>(
     let mut selected_change_indices = Vec::new();
     let mut local_pointer_changes = Vec::new();
     for (index, change) in dispatch_ctx.pointer_changes.iter().enumerate() {
-        if change.is_consumed() {
+        if change.is_consumed() && !receives_consumed {
             continue;
         }
         let Some(path) = dispatch_ctx.pointer_change_paths.get(index) else {
@@ -4712,6 +4723,7 @@ mod tests {
             consumed: false,
             tap_claimed: false,
             scroll_discrete: None,
+            live_consumption: None,
         }];
         tree.dispatch_pointer_input(
             root,
@@ -4777,6 +4789,7 @@ mod tests {
                     consumed: false,
                     tap_claimed: false,
                     scroll_discrete: None,
+                    live_consumption: None,
                 }];
                 tree.dispatch_pointer_input(
                     root,

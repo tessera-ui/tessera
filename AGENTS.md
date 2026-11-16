@@ -96,6 +96,7 @@ programming contract; the guidelines below also govern framework implementation.
   - the build closures of `key` and `provide_context`, and deferred Pending-property materializers;
   - content closures in the approved built-in render setters listed in [component calls](docs/COMPONENT_CALLS.md#built-in-render-setters). Their key providers and action callbacks remain uncolored.
 - All other executable contexts are uncolored by default: ordinary free functions, impl methods, trait methods/default methods, local functions, callbacks, event handlers, async tasks, iterator closures, `Option`/`Result` combinator closures, and arbitrary higher-order function closures.
+- Detector closures passed directly to `Modifier::pointer_input` or `pointer_input_once` are Tessera-colored; their action callbacks remain uncolored.
 - Color is one-way and does not propagate: colored contexts may call uncolored code, but uncolored code, including helpers called from components and closures written inside them, must not call Tessera-colored functions or Tessera-only APIs.
 - `State::new` creates model-owned state and is valid only in model initializers: `ModelInit::init` implementations and closures passed directly to `ModelStore::model`. `cargo tessera check` rejects other calls (T0006); like color, this does not propagate through helpers.
 - Tessera-only APIs such as `remember`, `remember_with_key`, `retain`, `retain_with_key`, `provide_context`, `use_context`, `launch`, `launch_once`, `key`, `RenderSlot::new`, `RenderSlotWith::new`, and internal current-instance/group/slot APIs require a Tessera-colored context.
@@ -188,6 +189,7 @@ programming contract; the guidelines below also govern framework implementation.
   Captured paths use stable instance identities and survive recomposition.
 - A child's tap must not activate or focus ancestor tap handlers; drag and scroll
   observers still receive the press.
+- Prefer the foundation `detect_*_gestures` helpers. Use keyed pointer-input tasks for changing detector configuration and state handles for live values. Reserve raw event loops for input behavior requiring explicit pass arbitration or editor-specific handling.
 - Event handlers should be lightweight to avoid blocking the main loop.
 - Gesture slop starts at the recorded press position. Direct and inertial scroll
   deltas share nested-scroll dispatch; advance inertia from the framework frame clock.

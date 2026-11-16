@@ -5,24 +5,70 @@
 //! Attach pointer and keyboard handling with accessibility actions to subtrees.
 
 use tessera_foundation::{
-    gesture::{LongPressRecognizer, TapRecognizer},
     modifier::{
         ClickableArgs, InteractionState, PointerEventContext, SelectableArgs, ToggleableArgs,
     },
+    pointer_gestures::{TapGesture, TapGestureConfig, detect_tap_gestures},
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, BuildModifierNode, Callback, CallbackWith,
-    CursorEventContent, FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode,
-    Modifier, ModifierBuildContext, PointerInput, PointerInputModifierNode, PxPosition, PxSize,
-    SemanticsModifierNode, State,
+    FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode, Modifier,
+    ModifierBuildContext, PointerChange, PointerDown, PointerInput, PointerInputModifierNode,
+    PointerInputScope, PxPosition, SemanticsModifierNode, State,
     accesskit::{self, Action, Toggled},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     winit::window::CursorIcon,
 };
 
-use crate::pos_misc::is_position_in_rect;
-
 type PressCallback = CallbackWith<PointerEventContext, ()>;
+
+fn with_focus_state(
+    base: Modifier,
+    state: Option<State<InteractionState>>,
+    focus: State<(bool, u64)>,
+) -> Modifier {
+    base.on_focus_changed(move |next: FocusState| {
+        let focused = next.has_focus();
+        if focus.with(|(current, _)| *current) != focused {
+            focus.with_mut(|(current, epoch)| {
+                *current = focused;
+                if !focused {
+                    *epoch = epoch.wrapping_add(1);
+                }
+            });
+        }
+        if let Some(state) = state {
+            state.with_mut(|state| {
+                state.set_focused(focused);
+                if !focused {
+                    state.release();
+                }
+            });
+        }
+    })
+}
+
+fn with_hover_state(
+    base: Modifier,
+    state: Option<State<InteractionState>>,
+    enabled: bool,
+) -> Modifier {
+    let Some(state) = state else {
+        return base;
+    };
+    with_pointer_input(base, move |input| {
+        let hovered = enabled
+            && input.cursor_position_rel.is_some_and(|position| {
+                position.x >= 0.0
+                    && position.y >= 0.0
+                    && position.x < input.computed_data.width.to_f32()
+                    && position.y < input.computed_data.height.to_f32()
+            });
+        if state.with(InteractionState::is_hovered) != hovered {
+            state.with_mut(|state| state.set_hovered(hovered));
+        }
+    })
+}
 
 struct ClosurePointerInputModifierNode<F> {
     handler: F,
@@ -64,13 +110,6 @@ where
     base.push_pointer_preview_input(ClosurePointerInputModifierNode { handler })
 }
 
-pub(crate) fn with_pointer_final_input<F>(base: Modifier, handler: F) -> Modifier
-where
-    F: for<'a> Fn(PointerInput<'a>) + 'static,
-{
-    base.push_pointer_final_input(ClosurePointerInputModifierNode { handler })
-}
-
 pub(crate) fn with_keyboard_input<F>(base: Modifier, handler: F) -> Modifier
 where
     F: for<'a> Fn(KeyboardInput<'a>) + 'static,
@@ -98,32 +137,81 @@ fn has_keyboard_activation_event(
     })
 }
 
-fn pointer_context(input: &PointerInput<'_>, released: bool) -> Option<PointerEventContext> {
-    let changes = input.pointer_changes.as_slice();
-    let timestamp = changes
-        .iter()
-        .rev()
-        .find(|change| match change.content {
-            CursorEventContent::Pressed(_) => !released,
-            CursorEventContent::Released(_) => released,
-            _ => false,
-        })
-        .or_else(|| changes.last())?
-        .timestamp;
-    let size = input.computed_data;
-    let normalized_pos = input.cursor_position_rel.map_or([0.5, 0.5], |position| {
-        let width = size.width.to_f32().max(1.0);
-        let height = size.height.to_f32().max(1.0);
-        [
-            (position.x / width).clamp(0.0, 1.0),
-            (position.y / height).clamp(0.0, 1.0),
-        ]
-    });
-    Some(PointerEventContext {
-        normalized_pos,
-        size: PxSize::new(size.width, size.height),
-        timestamp,
-    })
+fn async_pointer_context(down: &PointerDown, change: &PointerChange) -> PointerEventContext {
+    let size = down.size;
+    let position = change
+        .position()
+        .map(|position| down.local_to_window.inverse_point(position))
+        .or(down.local_position)
+        .unwrap_or(PxPosition::ZERO);
+    PointerEventContext {
+        normalized_pos: [
+            (position.x / size.width.to_f32().max(1.0)).clamp(0.0, 1.0),
+            (position.y / size.height.to_f32().max(1.0)).clamp(0.0, 1.0),
+        ],
+        size,
+        timestamp: change.timestamp,
+    }
+}
+
+async fn async_clickable_detector(
+    mut scope: PointerInputScope,
+    mut on_click: impl FnMut(),
+    on_long_click: Option<Callback>,
+    click_enabled: bool,
+    enabled: bool,
+    block_input: bool,
+    on_press: Option<PressCallback>,
+    on_release: Option<PressCallback>,
+    interaction_state: Option<State<InteractionState>>,
+    focus_requester: FocusRequester,
+) {
+    if !enabled {
+        return;
+    }
+    detect_tap_gestures(
+        &mut scope,
+        TapGestureConfig {
+            consume_down: block_input,
+            consume_up: block_input,
+            long_press: on_long_click.map(|_| std::time::Duration::from_millis(500)),
+            ..Default::default()
+        },
+        |gesture| match gesture {
+            TapGesture::Pressed(down) => {
+                focus_requester.request_focus();
+                if let Some(state) = interaction_state {
+                    state.with_mut(|state| state.set_pressed(true));
+                }
+                if let Some(callback) = on_press {
+                    callback.call(async_pointer_context(&down, &down.change));
+                }
+            }
+            TapGesture::Released(down, up) => {
+                if let Some(state) = interaction_state {
+                    state.with_mut(InteractionState::release);
+                }
+                if let Some(callback) = on_release {
+                    callback.call(async_pointer_context(&down, &up));
+                }
+            }
+            TapGesture::Tapped(_, _) if click_enabled => on_click(),
+            TapGesture::LongPressed(_) => {
+                if let Some(callback) = on_long_click {
+                    callback.call();
+                }
+            }
+            TapGesture::Cancelled => {
+                if let Some(state) = interaction_state
+                    && state.is_alive()
+                {
+                    state.with_mut(InteractionState::release);
+                }
+            }
+            _ => {}
+        },
+    )
+    .await;
 }
 
 fn reset_disabled_interaction_state(state: State<InteractionState>) {
@@ -140,150 +228,6 @@ fn reset_disabled_interaction_state(state: State<InteractionState>) {
             interaction.set_dragged(false);
             interaction.set_focused(false);
         });
-    }
-}
-
-struct ClickablePointerModifierNode {
-    tap_recognizer: State<TapRecognizer>,
-    long_press_recognizer: Option<State<LongPressRecognizer>>,
-    on_click: Callback,
-    on_long_click: Option<Callback>,
-    click_enabled: bool,
-    enabled: bool,
-    block_input: bool,
-    on_press: Option<PressCallback>,
-    on_release: Option<PressCallback>,
-    interaction_state: Option<State<InteractionState>>,
-    focus_requester: FocusRequester,
-}
-
-impl PointerInputModifierNode for ClickablePointerModifierNode {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let within_bounds = input
-            .cursor_position_rel
-            .map(|pos| {
-                is_position_in_rect(
-                    pos,
-                    PxPosition::ZERO,
-                    input.computed_data.width,
-                    input.computed_data.height,
-                )
-            })
-            .unwrap_or(false);
-
-        let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-            recognizer.update_exclusive(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                within_bounds,
-            )
-        });
-        let (already_long, long_press_triggered) = self
-            .long_press_recognizer
-            .map(|state| {
-                if !self.enabled {
-                    if state.with(LongPressRecognizer::is_active) {
-                        state.with_mut(LongPressRecognizer::cancel);
-                    }
-                    return (false, false);
-                }
-                if input.pointer_changes.is_empty()
-                    || input.pass == tessera_ui::PointerEventPass::Initial
-                {
-                    return (state.with(LongPressRecognizer::has_triggered), false);
-                }
-                state.with_mut(|recognizer| {
-                    let already = recognizer.has_triggered();
-                    let result = recognizer.update_after_tap(
-                        input.pass,
-                        input.pointer_changes.as_mut_slice(),
-                        within_bounds,
-                        tap_result,
-                    );
-                    (already, result.triggered)
-                })
-            })
-            .unwrap_or((false, false));
-        if long_press_triggered && let Some(callback) = self.on_long_click {
-            callback.call();
-        }
-        let tapped =
-            self.click_enabled && tap_result.tapped && !already_long && !long_press_triggered;
-
-        let Some(interaction_state) = self.interaction_state else {
-            if !self.enabled {
-                return;
-            }
-
-            if tapped {
-                self.on_click.call();
-            }
-            if self.block_input && within_bounds {
-                input.consume_pointer_changes();
-            }
-            return;
-        };
-
-        if self.enabled {
-            let hover_changed = interaction_state.with(|state| state.is_hovered() != within_bounds);
-            if hover_changed {
-                interaction_state.with_mut(|state| state.set_hovered(within_bounds));
-            }
-        } else {
-            let should_reset =
-                interaction_state.with(|state| state.is_pressed() || state.is_hovered());
-            if should_reset {
-                interaction_state.with_mut(|state| {
-                    state.release();
-                    state.set_hovered(false);
-                });
-            }
-            return;
-        }
-
-        if tap_result.pressed {
-            self.focus_requester.request_focus();
-            if let Some(on_press) = self.on_press.as_ref()
-                && let Some(context) = pointer_context(&input, false)
-            {
-                on_press.call(context);
-            }
-            let press_changed = interaction_state.with(|state| !state.is_pressed());
-            if press_changed {
-                interaction_state.with_mut(|state| state.set_pressed(true));
-            }
-        }
-
-        if tap_result.released {
-            let was_pressed = interaction_state.with(|state| state.is_pressed());
-            if was_pressed {
-                interaction_state.with_mut(|state| state.release());
-            }
-            if let Some(on_release) = self.on_release.as_ref()
-                && let Some(context) = pointer_context(&input, true)
-            {
-                on_release.call(context);
-            }
-        }
-
-        if tapped {
-            self.on_click.call();
-        }
-
-        if !within_bounds {
-            let should_reset =
-                interaction_state.with(|state| state.is_pressed() || state.is_hovered());
-            if should_reset {
-                interaction_state.with_mut(|state| {
-                    state.release();
-                    state.set_hovered(false);
-                });
-            }
-        }
-
-        if self.block_input && within_bounds {
-            input.consume_pointer_changes();
-        }
     }
 }
 
@@ -376,7 +320,7 @@ impl SemanticsModifierNode for ClickableSemanticsModifierNode {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum Activation {
     Toggle {
         value: bool,
@@ -397,100 +341,28 @@ impl Activation {
     }
 }
 
-struct ActivationPointerModifierNode {
-    tap_recognizer: State<TapRecognizer>,
+async fn async_activation_detector(
+    scope: PointerInputScope,
     activation: Activation,
     enabled: bool,
     interaction_state: Option<State<InteractionState>>,
     on_press: Option<PressCallback>,
     on_release: Option<PressCallback>,
     focus_requester: FocusRequester,
-}
-
-impl PointerInputModifierNode for ActivationPointerModifierNode {
-    fn on_pointer_input(&self, input: PointerInput<'_>) {
-        let within_bounds = input
-            .cursor_position_rel
-            .map(|pos| {
-                is_position_in_rect(
-                    pos,
-                    PxPosition::ZERO,
-                    input.computed_data.width,
-                    input.computed_data.height,
-                )
-            })
-            .unwrap_or(false);
-
-        let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-            recognizer.update_exclusive(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                within_bounds,
-            )
-        });
-
-        let Some(interaction_state) = self.interaction_state else {
-            return;
-        };
-
-        if self.enabled {
-            let hover_changed = interaction_state.with(|state| state.is_hovered() != within_bounds);
-            if hover_changed {
-                interaction_state.with_mut(|state| state.set_hovered(within_bounds));
-            }
-        } else {
-            let should_reset = interaction_state
-                .with(|state| state.is_pressed() || state.is_hovered() || state.is_focused());
-            if should_reset {
-                interaction_state.with_mut(|state| {
-                    state.release();
-                    state.set_hovered(false);
-                    state.set_focused(false);
-                });
-            }
-            return;
-        }
-
-        if tap_result.pressed {
-            self.focus_requester.request_focus();
-            if let Some(on_press) = self.on_press.as_ref()
-                && let Some(context) = pointer_context(&input, false)
-            {
-                on_press.call(context);
-            }
-            let press_changed = interaction_state.with(|state| !state.is_pressed());
-            if press_changed {
-                interaction_state.with_mut(|state| state.set_pressed(true));
-            }
-        }
-
-        if tap_result.released {
-            let was_pressed = interaction_state.with(|state| state.is_pressed());
-            if was_pressed {
-                interaction_state.with_mut(|state| state.release());
-            }
-            if let Some(on_release) = self.on_release.as_ref()
-                && let Some(context) = pointer_context(&input, true)
-            {
-                on_release.call(context);
-            }
-        }
-
-        if tap_result.tapped {
-            self.activation.activate();
-        }
-
-        if !within_bounds {
-            let should_reset =
-                interaction_state.with(|state| state.is_pressed() || state.is_hovered());
-            if should_reset {
-                interaction_state.with_mut(|state| {
-                    state.release();
-                    state.set_hovered(false);
-                });
-            }
-        }
-    }
+) {
+    async_clickable_detector(
+        scope,
+        move || activation.activate(),
+        None,
+        true,
+        enabled,
+        false,
+        on_press,
+        on_release,
+        interaction_state,
+        focus_requester,
+    )
+    .await;
 }
 
 struct ActivationKeyboardModifierNode {
@@ -648,6 +520,7 @@ fn apply_combined_clickable_resolved(
     args: ClickableArgs,
     on_long_click: Option<Callback>,
     click_enabled: bool,
+    focus: State<(bool, u64)>,
 ) -> Modifier {
     let ClickableArgs {
         on_click,
@@ -661,10 +534,7 @@ fn apply_combined_clickable_resolved(
         interaction_state,
         focus_requester,
         focus_properties,
-        tap_recognizer,
-        long_press_recognizer,
     } = args;
-    let tap_recognizer = tap_recognizer.expect("materialized tap recognizer");
     let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
     let participates_in_focus =
         enabled && (role.is_some() || label.is_some() || description.is_some());
@@ -681,13 +551,9 @@ fn apply_combined_clickable_resolved(
     if enabled {
         modifier = modifier.hover_cursor_icon(CursorIcon::Pointer);
     }
-    if let Some(interaction_state) = interaction_state {
-        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
-            interaction_state.with_mut(|state| state.set_focused(focus_state.has_focus()));
-        });
-    }
+    modifier = with_focus_state(modifier, interaction_state, focus);
 
-    modifier
+    with_hover_state(modifier, interaction_state, enabled)
         .push_semantics(ClickableSemanticsModifierNode {
             on_long_click,
             click_enabled,
@@ -705,22 +571,40 @@ fn apply_combined_clickable_resolved(
             enabled,
             focus_requester,
         })
-        .push_pointer_input(ClickablePointerModifierNode {
-            on_long_click,
-            click_enabled,
-            tap_recognizer,
-            long_press_recognizer,
-            on_click,
-            enabled,
-            block_input,
-            on_press,
-            on_release,
-            interaction_state,
-            focus_requester,
-        })
+        .pointer_input(
+            (
+                enabled,
+                click_enabled,
+                block_input,
+                on_click,
+                on_long_click,
+                on_press,
+                on_release,
+                interaction_state,
+                focus.with(|(_, epoch)| *epoch),
+            ),
+            move |scope| {
+                async_clickable_detector(
+                    scope,
+                    move || on_click.call(),
+                    on_long_click,
+                    click_enabled,
+                    enabled,
+                    block_input,
+                    on_press,
+                    on_release,
+                    interaction_state,
+                    focus_requester,
+                )
+            },
+        )
 }
 
-fn apply_toggleable_resolved(base: Modifier, args: ToggleableArgs) -> Modifier {
+fn apply_toggleable_resolved(
+    base: Modifier,
+    args: ToggleableArgs,
+    focus: State<(bool, u64)>,
+) -> Modifier {
     let ToggleableArgs {
         value,
         on_value_change,
@@ -732,9 +616,7 @@ fn apply_toggleable_resolved(base: Modifier, args: ToggleableArgs) -> Modifier {
         on_press,
         on_release,
         focus_requester,
-        tap_recognizer,
     } = args;
-    let tap_recognizer = tap_recognizer.expect("materialized tap recognizer");
     let activation = Activation::Toggle {
         value,
         on_value_change,
@@ -750,13 +632,9 @@ fn apply_toggleable_resolved(base: Modifier, args: ToggleableArgs) -> Modifier {
     } else if let Some(interaction_state) = interaction_state {
         reset_disabled_interaction_state(interaction_state);
     }
-    if let Some(interaction_state) = interaction_state {
-        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
-            interaction_state.with_mut(|state| state.set_focused(focus_state.has_focus()));
-        });
-    }
+    modifier = with_focus_state(modifier, interaction_state, focus);
 
-    modifier
+    with_hover_state(modifier, interaction_state, enabled)
         .push_semantics(ToggleableSemanticsModifierNode {
             value,
             on_value_change,
@@ -771,18 +649,34 @@ fn apply_toggleable_resolved(base: Modifier, args: ToggleableArgs) -> Modifier {
             enabled,
             focus_requester,
         })
-        .push_pointer_input(ActivationPointerModifierNode {
-            tap_recognizer,
-            activation,
-            enabled,
-            interaction_state,
-            on_press,
-            on_release,
-            focus_requester,
-        })
+        .pointer_input(
+            (
+                activation,
+                enabled,
+                on_press,
+                on_release,
+                interaction_state,
+                focus.with(|(_, epoch)| *epoch),
+            ),
+            move |scope| {
+                async_activation_detector(
+                    scope,
+                    activation,
+                    enabled,
+                    interaction_state,
+                    on_press,
+                    on_release,
+                    focus_requester,
+                )
+            },
+        )
 }
 
-fn apply_selectable_resolved(base: Modifier, args: SelectableArgs) -> Modifier {
+fn apply_selectable_resolved(
+    base: Modifier,
+    args: SelectableArgs,
+    focus: State<(bool, u64)>,
+) -> Modifier {
     let SelectableArgs {
         selected,
         on_click,
@@ -794,9 +688,7 @@ fn apply_selectable_resolved(base: Modifier, args: SelectableArgs) -> Modifier {
         on_press,
         on_release,
         focus_requester,
-        tap_recognizer,
     } = args;
-    let tap_recognizer = tap_recognizer.expect("materialized tap recognizer");
     let activation = Activation::Click(on_click);
     let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
 
@@ -809,13 +701,9 @@ fn apply_selectable_resolved(base: Modifier, args: SelectableArgs) -> Modifier {
     } else if let Some(interaction_state) = interaction_state {
         reset_disabled_interaction_state(interaction_state);
     }
-    if let Some(interaction_state) = interaction_state {
-        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
-            interaction_state.with_mut(|state| state.set_focused(focus_state.has_focus()));
-        });
-    }
+    modifier = with_focus_state(modifier, interaction_state, focus);
 
-    modifier
+    with_hover_state(modifier, interaction_state, enabled)
         .push_semantics(SelectableSemanticsModifierNode {
             selected,
             on_click,
@@ -830,15 +718,27 @@ fn apply_selectable_resolved(base: Modifier, args: SelectableArgs) -> Modifier {
             enabled,
             focus_requester,
         })
-        .push_pointer_input(ActivationPointerModifierNode {
-            tap_recognizer,
-            activation,
-            enabled,
-            interaction_state,
-            on_press,
-            on_release,
-            focus_requester,
-        })
+        .pointer_input(
+            (
+                activation,
+                enabled,
+                on_press,
+                on_release,
+                interaction_state,
+                focus.with(|(_, epoch)| *epoch),
+            ),
+            move |scope| {
+                async_activation_detector(
+                    scope,
+                    activation,
+                    enabled,
+                    interaction_state,
+                    on_press,
+                    on_release,
+                    focus_requester,
+                )
+            },
+        )
 }
 
 struct ClickableBuild {
@@ -850,10 +750,6 @@ struct ClickableBuild {
 impl BuildModifierNode for ClickableBuild {
     fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
         let mut args = self.args.clone();
-        args.tap_recognizer = Some(
-            args.tap_recognizer
-                .unwrap_or_else(|| context.state(TapRecognizer::default)),
-        );
         args.focus_requester = Some(
             args.focus_requester
                 .unwrap_or_else(|| context.state(FocusRequester::new).get()),
@@ -863,6 +759,7 @@ impl BuildModifierNode for ClickableBuild {
             args,
             self.on_long_click,
             self.click_enabled,
+            context.state(|| (false, 0)),
         ))
     }
 }
@@ -885,15 +782,15 @@ struct ToggleableBuild(ToggleableArgs);
 impl BuildModifierNode for ToggleableBuild {
     fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
         let mut args = self.0.clone();
-        args.tap_recognizer = Some(
-            args.tap_recognizer
-                .unwrap_or_else(|| context.state(TapRecognizer::default)),
-        );
         args.focus_requester = Some(
             args.focus_requester
                 .unwrap_or_else(|| context.state(FocusRequester::new).get()),
         );
-        Some(apply_toggleable_resolved(Modifier::new(), args))
+        Some(apply_toggleable_resolved(
+            Modifier::new(),
+            args,
+            context.state(|| (false, 0)),
+        ))
     }
 }
 
@@ -906,15 +803,15 @@ struct SelectableBuild(SelectableArgs);
 impl BuildModifierNode for SelectableBuild {
     fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
         let mut args = self.0.clone();
-        args.tap_recognizer = Some(
-            args.tap_recognizer
-                .unwrap_or_else(|| context.state(TapRecognizer::default)),
-        );
         args.focus_requester = Some(
             args.focus_requester
                 .unwrap_or_else(|| context.state(FocusRequester::new).get()),
         );
-        Some(apply_selectable_resolved(Modifier::new(), args))
+        Some(apply_selectable_resolved(
+            Modifier::new(),
+            args,
+            context.state(|| (false, 0)),
+        ))
     }
 }
 

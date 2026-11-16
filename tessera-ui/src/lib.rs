@@ -31,6 +31,7 @@ mod work;
 
 pub use async_dispatch::{Dispatcher, Task, on, spawn, spawn_local, with_frame_time};
 
+pub mod pointer_input;
 mod session;
 pub mod system_back;
 
@@ -123,6 +124,9 @@ pub use crate::{
         SemanticsModifierNode, StatefulLayoutPolicy,
     },
     plugin::{DesktopPlatformContext, Plugin, PluginContext, PluginResult, with_plugin},
+    pointer_input::{
+        DownRequirement, GestureEnd, LongPressResult, PointerDown, PointerEvent, PointerInputScope,
+    },
     prop::{Callback, CallbackWith, RenderSlot, RenderSlotWith},
     px::{Px, PxPosition, PxRect, PxSize},
     renderer::Renderer,

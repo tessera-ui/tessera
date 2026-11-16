@@ -73,6 +73,8 @@ const RENDER_SLOT_NEW_PATH: &str = "tessera_ui::prop::RenderSlot::new";
 const RENDER_SLOT_WITH_NEW_PATH: &str = "tessera_ui::prop::RenderSlotWith::new";
 const PUBLIC_RENDER_SLOT_NEW_PATH: &str = "tessera_ui::RenderSlot::new";
 const PUBLIC_RENDER_SLOT_WITH_NEW_PATH: &str = "tessera_ui::RenderSlotWith::new";
+const MODIFIER_TYPE_PATH: &str = "tessera_ui::modifier::Modifier";
+const PUBLIC_MODIFIER_TYPE_PATH: &str = "tessera_ui::Modifier";
 const ENTRY_POINT_NEW_PATH: &str = "tessera_ui::entry_point::EntryPoint::new";
 const PUBLIC_ENTRY_POINT_NEW_PATH: &str = "tessera_ui::EntryPoint::new";
 const CORE_OPTION_TYPE_PATH: &str = "core::option::Option";
@@ -1220,7 +1222,8 @@ impl<'db> CallAnalyzer<'db> {
                 }
                 return (self.method_call_takes_render_slot_setter_at(&call, index)
                     || self.method_call_takes_render_slot_closure_at(&call, index)
-                    || self.method_call_takes_pending_property_at(&call, index))
+                    || self.method_call_takes_pending_property_at(&call, index)
+                    || self.method_call_takes_pointer_input_detector_at(&call, index))
                 .then_some(Carrier::Content);
             }
             current = node.parent();
@@ -1230,6 +1233,12 @@ impl<'db> CallAnalyzer<'db> {
     }
 
     fn call_takes_tessera_carrier_closure_at(&self, call: &ast::CallExpr, index: usize) -> bool {
+        if self.call_resolves_to(call, |function| {
+            self.pointer_input_detector_index(function)
+                .is_some_and(|parameter| index == parameter + 1)
+        }) {
+            return true;
+        }
         if index == 0 && self.call_is_build_entry(&call) {
             return true;
         }
@@ -1277,6 +1286,31 @@ impl<'db> CallAnalyzer<'db> {
                         )
                     })
             })
+    }
+
+    fn method_call_takes_pointer_input_detector_at(
+        &self,
+        call: &ast::MethodCallExpr,
+        index: usize,
+    ) -> bool {
+        self.method_call_variants(call).any(|call| {
+            self.sema
+                .resolve_method_call(&call)
+                .is_some_and(|function| self.pointer_input_detector_index(function) == Some(index))
+        })
+    }
+
+    fn pointer_input_detector_index(&self, function: Function) -> Option<usize> {
+        if !self.is_render_slot_method(function, MODIFIER_TYPE_PATH)
+            && !self.is_render_slot_method(function, PUBLIC_MODIFIER_TYPE_PATH)
+        {
+            return None;
+        }
+        match function.name(self.db).as_str() {
+            "pointer_input" => Some(1),
+            "pointer_input_once" => Some(0),
+            _ => None,
+        }
     }
 
     fn call_resolves_to(&self, call: &ast::CallExpr, matches: impl Fn(Function) -> bool) -> bool {
@@ -1735,6 +1769,56 @@ fn plain() { foreign_component(); }
                     assert_eq!(messages[1].len(), 1);
                     assert!(messages[1][0].contains("remember"));
                 }
+            },
+        );
+    }
+
+    #[test]
+    fn pointer_input_detector_closures_are_tessera_colored() {
+        with_analyzer(
+            r#"
+use tessera_ui::{DownRequirement, Modifier, PointerEventPass, PressKeyEventType};
+
+#[tessera_ui::tessera]
+fn child() {}
+
+fn plain_modifier() {
+    let _modifier = Modifier::new().pointer_input_once(|mut scope| async move {
+        let _ = scope.await_first_down(
+            PointerEventPass::Main,
+            Some(PressKeyEventType::Left),
+            DownRequirement::Unconsumed,
+        ).await;
+        child();
+    });
+    let _keyed = Modifier::new().pointer_input(1u8, |_| async { child(); });
+    let _qualified = Modifier::pointer_input_once(Modifier::new(), |_| async { child(); });
+    let _qualified_keyed = Modifier::pointer_input(Modifier::new(), 1u8, |_| async { child(); });
+    let _action = Modifier::new().pointer_input_once(|_| async {
+        let action = || action_child();
+        action();
+    });
+}
+
+#[tessera_ui::tessera]
+fn action_child() {}
+#[tessera_ui::tessera]
+fn unrelated_child() {}
+struct Other;
+impl Other { fn pointer_input_once(&self, _: impl Fn()) {} }
+fn unrelated_method() {
+    Other.pointer_input_once(|| { unrelated_child(); });
+}
+"#,
+            |analyzer| {
+                let messages = analyzer
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.message.clone())
+                    .collect::<Vec<_>>();
+                assert_eq!(messages.len(), 2, "{messages:?}");
+                assert_contains(&messages, "action_child");
+                assert_contains(&messages, "unrelated_child");
             },
         );
     }

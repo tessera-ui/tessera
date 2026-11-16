@@ -3,9 +3,8 @@
 //! ## Usage
 //!
 //! Use for bottom navigation between a small set of top-level destinations.
-use tessera_foundation::{
-    gesture::TapRecognizer,
-    modifier::{InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs},
+use tessera_foundation::modifier::{
+    InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs,
 };
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusRequester,
@@ -415,7 +414,6 @@ fn navigation_bar_item_view(
     let on_click = on_click.unwrap_or_default();
     let interaction_state = remember(InteractionState::new);
     let ripple_state = remember(RippleState::new);
-    let tap_recognizer = remember(TapRecognizer::default);
     let focus = remember(FocusRequester::new).get();
 
     let label = item.label.clone();
@@ -449,7 +447,6 @@ fn navigation_bar_item_view(
         focus_requester: Some(focus),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
-        tap_recognizer: Some(tap_recognizer),
         ..Default::default()
     };
 
