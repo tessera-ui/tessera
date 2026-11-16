@@ -45,7 +45,6 @@ inquire = { version = "0.9.4", default-features = false, features = ["crossterm"
 interprocess = "2.4.8"
 notify = "8.2.2"
 owo-colors = "4.4.0"
-plist = "1.10.3"
 # These rust-analyzer crates exchange internal types and must stay on one release.
 ra_ap_base_db = "=0.0.358"
 ra_ap_cfg = "=0.0.358"
