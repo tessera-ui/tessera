@@ -37,6 +37,7 @@ programming contract; the guidelines below also govern framework implementation.
 - `tessera-components` places a component at the crate root only when it reads no design-system theme and implies no design-system visual, interaction, motion, or scrolling defaults. When in doubt, place it in a design-system module; promoting an API to the root later is additive.
 - Each design system owns its public text, icon, scrolling, lazy container, text editing, and interaction feedback components and their style types. Rendering pipelines and crate-private mechanisms, such as text shaping, editing, virtualization, and scroll control, may be shared.
 - Non-test code in root modules and other design systems must not depend on `md3`; `scripts/check-imports.rs` rejects such imports. Experimental design systems live under `experiment`.
+- `md3` and `experiment::hig` must never reference one another, including in tests and documentation. Share only design-system-independent internal mechanisms.
 
 ---
 
