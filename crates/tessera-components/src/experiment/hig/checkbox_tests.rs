@@ -42,7 +42,7 @@ fn label_is_placed_beside_the_glyph_at_fractional_density() {
                         });
                 })
                 .frame();
-            let glyph = frame.node("checkbox_glyph").bounds();
+            let glyph = frame.node("choice_glyph").bounds();
             let text = frame.node("text_node").bounds();
             assert_eq!(glyph.width.0, 24);
             assert_eq!(glyph.height.0, 24);
@@ -244,7 +244,7 @@ fn check_keyboard_and_semantics() {
         Some(Toggled::True)
     );
     let pixels = ui.read_pixels();
-    let glyph = ui.frames(1).node("checkbox_glyph").bounds();
+    let glyph = ui.frames(1).node("choice_glyph").bounds();
     let red = |x: i32, y: i32| pixels[(((glyph.y.0 + y) * 300 + glyph.x.0 + x) * 4) as usize];
     assert!(
         red(6, 11) > 200,
