@@ -39,7 +39,7 @@ use crate::{
         theme::MaterialTheme,
     },
     modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::{ModifierExt as _, with_keyboard_input},
+    modifier::with_keyboard_input,
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,

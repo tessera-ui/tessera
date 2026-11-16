@@ -22,7 +22,6 @@ use tessera_ui::{
 
 use crate::{
     animation::run_frames,
-    modifier::ModifierExt as _,
     padding_utils::remove_padding_from_constraint,
     pipelines::{
         blur::command::DualBlurCommand,

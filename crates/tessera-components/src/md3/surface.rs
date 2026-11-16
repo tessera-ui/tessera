@@ -4,7 +4,8 @@
 //!
 //! Use as a base for buttons, cards, or any styled and interactive region.
 use tessera_foundation::modifier::{
-    ClickableArgs, InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext,
+    CombinedClickableArgs, InteractionState, InteractionVisualState, ModifierExt as _,
+    PointerEventContext,
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint, Dp,
@@ -27,7 +28,6 @@ use crate::{
             ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for,
         },
     },
-    modifier::apply_combined_clickable_modifier,
     pipelines::{
         shape::command::{RippleProps, ShapeCommand},
         simple_rect::command::SimpleRectCommand,
@@ -1224,8 +1224,9 @@ pub fn surface(
         });
         let release_handler = ripple_state
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
-        let clickable_args = ClickableArgs {
-            on_click: resolved.on_click.unwrap_or_else(Callback::noop),
+        let clickable_args = CombinedClickableArgs {
+            on_click: resolved.on_click,
+            on_long_click: resolved.on_long_click,
             enabled: resolved.enabled,
             block_input: resolved.block_input,
             on_press: press_handler.map(Into::into),
@@ -1238,12 +1239,7 @@ pub fn surface(
             focus_properties: resolved.focus_properties,
         };
 
-        modifier = apply_combined_clickable_modifier(
-            modifier,
-            clickable_args,
-            resolved.on_long_click,
-            resolved.on_click.is_some(),
-        );
+        modifier = modifier.combined_clickable(clickable_args);
     } else if resolved.block_input {
         modifier = modifier.block_touch_propagation();
     }

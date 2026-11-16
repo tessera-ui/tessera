@@ -4,12 +4,6 @@
 //!
 //! Attach pointer and keyboard handling with accessibility actions to subtrees.
 
-use tessera_foundation::{
-    modifier::{
-        ClickableArgs, InteractionState, PointerEventContext, SelectableArgs, ToggleableArgs,
-    },
-    pointer_gestures::{TapGesture, TapGestureConfig, detect_tap_gestures},
-};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, BuildModifierNode, Callback, CallbackWith,
     FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode, Modifier,
@@ -19,6 +13,10 @@ use tessera_ui::{
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     winit::window::CursorIcon,
 };
+
+use crate::pointer_gestures::{TapGesture, TapGestureConfig, detect_tap_gestures};
+
+use super::{ClickableArgs, InteractionState, PointerEventContext, SelectableArgs, ToggleableArgs};
 
 type PressCallback = CallbackWith<PointerEventContext, ()>;
 
@@ -57,65 +55,27 @@ fn with_hover_state(
     let Some(state) = state else {
         return base;
     };
-    with_pointer_input(base, move |input| {
-        let hovered = enabled
+    base.push_pointer_input(HoverState { state, enabled })
+}
+
+struct HoverState {
+    state: State<InteractionState>,
+    enabled: bool,
+}
+
+impl PointerInputModifierNode for HoverState {
+    fn on_pointer_input(&self, input: PointerInput<'_>) {
+        let hovered = self.enabled
             && input.cursor_position_rel.is_some_and(|position| {
                 position.x >= 0.0
                     && position.y >= 0.0
                     && position.x < input.computed_data.width.to_f32()
                     && position.y < input.computed_data.height.to_f32()
             });
-        if state.with(InteractionState::is_hovered) != hovered {
-            state.with_mut(|state| state.set_hovered(hovered));
+        if self.state.with(InteractionState::is_hovered) != hovered {
+            self.state.with_mut(|state| state.set_hovered(hovered));
         }
-    })
-}
-
-struct ClosurePointerInputModifierNode<F> {
-    handler: F,
-}
-
-impl<F> PointerInputModifierNode for ClosurePointerInputModifierNode<F>
-where
-    F: for<'a> Fn(PointerInput<'a>) + 'static,
-{
-    fn on_pointer_input(&self, input: PointerInput<'_>) {
-        (self.handler)(input);
     }
-}
-
-struct ClosureKeyboardInputModifierNode<F> {
-    handler: F,
-}
-
-impl<F> KeyboardInputModifierNode for ClosureKeyboardInputModifierNode<F>
-where
-    F: for<'a> Fn(KeyboardInput<'a>) + 'static,
-{
-    fn on_keyboard_input(&self, input: KeyboardInput<'_>) {
-        (self.handler)(input);
-    }
-}
-
-pub(crate) fn with_pointer_input<F>(base: Modifier, handler: F) -> Modifier
-where
-    F: for<'a> Fn(PointerInput<'a>) + 'static,
-{
-    base.push_pointer_input(ClosurePointerInputModifierNode { handler })
-}
-
-pub(crate) fn with_pointer_preview_input<F>(base: Modifier, handler: F) -> Modifier
-where
-    F: for<'a> Fn(PointerInput<'a>) + 'static,
-{
-    base.push_pointer_preview_input(ClosurePointerInputModifierNode { handler })
-}
-
-pub(crate) fn with_keyboard_input<F>(base: Modifier, handler: F) -> Modifier
-where
-    F: for<'a> Fn(KeyboardInput<'a>) + 'static,
-{
-    base.push_keyboard_input(ClosureKeyboardInputModifierNode { handler })
 }
 
 fn has_keyboard_activation_event(
@@ -342,30 +302,6 @@ impl Activation {
     }
 }
 
-async fn async_activation_detector(
-    scope: PointerInputScope,
-    activation: Activation,
-    enabled: bool,
-    interaction_state: Option<State<InteractionState>>,
-    on_press: Option<PressCallback>,
-    on_release: Option<PressCallback>,
-    focus_requester: FocusRequester,
-) {
-    async_clickable_detector(
-        scope,
-        move || activation.activate(),
-        None,
-        true,
-        enabled,
-        false,
-        on_press,
-        on_release,
-        interaction_state,
-        focus_requester,
-    )
-    .await;
-}
-
 struct ActivationKeyboardModifierNode {
     activation: Activation,
     enabled: bool,
@@ -383,38 +319,6 @@ impl KeyboardInputModifierNode for ActivationKeyboardModifierNode {
         self.focus_requester.request_focus();
         self.activation.activate();
         input.block_keyboard();
-    }
-}
-
-pub(crate) struct DisabledToggleSemantics {
-    pub role: accesskit::Role,
-    pub value: bool,
-    pub label: Option<String>,
-    pub description: Option<String>,
-}
-
-impl SemanticsModifierNode for DisabledToggleSemantics {
-    fn apply(
-        &self,
-        node: &mut AccessibilityNode,
-        handler: &mut Option<AccessibilityActionHandler>,
-    ) {
-        node.role = Some(self.role);
-        node.toggled = Some(if self.value {
-            Toggled::True
-        } else {
-            Toggled::False
-        });
-        if let Some(label) = &self.label {
-            node.label = Some(label.clone());
-        }
-        if let Some(description) = &self.description {
-            node.description = Some(description.clone());
-        }
-        node.disabled = true;
-        node.focusable = false;
-        node.actions.clear();
-        *handler = None;
     }
 }
 
@@ -510,10 +414,6 @@ impl SemanticsModifierNode for SelectableSemanticsModifierNode {
             *action_handler = None;
         }
     }
-}
-
-pub(crate) fn apply_clickable_modifier(base: Modifier, args: ClickableArgs) -> Modifier {
-    apply_combined_clickable_modifier(base, args, None, true)
 }
 
 fn apply_combined_clickable_resolved(
@@ -660,13 +560,16 @@ fn apply_toggleable_resolved(
                 focus.with(|(_, epoch)| *epoch),
             ),
             move |scope| {
-                async_activation_detector(
+                async_clickable_detector(
                     scope,
-                    activation,
+                    move || activation.activate(),
+                    None,
+                    true,
                     enabled,
-                    interaction_state,
+                    false,
                     on_press,
                     on_release,
+                    interaction_state,
                     focus_requester,
                 )
             },
@@ -729,23 +632,26 @@ fn apply_selectable_resolved(
                 focus.with(|(_, epoch)| *epoch),
             ),
             move |scope| {
-                async_activation_detector(
+                async_clickable_detector(
                     scope,
-                    activation,
+                    move || activation.activate(),
+                    None,
+                    true,
                     enabled,
-                    interaction_state,
+                    false,
                     on_press,
                     on_release,
+                    interaction_state,
                     focus_requester,
                 )
             },
         )
 }
 
-struct ClickableBuild {
-    args: ClickableArgs,
-    on_long_click: Option<Callback>,
-    click_enabled: bool,
+pub(super) struct ClickableBuild {
+    pub args: ClickableArgs,
+    pub on_long_click: Option<Callback>,
+    pub click_enabled: bool,
 }
 
 impl BuildModifierNode for ClickableBuild {
@@ -765,20 +671,7 @@ impl BuildModifierNode for ClickableBuild {
     }
 }
 
-pub(crate) fn apply_combined_clickable_modifier(
-    base: Modifier,
-    args: ClickableArgs,
-    on_long_click: Option<Callback>,
-    click_enabled: bool,
-) -> Modifier {
-    base.push_build(ClickableBuild {
-        args,
-        on_long_click,
-        click_enabled,
-    })
-}
-
-struct ToggleableBuild(ToggleableArgs);
+pub(super) struct ToggleableBuild(pub ToggleableArgs);
 
 impl BuildModifierNode for ToggleableBuild {
     fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
@@ -795,11 +688,7 @@ impl BuildModifierNode for ToggleableBuild {
     }
 }
 
-pub(crate) fn apply_toggleable_modifier(base: Modifier, args: ToggleableArgs) -> Modifier {
-    base.push_build(ToggleableBuild(args))
-}
-
-struct SelectableBuild(SelectableArgs);
+pub(super) struct SelectableBuild(pub SelectableArgs);
 
 impl BuildModifierNode for SelectableBuild {
     fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
@@ -816,6 +705,6 @@ impl BuildModifierNode for SelectableBuild {
     }
 }
 
-pub(crate) fn apply_selectable_modifier(base: Modifier, args: SelectableArgs) -> Modifier {
-    base.push_build(SelectableBuild(args))
-}
+#[cfg(test)]
+#[path = "activation_tests.rs"]
+mod tests;

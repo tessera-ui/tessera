@@ -6,7 +6,7 @@
 use std::any::TypeId;
 
 use tessera_foundation::{
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::{InteractionState, ModifierExt as _, SemanticsArgs},
     pointer_gestures::{ScrollGestureConfig, detect_scroll_gestures},
 };
 use tessera_ui::{
@@ -27,7 +27,6 @@ use crate::{
     animation::{Animatable, run_frames},
     boxed::boxed,
     column::column,
-    interaction_state::InteractionState,
     md3::{
         icon::icon as icon_component,
         surface::surface,

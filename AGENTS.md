@@ -34,6 +34,7 @@ programming contract; the guidelines below also govern framework implementation.
 
 ### Design System Layering
 
+- `tessera-foundation` owns complete generic interaction modifiers (`clickable`, `combined_clickable`, `toggleable`, and `selectable`), including gesture, keyboard, focus, and accessibility behavior. Components use those public APIs directly; design systems add their visual feedback instead of forwarding generic interaction APIs.
 - `tessera-components` places a component at the crate root only when it reads no design-system theme and implies no design-system visual, interaction, motion, or scrolling defaults. When in doubt, place it in a design-system module; promoting an API to the root later is additive.
 - Each design system owns its public text, icon, scrolling, lazy container, text editing, and interaction feedback components and their style types. Rendering pipelines and crate-private mechanisms, such as text shaping, editing, virtualization, and scroll control, may be shared.
 - Non-test code in root modules and other design systems must not depend on `md3`; `scripts/check-imports.rs` rejects such imports. Experimental design systems live under `experiment`.

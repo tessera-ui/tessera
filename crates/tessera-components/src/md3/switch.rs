@@ -13,7 +13,6 @@ use tessera_ui::{
     accesskit::{Role, Toggled},
     launch,
     layout::{MeasureScope, PlacementResult, PlacementScope},
-    modifier::ModifierCapabilityExt as _,
     provide_context, remember, tessera, use_context,
 };
 
@@ -27,7 +26,6 @@ use crate::{
         surface::{SurfaceStyle, surface},
         theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
     },
-    modifier::{DisabledToggleSemantics, ModifierExt as _},
     shape_def::Shape,
 };
 
@@ -500,16 +498,7 @@ fn switch_content(
             on_release: release_handler.map(Into::into),
             ..Default::default()
         };
-        modifier = if enabled {
-            modifier.toggleable(toggle_args)
-        } else {
-            modifier.push_semantics(DisabledToggleSemantics {
-                role: Role::Switch,
-                value: checked,
-                label: accessibility_label,
-                description: accessibility_description,
-            })
-        };
+        modifier = modifier.toggleable(toggle_args);
     } else {
         modifier = modifier.semantics(SemanticsArgs {
             role: Some(Role::Switch),

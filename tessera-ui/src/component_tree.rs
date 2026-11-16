@@ -2323,6 +2323,35 @@ impl ComponentTree {
         requests
     }
 
+    fn dispatch_post_layout_focus(
+        &mut self,
+        root_node: NodeId,
+        keyboard_events: Vec<QueuedInput>,
+        ime_events: Vec<QueuedInput<crate::ime_state::ImeEvent>>,
+        retry_focus_move: Option<FocusDirection>,
+        window_requests: &mut WindowRequests,
+    ) -> (Option<FocusDirection>, bool) {
+        self.focus_owner.commit_pending();
+        let requested_move = self
+            .focus_owner
+            .take_pending_navigation()
+            .or(retry_focus_move);
+        let pending_focus_move_retry = requested_move.and_then(|direction| {
+            match try_dispatch_focus_move_request(&self.tree, direction, &mut self.focus_owner) {
+                FocusMoveRequestResult::Retry(direction) => Some(direction),
+                FocusMoveRequestResult::Moved | FocusMoveRequestResult::NotHandled => None,
+            }
+        });
+        self.queue_focused_input(keyboard_events, ime_events);
+        let pending_focus_move_retry = pending_focus_move_retry
+            .or_else(|| self.dispatch_pending_focused_input(root_node, window_requests));
+        self.focus_owner
+            .retain_navigation_retry(pending_focus_move_retry);
+        let pending_keyboard_retry =
+            needs_deferred_focus_retry(&self.focus_owner, !self.pending_focused_input.is_empty());
+        (pending_focus_move_retry, pending_keyboard_retry)
+    }
+
     fn clear_frame_structure_changes(&mut self) {
         let live_nodes = self.node_ids_by_instance_key.len();
         for (nodes, previous_count) in
@@ -2550,7 +2579,7 @@ impl ComponentTree {
                     &self.changed_frame_nodes,
                 );
                 self.clear_frame_structure_changes();
-                let _ = self.dispatch_pointer_input(
+                let mut window_requests = self.dispatch_pointer_input(
                     root_node,
                     pointer_changes.as_mut_slice(),
                     &mut cursor_position,
@@ -2561,14 +2590,22 @@ impl ComponentTree {
                 diagnostics_snapshot.pointer_nodes_dispatched = self.pointer_work.1.len() as u64;
                 diagnostics_snapshot.pointer_hit_test_candidates =
                     self.pointer_index.hit_candidates.get();
+                let (pending_focus_move_retry, pending_keyboard_retry) = self
+                    .dispatch_post_layout_focus(
+                        root_node,
+                        keyboard_events,
+                        ime_events,
+                        retry_focus_move,
+                        &mut window_requests,
+                    );
                 return (
                     RenderGraph::default(),
-                    WindowRequests::default(),
+                    window_requests,
                     diagnostics_snapshot,
                     std::time::Duration::ZERO,
-                    None,
+                    pending_focus_move_retry,
                     false,
-                    false,
+                    pending_keyboard_retry,
                 );
             }
         };
@@ -2633,24 +2670,13 @@ impl ComponentTree {
         diagnostics_snapshot.pointer_nodes_updated = self.pointer_work.0;
         diagnostics_snapshot.pointer_nodes_dispatched = self.pointer_work.1.len() as u64;
         diagnostics_snapshot.pointer_hit_test_candidates = self.pointer_index.hit_candidates.get();
-        self.focus_owner.commit_pending();
-        let requested_move = self
-            .focus_owner
-            .take_pending_navigation()
-            .or(retry_focus_move);
-        let pending_focus_move_retry = requested_move.and_then(|direction| {
-            match try_dispatch_focus_move_request(&self.tree, direction, &mut self.focus_owner) {
-                FocusMoveRequestResult::Retry(direction) => Some(direction),
-                FocusMoveRequestResult::Moved | FocusMoveRequestResult::NotHandled => None,
-            }
-        });
-        self.queue_focused_input(keyboard_events, ime_events);
-        let pending_focus_move_retry = pending_focus_move_retry
-            .or_else(|| self.dispatch_pending_focused_input(root_node, &mut window_requests));
-        self.focus_owner
-            .retain_navigation_retry(pending_focus_move_retry);
-        let pending_keyboard_retry =
-            needs_deferred_focus_retry(&self.focus_owner, !self.pending_focused_input.is_empty());
+        let (pending_focus_move_retry, pending_keyboard_retry) = self.dispatch_post_layout_focus(
+            root_node,
+            keyboard_events,
+            ime_events,
+            retry_focus_move,
+            &mut window_requests,
+        );
         let pending_focus_reveal_retry =
             if pending_focus_move_retry.is_none() && !self.focus_owner.keyboard_is_deferred() {
                 dispatch_pending_focus_reveal_request(

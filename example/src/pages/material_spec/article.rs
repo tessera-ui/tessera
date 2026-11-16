@@ -4,7 +4,6 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
-    interaction_state::InteractionState,
     md3::{
         dialog::DialogController,
         icon::icon,
@@ -21,7 +20,9 @@ use tessera_components::{
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
 };
-use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs};
+use tessera_foundation::modifier::{
+    ClickableArgs, InteractionState, ModifierExt as _, Padding, SemanticsArgs,
+};
 use tessera_ui::{
     Callback, Dp, LayoutCoordinates, Modifier, Px, PxPosition, RenderSlot, State, accesskit::Role,
     focus, launch, modifier::FocusModifierExt as _, remember, tessera, use_context,

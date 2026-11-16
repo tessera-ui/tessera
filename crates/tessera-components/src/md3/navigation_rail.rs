@@ -37,7 +37,7 @@ use crate::{
         theme::{ContentColor, MaterialTheme},
     },
     modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::{ModifierExt as _, with_keyboard_input},
+    modifier::with_keyboard_input,
     overlay_semantics::{dialog_semantics, overlay_background},
     row::row,
     shape_def::{RoundedCorner, Shape},

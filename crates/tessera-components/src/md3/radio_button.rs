@@ -31,7 +31,6 @@ use crate::{
         surface::{SurfaceStyle, surface},
         theme::{MaterialAlpha, MaterialTheme},
     },
-    modifier::ModifierExt as _,
     shape_def::Shape,
 };
 

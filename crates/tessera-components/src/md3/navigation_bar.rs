@@ -25,7 +25,6 @@ use crate::{
         text::text,
         theme::{ContentColor, MaterialTheme},
     },
-    modifier::ModifierExt as _,
     shape_def::Shape,
 };
 

@@ -1,8 +1,8 @@
-//! Shared interaction configuration types for modifier APIs.
+//! Shared interaction configuration and drag behavior.
 //!
 //! ## Usage
 //!
-//! Configure clickable, toggleable, selectable, and draggable modifier
+//! Configure clickable, combined-clickable, toggleable, selectable, and draggable modifier
 //! behavior.
 
 use tessera_ui::{
@@ -58,6 +58,54 @@ impl Default for ClickableArgs {
     fn default() -> Self {
         Self {
             on_click: Callback::noop(),
+            enabled: true,
+            block_input: true,
+            on_press: None,
+            on_release: None,
+            role: None,
+            label: None,
+            description: None,
+            interaction_state: None,
+            focus_requester: None,
+            focus_properties: None,
+        }
+    }
+}
+
+/// Arguments for the `combined_clickable` modifier.
+#[derive(Clone)]
+pub struct CombinedClickableArgs {
+    /// Optional click action; omit it for a long-click-only target.
+    pub on_click: Option<Callback>,
+    /// Optional long-click action, also available through the context-menu key.
+    pub on_long_click: Option<Callback>,
+    /// Whether the element accepts interaction.
+    pub enabled: bool,
+    /// Whether to consume accepted presses and releases.
+    pub block_input: bool,
+    /// Optional callback when a pointer press is accepted.
+    pub on_press: Option<PressCallback>,
+    /// Optional callback when the accepted pointer is released.
+    pub on_release: Option<PressCallback>,
+    /// Optional accessibility role.
+    pub role: Option<accesskit::Role>,
+    /// Optional accessibility label.
+    pub label: Option<String>,
+    /// Optional accessibility description.
+    pub description: Option<String>,
+    /// Optional external interaction state.
+    pub interaction_state: Option<State<InteractionState>>,
+    /// Optional externally managed focus requester.
+    pub focus_requester: Option<FocusRequester>,
+    /// Optional focus properties for the target.
+    pub focus_properties: Option<FocusProperties>,
+}
+
+impl Default for CombinedClickableArgs {
+    fn default() -> Self {
+        Self {
+            on_click: None,
+            on_long_click: None,
             enabled: true,
             block_input: true,
             on_press: None,

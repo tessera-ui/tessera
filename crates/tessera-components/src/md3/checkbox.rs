@@ -27,7 +27,6 @@ use crate::{
         surface::{SurfaceStyle, surface},
         theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
     },
-    modifier::{DisabledToggleSemantics, ModifierExt as _},
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -594,11 +593,13 @@ fn checkbox_inner(
         };
         modifier = modifier.toggleable(toggle_args);
     } else {
-        modifier = modifier.push_semantics(DisabledToggleSemantics {
-            role: Role::CheckBox,
+        modifier = modifier.toggleable(ToggleableArgs {
+            enabled: false,
+            role: Some(Role::CheckBox),
             value: is_checked,
             label: accessibility_label,
             description: accessibility_description,
+            ..Default::default()
         });
     }
     let modifier = modifier.push_semantics(CheckboxValueSemantics {
