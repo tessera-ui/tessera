@@ -1,6 +1,6 @@
 [package]
 name = "cargo-tessera"
-version = "0.5.0"
+version = "1.0.0"
 edition.workspace = true
 rust-version = "1.98"
 license.workspace = true
@@ -18,10 +18,10 @@ path = "src/main.rs"
 # Dependency requirements written into generated projects. The release script
 # updates them with the packages they name.
 [package.metadata.tessera.scaffold]
-tessera-build = "0.1.0"
-tessera-components = "2.7.0"
+tessera-build = "1.0.0"
+tessera-components = "3.0.0"
 tessera-foundation = "0.1.0"
-tessera-ui = "2.5.0"
+tessera-ui = "3.0.0"
 
 [dependencies]
 aho-corasick = "1.1.5"
@@ -65,7 +65,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["unbounded_depth"] }
 sha2 = "0.11.1"
 tempfile = "3.27.0"
-tessera-build = { path = "../tessera-build", version = "0.1.0" }
+tessera-build = { path = "../tessera-build", version = "1.0.0" }
 text-size = { version = "1.1.1", features = ["serde"] }
 toml = "1.2.1"
 # The rust-analyzer lexer requires these exact Unicode releases.
@@ -83,4 +83,4 @@ libc = "0.2.191"
 
 [dev-dependencies]
 tessera-foundation = { path = "../tessera-foundation", version = "0.1.0" }
-tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
+tessera-ui = { path = "../../tessera-ui", version = "3.0.0" }

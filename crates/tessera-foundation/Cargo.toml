@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Foundation primitives and shared UI building blocks for tessera-ui."
+metadata = { tessera = {} }
 
 [dependencies]
 tessera-ui.workspace = true

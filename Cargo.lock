@@ -814,7 +814,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-tessera"
-version = "0.5.0"
+version = "1.0.0"
 dependencies = [
  "aho-corasick",
  "annotate-snippets",
@@ -7250,7 +7250,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-build"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "embed-resource",
@@ -7271,7 +7271,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-components"
-version = "2.7.0"
+version = "3.0.0"
 dependencies = [
  "bytemuck",
  "encase",
@@ -7366,7 +7366,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-macros"
-version = "0.4.4"
+version = "1.0.0"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -7429,7 +7429,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-shard"
-version = "0.4.2"
+version = "1.0.0"
 dependencies = [
  "parking_lot 0.13.0",
  "tessera-macros",
@@ -7438,7 +7438,7 @@ dependencies = [
 
 [[package]]
 name = "tessera-ui"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "accesskit",
  "bumpalo",

@@ -1,3 +1,166 @@
+## [v3.0.0] - 2026-11-16
+
+Tessera 3 replaces the 2.x immediate-mode model with a retained, reactive
+runtime: components declare typed props, only invalidated calls rebuild, and
+layout, input, and drawing attach to nodes through modifiers. Most application
+and component code needs to be rewritten; the
+[component calls](https://github.com/tessera-ui/tessera/blob/main/docs/COMPONENT_CALLS.md),
+[state and async](https://github.com/tessera-ui/tessera/blob/main/docs/STATE_AND_ASYNC.md),
+and [layout policy](https://github.com/tessera-ui/tessera/blob/main/docs/LAYOUT_POLICIES.md)
+guides describe the new model.
+
+### Breaking changes
+
+- **Components take named props and return builders.** `#[tessera]` functions
+  declare owned parameters instead of an args struct and `impl FnOnce()`
+  children. Required parameters become entry arguments; `Option<T>` parameters
+  become setters, with defaults resolved in the body (`#[default(...)]` and
+  `derive(Prop)` are gone). Child content is a `RenderSlot` /
+  `RenderSlotWith<T>` and actions are `Callback` / `CallbackWith<T, R>`; each
+  gets a closure setter and a `*_shared` setter. A call registers one use and
+  returns its builder; setters panic once that use has been built.
+  `#[tessera]` no longer accepts arguments.
+
+  ```rust
+  // 2.x
+  #[tessera]
+  fn card(args: impl Into<CardArgs>, child: impl FnOnce()) { /* ... */ }
+  card(CardArgs { padding: Dp(8.0), ..Default::default() }, || { /* ... */ });
+
+  // 3.0
+  #[tessera]
+  pub fn card(#[prop(into)] title: String, padding: Option<Dp>, child: Option<RenderSlot>) {
+      let padding = padding.unwrap_or(Dp(8.0));
+      // ...
+      if let Some(child) = child {
+          child.render();
+      }
+  }
+  card("Title").padding(Dp(8.0)).child(|| { /* ... */ });
+  ```
+
+- **Layout uses policies and modifiers.** `measure_node`, `place_node`,
+  injected `measure` / `input_handler` closures, `DimensionValue`, and
+  `width` / `height` args fields are replaced by
+  `tessera_ui::layout::layout(policy)`, which emits a layout node configured
+  with `.modifier(..)`, `.draw(..)`, and `.child(..)`. Implement
+  `LayoutPolicy::measure` with `MeasureScope` / `LayoutChild` and return a
+  `LayoutResult`; constraints are interval-based `AxisConstraint`s. Size,
+  padding, and alignment come from `Modifier` chains (see
+  `tessera_foundation::modifier::ModifierExt`). `group()` attaches semantics,
+  focus, or input to content laid out by an enclosing layout. A component that
+  emits nodes must use one of these primitives; modifiers attach only to the
+  node it emits. `PxPosition` coordinates are now `f32`.
+- **State is remembered per call.** Use `remember` / `remember_with_key`
+  (returning copyable `State<T>` handles) instead of passing `Arc` state
+  through args; `retain` keeps state while its call is absent. Screen-level
+  data lives in models: implement `ModelInit`, take a `Model<T>` parameter, and
+  access it with `with` / `with_mut`. `State::new` is only valid in model
+  initializers.
+- **Context.** `provide_context(value, || ..)` takes a value (`T: PartialEq`)
+  and invalidates readers when it changes; `use_context::<T>()` returns
+  `Option<Context<T>>`.
+- **Async and time.** Use `Task` handles (cancelled on drop) with
+  `spawn(Dispatcher::{Ui, Io, Default}, future)`, `on(dispatcher, future)`,
+  `spawn_local`, and composition-scoped `launch(key, future)` /
+  `launch_once(future)`. Animations await `with_frame_time(|now| ..)` in a
+  launched task; builds and input handlers do not read a clock.
+- **Entry points.** Replace `Renderer::run(app, |registry| ..register_pipelines..)`
+  and per-platform setup with one shared entry function. The attribute
+  generates the Android entry point; `main` calls `run().run_desktop()`
+  (`run_ios()` on iOS) and web builds call `run().run_web()`:
+
+  ```rust
+  #[tessera_ui::entry]
+  pub fn run() -> EntryPoint {
+      EntryPoint::new(app).package(tessera_components::ComponentsPackage)
+  }
+  ```
+
+  Plugins are registered as instances on the entry, are session-local (no
+  `Send + Sync`), and are accessed through `with_plugin`.
+- **Input and focus.** Event handling attaches through modifiers with typed
+  `PointerInput`, `KeyboardInput`, `ImeInput`, and `ClipboardInput` contexts.
+  `Focus` is replaced by `FocusRequester`, focus groups and scopes, and the
+  free functions in `tessera_ui::focus`; `FocusModifierExt` and
+  `CursorModifierExt` are imported from `tessera_ui::modifier`.
+- **Rendering extensions moved to `tessera_ui::render`.** Draw and compute
+  commands receive `DrawGeometry` (local size plus local-to-window transform)
+  and declare separate `SampleRegion` and `DrawRegion`s (`BarrierRequirement`
+  is gone). UI draw pipelines must set
+  `depth_stencil: tessera_ui::render::ui_stencil_state()`. Composite pipelines,
+  render middleware, render-graph local/external textures, and the compute
+  resource manager were removed; pipelines own their buffers and use
+  `GraphicsDevice` scratch textures. Register pipelines through a
+  `RenderModule` or `TesseraPackage`.
+- **Assets.** Generated assets are `tessera_ui::Asset` values loaded
+  asynchronously with `Resource::load(source, decode)`; `Source` is `Asset` or
+  `Memory` bytes, and decoders receive `tessera_ui::asset::Bytes`.
+- **Moved out of `tessera-ui`.** The router is in `tessera-shard`; the
+  `Clipboard` service is `tessera_platform::Clipboard`; the `shard` macro and
+  `tessera_ui_shard` are no longer re-exported. `Arena`, `NodeId`,
+  `ComponentTree`, `TesseraRuntime`, and the `dyn_eq` modules are no longer
+  public.
+- **Dependencies.** wgpu 30, AccessKit 0.25 types in the accessibility API,
+  and Tessera's maintained `winit` fork (re-exported as `tessera_ui::winit`).
+  Android uses `GameActivity` instead of `NativeActivity`.
+- `TesseraConfig` gained fields such as `window`, `web`, and
+  `max_non_sampler_bindings`; build it with `..Default::default()` or from the
+  generated `res::application()`.
+
+### Added
+
+- Partial replay: state reads are tracked, and only invalidated component
+  calls rebuild; calls with unchanged props are skipped.
+- `key` for stable identity in dynamic lists, and `retain` /
+  `retain_with_key` for state that survives navigation.
+- Shape clipping for rounded and elliptical masks (exposed as the
+  `clip_shape` modifier in `tessera-foundation`); hit testing honors the same
+  shapes.
+- Accessibility semantics with roles, actions, and modal, selected, invalid,
+  disclosure, and orientation states, published through AccessKit.
+- Web (WebAssembly) support with `EntryPoint::run_web`, iOS support with
+  UIKit integration, and Android system and predictive back
+  (`tessera_ui::system_back`).
+- Window insets for safe areas and keyboard occlusion
+  (`tessera_ui::window_insets`), and `WindowConfig` options for
+  undecorated windows, integrated title bars, application IDs, and icons.
+- IME sessions synchronized across native and web platforms, and clipboard
+  actions routed to focused editors.
+- `testing` feature with `testing::UiTest` for layout-only or GPU-rendered
+  frames with virtual time, input injection, accessibility queries, and pixel
+  readback.
+- `headless` feature with `headless::HeadlessRenderer` and
+  `EntryPoint::into_headless` for offscreen rendering and scripted sessions.
+- `profiling` feature with per-component build, layout, and render timings
+  and opt-in GPU timestamps; `debug-dirty-overlay` feature to visualize
+  rebuilt regions.
+- Wheel scrolling normalized across platforms, nested scroll dispatch, and
+  touch inertia.
+
+### Fixed
+
+- The renderer falls back when `PIPELINE_CACHE` is unsupported instead of
+  panicking.
+- The renderer thread name is valid on Linux.
+- Nested clip rectangles intersect correctly.
+- Shader variable limits are capped to what the adapter supports.
+
+### Performance
+
+- Retained rendering redraws only damaged scene regions and skips frames when
+  nothing changed.
+- Background sampling copies only the declared sampling regions, and compute
+  effects filter only their regions using pooled scratch textures.
+- Lower memory use: GPU memory is suballocated in 8 MiB blocks, render targets
+  are created on first use, idle caches are bounded, and packaged assets are
+  memory-mapped or borrowed instead of copied.
+- Uses DX12 with DirectComposition on Windows, and reuses window resize
+  capacity to keep resizing smooth.
+- Declaring and retaining component calls avoids per-frame allocations.
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.5.0...tessera-ui-v3.0.0)
+
 ## [v2.5.0] - 2025-11-18 +08:00
 
 ### Changes

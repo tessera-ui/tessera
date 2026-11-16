@@ -36,18 +36,24 @@ struct Cli {
     /// Force a major bump for a package; repeat for multiple packages.
     #[arg(long)]
     major: Vec<String>,
-    /// Write the reviewed versions, dependency requirements and changelogs.
+    /// Write versions, dependency requirements and changelogs for a release
+    /// pull request.
     #[arg(long, conflicts_with = "execute")]
     prepare: bool,
-    /// Prepare, verify, publish, then push the release commit and tags.
+    /// Publish the prepared release from an up-to-date `main`, then push its
+    /// tags.
     #[arg(long)]
     execute: bool,
 }
 
+const REPOSITORY: &str = "https://github.com/tessera-ui/tessera";
+
 #[derive(Clone)]
 struct Release {
     version: Version,
-    changes: Vec<String>,
+    /// Tag of the release this one follows, under the current or a previous
+    /// package name.
+    previous: Option<String>,
 }
 
 fn output(command: &mut Command) -> Result<String> {
@@ -188,7 +194,6 @@ fn plan(metadata: &Metadata, major: &[String]) -> Result<BTreeMap<String, Releas
             .map(str::trim)
             .filter(|message| !message.is_empty())
             .collect::<Vec<_>>();
-        let initial = tag.is_none();
         let forced = major.contains(name);
         let breaking = commits.iter().any(|message| {
             message.contains("BREAKING CHANGE:")
@@ -198,13 +203,10 @@ fn plan(metadata: &Metadata, major: &[String]) -> Result<BTreeMap<String, Releas
                     .is_some_and(|subject| subject.contains("!:"))
         });
         let feature = commits.iter().any(|message| message.starts_with("feat"));
-        previous.insert(
-            name.clone(),
-            tag.as_ref().map(|(_, version)| version.clone()),
-        );
+        previous.insert(name.clone(), tag.clone());
         if tag.is_none() || !commits.is_empty() || forced {
-            let version = if let Some((_, version)) = tag {
-                next(version, forced || breaking, feature).max(package.version.clone())
+            let version = if let Some((_, version)) = &tag {
+                next(version.clone(), forced || breaking, feature).max(package.version.clone())
             } else if forced {
                 next(package.version.clone(), true, false)
             } else {
@@ -214,16 +216,7 @@ fn plan(metadata: &Metadata, major: &[String]) -> Result<BTreeMap<String, Releas
                 name.clone(),
                 Release {
                     version,
-                    changes: if initial {
-                        vec!["Initial release.".into()]
-                    } else {
-                        commits
-                            .iter()
-                            .filter_map(|message| message.lines().next())
-                            .filter(|subject| !subject.starts_with("release:"))
-                            .map(str::to_owned)
-                            .collect()
-                    },
+                    previous: tag.map(|(tag, _)| tag),
                 },
             );
         }
@@ -239,15 +232,16 @@ fn plan(metadata: &Metadata, major: &[String]) -> Result<BTreeMap<String, Releas
                 .iter()
                 .any(|dep| dep.path.is_some() && releases.contains_key(&dep.name))
             {
-                let version = previous[name].as_ref().map_or_else(
+                let tag = previous[name].clone();
+                let version = tag.as_ref().map_or_else(
                     || package.version.clone(),
-                    |version| next(version.clone(), false, false).max(package.version.clone()),
+                    |(_, version)| next(version.clone(), false, false).max(package.version.clone()),
                 );
                 releases.insert(
                     name.clone(),
                     Release {
                         version,
-                        changes: vec!["Update workspace dependencies.".into()],
+                        previous: tag.map(|(tag, _)| tag),
                     },
                 );
                 changed = true;
@@ -319,6 +313,19 @@ fn prepare(metadata: &Metadata, releases: &BTreeMap<String, Release>) -> Result<
             .iter()
             .map(|(name, release)| (name.clone(), release.version.clone())),
     );
+    let undocumented = owned_packages(metadata)
+        .into_iter()
+        .filter_map(|package| {
+            let release = releases.get(package.name.as_str())?;
+            let changelog = package.manifest_path.with_file_name("CHANGELOG.md");
+            (!has_notes(&fs::read_to_string(&changelog).unwrap_or_default(), release))
+                .then(|| changelog.to_string())
+        })
+        .collect::<Vec<_>>();
+    ensure!(
+        undocumented.is_empty(),
+        "Write the release notes of each planned version in {undocumented:?}"
+    );
     let mut files = Vec::new();
     for package in owned_packages(metadata) {
         let path = package.manifest_path.as_std_path();
@@ -326,18 +333,6 @@ fn prepare(metadata: &Metadata, releases: &BTreeMap<String, Release>) -> Result<
         let mut doc = original.parse::<DocumentMut>()?;
         if let Some(release) = releases.get(package.name.as_str()) {
             doc["package"]["version"] = value(release.version.to_string());
-            let changelog = path.with_file_name("CHANGELOG.md");
-            let old = fs::read_to_string(&changelog).unwrap_or_default();
-            let header = format!("## [v{}]", release.version);
-            if !old.starts_with(&header) {
-                let changes = release
-                    .changes
-                    .iter()
-                    .map(|change| format!("- {change}\n"))
-                    .collect::<String>();
-                fs::write(&changelog, format!("{header}\n\n{changes}\n{old}"))?;
-                files.push(changelog.to_string_lossy().into_owned());
-            }
         }
         update_dependencies(doc.as_item_mut(), &versions)?;
         if let Some(scaffold) = doc
@@ -367,6 +362,24 @@ fn prepare(metadata: &Metadata, releases: &BTreeMap<String, Release>) -> Result<
         files.push(root_path.to_string());
     }
     Ok(files)
+}
+
+/// Returns whether a changelog has a section for the release's version.
+fn has_notes(changelog: &str, release: &Release) -> bool {
+    let header = format!("## [v{}]", release.version);
+    changelog
+        .lines()
+        .any(|line| line == header || line.starts_with(&format!("{header} ")))
+}
+
+/// Link comparing a release with the release it follows.
+fn comparison(name: &str, release: &Release) -> Option<String> {
+    release.previous.as_ref().map(|previous| {
+        format!(
+            "{REPOSITORY}/compare/{previous}...{name}-v{}",
+            release.version
+        )
+    })
 }
 
 fn publish(releases: &BTreeMap<String, Release>, dry_run: bool) -> Result<()> {
@@ -682,7 +695,10 @@ fn main() -> Result<()> {
     }
     let releases = plan(&metadata, &cli.major)?;
     for (name, release) in &releases {
-        println!("{name}: {}", release.version);
+        match comparison(name, release) {
+            Some(link) => println!("{name}: {} ({link})", release.version),
+            None => println!("{name}: {} (initial release)", release.version),
+        }
     }
     if releases.is_empty() {
         return Ok(());
@@ -697,8 +713,20 @@ fn main() -> Result<()> {
                 .is_empty(),
             "Commit or stash tracked changes before publishing"
         );
+        run(Command::new("git").args(["fetch", "origin", "main"]))?;
+        ensure!(
+            output(Command::new("git").args(["rev-parse", "HEAD"]))?
+                == output(Command::new("git").args(["rev-parse", "origin/main"]))?,
+            "Publish from a checkout of the latest origin/main"
+        );
     }
-    let mut files = prepare(&metadata, &releases)?;
+    let files = prepare(&metadata, &releases)?;
+    // `main` only accepts pull requests, so the prepared files must already
+    // be merged when publishing.
+    ensure!(
+        !cli.execute || files.is_empty(),
+        "Merge a pull request with the `--prepare` changes before publishing: {files:?}"
+    );
     run(Command::new("cargo").args([
         "run",
         "--package",
@@ -713,17 +741,9 @@ fn main() -> Result<()> {
         return Ok(());
     }
     publish(&releases, true)?;
-    files.push(metadata.workspace_root.join("Cargo.lock").to_string());
-    run(Command::new("git").arg("add").arg("--").args(&files))?;
-    let changed = Command::new("git")
-        .args(["diff", "--cached", "--quiet"])
-        .status()?;
-    if !changed.success() {
-        run(Command::new("git").args(["commit", "-m", "release: prepare workspace versions"]))?;
-    }
     publish(&releases, false)?;
     let mut push = Command::new("git");
-    push.args(["push", "--atomic", "origin", "HEAD"]);
+    push.args(["push", "--atomic", "origin"]);
     for (name, release) in &releases {
         let tag = format!("{name}-v{}", release.version);
         run(Command::new("git").args(["tag", &tag]))?;
@@ -813,7 +833,31 @@ mod tests {
             assert_eq!(releases[name].version, Version::parse(version).unwrap());
         }
         assert!(!releases.contains_key("vendor"));
+        assert!(prepare(&metadata, &releases).is_err());
+        assert!(
+            fs::read_to_string(root.join("leaf/Cargo.toml"))
+                .unwrap()
+                .contains("version='1.3.0-rc.1'")
+        );
+        for (name, version) in [
+            ("leaf", "1.3.0"),
+            ("middle", "1.0.1"),
+            ("app", "1.0.1"),
+            ("new", "0.4.0"),
+            ("moved", "3.0.0"),
+        ] {
+            fs::write(
+                root.join(name).join("CHANGELOG.md"),
+                format!("## [v{version}] - 2026-01-01\n\n- Notes.\n"),
+            )
+            .unwrap();
+        }
         prepare(&metadata, &releases).unwrap();
+        assert_eq!(
+            comparison("moved", &releases["moved"]).as_deref(),
+            Some("https://github.com/tessera-ui/tessera/compare/old-moved-v2.0.0...moved-v3.0.0")
+        );
+        assert_eq!(comparison("new", &releases["new"]), None);
         assert!(!root.join("vendor/CHANGELOG.md").exists());
         let read = |name| {
             fs::read_to_string(root.join(name))

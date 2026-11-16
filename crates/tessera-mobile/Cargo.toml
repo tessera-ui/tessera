@@ -14,6 +14,9 @@ keywords = ["mobile", "ios", "android", "tessera"]
 categories = ["development-tools"]
 license = "Apache-2.0 OR MIT"
 
+[package.metadata]
+tessera = {}
+
 [package.metadata.docs.rs]
 no-default-features = true
 features = ["native-tls"]
