@@ -3,6 +3,7 @@
 pub mod button;
 pub mod checkbox;
 mod choice;
+pub mod disclosure_button;
 pub mod glass;
 pub mod progress;
 pub mod radio_button;
