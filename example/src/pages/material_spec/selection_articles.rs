@@ -13,7 +13,6 @@ use tessera_components::{
         text::text,
         theme::{MaterialTheme, TextStyle},
     },
-    modifier::ModifierExt as _,
 };
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, tessera, use_context};

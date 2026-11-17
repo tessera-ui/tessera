@@ -2572,6 +2572,7 @@ mod tests {
             consumed: false,
             tap_claimed: false,
             scroll_discrete: None,
+            live_consumption: None,
         };
         session.inject_pointer(pointer(press));
         session.frames(1);

@@ -5,13 +5,13 @@
 //! Open documentation or guidance related to the current task.
 
 use tessera_foundation::{
-    gesture::{TapRecognizer, TapSettings},
-    modifier::{ClickableArgs, InteractionState, PointerEventContext},
+    modifier::{ClickableArgs, InteractionState, ModifierExt as _},
+    pointer_gestures::TapGestureConfig,
 };
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp,
-    DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusRequester, LayoutPolicy,
-    LayoutResult, MeasurementError, Modifier, PxPosition,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, DrawModifierContent,
+    DrawModifierContext, DrawModifierNode, FocusRequester, LayoutPolicy, LayoutResult,
+    MeasurementError, Modifier, PxPosition,
     accesskit::Role,
     layout::{MeasureScope, layout},
     modifier::{CursorModifierExt as _, ModifierCapabilityExt as _},
@@ -20,7 +20,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::{ModifierExt as _, apply_pointer_clickable_modifier},
+    modifier::ModifierExt as _,
     pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualPath},
     shape_def::Shape,
 };
@@ -197,27 +197,16 @@ pub fn help_button(
     };
     let interaction = remember(InteractionState::new);
     let held = remember(|| false);
-    let pointer_down = remember(|| false);
-    let tap = remember(|| {
-        TapRecognizer::new(TapSettings {
-            slop_px: f32::INFINITY,
-            ..Default::default()
-        })
-    });
     if !enabled {
         if held.get() {
             held.set(false);
-        }
-        if pointer_down.get() {
-            pointer_down.set(false);
-            tap.with_mut(TapRecognizer::cancel);
         }
     } else if held.get() && !requester.is_focused() {
         held.set(false);
     }
     let pressed = enabled
         && active
-        && (held.get() || (pointer_down.get() && interaction.with(InteractionState::is_hovered)));
+        && (held.get() || interaction.with(|state| state.is_pressed() && state.is_hovered()));
     let dark = use_context::<HigTheme>()
         .map(|theme| theme.get().appearance == Appearance::Dark)
         .unwrap_or(false);
@@ -230,9 +219,9 @@ pub fn help_button(
         0.075
     });
     let foreground = tint.with_alpha(if enabled { 0.85 } else { 0.26 });
-    let modifier = apply_pointer_clickable_modifier(
-        modifier.unwrap_or_default(),
-        ClickableArgs {
+    let modifier = modifier
+        .unwrap_or_default()
+        .clickable(ClickableArgs {
             enabled,
             on_click: activate,
             role: Some(Role::Button),
@@ -240,22 +229,20 @@ pub fn help_button(
             description: accessibility_description,
             focus_requester: Some(requester),
             interaction_state: Some(interaction),
-            tap_recognizer: Some(tap),
-            on_press: Some(CallbackWith::new(move |_: PointerEventContext| {
-                pointer_down.set(true)
-            })),
-            on_release: Some(CallbackWith::new(move |_: PointerEventContext| {
-                pointer_down.set(false)
-            })),
+            keyboard_activation: false,
+            tap_config: TapGestureConfig {
+                slop_px: f32::INFINITY,
+                cancel_on_exit: false,
+                ..Default::default()
+            },
             ..Default::default()
-        },
-    )
-    .push_keyboard_input(ChoiceKeyboard {
-        enabled,
-        held,
-        activate,
-    })
-    .hover_cursor_icon(CursorIcon::Default);
+        })
+        .push_keyboard_input(ChoiceKeyboard {
+            enabled,
+            held,
+            activate,
+        })
+        .hover_cursor_icon(CursorIcon::Default);
     layout(HelpLayout).modifier(modifier).child(move || {
         help_face(
             background,

@@ -7,11 +7,11 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tessera_foundation::{gesture::TapRecognizer, modifier::SemanticsArgs};
+use tessera_foundation::modifier::SemanticsArgs;
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint, Dp,
-    FocusRequester, LayoutResult, MeasurementError, Modifier, PointerInput,
-    PointerInputModifierNode, PxPosition, PxSize, SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint,
+    CursorEventContent, Dp, FocusRequester, LayoutResult, MeasurementError, Modifier,
+    PointerEventPass, PressKeyEventType, PxPosition, PxSize, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     layout::{MeasureScope, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
@@ -415,7 +415,6 @@ fn linked_run(
     focus_color: Color,
 ) {
     let focus = remember(FocusRequester::new).get();
-    let tap = remember(TapRecognizer::default);
     let hovered = remember(|| false);
     let policy = RunLayout {
         index,
@@ -434,13 +433,63 @@ fn linked_run(
                 on_activate,
                 focus,
             })
-            .push_pointer_input(LinkPointer {
-                index,
-                cache: Arc::clone(&cache),
-                tap,
-                hovered,
-                focus,
-                on_activate,
+            .pointer_input((index, on_activate), move |mut scope| {
+                let cache = Arc::clone(&cache);
+                async move {
+                    let mut active_pointer = None;
+                    loop {
+                        let event = scope
+                            .await_pointer_event(tessera_ui::PointerEventPass::Main)
+                            .await;
+                        if event.is_cancelled() {
+                            return;
+                        }
+                        let within = event.cursor_position.is_some_and(|position| {
+                            cache.lock().as_ref().is_some_and(|cache| {
+                                cache.paragraph.bounds[index].is_some_and(|bounds| {
+                                    cache.paragraph.fragments[index].iter().any(|fragment| {
+                                        fragment.contains(PxPosition::from_f32_xy(
+                                            position.x + bounds.x,
+                                            position.y + bounds.y,
+                                        ))
+                                    })
+                                })
+                            })
+                        });
+                        if hovered.get() != within {
+                            hovered.set(within);
+                        }
+                        for mut change in event.changes {
+                            match change.content {
+                                CursorEventContent::Pressed(PressKeyEventType::Left)
+                                    if within && !change.is_consumed() =>
+                                {
+                                    active_pointer = Some(change.pointer_id);
+                                    change.consume();
+                                    focus.request_focus();
+                                }
+                                CursorEventContent::Released(PressKeyEventType::Left)
+                                    if active_pointer == Some(change.pointer_id) =>
+                                {
+                                    change.consume();
+                                    if within
+                                        && change.gesture_state
+                                            == tessera_ui::GestureState::TapCandidate
+                                    {
+                                        on_activate.call();
+                                    }
+                                    active_pointer = None;
+                                }
+                                CursorEventContent::Cancelled(PressKeyEventType::Left)
+                                    if active_pointer == Some(change.pointer_id) =>
+                                {
+                                    active_pointer = None;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
             });
         let modifier = if hovered.get() {
             modifier.hover_cursor_icon(CursorIcon::Pointer)
@@ -509,49 +558,6 @@ impl SemanticsModifierNode for LinkSemantics {
                 on_activate.call();
             }
         }));
-    }
-}
-
-struct LinkPointer {
-    index: usize,
-    cache: ParagraphCache,
-    tap: State<TapRecognizer>,
-    hovered: State<bool>,
-    focus: FocusRequester,
-    on_activate: Callback,
-}
-
-impl PointerInputModifierNode for LinkPointer {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let within = input.cursor_position_rel.is_some_and(|position| {
-            self.cache.lock().as_ref().is_some_and(|cache| {
-                cache.paragraph.bounds[self.index].is_some_and(|bounds| {
-                    cache.paragraph.fragments[self.index]
-                        .iter()
-                        .any(|fragment| {
-                            fragment.contains(PxPosition::from_f32_xy(
-                                position.x + bounds.x,
-                                position.y + bounds.y,
-                            ))
-                        })
-                })
-            })
-        });
-        if self.hovered.get() != within {
-            self.hovered.set(within);
-        }
-        let tap = self.tap.with_mut(|tap| {
-            tap.update_exclusive(input.pass, input.pointer_changes.as_mut_slice(), within)
-        });
-        if tap.pressed {
-            self.focus.request_focus();
-        }
-        if tap.tapped {
-            self.on_activate.call();
-        }
-        if within {
-            input.consume_pointer_changes();
-        }
     }
 }
 

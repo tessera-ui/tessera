@@ -348,6 +348,11 @@ pub trait SemanticsModifierNode: Any {
 /// A node-local pointer input modifier.
 pub trait PointerInputModifierNode: Any {
     modifier_lifecycle!();
+    /// Returns whether this node receives changes already consumed by another
+    /// handler in the same dispatch pass.
+    fn receives_consumed(&self) -> bool {
+        false
+    }
     /// Handles pointer input for the current node.
     fn on_pointer_input(&self, input: PointerInput<'_>);
 }
@@ -784,6 +789,36 @@ pub trait CursorModifierExt {
 }
 
 impl Modifier {
+    /// Attaches an asynchronous pointer detector whose task restarts when
+    /// `key` changes.
+    ///
+    /// Dropping this attachment cancels its task. Rebuilding with the same key
+    /// preserves the running closure; capture state handles to read live values.
+    /// Use the gesture detectors in `tessera-foundation` for taps, drags, long
+    /// presses, and scrolling. Await a specific pointer pass for custom input
+    /// arbitration; consumption is visible to later handlers in the same sample.
+    pub fn pointer_input<K, F, Fut>(self, key: K, detector: F) -> Self
+    where
+        K: PartialEq + Clone + 'static,
+        F: Fn(crate::PointerInputScope) -> Fut + 'static,
+        Fut: std::future::Future<Output = ()> + 'static,
+    {
+        self.push_build(crate::pointer_input::PointerInputSource::new(key, detector))
+    }
+
+    /// Attaches one asynchronous pointer detector for this modifier
+    /// attachment. The detector may handle any number of gestures itself.
+    ///
+    /// This is the unkeyed form of [`Self::pointer_input`], not a one-gesture
+    /// listener. Recomposition does not replace the running detector closure.
+    pub fn pointer_input_once<F, Fut>(self, detector: F) -> Self
+    where
+        F: Fn(crate::PointerInputScope) -> Fut + 'static,
+        Fut: std::future::Future<Output = ()> + 'static,
+    {
+        self.pointer_input((), detector)
+    }
+
     fn with_terminal_draw(mut self, draw: crate::layout::DrawModifierHandle) -> Self {
         if draw.has_node() {
             self = self.push_action(ModifierAction::TerminalDraw(draw));

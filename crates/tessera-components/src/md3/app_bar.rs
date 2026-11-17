@@ -4,8 +4,8 @@
 //!
 //! Show screen titles, navigation, and primary actions above page content.
 use tessera_foundation::{
-    gesture::DragAxis,
     modifier::{DraggableArgs, ModifierExt as _, Padding, SemanticsArgs},
+    pointer_gestures::DragAxis,
 };
 use tessera_ui::{
     Asset, AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp,

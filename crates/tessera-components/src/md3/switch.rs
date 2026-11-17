@@ -3,12 +3,9 @@
 //! ## Usage
 //!
 //! Use to control a boolean on/off state.
-use tessera_foundation::{
-    gesture::TapRecognizer,
-    modifier::{
-        InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext,
-        SemanticsArgs, ToggleableArgs,
-    },
+use tessera_foundation::modifier::{
+    InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext, SemanticsArgs,
+    ToggleableArgs,
 };
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusRequester,
@@ -16,7 +13,6 @@ use tessera_ui::{
     accesskit::{Role, Toggled},
     launch,
     layout::{MeasureScope, PlacementResult, PlacementScope},
-    modifier::ModifierCapabilityExt as _,
     provide_context, remember, tessera, use_context,
 };
 
@@ -30,7 +26,6 @@ use crate::{
         surface::{SurfaceStyle, surface},
         theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
     },
-    modifier::{DisabledToggleSemantics, ModifierExt as _},
     shape_def::Shape,
 };
 
@@ -385,11 +380,6 @@ pub fn switch(
     } else {
         None
     };
-    let tap_recognizer = if interactive {
-        Some(remember(TapRecognizer::default))
-    } else {
-        None
-    };
 
     switch_content(checked)
         .focus_requester(focus_requester)
@@ -411,7 +401,6 @@ pub fn switch(
         .accessibility_description_optional(accessibility_description)
         .interaction_state_optional(interaction_state)
         .ripple_state_optional(ripple_state)
-        .tap_recognizer_optional(tap_recognizer)
         .child_optional(child);
 }
 
@@ -438,7 +427,6 @@ fn switch_content(
     accessibility_description: Option<String>,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
-    tap_recognizer: Option<State<TapRecognizer>>,
     child: Option<RenderSlot>,
 ) {
     let enabled = enabled.unwrap_or(true);
@@ -508,19 +496,9 @@ fn switch_content(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
-            tap_recognizer,
             ..Default::default()
         };
-        modifier = if enabled {
-            modifier.toggleable(toggle_args)
-        } else {
-            modifier.push_semantics(DisabledToggleSemantics {
-                role: Role::Switch,
-                value: checked,
-                label: accessibility_label,
-                description: accessibility_description,
-            })
-        };
+        modifier = modifier.toggleable(toggle_args);
     } else {
         modifier = modifier.semantics(SemanticsArgs {
             role: Some(Role::Switch),

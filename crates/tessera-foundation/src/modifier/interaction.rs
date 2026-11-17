@@ -1,8 +1,8 @@
-//! Shared interaction configuration types for modifier APIs.
+//! Shared interaction configuration and drag behavior.
 //!
 //! ## Usage
 //!
-//! Configure clickable, toggleable, selectable, and draggable modifier
+//! Configure clickable, combined-clickable, toggleable, selectable, and draggable modifier
 //! behavior.
 
 use tessera_ui::{
@@ -11,7 +11,9 @@ use tessera_ui::{
     accesskit, modifier::ModifierCapabilityExt as _, time::Instant,
 };
 
-use crate::gesture::{DragAxis, DragRecognizer, DragSettings, LongPressRecognizer, TapRecognizer};
+use crate::pointer_gestures::{
+    DragAxis, DragGestureConfig, TapGestureConfig, detect_drag_gestures,
+};
 
 /// Context for pointer press/release callbacks.
 #[derive(Clone, PartialEq, Copy, Debug)]
@@ -34,6 +36,10 @@ pub struct ClickableArgs {
     pub on_click: Callback,
     /// Whether the element is enabled for interaction.
     pub enabled: bool,
+    /// Enables default Enter/Space handling. Disable when supplying custom keyboard activation.
+    pub keyboard_activation: bool,
+    /// Tap movement and exit behavior; input consumption and long presses use their dedicated options.
+    pub tap_config: TapGestureConfig,
     /// Whether to block input propagation when within bounds.
     pub block_input: bool,
     /// Optional press callback with normalized position and element size.
@@ -52,17 +58,62 @@ pub struct ClickableArgs {
     pub focus_requester: Option<FocusRequester>,
     /// Optional focus properties applied to the clickable target.
     pub focus_properties: Option<FocusProperties>,
-    /// Optional persistent tap recognizer state for component-owned gestures.
-    pub tap_recognizer: Option<State<TapRecognizer>>,
-    /// Optional component-owned long-press recognizer. When supplied, a
-    /// recognized long press suppresses the ordinary click.
-    pub long_press_recognizer: Option<State<LongPressRecognizer>>,
 }
 
 impl Default for ClickableArgs {
     fn default() -> Self {
         Self {
             on_click: Callback::noop(),
+            enabled: true,
+            keyboard_activation: true,
+            tap_config: TapGestureConfig::default(),
+            block_input: true,
+            on_press: None,
+            on_release: None,
+            role: None,
+            label: None,
+            description: None,
+            interaction_state: None,
+            focus_requester: None,
+            focus_properties: None,
+        }
+    }
+}
+
+/// Arguments for the `combined_clickable` modifier.
+#[derive(Clone)]
+pub struct CombinedClickableArgs {
+    /// Optional click action; omit it for a long-click-only target.
+    pub on_click: Option<Callback>,
+    /// Optional long-click action, also available through the context-menu key.
+    pub on_long_click: Option<Callback>,
+    /// Whether the element accepts interaction.
+    pub enabled: bool,
+    /// Whether to consume accepted presses and releases.
+    pub block_input: bool,
+    /// Optional callback when a pointer press is accepted.
+    pub on_press: Option<PressCallback>,
+    /// Optional callback when the accepted pointer is released.
+    pub on_release: Option<PressCallback>,
+    /// Optional accessibility role.
+    pub role: Option<accesskit::Role>,
+    /// Optional accessibility label.
+    pub label: Option<String>,
+    /// Optional accessibility description.
+    pub description: Option<String>,
+    /// Optional external interaction state.
+    pub interaction_state: Option<State<InteractionState>>,
+    /// Optional externally managed focus requester.
+    pub focus_requester: Option<FocusRequester>,
+    /// Optional focus properties for the target.
+    pub focus_properties: Option<FocusProperties>,
+}
+
+impl Default for CombinedClickableArgs {
+    fn default() -> Self {
+        Self {
+            on_click: None,
+            on_long_click: None,
             enabled: true,
             block_input: true,
             on_press: None,
@@ -73,8 +124,6 @@ impl Default for ClickableArgs {
             interaction_state: None,
             focus_requester: None,
             focus_properties: None,
-            tap_recognizer: None,
-            long_press_recognizer: None,
         }
     }
 }
@@ -102,8 +151,6 @@ pub struct ToggleableArgs {
     pub on_release: Option<PressCallback>,
     /// Optional externally managed focus requester for this toggleable target.
     pub focus_requester: Option<FocusRequester>,
-    /// Optional persistent tap recognizer state for component-owned gestures.
-    pub tap_recognizer: Option<State<TapRecognizer>>,
 }
 
 impl Default for ToggleableArgs {
@@ -119,7 +166,6 @@ impl Default for ToggleableArgs {
             on_press: None,
             on_release: None,
             focus_requester: None,
-            tap_recognizer: None,
         }
     }
 }
@@ -147,8 +193,6 @@ pub struct SelectableArgs {
     pub on_release: Option<PressCallback>,
     /// Optional externally managed focus requester for this selectable target.
     pub focus_requester: Option<FocusRequester>,
-    /// Optional persistent tap recognizer state for component-owned gestures.
-    pub tap_recognizer: Option<State<TapRecognizer>>,
 }
 
 impl Default for SelectableArgs {
@@ -164,7 +208,6 @@ impl Default for SelectableArgs {
             on_press: None,
             on_release: None,
             focus_requester: None,
-            tap_recognizer: None,
         }
     }
 }
@@ -197,8 +240,6 @@ pub struct DraggableArgs {
     pub on_drag_stopped: Option<Callback>,
     /// Optional external interaction state updated with the dragged flag.
     pub interaction_state: Option<State<InteractionState>>,
-    /// Optional persistent drag recognizer state for component-owned gestures.
-    pub drag_recognizer: Option<State<DragRecognizer>>,
 }
 
 impl Default for DraggableArgs {
@@ -207,12 +248,11 @@ impl Default for DraggableArgs {
             on_drag_delta: CallbackWith::default_value(),
             enabled: true,
             axis: None,
-            slop_px: DragSettings::default().slop_px,
-            consume_when_dragging: DragSettings::default().consume_when_dragging,
+            slop_px: DragGestureConfig::default().slop_px,
+            consume_when_dragging: DragGestureConfig::default().consume,
             on_drag_started: None,
             on_drag_stopped: None,
             interaction_state: None,
-            drag_recognizer: None,
         }
     }
 }
@@ -344,71 +384,57 @@ impl InteractionState {
     }
 }
 
-struct DraggablePointerModifierNode {
-    drag_recognizer: State<DragRecognizer>,
+async fn async_draggable_detector(
+    mut scope: tessera_ui::PointerInputScope,
+    settings: DragGestureConfig,
     on_drag_delta: DragCallback,
-    enabled: bool,
     on_drag_started: Option<Callback>,
     on_drag_stopped: Option<Callback>,
     interaction_state: Option<State<InteractionState>>,
-}
-
-impl PointerInputModifierNode for DraggablePointerModifierNode {
-    fn on_pointer_input(&self, input: PointerInput<'_>) {
-        if !self.enabled {
-            return;
+) {
+    let remainder = std::cell::Cell::new(PxPosition::ZERO);
+    let stop = || {
+        if let Some(state) = interaction_state
+            && state.is_alive()
+        {
+            state.with_mut(|state| state.set_dragged(false));
         }
-
-        let within_bounds = cursor_within_bounds(
-            input.cursor_position_rel,
-            PxSize::new(input.computed_data.width, input.computed_data.height),
-        );
-        let (was_dragging, drag_result) = self.drag_recognizer.with_mut(|recognizer| {
-            let was_dragging = recognizer.is_dragging();
-            let drag_result = recognizer.update(input.pass, input.pointer_changes, within_bounds);
-            (was_dragging, drag_result)
-        });
-
-        if drag_result.started {
-            if let Some(interaction_state) = self.interaction_state {
-                interaction_state.with_mut(|state| state.set_dragged(true));
-            }
-            if let Some(on_drag_started) = self.on_drag_started {
-                on_drag_started.call();
-            }
+        if let Some(callback) = on_drag_stopped {
+            callback.call();
         }
-
-        if drag_result.updated {
-            let (x, y) = self.drag_recognizer.with_mut(|recognizer| {
-                recognizer.local_integer_delta(
-                    drag_result.delta_x,
-                    drag_result.delta_y,
-                    input.local_to_window,
-                )
-            });
-            self.on_drag_delta.call(DragDelta { x, y });
-        }
-
-        if drag_result.ended && was_dragging {
-            if let Some(interaction_state) = self.interaction_state {
-                interaction_state.with_mut(|state| state.set_dragged(false));
-            }
-            if let Some(on_drag_stopped) = self.on_drag_stopped {
-                on_drag_stopped.call();
-            }
-        }
-    }
-}
-
-fn cursor_within_bounds(position: Option<PxPosition>, size: PxSize) -> bool {
-    let Some(position) = position else {
-        return false;
     };
-
-    position.x >= 0.0
-        && position.y >= 0.0
-        && position.x < size.width.0 as f32
-        && position.y < size.height.0 as f32
+    detect_drag_gestures(
+        &mut scope,
+        settings,
+        |_| {
+            remainder.set(PxPosition::ZERO);
+            if let Some(state) = interaction_state {
+                state.with_mut(|state| state.set_dragged(true));
+            }
+            if let Some(callback) = on_drag_started {
+                callback.call();
+            }
+        },
+        |_, _, delta| {
+            let total = delta + remainder.get();
+            let x = total.x.round();
+            let y = total.y.round();
+            remainder.set(PxPosition::from_f32_xy(total.x - x, total.y - y));
+            on_drag_delta.call(DragDelta {
+                x: Px(x as i32),
+                y: Px(y as i32),
+            });
+        },
+        |_, _| stop(),
+        || {
+            if let Some(state) = interaction_state
+                && state.is_alive()
+            {
+                state.with_mut(|state| state.set_dragged(false));
+            }
+        },
+    )
+    .await;
 }
 
 pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> Modifier {
@@ -421,17 +447,15 @@ pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> M
         on_drag_started,
         on_drag_stopped,
         interaction_state,
-        drag_recognizer,
     } = args;
 
-    let settings = DragSettings {
+    let settings = DragGestureConfig {
         slop_px,
-        consume_when_dragging,
+        consume: consume_when_dragging,
         axis,
     };
     base.push_build(DraggableBuild {
         settings,
-        drag_recognizer,
         on_drag_delta,
         enabled,
         on_drag_started,
@@ -465,26 +489,45 @@ pub(crate) fn apply_block_touch_propagation_modifier(base: Modifier) -> Modifier
 }
 
 #[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
-struct WindowDragRegionPointerModifierNode {
-    tap_recognizer: State<TapRecognizer>,
-}
-
-#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
-impl PointerInputModifierNode for WindowDragRegionPointerModifierNode {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let size = PxSize::new(input.computed_data.width, input.computed_data.height);
-        if !cursor_within_inclusive_bounds(input.cursor_position_rel, size) {
+async fn async_window_drag_detector(mut scope: tessera_ui::PointerInputScope) {
+    loop {
+        let Some(mut down) = scope
+            .await_first_down(
+                tessera_ui::PointerEventPass::Main,
+                Some(tessera_ui::PressKeyEventType::Left),
+                tessera_ui::DownRequirement::Any,
+            )
+            .await
+        else {
             return;
+        };
+        down.drag_window();
+        down.block_cursor();
+        down.change.consume();
+        loop {
+            let event = scope
+                .await_pointer_event(tessera_ui::PointerEventPass::Main)
+                .await;
+            if event.is_cancelled() {
+                return;
+            }
+            event.block_cursor();
+            let mut ended = false;
+            for mut change in event.changes {
+                if change.pointer_id != down.change.pointer_id {
+                    continue;
+                }
+                match change.content {
+                    tessera_ui::CursorEventContent::Released(_)
+                    | tessera_ui::CursorEventContent::Cancelled(_) => ended = true,
+                    _ => {}
+                }
+                change.consume();
+            }
+            if ended {
+                break;
+            }
         }
-
-        let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(input.pass, input.pointer_changes.as_mut_slice(), true)
-        });
-
-        if tap_result.pressed {
-            input.drag_window();
-        }
-        input.block_all();
     }
 }
 
@@ -493,12 +536,8 @@ struct WindowDragBuild;
 
 #[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
 impl BuildModifierNode for WindowDragBuild {
-    fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
-        let tap_recognizer = context.state(TapRecognizer::default);
-        Some(
-            Modifier::new()
-                .push_pointer_input(WindowDragRegionPointerModifierNode { tap_recognizer }),
-        )
+    fn materialize(&self, _context: &mut ModifierBuildContext) -> Option<Modifier> {
+        Some(Modifier::new().pointer_input_once(async_window_drag_detector))
     }
 }
 
@@ -513,8 +552,7 @@ pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
 }
 
 struct DraggableBuild {
-    settings: DragSettings,
-    drag_recognizer: Option<State<DragRecognizer>>,
+    settings: DragGestureConfig,
     on_drag_delta: DragCallback,
     enabled: bool,
     on_drag_started: Option<Callback>,
@@ -523,27 +561,37 @@ struct DraggableBuild {
 }
 
 impl BuildModifierNode for DraggableBuild {
-    fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
+    fn materialize(&self, _context: &mut ModifierBuildContext) -> Option<Modifier> {
         if !self.enabled {
             if let Some(state) = self.interaction_state {
                 state.with_mut(|state| state.set_dragged(false));
             }
             return Some(Modifier::new());
         }
-        let recognizer = self
-            .drag_recognizer
-            .unwrap_or_else(|| context.state(|| DragRecognizer::new(self.settings)));
-        recognizer.with_mut(|recognizer| recognizer.set_settings(self.settings));
-        Some(
-            Modifier::new().push_pointer_input(DraggablePointerModifierNode {
-                drag_recognizer: recognizer,
-                on_drag_delta: self.on_drag_delta,
-                enabled: self.enabled,
-                on_drag_started: self.on_drag_started,
-                on_drag_stopped: self.on_drag_stopped,
-                interaction_state: self.interaction_state,
-            }),
-        )
+        let settings = self.settings;
+        let on_drag_delta = self.on_drag_delta;
+        let on_drag_started = self.on_drag_started;
+        let on_drag_stopped = self.on_drag_stopped;
+        let interaction_state = self.interaction_state;
+        Some(Modifier::new().pointer_input(
+            (
+                settings,
+                on_drag_delta,
+                on_drag_started,
+                on_drag_stopped,
+                interaction_state,
+            ),
+            move |scope| {
+                async_draggable_detector(
+                    scope,
+                    settings,
+                    on_drag_delta,
+                    on_drag_started,
+                    on_drag_stopped,
+                    interaction_state,
+                )
+            },
+        ))
     }
 }
 

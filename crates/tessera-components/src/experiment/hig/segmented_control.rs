@@ -5,10 +5,8 @@
 //! Switch between related views, time ranges, or presentation modes.
 
 use tessera_foundation::{
-    gesture::{TapRecognizer, TapSettings},
-    modifier::{
-        ClickableArgs, InteractionState, ModifierExt as _, PointerEventContext, SemanticsArgs,
-    },
+    modifier::{ClickableArgs, InteractionState, ModifierExt as _, SemanticsArgs},
+    pointer_gestures::TapGestureConfig,
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
@@ -24,7 +22,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::{ModifierExt as _, apply_pointer_clickable_modifier},
+    modifier::ModifierExt as _,
     pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualStroke},
     shape_def::{RoundedCorner, Shape},
 };
@@ -246,20 +244,9 @@ fn segment_item(
     let requester = remember(FocusRequester::new).get();
     let interaction = remember(InteractionState::new);
     let held = remember(|| false);
-    let pointer_down = remember(|| false);
-    let tap = remember(|| {
-        TapRecognizer::new(TapSettings {
-            slop_px: f32::INFINITY,
-            ..Default::default()
-        })
-    });
     if !item.enabled {
         if held.get() {
             held.set(false);
-        }
-        if pointer_down.get() {
-            pointer_down.set(false);
-            tap.with_mut(TapRecognizer::cancel);
         }
     } else if held.get() && !requester.is_focused() {
         held.set(false);
@@ -274,7 +261,7 @@ fn segment_item(
     };
     let pressed = item.enabled
         && active
-        && (held.get() || (pointer_down.get() && interaction.with(InteractionState::is_hovered)));
+        && (held.get() || interaction.with(|state| state.is_pressed() && state.is_hovered()));
     let color = if selected {
         tint.with_alpha(if !item.enabled {
             0.0625
@@ -295,25 +282,21 @@ fn segment_item(
             0.26
         })
     };
-    let mut modifier = apply_pointer_clickable_modifier(
-        Modifier::new(),
-        ClickableArgs {
-            enabled: item.enabled,
-            on_click: activate,
-            role: Some(Role::RadioButton),
-            label: Some(item.label.clone()),
-            focus_requester: Some(requester),
-            interaction_state: Some(interaction),
-            tap_recognizer: Some(tap),
-            on_press: Some(CallbackWith::new(move |_: PointerEventContext| {
-                pointer_down.set(true)
-            })),
-            on_release: Some(CallbackWith::new(move |_: PointerEventContext| {
-                pointer_down.set(false)
-            })),
+    let mut modifier = Modifier::new().clickable(ClickableArgs {
+        enabled: item.enabled,
+        on_click: activate,
+        role: Some(Role::RadioButton),
+        label: Some(item.label.clone()),
+        focus_requester: Some(requester),
+        interaction_state: Some(interaction),
+        keyboard_activation: false,
+        tap_config: TapGestureConfig {
+            slop_px: f32::INFINITY,
+            cancel_on_exit: false,
             ..Default::default()
         },
-    );
+        ..Default::default()
+    });
     if item.enabled {
         modifier =
             modifier

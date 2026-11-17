@@ -19,7 +19,6 @@ use crate::{
         text::text,
         theme::MaterialTheme,
     },
-    modifier::ModifierExt as _,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -270,7 +269,7 @@ mod tests {
     use tessera_foundation::modifier::SemanticsArgs;
     use tessera_ui::{PxPosition, State, testing::UiTest};
 
-    use crate::md3::theme::material_theme;
+    use crate::{md3::theme::material_theme, modifier::ModifierExt as _};
 
     use super::*;
 

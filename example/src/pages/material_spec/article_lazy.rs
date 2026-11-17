@@ -13,7 +13,6 @@ use tessera_components::{
         scrollable::{ScrollBarBehavior, ScrollableController, scrollbar_v},
         text::text,
     },
-    modifier::ModifierExt as _,
     row::row,
     spacer::spacer,
 };

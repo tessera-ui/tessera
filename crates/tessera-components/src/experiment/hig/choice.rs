@@ -1,13 +1,10 @@
 use tessera_foundation::{
-    gesture::{TapRecognizer, TapSettings},
-    modifier::{
-        ClickableArgs, InteractionState, ModifierExt as _, Padding, PointerEventContext,
-        SemanticsArgs,
-    },
+    modifier::{ClickableArgs, InteractionState, ModifierExt as _, Padding, SemanticsArgs},
+    pointer_gestures::TapGestureConfig,
 };
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, Dp,
-    DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusRequester, KeyboardInput,
+    AccessibilityActionHandler, AccessibilityNode, Callback, Color, Dp, DrawModifierContent,
+    DrawModifierContext, DrawModifierNode, FocusRequester, KeyboardInput,
     KeyboardInputModifierNode, Modifier, SemanticsModifierNode, State,
     accesskit::{Role, Toggled},
     layout::{Stack, layout},
@@ -22,7 +19,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::CrossAxisAlignment,
-    modifier::{ModifierExt as _, apply_pointer_clickable_modifier},
+    modifier::ModifierExt as _,
     pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualStroke},
     row::row,
     shape_def::{RoundedCorner, Shape},
@@ -149,26 +146,14 @@ pub(super) fn choice_control(
 ) {
     let interaction = remember(InteractionState::new);
     let held = remember(|| false);
-    let pointer_down = remember(|| false);
-    let tap = remember(|| {
-        TapRecognizer::new(TapSettings {
-            slop_px: f32::INFINITY,
-            ..Default::default()
-        })
-    });
     if !enabled {
         if held.get() {
             held.set(false);
         }
-        if pointer_down.get() {
-            pointer_down.set(false);
-            tap.with_mut(TapRecognizer::cancel);
-        }
     } else if held.get() && !requester.is_focused() {
         held.set(false);
     }
-    let pressed =
-        held.get() || (pointer_down.get() && interaction.with(InteractionState::is_hovered));
+    let pressed = held.get() || interaction.with(|state| state.is_pressed() && state.is_hovered());
     let theme = use_context::<HigTheme>()
         .map(|theme| theme.get())
         .unwrap_or_default();
@@ -206,9 +191,8 @@ pub(super) fn choice_control(
             ChoiceMark::Dot => [[0.50, 0.50]; 3],
         },
     });
-    let modifier = apply_pointer_clickable_modifier(
-        modifier,
-        ClickableArgs {
+    let modifier = modifier
+        .clickable(ClickableArgs {
             enabled,
             on_click: activate,
             label: Some(accessibility_label.unwrap_or_else(|| label.clone())),
@@ -216,24 +200,22 @@ pub(super) fn choice_control(
             role: Some(style.role),
             focus_requester: Some(requester),
             interaction_state: Some(interaction),
-            tap_recognizer: Some(tap),
-            on_press: Some(CallbackWith::new(move |_: PointerEventContext| {
-                pointer_down.set(true)
-            })),
-            on_release: Some(CallbackWith::new(move |_: PointerEventContext| {
-                pointer_down.set(false)
-            })),
+            keyboard_activation: false,
+            tap_config: TapGestureConfig {
+                slop_px: f32::INFINITY,
+                cancel_on_exit: false,
+                ..Default::default()
+            },
             ..Default::default()
-        },
-    )
-    .then(focus_modifier.unwrap_or_default())
-    .push_keyboard_input(ChoiceKeyboard {
-        enabled,
-        held,
-        activate,
-    })
-    .push_semantics(ChoiceSemantics(style.mark))
-    .hover_cursor_icon(CursorIcon::Default);
+        })
+        .then(focus_modifier.unwrap_or_default())
+        .push_keyboard_input(ChoiceKeyboard {
+            enabled,
+            held,
+            activate,
+        })
+        .push_semantics(ChoiceSemantics(style.mark))
+        .hover_cursor_icon(CursorIcon::Default);
     let focused = enabled && active && requester.is_focus_visible();
     row()
         .modifier(modifier)

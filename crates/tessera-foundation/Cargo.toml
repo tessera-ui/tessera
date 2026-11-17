@@ -9,3 +9,6 @@ description = "Foundation primitives and shared UI building blocks for tessera-u
 
 [dependencies]
 tessera-ui.workspace = true
+
+[dev-dependencies]
+tessera-ui = { workspace = true, features = ["testing"] }

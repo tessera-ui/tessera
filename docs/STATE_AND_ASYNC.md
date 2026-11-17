@@ -171,3 +171,34 @@ launch(target, async move {
 
 Cancellation stops a future at its next suspension point; it cannot interrupt
 synchronous work that has already started.
+
+## Pointer-input tasks
+
+Attach custom gesture work with `Modifier::pointer_input(key, detector)` or
+`pointer_input_once(detector)`. Each attachment owns one UI-local task. Changing
+the key or detaching the modifier cancels it; rebuilding with an unchanged key
+preserves its running closure. Capture state handles for live values, and put
+configuration that should restart a gesture in the key. `pointer_input_once`
+means one task per attachment, not one gesture.
+
+Prefer `tessera_foundation::pointer_gestures::detect_tap_gestures`,
+`detect_long_press_gestures`, `detect_drag_gestures`, and `detect_scroll_gestures`.
+They share cancellation, movement thresholds, and sampled event handling. Drag
+slop accumulates from the press; reported deltas are incremental local movement
+between samples. Normal release and cancellation have separate callbacks.
+Cancellation callbacks also run when an active detector is dropped, so check
+`State::is_alive` before accessing remembered state during cleanup.
+
+For custom arbitration, await `PointerEventPass::Initial`, `Main`, or `Final`
+through `PointerInputScope`. Each sample completes all three passes before the
+next sample. Detectors resume within the requested pass, so consuming a change
+affects later handlers immediately. Main runs from children to parents; Final
+lets a child observe a parent's consumption. Pointer events carry the sample's
+position, timestamp, local size, and coordinate transform. Long-press timeouts
+use the frame clock and also work without pointer motion.
+
+Use `await_each_gesture` when building a repeating detector; it waits for all
+observed pointers to lift after the gesture body completes. Long-lived unrelated
+work belongs in a separate task, since pointer events are not buffered while a
+detector awaits something else. Detector closures are Tessera-colored; gesture
+action callbacks remain ordinary, uncolored callbacks.

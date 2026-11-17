@@ -6,14 +6,16 @@
 use std::time::Duration;
 
 use tessera_foundation::{
-    gesture::{DragAxis, DragRecognizer, DragSettings, ScrollRecognizer, ScrollSettings},
     modifier::ModifierExt as _,
+    pointer_gestures::{
+        DragAxis, DragGestureConfig, ScrollGestureConfig, detect_drag_gestures,
+        detect_scroll_gestures,
+    },
 };
 use tessera_ui::{
     AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusProperties, KeyboardInput,
-    KeyboardInputModifierNode, LayoutResult, MeasurementError, Modifier, PointerInput,
-    PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventSource, State, key,
-    launch_once,
+    KeyboardInputModifierNode, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    ScrollDeltaUnit, ScrollEventSource, State, key, launch_once,
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember,
@@ -27,7 +29,6 @@ use crate::{
     alignment::CrossAxisAlignment,
     animation::{Delay, run_frames},
     layout_flex::{cross_axis_child_constraint, px_mul},
-    pos_misc::is_position_inside_bounds,
 };
 
 const DEFAULT_SNAP_THRESHOLD: f32 = 0.5;
@@ -743,78 +744,39 @@ impl KeyboardInputModifierNode for PagerKeyboardModifierNode {
     }
 }
 
-struct PagerPointerModifierNode {
+async fn pager_pointer_detector(
+    mut scope: tessera_ui::PointerInputScope,
     controller: State<PagerController>,
     axis: PagerAxis,
-    user_scroll_enabled: bool,
-    drag_recognizer: State<DragRecognizer>,
-    scroll_recognizer: State<ScrollRecognizer>,
-}
-
-impl PointerInputModifierNode for PagerPointerModifierNode {
-    fn on_pointer_input(&self, input: PointerInput<'_>) {
-        if !self.user_scroll_enabled {
-            return;
-        }
-
-        let is_cursor_in_component = input
-            .cursor_position_rel
-            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
-            .unwrap_or(false);
-        let is_dragging = self.controller.with(|controller| controller.is_dragging());
-        if !is_cursor_in_component && !is_dragging {
-            return;
-        }
-
-        let at = input
-            .pointer_changes
-            .iter()
-            .map(|change| change.timestamp)
-            .max();
-        let scroll_result = self.scroll_recognizer.with_mut(|recognizer| {
-            recognizer.update(input.pass, input.pointer_changes.as_mut_slice())
-        });
-        let (scroll_delta_x, scroll_delta_y) = normalize_pager_scroll_delta(
-            scroll_result.delta_x,
-            scroll_result.delta_y,
-            scroll_result.unit,
-            scroll_result.source,
-        );
-        let scroll_delta = self.axis.scroll_delta(scroll_delta_x, scroll_delta_y);
-
-        if scroll_delta.abs() >= 0.01 {
-            self.controller.with_mut(|controller| {
-                controller.apply_scroll_delta(scroll_delta, at);
-                controller.end_drag();
-            });
-            return;
-        }
-
-        let drag_result = self.drag_recognizer.with_mut(|recognizer| {
-            recognizer.update(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                is_cursor_in_component,
-            )
-        });
-        if drag_result.started {
-            self.controller
-                .with_mut(|controller| controller.start_drag(at));
-        }
-
-        let drag_delta = self.axis.scroll_delta(
-            input.local_delta(drag_result.delta_x.to_f32(), 0.0).0,
-            input.local_delta(0.0, drag_result.delta_y.to_f32()).1,
-        );
-        if drag_result.updated && drag_delta.abs() >= 0.01 {
-            self.controller
-                .with_mut(|controller| controller.apply_scroll_delta(drag_delta, at));
-        }
-
-        if drag_result.ended {
-            self.controller.with_mut(|controller| controller.end_drag());
-        }
+    enabled: bool,
+) {
+    if !enabled {
+        return;
     }
+    detect_drag_gestures(
+        &mut scope,
+        DragGestureConfig {
+            axis: Some(match axis {
+                PagerAxis::Horizontal => DragAxis::Horizontal,
+                PagerAxis::Vertical => DragAxis::Vertical,
+            }),
+            ..Default::default()
+        },
+        |down| controller.with_mut(|controller| controller.start_drag(Some(down.change.timestamp))),
+        |_, change, delta| {
+            controller.with_mut(|controller| {
+                controller
+                    .apply_scroll_delta(axis.scroll_delta(delta.x, delta.y), Some(change.timestamp))
+            })
+        },
+        |_, _| controller.with_mut(PagerController::end_drag),
+        || {
+            if controller.is_alive() && controller.with(PagerController::is_dragging) {
+                controller.with_mut(PagerController::end_drag);
+            }
+        },
+    )
+    .await;
 }
 
 fn apply_pager_input_modifiers(
@@ -822,21 +784,48 @@ fn apply_pager_input_modifiers(
     controller: State<PagerController>,
     axis: PagerAxis,
     user_scroll_enabled: bool,
-    drag_recognizer: State<DragRecognizer>,
-    scroll_recognizer: State<ScrollRecognizer>,
 ) -> Modifier {
     base.push_keyboard_input(PagerKeyboardModifierNode {
         controller,
         axis,
         user_scroll_enabled,
     })
-    .push_pointer_input(PagerPointerModifierNode {
-        controller,
-        axis,
-        user_scroll_enabled,
-        drag_recognizer,
-        scroll_recognizer,
+    .pointer_input((controller, axis, user_scroll_enabled), move |scope| {
+        pager_pointer_detector(scope, controller, axis, user_scroll_enabled)
     })
+    .pointer_input(
+        (controller, axis, user_scroll_enabled),
+        move |mut scope| async move {
+            if !user_scroll_enabled {
+                return;
+            }
+            detect_scroll_gestures(
+                &mut scope,
+                ScrollGestureConfig::default(),
+                |event, change, scroll| {
+                    if !event.is_pointer_inside() {
+                        return;
+                    }
+                    let (dx, dy) = normalize_pager_scroll_delta(
+                        scroll.delta_x,
+                        scroll.delta_y,
+                        Some(scroll.unit),
+                        Some(scroll.source),
+                    );
+                    let delta = axis.scroll_delta(dx, dy);
+                    if delta.abs() >= 0.01 {
+                        controller.with_mut(|controller| {
+                            controller.apply_scroll_delta(delta, Some(change.timestamp));
+                            controller.end_drag();
+                        });
+                        scroll.delta_x = 0.0;
+                        scroll.delta_y = 0.0;
+                    }
+                },
+            )
+            .await;
+        },
+    )
 }
 
 /// # horizontal_pager
@@ -923,13 +912,6 @@ pub fn horizontal_pager(
         Some(value) => value,
         None => remember(|| PagerController::new(pager_args.initial_page)),
     };
-    let drag_recognizer = remember(|| {
-        DragRecognizer::new(DragSettings {
-            axis: Some(DragAxis::Horizontal),
-            ..DragSettings::default()
-        })
-    });
-    let scroll_recognizer = remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
     if controller.with(PagerController::has_pending_animation_frame) {
         let snap_threshold = pager_args.snap_threshold;
         let scroll_smoothing = pager_args.scroll_smoothing;
@@ -937,13 +919,7 @@ pub fn horizontal_pager(
             current.tick(now, snap_threshold, scroll_smoothing)
         }));
     }
-    pager_render(
-        pager_args,
-        controller,
-        PagerAxis::Horizontal,
-        drag_recognizer,
-        scroll_recognizer,
-    );
+    pager_render(pager_args, controller, PagerAxis::Horizontal);
 }
 
 /// # vertical_pager
@@ -1027,13 +1003,6 @@ pub fn vertical_pager(
         Some(value) => value,
         None => remember(|| PagerController::new(pager_args.initial_page)),
     };
-    let drag_recognizer = remember(|| {
-        DragRecognizer::new(DragSettings {
-            axis: Some(DragAxis::Vertical),
-            ..DragSettings::default()
-        })
-    });
-    let scroll_recognizer = remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
     if controller.with(PagerController::has_pending_animation_frame) {
         let snap_threshold = pager_args.snap_threshold;
         let scroll_smoothing = pager_args.scroll_smoothing;
@@ -1041,23 +1010,11 @@ pub fn vertical_pager(
             current.tick(now, snap_threshold, scroll_smoothing)
         }));
     }
-    pager_render(
-        pager_args,
-        controller,
-        PagerAxis::Vertical,
-        drag_recognizer,
-        scroll_recognizer,
-    );
+    pager_render(pager_args, controller, PagerAxis::Vertical);
 }
 
 #[tessera]
-fn pager_render(
-    args: PagerConfig,
-    controller: State<PagerController>,
-    axis: PagerAxis,
-    drag_recognizer: State<DragRecognizer>,
-    scroll_recognizer: State<ScrollRecognizer>,
-) {
+fn pager_render(args: PagerConfig, controller: State<PagerController>, axis: PagerAxis) {
     let page_content = args.page_content;
     let should_set_page_count = controller.with(|current| {
         let mut next = current.clone();
@@ -1089,8 +1046,6 @@ fn pager_render(
         controller,
         axis,
         args.user_scroll_enabled,
-        drag_recognizer,
-        scroll_recognizer,
     );
 
     let policy = PagerLayout {

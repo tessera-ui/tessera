@@ -9,10 +9,9 @@ use std::time::Duration;
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
 use tessera_ui::{
     AxisConstraint, Callback, ComputedData, CursorEventContent, Dp, FocusDirection, FocusGroupNode,
-    FocusRequester, FocusState, GestureState, KeyboardInput, KeyboardInputModifierNode,
-    LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier, PointerInput,
-    PointerInputModifierNode, PressKeyEventType, Px, PxPosition, PxRect, RenderSlot,
-    RenderSlotWith, State,
+    FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode, LayoutResult,
+    MOUSE_POINTER_ID, MeasurementError, Modifier, PointerInput, PointerInputModifierNode,
+    PressKeyEventType, Px, PxPosition, PxRect, RenderSlot, RenderSlotWith, State,
     accesskit::{Live, Role},
     launch_once,
     layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
@@ -64,8 +63,6 @@ pub enum TooltipPlacement {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct TouchPress {
     pointer: u64,
-    origin: PxPosition,
-    since: Instant,
     triggered: bool,
 }
 
@@ -246,9 +243,7 @@ impl TooltipController {
     }
 
     fn needs_frame(&self) -> bool {
-        self.pending_show.is_some()
-            || self.pending_hide.is_some()
-            || self.touch.is_some_and(|touch| !touch.triggered)
+        self.pending_show.is_some() || self.pending_hide.is_some()
     }
 
     fn advance(&mut self, now: Instant) -> bool {
@@ -261,16 +256,6 @@ impl TooltipController {
             if !self.suppressed && self.engaged() {
                 self.open = true;
             }
-        }
-        if self.touch.is_some_and(|touch| {
-            !touch.triggered && now.saturating_duration_since(touch.since) >= SHOW_DELAY
-        }) {
-            if let Some(touch) = &mut self.touch {
-                touch.triggered = true;
-            }
-            self.open = true;
-            self.pending_show = None;
-            self.pending_hide = None;
         }
         if self
             .pending_hide
@@ -290,7 +275,6 @@ impl TooltipController {
 struct TooltipPointer {
     controller: State<TooltipController>,
     popup: bool,
-    persistent: bool,
 }
 
 fn within(position: Option<PxPosition>, rect: impl Into<tessera_ui::FloatRect>) -> bool {
@@ -325,83 +309,91 @@ impl PointerInputModifierNode for TooltipPointer {
             self.controller
                 .with_mut(|controller| controller.hover(self.popup, inside, at));
         }
-        if self.popup {
-            return;
-        }
-        let window_position = input.cursor_position_abs();
-        for event in input
-            .pointer_changes
-            .iter_mut()
-            .filter(|event| event.pointer_id != MOUSE_POINTER_ID)
-        {
-            let active = self.controller.with(|controller| controller.touch);
-            match event.content {
-                CursorEventContent::Pressed(PressKeyEventType::Left)
-                    if inside && !event.is_consumed() =>
-                {
-                    if let Some(origin) = event.position().or(window_position) {
-                        self.controller.with_mut(|controller| {
-                            controller.touch_focus_suppressed = true;
-                            controller.anchor_focused = false;
-                            controller.popup_focused = false;
-                            controller.anchor_hovered = false;
-                            controller.popup_hovered = false;
-                            controller.pending_show = None;
-                            controller.pending_hide = None;
-                            controller.open = controller.manual;
-                            controller.suppressed = false;
-                            controller.touch = Some(TouchPress {
-                                pointer: event.pointer_id,
-                                origin,
-                                since: event.timestamp,
-                                triggered: false,
-                            });
-                        });
-                    }
-                }
-                CursorEventContent::Moved(_) | CursorEventContent::Scroll(_)
-                    if active.is_some_and(|touch| {
-                        touch.pointer == event.pointer_id && !touch.triggered
-                    }) =>
-                {
-                    let touch = active.expect("active touch was checked");
-                    let moved = event
-                        .position()
-                        .or(window_position)
-                        .is_some_and(|position| {
-                            (position.x - touch.origin.x).hypot(position.y - touch.origin.y)
-                                > Dp(8.0).to_pixels_f32()
-                        });
-                    if moved || !inside || event.gesture_state == GestureState::Dragged {
-                        self.controller
-                            .with_mut(|controller| controller.touch = None);
-                    }
-                }
-                CursorEventContent::Released(_) | CursorEventContent::Cancelled(_)
-                    if active.is_some_and(|touch| touch.pointer == event.pointer_id) =>
-                {
-                    let triggered = active.is_some_and(|touch| touch.triggered);
-                    let cancelled = matches!(event.content, CursorEventContent::Cancelled(_));
-                    if triggered && !cancelled {
-                        // Descendant recognizers need cancellation to clear
-                        // their active press.
-                        event.content = CursorEventContent::Cancelled(PressKeyEventType::Left);
-                        event.gesture_state = GestureState::Dragged;
-                    }
-                    self.controller.with_mut(|controller| {
-                        controller.touch = None;
-                        if cancelled {
-                            controller.dismiss();
-                        } else if triggered {
-                            controller.manual = self.persistent;
-                            controller.pending_hide = (!self.persistent)
-                                .then_some(Delay::new(Some(event.timestamp), TOUCH_DURATION));
-                        }
-                    });
-                }
-                _ => {}
+    }
+}
+
+async fn tooltip_touch_detector(
+    mut scope: tessera_ui::PointerInputScope,
+    controller: State<TooltipController>,
+) {
+    struct TouchLease(State<TooltipController>);
+    impl Drop for TouchLease {
+        fn drop(&mut self) {
+            if self.0.is_alive() {
+                self.0.with_mut(|controller| controller.touch = None);
             }
         }
+    }
+    // Touch observes Initial so its long-press release preempts descendant clicks.
+    while let Some(down) = scope
+        .await_first_down(
+            tessera_ui::PointerEventPass::Initial,
+            Some(PressKeyEventType::Left),
+            tessera_ui::DownRequirement::Unconsumed,
+        )
+        .await
+    {
+        if down.change.pointer_id == MOUSE_POINTER_ID {
+            continue;
+        }
+        let _lease = TouchLease(controller);
+        controller.with_mut(|controller| {
+            controller.touch_focus_suppressed = true;
+            controller.anchor_focused = false;
+            controller.popup_focused = false;
+            controller.anchor_hovered = false;
+            controller.popup_hovered = false;
+            controller.pending_show = None;
+            controller.pending_hide = None;
+            controller.open = controller.manual;
+            controller.suppressed = false;
+            controller.touch = Some(TouchPress {
+                pointer: down.change.pointer_id,
+                triggered: false,
+            });
+        });
+        if !matches!(
+            scope
+                .await_long_press_or_cancellation(
+                    tessera_ui::PointerEventPass::Initial,
+                    &down,
+                    SHOW_DELAY,
+                    Dp(8.0).to_pixels_f32()
+                )
+                .await,
+            tessera_ui::LongPressResult::Triggered { .. }
+        ) {
+            continue;
+        }
+        if !controller.with(|controller| {
+            controller
+                .touch
+                .is_some_and(|touch| touch.pointer == down.change.pointer_id)
+        }) {
+            continue;
+        }
+        controller.with_mut(|controller| {
+            if let Some(touch) = &mut controller.touch {
+                touch.triggered = true;
+            }
+            controller.open = true;
+            controller.pending_show = None;
+            controller.pending_hide = None;
+        });
+        let end = scope
+            .consume_until_up(
+                tessera_ui::PointerEventPass::Initial,
+                down.change.pointer_id,
+            )
+            .await;
+        controller.with_mut(|controller| match end {
+            tessera_ui::GestureEnd::Released(up) => {
+                controller.manual = controller.persistent;
+                controller.pending_hide = (!controller.persistent)
+                    .then_some(Delay::new(Some(up.timestamp), TOUCH_DURATION));
+            }
+            tessera_ui::GestureEnd::Cancelled => controller.dismiss(),
+        });
     }
 }
 
@@ -835,7 +827,6 @@ pub fn tooltip_provider(
         on_action,
         child,
         variant,
-        persistent,
         actions,
         popup_modifier,
     );
@@ -884,7 +875,6 @@ pub fn tooltip_provider(
             on_action,
             child,
             variant,
-            persistent,
             actions,
             popup_modifier,
         ) = render_data.get();
@@ -901,7 +891,6 @@ pub fn tooltip_provider(
                 .on_action_shared(on_action.unwrap_or_default())
                 .controller(controller)
                 .popup(popup)
-                .persistent(persistent)
                 .actions_shared(actions.unwrap_or_else(RenderSlot::empty))
                 .has_actions(has_actions);
         }
@@ -957,7 +946,9 @@ pub fn tooltip_anchor(
         .push_pointer_preview_input(TooltipPointer {
             controller,
             popup: false,
-            persistent: controller.with(|controller| controller.persistent),
+        })
+        .pointer_input(controller, move |scope| {
+            tooltip_touch_detector(scope, controller)
         });
     layout(Stack)
         .modifier(modifier)
@@ -975,7 +966,6 @@ fn tooltip_panel(
     has_actions: Option<bool>,
     controller: Option<State<TooltipController>>,
     popup: Option<State<tessera_ui::FloatRect>>,
-    persistent: Option<bool>,
     modifier: Option<Modifier>,
 ) {
     let theme = use_context::<MaterialTheme>()
@@ -1017,7 +1007,6 @@ fn tooltip_panel(
         .push_pointer_preview_input(TooltipPointer {
             controller,
             popup: true,
-            persistent: persistent.unwrap_or(false),
         })
         .semantics(SemanticsArgs {
             role: Some(if rich && (action_label.is_some() || has_actions) {
@@ -1180,23 +1169,27 @@ mod tests {
 
     #[test]
     fn touch_waits_for_threshold_and_manual_visibility_does_not_run_a_clock() {
-        let mut controller = TooltipController::new();
-        controller.touch = Some(TouchPress {
-            pointer: 1,
-            origin: PxPosition::ZERO,
-            since: at(Duration::ZERO),
-            triggered: false,
-        });
-        controller.focus(false, true);
-        controller.advance(at(SHOW_DELAY - Duration::from_nanos(1)));
-        assert!(!controller.is_open());
-        controller.advance(at(SHOW_DELAY));
-        assert!(controller.is_open());
-        assert!(!controller.needs_frame());
-        controller.show();
-        controller.advance(at(SHOW_DELAY * 100));
-        assert!(controller.is_open());
-        assert!(!controller.needs_frame());
+        let observed = tessera_ui::testing::TestProbe::default();
+        let mut session = UiTest::new()
+            .content(|| fixture(observed.clone()))
+            .viewport(400, 320);
+        session.frame();
+        let controller = observed.get().controller.expect("controller");
+        let bounds = controller.with(TooltipController::anchor);
+        let point = PxPosition::from_f32_xy(
+            bounds.x + bounds.width / 2.0,
+            bounds.y + bounds.height / 2.0,
+        );
+        session.pointer_press(1, point, PressKeyEventType::Left);
+        session.frame();
+        session.advance(SHOW_DELAY - Duration::from_nanos(1));
+        assert!(!controller.with(TooltipController::is_open));
+        session.advance(Duration::from_nanos(1));
+        assert!(controller.with(TooltipController::is_open));
+        session.run(|| controller.with_mut(TooltipController::show));
+        session.advance(SHOW_DELAY * 100);
+        assert!(controller.with(TooltipController::is_open));
+        assert!(!controller.with(TooltipController::needs_frame));
     }
 
     #[test]
