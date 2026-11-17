@@ -5,7 +5,8 @@ use tessera_ui::{
     Color, Dp, FocusRequester, KeyboardEvent, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
     accesskit::{Action, Role, Toggled},
-    remember, tessera,
+    layout::{Stack, layout},
+    remember, scaled_box, tessera,
     testing::{TestProbe, UiTest},
     winit::{event::ElementState, keyboard::NamedKey},
 };
@@ -292,5 +293,296 @@ fn disabled_on_track_keeps_active_tint_over_checkers_and_restores_after_deactiva
     crate::test_utils::run_isolated_test(
         "experiment::hig::switch::tests::disabled_on_track_keeps_active_tint_over_checkers_and_restores_after_deactivation",
         check_disabled_track,
+    );
+}
+
+#[derive(Clone, Copy)]
+struct LensControls {
+    enabled: State<bool>,
+    visible: State<bool>,
+    value: State<bool>,
+    background: State<bool>,
+    requests: State<usize>,
+}
+
+fn stripe_image(width: u32, height: u32) -> ImageData {
+    let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+    for _ in 0..height {
+        for x in 0..width {
+            let gray = if x / 4 % 2 == 0 { 31 } else { 230 };
+            pixels.extend_from_slice(&[gray, gray, gray, 255]);
+        }
+    }
+    ImageData::from_rgba(pixels, width, height)
+}
+
+#[tessera]
+fn lens_fixture(probe: TestProbe<Option<LensControls>>) {
+    let enabled = remember(|| true);
+    let visible = remember(|| true);
+    let value = remember(|| false);
+    let background = remember(|| false);
+    let requests = remember(|| 0);
+    let stripes = remember(|| stripe_image(320, 160));
+    probe.set(Some(LensControls {
+        enabled,
+        visible,
+        value,
+        background,
+        requests,
+    }));
+    boxed()
+        .alignment(Alignment::TopStart)
+        .modifier(Modifier::new().size(Dp(160.0), Dp(80.0)))
+        .children(move || {
+            if background.get() {
+                layout(Stack).modifier(
+                    Modifier::new()
+                        .size(Dp(160.0), Dp(80.0))
+                        .background(Color::from_rgb(0.1, 0.6, 0.2)),
+                );
+            } else {
+                image()
+                    .painter(stripes.get())
+                    .modifier(Modifier::new().size(Dp(160.0), Dp(80.0)));
+            }
+            if visible.get() {
+                switch(value.get())
+                    .enabled(enabled.get())
+                    .on_value_change(move |_| requests.set(requests.get() + 1))
+                    .accessibility_label("Lens setting")
+                    .modifier(Modifier::new().offset(Dp(40.0), Dp(28.0)).semantics(
+                        SemanticsArgs {
+                            test_tag: Some("lens".into()),
+                            ..Default::default()
+                        },
+                    ));
+            }
+        });
+}
+
+fn check_held_lens() {
+    for samples in [1, 4] {
+        let probe = TestProbe::default();
+        let mut ui = UiTest::new()
+            .viewport(320, 160)
+            .scale_factor(2.0)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| lens_fixture(probe.clone()));
+        ui.frames(3);
+        let controls = probe.get().unwrap();
+        let rest = ui.read_pixels();
+        let inside = PxPosition::from_f32_xy(112.0, 80.0);
+        ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+        ui.frames(18);
+        let thumb = ui.frame().node("switch_thumb").bounds();
+        assert_eq!(
+            (thumb.x.0, thumb.y.0, thumb.width.0, thumb.height.0),
+            (66, 49, 100, 62)
+        );
+        let held = ui.read_pixels();
+        assert_ne!(rest, held);
+        assert_eq!(controls.requests.get(), 0);
+        let mut chromatic = false;
+        for y in 49..62 {
+            for x in 100..132 {
+                let pixel = ui.pixel(x, y);
+                chromatic |= pixel[0].abs_diff(pixel[2]) > 40;
+            }
+        }
+        assert!(
+            chromatic,
+            "the gray backdrop must disperse into different channel samples at the lens rim"
+        );
+        for (x, y, expected) in [
+            (112, 52, [47_u8, 86, 185]),
+            (116, 52, [224, 187, 88]),
+            (116, 56, [224, 204, 151]),
+            (69, 80, [215, 210, 216]),
+            (70, 80, [220, 219, 218]),
+            (91, 49, [35, 25, 22]),
+            (92, 49, [163, 148, 129]),
+        ] {
+            let actual = ui.pixel(x, y);
+            for channel in 0..3 {
+                assert!(
+                    actual[channel].abs_diff(expected[channel]) <= 16,
+                    "contour coverage, sequential refraction, and dispersion must preserve flat and curved rim samples: ({x}, {y}) {actual:?} vs {expected:?}"
+                );
+            }
+        }
+        assert!(
+            ui.pixel(116, 80)[0] > ui.pixel(112, 80)[0] + 80,
+            "the lens interior must transmit stripe contrast rather than an opaque thumb"
+        );
+        controls.background.set(true);
+        ui.frame();
+        assert_ne!(held, ui.read_pixels());
+        controls.background.set(false);
+        ui.frames(2);
+        assert_eq!(held, ui.read_pixels());
+        controls.value.set(true);
+        ui.frame();
+        assert_eq!(ui.frame().node("switch_thumb").bounds().x.0, 102);
+        controls.enabled.set(false);
+        ui.frame();
+        assert_eq!(ui.frame().node("switch_thumb").bounds().width.0, 64);
+        ui.pointer_release(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+        ui.frame();
+        assert_eq!(controls.requests.get(), 0);
+        controls.enabled.set(true);
+        controls.value.set(false);
+        ui.frame();
+        ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+        ui.frames(18);
+        controls.visible.set(false);
+        ui.frame();
+        ui.pointer_release(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+        ui.frame();
+        controls.visible.set(true);
+        ui.frames(2);
+        assert_eq!(controls.requests.get(), 0);
+        assert_eq!(rest, ui.read_pixels());
+    }
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(320, 160)
+        .scale_factor(1.5)
+        .samples(4)
+        .rendered(crate::TesseraComponents)
+        .content(|| {
+            let probe = probe.clone();
+            scaled_box(1.25).child(move || lens_fixture(probe.clone()));
+        });
+    ui.frames(3);
+    let controls = probe.get().unwrap();
+    let bounds = ui.frame().node("lens").bounds();
+    let inside = PxPosition::from_f32_xy(bounds.x.to_f32() + 16.0, bounds.y.to_f32() + 16.0);
+    let rest = ui.read_pixels();
+    ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+    ui.frames(18);
+    let lens = ui.frame().node("switch_thumb").bounds();
+    assert!(lens.x < bounds.x && lens.y < bounds.y);
+    assert!(lens.height > bounds.height);
+    let held = ui.read_pixels();
+    assert_ne!(rest, held);
+    ui.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(310.0, 150.0));
+    ui.frames(2);
+    assert_eq!(rest, ui.read_pixels());
+    ui.pointer_move(MOUSE_POINTER_ID, inside);
+    ui.frames(18);
+    assert_eq!(held, ui.read_pixels());
+    ui.pointer_release(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+    ui.frames(2);
+    assert_eq!(controls.requests.get(), 1);
+    assert_eq!(rest, ui.read_pixels());
+    ui.advance(Duration::from_secs(1));
+    assert_eq!(rest, ui.read_pixels());
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for dispersive lens pixels"]
+fn held_lens_expands_transmits_and_disperses_the_live_backdrop_and_cancels_on_disable_or_removal() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::switch::tests::held_lens_expands_transmits_and_disperses_the_live_backdrop_and_cancels_on_disable_or_removal",
+        check_held_lens,
+    );
+}
+
+#[tessera]
+fn lens_pair_fixture(probe: TestProbe<Option<State<Dp>>>) {
+    let offset = remember(|| Dp(130.0));
+    let stripes = remember(|| stripe_image(440, 160));
+    probe.set(Some(offset));
+    layout(Stack)
+        .modifier(Modifier::new().size(Dp(220.0), Dp(80.0)))
+        .child(move || {
+            image()
+                .painter(stripes.get())
+                .modifier(Modifier::new().size(Dp(220.0), Dp(80.0)));
+            switch(false)
+                .on_value_change(|_| {})
+                .modifier(Modifier::new().offset(Dp(20.0), Dp(28.0)));
+            switch(false)
+                .on_value_change(|_| {})
+                .modifier(Modifier::new().offset(offset.get(), Dp(28.0)));
+        });
+}
+
+fn check_independent_lens_rasters() {
+    let crop = |pixels: &[u8], x: usize| -> Vec<u8> {
+        (16..144)
+            .flat_map(|y| {
+                pixels[(y * 440 + x) * 4..(y * 440 + x + 144) * 4]
+                    .iter()
+                    .copied()
+            })
+            .collect()
+    };
+    for samples in [1, 4] {
+        let probe = TestProbe::default();
+        let mut ui = UiTest::new()
+            .viewport(440, 160)
+            .scale_factor(2.0)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| lens_pair_fixture(probe.clone()));
+        ui.frames(2);
+        let rest = ui.read_pixels();
+        let first = PxPosition::from_f32_xy(64.0, 80.0);
+        let second = PxPosition::from_f32_xy(284.0, 80.0);
+        ui.pointer_press(1, first, PressKeyEventType::Left);
+        ui.frames(2);
+        let first_held = crop(&ui.read_pixels(), 6);
+        assert_ne!(first_held, crop(&rest, 6));
+        ui.pointer_press(2, second, PressKeyEventType::Left);
+        ui.frames(2);
+        let both = ui.read_pixels();
+        assert_eq!(first_held, crop(&both, 6));
+        let second_held = crop(&both, 222);
+        assert_ne!(second_held, crop(&rest, 222));
+        probe.get().unwrap().set(Dp(131.0));
+        ui.frame();
+        assert_eq!(first_held, crop(&ui.read_pixels(), 6));
+        assert_ne!(second_held, crop(&ui.read_pixels(), 222));
+        probe.get().unwrap().set(Dp(130.0));
+        ui.frame();
+        assert_eq!(both, ui.read_pixels());
+        ui.pointer_release(1, first, PressKeyEventType::Left);
+        ui.frames(2);
+        let after_release = crop(&ui.read_pixels(), 222);
+        assert!(
+            second_held == after_release,
+            "releasing the other lens changed {} channels; maximum delta {}; first difference {:?}",
+            second_held
+                .iter()
+                .zip(&after_release)
+                .filter(|(a, b)| a != b)
+                .count(),
+            second_held
+                .iter()
+                .zip(&after_release)
+                .map(|(a, b)| a.abs_diff(*b))
+                .max()
+                .unwrap(),
+            second_held
+                .iter()
+                .zip(&after_release)
+                .enumerate()
+                .find(|(_, (a, b))| a != b)
+        );
+        ui.pointer_release(2, second, PressKeyEventType::Left);
+        ui.frames(2);
+        assert_eq!(rest, ui.read_pixels());
+    }
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for simultaneous lens pixels"]
+fn simultaneous_lenses_keep_independent_rasters_during_motion_and_release() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::switch::tests::simultaneous_lenses_keep_independent_rasters_during_motion_and_release",
+        check_independent_lens_rasters,
     );
 }

@@ -23,7 +23,13 @@ use crate::{
     alignment::Alignment,
     boxed::boxed,
     modifier::ModifierExt as _,
-    pipelines::{perceptual_fill::PerceptualFillCommand, shape::command::ShapeCommand},
+    pipelines::{
+        fluid_glass::{
+            FluidGlassCommand, FluidGlassRenderArgs, LensContour, LensOptics, LensShadow,
+        },
+        perceptual_fill::PerceptualFillCommand,
+        shape::command::ShapeCommand,
+    },
     shape_def::{ResolvedShape, RoundedCorner, Shape},
 };
 
@@ -123,19 +129,80 @@ fn switch_shadow(x: Dp) {
 
 #[tessera]
 fn switch_thumb(x: Dp, pressed: bool) {
+    if pressed {
+        layout(Stack).modifier(
+            Modifier::new()
+                .offset(Dp(x.0 - 9.0), Dp(-3.5))
+                .required_size(Dp(50.0), Dp(31.0))
+                .push_draw(ThumbLens),
+        );
+        return;
+    }
     layout(Stack).modifier(
         Modifier::new()
             .offset(x, Dp(2.0))
             .size(Dp(32.0), Dp(20.0))
             .push_draw(Fill {
-                color: if pressed {
-                    Color::from_rgb(0.90, 0.90, 0.90)
-                } else {
-                    Color::WHITE
-                },
+                color: Color::WHITE,
                 radius: Dp(10.0),
             }),
     );
+}
+
+struct ThumbLens;
+
+impl DrawModifierNode for ThumbLens {
+    fn draw(
+        &self,
+        context: &mut DrawModifierContext<'_, '_>,
+        content: &mut dyn DrawModifierContent,
+    ) {
+        let corner = RoundedCorner::manual(Dp(15.5), 2.03);
+        context
+            .render_input
+            .metadata_mut()
+            .fragment_mut()
+            .push_draw_command(FluidGlassCommand {
+                render: FluidGlassRenderArgs {
+                    shape: Shape::RoundedRectangle {
+                        top_left: corner,
+                        top_right: corner,
+                        bottom_right: corner,
+                        bottom_left: corner,
+                    },
+                    pixels_per_dp: Dp(1.0).to_pixels_f32(),
+                    lens: Some(LensOptics {
+                        contour: Some(LensContour {
+                            controls: [
+                                [0.0, 22.501842 / 31.0],
+                                [3.697153 / 50.0, 12.862425 / 31.0],
+                                [12.134089 / 50.0, 6.410123 / 31.0],
+                                [20.571026 / 50.0, -0.042180 / 31.0],
+                                [29.207634 / 50.0, 0.217691 / 31.0],
+                            ],
+                            coverage_width: 0.994163,
+                        }),
+                        edge_width: 6.2,
+                        refraction_width: 31.5,
+                        refraction_corner_g2: 2.0,
+                        inner_refraction_width: 3.1,
+                        inner_refraction: -4.65,
+                        refraction: 7.75,
+                        dispersion_angle: -std::f32::consts::PI / 12.0,
+                        shadow: LensShadow {
+                            offset: 8.0,
+                            width: 4.0,
+                            blur: 3.0,
+                            opacity: 0.1,
+                        },
+                        dispersion: 0.4707,
+                        transmission: 1.0,
+                    }),
+                    ..Default::default()
+                },
+            });
+        content.draw(context.render_input);
+    }
 }
 
 #[tessera]
@@ -162,7 +229,9 @@ fn switch_graphic(value: bool, track: Color, pressed: bool, focused: bool) {
         .modifier(modifier)
         .children(move || {
             let x = Dp(if value { 20.0 } else { 2.0 });
-            switch_shadow(x);
+            if !pressed {
+                switch_shadow(x);
+            }
             switch_thumb(x, pressed);
         });
 }
@@ -252,7 +321,11 @@ pub fn switch(
         .map(|theme| theme.get())
         .unwrap_or_default();
     let track = if value && active {
-        Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(if enabled { 1.0 } else { 0.7 })
+        if pressed {
+            Color::from_rgb(0.0, 0.14412847, 0.7379104)
+        } else {
+            Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(if enabled { 1.0 } else { 0.7 })
+        }
     } else {
         let tint = if theme.appearance == Appearance::Dark {
             Color::WHITE
@@ -260,7 +333,13 @@ pub fn switch(
             Color::BLACK
         };
         tint.with_alpha(match (enabled, value) {
-            (true, false) => 0.10,
+            (true, false) => {
+                if pressed {
+                    0.20
+                } else {
+                    0.10
+                }
+            }
             (true, true) => 0.14,
             (false, false) => 0.05,
             (false, true) => 0.07,

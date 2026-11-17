@@ -125,6 +125,7 @@ impl Default for FluidGlassRenderArgs {
             dark: false,
             regular: false,
             feedback: 0.0,
+            lens: None,
         }
     }
 }
@@ -449,6 +450,7 @@ pub fn glass(
         dark: appearance == GlassAppearance::Dark,
         regular: material == GlassMaterial::Regular,
         feedback: 0.0,
+        lens: None,
     };
 
     layout(Stack).modifier(modifier).child(move || {

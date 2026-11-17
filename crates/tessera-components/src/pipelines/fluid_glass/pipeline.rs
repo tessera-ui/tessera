@@ -1,11 +1,19 @@
+use std::collections::HashMap;
+
 use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    render::{DrawContext, DrawablePipeline},
+    PxRect, PxSize,
+    render::{DrawContext, DrawGeometry, DrawPreparationContext, DrawablePipeline, FrameContext},
     wgpu,
 };
 
 use crate::pipelines::fluid_glass::FluidGlassCommand;
+
+#[path = "raster.rs"]
+mod raster;
+
+use raster::{LensRasterPipeline, PreparedLens, PreparedLensKey};
 
 #[derive(ShaderType, Clone, PartialEq, Copy, Debug, Default)]
 struct GlassUniforms {
@@ -14,6 +22,22 @@ struct GlassUniforms {
     corner_radii: Vec4,
     corner_g2: Vec4,
     material_tone: Vec4,
+    lens: Vec4,
+    lens_shadow: Vec4,
+    lens_contour_a: Vec4,
+    lens_contour_b: Vec4,
+    lens_contour_c: Vec4,
+    raster_origin: Vec2,
+    raster_size: Vec2,
+    scene_origin_px: Vec2,
+    raster_step: Vec2,
+    contour_iterations: u32,
+    refraction_width: f32,
+    refraction_corner_g2: f32,
+    inner_refraction_width: f32,
+    inner_refraction: f32,
+    dispersion_angle: f32,
+    spectrum_radius: u32,
     blur_sigma_px: f32,
     pixels_per_dp: f32,
     opacity: f32,
@@ -46,6 +70,8 @@ pub(crate) struct FluidGlassPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
+    raster: LensRasterPipeline,
+    prepared: HashMap<PreparedLensKey, PreparedLens>,
 }
 
 impl FluidGlassPipeline {
@@ -62,7 +88,9 @@ impl FluidGlassPipeline {
                 concat!(
                     include_str!("sdf_common.wgsl"),
                     "\n",
-                    include_str!("glass.wgsl")
+                    include_str!("glass.wgsl"),
+                    "\n",
+                    include_str!("raster.wgsl")
                 )
                 .into(),
             ),
@@ -82,6 +110,8 @@ impl FluidGlassPipeline {
             pipeline,
             bind_group_layout,
             sampler,
+            raster: LensRasterPipeline::new(gpu, pipeline_cache, &shader),
+            prepared: HashMap::new(),
         }
     }
 
@@ -127,6 +157,16 @@ impl FluidGlassPipeline {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    },
                     count: None,
                 },
             ],
@@ -188,15 +228,64 @@ impl FluidGlassPipeline {
 }
 
 impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
-    fn draw(&mut self, context: &mut DrawContext<FluidGlassCommand>) {
-        if context.commands.is_empty() {
-            return;
+    fn prepare(&mut self, context: &mut DrawPreparationContext<'_, FluidGlassCommand>) {
+        if context.command.render.lens.is_some() {
+            let prepared = self.raster.prepare(context);
+            self.prepared.insert(
+                PreparedLensKey::new(context.command, context.geometry),
+                prepared,
+            );
         }
+    }
+
+    fn end_frame(&mut self, _: &FrameContext<'_>) {
+        self.prepared.clear();
+    }
+
+    fn draw(&mut self, context: &mut DrawContext<FluidGlassCommand>) {
+        let commands = context.commands;
+        let mut start = 0;
+        while start < commands.len() {
+            if commands[start].0.render.lens.is_some() {
+                let prepared =
+                    &self.prepared[&PreparedLensKey::new(commands[start].0, commands[start].1)];
+                self.draw_batch(context, &commands[start..start + 1], Some(prepared));
+                start += 1;
+            } else {
+                let end = (start + 1..commands.len())
+                    .find(|&index| commands[index].0.render.lens.is_some())
+                    .unwrap_or(commands.len());
+                self.draw_batch(context, &commands[start..end], None);
+                start = end;
+            }
+        }
+    }
+}
+
+impl FluidGlassPipeline {
+    fn draw_batch(
+        &self,
+        context: &mut DrawContext<FluidGlassCommand>,
+        commands: &[(&FluidGlassCommand, DrawGeometry)],
+        prepared: Option<&PreparedLens>,
+    ) {
         let instances = GlassInstances {
-            instances: context
-                .commands
+            instances: commands
                 .iter()
-                .map(|(command, geometry)| glass_uniforms(command, *geometry, &*context))
+                .map(|(command, geometry)| {
+                    let mut uniforms = glass_uniforms(
+                        command,
+                        *geometry,
+                        context.target_size,
+                        context.scene_rect,
+                        context.scene_texture_view,
+                    );
+                    if let Some(prepared) = prepared {
+                        uniforms.raster_origin = prepared.origin;
+                        uniforms.raster_size = prepared.size;
+                    }
+                    uniforms
+                })
                 .collect(),
         };
         let mut content = StorageBuffer::new(Vec::<u8>::new());
@@ -223,6 +312,13 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
                         binding: 2,
                         resource: wgpu::BindingResource::Sampler(&self.sampler),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::TextureView(
+                            prepared
+                                .map_or(context.scene_texture_view, |prepared| &prepared.texture),
+                        ),
+                    },
                 ],
                 label: Some("fluid_glass_bind_group"),
             });
@@ -237,17 +333,18 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
 fn glass_uniforms(
     command: &FluidGlassCommand,
     geometry: tessera_ui::render::DrawGeometry,
-    context: &DrawContext<FluidGlassCommand>,
+    target_size: PxSize,
+    scene: PxRect,
+    scene_texture_view: &wgpu::TextureView,
 ) -> GlassUniforms {
     let render = &command.render;
     let size = geometry.local_size;
     let start_pos = geometry.window_origin();
     let [world_width, world_height] = geometry.window_size();
-    let screen_w = context.target_size.width.to_f32();
-    let screen_h = context.target_size.height.to_f32();
+    let screen_w = target_size.width.to_f32();
+    let screen_h = target_size.height.to_f32();
 
-    let scene = context.scene_rect;
-    let texture = context.scene_texture_view.texture();
+    let texture = scene_texture_view.texture();
     let (texture_w, texture_h) = (texture.width() as f32, texture.height() as f32);
     let scene_uv = Vec4::new(
         screen_w / texture_w,
@@ -277,6 +374,69 @@ fn glass_uniforms(
             (start_pos.y + world_height) / screen_h,
         ),
         material_tone: render.material_tone.unwrap_or_default().into(),
+        lens: render.lens.map_or(Vec4::ZERO, |lens| {
+            Vec4::new(
+                lens.edge_width,
+                lens.refraction,
+                lens.dispersion,
+                lens.transmission,
+            )
+        }),
+        lens_shadow: render.lens.map_or(Vec4::ZERO, |lens| {
+            Vec4::new(
+                lens.shadow.offset,
+                lens.shadow.width,
+                lens.shadow.blur,
+                lens.shadow.opacity,
+            )
+        }),
+        refraction_width: render.lens.map_or(0.0, |lens| lens.refraction_width),
+        lens_contour_a: render
+            .lens
+            .and_then(|lens| lens.contour)
+            .map_or(Vec4::ZERO, |contour| {
+                Vec4::new(
+                    contour.controls[0][0],
+                    contour.controls[0][1],
+                    contour.controls[1][0],
+                    contour.controls[1][1],
+                )
+            }),
+        lens_contour_b: render
+            .lens
+            .and_then(|lens| lens.contour)
+            .map_or(Vec4::ZERO, |contour| {
+                Vec4::new(
+                    contour.controls[2][0],
+                    contour.controls[2][1],
+                    contour.controls[3][0],
+                    contour.controls[3][1],
+                )
+            }),
+        lens_contour_c: render
+            .lens
+            .and_then(|lens| lens.contour)
+            .map_or(Vec4::ZERO, |contour| {
+                Vec4::new(
+                    contour.controls[4][0],
+                    contour.controls[4][1],
+                    contour.coverage_width,
+                    0.0,
+                )
+            }),
+        contour_iterations: 6,
+        raster_origin: Vec2::ZERO,
+        raster_size: Vec2::ONE,
+        scene_origin_px: Vec2::new(
+            start_pos.x - scene.x.to_f32(),
+            start_pos.y - scene.y.to_f32(),
+        ),
+        raster_step: Vec2::splat(1.0 / geometry.local_to_window.scale()),
+        refraction_corner_g2: render.lens.map_or(2.0, |lens| lens.refraction_corner_g2),
+        inner_refraction_width: render.lens.map_or(0.0, |lens| lens.inner_refraction_width),
+        inner_refraction: render.lens.map_or(0.0, |lens| lens.inner_refraction),
+        dispersion_angle: render.lens.map_or(0.0, |lens| lens.dispersion_angle),
+        spectrum_radius: 4,
         blur_sigma_px: render.blur_sigma_px,
         pixels_per_dp: render.pixels_per_dp,
         opacity: render.opacity,
