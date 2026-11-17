@@ -643,6 +643,7 @@ impl GloballyPositionedHandler {
 /// This type carries pointer event payload, local geometry, and event
 /// consumption helpers.
 pub struct PointerInput<'a> {
+    pub(crate) node_id: indextree::NodeId,
     /// Maps this handler's local geometry and displacement units into the
     /// window.
     pub local_to_window: crate::LocalToWindow,
@@ -694,17 +695,16 @@ impl PointerInput<'_> {
         *self.cursor_position_abs
     }
 
-    /// Blocks pointer input to other components.
+    /// Blocks non-scroll input from propagating beyond this node without
+    /// consuming it. Descendant Final observers can still arbitrate gestures.
     ///
     /// Scroll events still reach ancestors.
     pub fn block_cursor(&mut self) {
-        let blocks_non_scroll = self.pointer_changes.iter().any(|change| {
-            !change.is_consumed() && !matches!(change.content, CursorEventContent::Scroll(_))
-        });
-        if blocks_non_scroll {
-            self.cursor_position_abs.take();
+        for change in self.pointer_changes.iter() {
+            if !matches!(change.content, CursorEventContent::Scroll(_)) {
+                change.block_propagation(self.node_id, self.pass);
+            }
         }
-        self.consume_pointer_changes();
     }
 
     /// Blocks pointer changes to other components.

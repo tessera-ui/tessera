@@ -192,6 +192,8 @@ programming contract; the guidelines below also govern framework implementation.
   Captured paths use stable instance identities and survive recomposition.
 - A child's tap must not activate or focus ancestor tap handlers; drag and scroll
   observers still receive the press.
+- Passive input barriers stop propagation without consuming changes or cancelling
+  descendant gestures; explicit gesture consumption still arbitrates in Final.
 - Prefer the foundation `detect_*_gestures` helpers. Use keyed pointer-input tasks for changing detector configuration and state handles for live values. Reserve raw event loops for input behavior requiring explicit pass arbitration or editor-specific handling.
 - Event handlers should be lightweight to avoid blocking the main loop.
 - Gesture slop starts at the recorded press position. Direct and inertial scroll

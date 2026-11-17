@@ -875,13 +875,17 @@ fn surface_foreground(paint: Option<State<SurfaceLayout>>) {
 struct SurfaceBlockInputPointerModifierNode;
 
 impl PointerInputModifierNode for SurfaceBlockInputPointerModifierNode {
+    fn receives_consumed(&self) -> bool {
+        true
+    }
+
     fn on_pointer_input(&self, mut input: PointerInput<'_>) {
         let is_cursor_in_surface = input
             .cursor_position_rel
             .map(|pos| is_position_inside_bounds(input.computed_data, pos))
             .unwrap_or(false);
         if is_cursor_in_surface {
-            input.consume_pointer_changes();
+            input.block_cursor();
         }
     }
 }

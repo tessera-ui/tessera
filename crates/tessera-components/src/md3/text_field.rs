@@ -6,7 +6,10 @@
 use glyphon::Action as GlyphonAction;
 use tessera_foundation::{
     modifier::{InteractionVisualState, ModifierExt as _, Padding},
-    pointer_gestures::{LongPressGestureConfig, detect_long_press_gestures},
+    pointer_gestures::{
+        LongPressGestureConfig, TapGesture, TapGestureConfig, detect_long_press_gestures,
+        detect_tap_gestures,
+    },
 };
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, CursorEventContent,
@@ -37,8 +40,6 @@ use crate::{
             TextStyle,
         },
     },
-    modifier::with_pointer_preview_input,
-    pos_misc::is_position_inside_bounds,
     res::I18N,
     row::row,
     shape_def::{RoundedCorner, Shape},
@@ -1557,46 +1558,44 @@ pub fn text_field(
             geometry.with_mut(|geometry| geometry.outer = Some(bounds));
         }
     });
-    let modifier_base = with_pointer_preview_input(modifier_base, move |input| {
-        if !menu_policy.enabled || input.pass != PointerEventPass::Initial {
-            return;
-        }
-        let cursor_pos = input.cursor_position_rel;
-        let is_inside = cursor_pos
-            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
-            .unwrap_or(false);
-        if input.pointer_changes.iter().any(|change| {
-            matches!(
-                change.content,
-                CursorEventContent::Pressed(PressKeyEventType::Left)
-            )
-        }) {
-            context_menu_anchor.set(cursor_pos);
-        }
-        for change in input.pointer_changes.iter_mut() {
-            if matches!(
-                change.content,
-                CursorEventContent::Pressed(PressKeyEventType::Right)
-            ) && is_inside
-            {
-                if let Some(cursor_pos) = cursor_pos {
-                    menu_controller.with_mut(|menu| {
-                        menu.open_at(MenuAnchor::at(cursor_pos));
-                    });
-                }
-                change.consume();
-            }
-        }
-    });
     let modifier_base = if menu_policy.enabled {
-        modifier_base.pointer_input((menu_policy, menu_controller), move |scope| {
-            text_field_context_menu_detector(
-                scope,
-                menu_policy,
-                menu_controller,
-                context_menu_anchor,
+        modifier_base
+            .pointer_input((menu_policy, menu_controller), move |scope| {
+                text_field_context_menu_detector(
+                    scope,
+                    menu_policy,
+                    menu_controller,
+                    context_menu_anchor,
+                )
+            })
+            .pointer_input(
+                (menu_policy, menu_controller),
+                move |mut scope| async move {
+                    detect_tap_gestures(
+                        &mut scope,
+                        TapGestureConfig {
+                            pass: PointerEventPass::Initial,
+                            button: PressKeyEventType::Right,
+                            slop_px: Dp(8.0).to_pixels_f32(),
+                            consume_down: true,
+                            consume_up: true,
+                            ..Default::default()
+                        },
+                        |gesture| {
+                            if let TapGesture::Tapped(down, up) = gesture
+                                && let Some(anchor) = up
+                                    .position()
+                                    .map(|point| down.local_to_window.inverse_point(point))
+                                    .or(down.local_position)
+                            {
+                                menu_controller
+                                    .with_mut(|menu| menu.open_at(MenuAnchor::at(anchor)));
+                            }
+                        },
+                    )
+                    .await;
+                },
             )
-        })
     } else {
         modifier_base
     };
@@ -1820,6 +1819,16 @@ mod tests {
         let position = PxPosition::from_f32_xy(390.0, 28.0);
         session.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Right);
         session.frames(1);
+        assert!(
+            !session
+                .accessibility_snapshot()
+                .expect("tree before right release")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
+        );
+        session.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(391.0, 28.0));
+        session.frames(1);
         session.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Right);
         session.frames(1);
 
@@ -1837,6 +1846,44 @@ mod tests {
             node.bounds()
                 .is_some_and(|bounds| bounds.x0 >= 0.0 && bounds.x1 <= 400.0)
         }));
+        session.frames(2);
+        assert!(
+            session
+                .accessibility_snapshot()
+                .expect("tree after right release")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
+        );
+    }
+
+    #[test]
+    fn right_click_drag_does_not_open_context_menu() {
+        use tessera_ui::{
+            MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Role, testing::UiTest,
+        };
+
+        let mut session = UiTest::new()
+            .content(context_menu_fixture)
+            .viewport(400, 200);
+        session.frame();
+        let start = PxPosition::from_f32_xy(100.0, 28.0);
+        let end = PxPosition::from_f32_xy(120.0, 28.0);
+        session.pointer_press(MOUSE_POINTER_ID, start, PressKeyEventType::Right);
+        session.frames(1);
+        session.pointer_move(MOUSE_POINTER_ID, end);
+        session.frames(1);
+        session.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Right);
+        session.frames(1);
+
+        assert!(
+            !session
+                .accessibility_snapshot()
+                .expect("tree after right-button drag")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
+        );
     }
 
     #[test]
@@ -1856,6 +1903,16 @@ mod tests {
         session.frames(1);
         session.advance(Duration::from_millis(500));
         session.frames(1);
+        assert!(
+            session
+                .accessibility_snapshot()
+                .expect("tree while long-press menu is open")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
+        );
+        session.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        session.frames(1);
 
         let tree = session.accessibility_snapshot().expect("tree");
         assert!(
@@ -1863,6 +1920,15 @@ mod tests {
                 .iter()
                 .any(|(_, node)| node.role() == Role::MenuItem),
             "holding populated text opens its context menu"
+        );
+        session.frames(2);
+        assert!(
+            session
+                .accessibility_snapshot()
+                .expect("tree after long-press release")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
         );
     }
 }

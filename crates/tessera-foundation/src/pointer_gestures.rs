@@ -46,6 +46,9 @@ use tessera_ui::{
 /// Configuration for [`detect_tap_gestures`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TapGestureConfig {
+    /// Pass used to observe presses and recognize taps. Main also checks for
+    /// consumption by later handlers in Final.
+    pub pass: PointerEventPass,
     /// Button that starts the gesture.
     pub button: PressKeyEventType,
     /// Maximum movement before the tap is cancelled.
@@ -63,6 +66,7 @@ pub struct TapGestureConfig {
 impl Default for TapGestureConfig {
     fn default() -> Self {
         Self {
+            pass: PointerEventPass::Main,
             button: PressKeyEventType::Left,
             slop_px: 8.0,
             cancel_on_exit: true,
@@ -113,7 +117,7 @@ pub async fn detect_tap_gestures(
     loop {
         let Some(mut down) = scope
             .await_first_down(
-                PointerEventPass::Main,
+                config.pass,
                 Some(config.button),
                 DownRequirement::Unconsumed,
             )
@@ -131,12 +135,7 @@ pub async fn detect_tap_gestures(
         (observer.callback)(TapGesture::Pressed(down.clone()));
         let result = if let Some(timeout) = config.long_press {
             scope
-                .await_long_press_or_cancellation(
-                    PointerEventPass::Main,
-                    &down,
-                    timeout,
-                    config.slop_px,
-                )
+                .await_long_press_or_cancellation(config.pass, &down, timeout, config.slop_px)
                 .await
         } else {
             wait_for_tap(scope, &down, config).await
@@ -147,7 +146,7 @@ pub async fn detect_tap_gestures(
             LongPressResult::Triggered { .. } => {
                 (observer.callback)(TapGesture::LongPressed(down.clone()));
                 let end = scope
-                    .consume_until_up(PointerEventPass::Main, down.change.pointer_id)
+                    .consume_until_up(config.pass, down.change.pointer_id)
                     .await;
                 (
                     match end {
@@ -179,7 +178,7 @@ async fn wait_for_tap(
     config: TapGestureConfig,
 ) -> LongPressResult {
     loop {
-        let event = scope.await_pointer_event(PointerEventPass::Main).await;
+        let event = scope.await_pointer_event(config.pass).await;
         if event.is_cancelled() {
             return LongPressResult::Cancelled;
         }
@@ -213,14 +212,15 @@ async fn wait_for_tap(
                 _ => {}
             }
         }
-        let final_event = scope.await_pointer_event(PointerEventPass::Final).await;
-        if final_event.is_cancelled()
-            || final_event
-                .changes
-                .iter()
-                .any(|change| change.pointer_id == down.change.pointer_id && change.is_consumed())
-        {
-            return LongPressResult::Cancelled;
+        if config.pass == PointerEventPass::Main {
+            let final_event = scope.await_pointer_event(PointerEventPass::Final).await;
+            if final_event.is_cancelled()
+                || final_event.changes.iter().any(|change| {
+                    change.pointer_id == down.change.pointer_id && change.is_consumed()
+                })
+            {
+                return LongPressResult::Cancelled;
+            }
         }
     }
 }

@@ -398,6 +398,8 @@ mod tests {
                 point,
                 tessera_ui::PressKeyEventType::Left,
             );
+            renderer.frames(1);
+            renderer.pointer_move(tessera_ui::MOUSE_POINTER_ID, point);
             renderer.pointer_release(
                 tessera_ui::MOUSE_POINTER_ID,
                 point,
@@ -437,6 +439,7 @@ mod tests {
                     .router
                     .with(RouterController::current_is::<MaterialComponentsPageDestination>)
             );
+            assert!(!handles.directory.with(SideSheetController::is_open));
             click(&mut renderer, "Open navigation drawer");
             click(&mut renderer, label);
             assert!(handles.router.with(|router| match label {
@@ -446,6 +449,7 @@ mod tests {
                 "Material components" => router.current_is::<MaterialComponentsPageDestination>(),
                 _ => unreachable!(),
             }));
+            assert!(!handles.directory.with(SideSheetController::is_open));
             assert!(
                 renderer
                     .read_pixels()

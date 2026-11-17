@@ -200,6 +200,10 @@ impl GlassPress {
 struct FluidGlassBlockInputPointerModifierNode;
 
 impl PointerInputModifierNode for FluidGlassBlockInputPointerModifierNode {
+    fn receives_consumed(&self) -> bool {
+        true
+    }
+
     fn on_pointer_input(&self, mut input: PointerInput<'_>) {
         let size = input.computed_data;
         let cursor_pos_option = input.cursor_position_rel;
@@ -208,8 +212,6 @@ impl PointerInputModifierNode for FluidGlassBlockInputPointerModifierNode {
             .unwrap_or(false);
 
         if is_cursor_in {
-            // Consume all input events to prevent interaction with underlying
-            // components
             input.block_all();
         }
     }
