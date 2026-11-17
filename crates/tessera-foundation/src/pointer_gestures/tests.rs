@@ -107,6 +107,7 @@ fn tap_fixture(
     #[prop(skip_eq)] events: Rc<RefCell<Vec<(usize, &'static str)>>>,
     hold: Option<Duration>,
     child: Option<tessera_ui::RenderSlot>,
+    consume: Option<bool>,
 ) {
     layout(Stack)
         .modifier(
@@ -119,6 +120,8 @@ fn tap_fixture(
                             &mut scope,
                             TapGestureConfig {
                                 long_press: hold,
+                                consume_down: consume.unwrap_or(false),
+                                consume_up: consume.unwrap_or(false),
                                 ..Default::default()
                             },
                             |gesture| {
@@ -222,43 +225,172 @@ fn stationary_long_press_is_one_shot_and_movement_or_cancel_prevents_it() {
 }
 
 #[tessera_ui::tessera]
-fn consumed_motion_fixture(#[prop(skip_eq)] events: Rc<RefCell<Vec<(usize, &'static str)>>>) {
+fn blocked_tap_fixture(
+    #[prop(skip_eq)] events: Rc<RefCell<Vec<(usize, &'static str)>>>,
+    consume: bool,
+    hold: Option<Duration>,
+) {
+    let observed = events.clone();
     layout(Stack)
-        .modifier(Modifier::new().size(Dp(80.0), Dp(80.0)).pointer_input_once(
-            |mut scope| async move {
-                loop {
-                    let event = scope.await_pointer_event(PointerEventPass::Main).await;
-                    if event.is_cancelled() {
-                        return;
-                    }
-                    for mut change in event.changes {
-                        if matches!(change.content, CursorEventContent::Moved(_)) {
-                            change.consume();
+        .modifier(
+            Modifier::new()
+                .size(Dp(80.0), Dp(80.0))
+                .pointer_input_once(move |mut scope| {
+                    let observed = observed.clone();
+                    async move {
+                        loop {
+                            for pass in [PointerEventPass::Main, PointerEventPass::Final] {
+                                let event = scope.await_pointer_event(pass).await;
+                                if event.is_cancelled() {
+                                    return;
+                                }
+                                if !event.changes.is_empty() {
+                                    observed.borrow_mut().push((0, "input"));
+                                }
+                            }
                         }
                     }
-                }
-            },
-        ))
+                }),
+        )
         .child(move || {
-            tap_fixture(3, events.clone()).hold(Duration::from_millis(500));
+            let events = events.clone();
+            layout(Stack)
+                .modifier(Modifier::new().block_touch_propagation())
+                .child(move || {
+                    let tap = tap_fixture(1, events.clone()).consume(consume);
+                    if let Some(hold) = hold {
+                        tap.hold(hold);
+                    }
+                });
         });
 }
 
 #[test]
-fn ancestor_consumption_after_child_main_cancels_a_pending_long_press() {
-    let events = Rc::new(RefCell::new(Vec::new()));
-    let mut test = UiTest::new().content(|| consumed_motion_fixture(events.clone()));
-    test.frame();
-    test.pointer_press(
-        MOUSE_POINTER_ID,
-        PxPosition::from_f32_xy(10.0, 10.0),
-        PressKeyEventType::Left,
-    );
-    test.frame();
-    test.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(11.0, 10.0));
-    test.frame();
-    test.advance(Duration::from_millis(500));
-    assert_eq!(events.borrow().as_slice(), [(3, "press"), (3, "cancel")]);
+fn propagation_barriers_preserve_child_taps_without_leaking_to_ancestors() {
+    for (hold, consume) in [
+        (None, false),
+        (None, true),
+        (Some(Duration::from_millis(500)), false),
+        (Some(Duration::from_millis(500)), true),
+    ] {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let mut test = UiTest::new().content(|| {
+            let fixture = blocked_tap_fixture(events.clone(), consume);
+            if let Some(hold) = hold {
+                fixture.hold(hold);
+            }
+        });
+        test.frame();
+        let point = PxPosition::from_f32_xy(10.0, 10.0);
+        for x in [10.0, 13.0] {
+            events.borrow_mut().clear();
+            test.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+            test.frame();
+            let moved = PxPosition::from_f32_xy(x, 10.0);
+            test.pointer_move(MOUSE_POINTER_ID, moved);
+            test.pointer_release(MOUSE_POINTER_ID, moved, PressKeyEventType::Left);
+            test.frame();
+            assert_eq!(
+                events.borrow().as_slice(),
+                [(1, "press"), (1, "release"), (1, "tap")]
+            );
+        }
+        events.borrow_mut().clear();
+        test.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+        test.frame();
+        let moved = PxPosition::from_f32_xy(30.0, 10.0);
+        test.pointer_move(MOUSE_POINTER_ID, moved);
+        test.pointer_release(MOUSE_POINTER_ID, moved, PressKeyEventType::Left);
+        test.frame();
+        assert_eq!(events.borrow().as_slice(), [(1, "press"), (1, "cancel")]);
+        if let Some(hold) = hold {
+            events.borrow_mut().clear();
+            test.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+            test.frame();
+            let moved = PxPosition::from_f32_xy(13.0, 10.0);
+            test.pointer_move(MOUSE_POINTER_ID, moved);
+            test.frame();
+            test.advance(hold);
+            test.pointer_release(MOUSE_POINTER_ID, moved, PressKeyEventType::Left);
+            test.frame();
+            assert_eq!(
+                events.borrow().as_slice(),
+                [(1, "press"), (1, "long"), (1, "release")]
+            );
+        }
+        events.borrow_mut().clear();
+        test.inject_pointer(
+            PointerChange::new(
+                test.frame_origin() + test.frame_time(),
+                MOUSE_POINTER_ID,
+                CursorEventContent::Scroll(ScrollEventContent {
+                    delta_x: 0.0,
+                    delta_y: 12.0,
+                    unit: tessera_ui::ScrollDeltaUnit::Pixel,
+                    source: tessera_ui::ScrollEventSource::Wheel,
+                }),
+                tessera_ui::GestureState::TapCandidate,
+            )
+            .with_position(point),
+        );
+        test.frame();
+        assert_eq!(events.borrow().as_slice(), [(0, "input"), (0, "input")]);
+    }
+}
+
+#[tessera_ui::tessera]
+fn consumed_motion_fixture(
+    #[prop(skip_eq)] events: Rc<RefCell<Vec<(usize, &'static str)>>>,
+    hold: Option<Duration>,
+) {
+    layout(Stack)
+        .modifier(
+            Modifier::new()
+                .size(Dp(80.0), Dp(80.0))
+                .pointer_input_once(|mut scope| async move {
+                    loop {
+                        let event = scope.await_pointer_event(PointerEventPass::Main).await;
+                        if event.is_cancelled() {
+                            return;
+                        }
+                        for mut change in event.changes {
+                            if matches!(change.content, CursorEventContent::Moved(_)) {
+                                change.consume();
+                            }
+                        }
+                    }
+                })
+                .block_touch_propagation(),
+        )
+        .child(move || {
+            let tap = tap_fixture(3, events.clone());
+            if let Some(hold) = hold {
+                tap.hold(hold);
+            }
+        });
+}
+
+#[test]
+fn ancestor_consumption_after_child_main_cancels_taps_and_long_presses() {
+    for hold in [None, Some(Duration::from_millis(500))] {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let mut test = UiTest::new().content(|| {
+            let fixture = consumed_motion_fixture(events.clone());
+            if let Some(hold) = hold {
+                fixture.hold(hold);
+            }
+        });
+        test.frame();
+        let point = PxPosition::from_f32_xy(10.0, 10.0);
+        test.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+        test.frame();
+        test.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(11.0, 10.0));
+        test.frame();
+        test.advance(Duration::from_millis(500));
+        test.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+        test.frame();
+        assert_eq!(events.borrow().as_slice(), [(3, "press"), (3, "cancel")]);
+    }
 }
 
 #[tessera_ui::tessera]

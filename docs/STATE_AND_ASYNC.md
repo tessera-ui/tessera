@@ -197,6 +197,11 @@ lets a child observe a parent's consumption. Pointer events carry the sample's
 position, timestamp, local size, and coordinate transform. Long-press timeouts
 use the frame clock and also work without pointer motion.
 
+Passive barriers such as `block_touch_propagation` stop non-scroll input from
+reaching ancestors without consuming it. Descendant detectors still receive Final
+observations, so taps survive movement within slop. Explicit consumption by a drag
+or scroll handler still cancels competing gestures.
+
 Use `await_each_gesture` when building a repeating detector; it waits for all
 observed pointers to lift after the gesture body completes. Long-lived unrelated
 work belongs in a separate task, since pointer events are not buffered while a

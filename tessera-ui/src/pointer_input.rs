@@ -71,7 +71,8 @@ impl PointerEvent {
         self.cancelled
     }
 
-    /// Blocks pointer changes from reaching later components in this dispatch.
+    /// Blocks non-scroll propagation without consuming the changes or cancelling
+    /// descendant gestures.
     pub fn block_cursor(&self) {
         self.commands.block_cursor.set(true);
     }
@@ -130,7 +131,8 @@ pub struct PointerDown {
 }
 
 impl PointerDown {
-    /// Blocks pointer changes from reaching later components in this dispatch.
+    /// Blocks non-scroll propagation without consuming the changes or cancelling
+    /// descendant gestures.
     pub fn block_cursor(&self) {
         self.commands.block_cursor.set(true);
     }
