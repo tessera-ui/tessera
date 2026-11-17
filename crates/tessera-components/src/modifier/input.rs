@@ -36,13 +36,6 @@ where
     base.push_pointer_input(ClosurePointerInputModifierNode { handler })
 }
 
-pub(crate) fn with_pointer_preview_input<F>(base: Modifier, handler: F) -> Modifier
-where
-    F: for<'a> Fn(PointerInput<'a>) + 'static,
-{
-    base.push_pointer_preview_input(ClosurePointerInputModifierNode { handler })
-}
-
 pub(crate) fn with_keyboard_input<F>(base: Modifier, handler: F) -> Modifier
 where
     F: for<'a> Fn(KeyboardInput<'a>) + 'static,

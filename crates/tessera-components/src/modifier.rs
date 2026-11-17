@@ -15,7 +15,7 @@ use crate::shape_def::Shape;
 
 use visual::{BackgroundModifierNode, BorderModifierNode};
 
-pub(crate) use input::{with_keyboard_input, with_pointer_input, with_pointer_preview_input};
+pub(crate) use input::{with_keyboard_input, with_pointer_input};
 
 /// Extensions for drawing around component subtrees.
 pub trait ModifierExt {
