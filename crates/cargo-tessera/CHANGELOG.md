@@ -58,7 +58,8 @@ Requires Rust 1.98 or newer and targets Tessera 3.
   slots, and Tessera-only APIs) with rust-analyzer before running
   `cargo check`, with stable diagnostic codes, `--explain`, named lints, and
   rustc-style lint levels (`-A`/`-W`/`-D`/`--forbid`/`--cap-lints`, or
-  `#[tessera_ui::lint(...)]`).
+  `#[tessera_ui::lint(...)]`). Pointer-input detector closures are recognized
+  as Tessera contexts; gesture action callbacks remain uncolored.
 - `cargo tessera fix` applies machine-applicable Tessera suggestions and
   `cargo fix`.
 - `cargo tessera web init`, `web build`, and `web dev` for WebAssembly builds
@@ -163,4 +164,3 @@ Requires Rust 1.98 or newer and targets Tessera 3.
 - feat(dev): improve watcher coverage and resilience
 - feat(new): support nested template directories
 - feat(cargo-tessera): add CLI tool for Tessera projects
-

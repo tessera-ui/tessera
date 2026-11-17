@@ -28,4 +28,4 @@ rust-script scripts/release-package.rs
 
 按需使用 `### Breaking changes`、`### Added`、`### Changed`、`### Fixed` 和 `### Performance`，归纳而非罗列提交。发布计划会输出每个包的对比链接。仅因依赖升级而发布的包用一行说明即可。
 
-使用 `--major <package>` 指定主版本升级。在分支上运行 `--prepare` 写入版本、依赖要求与更新日志，并通过标题为 `release: prepare workspace versions` 的 pull request 合并。随后在最新 `main` 的干净 checkout 中运行 `--execute`，验证并发布各包，然后推送标签。
+使用 `--major <package>` 指定主版本升级。在分支上运行 `--prepare` 校验发布说明并写入版本与依赖要求，通过标题为 `release: prepare workspace versions` 的 pull request 合并。如果发布前 `main` 又合入了改动，将它们整合到该分支、更新说明，并重新运行发布计划与 `--prepare`。随后在最新 `main` 的干净 checkout 中运行 `--execute`，验证并发布各包，然后推送标签。

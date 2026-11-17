@@ -52,9 +52,14 @@
 - **Modifiers.** Layout, semantics, and generic visual modifiers (`padding`,
   `size`, `fill_*`, `alpha`, `clip_shape`, ...) come from
   `tessera_foundation::modifier::ModifierExt`.
-  `tessera_components::modifier::ModifierExt` provides backgrounds, borders,
-  and `clickable` / `toggleable` / `selectable`; scrolling and Material
-  shadows come from `md3::modifier::ModifierExt`.
+  Generic interaction modifiers (`clickable`, `combined_clickable`,
+  `toggleable`, `selectable`, and `draggable`) and `InteractionState` also
+  belong to `tessera_foundation::modifier`; the
+  `tessera_components::interaction_state` module is removed.
+  `tessera_components::modifier::ModifierExt` provides drawing extensions
+  only (backgrounds and borders); scrolling and Material shadows come from
+  `md3::modifier::ModifierExt`. Foundation interaction modifiers do not add
+  Material ripples; use Material controls or supply custom visual feedback.
 - **Removed and replaced components.** `text_editor` is replaced by
   `md3::text_input` and `md3::text_field`; `bottom_nav_bar` by
   `md3::navigation_bar`; `side_bar` is removed (use `md3::navigation_drawer`
@@ -91,6 +96,12 @@
   components.
 - `experiment::hig::glass::glass` with Regular, Clear, and Custom liquid glass
   materials.
+
+### Fixed
+
+- Text-field context menus open on completed right clicks and long presses,
+  remain open through release, and tolerate small pointer movements without
+  treating drags as clicks. Focused editors no longer swallow the menu trigger.
 
 ### Performance
 

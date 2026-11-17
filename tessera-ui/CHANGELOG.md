@@ -137,6 +137,13 @@ guides describe the new model.
   rebuilt regions.
 - Wheel scrolling normalized across platforms, nested scroll dispatch, and
   touch inertia.
+- Modifier-owned asynchronous pointer input with `pointer_input(key, detector)`
+  and `pointer_input_once(detector)`. A key change or detachment cancels the
+  task; unchanged keys retain the running closure, so capture state handles for
+  live values. `PointerInputScope` supports sampled events, same-dispatch
+  consumption across Initial/Main/Final passes, and frame-clock long presses.
+  Use the shared detectors in `tessera_foundation::pointer_gestures` for common
+  gestures.
 
 ### Fixed
 
@@ -145,6 +152,9 @@ guides describe the new model.
 - The renderer thread name is valid on Linux.
 - Nested clip rectangles intersect correctly.
 - Shader variable limits are capped to what the adapter supports.
+- Child taps do not activate ancestor click handlers, while drag and scroll
+  observers still receive the press. Ordinary focus changes preserve held
+  pointer presses.
 
 ### Performance
 

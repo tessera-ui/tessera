@@ -36,8 +36,8 @@ struct Cli {
     /// Force a major bump for a package; repeat for multiple packages.
     #[arg(long)]
     major: Vec<String>,
-    /// Write versions, dependency requirements and changelogs for a release
-    /// pull request.
+    /// Validate release notes and write versions and dependency requirements
+    /// for a release pull request.
     #[arg(long, conflicts_with = "execute")]
     prepare: bool,
     /// Publish the prepared release from an up-to-date `main`, then push its
