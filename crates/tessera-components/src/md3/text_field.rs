@@ -1931,6 +1931,44 @@ mod tests {
                 .any(|(_, node)| node.role() == Role::MenuItem)
         );
     }
+
+    #[test]
+    fn losing_focus_dismisses_text_field_context_menu() {
+        use tessera_ui::{
+            MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Role, testing::UiTest,
+        };
+
+        let mut session = UiTest::new()
+            .content(context_menu_fixture)
+            .viewport(400, 200);
+        session.frame();
+        let position = PxPosition::from_f32_xy(390.0, 28.0);
+        session.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Right);
+        session.frames(1);
+        session.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Right);
+        session.frames(2);
+        assert!(
+            session
+                .accessibility_snapshot()
+                .expect("tree while context menu is open")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
+        );
+
+        tessera_ui::focus::clear_focus(true);
+        session.frame();
+
+        assert!(
+            !session
+                .accessibility_snapshot()
+                .expect("tree after context menu loses focus")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem),
+            "the text-field context menu closes after focus leaves its menu scope"
+        );
+    }
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]

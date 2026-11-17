@@ -558,7 +558,8 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 
 /// # menu_provider
 ///
-/// Provides a Material Design 3 menu overlay anchored to a rectangle.
+/// Provides a Material Design 3 menu overlay anchored to a rectangle and
+/// dismisses it when its focus leaves the menu.
 ///
 /// ## Usage
 ///
@@ -908,6 +909,7 @@ fn menu_panel(
     let on_dismiss = provider.on_dismiss;
     let placement = provider.placement;
     let is_submenu = provider.parent_request.is_some();
+    let focus_seen = remember(|| false);
     let typeahead = remember(typeahead::Registry::default);
     let scroll = remember(ScrollableController::new);
     let color_style = provider.color_style;
@@ -915,6 +917,15 @@ fn menu_panel(
     let host = provider.host.expect("menu host");
     let motion = remember(|| MenuShapeMotion::new(MenuPosition::Standalone));
     let focused = focus_scope.has_focus();
+    if !is_submenu {
+        let was_focused = focus_seen.get();
+        if was_focused != focused {
+            focus_seen.set(focused);
+        }
+        if was_focused && !focused && controller.with(MenuController::is_open) {
+            host.dismiss_all();
+        }
+    }
     if !grouped && provider.animate_shape {
         let hovered = motion.with(MenuShapeMotion::hovered);
         launch(
