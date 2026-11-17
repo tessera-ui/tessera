@@ -3295,10 +3295,21 @@ fn run_pointer_input_for_node<F>(
             cursor_position_ref = &mut dummy_cursor_position;
         }
     }
-    let current_cursor_position = cursor_position_ref.map(|pos| transform.inverse_point(pos));
     let mut selected_change_indices = Vec::new();
     let mut local_pointer_changes = Vec::new();
+    let mut propagation_blocked = false;
     for (index, change) in dispatch_ctx.pointer_changes.iter().enumerate() {
+        if let Some((blocker, blocked_pass)) = change.propagation_blocker() {
+            let descendant_final = blocked_pass == PointerEventPass::Main
+                && pass == PointerEventPass::Final
+                && node_id
+                    .ancestors(dispatch_ctx.tree)
+                    .any(|ancestor| ancestor == blocker);
+            if !descendant_final {
+                propagation_blocked = true;
+                continue;
+            }
+        }
         if change.is_consumed() && !receives_consumed {
             continue;
         }
@@ -3318,6 +3329,10 @@ fn run_pointer_input_for_node<F>(
             local_pointer_changes.push(local_change);
         }
     }
+    if owns_sample && propagation_blocked && local_pointer_changes.is_empty() {
+        cursor_position_ref = &mut dummy_cursor_position;
+    }
+    let current_cursor_position = cursor_position_ref.map(|pos| transform.inverse_point(pos));
     #[cfg(feature = "profiling")]
     let mut profiler_guard = Some(ProfilerScopeGuard::new(
         ProfilerPhase::Input,
@@ -3333,6 +3348,7 @@ fn run_pointer_input_for_node<F>(
     let _phase_guard = push_phase(RuntimePhase::Input);
     let _focus_owner_guard = bind_focus_owner(dispatch_ctx.focus_owner);
     let input = PointerInput {
+        node_id,
         pass,
         local_to_window: transform,
         computed_data: node_computed_data,

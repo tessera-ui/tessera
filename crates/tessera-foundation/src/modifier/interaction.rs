@@ -468,6 +468,10 @@ fn cursor_within_inclusive_bounds(position: Option<PxPosition>, size: PxSize) ->
 struct BlockTouchPropagationPointerModifierNode;
 
 impl PointerInputModifierNode for BlockTouchPropagationPointerModifierNode {
+    fn receives_consumed(&self) -> bool {
+        true
+    }
+
     fn on_pointer_input(&self, mut input: PointerInput<'_>) {
         let size = PxSize::new(input.computed_data.width, input.computed_data.height);
         if cursor_within_inclusive_bounds(input.cursor_position_rel, size) {

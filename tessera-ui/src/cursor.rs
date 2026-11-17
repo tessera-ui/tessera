@@ -397,6 +397,27 @@ impl PointerChange {
                 .is_some_and(|consumed| consumed.borrow().consumed.contains(&self.pointer_id))
     }
 
+    pub(crate) fn block_propagation(
+        &self,
+        node_id: indextree::NodeId,
+        pass: crate::PointerEventPass,
+    ) {
+        if let Some(consumption) = &self.live_consumption {
+            consumption
+                .borrow_mut()
+                .blocked
+                .insert(self.pointer_id, (node_id, pass));
+        }
+    }
+
+    pub(crate) fn propagation_blocker(
+        &self,
+    ) -> Option<(indextree::NodeId, crate::PointerEventPass)> {
+        self.live_consumption
+            .as_ref()
+            .and_then(|consumption| consumption.borrow().blocked.get(&self.pointer_id).copied())
+    }
+
     /// Claims a press for one tap detector without consuming the sample.
     ///
     /// Returns `false` for a non-press sample or a press already claimed by
@@ -419,6 +440,7 @@ impl PointerChange {
 pub(crate) struct PointerConsumption {
     consumed: HashSet<PointerId>,
     tap_claimed: HashSet<PointerId>,
+    blocked: HashMap<PointerId, (indextree::NodeId, crate::PointerEventPass)>,
 }
 
 /// Contains scroll movement data for scroll events.
