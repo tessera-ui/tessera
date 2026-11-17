@@ -8,7 +8,7 @@ use crate::{
     render::{
         DrawCommand, SampleRegion, ScratchFit, ScratchTexture, ScratchTextureDescriptor,
         compute::{ErasedComputeBatchItem, ErasedDispatchContext},
-        drawer::ErasedDrawContext,
+        drawer::{ErasedDrawContext, ErasedDrawPreparationContext},
     },
     render_graph::{DrawGeometry, RenderGraph},
     render_pass::{ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassPlan},
@@ -904,6 +904,30 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     };
 
     let timing = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
+    let scene = scene.unwrap_or((
+        write_target,
+        PxRect::from_position_size(PxPosition::ZERO, target_size),
+    ));
+    for op in commands_in_pass.iter() {
+        if let DrawOrClip::Draw(draw) = op
+            && draw.draw_rect.intersection(&damage).is_some()
+        {
+            drawer.pipeline_registry.prepare(
+                ErasedDrawPreparationContext {
+                    graphics,
+                    device,
+                    queue,
+                    config,
+                    target_size,
+                    encoder,
+                    scene_texture_view: scene.0,
+                    scene_rect: scene.1,
+                },
+                draw.command,
+                draw.geometry,
+            );
+        }
+    }
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("Render Pass"),
         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -936,11 +960,6 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     );
     clipper.restore(&mut rpass, target_size);
 
-    // Draws that do not sample the scene never read this placeholder.
-    let scene = scene.unwrap_or((
-        write_target,
-        PxRect::from_position_size(PxPosition::ZERO, target_size),
-    ));
     let mut buffer: SmallVec<[(&dyn DrawCommand, DrawGeometry); 16]> = SmallVec::new();
     let mut last_command_type_id = None;
     let mut current_batch_draw_rect: Option<PxRect> = None;
@@ -1423,7 +1442,9 @@ mod tests {
     fn deferred_pipelines_start_on_first_use_and_draw_receives_the_whole_frame() {
         use std::sync::{Arc, Mutex};
 
-        use crate::render::{ComputeContext, DrawContext, DrawablePipeline, FrameContext};
+        use crate::render::{
+            ComputeContext, DrawContext, DrawPreparationContext, DrawablePipeline, FrameContext,
+        };
 
         struct Probe(Arc<Mutex<Vec<&'static str>>>);
 
@@ -1458,6 +1479,13 @@ mod tests {
                     .lock()
                     .expect("test lock is not poisoned")
                     .push("draw");
+            }
+
+            fn prepare(&mut self, _: &mut DrawPreparationContext<'_, SampleCommand>) {
+                self.0
+                    .lock()
+                    .expect("test lock is not poisoned")
+                    .push("prepare");
             }
 
             fn end_frame(&mut self, _: &FrameContext<'_>) {
@@ -1519,7 +1547,9 @@ mod tests {
         render(&mut core, graph);
         assert_eq!(
             *events.lock().expect("test lock is not poisoned"),
-            ["create", "begin", "draw", "end", "begin", "draw", "end"]
+            [
+                "create", "begin", "prepare", "draw", "end", "begin", "prepare", "draw", "end"
+            ]
         );
         events.lock().expect("test lock is not poisoned").clear();
         let mut fragment = crate::render_graph::RenderFragment::default();

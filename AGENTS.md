@@ -138,6 +138,7 @@ programming contract; the guidelines below also govern framework implementation.
   - **DrawablePipeline**/**ComputablePipeline**: GPU rendering/compute logic
   - **PipelineRegistry**: Registers all pipelines at startup
 - Components set draw/compute commands through `RenderInput`, `RenderMetadataMut`, and draw modifiers (`DrawModifierNode`, `LayoutNode::draw`)
+- Encode draw-dependent intermediate passes through `DrawablePipeline::prepare`, after scene capture and before the render pass. Keep scratch leases alive until all consuming draws are recorded; preserve the final draw's stencil, clipping, and opacity behavior.
 - Draw commands use the measured bounds at their position in the modifier chain.
 - The components crate provides common pipelines; applications register them by adding `tessera_components::ComponentsPackage` to their `EntryPoint`
 
