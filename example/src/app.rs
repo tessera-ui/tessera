@@ -30,6 +30,7 @@ use crate::{
     pages::{
         custom_shader::CustomShaderPageDestination,
         glass_components::GlassComponentsPageDestination,
+        hig_components::{HigComponentsPageDestination, current_article as current_hig_article},
         home::HomePageDestination,
         material_components::{MaterialComponentsPageDestination, current_article},
     },
@@ -85,6 +86,11 @@ pub(crate) fn app(
                                     || current_article(router).is_some()
                             }) {
                                 "Material Design 3"
+                            } else if nav_controller.with(|router| {
+                                router.current_is::<HigComponentsPageDestination>()
+                                    || current_hig_article(router).is_some()
+                            }) {
+                                "ui-hig-components"
                             } else {
                                 "ui-examples"
                             },
@@ -155,6 +161,14 @@ pub(crate) fn app(
                                                 MaterialComponentsPageDestination {
                                                     sessions: Some(sessions),
                                                 },
+                                                nav_controller,
+                                                side_sheet_controller,
+                                            )
+                                            .icon_asset(outlined::WIDGETS_SVG)
+                                            .selected_icon_asset(filled::WIDGETS_SVG);
+                                            nav_item(
+                                                "ui-hig-components",
+                                                HigComponentsPageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
                                             )
@@ -270,7 +284,8 @@ pub(crate) fn navigation_button(
     router: State<RouterController>,
     drawer: State<SideSheetController>,
 ) {
-    let back = router.with(current_article).is_some();
+    let back = router
+        .with(|router| current_article(router).is_some() || current_hig_article(router).is_some());
     let target = if back { 1.0 } else { 0.0 };
     let fade = remember(|| target);
     launch(back, async move {
@@ -316,7 +331,9 @@ pub(crate) fn navigation_button(
                     "ui-open-navigation-drawer"
                 }))
                 .on_click(move || {
-                    if router.with(current_article).is_some() {
+                    if router.with(|router| {
+                        current_article(router).is_some() || current_hig_article(router).is_some()
+                    }) {
                         router.with_mut(RouterController::pop);
                     } else {
                         drawer.with_mut(|drawer| {
