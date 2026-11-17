@@ -446,6 +446,7 @@ mod tests {
             "Glass components",
             "Custom shader",
             "Material components",
+            "HIG components",
         ] {
             if !handles.directory.with(SideSheetController::is_open) {
                 click(&mut renderer, "Open navigation drawer");
@@ -464,6 +465,7 @@ mod tests {
                 "Glass components" => router.current_is::<GlassComponentsPageDestination>(),
                 "Custom shader" => router.current_is::<CustomShaderPageDestination>(),
                 "Material components" => router.current_is::<MaterialComponentsPageDestination>(),
+                "HIG components" => router.current_is::<HigComponentsPageDestination>(),
                 _ => unreachable!(),
             }));
             assert!(!handles.directory.with(SideSheetController::is_open));
