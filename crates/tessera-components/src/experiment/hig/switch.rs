@@ -314,9 +314,7 @@ pub fn switch(
     } else if held.get() && !requester.is_focused() {
         held.set(false);
     }
-    let pressed = enabled
-        && active
-        && (held.get() || interaction.with(|state| state.is_pressed() && state.is_hovered()));
+    let pressed = enabled && active && (held.get() || interaction.with(|state| state.is_pressed()));
     let theme = use_context::<HigTheme>()
         .map(|theme| theme.get())
         .unwrap_or_default();

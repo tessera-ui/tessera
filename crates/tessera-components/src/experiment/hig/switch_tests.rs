@@ -425,6 +425,18 @@ fn check_held_lens() {
         controls.value.set(true);
         ui.frame();
         assert_eq!(ui.frame().node("switch_thumb").bounds().x.0, 102);
+        let held_on = ui.read_pixels();
+        let outside = PxPosition::from_f32_xy(inside.x, 8.0);
+        ui.pointer_move(MOUSE_POINTER_ID, outside);
+        ui.frames(2);
+        assert_eq!(held_on, ui.read_pixels());
+        assert_eq!(controls.requests.get(), 0);
+        ui.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
+        ui.frame();
+        assert_eq!(ui.frame().node("switch_thumb").bounds().width.0, 64);
+        assert_eq!(controls.requests.get(), 0);
+        ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+        ui.frames(18);
         controls.enabled.set(false);
         ui.frame();
         assert_eq!(ui.frame().node("switch_thumb").bounds().width.0, 64);
@@ -469,7 +481,20 @@ fn check_held_lens() {
     assert_ne!(rest, held);
     ui.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(310.0, 150.0));
     ui.frames(2);
+    assert_eq!(held, ui.read_pixels());
+    ui.pointer_release(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(310.0, 150.0),
+        PressKeyEventType::Left,
+    );
+    ui.frames(2);
+    assert_eq!(controls.requests.get(), 0);
     assert_eq!(rest, ui.read_pixels());
+    ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+    ui.frames(18);
+    ui.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(310.0, 150.0));
+    ui.frames(2);
+    assert_eq!(held, ui.read_pixels());
     ui.pointer_move(MOUSE_POINTER_ID, inside);
     ui.frames(18);
     assert_eq!(held, ui.read_pixels());
