@@ -251,6 +251,7 @@ impl DrawModifierNode for HalfFill {
             .push_draw_command(PerceptualFillCommand {
                 outline_width: Dp::ZERO,
                 snap_to_pixels: false,
+                path: None,
                 color: self.fill,
                 radii: [Dp(0.0); 2],
                 insets: [Dp(0.0); 4],
@@ -272,6 +273,7 @@ impl DrawModifierNode for HalfFill {
             .push_draw_command(PerceptualFillCommand {
                 outline_width: Dp::ZERO,
                 snap_to_pixels: false,
+                path: None,
                 color: Color::TRANSPARENT,
                 radii: [Dp(0.0); 2],
                 insets: [Dp(0.0); 4],

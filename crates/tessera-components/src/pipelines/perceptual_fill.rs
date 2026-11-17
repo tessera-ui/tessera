@@ -12,6 +12,7 @@ pub(crate) struct PerceptualFillCommand {
     pub clip_radius: Option<Dp>,
     pub edge_smoothness: f32,
     pub stroke: Option<PerceptualStroke>,
+    pub path: Option<PerceptualPath>,
     pub line: Option<PerceptualLine>,
     pub outline_width: Dp,
     pub snap_to_pixels: bool,
@@ -32,6 +33,15 @@ pub(crate) struct PerceptualStroke {
     pub raster_mask: bool,
 }
 
+#[derive(Clone, PartialEq)]
+pub(crate) struct PerceptualPath {
+    pub color: Color,
+    pub width: Dp,
+    pub points: [[f32; 2]; 13],
+    pub dot: [f32; 2],
+    pub dot_radius: Dp,
+}
+
 impl DrawCommand for PerceptualFillCommand {
     fn sample_region(&self) -> Option<SampleRegion> {
         Some(SampleRegion::PaddedLocal(self.padding()))
@@ -45,6 +55,9 @@ impl DrawCommand for PerceptualFillCommand {
         self.color.a *= opacity;
         if let Some(stroke) = &mut self.stroke {
             stroke.color.a *= opacity;
+        }
+        if let Some(path) = &mut self.path {
+            path.color.a *= opacity;
         }
     }
 }
@@ -186,7 +199,7 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
                     },
                 )
             });
-            let uniforms = [
+            let base_uniforms = [
                 raster_rect,
                 [origin.x, origin.y, size[0], size[1]],
                 [
@@ -208,7 +221,9 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
                 command
                     .stroke
                     .as_ref()
-                    .map_or([0.0; 4], |stroke| stroke.color.to_array()),
+                    .map(|stroke| stroke.color.to_array())
+                    .or_else(|| command.path.as_ref().map(|path| path.color.to_array()))
+                    .unwrap_or([0.0; 4]),
                 command.stroke.as_ref().map_or([0.0; 4], |stroke| {
                     [
                         stroke.points[0][0],
@@ -232,6 +247,22 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
                     0.0,
                 ],
             ];
+            let mut uniforms = [[0.0; 4]; 17];
+            uniforms[..9].copy_from_slice(&base_uniforms);
+            if let Some(path) = &command.path {
+                for (index, point) in path.points.iter().enumerate() {
+                    uniforms[9 + index / 2][index % 2 * 2] = point[0];
+                    uniforms[9 + index / 2][index % 2 * 2 + 1] = point[1];
+                }
+                uniforms[15][2..].copy_from_slice(&path.dot);
+                let scale = geometry.local_to_window.scale();
+                uniforms[16] = [
+                    path.width.to_pixels_f32() * scale,
+                    path.dot_radius.to_pixels_f32() * scale,
+                    1.0,
+                    0.0,
+                ];
+            }
             let buffer = context
                 .graphics
                 .frame_buffer(wgpu::BufferUsages::UNIFORM, bytemuck::cast_slice(&uniforms));

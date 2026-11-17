@@ -8,6 +8,8 @@ struct Uniforms {
     stroke_start_joint: vec4<f32>,
     stroke_end_width: vec4<f32>,
     outline: vec4<f32>,
+    path_points: array<vec4<f32>, 7>,
+    path_params: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var backdrop: texture_2d<f32>;
@@ -73,6 +75,15 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
             fraction.y,
         );
     }
+    if uniforms.path_params.z > 0.5 {
+        let grid = floor(local - vec2(0.5)) + vec2(0.5);
+        let fraction = fract(local - vec2(0.5));
+        stroke_coverage = mix(
+            mix(path_coverage(grid), path_coverage(grid + vec2(1.0, 0.0)), fraction.x),
+            mix(path_coverage(grid + vec2(0.0, 1.0)), path_coverage(grid + vec2(1.0)), fraction.x),
+            fraction.y,
+        );
+    }
     let stroke_alpha = uniforms.stroke_color.a * stroke_coverage * coverage;
     if alpha == 0.0 && stroke_alpha == 0.0 { discard; }
     let background = textureLoad(backdrop, vec2<i32>(floor(position.xy - uniforms.viewport_scene.zw)), 0);
@@ -93,4 +104,28 @@ fn segment_distance(point: vec2<f32>, start: vec2<f32>, end: vec2<f32>) -> f32 {
 fn mask_coverage(point: vec2<f32>, start: vec2<f32>, joint: vec2<f32>, end: vec2<f32>) -> f32 {
     let distance = min(segment_distance(point, start, joint), segment_distance(point, joint, end));
     return clamp(uniforms.stroke_end_width.z * 0.5 + 0.5 - distance, 0.0, 1.0);
+}
+
+fn path_point(index: u32) -> vec2<f32> {
+    let pair = uniforms.path_points[index / 2u];
+    return select(pair.xy, pair.zw, index % 2u == 1u) * uniforms.rect.zw;
+}
+
+fn path_coverage(point: vec2<f32>) -> f32 {
+    var distance = length(point - uniforms.path_points[6].zw * uniforms.rect.zw) - uniforms.path_params.y;
+    for (var curve = 0u; curve < 4u; curve++) {
+        let a = path_point(curve * 3u);
+        let b = path_point(curve * 3u + 1u);
+        let c = path_point(curve * 3u + 2u);
+        let d = path_point(curve * 3u + 3u);
+        var previous = a;
+        for (var step = 1u; step <= 24u; step++) {
+            let t = f32(step) / 24.0;
+            let u = 1.0 - t;
+            let next = u*u*u*a + 3.0*u*u*t*b + 3.0*u*t*t*c + t*t*t*d;
+            distance = min(distance, segment_distance(point, previous, next) - uniforms.path_params.x * 0.5);
+            previous = next;
+        }
+    }
+    return clamp(0.5 - distance, 0.0, 1.0);
 }

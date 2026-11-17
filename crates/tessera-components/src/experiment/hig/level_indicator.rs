@@ -124,6 +124,7 @@ impl DrawModifierNode for CapacityFill {
                     line: None,
                     outline_width: if self.outline { Dp(0.5) } else { Dp::ZERO },
                     snap_to_pixels: true,
+                    path: None,
                 });
         }
         content.draw(context.render_input);

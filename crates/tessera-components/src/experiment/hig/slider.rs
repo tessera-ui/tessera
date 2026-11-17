@@ -234,6 +234,7 @@ impl DrawModifierNode for Fill {
             .push_draw_command(PerceptualFillCommand {
                 outline_width: Dp::ZERO,
                 snap_to_pixels: false,
+                path: None,
                 color: self.0,
                 radii: [self.1; 2],
                 insets: [Dp(0.0); 4],

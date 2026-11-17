@@ -146,6 +146,7 @@ impl DrawModifierNode for SegmentFill {
             .push_draw_command(PerceptualFillCommand {
                 outline_width: Dp::ZERO,
                 snap_to_pixels: false,
+                path: None,
                 color: self.color,
                 radii: [Dp(6.0); 2],
                 insets: [Dp(0.0); 4],

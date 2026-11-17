@@ -243,6 +243,7 @@ pub(super) fn choice_control(
                 PerceptualFillCommand {
                     outline_width: Dp::ZERO,
                     snap_to_pixels: false,
+                    path: None,
                     color: fill,
                     radii: [Dp(if style.role == Role::RadioButton {
                         8.0
