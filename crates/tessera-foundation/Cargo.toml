@@ -10,3 +10,6 @@ metadata = { tessera = {} }
 
 [dependencies]
 tessera-ui.workspace = true
+
+[dev-dependencies]
+tessera-ui = { workspace = true, features = ["testing"] }

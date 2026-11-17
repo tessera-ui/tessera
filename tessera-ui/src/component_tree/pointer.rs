@@ -465,7 +465,7 @@ mod tests {
 
     use crate::{
         ComputedData, Constraint, LayoutResult, Modifier, Px, PxPosition, State,
-        layout::MeasureScope,
+        layout::{MeasureScope, layout},
         modifier::{LayoutPolicy, PlacementModifierNode, PointerInputModifierNode},
         remember,
         runtime::TesseraRuntime,
@@ -554,6 +554,93 @@ mod tests {
                     .push_pointer_input(Input(generation, probe.observed_handler.clone())),
             );
         });
+    }
+
+    #[derive(Clone, Default, PartialEq)]
+    struct AsyncPointerProbe {
+        pressed: crate::testing::TestProbe<bool>,
+        consumed: crate::testing::TestProbe<bool>,
+        parent_pressed: crate::testing::TestProbe<bool>,
+    }
+
+    #[tessera]
+    fn async_pointer_control(probe: AsyncPointerProbe) {
+        let size = crate::remember(|| ComputedData {
+            width: Px(80),
+            height: Px(80),
+        });
+        let parent_probe = probe.clone();
+        layout(ControlSize(size)).modifier(
+            Modifier::new()
+                .pointer_input_once(move |mut scope| {
+                    let probe = probe.clone();
+                    async move {
+                        loop {
+                            let Some(mut down) = scope
+                                .await_first_down(
+                                    crate::PointerEventPass::Main,
+                                    Some(crate::PressKeyEventType::Left),
+                                    crate::DownRequirement::Unconsumed,
+                                )
+                                .await
+                            else {
+                                return;
+                            };
+                            probe.pressed.set(true);
+                            let consumed = down.change.is_consumed();
+                            down.change.consume();
+                            probe.consumed.set(!consumed && down.change.is_consumed());
+                            if matches!(
+                                scope
+                                    .wait_for_up_or_cancellation(
+                                        crate::PointerEventPass::Main,
+                                        down.change.pointer_id,
+                                    )
+                                    .await,
+                                crate::GestureEnd::Cancelled
+                            ) {
+                                return;
+                            }
+                        }
+                    }
+                })
+                .pointer_input_once(move |mut scope| {
+                    let probe = parent_probe.clone();
+                    async move {
+                        if scope
+                            .await_first_down(
+                                crate::PointerEventPass::Main,
+                                Some(crate::PressKeyEventType::Left),
+                                crate::DownRequirement::Unconsumed,
+                            )
+                            .await
+                            .is_some()
+                        {
+                            probe.parent_pressed.set(true);
+                        }
+                    }
+                }),
+        );
+    }
+
+    #[test]
+    fn asynchronous_pointer_detector_runs_in_the_current_pass_and_consumes_live_input() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let probe = AsyncPointerProbe::default();
+        let mut session = UiTest::new()
+            .content(|| async_pointer_control(probe.clone()))
+            .viewport(80, 80);
+        session.frame();
+        session.pointer_press(
+            crate::MOUSE_POINTER_ID,
+            PxPosition::new(Px(20), Px(20)),
+            crate::PressKeyEventType::Left,
+        );
+        session.frame();
+        assert!(probe.pressed.get());
+        assert!(probe.consumed.get());
+        assert!(!probe.parent_pressed.get());
     }
 
     #[test]

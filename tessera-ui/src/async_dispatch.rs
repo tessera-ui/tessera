@@ -315,6 +315,20 @@ pub(crate) fn run_ready(queue: &crate::dispatcher::DispatchQueue) {
     poll_batch(&tasks, &tasks.ready, |keys| queue.take_ready(keys));
 }
 
+// Detectors must consume live input before the next handler in the same pass.
+pub(crate) fn poll_now(task: &Task) {
+    let Some((session, key)) = task.local else {
+        return;
+    };
+    assert_eq!(
+        crate::session::current_session_identity(),
+        Some(session),
+        "a pointer task must be polled on its owning UI session"
+    );
+    let tasks = crate::local_runtime_resource::<UiTasks>();
+    poll_task(&tasks, key);
+}
+
 /// Resumes the tasks waiting in [`with_frame_time`] for the current frame.
 pub(crate) fn resume_frame_waiters() {
     let tasks = crate::local_runtime_resource::<UiTasks>();

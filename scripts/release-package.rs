@@ -439,6 +439,14 @@ fn render_check(command: &mut Command, requests: &[Value]) -> Result<()> {
     Ok(())
 }
 
+fn unpack_package(archive: &std::path::Path, destination: &std::path::Path) -> Result<()> {
+    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(fs::File::open(archive)?));
+    // Normalized archive timestamps can make Cargo reuse artifacts from older candidate sources.
+    archive.set_preserve_mtime(false);
+    archive.unpack(destination)?;
+    Ok(())
+}
+
 fn verify(metadata: &Metadata) -> Result<()> {
     let artifacts = metadata.target_directory.join("release-candidates");
     fs::create_dir_all(&artifacts)?;
@@ -493,8 +501,7 @@ fn verify(metadata: &Metadata) -> Result<()> {
             fs::metadata(&archive)?.len() <= 10_000_000,
             "Package exceeds the default upload limit: {archive}"
         );
-        tar::Archive::new(flate2::read::GzDecoder::new(fs::File::open(archive)?))
-            .unpack(staging.path())?;
+        unpack_package(archive.as_std_path(), staging.path())?;
     }
     let wire = |document: &mut DocumentMut| {
         visit_dependencies(document.as_item_mut(), &mut |alias, item| {
@@ -755,6 +762,54 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unpacked_candidates_rebuild_changed_apis_with_a_warm_cargo_cache() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
+        fs::create_dir(root.join("src"))?;
+        fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname='consumer'\nversion='0.1.0'\nedition='2024'\n[dependencies]\ncandidate={path='candidate'}\n[workspace]\n",
+        )?;
+        let archive = root.join("candidate.crate");
+        for api in ["old_api", "new_api"] {
+            let encoder = flate2::write::GzEncoder::new(
+                fs::File::create(&archive)?,
+                flate2::Compression::default(),
+            );
+            let mut builder = tar::Builder::new(encoder);
+            let source = format!("pub fn {api}() {{}}\n");
+            for (path, contents) in [
+                (
+                    "candidate/Cargo.toml",
+                    "[package]\nname='candidate'\nversion='0.1.0'\nedition='2024'\n",
+                ),
+                ("candidate/src/lib.rs", source.as_str()),
+            ] {
+                let mut header = tar::Header::new_gnu();
+                header.set_size(contents.len() as u64);
+                header.set_mode(0o644);
+                header.set_mtime(1);
+                header.set_cksum();
+                builder.append_data(&mut header, path, contents.as_bytes())?;
+            }
+            builder.into_inner()?.finish()?;
+            unpack_package(&archive, root)?;
+            fs::write(
+                root.join("src/lib.rs"),
+                format!("pub fn exercise() {{ candidate::{api}(); }}\n"),
+            )?;
+            output(
+                Command::new("cargo")
+                    .args(["check", "--offline", "--target-dir"])
+                    .arg(root.join("target"))
+                    .current_dir(root),
+            )
+            .with_context(|| format!("Unpacked candidate must expose {api}"))?;
+        }
+        Ok(())
+    }
 
     #[test]
     fn release_plans_follow_dependencies_and_previous_names_and_preserve_paths() {

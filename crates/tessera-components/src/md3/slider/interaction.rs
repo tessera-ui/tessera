@@ -1,7 +1,6 @@
-use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, CallbackWith, ComputedData, FocusRequester,
-    KeyboardInput, KeyboardInputModifierNode, PointerInput, Px, PxPosition, State,
+    KeyboardInput, KeyboardInputModifierNode, Px, PxPosition, State,
     accesskit::{Action, Role},
     winit::{
         event::ElementState,
@@ -215,12 +214,14 @@ fn range_handle_center_x(
 }
 
 pub(super) fn handle_slider_state(
-    input: &mut PointerInput,
-    tap_recognizer: State<TapRecognizer>,
-    drag_recognizer: State<DragRecognizer>,
+    cursor: Option<PxPosition>,
+    size: ComputedData,
     state: State<SliderController>,
     args: &SliderArgs,
     layout: &SliderLayout,
+    pressed: bool,
+    dragged: bool,
+    released: bool,
 ) {
     if args.disabled {
         let should_reset = state.with(|inner| inner.is_hovered || inner.is_dragging);
@@ -233,7 +234,7 @@ pub(super) fn handle_slider_state(
         return;
     }
 
-    let is_in_component = cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
+    let is_in_component = cursor_within_bounds(cursor, &size);
 
     let hover_changed = state.with(|inner| inner.is_hovered != is_in_component);
     if hover_changed {
@@ -242,48 +243,26 @@ pub(super) fn handle_slider_state(
         });
     }
 
-    let tap_result = tap_recognizer.with_mut(|recognizer| {
-        recognizer.update(
-            input.pass,
-            input.pointer_changes.as_mut_slice(),
-            is_in_component,
-        )
-    });
-    let drag_result = drag_recognizer.with_mut(|recognizer| {
-        recognizer.update(
-            input.pass,
-            input.pointer_changes.as_mut_slice(),
-            is_in_component,
-        )
-    });
-
     let mut new_value: Option<f32> = None;
 
-    handle_press_for_slider(
-        input,
-        state,
-        &mut new_value,
-        layout,
-        args.steps,
-        tap_result.pressed,
-    );
+    handle_press_for_slider(cursor, state, &mut new_value, layout, args.steps, pressed);
     handle_drag_for_slider(
-        input,
+        cursor,
         state,
         &mut new_value,
         layout,
         args.steps,
-        drag_result.started,
-        drag_result.updated,
+        dragged,
+        dragged,
     );
-    if tap_result.released || drag_result.ended {
+    if released {
         state.with_mut(|inner| inner.is_dragging = false);
     }
     notify_on_change(new_value, args);
 }
 
 fn handle_press_for_slider(
-    input: &mut PointerInput,
+    cursor: Option<PxPosition>,
     state: State<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
@@ -294,14 +273,14 @@ fn handle_press_for_slider(
         state.with_mut(|inner| {
             inner.focus.request_focus();
         });
-        if let Some(v) = cursor_progress(input.cursor_position_rel, layout) {
+        if let Some(v) = cursor_progress(cursor, layout) {
             *new_value = Some(snap_fraction(v, steps));
         }
     }
 }
 
 fn handle_drag_for_slider(
-    input: &PointerInput,
+    cursor: Option<PxPosition>,
     state: State<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
@@ -313,9 +292,7 @@ fn handle_drag_for_slider(
         state.with_mut(|inner| inner.is_dragging = true);
     }
 
-    if (drag_updated || state.with(|s| s.is_dragging))
-        && let Some(v) = cursor_progress(input.cursor_position_rel, layout)
-    {
+    if drag_updated && let Some(v) = cursor_progress(cursor, layout) {
         *new_value = Some(snap_fraction(v, steps));
     }
 }
@@ -401,6 +378,12 @@ impl Default for RangeSliderInteraction {
 }
 
 impl RangeSliderInteraction {
+    pub(super) fn cancel_drag(&mut self) {
+        self.is_dragging_start = false;
+        self.is_dragging_end = false;
+        self.active_handle = None;
+    }
+
     pub(super) fn new() -> Self {
         Self {
             is_hovered: false,
@@ -420,13 +403,15 @@ pub(super) struct RangeSliderHandleWidths {
 }
 
 pub(super) fn handle_range_slider_state(
-    input: &mut PointerInput,
-    tap_recognizer: State<TapRecognizer>,
-    drag_recognizer: State<DragRecognizer>,
+    cursor: Option<PxPosition>,
+    size: ComputedData,
     state: &State<RangeSliderInteraction>,
     args: &super::RangeSliderArgs,
     layout: &SliderLayout,
     handle_widths: RangeSliderHandleWidths,
+    pressed: bool,
+    dragged: bool,
+    released: bool,
 ) {
     if args.disabled {
         let should_reset = state
@@ -442,7 +427,7 @@ pub(super) fn handle_range_slider_state(
         return;
     }
 
-    let is_in_component = cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
+    let is_in_component = cursor_within_bounds(cursor, &size);
 
     let hover_changed = state.with(|inner| inner.is_hovered != is_in_component);
     if hover_changed {
@@ -451,35 +436,16 @@ pub(super) fn handle_range_slider_state(
         });
     }
 
-    let tap_result = tap_recognizer.with_mut(|recognizer| {
-        recognizer.update(
-            input.pass,
-            input.pointer_changes.as_mut_slice(),
-            is_in_component,
-        )
-    });
-    let drag_result = drag_recognizer.with_mut(|recognizer| {
-        recognizer.update(
-            input.pass,
-            input.pointer_changes.as_mut_slice(),
-            is_in_component,
-        )
-    });
-
     let mut new_start: Option<f32> = None;
     let mut new_end: Option<f32> = None;
 
-    if tap_result.pressed
-        && let Some(progress) = range_cursor_progress(
-            input.cursor_position_rel,
-            layout,
-            handle_widths.start,
-            handle_widths.end,
-        )
+    if pressed
+        && let Some(progress) =
+            range_cursor_progress(cursor, layout, handle_widths.start, handle_widths.end)
     {
         let progress = snap_fraction(progress, args.steps);
         let active_handle = choose_range_slider_handle(
-            input.cursor_position_rel,
+            cursor,
             layout,
             args.value.0.clamp(0.0, 1.0),
             args.value.1.clamp(args.value.0.clamp(0.0, 1.0), 1.0),
@@ -499,7 +465,7 @@ pub(super) fn handle_range_slider_state(
         }
     }
 
-    if drag_result.started {
+    if dragged {
         state.with_mut(|inner| match inner.active_handle {
             Some(RangeSliderHandle::Start) => inner.is_dragging_start = true,
             Some(RangeSliderHandle::End) => inner.is_dragging_end = true,
@@ -507,13 +473,9 @@ pub(super) fn handle_range_slider_state(
         });
     }
 
-    if (drag_result.updated || state.with(|s| s.is_dragging_start || s.is_dragging_end))
-        && let Some(progress) = range_cursor_progress(
-            input.cursor_position_rel,
-            layout,
-            handle_widths.start,
-            handle_widths.end,
-        )
+    if dragged
+        && let Some(progress) =
+            range_cursor_progress(cursor, layout, handle_widths.start, handle_widths.end)
     {
         let progress = snap_fraction(progress, args.steps);
         state.with(|s| {
@@ -525,7 +487,7 @@ pub(super) fn handle_range_slider_state(
         });
     }
 
-    if tap_result.released || drag_result.ended {
+    if released {
         state.with_mut(|inner| {
             inner.is_dragging_start = false;
             inner.is_dragging_end = false;

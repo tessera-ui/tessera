@@ -2,8 +2,9 @@
 //!
 //! ## Usage
 //!
-//! Attach reusable layout and semantics behavior to any component subtree.
+//! Attach reusable layout, interaction, and semantics behavior to any subtree.
 
+mod activation;
 mod insets;
 mod interaction;
 mod layout;
@@ -22,8 +23,8 @@ use layout::{
 use visual::{AlphaModifierNode, ClipModifierNode, ShapeClipModifierNode};
 
 pub use interaction::{
-    ClickableArgs, DragDelta, DraggableArgs, InteractionState, InteractionVisualState,
-    PointerEventContext, SelectableArgs, ToggleableArgs,
+    ClickableArgs, CombinedClickableArgs, DragDelta, DraggableArgs, InteractionState,
+    InteractionVisualState, PointerEventContext, SelectableArgs, ToggleableArgs,
 };
 pub use layout::{
     AlignmentParentData, MinimumInteractiveComponentEnforcement, Padding, WeightParentData,
@@ -125,6 +126,19 @@ pub trait ModifierExt {
 
     /// Emits drag deltas for free-form dragging.
     fn draggable(self, args: DraggableArgs) -> Modifier;
+
+    /// Handles pointer clicks, keyboard activation, focus, and accessibility actions.
+    fn clickable(self, args: ClickableArgs) -> Modifier;
+
+    /// Handles clicks and long clicks with keyboard and accessibility actions.
+    /// A recognized long click suppresses the click on release.
+    fn combined_clickable(self, args: CombinedClickableArgs) -> Modifier;
+
+    /// Handles boolean changes and publishes checked or toggled accessibility state.
+    fn toggleable(self, args: ToggleableArgs) -> Modifier;
+
+    /// Handles selection and publishes the selected state, or checked state for radio buttons.
+    fn selectable(self, args: SelectableArgs) -> Modifier;
 
     /// Prevents cursor events from propagating to components behind this
     /// subtree.
@@ -343,6 +357,42 @@ impl ModifierExt for Modifier {
 
     fn draggable(self, args: DraggableArgs) -> Modifier {
         interaction::apply_draggable_modifier(self, args)
+    }
+
+    fn clickable(self, args: ClickableArgs) -> Modifier {
+        self.push_build(activation::ClickableBuild {
+            args,
+            on_long_click: None,
+            click_enabled: true,
+        })
+    }
+
+    fn combined_clickable(self, args: CombinedClickableArgs) -> Modifier {
+        self.push_build(activation::ClickableBuild {
+            click_enabled: args.on_click.is_some(),
+            on_long_click: args.on_long_click,
+            args: ClickableArgs {
+                on_click: args.on_click.unwrap_or_else(tessera_ui::Callback::noop),
+                enabled: args.enabled,
+                block_input: args.block_input,
+                on_press: args.on_press,
+                on_release: args.on_release,
+                role: args.role,
+                label: args.label,
+                description: args.description,
+                interaction_state: args.interaction_state,
+                focus_requester: args.focus_requester,
+                focus_properties: args.focus_properties,
+            },
+        })
+    }
+
+    fn toggleable(self, args: ToggleableArgs) -> Modifier {
+        self.push_build(activation::ToggleableBuild(args))
+    }
+
+    fn selectable(self, args: SelectableArgs) -> Modifier {
+        self.push_build(activation::SelectableBuild(args))
     }
 
     fn block_touch_propagation(self) -> Modifier {

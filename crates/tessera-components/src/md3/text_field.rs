@@ -5,13 +5,16 @@
 //! Collect short-form inputs like names, passwords, or search queries.
 use glyphon::Action as GlyphonAction;
 use tessera_foundation::{
-    gesture::{ScrollRecognizer, TapRecognizer, TapSettings},
     modifier::{InteractionVisualState, ModifierExt as _, Padding},
+    pointer_gestures::{
+        LongPressGestureConfig, TapGesture, TapGestureConfig, detect_long_press_gestures,
+        detect_tap_gestures,
+    },
 };
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
-    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, PxSize, RenderSlot,
-    ScrollDeltaUnit, State,
+    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, CursorEventContent,
+    Dp, LayoutResult, MeasurementError, Modifier, PointerEventPass, PressKeyEventType, Px,
+    PxPosition, PxSize, RenderSlot, ScrollDeltaUnit, State,
     layout::{MeasureScope, Stack, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _},
     provide_context, remember,
@@ -37,8 +40,6 @@ use crate::{
             TextStyle,
         },
     },
-    modifier::with_pointer_input,
-    pos_misc::is_position_inside_bounds,
     res::I18N,
     row::row,
     shape_def::{RoundedCorner, Shape},
@@ -542,6 +543,161 @@ fn field_click_pointer_position(
             .clamp(0.0, editor.local_size.height.to_f32())
             + vertical,
     ))
+}
+
+async fn text_field_context_menu_detector(
+    mut scope: tessera_ui::PointerInputScope,
+    menu_policy: TextFieldContextMenu,
+    menu_controller: State<MenuController>,
+    context_menu_anchor: State<Option<PxPosition>>,
+) {
+    if !menu_policy.enabled {
+        return;
+    }
+    detect_long_press_gestures(
+        &mut scope,
+        LongPressGestureConfig {
+            pass: PointerEventPass::Initial,
+            down_requirement: tessera_ui::DownRequirement::Any,
+            slop_px: Dp(8.0).to_pixels_f32(),
+            consume_trigger: true,
+            ..Default::default()
+        },
+        |down| {
+            if let Some(anchor) = down.local_position {
+                context_menu_anchor.set(Some(anchor));
+                menu_controller.with_mut(|menu| menu.open_at(MenuAnchor::at(anchor)));
+            }
+        },
+    )
+    .await;
+}
+
+async fn text_field_pointer_detector(
+    mut scope: tessera_ui::PointerInputScope,
+    controller: State<TextInputController>,
+    geometry: State<FieldGeometry>,
+    action_state: State<Option<TextFieldMenuAction>>,
+    menu_policy: TextFieldContextMenu,
+    input_transform: Option<CallbackWith<String, String>>,
+    on_change: CallbackWith<String, String>,
+    enabled: bool,
+    read_only: bool,
+) {
+    let mut active_pointer = None;
+    loop {
+        let event = scope.await_pointer_event(PointerEventPass::Main).await;
+        if event.is_cancelled() {
+            return;
+        }
+        let cursor_pos = event.cursor_position;
+        let inside = cursor_pos.is_some_and(|position| {
+            position.x >= 0.0
+                && position.y >= 0.0
+                && position.x < event.size.width.to_f32()
+                && position.y < event.size.height.to_f32()
+        });
+        if inside {
+            event.block_cursor();
+        }
+        if menu_policy.enabled
+            && let Some(action) = action_state.with_mut(|state| state.take())
+        {
+            apply_menu_action(
+                action,
+                controller,
+                on_change,
+                input_transform,
+                enabled,
+                read_only,
+            );
+        }
+        for change in event.changes.iter().cloned() {
+            match change.content {
+                CursorEventContent::Pressed(PressKeyEventType::Left)
+                    if enabled && inside && !change.is_consumed() =>
+                {
+                    active_pointer = Some((
+                        change.pointer_id,
+                        change.timestamp,
+                        cursor_pos.unwrap_or(PxPosition::ZERO),
+                        event.key_modifiers.shift_key(),
+                    ));
+                    controller
+                        .with(|controller| *controller.focus_handler())
+                        .request_focus();
+                    if controller.with(|controller| controller.last_click_time())
+                        != Some(change.timestamp)
+                        && let Some(position) = field_click_pointer_position(
+                            cursor_pos.unwrap_or(PxPosition::ZERO),
+                            geometry,
+                            controller,
+                        )
+                    {
+                        controller.with_mut(|controller| {
+                            if event.key_modifiers.shift_key() {
+                                controller.extend_selection_to_point(position);
+                            } else {
+                                controller.apply_pointer_action(GlyphonAction::Click {
+                                    x: position.x_px().0,
+                                    y: position.y_px().0,
+                                });
+                            }
+                        });
+                    }
+                }
+                CursorEventContent::Released(PressKeyEventType::Left)
+                    if active_pointer
+                        .is_some_and(|(pointer, _, _, _)| pointer == change.pointer_id) =>
+                {
+                    active_pointer = None;
+                }
+                CursorEventContent::Cancelled(PressKeyEventType::Left)
+                    if active_pointer
+                        .is_some_and(|(pointer, _, _, _)| pointer == change.pointer_id) =>
+                {
+                    active_pointer = None
+                }
+                CursorEventContent::Scroll(ref scroll) if enabled && inside => {
+                    let mut remainder = scroll.clone();
+                    let (dx, dy) = normalize_platform_scroll_delta(
+                        scroll.delta_x,
+                        scroll.delta_y,
+                        scroll.unit,
+                        scroll.source,
+                    );
+                    if controller.with(|controller| controller.single_line()) {
+                        let requested = if dx.abs() > f32::EPSILON { dx } else { dy };
+                        if requested.abs() > f32::EPSILON
+                            && controller
+                                .with_mut(|controller| controller.has_horizontal_overflow())
+                        {
+                            let consumed =
+                                controller.with_mut(|c| c.scroll_horizontal_consumed(-requested));
+                            let consumed_raw = -consumed;
+                            if dx.abs() > f32::EPSILON {
+                                remainder.delta_x = dx - consumed_raw;
+                                remainder.delta_y = dy;
+                            } else {
+                                remainder.delta_y = dy - consumed_raw;
+                                remainder.delta_x = dx;
+                            }
+                            remainder.unit = ScrollDeltaUnit::Pixel;
+                        }
+                    } else if dy.abs() > f32::EPSILON
+                        && controller.with_mut(|controller| controller.has_vertical_overflow())
+                    {
+                        let consumed = controller.with_mut(|c| c.scroll_vertical_consumed(-dy));
+                        remainder.delta_y = dy + consumed;
+                        remainder.delta_x = dx;
+                        remainder.unit = ScrollDeltaUnit::Pixel;
+                    }
+                    event.set_scroll_remainder(change.pointer_id, remainder);
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -1391,14 +1547,7 @@ pub fn text_field(
     let menu_policy = resolve_text_field_menu_policy(args.context_menu, enabled, read_only);
     let on_change = args.on_change;
     let render_args = args.clone();
-    let focus_tap_recognizer = remember(TapRecognizer::default);
-    let scroll_recognizer = remember(ScrollRecognizer::default);
-    let context_menu_tap_recognizer = remember(|| {
-        TapRecognizer::new(TapSettings {
-            button: PressKeyEventType::Right,
-            ..Default::default()
-        })
-    });
+    let context_menu_anchor = remember(|| None::<PxPosition>);
     let modifier_base = if enabled {
         Modifier::new().hover_cursor_icon(winit::window::CursorIcon::Text)
     } else {
@@ -1409,119 +1558,70 @@ pub fn text_field(
             geometry.with_mut(|geometry| geometry.outer = Some(bounds));
         }
     });
-    let modifier = with_pointer_input(modifier_base, move |mut input| {
-        let cursor_pos = input.cursor_position_rel;
-        let is_inside = cursor_pos
-            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
-            .unwrap_or(false);
-        let context_menu_tap_result = context_menu_tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(input.pass, input.pointer_changes.as_mut_slice(), is_inside)
-        });
-        let focus_tap_result = focus_tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(input.pass, input.pointer_changes.as_mut_slice(), is_inside)
-        });
-
-        if menu_policy.enabled {
-            if let Some(action) = action_state.with_mut(|state| state.take()) {
-                apply_menu_action(
-                    action,
-                    controller,
-                    on_change,
-                    input_transform,
-                    enabled,
-                    read_only,
-                );
-            }
-
-            if context_menu_tap_result.tapped
-                && let Some(cursor_pos) = cursor_pos
-            {
-                menu_controller.with_mut(|menu| {
-                    menu.open_at(MenuAnchor::at(cursor_pos));
-                });
-            }
-        }
-
-        if enabled {
-            if focus_tap_result.pressed
-                && let Some(cursor_pos) = cursor_pos
-                && is_inside
-            {
-                let press_timestamp = focus_tap_result.press_timestamp;
-                controller.with(|c| *c.focus_handler()).request_focus();
-                let inner_handled_click = press_timestamp
-                    .map(|timestamp| controller.with(|c| c.last_click_time() == Some(timestamp)))
-                    .unwrap_or(false);
-                if !inner_handled_click {
-                    if let Some(click_position) =
-                        field_click_pointer_position(cursor_pos, geometry, controller)
-                    {
-                        controller.with_mut(|c| {
-                            if input.key_modifiers.shift_key() {
-                                c.extend_selection_to_point(click_position);
-                            } else {
-                                c.apply_pointer_action(GlyphonAction::Click {
-                                    x: click_position.x_px().0,
-                                    y: click_position.y_px().0,
-                                });
-                            }
-                        });
-                    }
-                }
-            }
-        }
-
-        if enabled && is_inside {
-            scroll_recognizer.with_mut(|recognizer| {
-                recognizer.for_each(
-                    input.pass,
-                    input.pointer_changes.as_mut_slice(),
-                    |_context, event| {
-                        let (dx, dy) = normalize_platform_scroll_delta(
-                            event.delta_x,
-                            event.delta_y,
-                            event.unit,
-                            event.source,
-                        );
-                        if controller.with(|c| c.single_line()) {
-                            let requested = if dx.abs() > f32::EPSILON { dx } else { dy };
-                            if requested.abs() <= f32::EPSILON
-                                || !controller.with_mut(|c| c.has_horizontal_overflow())
+    let modifier_base = if menu_policy.enabled {
+        modifier_base
+            .pointer_input((menu_policy, menu_controller), move |scope| {
+                text_field_context_menu_detector(
+                    scope,
+                    menu_policy,
+                    menu_controller,
+                    context_menu_anchor,
+                )
+            })
+            .pointer_input(
+                (menu_policy, menu_controller),
+                move |mut scope| async move {
+                    detect_tap_gestures(
+                        &mut scope,
+                        TapGestureConfig {
+                            pass: PointerEventPass::Initial,
+                            button: PressKeyEventType::Right,
+                            slop_px: Dp(8.0).to_pixels_f32(),
+                            consume_down: true,
+                            consume_up: true,
+                            ..Default::default()
+                        },
+                        |gesture| {
+                            if let TapGesture::Tapped(down, up) = gesture
+                                && let Some(anchor) = up
+                                    .position()
+                                    .map(|point| down.local_to_window.inverse_point(point))
+                                    .or(down.local_position)
                             {
-                                return;
+                                menu_controller
+                                    .with_mut(|menu| menu.open_at(MenuAnchor::at(anchor)));
                             }
-                            let consumed =
-                                controller.with_mut(|c| c.scroll_horizontal_consumed(-requested));
-                            let consumed_raw = -consumed;
-                            if dx.abs() > f32::EPSILON {
-                                event.delta_x = dx - consumed_raw;
-                                event.delta_y = dy;
-                            } else {
-                                event.delta_y = dy - consumed_raw;
-                                event.delta_x = dx;
-                            }
-                        } else {
-                            if dy.abs() <= f32::EPSILON
-                                || !controller.with_mut(|c| c.has_vertical_overflow())
-                            {
-                                return;
-                            }
-                            // The editor engine clamps vertical scroll to the
-                            // content extent, so `consumed` is the exact amount
-                            // applied and the remainder goes to an ancestor.
-                            let consumed = controller.with_mut(|c| c.scroll_vertical_consumed(-dy));
-                            event.delta_y = dy + consumed;
-                        }
-                        event.unit = ScrollDeltaUnit::Pixel;
-                    },
-                );
-            });
-        }
-
-        if is_inside {
-            input.block_cursor();
-        }
-    });
+                        },
+                    )
+                    .await;
+                },
+            )
+    } else {
+        modifier_base
+    };
+    let modifier = modifier_base.pointer_input(
+        (
+            controller,
+            menu_policy,
+            input_transform,
+            on_change,
+            enabled,
+            read_only,
+        ),
+        move |scope| {
+            text_field_pointer_detector(
+                scope,
+                controller,
+                geometry,
+                action_state,
+                menu_policy,
+                input_transform,
+                on_change,
+                enabled,
+                read_only,
+            )
+        },
+    );
 
     layout(Stack).modifier(modifier).child(move || {
         if menu_policy.enabled {
@@ -1678,6 +1778,157 @@ mod tests {
                 .get()
                 .unwrap()
                 .with(|c| c.focus_handler().is_focused())
+        );
+    }
+
+    #[tessera_ui::tessera]
+    fn context_menu_fixture() {
+        use tessera_foundation::modifier::ModifierExt as _;
+
+        let controller = tessera_ui::remember(|| {
+            let mut controller = crate::md3::text_input::TextInputController::new(
+                tessera_ui::Dp(16.0),
+                Some(tessera_ui::Dp(24.0)),
+            );
+            controller.set_text("Existing text");
+            controller
+        });
+        crate::md3::theme::material_theme().child(move || {
+            crate::boxed::boxed()
+                .modifier(tessera_ui::Modifier::new().fill_max_size())
+                .alignment(crate::alignment::Alignment::TopStart)
+                .children(move || {
+                    crate::md3::text_field::text_field()
+                        .outlined()
+                        .modifier(tessera_ui::Modifier::new().fill_max_width())
+                        .controller(controller);
+                });
+        });
+    }
+
+    #[test]
+    fn right_click_opens_context_menu_for_existing_text_at_field_edge() {
+        use tessera_ui::{
+            MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Role, testing::UiTest,
+        };
+
+        let mut session = UiTest::new()
+            .content(context_menu_fixture)
+            .viewport(400, 200);
+        session.frame();
+        let position = PxPosition::from_f32_xy(390.0, 28.0);
+        session.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Right);
+        session.frames(1);
+        assert!(
+            !session
+                .accessibility_snapshot()
+                .expect("tree before right release")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
+        );
+        session.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(391.0, 28.0));
+        session.frames(1);
+        session.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Right);
+        session.frames(1);
+
+        let tree = session.accessibility_snapshot().expect("tree");
+        let menu_items = tree
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.role() == Role::MenuItem)
+            .collect::<Vec<_>>();
+        assert!(
+            !menu_items.is_empty(),
+            "right-clicking populated text near the field edge opens its context menu"
+        );
+        assert!(menu_items.iter().all(|(_, node)| {
+            node.bounds()
+                .is_some_and(|bounds| bounds.x0 >= 0.0 && bounds.x1 <= 400.0)
+        }));
+        session.frames(2);
+        assert!(
+            session
+                .accessibility_snapshot()
+                .expect("tree after right release")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
+        );
+    }
+
+    #[test]
+    fn right_click_drag_does_not_open_context_menu() {
+        use tessera_ui::{
+            MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Role, testing::UiTest,
+        };
+
+        let mut session = UiTest::new()
+            .content(context_menu_fixture)
+            .viewport(400, 200);
+        session.frame();
+        let start = PxPosition::from_f32_xy(100.0, 28.0);
+        let end = PxPosition::from_f32_xy(120.0, 28.0);
+        session.pointer_press(MOUSE_POINTER_ID, start, PressKeyEventType::Right);
+        session.frames(1);
+        session.pointer_move(MOUSE_POINTER_ID, end);
+        session.frames(1);
+        session.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Right);
+        session.frames(1);
+
+        assert!(
+            !session
+                .accessibility_snapshot()
+                .expect("tree after right-button drag")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
+        );
+    }
+
+    #[test]
+    fn long_press_opens_context_menu_for_existing_text() {
+        use std::time::Duration;
+
+        use tessera_ui::{
+            MOUSE_POINTER_ID, PressKeyEventType, PxPosition, accesskit::Role, testing::UiTest,
+        };
+
+        let mut session = UiTest::new()
+            .content(context_menu_fixture)
+            .viewport(400, 200);
+        session.frame();
+        let position = PxPosition::from_f32_xy(100.0, 28.0);
+        session.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        session.frames(1);
+        session.advance(Duration::from_millis(500));
+        session.frames(1);
+        assert!(
+            session
+                .accessibility_snapshot()
+                .expect("tree while long-press menu is open")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
+        );
+        session.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        session.frames(1);
+
+        let tree = session.accessibility_snapshot().expect("tree");
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem),
+            "holding populated text opens its context menu"
+        );
+        session.frames(2);
+        assert!(
+            session
+                .accessibility_snapshot()
+                .expect("tree after long-press release")
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::MenuItem)
         );
     }
 }

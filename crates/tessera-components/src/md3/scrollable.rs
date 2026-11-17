@@ -9,15 +9,15 @@ pub mod scrollbar;
 use std::time::Duration;
 
 use tessera_foundation::{
-    gesture::{ScrollRecognizer, TapRecognizer},
     modifier::ModifierExt as _,
+    pointer_gestures::{ScrollGestureConfig, detect_scroll_gestures},
     scroll_physics::{ExponentialInertia, ScrollVelocityTracker as FoundationVelocityTracker},
 };
 use tessera_ui::{
     AxisConstraint, BuildModifierNode, CallbackWith, Color, ComputedData, Constraint, Dp,
     LayoutCoordinates, LayoutModifier, LayoutModifierChild, LayoutModifierInput, LayoutResult,
-    MeasurementError, Modifier, ModifierBuildContext, PointerInput, PointerInputModifierNode, Px,
-    PxPosition, RenderSlot, ScrollEventSource, State,
+    MeasurementError, Modifier, ModifierBuildContext, Px, PxPosition, RenderSlot,
+    ScrollEventSource, State,
     focus::FocusRevealRequest,
     launch_once,
     layout::{MeasureScope, Stack, layout},
@@ -684,8 +684,6 @@ impl BuildModifierNode for ScrollBuild {
 
         let scrollbar_state_v = ScrollBarController::viewport(controller, true);
         let scrollbar_state_h = ScrollBarController::viewport(controller, false);
-        let tap_recognizer = context.state(TapRecognizer::default);
-        let scroll_recognizer = context.state(ScrollRecognizer::default);
         if controller.with(|c| c.has_pending_animation_frame()) {
             context.launch(run_frames(controller, |c, now| {
                 c.update_scroll_position(now, DEFAULT_SCROLL_SMOOTHING);
@@ -702,8 +700,6 @@ impl BuildModifierNode for ScrollBuild {
             scrollbar_behavior: ScrollBarBehavior::Hidden,
             scrollbar_state_v,
             scrollbar_state_h,
-            tap_recognizer,
-            scroll_recognizer,
             nested_scroll_connection,
         });
         let modifier = modifier.on_layout_coordinates(move |coordinates: LayoutCoordinates| {
@@ -1044,62 +1040,52 @@ impl ScrollInputTarget<'_> {
 
 struct ScrollbarWheelModifierNode {
     controller: State<ScrollableController>,
-    recognizer: State<ScrollRecognizer>,
     connection: Option<NestedScrollConnection>,
     scrollbar_controller: ScrollBarController,
     behavior: ScrollBarBehavior,
 }
 
-impl PointerInputModifierNode for ScrollbarWheelModifierNode {
-    fn on_pointer_input(&self, input: PointerInput<'_>) {
-        if input.pass != tessera_ui::PointerEventPass::Main
-            || !input
-                .cursor_position_rel
-                .is_some_and(|position| is_position_inside_bounds(input.computed_data, position))
-        {
-            return;
-        }
-        let (viewport_scale, axes) = self
-            .controller
-            .with(|controller| (controller.viewport_scale, controller.viewport_axes));
-        let Some(axes) = axes else {
-            return;
-        };
-        let target = ScrollInputTarget {
-            controller: self.controller,
-            vertical: axes.0,
-            horizontal: axes.1,
-            viewport: self.controller.with(|controller| controller.visible_size()),
-            connection: self.connection.as_ref(),
-            transform: tessera_ui::LocalToWindow::new(viewport_scale, PxPosition::ZERO)
-                .expect("Viewport scale is finite and positive"),
-        };
-        for change in input.pointer_changes.iter_mut() {
-            if !matches!(&change.content, tessera_ui::CursorEventContent::Scroll(event)
-                if event.source == ScrollEventSource::Wheel)
-            {
-                continue;
-            }
-            let discrete = change.is_discrete_scroll();
-            self.recognizer.with_mut(|recognizer| {
-                recognizer.for_each(input.pass, std::slice::from_mut(change), |_, event| {
-                    event.normalize_to_pixels();
-                    let to_viewport = input.local_to_window.scale() / viewport_scale;
-                    event.delta_x *= to_viewport;
-                    event.delta_y *= to_viewport;
-                    let consumption = target.apply(event, discrete);
-                    event.delta_x /= to_viewport;
-                    event.delta_y /= to_viewport;
-                    if !consumption.child.is_zero() && self.behavior == ScrollBarBehavior::AutoHide
-                    {
-                        self.scrollbar_controller.with_mut(|state| {
-                            state.scroll_activity = state.scroll_activity.wrapping_add(1);
-                            state.should_be_visible = true;
-                        });
-                    }
-                });
-            });
-        }
+impl ScrollbarWheelModifierNode {
+    async fn detect(&self, mut scope: tessera_ui::PointerInputScope) {
+        detect_scroll_gestures(
+            &mut scope,
+            ScrollGestureConfig::default(),
+            |input, change, event| {
+                if !input.is_pointer_inside() || event.source != ScrollEventSource::Wheel {
+                    return;
+                }
+                let (viewport_scale, axes) = self
+                    .controller
+                    .with(|controller| (controller.viewport_scale, controller.viewport_axes));
+                let Some(axes) = axes else {
+                    return;
+                };
+                let target = ScrollInputTarget {
+                    controller: self.controller,
+                    vertical: axes.0,
+                    horizontal: axes.1,
+                    viewport: self.controller.with(|controller| controller.visible_size()),
+                    connection: self.connection.as_ref(),
+                    transform: tessera_ui::LocalToWindow::new(viewport_scale, PxPosition::ZERO)
+                        .expect("Viewport scale is finite and positive"),
+                };
+                let discrete = change.is_discrete_scroll();
+                event.normalize_to_pixels();
+                let to_viewport = input.local_to_window.scale() / viewport_scale;
+                event.delta_x *= to_viewport;
+                event.delta_y *= to_viewport;
+                let consumption = target.apply(event, discrete);
+                event.delta_x /= to_viewport;
+                event.delta_y /= to_viewport;
+                if !consumption.child.is_zero() && self.behavior == ScrollBarBehavior::AutoHide {
+                    self.scrollbar_controller.with_mut(|state| {
+                        state.scroll_activity = state.scroll_activity.wrapping_add(1);
+                        state.should_be_visible = true;
+                    });
+                }
+            },
+        )
+        .await;
     }
 }
 
@@ -1110,8 +1096,7 @@ struct ScrollableViewportPointerModifierNode {
     scrollbar_behavior: ScrollBarBehavior,
     scrollbar_state_v: ScrollBarController,
     scrollbar_state_h: ScrollBarController,
-    tap_recognizer: State<TapRecognizer>,
-    scroll_recognizer: State<ScrollRecognizer>,
+    pointer: std::cell::Cell<Option<tessera_ui::PointerId>>,
     nested_scroll_connection: Option<NestedScrollConnection>,
 }
 
@@ -1123,8 +1108,6 @@ struct ScrollableViewportInputArgs {
     scrollbar_behavior: ScrollBarBehavior,
     scrollbar_state_v: ScrollBarController,
     scrollbar_state_h: ScrollBarController,
-    tap_recognizer: State<TapRecognizer>,
-    scroll_recognizer: State<ScrollRecognizer>,
     nested_scroll_connection: Option<NestedScrollConnection>,
 }
 
@@ -1137,33 +1120,84 @@ fn apply_scrollable_viewport_input_modifier(args: ScrollableViewportInputArgs) -
         scrollbar_behavior,
         scrollbar_state_v,
         scrollbar_state_h,
-        tap_recognizer,
-        scroll_recognizer,
         nested_scroll_connection,
     } = args;
-    base.push_pointer_input(ScrollableViewportPointerModifierNode {
+    let key = (
+        controller,
+        vertical,
+        horizontal,
+        scrollbar_behavior.clone(),
+        nested_scroll_connection.clone(),
+    );
+    let input = std::rc::Rc::new(ScrollableViewportPointerModifierNode {
         controller,
         vertical,
         horizontal,
         scrollbar_behavior,
         scrollbar_state_v,
         scrollbar_state_h,
-        tap_recognizer,
-        scroll_recognizer,
+        pointer: std::cell::Cell::new(None),
         nested_scroll_connection,
+    });
+    let lifecycle = input.clone();
+    base.pointer_input(key.clone(), move |mut scope| {
+        let input = lifecycle.clone();
+        async move {
+            loop {
+                let event = scope
+                    .await_pointer_event(tessera_ui::PointerEventPass::Main)
+                    .await;
+                if event.is_cancelled() {
+                    return;
+                }
+                let mut changes: Vec<_> = event
+                    .changes
+                    .iter()
+                    .filter(|change| {
+                        !matches!(change.content, tessera_ui::CursorEventContent::Scroll(_))
+                    })
+                    .cloned()
+                    .collect();
+                input.handle_changes(
+                    event.pass,
+                    &mut changes,
+                    event.cursor_position,
+                    ComputedData {
+                        width: event.size.width,
+                        height: event.size.height,
+                    },
+                    event.local_to_window,
+                );
+            }
+        }
     })
-}
-
-impl PointerInputModifierNode for ScrollableViewportPointerModifierNode {
-    fn on_pointer_input(&self, input: PointerInput<'_>) {
-        self.handle_changes(
-            input.pass,
-            input.pointer_changes.as_mut_slice(),
-            input.cursor_position_rel,
-            input.computed_data,
-            input.local_to_window,
-        );
-    }
+    .pointer_input(key, move |mut scope| {
+        let input = input.clone();
+        async move {
+            detect_scroll_gestures(
+                &mut scope,
+                ScrollGestureConfig::default(),
+                |event, change, scroll| {
+                    let mut change = change.clone();
+                    change.content = tessera_ui::CursorEventContent::Scroll(scroll.clone());
+                    input.handle_changes(
+                        event.pass,
+                        std::slice::from_mut(&mut change),
+                        event.cursor_position,
+                        ComputedData {
+                            width: event.size.width,
+                            height: event.size.height,
+                        },
+                        event.local_to_window,
+                    );
+                    if let tessera_ui::CursorEventContent::Scroll(remainder) = change.content {
+                        *scroll = remainder;
+                    }
+                },
+            )
+            .await;
+        }
+    })
 }
 
 impl ScrollableViewportPointerModifierNode {
@@ -1270,15 +1304,19 @@ impl ScrollableViewportPointerModifierNode {
                     tessera_ui::CursorEventContent::Scroll(ref scroll)
                         if scroll.source == ScrollEventSource::Touch
                 );
-            let tap_result = self
-                .tap_recognizer
-                .with_mut(|recognizer| recognizer.update(pass, changes, is_cursor_in_component));
-            if tap_result.pressed {
+            let pressed = is_cursor_in_component
+                && self.pointer.get().is_none()
+                && matches!(
+                    changes[0].content,
+                    tessera_ui::CursorEventContent::Pressed(tessera_ui::PressKeyEventType::Left)
+                );
+            if pressed {
+                self.pointer.set(Some(changes[0].pointer_id));
                 self.controller.with_mut(|c| {
                     c.cancel_inertia();
                     c.target_position_f32 = c.child_position_f32;
                     c.target_position = c.child_position;
-                    c.velocity_tracker = tap_result.press_timestamp.or(now).map(|start| {
+                    c.velocity_tracker = Some(changes[0].timestamp).map(|start| {
                         FoundationVelocityTracker::new(
                             start,
                             SCROLL_VELOCITY_SAMPLE_WINDOW,
@@ -1292,52 +1330,54 @@ impl ScrollableViewportPointerModifierNode {
             // frame.
             if should_handle_scroll {
                 let discrete = changes[0].is_discrete_scroll();
-                self.scroll_recognizer.with_mut(|recognizer| {
-                    recognizer.for_each(pass, changes, |context, scroll_event| {
-                        scroll_event.normalize_to_pixels();
-                        let consumption = ScrollInputTarget {
-                            controller: self.controller,
-                            vertical: self.vertical,
-                            horizontal: self.horizontal,
-                            viewport: computed_data,
-                            connection: self.nested_scroll_connection.as_ref(),
-                            transform,
-                        }
-                        .apply(scroll_event, discrete);
-                        let child_consumed = consumption.child;
-                        let gesture_consumed = consumption.gesture;
-                        if scroll_event.source == ScrollEventSource::Touch
-                            && !gesture_consumed.is_zero()
-                        {
-                            self.controller.with_mut(|c| {
-                                let window = transform.map_vector(PxPosition::from_f32_xy(
-                                    gesture_consumed.x,
-                                    gesture_consumed.y,
-                                ));
-                                c.push_touch_delta(context.timestamp, window.x, window.y);
+                let timestamp = changes[0].timestamp;
+                if !changes[0].is_consumed()
+                    && let tessera_ui::CursorEventContent::Scroll(scroll_event) =
+                        &mut changes[0].content
+                {
+                    scroll_event.normalize_to_pixels();
+                    let consumption = ScrollInputTarget {
+                        controller: self.controller,
+                        vertical: self.vertical,
+                        horizontal: self.horizontal,
+                        viewport: computed_data,
+                        connection: self.nested_scroll_connection.as_ref(),
+                        transform,
+                    }
+                    .apply(scroll_event, discrete);
+                    let child_consumed = consumption.child;
+                    let gesture_consumed = consumption.gesture;
+                    if scroll_event.source == ScrollEventSource::Touch
+                        && !gesture_consumed.is_zero()
+                    {
+                        self.controller.with_mut(|c| {
+                            let window = transform.map_vector(PxPosition::from_f32_xy(
+                                gesture_consumed.x,
+                                gesture_consumed.y,
+                            ));
+                            c.push_touch_delta(timestamp, window.x, window.y);
+                        });
+                    }
+
+                    if matches!(self.scrollbar_behavior, ScrollBarBehavior::AutoHide)
+                        && !child_consumed.is_zero()
+                    {
+                        if self.vertical {
+                            self.scrollbar_state_v.with_mut(|scrollbar_controller| {
+                                scrollbar_controller.scroll_activity =
+                                    scrollbar_controller.scroll_activity.wrapping_add(1);
+                                scrollbar_controller.should_be_visible = true;
                             });
                         }
-
-                        if matches!(self.scrollbar_behavior, ScrollBarBehavior::AutoHide)
-                            && !child_consumed.is_zero()
-                        {
-                            if self.vertical {
-                                self.scrollbar_state_v.with_mut(|scrollbar_controller| {
-                                    scrollbar_controller.scroll_activity =
-                                        scrollbar_controller.scroll_activity.wrapping_add(1);
-                                    scrollbar_controller.should_be_visible = true;
-                                });
-                            }
-                            if self.horizontal {
-                                self.scrollbar_state_h.with_mut(|scrollbar_controller| {
-                                    scrollbar_controller.scroll_activity =
-                                        scrollbar_controller.scroll_activity.wrapping_add(1);
-                                    scrollbar_controller.should_be_visible = true;
-                                });
-                            }
+                        if self.horizontal {
+                            self.scrollbar_state_h.with_mut(|scrollbar_controller| {
+                                scrollbar_controller.scroll_activity =
+                                    scrollbar_controller.scroll_activity.wrapping_add(1);
+                                scrollbar_controller.should_be_visible = true;
+                            });
                         }
-                    });
-                });
+                    }
+                }
 
                 let target = self.controller.with(|c| c.target_position());
                 let child_size = self.controller.with(|c| c.child_size());
@@ -1357,9 +1397,11 @@ impl ScrollableViewportPointerModifierNode {
             // after the last scroll sample, independently of the
             // current hit-test result.
             let cancelled = changes.iter().any(|change| {
-                matches!(change.content, tessera_ui::CursorEventContent::Cancelled(_))
+                self.pointer.get() == Some(change.pointer_id)
+                    && matches!(change.content, tessera_ui::CursorEventContent::Cancelled(_))
             });
             if cancelled {
+                self.pointer.set(None);
                 self.controller.with_mut(|c| {
                     c.velocity_tracker = None;
                     c.cancel_inertia();
@@ -1367,7 +1409,17 @@ impl ScrollableViewportPointerModifierNode {
                 if let Some(connection) = &connection {
                     connection.post_fling(ScrollVelocity::ZERO);
                 }
-            } else if let Some(release_timestamp) = tap_result.release_timestamp {
+            } else if let Some(release_timestamp) = changes.iter().find_map(|change| {
+                (self.pointer.get() == Some(change.pointer_id)
+                    && matches!(
+                        change.content,
+                        tessera_ui::CursorEventContent::Released(
+                            tessera_ui::PressKeyEventType::Left
+                        )
+                    ))
+                .then_some(change.timestamp)
+            }) {
+                self.pointer.set(None);
                 let available_velocity = self
                     .controller
                     .with_mut(|c| c.resolve_touch_velocity(release_timestamp));
@@ -1422,8 +1474,6 @@ fn scrollable_viewport(
     let scrollbar_state_h =
         scrollbar_state_h.unwrap_or_else(|| ScrollBarController::viewport(controller, false));
     let child = child.unwrap_or_else(RenderSlot::empty);
-    let tap_recognizer = remember(TapRecognizer::default);
-    let scroll_recognizer = remember(ScrollRecognizer::default);
     if controller.with(|c| c.has_pending_animation_frame()) {
         let smoothing = scroll_smoothing;
         launch_once(run_frames(controller, move |c, now| {
@@ -1441,8 +1491,6 @@ fn scrollable_viewport(
         scrollbar_behavior: scrollbar_behavior.clone(),
         scrollbar_state_v,
         scrollbar_state_h,
-        tap_recognizer,
-        scroll_recognizer,
         nested_scroll_connection,
     });
     let modifier = modifier.on_layout_coordinates(move |coordinates: LayoutCoordinates| {

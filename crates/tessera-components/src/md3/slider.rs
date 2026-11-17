@@ -4,8 +4,8 @@
 //!
 //! Use to allow users to select a value from a continuous range.
 use tessera_foundation::{
-    gesture::{DragRecognizer, TapRecognizer},
     modifier::{InteractionState, InteractionVisualState},
+    pointer_gestures::{DragGestureConfig, detect_drag_gestures},
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, CallbackWith, Color,
@@ -272,38 +272,137 @@ fn apply_range_thumb_pointer_modifier(
     .push_semantics(RangeSliderThumbSemanticsModifierNode { accessibility })
 }
 
+#[derive(Clone)]
 struct SliderPointerModifierNode {
     controller: State<SliderController>,
-    args: SliderConfig,
-    tap_recognizer: State<TapRecognizer>,
-    drag_recognizer: State<DragRecognizer>,
+    args: State<SliderConfig>,
 }
 
 impl PointerInputModifierNode for SliderPointerModifierNode {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
+    fn on_pointer_input(&self, input: PointerInput<'_>) {
+        self.apply(
+            input.cursor_position_rel,
+            input.computed_data,
+            false,
+            false,
+            false,
+        );
+    }
+}
+
+impl SliderPointerModifierNode {
+    fn apply(
+        &self,
+        cursor: Option<PxPosition>,
+        size: ComputedData,
+        pressed: bool,
+        dragged: bool,
+        released: bool,
+    ) {
+        let args = self.args.get();
         let visual = self
             .controller
-            .with(|controller| controller.visual_state(&self.args));
-        let base_handle_width = self.args.thumb_diameter.to_px();
+            .with(|controller| controller.visual_state(&args));
+        let base_handle_width = args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
         let handle_width = if visual.is_dragged() || visual.is_pressed() || visual.is_focused() {
             pressed_handle_width
         } else {
             base_handle_width
         };
-        let resolved_layout = slider_layout_with_handle_width(
-            &self.args,
-            self.args.axis.main_length(input.computed_data),
-            handle_width,
-        );
+        let resolved_layout =
+            slider_layout_with_handle_width(&args, args.axis.main_length(size), handle_width);
         handle_slider_state(
-            &mut input,
-            self.tap_recognizer,
-            self.drag_recognizer,
+            cursor,
+            size,
             self.controller,
-            &self.args,
+            &args,
             &resolved_layout,
+            pressed,
+            dragged,
+            released,
         );
+    }
+
+    async fn detect(self, mut scope: tessera_ui::PointerInputScope) {
+        if self.args.with(|args| args.disabled) {
+            return;
+        }
+        detect_drag_gestures(
+            &mut scope,
+            DragGestureConfig {
+                slop_px: 0.0,
+                ..Default::default()
+            },
+            |down| {
+                self.apply(
+                    down.local_position,
+                    ComputedData {
+                        width: down.size.width,
+                        height: down.size.height,
+                    },
+                    true,
+                    false,
+                    false,
+                )
+            },
+            |event, _, _| {
+                self.apply(
+                    event.cursor_position,
+                    ComputedData {
+                        width: event.size.width,
+                        height: event.size.height,
+                    },
+                    false,
+                    true,
+                    false,
+                )
+            },
+            |event, _| {
+                self.apply(
+                    event.cursor_position,
+                    ComputedData {
+                        width: event.size.width,
+                        height: event.size.height,
+                    },
+                    false,
+                    false,
+                    true,
+                )
+            },
+            || {
+                if self.controller.is_alive() {
+                    self.controller.with_mut(|state| state.is_dragging = false);
+                }
+            },
+        )
+        .await;
+    }
+}
+
+struct SliderPointerBuild {
+    controller: State<SliderController>,
+    args: SliderConfig,
+}
+
+impl tessera_ui::BuildModifierNode for SliderPointerBuild {
+    fn materialize(&self, context: &mut tessera_ui::ModifierBuildContext) -> Option<Modifier> {
+        let args = context.state(|| self.args.clone());
+        if args.with(|current| current != &self.args) {
+            args.set(self.args.clone());
+        }
+        let node = SliderPointerModifierNode {
+            controller: self.controller,
+            args,
+        };
+        Some(
+            Modifier::new()
+                .push_pointer_input(node.clone())
+                .pointer_input(
+                    (self.controller, self.args.disabled, self.args.axis),
+                    move |scope| node.clone().detect(scope),
+                ),
+        )
     }
 }
 
@@ -332,8 +431,6 @@ fn apply_slider_pointer_modifier(
     base: Modifier,
     controller: State<SliderController>,
     args: SliderConfig,
-    tap_recognizer: State<TapRecognizer>,
-    drag_recognizer: State<DragRecognizer>,
     clamped_value: f32,
     keyboard_value: State<f32>,
     space_held: State<bool>,
@@ -356,26 +453,39 @@ fn apply_slider_pointer_modifier(
             args: args.clone(),
             clamped_value,
         })
-        .push_pointer_input(SliderPointerModifierNode {
-            controller,
-            args,
-            tap_recognizer,
-            drag_recognizer,
-        })
+        .push_build(SliderPointerBuild { controller, args })
 }
 
+#[derive(Clone)]
 struct RangeSliderPointerModifierNode {
     state: State<RangeSliderInteraction>,
-    args: RangeSliderConfig,
-    tap_recognizer: State<TapRecognizer>,
-    drag_recognizer: State<DragRecognizer>,
+    args: State<RangeSliderConfig>,
 }
 
 impl PointerInputModifierNode for RangeSliderPointerModifierNode {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let resolved_layout =
-            range_slider_layout(&self.args, self.args.axis.main_length(input.computed_data));
-        let base_handle_width = self.args.thumb_diameter.to_px();
+    fn on_pointer_input(&self, input: PointerInput<'_>) {
+        self.apply(
+            input.cursor_position_rel,
+            input.computed_data,
+            false,
+            false,
+            false,
+        );
+    }
+}
+
+impl RangeSliderPointerModifierNode {
+    fn apply(
+        &self,
+        cursor: Option<PxPosition>,
+        size: ComputedData,
+        pressed: bool,
+        dragged: bool,
+        released: bool,
+    ) {
+        let args = self.args.get();
+        let resolved_layout = range_slider_layout(&args, args.axis.main_length(size));
+        let base_handle_width = args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
         let (start_interacting, end_interacting) = self.state.with(|state| {
             (
@@ -394,17 +504,100 @@ impl PointerInputModifierNode for RangeSliderPointerModifierNode {
             base_handle_width
         };
         handle_range_slider_state(
-            &mut input,
-            self.tap_recognizer,
-            self.drag_recognizer,
+            cursor,
+            size,
             &self.state,
-            &self.args,
+            &args,
             &resolved_layout.base,
             RangeSliderHandleWidths {
                 start: start_handle_width,
                 end: end_handle_width,
             },
+            pressed,
+            dragged,
+            released,
         );
+    }
+
+    async fn detect(self, mut scope: tessera_ui::PointerInputScope) {
+        if self.args.with(|args| args.disabled) {
+            return;
+        }
+        detect_drag_gestures(
+            &mut scope,
+            DragGestureConfig {
+                slop_px: 0.0,
+                ..Default::default()
+            },
+            |down| {
+                self.apply(
+                    down.local_position,
+                    ComputedData {
+                        width: down.size.width,
+                        height: down.size.height,
+                    },
+                    true,
+                    false,
+                    false,
+                )
+            },
+            |event, _, _| {
+                self.apply(
+                    event.cursor_position,
+                    ComputedData {
+                        width: event.size.width,
+                        height: event.size.height,
+                    },
+                    false,
+                    true,
+                    false,
+                )
+            },
+            |event, _| {
+                self.apply(
+                    event.cursor_position,
+                    ComputedData {
+                        width: event.size.width,
+                        height: event.size.height,
+                    },
+                    false,
+                    false,
+                    true,
+                )
+            },
+            || {
+                if self.state.is_alive() {
+                    self.state.with_mut(|state| state.cancel_drag());
+                }
+            },
+        )
+        .await;
+    }
+}
+
+struct RangeSliderPointerBuild {
+    state: State<RangeSliderInteraction>,
+    args: RangeSliderConfig,
+}
+
+impl tessera_ui::BuildModifierNode for RangeSliderPointerBuild {
+    fn materialize(&self, context: &mut tessera_ui::ModifierBuildContext) -> Option<Modifier> {
+        let args = context.state(|| self.args.clone());
+        if args.with(|current| current != &self.args) {
+            args.set(self.args.clone());
+        }
+        let node = RangeSliderPointerModifierNode {
+            state: self.state,
+            args,
+        };
+        Some(
+            Modifier::new()
+                .push_pointer_input(node.clone())
+                .pointer_input(
+                    (self.state, self.args.disabled, self.args.axis),
+                    move |scope| node.clone().detect(scope),
+                ),
+        )
     }
 }
 
@@ -435,8 +628,6 @@ fn apply_range_slider_pointer_modifier(
     base: Modifier,
     state: State<RangeSliderInteraction>,
     args: RangeSliderConfig,
-    tap_recognizer: State<TapRecognizer>,
-    drag_recognizer: State<DragRecognizer>,
     start_value: f32,
     end_value: f32,
 ) -> Modifier {
@@ -451,12 +642,7 @@ fn apply_range_slider_pointer_modifier(
             start_value,
             end_value,
         })
-        .push_pointer_input(RangeSliderPointerModifierNode {
-            state,
-            args,
-            tap_recognizer,
-            drag_recognizer,
-        })
+        .push_build(RangeSliderPointerBuild { state, args })
 }
 
 struct RangeSliderMeasureArgs {
@@ -1334,26 +1520,14 @@ pub fn slider(
     } else {
         remember(SliderController::new)
     };
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
     let mut resolved_args = args;
     resolved_args.controller = Some(controller);
-    slider_content()
-        .args(resolved_args)
-        .tap_recognizer(tap_recognizer)
-        .drag_recognizer(drag_recognizer);
+    slider_content().args(resolved_args);
 }
 
 #[tessera]
-fn slider_content(
-    args: Option<SliderConfig>,
-    tap_recognizer: Option<State<TapRecognizer>>,
-    drag_recognizer: Option<State<DragRecognizer>>,
-) {
+fn slider_content(args: Option<SliderConfig>) {
     let args = args.expect("slider_content requires args to be set");
-    let tap_recognizer = tap_recognizer.expect("slider_content requires tap recognizer to be set");
-    let drag_recognizer =
-        drag_recognizer.expect("slider_content requires drag recognizer to be set");
     let controller = args
         .controller
         .expect("slider_content requires controller to be set");
@@ -1385,8 +1559,6 @@ fn slider_content(
         ),
         controller,
         args.clone(),
-        tap_recognizer,
-        drag_recognizer,
         clamped_value,
         keyboard_value,
         space_held,
@@ -1823,27 +1995,14 @@ pub fn centered_slider(
     } else {
         remember(SliderController::new)
     };
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
     let mut resolved_args = args;
     resolved_args.controller = Some(controller);
-    centered_slider_content()
-        .args(resolved_args)
-        .tap_recognizer(tap_recognizer)
-        .drag_recognizer(drag_recognizer);
+    centered_slider_content().args(resolved_args);
 }
 
 #[tessera]
-fn centered_slider_content(
-    args: Option<SliderConfig>,
-    tap_recognizer: Option<State<TapRecognizer>>,
-    drag_recognizer: Option<State<DragRecognizer>>,
-) {
+fn centered_slider_content(args: Option<SliderConfig>) {
     let args = args.expect("centered_slider_content requires args to be set");
-    let tap_recognizer =
-        tap_recognizer.expect("centered_slider_content requires tap recognizer to be set");
-    let drag_recognizer =
-        drag_recognizer.expect("centered_slider_content requires drag recognizer to be set");
     let controller = args
         .controller
         .expect("centered_slider_content requires controller to be set");
@@ -1875,8 +2034,6 @@ fn centered_slider_content(
         ),
         controller,
         args.clone(),
-        tap_recognizer,
-        drag_recognizer,
         clamped_value,
         keyboard_value,
         space_held,
@@ -2294,26 +2451,12 @@ pub fn range_slider(
         slider_theme_colors(&scheme),
     );
     let state = remember(RangeSliderInteraction::new);
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
-    range_slider_content(state)
-        .args(args)
-        .tap_recognizer(tap_recognizer)
-        .drag_recognizer(drag_recognizer);
+    range_slider_content(state).args(args);
 }
 
 #[tessera]
-fn range_slider_content(
-    state: State<RangeSliderInteraction>,
-    args: Option<RangeSliderConfig>,
-    tap_recognizer: Option<State<TapRecognizer>>,
-    drag_recognizer: Option<State<DragRecognizer>>,
-) {
+fn range_slider_content(state: State<RangeSliderInteraction>, args: Option<RangeSliderConfig>) {
     let args = args.expect("range_slider_content requires args to be set");
-    let tap_recognizer =
-        tap_recognizer.expect("range_slider_content requires tap recognizer to be set");
-    let drag_recognizer =
-        drag_recognizer.expect("range_slider_content requires drag recognizer to be set");
     let dummy_slider_args = SliderConfig {
         axis: args.axis,
         size: args.size,
@@ -2360,15 +2503,8 @@ fn range_slider_content(
         base_handle_width
     };
 
-    let modifier = apply_range_slider_pointer_modifier(
-        args.modifier.clone(),
-        state,
-        args.clone(),
-        tap_recognizer,
-        drag_recognizer,
-        start,
-        end,
-    );
+    let modifier =
+        apply_range_slider_pointer_modifier(args.modifier.clone(), state, args.clone(), start, end);
 
     let indicator_anchors = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
         let start_anchor = remember(tessera_ui::LayoutCoordinates::default);

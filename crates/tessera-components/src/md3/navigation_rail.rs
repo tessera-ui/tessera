@@ -5,12 +5,8 @@
 //! Use for primary destinations on wide layouts with a collapsible side rail.
 use std::time::Duration;
 
-use tessera_foundation::{
-    gesture::TapRecognizer,
-    modifier::{
-        InteractionState, ModifierExt as _, Padding, PointerEventContext, SelectableArgs,
-        SemanticsArgs,
-    },
+use tessera_foundation::modifier::{
+    InteractionState, ModifierExt as _, Padding, PointerEventContext, SelectableArgs, SemanticsArgs,
 };
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
@@ -41,7 +37,7 @@ use crate::{
         theme::{ContentColor, MaterialTheme},
     },
     modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::{ModifierExt as _, with_keyboard_input},
+    modifier::with_keyboard_input,
     overlay_semantics::{dialog_semantics, overlay_background},
     row::row,
     shape_def::{RoundedCorner, Shape},
@@ -545,7 +541,6 @@ fn navigation_rail_item_view(
     let item_min_height = item_min_height.unwrap_or(Dp(0.0));
     let interaction_state = remember(InteractionState::new);
     let ripple_state = remember(RippleState::new);
-    let tap_recognizer = remember(TapRecognizer::default);
     let focus = remember(FocusRequester::new).get();
 
     let label = item.label.clone();
@@ -609,7 +604,6 @@ fn navigation_rail_item_view(
         focus_requester: Some(focus),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
-        tap_recognizer: Some(tap_recognizer),
         ..Default::default()
     };
 

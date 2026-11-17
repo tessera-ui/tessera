@@ -6,8 +6,8 @@
 use std::any::TypeId;
 
 use tessera_foundation::{
-    gesture::{ScrollRecognizer, ScrollSettings},
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::{InteractionState, ModifierExt as _, SemanticsArgs},
+    pointer_gestures::{ScrollGestureConfig, detect_scroll_gestures},
 };
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties,
@@ -27,14 +27,12 @@ use crate::{
     animation::{Animatable, run_frames},
     boxed::boxed,
     column::column,
-    interaction_state::InteractionState,
     md3::{
         icon::icon as icon_component,
         surface::surface,
         text::text as text_component,
         theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme},
     },
-    modifier::with_pointer_input,
     painter::Painter,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -1336,8 +1334,6 @@ pub fn tabs(
             focus::defer_keyboard_until_layout();
         }
     }
-    let tab_row_scroll_recognizer =
-        remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
     if controller.with(|controller| controller.active_tab()) != selected {
         controller.with_mut(|controller| controller.sync_selected(selected));
     }
@@ -1347,10 +1343,7 @@ pub fn tabs(
             controller.has_pending_animation_frame()
         }));
     }
-    let body = tabs_content()
-        .args(config)
-        .controller(controller)
-        .tab_row_scroll_recognizer(tab_row_scroll_recognizer);
+    let body = tabs_content().args(config).controller(controller);
     if let Some(content) = content {
         body.content_shared(content);
     }
@@ -1361,7 +1354,6 @@ fn tabs_content(
     args: Option<TabsConfig>,
     controller: Option<State<TabsController>>,
     content: Option<RenderSlotWith<TabRow>>,
-    tab_row_scroll_recognizer: Option<State<ScrollRecognizer>>,
 ) {
     let args = args.expect("tabs_content requires args to be set");
     let live = remember(|| args.clone());
@@ -1369,59 +1361,59 @@ fn tabs_content(
         live.set(args.clone());
     }
     let controller = controller.expect("tabs_content requires controller to be set");
-    let tab_row_scroll_recognizer =
-        tab_row_scroll_recognizer.expect("tabs_content requires scroll recognizer to be set");
     let tab_row_scroll_px = controller.with(|c| c.tab_row_scroll_px());
     let indicator_x_px = controller.with(|c| c.indicator_x_px());
     let indicator_width_px = controller.with(|c| c.indicator_width_px());
 
     let layout_args = args.clone();
-    let modifier = with_pointer_input(
-        args.modifier
-            .clone()
-            .push_semantics(TabListSemantics)
-            .focus_group(None)
-            .on_focus_changed(move |state: FocusState| {
-                if !state.has_focus()
-                    && controller.with(|controller| controller.focused_requester.is_some())
-                {
-                    controller.with_mut(|controller| controller.set_focused_requester(None));
-                    focus::defer_keyboard_until_layout();
-                }
-            }),
-        move |input| {
-            let is_scrollable = controller.with(|c| c.tab_row_scroll_max() > Px(0));
-            if is_scrollable {
-                let cursor_in_tab_bar = if let Some(pos) = input.cursor_position_rel {
-                    let within_x = pos.x >= 0.0 && pos.x < input.computed_data.width.0 as f32;
-                    let within_y =
-                        pos.y >= 0.0 && pos.y < controller.with(|c| c.tab_bar_height()).0 as f32;
-                    within_x && within_y
-                } else {
-                    false
-                };
-
-                if cursor_in_tab_bar {
-                    let scroll_result = tab_row_scroll_recognizer.with_mut(|recognizer| {
-                        recognizer.update(input.pass, input.pointer_changes.as_mut_slice())
-                    });
-                    let delta = if scroll_result.delta_x.abs() >= 0.01 {
-                        scroll_result.delta_x
-                    } else {
-                        scroll_result.delta_y
-                    };
-                    if delta.abs() >= 0.01 {
-                        controller.with_mut(|c| {
-                            let current = c.tab_row_scroll_offset.target;
-                            let max = c.tab_row_scroll_max().to_f32();
-                            let next = (current - delta).clamp(0.0, max);
-                            c.set_tab_row_scroll_immediate(Px::saturating_from_f32(next));
-                        });
-                    }
-                }
+    let modifier = args
+        .modifier
+        .clone()
+        .push_semantics(TabListSemantics)
+        .focus_group(None)
+        .on_focus_changed(move |state: FocusState| {
+            if !state.has_focus()
+                && controller.with(|controller| controller.focused_requester.is_some())
+            {
+                controller.with_mut(|controller| controller.set_focused_requester(None));
+                focus::defer_keyboard_until_layout();
             }
-        },
-    );
+        })
+        .pointer_input(controller, move |mut scope| async move {
+            detect_scroll_gestures(
+                &mut scope,
+                ScrollGestureConfig::default(),
+                |event, _, scroll| {
+                    let is_scrollable = controller.with(|c| c.tab_row_scroll_max() > Px(0));
+                    if is_scrollable {
+                        let cursor_in_tab_bar = if let Some(pos) = event.cursor_position {
+                            let within_x = pos.x >= 0.0 && pos.x < event.size.width.0 as f32;
+                            let within_y = pos.y >= 0.0
+                                && pos.y < controller.with(|c| c.tab_bar_height()).0 as f32;
+                            within_x && within_y
+                        } else {
+                            false
+                        };
+
+                        if cursor_in_tab_bar {
+                            let (dx, dy) = scroll.pixel_delta();
+                            let delta = if dx.abs() >= 0.01 { dx } else { dy };
+                            if delta.abs() >= 0.01 {
+                                controller.with_mut(|c| {
+                                    let current = c.tab_row_scroll_offset.target;
+                                    let max = c.tab_row_scroll_max().to_f32();
+                                    let next = (current - delta).clamp(0.0, max);
+                                    c.set_tab_row_scroll_immediate(Px::saturating_from_f32(next));
+                                });
+                                scroll.delta_x = 0.0;
+                                scroll.delta_y = 0.0;
+                            }
+                        }
+                    }
+                },
+            )
+            .await;
+        });
 
     let policy = TabsLayout {
         args: layout_args,

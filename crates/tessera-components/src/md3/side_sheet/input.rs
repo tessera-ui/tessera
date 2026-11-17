@@ -6,180 +6,124 @@
 
 use std::time::Duration;
 
-use tessera_foundation::{
-    gesture::{DragAxis, DragRecognizer, DragSettings},
-    modifier::ModifierExt as _,
-    scroll_physics::ScrollVelocityTracker,
-};
+use tessera_foundation::{modifier::ModifierExt as _, scroll_physics::ScrollVelocityTracker};
 use tessera_ui::{
-    Callback, CursorEventContent, Dp, Modifier, PointerEventPass, PointerInput,
-    PointerInputModifierNode, PressKeyEventType, PxPosition, RenderSlot, State,
+    Callback, CursorEventContent, Dp, Modifier, PointerEventPass, PointerInputScope,
+    PressKeyEventType, PxPosition, RenderSlot, State,
     layout::{Stack, layout},
-    modifier::ModifierCapabilityExt as _,
-    remember, tessera,
+    tessera,
 };
 
-use crate::{
-    boxed::boxed, nested_scroll::NestedScrollConnection, pos_misc::is_position_inside_bounds,
-};
+use crate::{boxed::boxed, nested_scroll::NestedScrollConnection};
 
 use super::{SideSheetController, SideSheetPosition, side_sheet_dimension};
 
-struct SheetPointerGesture {
-    recognizer: DragRecognizer,
-    velocity: Option<ScrollVelocityTracker>,
-    pointer: Option<u64>,
-    pending_delta: f32,
-    pending_motion: bool,
-    claimed: bool,
-}
-
-#[derive(Default)]
-struct GestureEnd {
-    released: bool,
-    cancelled: bool,
-    velocity: f32,
-}
-
-impl SheetPointerGesture {
-    fn new() -> Self {
-        Self {
-            recognizer: DragRecognizer::new(DragSettings {
-                axis: Some(DragAxis::Horizontal),
-                consume_when_dragging: false,
-                ..Default::default()
-            }),
-            velocity: None,
-            pointer: None,
-            pending_delta: 0.0,
-            pending_motion: false,
-            claimed: false,
-        }
-    }
-
-    fn preview(&mut self, input: &mut PointerInput<'_>) -> GestureEnd {
-        let within = input
-            .cursor_position_rel
-            .map(|p| is_position_inside_bounds(input.computed_data, p))
-            .unwrap_or(false);
-        self.recognizer.set_settings(DragSettings {
-            axis: Some(DragAxis::Horizontal),
-            slop_px: Dp(8.0).to_pixels_f32(),
-            consume_when_dragging: false,
-        });
-        for change in input.pointer_changes.iter() {
-            if self.pointer.is_none()
-                && within
-                && matches!(
-                    change.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                )
-            {
-                self.pointer = Some(change.pointer_id);
-                self.claimed = false;
-                self.velocity = Some(ScrollVelocityTracker::new(
-                    change.timestamp,
-                    Duration::from_millis(90),
-                    Duration::from_millis(65),
-                ));
-            }
-        }
-        let cancelled = input.pointer_changes.iter().any(|c| {
-            Some(c.pointer_id) == self.pointer
-                && matches!(
-                    c.content,
-                    CursorEventContent::Cancelled(PressKeyEventType::Left)
-                )
-        });
-        let sample = input
-            .pointer_changes
-            .iter_mut()
-            .find(|change| Some(change.pointer_id) == self.pointer);
-        let now = sample.as_ref().map(|change| change.timestamp);
-        let result = self.recognizer.update(
-            PointerEventPass::Main,
-            sample.map(std::slice::from_mut).unwrap_or(&mut []),
-            within,
-        );
-        self.pending_delta = input.local_delta(result.delta_x.to_f32(), 0.0).0;
-        self.pending_motion = result.updated;
-        if cancelled || result.ended {
-            let end = GestureEnd {
-                released: result.ended && self.claimed,
-                cancelled,
-                velocity: self
-                    .velocity
-                    .take()
-                    .zip(now)
-                    .and_then(|(mut v, now)| v.resolve(now))
-                    .map(|v| input.local_delta(v.x, 0.0).0)
-                    .unwrap_or(0.0),
-            };
-            self.claimed = false;
-            self.pointer = None;
-            return end;
-        }
-        GestureEnd::default()
-    }
-
-    fn main(&mut self, input: &mut PointerInput<'_>) -> Option<(bool, f32)> {
-        let now = input.pointer_changes.iter().rev().find_map(|c| {
-            (!c.is_consumed()
-                && Some(c.pointer_id) == self.pointer
-                && matches!(c.content, CursorEventContent::Moved(_)))
-            .then_some(c.timestamp)
-        })?;
-        if !self.claimed && !self.pending_motion {
-            return None;
-        }
-        let started = !self.claimed;
-        self.claimed = true;
-        if let Some(velocity) = &mut self.velocity {
-            let window = input
-                .local_to_window
-                .map_vector(PxPosition::from_f32_xy(self.pending_delta, 0.0));
-            velocity.push_delta(now, window.x, window.y);
-        }
-        input.consume_pointer_changes();
-        Some((started, self.pending_delta))
-    }
-}
-
-#[derive(Clone, Copy)]
-struct SheetPointerNode {
-    gesture: State<SheetPointerGesture>,
+async fn sheet_pointer_detector(
+    mut scope: PointerInputScope,
     controller: State<SideSheetController>,
     position: State<SideSheetPosition>,
     on_close: Callback,
-}
-
-impl PointerInputModifierNode for SheetPointerNode {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        if input.pointer_changes.is_empty() {
-            return;
-        }
-        if input.pass == PointerEventPass::Initial {
-            let end = self.gesture.with_mut(|gesture| gesture.preview(&mut input));
-            if end.cancelled {
+) {
+    struct DragLease {
+        controller: State<SideSheetController>,
+        claimed: bool,
+    }
+    impl Drop for DragLease {
+        fn drop(&mut self) {
+            if self.claimed && self.controller.is_alive() {
                 self.controller.with_mut(SideSheetController::settle_drag);
             }
-            if end.released
-                && self
-                    .controller
-                    .with_mut(|c| c.complete_drag(end.velocity, self.position.get()))
-            {
-                self.on_close.call();
+        }
+    }
+    loop {
+        let Some(down) = scope
+            .await_first_down(
+                PointerEventPass::Initial,
+                Some(PressKeyEventType::Left),
+                tessera_ui::DownRequirement::Any,
+            )
+            .await
+        else {
+            return;
+        };
+        let Some(start) = down.position else { continue };
+        let mut previous = start;
+        let mut drag = DragLease {
+            controller,
+            claimed: false,
+        };
+        let mut velocity = ScrollVelocityTracker::new(
+            down.change.timestamp,
+            Duration::from_millis(90),
+            Duration::from_millis(65),
+        );
+        loop {
+            let event = scope.await_pointer_event(PointerEventPass::Initial).await;
+            if event.is_cancelled() {
+                return;
             }
-        } else if input.pass == PointerEventPass::Main {
-            if let Some((started, delta)) =
-                self.gesture.with_mut(|gesture| gesture.main(&mut input))
-            {
-                self.controller.with_mut(|controller| {
-                    if started {
-                        controller.grab();
+            let Some(change) = event
+                .changes
+                .iter()
+                .find(|change| change.pointer_id == down.change.pointer_id)
+            else {
+                continue;
+            };
+            match change.content {
+                CursorEventContent::Cancelled(_) => {
+                    break;
+                }
+                CursorEventContent::Released(_) => {
+                    if drag.claimed && !change.is_consumed() {
+                        drag.claimed = false;
+                        let velocity = velocity
+                            .resolve(change.timestamp)
+                            .map(|v| {
+                                event
+                                    .local_to_window
+                                    .inverse_vector(PxPosition::from_f32_xy(v.x, 0.0))
+                                    .x
+                            })
+                            .unwrap_or(0.0);
+                        if controller.with_mut(|c| c.complete_drag(velocity, position.get())) {
+                            on_close.call();
+                        }
                     }
-                    controller.apply_drag_delta(delta, self.position.get());
-                });
+                    break;
+                }
+                CursorEventContent::Moved(point) => {
+                    let travel = point - start;
+                    let delta = point - previous;
+                    previous = point;
+                    if !drag.claimed
+                        && (travel.x.abs() < Dp(8.0).to_pixels_f32()
+                            || travel.x.abs() < travel.y.abs())
+                    {
+                        continue;
+                    }
+                    let event = scope.await_pointer_event(PointerEventPass::Main).await;
+                    if event.is_cancelled() {
+                        return;
+                    }
+                    if let Some(mut change) = event.changes.into_iter().find(|change| {
+                        change.pointer_id == down.change.pointer_id && !change.is_consumed()
+                    }) {
+                        let window_delta = delta;
+                        let local = event.local_to_window.inverse_vector(window_delta);
+                        controller.with_mut(|controller| {
+                            if !drag.claimed {
+                                controller.grab();
+                            }
+                            controller.apply_drag_delta(local.x, position.get());
+                        });
+                        drag.claimed = true;
+                        velocity.push_delta(change.timestamp, window_delta.x, 0.0);
+                        change.consume();
+                    } else {
+                        break;
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -200,17 +144,11 @@ pub(super) fn side_sheet_body(
     let on_close = on_close.unwrap_or_default();
     let content = content.unwrap_or_else(RenderSlot::empty);
     let nested_scroll_connection = nested_scroll_connection.unwrap_or_default();
-    let gesture = remember(SheetPointerGesture::new);
-    let node = SheetPointerNode {
-        gesture,
-        controller,
-        position,
-        on_close,
-    };
     let modifier = Modifier::new()
         .fill_max_size()
-        .push_pointer_preview_input(node)
-        .push_pointer_input(node);
+        .pointer_input((controller, position, on_close), move |scope| {
+            sheet_pointer_detector(scope, controller, position, on_close)
+        });
     boxed().modifier(modifier).children(move || {
         let nested_scroll_connection = nested_scroll_connection.clone();
         layout(Stack)

@@ -1,5 +1,6 @@
-use tessera_components::{interaction_state::InteractionState, modifier::ModifierExt as _};
-use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs};
+use tessera_foundation::modifier::{
+    ClickableArgs, InteractionState, ModifierExt as _, SemanticsArgs,
+};
 use tessera_ui::{
     Callback, FocusProperties, FocusRequester, FocusState, KeyboardInput,
     KeyboardInputModifierNode, Modifier, State,

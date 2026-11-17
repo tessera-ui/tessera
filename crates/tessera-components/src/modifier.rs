@@ -1,28 +1,23 @@
-//! Drawing and stateful interaction modifier extensions.
+//! Drawing modifier extensions.
 //!
 //! ## Usage
 //!
-//! Attach backgrounds, borders, and clickable, toggleable, or selectable behavior to any subtree.
+//! Attach backgrounds and borders to any subtree.
 
+mod input;
 #[cfg(test)]
 mod insets_tests;
-mod interaction;
 mod visual;
 
-use tessera_foundation::modifier::{ClickableArgs, SelectableArgs, ToggleableArgs};
 use tessera_ui::{Color, Dp, Modifier, modifier::ModifierCapabilityExt as _};
 
 use crate::shape_def::Shape;
 
-use interaction::{apply_clickable_modifier, apply_selectable_modifier, apply_toggleable_modifier};
 use visual::{BackgroundModifierNode, BorderModifierNode};
 
-pub(crate) use interaction::{
-    DisabledToggleSemantics, apply_combined_clickable_modifier, with_keyboard_input,
-    with_pointer_input,
-};
+pub(crate) use input::{with_keyboard_input, with_pointer_input};
 
-/// Extensions for drawing and stateful interaction around component subtrees.
+/// Extensions for drawing around component subtrees.
 pub trait ModifierExt {
     /// Draws a background behind the subtree.
     fn background(self, color: Color) -> Modifier;
@@ -42,15 +37,6 @@ pub trait ModifierExt {
 
     /// Draws a border stroke above the subtree using a custom shape.
     fn border_with_shape(self, width: Dp, color: Color, shape: Shape) -> Modifier;
-
-    /// Makes the subtree clickable with an accessibility click action.
-    fn clickable(self, args: ClickableArgs) -> Modifier;
-
-    /// Makes the subtree toggleable.
-    fn toggleable(self, args: ToggleableArgs) -> Modifier;
-
-    /// Makes the subtree selectable.
-    fn selectable(self, args: SelectableArgs) -> Modifier;
 }
 
 impl ModifierExt for Modifier {
@@ -94,17 +80,5 @@ impl ModifierExt for Modifier {
             color,
             shape,
         })
-    }
-
-    fn clickable(self, args: ClickableArgs) -> Modifier {
-        apply_clickable_modifier(self, args)
-    }
-
-    fn toggleable(self, args: ToggleableArgs) -> Modifier {
-        apply_toggleable_modifier(self, args)
-    }
-
-    fn selectable(self, args: SelectableArgs) -> Modifier {
-        apply_selectable_modifier(self, args)
     }
 }
