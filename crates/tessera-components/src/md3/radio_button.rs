@@ -6,9 +6,8 @@
 
 use std::time::Duration;
 
-use tessera_foundation::{
-    gesture::TapRecognizer,
-    modifier::{InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs},
+use tessera_foundation::modifier::{
+    InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs,
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
@@ -32,7 +31,6 @@ use crate::{
         surface::{SurfaceStyle, surface},
         theme::{MaterialAlpha, MaterialTheme},
     },
-    modifier::ModifierExt as _,
     shape_def::Shape,
 };
 
@@ -410,11 +408,6 @@ fn radio_button_inner(
     } else {
         None
     };
-    let tap_recognizer = if enabled {
-        Some(remember(TapRecognizer::default))
-    } else {
-        None
-    };
     if controller.with(|c| c.is_animating()) {
         launch_once(run_frames(controller, RadioButtonMotion::update_animation));
     }
@@ -488,7 +481,6 @@ fn radio_button_inner(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
-            tap_recognizer,
             ..Default::default()
         };
         modifier = modifier.selectable(selectable_args);

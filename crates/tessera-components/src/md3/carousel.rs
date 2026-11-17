@@ -7,15 +7,17 @@
 use std::{fmt, sync::Arc, time::Duration};
 
 use tessera_foundation::{
-    gesture::{DragAxis, DragRecognizer, DragSettings},
     modifier::{ModifierExt as _, SemanticsArgs},
+    pointer_gestures::{
+        DragAxis, DragGestureConfig, ScrollGestureConfig, detect_drag_gestures,
+        detect_scroll_gestures,
+    },
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint, Dp,
     DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusProperties, FocusRequester,
     FocusScopeNode, KeyboardInput, KeyboardInputModifierNode, LayoutResult, MeasurementError,
-    Modifier, PointerEventPass, PointerInput, PointerInputModifierNode, Px, PxPosition,
-    RenderSlotWith, SemanticsModifierNode, State,
+    Modifier, Px, PxPosition, RenderSlotWith, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     dp::scale_factor,
     key, launch_once,
@@ -659,122 +661,78 @@ impl DrawModifierNode for ItemMask {
     }
 }
 
-struct CarouselInput {
+async fn carousel_pointer_detector(
+    mut scope: tessera_ui::PointerInputScope,
     controller: State<CarouselController>,
-    recognizer: State<DragRecognizer>,
     focus: FocusRequester,
     enabled: bool,
     reverse: bool,
     vertical: bool,
     behavior: CarouselFlingBehavior,
-    navigation: focus::Navigation,
-}
-
-impl PointerInputModifierNode for CarouselInput {
-    fn on_pointer_input(&self, input: PointerInput<'_>) {
-        if !self.enabled || input.pass != PointerEventPass::Main {
-            return;
-        }
-        let inside = input.cursor_position_rel.is_some_and(|point| {
-            point.x >= 0.0
-                && point.y >= 0.0
-                && point.x < input.computed_data.width.to_f32()
-                && point.y < input.computed_data.height.to_f32()
-        });
-        let now = input.pointer_changes.last().map(|change| change.timestamp);
-        if inside {
-            for change in input.pointer_changes.iter_mut() {
-                if change.is_consumed() {
-                    continue;
-                }
-                if matches!(
-                    change.content,
-                    tessera_ui::CursorEventContent::Pressed(tessera_ui::PressKeyEventType::Left)
-                ) {
-                    self.controller.with_mut(|state| {
-                        state.free_velocity = 0.0;
-                        state.wheel_idle = None;
-                        state.motion = resting_motion(state.motion.value());
-                        state.current_item = state.nearest(state.motion.value());
-                    });
-                }
-                if let tessera_ui::CursorEventContent::Scroll(scroll) = &mut change.content {
-                    let (delta_x, delta_y) = normalize_platform_scroll_delta(
-                        scroll.delta_x,
-                        scroll.delta_y,
-                        scroll.unit,
-                        scroll.source,
-                    );
-                    let delta = if self.vertical { delta_y } else { delta_x };
-                    if delta.abs() > 0.001 {
-                        let moved = self.controller.with_mut(|state| {
-                            state.free_velocity = 0.0;
-                            let moved = state.move_by(if self.reverse { delta } else { -delta });
-                            if moved && self.behavior != CarouselFlingBehavior::Free {
-                                state.wheel_idle = Some(change.timestamp);
-                            }
-                            moved
-                        });
-                        if moved {
-                            let remaining = if self.vertical {
-                                scroll.delta_y = 0.0;
-                                scroll.delta_x
-                            } else {
-                                scroll.delta_x = 0.0;
-                                scroll.delta_y
-                            };
-                            if remaining.abs() < 0.001 {
-                                change.consume();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        let drag = self.recognizer.with_mut(|recognizer| {
-            recognizer.update(input.pass, input.pointer_changes.as_mut_slice(), inside)
-        });
-        if drag.started {
-            self.focus.request_focus();
-            self.controller.with_mut(|state| {
+) {
+    if !enabled {
+        return;
+    }
+    detect_drag_gestures(
+        &mut scope,
+        DragGestureConfig {
+            axis: Some(if vertical {
+                DragAxis::Vertical
+            } else {
+                DragAxis::Horizontal
+            }),
+            ..Default::default()
+        },
+        |down| {
+            focus.request_focus();
+            controller.with_mut(|state| {
                 state.stop_input();
                 state.dragging = true;
+                state.last_input = Some(down.change.timestamp);
                 state.motion = resting_motion(state.motion.value());
             });
-        }
-        if drag.updated {
-            self.controller.with_mut(|state| {
-                let delta = if self.vertical {
-                    input.local_delta(0.0, drag.delta_y.to_f32()).1
-                } else {
-                    input.local_delta(drag.delta_x.to_f32(), 0.0).0
-                } * if self.reverse { 1.0 } else { -1.0 };
+        },
+        |event, change, delta| {
+            let delta =
+                (if vertical { delta.y } else { delta.x }) * if reverse { 1.0 } else { -1.0 };
+            controller.with_mut(|state| {
                 let dt = state
                     .last_input
-                    .zip(now)
-                    .map(|(last, now)| now.saturating_duration_since(last).as_secs_f32())
+                    .map(|last| {
+                        change
+                            .timestamp
+                            .saturating_duration_since(last)
+                            .as_secs_f32()
+                    })
                     .unwrap_or(1.0 / 60.0)
                     .clamp(0.004, 0.1);
-                let window = input
-                    .local_to_window
-                    .map_vector(PxPosition::from_f32_xy(delta, delta));
-                let window_delta = if self.vertical { window.y } else { window.x };
-                state.drag_velocity = state.drag_velocity * 0.6 + window_delta / dt * 0.4;
-                state.last_input = now.or(state.last_input);
+                state.drag_velocity =
+                    state.drag_velocity * 0.6 + delta * event.local_to_window.scale() / dt * 0.4;
+                state.last_input = Some(change.timestamp);
                 state.move_by(delta);
             });
-        }
-        let cancelled = !self.recognizer.with(DragRecognizer::is_dragging)
-            && self.controller.with(|state| state.dragging)
-            && !drag.ended;
-        if drag.ended || cancelled {
-            self.controller.with_mut(|state| {
-                let local = input.local_delta(state.drag_velocity, state.drag_velocity);
-                state.drag_velocity = if self.vertical { local.1 } else { local.0 };
-                state.end_drag(self.behavior, now, cancelled);
-            });
-        }
-    }
+        },
+        |event, change| {
+            controller.with_mut(|state| {
+                state.drag_velocity /= event.local_to_window.scale();
+                state.end_drag(behavior, Some(change.timestamp), false);
+            })
+        },
+        || {
+            if controller.is_alive() {
+                controller.with_mut(|state| state.end_drag(behavior, state.last_input, true));
+            }
+        },
+    )
+    .await;
+}
+
+struct CarouselInput {
+    controller: State<CarouselController>,
+    enabled: bool,
+    reverse: bool,
+    vertical: bool,
+    navigation: focus::Navigation,
 }
 
 impl KeyboardInputModifierNode for CarouselInput {
@@ -1045,28 +1003,6 @@ pub fn carousel(
     } else {
         remember(CarouselController::default)
     };
-    let recognizer = remember(|| {
-        DragRecognizer::new(DragSettings {
-            axis: Some(if vertical {
-                DragAxis::Vertical
-            } else {
-                DragAxis::Horizontal
-            }),
-            ..Default::default()
-        })
-    });
-    let previous_vertical = remember(|| vertical);
-    if previous_vertical.get() != vertical {
-        previous_vertical.set(vertical);
-        recognizer.set(DragRecognizer::new(DragSettings {
-            axis: Some(if vertical {
-                DragAxis::Vertical
-            } else {
-                DragAxis::Horizontal
-            }),
-            ..Default::default()
-        }));
-    }
     let focus = if let Some(focus) = focus_requester {
         focus
     } else {
@@ -1145,14 +1081,6 @@ pub fn carousel(
         })
     {
         controller.with_mut(CarouselController::stop_input);
-        recognizer.set(DragRecognizer::new(DragSettings {
-            axis: Some(if vertical {
-                DragAxis::Vertical
-            } else {
-                DragAxis::Horizontal
-            }),
-            ..Default::default()
-        }));
     }
     if controller.with(CarouselController::needs_frame) {
         launch_once(run_frames(controller, CarouselController::tick));
@@ -1284,24 +1212,62 @@ pub fn carousel(
             reverse,
             vertical,
         })
-        .push_pointer_input(CarouselInput {
-            controller,
-            recognizer,
-            focus,
-            enabled,
-            reverse,
-            vertical,
-            behavior,
-            navigation,
-        })
+        .pointer_input(
+            (controller, enabled, reverse, vertical, behavior),
+            move |scope| {
+                carousel_pointer_detector(
+                    scope, controller, focus, enabled, reverse, vertical, behavior,
+                )
+            },
+        )
+        .pointer_input(
+            (controller, enabled, reverse, vertical, behavior),
+            move |mut scope| async move {
+                if !enabled {
+                    return;
+                }
+                detect_scroll_gestures(
+                    &mut scope,
+                    ScrollGestureConfig::default(),
+                    |event, change, scroll| {
+                        if !event.is_pointer_inside() {
+                            return;
+                        }
+                        let (dx, dy) = normalize_platform_scroll_delta(
+                            scroll.delta_x,
+                            scroll.delta_y,
+                            scroll.unit,
+                            scroll.source,
+                        );
+                        let delta = if vertical { dy } else { dx };
+                        if delta.abs() <= 0.001 {
+                            return;
+                        }
+                        let moved = controller.with_mut(|state| {
+                            state.free_velocity = 0.0;
+                            let moved = state.move_by(if reverse { delta } else { -delta });
+                            if moved && behavior != CarouselFlingBehavior::Free {
+                                state.wheel_idle = Some(change.timestamp);
+                            }
+                            moved
+                        });
+                        if moved {
+                            if vertical {
+                                scroll.delta_y = 0.0;
+                            } else {
+                                scroll.delta_x = 0.0;
+                            }
+                        }
+                    },
+                )
+                .await;
+            },
+        )
         .push_keyboard_input(CarouselInput {
             controller,
-            recognizer,
-            focus,
             enabled,
             reverse,
             vertical,
-            behavior,
             navigation,
         });
     let corner = RoundedCorner::manual(Dp(28.0), 2.0);

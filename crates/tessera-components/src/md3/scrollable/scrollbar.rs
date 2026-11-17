@@ -7,8 +7,11 @@
 use std::time::Duration;
 
 use tessera_foundation::{
-    gesture::{DragRecognizer, ScrollRecognizer, TapRecognizer},
     modifier::ModifierExt as _,
+    pointer_gestures::{
+        DragAxis, DragGestureConfig, TapGesture, TapGestureConfig, detect_drag_gestures,
+        detect_tap_gestures,
+    },
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
@@ -508,12 +511,12 @@ fn scroll_accessibility_step(
 
 fn update_drag(
     orientation: ScrollOrientation,
-    input: &tessera_ui::PointerInput,
+    cursor: Option<PxPosition>,
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarConfig,
     state: &ScrollBarController,
 ) {
-    if let Some(cursor_pos) = input.cursor_position_rel {
+    if let Some(cursor_pos) = cursor {
         let new_target_pos = calculate_target(orientation.axis_px(cursor_pos));
         // Dragging the thumb is direct manipulation: the content has to follow
         // the pointer without the eased follow used for wheel notches.
@@ -538,14 +541,12 @@ struct ScrollBarTrackMetrics {
     thumb_extent: Px,
 }
 
-fn handle_state(
+fn handle_press(
     orientation: ScrollOrientation,
     args: &ScrollBarConfig,
     state: &ScrollBarController,
     metrics: ScrollBarTrackMetrics,
-    tap_recognizer: State<TapRecognizer>,
-    drag_recognizer: State<DragRecognizer>,
-    input: &mut tessera_ui::PointerInput<'_>,
+    cursor_pos: Option<PxPosition>,
 ) {
     // Capture current target position once to avoid locking inside helper on
     // every call.
@@ -562,7 +563,6 @@ fn handle_state(
         )
     };
     let thickness = args.thickness.to_px();
-    let cursor_pos = input.cursor_position_rel;
     let within_track = cursor_pos
         .map(|pos| cursor_on_thumb(orientation, pos, thickness, 0.0, metrics.track_extent))
         .unwrap_or(false);
@@ -578,51 +578,13 @@ fn handle_state(
             )
         })
         .unwrap_or(false);
-    update_hover_state(is_on_thumb, state);
-    let tap_result = tap_recognizer.with_mut(|recognizer| {
-        recognizer.update(
-            input.pass,
-            input.pointer_changes.as_mut_slice(),
-            within_track,
-        )
-    });
-    let drag_result = drag_recognizer.with_mut(|recognizer| {
-        recognizer.update(
-            input.pass,
-            input.pointer_changes.as_mut_slice(),
-            within_track,
-        )
-    });
-
-    if tap_result.pressed {
-        if is_on_thumb {
-            state.with_mut(|state| state.pressed_on_thumb = true);
-        } else if within_track && let Some(cursor_pos) = cursor_pos {
-            let new_target_pos = calculate_target_pos(orientation.axis_px(cursor_pos));
-            args.state
-                .with_mut(|c| c.set_target_position(new_target_pos));
-            mark_scroll_activity(state, &args.scrollbar_behavior);
-        }
-    }
-
-    if drag_result.started && state.read().pressed_on_thumb {
-        state.with_mut(|state| state.is_dragging = true);
-    }
-
-    if state.read().is_dragging && drag_result.updated {
-        update_drag(orientation, input, &calculate_target_pos, args, state);
-    } else if state.read().is_dragging && cursor_pos.is_none() {
-        state.with_mut(|state_guard| {
-            state_guard.is_dragging = false;
-            state_guard.pressed_on_thumb = false;
-        });
-    }
-
-    if tap_result.released || drag_result.ended {
-        state.with_mut(|state_guard| {
-            state_guard.is_dragging = false;
-            state_guard.pressed_on_thumb = false;
-        });
+    if is_on_thumb {
+        state.with_mut(|state| state.pressed_on_thumb = true);
+    } else if within_track && let Some(cursor_pos) = cursor_pos {
+        let new_target_pos = calculate_target_pos(orientation.axis_px(cursor_pos));
+        args.state
+            .with_mut(|c| c.set_target_position(new_target_pos));
+        mark_scroll_activity(state, &args.scrollbar_behavior);
     }
 }
 
@@ -826,9 +788,10 @@ fn scrollbar(
         ScrollBarController::new(remember(ScrollBarInteractionState::default))
     };
 
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
-    let scroll_recognizer = remember(ScrollRecognizer::default);
+    let live = remember(|| args.clone());
+    if live.with(|current| current != &args) {
+        live.set(args.clone());
+    }
     let nested_scroll_connection = NestedScrollConnection::nearest();
     let auto_hide = matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide);
     if needs_scrollbar_frame_tick(&state.read(), auto_hide) {
@@ -857,29 +820,119 @@ fn scrollbar(
         args.track_color.with_alpha(0.0)
     };
 
-    let handler_args = args.clone();
-    let handler_state = state;
-    let modifier = with_pointer_input(Modifier::new(), move |mut input| {
-        handle_state(
-            orientation,
-            &handler_args,
-            &handler_state,
-            ScrollBarTrackMetrics {
-                track_extent: track_extent,
-                thumb_extent: thumb_extent,
+    let stop = move || {
+        let alive = match state.owner {
+            ScrollBarOwner::External(value) => value.is_alive(),
+            ScrollBarOwner::Viewport { controller, .. } => controller.is_alive(),
+        };
+        if alive {
+            state.with_mut(|state| {
+                state.is_dragging = false;
+                state.pressed_on_thumb = false;
+            });
+        }
+    };
+    let modifier = with_pointer_input(Modifier::new(), move |input| {
+        let args = live.get();
+        let offset = args.visible.to_f32() * (args.offset.to_f32().abs() / args.total.to_f32());
+        let on_thumb = input.cursor_position_rel.is_some_and(|position| {
+            cursor_on_thumb(
+                orientation,
+                position,
+                args.thickness.to_px(),
+                offset,
+                compute_thumb_size(args.visible, args.total),
+            )
+        });
+        update_hover_state(on_thumb, &state);
+    })
+    .pointer_input((orientation, state), move |mut scope| async move {
+        detect_tap_gestures(
+            &mut scope,
+            TapGestureConfig::default(),
+            |gesture| match gesture {
+                TapGesture::Pressed(down) => {
+                    let args = live.get();
+                    handle_press(
+                        orientation,
+                        &args,
+                        &state,
+                        ScrollBarTrackMetrics {
+                            track_extent: args.visible,
+                            thumb_extent: compute_thumb_size(args.visible, args.total),
+                        },
+                        down.local_position,
+                    );
+                }
+                TapGesture::Released(_, _) => stop(),
+                _ => {}
             },
-            tap_recognizer,
-            drag_recognizer,
-            &mut input,
-        );
+        )
+        .await;
     })
-    .push_pointer_input(ScrollbarWheelModifierNode {
-        controller: args.state,
-        recognizer: scroll_recognizer,
-        connection: nested_scroll_connection,
-        scrollbar_controller: state,
-        behavior: args.scrollbar_behavior.clone(),
+    .pointer_input((orientation, state), move |mut scope| async move {
+        detect_drag_gestures(
+            &mut scope,
+            DragGestureConfig {
+                axis: Some(match orientation {
+                    ScrollOrientation::Vertical => DragAxis::Vertical,
+                    ScrollOrientation::Horizontal => DragAxis::Horizontal,
+                }),
+                ..Default::default()
+            },
+            |_| {
+                if state.read().pressed_on_thumb {
+                    state.with_mut(|state| state.is_dragging = true);
+                }
+            },
+            |event, _, _| {
+                if !state.read().is_dragging {
+                    return;
+                }
+                let args = live.get();
+                let fallback = args.state.with(|c| c.target_position());
+                update_drag(
+                    orientation,
+                    event.cursor_position,
+                    &|cursor| {
+                        calculate_target_pos(
+                            orientation,
+                            cursor,
+                            args.visible,
+                            compute_thumb_size(args.visible, args.total),
+                            args.total,
+                            args.visible,
+                            fallback,
+                        )
+                    },
+                    &args,
+                    &state,
+                );
+            },
+            |_, _| stop(),
+            stop,
+        )
+        .await;
     })
+    .pointer_input(
+        (
+            args.state,
+            state,
+            args.scrollbar_behavior.clone(),
+            nested_scroll_connection.clone(),
+        ),
+        move |scope| {
+            let node = ScrollbarWheelModifierNode {
+                controller: live.with(|args| args.state),
+                connection: nested_scroll_connection.clone(),
+                scrollbar_controller: state,
+                behavior: live.with(|args| args.scrollbar_behavior.clone()),
+            };
+            async move {
+                node.detect(scope).await;
+            }
+        },
+    )
     .push_semantics(ScrollbarSemanticsModifierNode {
         args: args.clone(),
         state: state,

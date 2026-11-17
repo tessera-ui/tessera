@@ -4,15 +4,12 @@
 //!
 //! Collect short-form input when the full text field decoration is not needed.
 use glyphon::Action as GlyphonAction;
-use tessera_foundation::{
-    gesture::{ScrollRecognizer, TapRecognizer},
-    modifier::{InteractionState, InteractionVisualState, ModifierExt as _},
-};
+use tessera_foundation::modifier::{InteractionState, InteractionVisualState, ModifierExt as _};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, ComputedData,
     CursorEventContent, Dp, ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput,
-    KeyboardInputModifierNode, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition,
-    PxSize, SemanticsModifierNode, State,
+    KeyboardInputModifierNode, Modifier, PressKeyEventType, Px, PxPosition, PxSize,
+    SemanticsModifierNode, State,
     accesskit::{Action, Role},
     clipboard::{ClipboardAction, ClipboardInput, ClipboardInputModifierNode},
     layout::{Stack, layout},
@@ -49,25 +46,6 @@ pub(crate) const DISABLED_OUTLINE_ALPHA: f32 = 0.12;
 
 /// Material 3 opacity applied to the container of a disabled filled field.
 pub(crate) const DISABLED_FILL_ALPHA: f32 = 0.04;
-
-struct TextInputPointerModifierNode {
-    args: TextInputProps,
-    controller: State<TextInputController>,
-    tap_recognizer: State<TapRecognizer>,
-    scroll_recognizer: State<ScrollRecognizer>,
-}
-
-impl PointerInputModifierNode for TextInputPointerModifierNode {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        handle_text_input(
-            &mut input,
-            &self.args,
-            &self.controller,
-            self.tap_recognizer,
-            self.scroll_recognizer,
-        );
-    }
-}
 
 struct TextInputKeyboardModifierNode {
     args: TextInputProps,
@@ -166,8 +144,6 @@ fn apply_text_input_input_modifiers(
     base: Modifier,
     args: TextInputProps,
     controller: State<TextInputController>,
-    tap_recognizer: State<TapRecognizer>,
-    scroll_recognizer: State<ScrollRecognizer>,
 ) -> Modifier {
     let modifier = if args.enabled {
         base.hover_cursor_icon(winit::window::CursorIcon::Text)
@@ -187,11 +163,9 @@ fn apply_text_input_input_modifiers(
             args: args.clone(),
             controller,
         })
-        .push_pointer_input(TextInputPointerModifierNode {
-            args: args.clone(),
-            controller,
-            tap_recognizer,
-            scroll_recognizer,
+        .pointer_input((controller, args.clone()), {
+            let args = args.clone();
+            move |scope| async_text_input(scope, args.clone(), controller)
         })
         .push_keyboard_input(TextInputKeyboardModifierNode {
             args: args.clone(),
@@ -501,8 +475,6 @@ pub fn text_input(
     }
     sync_text_input_controller(&controller, &editor_args);
     let focus = controller.with(|c| *c.focus_handler());
-    let tap_recognizer = remember(TapRecognizer::default);
-    let scroll_recognizer = remember(ScrollRecognizer::default);
     let modifier = apply_text_input_input_modifiers(
         Modifier::new()
             .focus_requester(focus)
@@ -514,8 +486,6 @@ pub fn text_input(
             ),
         editor_args.clone(),
         controller,
-        tap_recognizer,
-        scroll_recognizer,
     );
 
     let current = editor_args;
@@ -551,8 +521,6 @@ fn text_input_editor(props: TextInputProps) {
     }
     sync_text_input_controller(&controller, &editor_args);
     let focus = controller.with(|c| *c.focus_handler());
-    let tap_recognizer = remember(TapRecognizer::default);
-    let scroll_recognizer = remember(ScrollRecognizer::default);
     let modifier = apply_text_input_input_modifiers(
         editor_args.modifier.clone().then(
             Modifier::new()
@@ -566,8 +534,6 @@ fn text_input_editor(props: TextInputProps) {
         ),
         editor_args.clone(),
         controller,
-        tap_recognizer,
-        scroll_recognizer,
     );
 
     let current = editor_args;
@@ -653,188 +619,182 @@ fn sync_text_input_controller(controller: &State<TextInputController>, args: &Te
     }
 }
 
-fn handle_text_input(
-    input: &mut tessera_ui::PointerInput<'_>,
-    args: &TextInputProps,
-    controller: &State<TextInputController>,
-    tap_recognizer: State<TapRecognizer>,
-    scroll_recognizer: State<ScrollRecognizer>,
+async fn async_text_input(
+    mut scope: tessera_ui::PointerInputScope,
+    args: TextInputProps,
+    controller: State<TextInputController>,
 ) {
-    if !args.enabled {
-        return;
-    }
-    let size = input.computed_data; // This is the full surface size
-    let cursor_pos_option = input.cursor_position_rel;
-    let is_cursor_in_editor = cursor_pos_option
-        .map(|pos| is_position_inside_bounds(size, pos))
-        .unwrap_or(false);
-    let tap_result = tap_recognizer.with_mut(|recognizer| {
-        recognizer.update(
-            input.pass,
-            input.pointer_changes.as_mut_slice(),
-            is_cursor_in_editor,
-        )
-    });
-
-    // Handle click events - now we have a full clickable area from surface
-    if is_cursor_in_editor {
-        if tap_result.pressed {
-            // Request focus if not already focused
-            if !controller.with(|s| s.focus_handler().is_focused()) {
-                controller.with(|s| *s.focus_handler()).request_focus();
+    struct SelectionLease(State<TextInputController>);
+    impl Drop for SelectionLease {
+        fn drop(&mut self) {
+            if self.0.is_alive() {
+                self.0.with_mut(|controller| controller.stop_drag());
             }
-
-            // Handle cursor positioning for clicks
-            if let Some(cursor_pos) = cursor_pos_option {
-                let text_relative_pos =
-                    click_selection_pointer_position(cursor_pos, args, controller, size);
-                let Some(click_timestamp) = tap_result.press_timestamp else {
-                    return;
-                };
-                // Determine click type and handle accordingly
-                let window_position = input
-                    .pointer_changes
-                    .iter()
-                    .find(|change| {
-                        change.timestamp == click_timestamp
-                            && matches!(change.content, CursorEventContent::Pressed(_))
-                    })
-                    .and_then(|change| change.position())
-                    .or_else(|| input.cursor_position_abs())
-                    .unwrap_or_else(|| input.local_to_window.map_point(cursor_pos));
-                let click_type = controller.with_mut(|s| {
-                    s.handle_click(text_relative_pos, window_position, click_timestamp)
-                });
-
-                match click_type {
-                    ClickType::Single => {
-                        if input.key_modifiers.shift_key() {
-                            controller.with_mut(|s| {
-                                s.extend_selection_to_point(text_relative_pos);
+        }
+    }
+    let _lease = SelectionLease(controller);
+    let mut active: Option<(tessera_ui::PointerId, PxPosition, ClickType, bool)> = None;
+    loop {
+        let event = scope
+            .await_pointer_event(tessera_ui::PointerEventPass::Main)
+            .await;
+        if event.is_cancelled() {
+            return;
+        }
+        let cursor = event.cursor_position;
+        let mut pressed = false;
+        let inside = cursor.is_some_and(|position| {
+            is_position_inside_bounds(
+                ComputedData {
+                    width: event.size.width,
+                    height: event.size.height,
+                },
+                position,
+            )
+        });
+        for mut change in event.changes.iter().cloned() {
+            match change.content {
+                CursorEventContent::Pressed(PressKeyEventType::Left)
+                    if args.enabled && inside && !change.is_consumed() =>
+                {
+                    let Some(cursor) = cursor else { continue };
+                    if !controller.with(|s| s.focus_handler().is_focused()) {
+                        controller.with(|s| *s.focus_handler()).request_focus();
+                    }
+                    let position = click_selection_pointer_position(
+                        cursor,
+                        &args,
+                        &controller,
+                        ComputedData {
+                            width: event.size.width,
+                            height: event.size.height,
+                        },
+                    );
+                    let window = change
+                        .position()
+                        .unwrap_or_else(|| event.local_to_window.map_point(cursor));
+                    let kind =
+                        controller.with_mut(|s| s.handle_click(position, window, change.timestamp));
+                    match kind {
+                        ClickType::Single if event.key_modifiers.shift_key() => {
+                            controller.with_mut(|s| s.extend_selection_to_point(position));
+                        }
+                        ClickType::Single => controller.with_mut(|s| {
+                            s.apply_pointer_action(GlyphonAction::Click {
+                                x: position.x_px().0,
+                                y: position.y_px().0,
                             });
-                        } else {
+                        }),
+                        ClickType::Double => controller.with_mut(|s| {
+                            s.apply_pointer_action(GlyphonAction::DoubleClick {
+                                x: position.x_px().0,
+                                y: position.y_px().0,
+                            });
+                        }),
+                        ClickType::Triple => controller.with_mut(|s| {
+                            s.apply_pointer_action(GlyphonAction::TripleClick {
+                                x: position.x_px().0,
+                                y: position.y_px().0,
+                            });
+                        }),
+                    }
+                    controller.with_mut(|s| s.start_drag(kind));
+                    pressed = true;
+                    active = Some((change.pointer_id, position, kind, true));
+                    change.consume();
+                }
+                CursorEventContent::Moved(_) if controller.with(|s| s.is_dragging()) => {
+                    if let (Some(cursor), Some((pointer, _, _, _))) = (cursor, active)
+                        && pointer == change.pointer_id
+                    {
+                        let target = drag_selection_pointer_position(
+                            cursor,
+                            &args,
+                            &controller,
+                            ComputedData {
+                                width: event.size.width,
+                                height: event.size.height,
+                            },
+                        );
+                        auto_scroll_drag_selection(&target, &controller);
+                        let target = drag_selection_pointer_position(
+                            cursor,
+                            &args,
+                            &controller,
+                            ComputedData {
+                                width: event.size.width,
+                                height: event.size.height,
+                            },
+                        );
+                        if controller.with(|s| s.last_click_position()) != Some(target.position) {
                             controller.with_mut(|s| {
-                                s.apply_pointer_action(GlyphonAction::Click {
-                                    x: text_relative_pos.x_px().0,
-                                    y: text_relative_pos.y_px().0,
+                                s.apply_pointer_action(GlyphonAction::Drag {
+                                    x: target.position.x_px().0,
+                                    y: target.position.y_px().0,
                                 });
+                                s.update_last_click_position(target.position);
                             });
                         }
-                    }
-                    ClickType::Double => {
-                        controller.with_mut(|s| {
-                            s.apply_pointer_action(GlyphonAction::DoubleClick {
-                                x: text_relative_pos.x_px().0,
-                                y: text_relative_pos.y_px().0,
-                            });
-                        });
-                    }
-                    ClickType::Triple => {
-                        controller.with_mut(|s| {
-                            s.apply_pointer_action(GlyphonAction::TripleClick {
-                                x: text_relative_pos.x_px().0,
-                                y: text_relative_pos.y_px().0,
-                            });
-                        });
+                        change.consume();
                     }
                 }
-
-                // Start potential drag operation
-                controller.with_mut(|s| s.start_drag(click_type));
-            }
-        }
-
-        // Handle drag events (mouse move while dragging)
-        // This happens every frame when cursor position changes during drag
-        if controller.with(|s| s.is_dragging())
-            && let Some(cursor_pos) = cursor_pos_option
-        {
-            let drag_target = drag_selection_pointer_position(cursor_pos, args, controller, size);
-            auto_scroll_drag_selection(&drag_target, controller);
-            let current_pos_px =
-                drag_selection_pointer_position(cursor_pos, args, controller, size).position;
-            let last_pos_px = controller.with(|s| s.last_click_position());
-
-            if last_pos_px != Some(current_pos_px) {
-                controller.with_mut(|s| {
-                    s.apply_pointer_action(GlyphonAction::Drag {
-                        x: current_pos_px.x_px().0,
-                        y: current_pos_px.y_px().0,
-                    });
-                });
-
-                // Update last position to current position
-                controller.with_mut(|s| {
-                    s.update_last_click_position(current_pos_px);
-                });
-            }
-        }
-
-        scroll_recognizer.with_mut(|recognizer| {
-            recognizer.for_each(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                |_context, event| {
-                    event.normalize_to_pixels();
-                    let (dx, dy) = (event.delta_x, event.delta_y);
+                CursorEventContent::Released(_) | CursorEventContent::Cancelled(_)
+                    if active.is_some_and(|(pointer, _, _, _)| pointer == change.pointer_id) =>
+                {
+                    controller.with_mut(|s| s.stop_drag());
+                    active = None;
+                    change.consume();
+                }
+                CursorEventContent::Scroll(scroll) if inside && args.enabled => {
+                    let (dx, dy) = scroll.pixel_delta();
+                    let mut remainder = scroll;
                     if controller.with(|s| s.single_line()) {
                         let requested = if dx.abs() > f32::EPSILON { dx } else { dy };
-                        if requested.abs() <= f32::EPSILON
-                            || !controller.with_mut(|s| s.has_horizontal_overflow())
+                        if requested.abs() > f32::EPSILON
+                            && controller.with_mut(|s| s.has_horizontal_overflow())
                         {
-                            return;
+                            let consumed =
+                                controller.with_mut(|s| s.scroll_horizontal_consumed(-requested));
+                            if dx.abs() > f32::EPSILON {
+                                remainder.delta_x = dx + consumed;
+                                remainder.delta_y = dy;
+                            } else {
+                                remainder.delta_y = dy + consumed;
+                                remainder.delta_x = dx;
+                            }
+                            remainder.unit = tessera_ui::ScrollDeltaUnit::Pixel;
                         }
-                        let consumed =
-                            controller.with_mut(|s| s.scroll_horizontal_consumed(-requested));
-                        // `consumed` is in editor scroll space; the raw scroll
-                        // event uses the opposite sign.
-                        let consumed_raw = -consumed;
-                        if dx.abs() > f32::EPSILON {
-                            event.delta_x = dx - consumed_raw;
-                            event.delta_y = dy;
-                        } else {
-                            event.delta_y = dy - consumed_raw;
-                            event.delta_x = dx;
-                        }
-                    } else {
-                        if dy.abs() <= f32::EPSILON
-                            || !controller.with_mut(|s| s.has_vertical_overflow())
-                        {
-                            return;
-                        }
-                        // The editor engine clamps vertical scroll to the
-                        // content extent, so `consumed` is the exact amount
-                        // applied and the remainder goes to an ancestor.
+                    } else if dy.abs() > f32::EPSILON
+                        && controller.with_mut(|s| s.has_vertical_overflow())
+                    {
                         let consumed = controller.with_mut(|s| s.scroll_vertical_consumed(-dy));
-                        event.delta_y = dy + consumed;
+                        remainder.delta_y = dy + consumed;
+                        remainder.delta_x = dx;
+                        remainder.unit = tessera_ui::ScrollDeltaUnit::Pixel;
                     }
+                    event.set_scroll_remainder(change.pointer_id, remainder);
+                }
+                _ => {}
+            }
+        }
+        let focused = controller.with(|s| s.focus_handler().is_focused());
+        if focused && inside {
+            event.block_cursor();
+        }
+        if args.enabled && !args.read_only && focused {
+            let request = current_ime_request(
+                &args,
+                &controller,
+                ComputedData {
+                    width: event.size.width,
+                    height: event.size.height,
                 },
             );
-        });
-    }
-
-    // Handle mouse release events (end drag), even if the pointer is outside
-    // the editor bounds.
-    if tap_result.released {
-        controller.with_mut(|s| s.stop_drag());
-    }
-
-    // Only block cursor events when focused to prevent propagation.
-    let should_consume_pointer = controller.with(|s| {
-        s.focus_handler().is_focused()
-            && (is_cursor_in_editor || s.is_dragging() || tap_result.released)
-    });
-    if should_consume_pointer {
-        input.consume_pointer_changes();
-    }
-
-    if args.enabled && !args.read_only && controller.with(|s| s.focus_handler().is_focused()) {
-        let computed_data = input.computed_data;
-        let request = current_ime_request(args, controller, computed_data);
-        if tap_result.pressed && is_cursor_in_editor {
-            input.ime_session().show(request);
-        } else {
-            input.ime_session().update(request);
+            if pressed {
+                event.show_ime(request);
+            } else {
+                event.update_ime(request);
+            }
         }
     }
 }

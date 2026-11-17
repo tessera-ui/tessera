@@ -3,12 +3,8 @@
 //! ## Usage
 //!
 //! Use in forms, settings, or lists to enable boolean selections.
-use tessera_foundation::{
-    gesture::TapRecognizer,
-    modifier::{
-        InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext,
-        ToggleableArgs,
-    },
+use tessera_foundation::modifier::{
+    InteractionState, InteractionVisualState, ModifierExt as _, PointerEventContext, ToggleableArgs,
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, CallbackWith, Color, Dp, FocusRequester,
@@ -31,7 +27,6 @@ use crate::{
         surface::{SurfaceStyle, surface},
         theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
     },
-    modifier::{DisabledToggleSemantics, ModifierExt as _},
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -421,11 +416,6 @@ fn checkbox_inner(
     } else {
         None
     };
-    let tap_recognizer = if enabled {
-        Some(remember(TapRecognizer::default))
-    } else {
-        None
-    };
 
     let on_value_change = on_toggle.unwrap_or_else(CallbackWith::default_value);
 
@@ -599,16 +589,17 @@ fn checkbox_inner(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
-            tap_recognizer,
             ..Default::default()
         };
         modifier = modifier.toggleable(toggle_args);
     } else {
-        modifier = modifier.push_semantics(DisabledToggleSemantics {
-            role: Role::CheckBox,
+        modifier = modifier.toggleable(ToggleableArgs {
+            enabled: false,
+            role: Some(Role::CheckBox),
             value: is_checked,
             label: accessibility_label,
             description: accessibility_description,
+            ..Default::default()
         });
     }
     let modifier = modifier.push_semantics(CheckboxValueSemantics {
