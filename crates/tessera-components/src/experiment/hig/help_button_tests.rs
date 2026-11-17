@@ -34,7 +34,7 @@ struct Controls {
 }
 
 #[tessera]
-fn fixture(probe: TestProbe<Option<Controls>>) {
+fn fixture(probe: TestProbe<Option<Controls>>, transparent: Option<bool>) {
     let count = remember(|| 0);
     let enabled = remember(|| true);
     let visible = remember(|| true);
@@ -64,11 +64,15 @@ fn fixture(probe: TestProbe<Option<Controls>>) {
         .child(move || {
             boxed()
                 .alignment(Alignment::TopStart)
-                .modifier(Modifier::new().background(if dark.get() {
-                    Color::BLACK
+                .modifier(if transparent.unwrap_or(false) {
+                    Modifier::new()
                 } else {
-                    Color::WHITE
-                }))
+                    Modifier::new().background(if dark.get() {
+                        Color::BLACK
+                    } else {
+                        Color::WHITE
+                    })
+                })
                 .children(move || {
                     column().children(move || {
                         if visible.get() {
@@ -180,12 +184,15 @@ fn fractional_density_scaled_targets_and_collapsed_recovery_preserve_actions() {
     );
 }
 
-fn check_keyboard() {
+fn check_keyboard_at_samples(samples: u32) {
     let probe = TestProbe::default();
     let mut ui = UiTest::new()
         .viewport(160, 100)
+        .samples(samples)
         .rendered(crate::TesseraComponents)
-        .content(|| fixture(probe.clone()));
+        .content(|| {
+            fixture(probe.clone()).transparent(true);
+        });
     ui.frames(2);
     let controls = probe.get().unwrap();
     let initial = ui.read_pixels();
@@ -276,8 +283,18 @@ fn check_keyboard() {
     assert_eq!(controls.count.get(), 2);
     let restored = ui.read_pixels();
     ui.advance(Duration::from_secs(1));
-    assert_eq!(restored, ui.read_pixels());
+    let idle = ui.read_pixels();
+    assert!(
+        restored == idle,
+        "transparent focus pixels changed while idle at MSAA{samples}"
+    );
     assert_eq!(ui.frame_clock_diagnostics().waiting_tasks, 0);
+}
+
+fn check_keyboard() {
+    for samples in [1, 4] {
+        check_keyboard_at_samples(samples);
+    }
 }
 
 #[test]
