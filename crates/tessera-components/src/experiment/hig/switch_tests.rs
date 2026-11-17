@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Color, Dp, FocusRequester, KeyboardEvent, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
@@ -8,7 +10,13 @@ use tessera_ui::{
     winit::{event::ElementState, keyboard::NamedKey},
 };
 
-use crate::{column::column, modifier::ModifierExt as _};
+use crate::{
+    alignment::Alignment,
+    boxed::boxed,
+    column::column,
+    image::{ImageData, image},
+    modifier::ModifierExt as _,
+};
 
 use super::{
     super::button::{button, button_scope},
@@ -207,5 +215,82 @@ fn keyboard_feedback_focus_cancellation_and_accessibility_use_the_switch() {
     crate::test_utils::run_isolated_test(
         "experiment::hig::switch::tests::keyboard_feedback_focus_cancellation_and_accessibility_use_the_switch",
         check_keyboard_and_pixels,
+    );
+}
+
+#[tessera]
+fn disabled_track_fixture(probe: TestProbe<Option<State<bool>>>) {
+    let active = remember(|| true);
+    let background = remember(|| {
+        let mut pixels = Vec::with_capacity(120 * 80 * 4);
+        for y in 0..80 {
+            for x in 0..120 {
+                let gray = if (x / 8 + y / 8) % 2 == 0 { 51 } else { 204 };
+                pixels.extend_from_slice(&[gray, gray, gray, 255]);
+            }
+        }
+        ImageData::from_rgba(pixels, 120, 80)
+    });
+    probe.set(Some(active));
+    boxed().alignment(Alignment::TopStart).children(move || {
+        image()
+            .painter(background.get())
+            .modifier(Modifier::new().size(Dp(120.0), Dp(80.0)));
+        switch(true)
+            .enabled(false)
+            .window_active(active.get())
+            .accessibility_label("Disabled setting")
+            .modifier(Modifier::new().offset(Dp(20.0), Dp(20.0)));
+    });
+}
+
+fn check_disabled_track() {
+    for samples in [1, 4] {
+        let probe = TestProbe::default();
+        let mut ui = UiTest::new()
+            .viewport(120, 80)
+            .scale_factor(1.0)
+            .samples(samples)
+            .rendered(crate::TesseraComponents)
+            .content(|| disabled_track_fixture(probe.clone()));
+        ui.frames(2);
+        let active = probe.get().unwrap();
+        let (_, node) = ui.accessibility_node("Disabled setting");
+        assert!(node.is_disabled());
+        assert_eq!(node.toggled(), Some(Toggled::True));
+        assert!(!node.supports_action(Action::Click));
+        let colored = ui.read_pixels();
+        for (x, red) in [(26, 61), (34, 15)] {
+            let pixel = ui.pixel(x, 32);
+            assert!(
+                pixel[0].abs_diff(red) <= 2,
+                "disabled track must retain backdrop contrast: {pixel:?}"
+            );
+            assert!(
+                pixel[2] > pixel[0].saturating_add(100),
+                "disabled on-track loses its tint: {pixel:?}"
+            );
+        }
+        active.set(false);
+        ui.frame();
+        for x in [26, 34] {
+            let pixel = ui.pixel(x, 32);
+            assert_eq!(&pixel[..3], &[pixel[0]; 3]);
+        }
+        assert_ne!(colored, ui.read_pixels());
+        active.set(true);
+        ui.frame();
+        assert_eq!(colored, ui.read_pixels());
+        ui.advance(Duration::from_secs(1));
+        assert_eq!(colored, ui.read_pixels());
+    }
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for disabled track pixels"]
+fn disabled_on_track_keeps_active_tint_over_checkers_and_restores_after_deactivation() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::switch::tests::disabled_on_track_keeps_active_tint_over_checkers_and_restores_after_deactivation",
+        check_disabled_track,
     );
 }

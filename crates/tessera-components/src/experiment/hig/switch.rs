@@ -251,8 +251,8 @@ pub fn switch(
     let theme = use_context::<HigTheme>()
         .map(|theme| theme.get())
         .unwrap_or_default();
-    let track = if value && enabled && active {
-        Color::from_rgb(0.0, 0.19461783, 1.0)
+    let track = if value && active {
+        Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(if enabled { 1.0 } else { 0.7 })
     } else {
         let tint = if theme.appearance == Appearance::Dark {
             Color::WHITE
