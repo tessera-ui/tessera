@@ -1630,6 +1630,7 @@ pub fn text_field(
             menu_provider()
                 .placement(MenuPlacement::BelowStart)
                 .offset([Dp(0.0), Dp(4.0)])
+                .close_on_focus_loss(true)
                 .controller(menu_controller)
                 .main_content(move || {
                     text_field_content()

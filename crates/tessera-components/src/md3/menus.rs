@@ -225,6 +225,7 @@ struct MenuProviderConfig {
     pub scrim_color: Color,
     pub close_on_background: bool,
     pub close_on_escape: bool,
+    pub close_on_focus_loss: bool,
     pub on_dismiss: Option<Callback>,
     pub controller: Option<State<MenuController>>,
     pub focus_restorer_fallback: Option<FocusRequester>,
@@ -254,6 +255,7 @@ impl Default for MenuProviderConfig {
             scrim_color: default_scrim_color(),
             close_on_background: true,
             close_on_escape: true,
+            close_on_focus_loss: false,
             on_dismiss: None,
             controller: None,
             focus_restorer_fallback: None,
@@ -558,8 +560,8 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 
 /// # menu_provider
 ///
-/// Provides a Material Design 3 menu overlay anchored to a rectangle and
-/// dismisses it when its focus leaves the menu.
+/// Provides a Material Design 3 menu overlay anchored to a rectangle, with
+/// optional dismissal when focus leaves the menu.
 ///
 /// ## Usage
 ///
@@ -586,6 +588,7 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 /// - `scrim_color` — background color behind the menu
 /// - `close_on_background` — whether outside clicks dismiss the menu
 /// - `close_on_escape` — whether Escape dismisses the menu
+/// - `close_on_focus_loss` — whether focus leaving the menu dismisses it
 /// - `on_dismiss` — optional callback before dismissal
 /// - `controller` — optional external controller for open state and anchor
 /// - `focus_restorer_fallback` — optional fallback focus target on dismiss
@@ -644,6 +647,7 @@ pub fn menu_provider(
     scrim_color: Option<Color>,
     close_on_background: Option<bool>,
     close_on_escape: Option<bool>,
+    close_on_focus_loss: Option<bool>,
     on_dismiss: Option<Callback>,
     controller: Option<State<MenuController>>,
     focus_restorer_fallback: Option<FocusRequester>,
@@ -683,6 +687,7 @@ pub fn menu_provider(
         scrim_color: scrim_color.unwrap_or_else(default_scrim_color),
         close_on_background: close_on_background.unwrap_or(true),
         close_on_escape: close_on_escape.unwrap_or(true),
+        close_on_focus_loss: close_on_focus_loss.unwrap_or(false),
         on_dismiss,
         controller,
         focus_restorer_fallback,
@@ -917,12 +922,16 @@ fn menu_panel(
     let host = provider.host.expect("menu host");
     let motion = remember(|| MenuShapeMotion::new(MenuPosition::Standalone));
     let focused = focus_scope.has_focus();
-    if !is_submenu {
+    if provider.close_on_focus_loss && !is_submenu {
         let was_focused = focus_seen.get();
         if was_focused != focused {
             focus_seen.set(focused);
         }
-        if was_focused && !focused && controller.with(MenuController::is_open) {
+        if was_focused
+            && !focused
+            && controller.with(MenuController::is_open)
+            && !host.popup_has_focus()
+        {
             host.dismiss_all();
         }
     }
