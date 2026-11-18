@@ -320,7 +320,11 @@ pub fn switch(
         .unwrap_or_default();
     let track = if value && active {
         if pressed {
-            Color::from_rgb(0.0, 0.14412847, 0.7379104)
+            if theme.appearance == Appearance::Dark {
+                Color::from_rgb(0.012983031, 0.2541521, 1.0)
+            } else {
+                Color::from_rgb(0.0, 0.14412847, 0.7379104)
+            }
         } else {
             Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(if enabled { 1.0 } else { 0.7 })
         }

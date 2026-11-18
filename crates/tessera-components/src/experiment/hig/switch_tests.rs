@@ -20,7 +20,10 @@ use crate::{
 };
 
 use super::{
-    super::button::{button, button_scope},
+    super::{
+        button::{button, button_scope},
+        theme::{Appearance, HigTheme, hig_theme},
+    },
     switch,
 };
 
@@ -503,6 +506,48 @@ fn check_held_lens() {
     assert_eq!(controls.requests.get(), 1);
     assert_eq!(rest, ui.read_pixels());
     ui.advance(Duration::from_secs(1));
+    assert_eq!(rest, ui.read_pixels());
+
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(320, 160)
+        .scale_factor(2.0)
+        .samples(4)
+        .rendered(crate::TesseraComponents)
+        .content(|| {
+            let probe = probe.clone();
+            hig_theme()
+                .theme(HigTheme {
+                    appearance: Appearance::Dark,
+                })
+                .child(move || lens_fixture(probe.clone()));
+        });
+    ui.frames(3);
+    let controls = probe.get().unwrap();
+    controls.value.set(true);
+    ui.frames(2);
+    let rest = ui.read_pixels();
+    ui.pointer_press(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(155.0, 80.0),
+        PressKeyEventType::Left,
+    );
+    ui.frames(18);
+    let pixel = ui.pixel(93, 80);
+    assert!(
+        pixel[..3]
+            .iter()
+            .zip([30_u8, 138, 254])
+            .all(|(a, b)| a.abs_diff(b) <= 4),
+        "the dark held-on track must match the native exposed accent: {pixel:?}"
+    );
+    ui.pointer_release(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(155.0, 8.0),
+        PressKeyEventType::Left,
+    );
+    ui.frames(2);
+    assert_eq!(controls.requests.get(), 0);
     assert_eq!(rest, ui.read_pixels());
 }
 
