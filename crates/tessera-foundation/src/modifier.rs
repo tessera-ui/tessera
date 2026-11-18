@@ -141,7 +141,7 @@ pub trait ModifierExt {
     fn selectable(self, args: SelectableArgs) -> Modifier;
 
     /// Prevents cursor events from propagating to components behind this
-    /// subtree.
+    /// subtree without consuming changes observed by descendant gestures.
     fn block_touch_propagation(self) -> Modifier;
 
     /// Marks this subtree as a draggable window region. On macOS, double-clicking
