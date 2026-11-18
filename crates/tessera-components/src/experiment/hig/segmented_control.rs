@@ -1,4 +1,4 @@
-//! Segmented controls for mutually exclusive choices.
+//! Segmented controls for mutually exclusive choices or related actions.
 //!
 //! ## Usage
 //!
@@ -54,6 +54,16 @@ impl Segment {
             enabled: true,
         }
     }
+}
+
+/// How a segmented control responds to activation.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum SegmentTracking {
+    /// Request one selection among the segments.
+    #[default]
+    SelectOne,
+    /// Invoke a segment action without keeping a selection.
+    Momentary,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -116,6 +126,51 @@ struct SegmentFill {
     divider: Option<Color>,
 }
 
+#[derive(Clone, PartialEq)]
+struct MomentaryFocusRing(Appearance);
+
+impl DrawModifierNode for MomentaryFocusRing {
+    fn draw(
+        &self,
+        context: &mut DrawModifierContext<'_, '_>,
+        content: &mut dyn DrawModifierContent,
+    ) {
+        content.draw(context.render_input);
+        let mut metadata = context.render_input.metadata_mut();
+        let Some(size) = metadata.computed_data() else {
+            return;
+        };
+        if size.width <= Px::ZERO || size.height <= Px::ZERO {
+            return;
+        }
+        let outset = Dp(3.0).to_px();
+        let color = match self.0 {
+            Appearance::Light => Color::new(0.0, 0.133, 0.92, 0.5),
+            Appearance::Dark => Color::new(0.009, 0.41, 1.0, 0.5),
+        };
+        let fragment = metadata.fragment_mut();
+        let index = fragment.push_draw_command(PerceptualFillCommand {
+            color,
+            radii: [Dp(9.0); 2],
+            insets: [Dp::ZERO; 4],
+            clip_radius: None,
+            edge_smoothness: 1.0,
+            stroke: None,
+            path: None,
+            line: None,
+            outline_width: Dp(4.0),
+            snap_to_pixels: false,
+        });
+        // Expand only this paint operation, not the segment's input or layout bounds.
+        let op = &mut fragment.ops_mut()[index as usize];
+        op.position_override = Some(PxPosition::new(-outset, -outset));
+        op.size_override = Some(tessera_ui::PxSize::new(
+            size.width + outset * 2,
+            size.height + outset * 2,
+        ));
+    }
+}
+
 impl DrawModifierNode for SegmentFill {
     fn draw(
         &self,
@@ -157,7 +212,7 @@ impl DrawModifierNode for SegmentFill {
     }
 }
 
-struct SegmentSemantics(bool);
+struct SegmentSemantics(Option<bool>);
 
 #[derive(Clone, Copy, PartialEq)]
 struct SegmentLayout;
@@ -202,10 +257,12 @@ impl LayoutPolicy for SegmentLayout {
 impl SemanticsModifierNode for SegmentSemantics {
     fn apply(&self, node: &mut AccessibilityNode, _: &mut Option<AccessibilityActionHandler>) {
         node.merge_descendants = false;
-        node.toggled = Some(if self.0 {
-            Toggled::True
-        } else {
-            Toggled::False
+        node.toggled = self.0.map(|selected| {
+            if selected {
+                Toggled::True
+            } else {
+                Toggled::False
+            }
         });
     }
 }
@@ -221,11 +278,13 @@ struct Action {
 fn segment_item(
     index: usize,
     item: Segment,
+    tracking: SegmentTracking,
     selected: bool,
     divider: bool,
     active: bool,
     callback: CallbackWith<usize>,
 ) {
+    let choosing = tracking == SegmentTracking::SelectOne;
     let next = Action {
         index,
         enabled: item.enabled,
@@ -270,6 +329,13 @@ fn segment_item(
         } else {
             0.125
         })
+    } else if pressed && !choosing {
+        // A momentary press darkens or lightens the resting plate without retaining selection.
+        tint.with_alpha(if theme.appearance == Appearance::Dark {
+            0.165
+        } else {
+            0.16
+        })
     } else {
         tint.with_alpha(if pressed { 0.125 } else { 0.0 })
     };
@@ -285,7 +351,11 @@ fn segment_item(
     let mut modifier = Modifier::new().clickable(ClickableArgs {
         enabled: item.enabled,
         on_click: activate,
-        role: Some(Role::RadioButton),
+        role: Some(if choosing {
+            Role::RadioButton
+        } else {
+            Role::Button
+        }),
         label: Some(item.label.clone()),
         focus_requester: Some(requester),
         interaction_state: Some(interaction),
@@ -297,7 +367,7 @@ fn segment_item(
         },
         ..Default::default()
     });
-    if item.enabled {
+    if item.enabled && choosing {
         modifier =
             modifier
                 .preferred_tab_stop(selected)
@@ -318,14 +388,16 @@ fn segment_item(
             held,
             activate,
         })
-        .push_semantics(SegmentSemantics(selected))
+        .push_semantics(SegmentSemantics(choosing.then_some(selected)))
         .hover_cursor_icon(CursorIcon::Default)
         .height(Dp(24.0))
         .push_draw(SegmentFill {
             color,
             divider: divider.then_some(tint.with_alpha(0.25)),
         });
-    if item.enabled && active && requester.is_focus_visible() {
+    if item.enabled && active && requester.is_focus_visible() && !choosing {
+        modifier = modifier.push_draw(MomentaryFocusRing(theme.appearance));
+    } else if item.enabled && active && requester.is_focus_visible() {
         let corner = RoundedCorner::manual(Dp(6.0), 2.0);
         modifier = modifier.border_with_shape(
             Dp(2.0),
@@ -352,17 +424,18 @@ fn segment_item(
 
 /// # segmented_control
 ///
-/// Requests one selection among related labeled options for view modes and filters.
+/// Groups related labeled options or commands in one control.
 ///
 /// ## Usage
 ///
-/// Switch a content view or choose a time range without opening a menu.
+/// Switch a content view or offer a pair of navigation commands.
 ///
 /// ## Parameters
 ///
 /// - `segments` — options in display order, including individual availability.
-/// - `selected` — controlled selected index; absent or out-of-range values display no selection.
-/// - `on_select` — requested index on activation, including repeated selection.
+/// - `tracking` — select one option by default, or invoke momentary commands.
+/// - `selected` — controlled selected index in select-one mode; ignored in momentary mode.
+/// - `on_select` — index requested on activation, including repeated activation.
 /// - `enabled`, `window_active` — input availability and active window appearance; both default to true.
 /// - `modifier` — layout and semantics; extra width is distributed evenly between segments.
 /// - `accessibility_label`, `accessibility_description` — spoken group name and instructions.
@@ -388,6 +461,7 @@ fn segment_item(
 #[tessera]
 pub fn segmented_control(
     segments: Vec<Segment>,
+    tracking: Option<SegmentTracking>,
     selected: Option<usize>,
     on_select: Option<CallbackWith<usize>>,
     enabled: Option<bool>,
@@ -396,7 +470,9 @@ pub fn segmented_control(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
-    let selected = selected.filter(|index| *index < segments.len());
+    let tracking = tracking.unwrap_or_default();
+    let choosing = tracking == SegmentTracking::SelectOne;
+    let selected = selected.filter(|index| choosing && *index < segments.len());
     let enabled = enabled.unwrap_or(true);
     let active = window_active.unwrap_or(true);
     let callback = on_select.unwrap_or_else(CallbackWith::default_value);
@@ -414,7 +490,11 @@ pub fn segmented_control(
         .focus_group(None)
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().single_tab_stop(true))
         .semantics(SemanticsArgs {
-            role: Some(Role::RadioGroup),
+            role: Some(if choosing {
+                Role::RadioGroup
+            } else {
+                Role::Group
+            }),
             label: accessibility_label,
             description: accessibility_description,
             disabled: !enabled,
@@ -428,10 +508,11 @@ pub fn segmented_control(
     layout(SegmentsLayout).modifier(modifier).child(move || {
         for (index, mut item) in segments.clone().into_iter().enumerate() {
             item.enabled &= enabled;
-            key(index, move || {
+            key((index, tracking), move || {
                 segment_item(
                     index,
                     item,
+                    tracking,
                     selected == Some(index),
                     index > 0 && selected != Some(index - 1) && selected != Some(index),
                     active,

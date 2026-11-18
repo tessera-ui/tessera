@@ -12,7 +12,7 @@ use crate::{column::column, modifier::ModifierExt as _};
 
 use super::{
     super::button::{button, button_scope},
-    Segment, segmented_control,
+    Segment, SegmentTracking, segmented_control,
 };
 
 #[derive(Clone, Copy)]
@@ -29,7 +29,7 @@ struct Controls {
 }
 
 #[tessera]
-fn fixture(probe: TestProbe<Option<Controls>>) {
+fn fixture(probe: TestProbe<Option<Controls>>, tracking: SegmentTracking) {
     let segments = remember(|| {
         vec![
             Segment::new("Day"),
@@ -62,6 +62,7 @@ fn fixture(probe: TestProbe<Option<Controls>>) {
             .children(move || {
                 button("Before").focus_requester(before);
                 segmented_control(segments.get())
+                    .tracking(tracking)
                     .selected_optional(selected.get())
                     .enabled(enabled.get())
                     .accessibility_label("Period")
@@ -95,7 +96,7 @@ fn pointer_selection_reselection_and_disabled_segments_use_caller_owned_values()
     let probe = TestProbe::default();
     let mut ui = UiTest::new()
         .viewport(400, 160)
-        .content(|| fixture(probe.clone()));
+        .content(|| fixture(probe.clone(), SegmentTracking::SelectOne));
     ui.frame();
     let controls = probe.get().unwrap();
     let week = center(&ui, "Week");
@@ -144,7 +145,7 @@ fn check_shrinking_and_replacing_segments() {
     let mut ui = UiTest::new()
         .viewport(400, 160)
         .scale_factor(1.5)
-        .content(|| fixture(probe.clone()));
+        .content(|| fixture(probe.clone(), SegmentTracking::SelectOne));
     ui.frame();
     let controls = probe.get().unwrap();
     controls.width.set(Dp(241.0));
@@ -237,7 +238,7 @@ fn check_keyboard_and_pixels() {
         .viewport(400, 160)
         .scale_factor(1.0)
         .rendered(crate::TesseraComponents)
-        .content(|| fixture(probe.clone()));
+        .content(|| fixture(probe.clone(), SegmentTracking::SelectOne));
     ui.frames(3);
     let controls = probe.get().unwrap();
     controls.segments.with_mut(|items| items[1].enabled = false);
@@ -325,5 +326,110 @@ fn keyboard_navigation_focus_actions_and_removal_use_the_segmented_control() {
     crate::test_utils::run_isolated_test(
         "experiment::hig::segmented_control::tests::keyboard_navigation_focus_actions_and_removal_use_the_segmented_control",
         check_keyboard_and_pixels,
+    );
+}
+
+#[test]
+fn momentary_segments_activate_repeatedly_without_a_selection_or_focus_action() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 160)
+        .content(|| fixture(probe.clone(), SegmentTracking::Momentary));
+    ui.frames(1);
+    let controls = probe.get().unwrap();
+    assert_eq!(ui.accessibility_node("Period").1.role(), Role::Group);
+    let (day, node) = ui.accessibility_node("Day");
+    assert_eq!(node.role(), Role::Button);
+    assert_eq!(node.toggled(), None);
+    assert!(ui.accessibility_action(day, Action::Focus));
+    ui.frames(1);
+    ui.press_key(NamedKey::ArrowRight);
+    key_up(&mut ui, NamedKey::ArrowRight);
+    assert_eq!(
+        ui.accessibility_snapshot().unwrap().focus,
+        ui.accessibility_node("Week").0
+    );
+    assert!(controls.requests.get().is_empty());
+
+    let month = center(&ui, "Month");
+    ui.click_at(month);
+    ui.click_at(month);
+    assert_eq!(controls.requests.get(), [2, 2]);
+    assert_eq!(ui.accessibility_node("Month").1.toggled(), None);
+
+    let day = center(&ui, "Day");
+    let week = center(&ui, "Week");
+    ui.pointer_press(MOUSE_POINTER_ID, day, PressKeyEventType::Left);
+    ui.frames(1);
+    ui.pointer_move(MOUSE_POINTER_ID, week);
+    ui.frames(1);
+    ui.pointer_release(MOUSE_POINTER_ID, week, PressKeyEventType::Left);
+    ui.frames(1);
+    assert_eq!(controls.requests.get(), [2, 2]);
+
+    let month_id = ui.accessibility_node("Month").0;
+    assert!(ui.accessibility_action(month_id, Action::Focus));
+    ui.frames(1);
+    ui.press_key(NamedKey::Space);
+    ui.frames(1);
+    assert_eq!(controls.requests.get(), [2, 2]);
+    key_up(&mut ui, NamedKey::Space);
+    assert_eq!(controls.requests.get(), [2, 2, 2]);
+    ui.press_key(NamedKey::Enter);
+    key_up(&mut ui, NamedKey::Enter);
+    assert_eq!(controls.requests.get(), [2, 2, 2]);
+
+    ui.pointer_press(MOUSE_POINTER_ID, month, PressKeyEventType::Left);
+    ui.frames(1);
+    assert_eq!(controls.requests.get(), [2, 2, 2]);
+    controls.segments.with_mut(|items| items[2].enabled = false);
+    ui.frames(1);
+    ui.pointer_release(MOUSE_POINTER_ID, month, PressKeyEventType::Left);
+    ui.frames(1);
+    assert_eq!(controls.requests.get(), [2, 2, 2]);
+    let (_, disabled) = ui.accessibility_node("Month");
+    assert!(disabled.is_disabled());
+    assert!(!disabled.supports_action(Action::Click));
+}
+
+fn check_momentary_exterior_focus() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(640, 256)
+        .scale_factor(2.0)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone(), SegmentTracking::Momentary));
+    ui.frames(3);
+    let (day, node) = ui.accessibility_node("Day");
+    let bounds = node.bounds().unwrap();
+    let x = ((bounds.x0 + bounds.x1) * 0.5) as usize;
+    let y = bounds.y0 as usize;
+    let offset = (640 * (y - 5) + x) * 4;
+    let idle = ui.read_pixels();
+    assert!(ui.accessibility_action(day, Action::Focus));
+    ui.frames(2);
+    let focused = ui.read_pixels();
+    assert_ne!(&focused[offset..offset + 4], &idle[offset..offset + 4]);
+    assert_eq!(ui.accessibility_node("Day").1.bounds(), Some(bounds));
+
+    ui.press_key(NamedKey::ArrowRight);
+    key_up(&mut ui, NamedKey::ArrowRight);
+    assert_eq!(
+        ui.accessibility_snapshot().unwrap().focus,
+        ui.accessibility_node("Week").0
+    );
+    assert_eq!(
+        &ui.read_pixels()[offset..offset + 4],
+        &idle[offset..offset + 4]
+    );
+    assert!(probe.get().unwrap().requests.get().is_empty());
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for focus ring pixels"]
+fn momentary_focus_draws_outside_hit_bounds_and_erases_on_traversal() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::segmented_control::tests::momentary_focus_draws_outside_hit_bounds_and_erases_on_traversal",
+        check_momentary_exterior_focus,
     );
 }
