@@ -102,6 +102,9 @@
 - Text-field context menus open on completed right clicks and long presses,
   remain open through release, and tolerate small pointer movements without
   treating drags as clicks. Focused editors no longer swallow the menu trigger.
+- Menus dismiss when focus leaves their scope, including text-field context menus.
+- Fixed-height multiline text fields use the full content area and keep the
+  indicator at the bottom of the field.
 
 ### Performance
 

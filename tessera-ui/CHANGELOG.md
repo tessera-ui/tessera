@@ -155,6 +155,8 @@ guides describe the new model.
 - Child taps do not activate ancestor click handlers, while drag and scroll
   observers still receive the press. Ordinary focus changes preserve held
   pointer presses.
+- Passive input barriers stop propagation without canceling descendant gestures,
+  including taps followed by a final position update on the web.
 
 ### Performance
 
