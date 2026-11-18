@@ -19,6 +19,7 @@ use super::{
 struct Controls {
     segments: State<Vec<Segment>>,
     selected: State<Option<usize>>,
+    selected_indices: State<Vec<usize>>,
     enabled: State<bool>,
     accept: State<bool>,
     width: State<Dp>,
@@ -38,6 +39,7 @@ fn fixture(probe: TestProbe<Option<Controls>>, tracking: SegmentTracking) {
         ]
     });
     let selected = remember(|| Some(0usize));
+    let selected_indices = remember(Vec::new);
     let enabled = remember(|| true);
     let accept = remember(|| true);
     let width = remember(|| Dp(240.0));
@@ -48,6 +50,7 @@ fn fixture(probe: TestProbe<Option<Controls>>, tracking: SegmentTracking) {
     probe.set(Some(Controls {
         segments,
         selected,
+        selected_indices,
         enabled,
         accept,
         width,
@@ -64,13 +67,25 @@ fn fixture(probe: TestProbe<Option<Controls>>, tracking: SegmentTracking) {
                 segmented_control(segments.get())
                     .tracking(tracking)
                     .selected_optional(selected.get())
+                    .selected_indices(selected_indices.get())
                     .enabled(enabled.get())
                     .accessibility_label("Period")
                     .modifier(Modifier::new().width(width.get()))
                     .on_select(move |index| {
                         requests.with_mut(|requests| requests.push(index));
                         if accept.get() {
-                            selected.set(Some(index));
+                            if tracking == SegmentTracking::SelectAny {
+                                selected_indices.with_mut(|indices| {
+                                    if let Some(position) = indices.iter().position(|&i| index == i)
+                                    {
+                                        indices.remove(position);
+                                    } else {
+                                        indices.push(index);
+                                    }
+                                });
+                            } else {
+                                selected.set(Some(index));
+                            }
                         }
                     });
                 button("Save")
@@ -230,6 +245,114 @@ fn shrinking_and_replacing_segments_preserve_contiguous_bounds_and_current_actio
 fn key_up(ui: &mut UiTest<'_>, key: NamedKey) {
     ui.inject_key_event(KeyboardEvent::named(key, ElementState::Released));
     ui.frames(1);
+}
+
+#[test]
+fn select_any_reports_independent_toggles_without_owning_selection() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 160)
+        .content(|| fixture(probe.clone(), SegmentTracking::SelectAny));
+    ui.frame();
+    let controls = probe.get().unwrap();
+    assert_eq!(
+        ui.accessibility_node("Day").1.toggled(),
+        Some(Toggled::False)
+    );
+    ui.click_at(center(&ui, "Day"));
+    ui.click_at(center(&ui, "Week"));
+    assert_eq!(
+        ui.accessibility_node("Day").1.toggled(),
+        Some(Toggled::True)
+    );
+    assert_eq!(
+        ui.accessibility_node("Week").1.toggled(),
+        Some(Toggled::True)
+    );
+
+    controls.accept.set(false);
+    ui.click_at(center(&ui, "Week"));
+    assert_eq!(controls.requests.get(), [0, 1, 1]);
+    assert_eq!(
+        ui.accessibility_node("Week").1.toggled(),
+        Some(Toggled::True)
+    );
+    controls.accept.set(true);
+    controls.segments.with_mut(|items| items[1].enabled = false);
+    ui.frames(1);
+    let (week, disabled) = ui.accessibility_node("Week");
+    assert!(disabled.is_disabled());
+    assert_eq!(disabled.toggled(), Some(Toggled::True));
+    assert!(!disabled.supports_action(Action::Click));
+    ui.click_at(center(&ui, "Week"));
+    assert!(!ui.accessibility_action(week, Action::Click));
+    assert_eq!(controls.requests.get(), [0, 1, 1]);
+
+    let (day, _) = ui.accessibility_node("Day");
+    assert!(ui.accessibility_action(day, Action::Focus));
+    ui.frames(1);
+    ui.press_key(NamedKey::ArrowRight);
+    key_up(&mut ui, NamedKey::ArrowRight);
+    let (month, _) = ui.accessibility_node("Month");
+    assert_eq!(ui.accessibility_snapshot().unwrap().focus, month);
+    assert_eq!(controls.requests.get(), [0, 1, 1]);
+    ui.press_key(NamedKey::Space);
+    ui.frames(1);
+    assert_eq!(controls.requests.get(), [0, 1, 1]);
+    key_up(&mut ui, NamedKey::Space);
+    assert_eq!(
+        ui.accessibility_node("Month").1.toggled(),
+        Some(Toggled::True)
+    );
+    assert!(ui.accessibility_action(month, Action::Click));
+    ui.frames(1);
+    assert_eq!(controls.requests.get(), [0, 1, 1, 2, 2]);
+    assert_eq!(
+        ui.accessibility_node("Month").1.toggled(),
+        Some(Toggled::False)
+    );
+}
+
+#[test]
+fn select_any_retargets_drag_and_cancels_outside_or_invalidated_presses() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 160)
+        .content(|| fixture(probe.clone(), SegmentTracking::SelectAny));
+    ui.frame();
+    let controls = probe.get().unwrap();
+    let day = center(&ui, "Day");
+    let month = center(&ui, "Month");
+    ui.pointer_press(MOUSE_POINTER_ID, day, PressKeyEventType::Left);
+    ui.frames(1);
+    ui.pointer_move(MOUSE_POINTER_ID, month);
+    ui.frames(1);
+    assert!(controls.requests.get().is_empty());
+    ui.pointer_release(MOUSE_POINTER_ID, month, PressKeyEventType::Left);
+    ui.frames(1);
+    assert_eq!(controls.requests.get(), [2]);
+    assert_eq!(controls.selected_indices.get(), [2]);
+
+    ui.pointer_press(MOUSE_POINTER_ID, day, PressKeyEventType::Left);
+    ui.frames(1);
+    ui.pointer_release(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(390.0, 150.0),
+        PressKeyEventType::Left,
+    );
+    ui.frames(1);
+    assert_eq!(controls.requests.get(), [2]);
+
+    ui.pointer_press(MOUSE_POINTER_ID, day, PressKeyEventType::Left);
+    ui.frames(1);
+    controls.segments.with_mut(|items| items[0].enabled = false);
+    ui.frames(1);
+    ui.pointer_release(MOUSE_POINTER_ID, month, PressKeyEventType::Left);
+    ui.frames(1);
+    assert_eq!(controls.requests.get(), [2]);
+    ui.click_at(month);
+    assert_eq!(controls.requests.get(), [2, 2]);
+    assert!(controls.selected_indices.get().is_empty());
 }
 
 fn check_keyboard_and_pixels() {

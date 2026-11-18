@@ -1,4 +1,4 @@
-//! Segmented controls for mutually exclusive choices or related actions.
+//! Segmented controls for related choices or actions.
 //!
 //! ## Usage
 //!
@@ -10,14 +10,16 @@ use tessera_foundation::{
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
-    ComputedData, Constraint, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode,
-    FocusDirection, FocusRequester, FocusState, FocusTraversalPolicy, LayoutPolicy, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode,
-    accesskit::{Role, Toggled},
+    ComputedData, Constraint, CursorEventContent, Dp, DrawModifierContent, DrawModifierContext,
+    DrawModifierNode, FloatRect, FocusDirection, FocusRequester, FocusState, FocusTraversalPolicy,
+    GestureState, LayoutPolicy, LayoutResult, MeasurementError, Modifier, PointerEventPass,
+    PointerId, PointerInput, PointerInputModifierNode, PressKeyEventType, Px, PxPosition,
+    SemanticsModifierNode, State,
+    accesskit::{Action as AxAction, Role, Toggled},
     focus, key,
     layout::{MeasureScope, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
-    remember, tessera, use_context,
+    remember, remember_with_key, tessera, use_context,
     winit::window::CursorIcon,
 };
 
@@ -38,7 +40,7 @@ use super::{
 mod tests;
 
 /// One labeled option in a [`segmented_control`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Segment {
     /// Visible title and accessible name.
     pub label: String,
@@ -62,6 +64,8 @@ pub enum SegmentTracking {
     /// Request one selection among the segments.
     #[default]
     SelectOne,
+    /// Toggle independent selections, including an empty selection.
+    SelectAny,
     /// Invoke a segment action without keeping a selection.
     Momentary,
 }
@@ -124,12 +128,97 @@ impl LayoutPolicy for SegmentsLayout {
 struct SegmentFill {
     color: Color,
     divider: Option<Color>,
+    joined: [bool; 2],
+    accent: bool,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct TrackingPress {
+    pointer: PointerId,
+    target: Option<usize>,
+}
+
+struct MultiPointer {
+    press: State<Option<TrackingPress>>,
+    bounds: State<Vec<Option<FloatRect>>>,
+    enabled: Vec<bool>,
+    activate: CallbackWith<usize>,
+}
+
+impl PointerInputModifierNode for MultiPointer {
+    fn on_pointer_input(&self, input: PointerInput<'_>) {
+        if input.pass != PointerEventPass::Main {
+            return;
+        }
+        let mut press = self.press.get();
+        let position = input.cursor_position_abs();
+        for change in input.pointer_changes.iter_mut() {
+            if press.is_some_and(|press| press.pointer != change.pointer_id) {
+                continue;
+            }
+            if change.is_consumed() {
+                press = None;
+                continue;
+            }
+            let target = || {
+                position.and_then(|position| {
+                    self.bounds.with(|bounds| {
+                        bounds
+                            .iter()
+                            .zip(&self.enabled)
+                            .position(|(bounds, enabled)| {
+                                *enabled && bounds.is_some_and(|bounds| bounds.contains(position))
+                            })
+                    })
+                })
+            };
+            match change.content {
+                CursorEventContent::Pressed(PressKeyEventType::Left) if press.is_none() => {
+                    if let Some(target) = target()
+                        && change.claim_tap_press()
+                    {
+                        press = Some(TrackingPress {
+                            pointer: change.pointer_id,
+                            target: Some(target),
+                        });
+                    }
+                }
+                CursorEventContent::Moved(_) if press.is_some() => {
+                    press.as_mut().unwrap().target =
+                        if change.gesture_state == GestureState::Dragged {
+                            None
+                        } else {
+                            target()
+                        };
+                }
+                CursorEventContent::Released(PressKeyEventType::Left) if press.take().is_some() => {
+                    if change.gesture_state == GestureState::TapCandidate
+                        && let Some(target) = target()
+                    {
+                        change.consume();
+                        self.activate.call(target);
+                    }
+                }
+                CursorEventContent::Cancelled(PressKeyEventType::Left)
+                | CursorEventContent::Scroll(_) => {
+                    press = None;
+                }
+                _ => {}
+            }
+        }
+        if self.press.is_alive() && self.press.get() != press {
+            self.press.set(press);
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
-struct MomentaryFocusRing(Appearance);
+struct SegmentFocusRing {
+    appearance: Appearance,
+    radius: Dp,
+}
 
-impl DrawModifierNode for MomentaryFocusRing {
+impl DrawModifierNode for SegmentFocusRing {
     fn draw(
         &self,
         context: &mut DrawModifierContext<'_, '_>,
@@ -144,14 +233,14 @@ impl DrawModifierNode for MomentaryFocusRing {
             return;
         }
         let outset = Dp(3.0).to_px();
-        let color = match self.0 {
+        let color = match self.appearance {
             Appearance::Light => Color::new(0.0, 0.133, 0.92, 0.5),
             Appearance::Dark => Color::new(0.009, 0.41, 1.0, 0.5),
         };
         let fragment = metadata.fragment_mut();
         let index = fragment.push_draw_command(PerceptualFillCommand {
             color,
-            radii: [Dp(9.0); 2],
+            radii: [self.radius; 2],
             insets: [Dp::ZERO; 4],
             clip_radius: None,
             edge_smoothness: 1.0,
@@ -182,9 +271,18 @@ impl DrawModifierNode for SegmentFill {
             .metadata_mut()
             .computed_data()
             .expect("measured segment");
+        // Extend only the fill math past joined edges; the raster bounds stay local.
+        let [left, right] = self
+            .joined
+            .map(|joined| if joined { Dp(6.0) } else { Dp::ZERO });
         let stroke = self.divider.map(|color| {
-            let x = Dp(0.5).to_pixels_f32() / size.width.to_f32().max(1.0);
-            let y = Dp(5.5).to_pixels_f32() / size.height.to_f32().max(1.0);
+            let x = Dp(0.5 + left.0).to_pixels_f32()
+                / (size.width.to_f32() + Dp(left.0 + right.0).to_pixels_f32()).max(1.0);
+            let y = if self.joined[0] {
+                0.0
+            } else {
+                Dp(5.5).to_pixels_f32() / size.height.to_f32().max(1.0)
+            };
             PerceptualStroke {
                 raster_mask: false,
                 color,
@@ -201,18 +299,21 @@ impl DrawModifierNode for SegmentFill {
                 snap_to_pixels: false,
                 path: None,
                 color: self.color,
-                radii: [Dp(6.0); 2],
-                insets: [Dp(0.0); 4],
+                radii: [Dp(if self.accent { 5.65 } else { 6.0 }); 2],
+                insets: [Dp::ZERO, Dp(-right.0), Dp::ZERO, Dp(-left.0)],
                 clip_radius: None,
                 line: None,
-                edge_smoothness: 1.0,
+                edge_smoothness: if self.accent { 1.10 } else { 1.0 },
                 stroke,
             });
         content.draw(context.render_input);
     }
 }
 
-struct SegmentSemantics(Option<bool>);
+struct SegmentSemantics {
+    selected: Option<bool>,
+    activate: Option<Callback>,
+}
 
 #[derive(Clone, Copy, PartialEq)]
 struct SegmentLayout;
@@ -255,15 +356,27 @@ impl LayoutPolicy for SegmentLayout {
 }
 
 impl SemanticsModifierNode for SegmentSemantics {
-    fn apply(&self, node: &mut AccessibilityNode, _: &mut Option<AccessibilityActionHandler>) {
+    fn apply(
+        &self,
+        node: &mut AccessibilityNode,
+        handler: &mut Option<AccessibilityActionHandler>,
+    ) {
         node.merge_descendants = false;
-        node.toggled = self.0.map(|selected| {
+        node.toggled = self.selected.map(|selected| {
             if selected {
                 Toggled::True
             } else {
                 Toggled::False
             }
         });
+        if let Some(activate) = self.activate {
+            node.actions.push(AxAction::Click);
+            *handler = Some(Box::new(move |action| {
+                if action == AxAction::Click {
+                    activate.call();
+                }
+            }));
+        }
     }
 }
 
@@ -281,10 +394,13 @@ fn segment_item(
     tracking: SegmentTracking,
     selected: bool,
     divider: bool,
+    joined: [bool; 2],
     active: bool,
     callback: CallbackWith<usize>,
+    multi_pointer: Option<(State<Option<TrackingPress>>, State<Vec<Option<FloatRect>>>)>,
 ) {
     let choosing = tracking == SegmentTracking::SelectOne;
+    let multiple = tracking == SegmentTracking::SelectAny;
     let next = Action {
         index,
         enabled: item.enabled,
@@ -318,10 +434,25 @@ fn segment_item(
     } else {
         Color::BLACK
     };
-    let pressed = item.enabled
-        && active
-        && (held.get() || interaction.with(|state| state.is_pressed() && state.is_hovered()));
-    let color = if selected {
+    let pointed = multi_pointer
+        .and_then(|(press, _)| press.with(|press| press.and_then(|press| press.target)));
+    let pointer_pressed = if multiple {
+        pointed == Some(index)
+    } else {
+        interaction.with(|state| state.is_pressed() && state.is_hovered())
+    };
+    let pressed = item.enabled && active && (held.get() || pointer_pressed);
+    let accent = multiple && selected && active;
+    let color = if accent {
+        match (theme.appearance, item.enabled, pressed) {
+            (Appearance::Light, false, _) => Color::from_rgb(0.05448, 0.29614, 0.85499),
+            (Appearance::Dark, false, _) => Color::from_rgb(0.006995, 0.13563, 0.52712),
+            (Appearance::Light, true, false) => Color::from_rgb(0.0, 0.18448, 0.94731),
+            (Appearance::Light, true, true) => Color::from_rgb(0.0, 0.14703, 0.75294),
+            (Appearance::Dark, true, false) => Color::from_rgb(0.001821, 0.20508, 1.0),
+            (Appearance::Dark, true, true) => Color::from_rgb(0.012983, 0.25415, 1.0),
+        }
+    } else if selected {
         tint.with_alpha(if !item.enabled {
             0.0625
         } else if pressed {
@@ -330,7 +461,6 @@ fn segment_item(
             0.125
         })
     } else if pressed && !choosing {
-        // A momentary press darkens or lightens the resting plate without retaining selection.
         tint.with_alpha(if theme.appearance == Appearance::Dark {
             0.165
         } else {
@@ -339,7 +469,10 @@ fn segment_item(
     } else {
         tint.with_alpha(if pressed { 0.125 } else { 0.0 })
     };
-    let ink = if item.enabled {
+    let ink = if accent {
+        // Dimming the white ink keeps the same raster mask as the enabled label.
+        Color::WHITE.with_alpha(if item.enabled { 1.0 } else { 0.5 })
+    } else if item.enabled {
         theme.label_color()
     } else {
         tint.with_alpha(if theme.appearance == Appearance::Dark {
@@ -348,25 +481,48 @@ fn segment_item(
             0.26
         })
     };
-    let mut modifier = Modifier::new().clickable(ClickableArgs {
-        enabled: item.enabled,
-        on_click: activate,
-        role: Some(if choosing {
-            Role::RadioButton
-        } else {
-            Role::Button
-        }),
-        label: Some(item.label.clone()),
-        focus_requester: Some(requester),
-        interaction_state: Some(interaction),
-        keyboard_activation: false,
-        tap_config: TapGestureConfig {
-            slop_px: f32::INFINITY,
-            cancel_on_exit: false,
+    let mut modifier = if let Some((_, bounds)) = multi_pointer {
+        let mut modifier = Modifier::new()
+            .on_globally_positioned_precise(move |rect| {
+                bounds.with_mut(|bounds| {
+                    if bounds.len() <= index {
+                        bounds.resize(index + 1, None);
+                    }
+                    bounds[index] = Some(rect);
+                });
+            })
+            .semantics(SemanticsArgs {
+                role: Some(Role::Button),
+                label: Some(item.label.clone()),
+                disabled: !item.enabled,
+                focusable: item.enabled,
+                ..Default::default()
+            });
+        if item.enabled {
+            modifier = modifier.focusable().focus_requester(requester);
+        }
+        modifier
+    } else {
+        Modifier::new().clickable(ClickableArgs {
+            enabled: item.enabled,
+            on_click: activate,
+            role: Some(if choosing {
+                Role::RadioButton
+            } else {
+                Role::Button
+            }),
+            label: Some(item.label.clone()),
+            focus_requester: Some(requester),
+            interaction_state: Some(interaction),
+            keyboard_activation: false,
+            tap_config: TapGestureConfig {
+                slop_px: f32::INFINITY,
+                cancel_on_exit: false,
+                ..Default::default()
+            },
             ..Default::default()
-        },
-        ..Default::default()
-    });
+        })
+    };
     if item.enabled && choosing {
         modifier =
             modifier
@@ -382,21 +538,49 @@ fn segment_item(
                     }
                 });
     }
+    let divider = if joined[0] {
+        Some(if active {
+            match theme.appearance {
+                Appearance::Light => Color::from_rgb(0.0, 0.10224, 0.73791),
+                Appearance::Dark => Color::from_rgb(0.01444, 0.32314, 1.0),
+            }
+        } else {
+            tint.with_alpha(if item.enabled { 0.42 } else { 0.41 })
+        })
+    } else if divider
+        && !(multiple
+            && (pressed
+                || pointed
+                    .zip(index.checked_sub(1))
+                    .is_some_and(|(pointed, previous)| pointed == previous)))
+    {
+        Some(tint.with_alpha(0.25))
+    } else {
+        None
+    };
     modifier = modifier
         .push_keyboard_input(ChoiceKeyboard {
             enabled: item.enabled,
             held,
             activate,
         })
-        .push_semantics(SegmentSemantics(choosing.then_some(selected)))
+        .push_semantics(SegmentSemantics {
+            selected: (tracking != SegmentTracking::Momentary).then_some(selected),
+            activate: (multiple && item.enabled).then_some(activate),
+        })
         .hover_cursor_icon(CursorIcon::Default)
         .height(Dp(24.0))
         .push_draw(SegmentFill {
             color,
-            divider: divider.then_some(tint.with_alpha(0.25)),
+            divider,
+            joined,
+            accent: multiple && selected,
         });
     if item.enabled && active && requester.is_focus_visible() && !choosing {
-        modifier = modifier.push_draw(MomentaryFocusRing(theme.appearance));
+        modifier = modifier.push_draw(SegmentFocusRing {
+            appearance: theme.appearance,
+            radius: Dp(if multiple { 9.75 } else { 9.0 }),
+        });
     } else if item.enabled && active && requester.is_focus_visible() {
         let corner = RoundedCorner::manual(Dp(6.0), 2.0);
         modifier = modifier.border_with_shape(
@@ -433,9 +617,10 @@ fn segment_item(
 /// ## Parameters
 ///
 /// - `segments` — options in display order, including individual availability.
-/// - `tracking` — select one option by default, or invoke momentary commands.
-/// - `selected` — controlled selected index in select-one mode; ignored in momentary mode.
-/// - `on_select` — index requested on activation, including repeated activation.
+/// - `tracking` — select one option by default, toggle independent choices, or invoke momentary commands.
+/// - `selected` — controlled selected index in select-one mode.
+/// - `selected_indices` — controlled selected indices in select-any mode; empty by default.
+/// - `on_select` — index requested on activation; toggle that index in select-any mode.
 /// - `enabled`, `window_active` — input availability and active window appearance; both default to true.
 /// - `modifier` — layout and semantics; extra width is distributed evenly between segments.
 /// - `accessibility_label`, `accessibility_description` — spoken group name and instructions.
@@ -463,6 +648,7 @@ pub fn segmented_control(
     segments: Vec<Segment>,
     tracking: Option<SegmentTracking>,
     selected: Option<usize>,
+    selected_indices: Option<Vec<usize>>,
     on_select: Option<CallbackWith<usize>>,
     enabled: Option<bool>,
     window_active: Option<bool>,
@@ -472,7 +658,8 @@ pub fn segmented_control(
 ) {
     let tracking = tracking.unwrap_or_default();
     let choosing = tracking == SegmentTracking::SelectOne;
-    let selected = selected.filter(|index| choosing && *index < segments.len());
+    let multiple = tracking == SegmentTracking::SelectAny;
+    let selected_indices = selected_indices.unwrap_or_default();
     let enabled = enabled.unwrap_or(true);
     let active = window_active.unwrap_or(true);
     let callback = on_select.unwrap_or_else(CallbackWith::default_value);
@@ -484,7 +671,7 @@ pub fn segmented_control(
     } else {
         Color::BLACK
     };
-    let modifier = modifier
+    let mut modifier = modifier
         .unwrap_or_default()
         .height(Dp(24.0))
         .focus_group(None)
@@ -504,20 +691,49 @@ pub fn segmented_control(
         .push_draw(SegmentFill {
             color: tint.with_alpha(0.075),
             divider: None,
+            joined: [false; 2],
+            accent: false,
         });
+    let multi_pointer = if multiple {
+        let press = remember_with_key((segments.clone(), enabled), || None);
+        let bounds = remember(Vec::new);
+        modifier = modifier.push_pointer_input(MultiPointer {
+            press,
+            bounds,
+            enabled: segments
+                .iter()
+                .map(|item| enabled && item.enabled)
+                .collect(),
+            activate: callback,
+        });
+        Some((press, bounds))
+    } else {
+        None
+    };
+    let is_selected = move |index| match tracking {
+        SegmentTracking::SelectOne => selected == Some(index),
+        SegmentTracking::SelectAny => selected_indices.contains(&index),
+        SegmentTracking::Momentary => false,
+    };
+    let segment_count = segments.len();
     layout(SegmentsLayout).modifier(modifier).child(move || {
         for (index, mut item) in segments.clone().into_iter().enumerate() {
             item.enabled &= enabled;
+            let selected = is_selected(index);
+            let divider = index > 0 && !is_selected(index - 1) && !selected;
+            let joined = if multiple && selected {
+                [
+                    index > 0 && is_selected(index - 1),
+                    index + 1 < segment_count && is_selected(index + 1),
+                ]
+            } else {
+                [false; 2]
+            };
             key((index, tracking), move || {
                 segment_item(
-                    index,
-                    item,
-                    tracking,
-                    selected == Some(index),
-                    index > 0 && selected != Some(index - 1) && selected != Some(index),
-                    active,
-                    callback,
-                );
+                    index, item, tracking, selected, divider, joined, active, callback,
+                )
+                .multi_pointer_optional(multi_pointer);
             });
         }
     });
