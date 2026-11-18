@@ -12,8 +12,140 @@ use crate::{alignment::Alignment, boxed::boxed, modifier::ModifierExt as _};
 
 use super::{
     super::theme::{Appearance, HigTheme, hig_theme},
-    SpinnerSize, progress_bar, progress_spinner,
+    IndeterminateBarSize, SpinnerSize, indeterminate_progress_bar, progress_bar, progress_spinner,
 };
+
+#[tessera]
+fn bar_fixture(probe: TestProbe<Option<State<bool>>>) {
+    let running = remember(|| false);
+    probe.set(Some(running));
+    boxed()
+        .alignment(Alignment::TopStart)
+        .modifier(Modifier::new().background(Color::WHITE))
+        .children(move || {
+            indeterminate_progress_bar(running.get()).accessibility_label("Shown bar");
+            indeterminate_progress_bar(running.get())
+                .size(IndeterminateBarSize::Small)
+                .window_active(false)
+                .displayed_when_stopped(false)
+                .accessibility_label("Hidden bar")
+                .accessibility_description("Preparing files")
+                .modifier(Modifier::new().width(Dp(180.0)).offset(Dp::ZERO, Dp(24.0)));
+        });
+}
+
+#[test]
+fn indeterminate_bar_keeps_intrinsic_height_and_exposes_no_value_or_actions() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(200, 42)
+        .scale_factor(1.0)
+        .content(|| bar_fixture(probe.clone()));
+    ui.frame();
+    assert_eq!(ui.frame_clock_diagnostics().waiting_tasks, 0);
+    let (_, shown) = ui.accessibility_node("Shown bar");
+    let bounds = shown.bounds().unwrap();
+    assert_eq!((bounds.width(), bounds.height()), (160.0, 20.0));
+    let missing = |ui: &UiTest<'_>| {
+        ui.accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .iter()
+            .all(|(_, node)| node.label() != Some("Hidden bar"))
+    };
+    assert!(missing(&ui));
+    let running = probe.get().unwrap();
+    running.set(true);
+    ui.frame();
+    let (id, hidden) = ui.accessibility_node("Hidden bar");
+    let bounds = hidden.bounds().unwrap();
+    assert_eq!((bounds.width(), bounds.height()), (180.0, 12.0));
+    assert_eq!(hidden.role(), Role::ProgressIndicator);
+    assert_eq!(hidden.description(), Some("Preparing files"));
+    assert_eq!(hidden.numeric_value(), None);
+    assert_eq!(hidden.min_numeric_value(), None);
+    assert_eq!(hidden.max_numeric_value(), None);
+    assert!(!hidden.supports_action(Action::Focus));
+    assert!(!ui.accessibility_action(id, Action::Click));
+    running.set(false);
+    ui.frame();
+    assert!(missing(&ui));
+}
+
+fn check_bar_start_stop_restart() {
+    const ROW_BYTES: usize = 200 * 4;
+    const SPLIT: usize = ROW_BYTES * 24;
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(200, 42)
+        .scale_factor(1.0)
+        .samples(4)
+        .rendered(crate::TesseraComponents)
+        .content(|| bar_fixture(probe.clone()));
+    ui.frame();
+    let stopped = ui.read_pixels();
+    assert!(ui.pixel(1, 10)[0] < 30);
+    assert!(ui.pixel(80, 10)[0].abs_diff(239) <= 1);
+    assert_eq!(ui.pixel(1, 30), [255; 4]);
+    let running = probe.get().unwrap();
+    running.set(true);
+    for _ in 0..4 {
+        ui.frame();
+    }
+    let first = ui.read_pixels();
+    assert!(ui.pixel(1, 30)[0].abs_diff(170) <= 1);
+    ui.advance(Duration::from_millis(440));
+    let moving = ui.read_pixels();
+    assert_ne!(moving, first);
+    running.set(false);
+    ui.frame();
+    ui.frame();
+    assert_eq!(&ui.read_pixels()[SPLIT..], &stopped[SPLIT..]);
+    ui.advance(Duration::from_millis(100));
+    let draining = ui.read_pixels();
+    assert_ne!(&draining[..SPLIT], &moving[..SPLIT]);
+
+    running.set(true);
+    for _ in 0..4 {
+        ui.frame();
+    }
+    let restarted = ui.read_pixels();
+    assert_eq!(&restarted[..SPLIT], &draining[..SPLIT]);
+    assert_eq!(&restarted[SPLIT..], &first[SPLIT..]);
+
+    // The retained sweep is now 1.70 seconds into its original period.
+    ui.advance(Duration::from_millis(1160));
+    running.set(false);
+    ui.frame();
+    ui.frame();
+    ui.advance(Duration::from_millis(400));
+    assert_ne!(ui.read_pixels(), stopped);
+    ui.advance(Duration::from_millis(1700));
+    assert_eq!(ui.read_pixels(), stopped);
+    assert_eq!(ui.frame_clock_diagnostics().waiting_tasks, 0);
+
+    running.set(true);
+    for _ in 0..4 {
+        ui.frame();
+    }
+    assert_eq!(ui.read_pixels(), first);
+    ui.advance(Duration::from_millis(440));
+    running.set(false);
+    ui.frame();
+    ui.frame();
+    ui.advance(Duration::from_millis(1460));
+    assert_eq!(ui.read_pixels(), stopped);
+    assert_eq!(ui.frame_clock_diagnostics().waiting_tasks, 0);
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for progress pixels"]
+fn indeterminate_bar_drains_its_sweep_and_restarts_from_the_expected_phase() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::progress::tests::indeterminate_bar_drains_its_sweep_and_restarts_from_the_expected_phase",
+        check_bar_start_stop_restart,
+    );
+}
 
 #[tessera]
 fn spinner_fixture(probe: TestProbe<Option<State<bool>>>) {

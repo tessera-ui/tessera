@@ -11,6 +11,13 @@ use crate::pipelines::{
 
 pub(super) fn register(context: &mut PipelineContext<'_>) {
     context.register_draw_pipeline_factory(|resources| {
+        super::perceptual_fill::PerceptualSweepPipeline::new(
+            resources.device,
+            resources.surface_config.format,
+            resources.sample_count,
+        )
+    });
+    context.register_draw_pipeline_factory(|resources| {
         super::perceptual_fill::PerceptualFillPipeline::new(
             resources.device,
             resources.surface_config.format,

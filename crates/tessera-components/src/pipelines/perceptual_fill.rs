@@ -66,6 +66,34 @@ impl DrawCommand for PerceptualSpokesCommand {
     }
 }
 
+#[derive(Clone, PartialEq)]
+pub(crate) struct PerceptualSweepCommand {
+    pub track: Color,
+    pub lower_edge: f32,
+    pub accent: Color,
+    pub height: Dp,
+    pub advance: f32,
+    pub width: Dp,
+    pub stretch: [f32; 2],
+    pub tail_opacity: f32,
+    pub mirrored: bool,
+    pub opacity: f32,
+}
+
+impl DrawCommand for PerceptualSweepCommand {
+    fn sample_region(&self) -> Option<SampleRegion> {
+        Some(SampleRegion::PaddedLocal(PaddingRect::ZERO))
+    }
+
+    fn draw_region(&self) -> DrawRegion {
+        DrawRegion::PaddedLocal(PaddingRect::ZERO)
+    }
+
+    fn apply_opacity(&mut self, opacity: f32) {
+        self.opacity *= opacity;
+    }
+}
+
 impl DrawCommand for PerceptualFillCommand {
     fn sample_region(&self) -> Option<SampleRegion> {
         Some(SampleRegion::PaddedLocal(self.padding()))
@@ -371,6 +399,60 @@ impl DrawablePipeline<PerceptualSpokesCommand> for PerceptualSpokesPipeline {
             ];
             uniforms[5].copy_from_slice(&command.weights[..4]);
             uniforms[6].copy_from_slice(&command.weights[4..]);
+            self.0.draw_quad(context, &uniforms);
+        }
+    }
+}
+
+pub(crate) struct PerceptualSweepPipeline(PerceptualFillPipeline);
+
+impl PerceptualSweepPipeline {
+    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat, samples: u32) -> Self {
+        Self(PerceptualFillPipeline::with_fragment(
+            device, format, samples, "fs_sweep",
+        ))
+    }
+}
+
+impl DrawablePipeline<PerceptualSweepCommand> for PerceptualSweepPipeline {
+    fn draw(&mut self, context: &mut DrawContext<'_, '_, '_, PerceptualSweepCommand>) {
+        for (command, geometry) in context.commands {
+            let [width, height] = geometry.window_size();
+            if width <= 0.0 || height <= 0.0 || command.opacity <= 0.0 {
+                continue;
+            }
+            let origin = geometry.window_origin();
+            let scale = geometry.local_to_window.scale();
+            let rect = [origin.x, origin.y, width, height];
+            let mut uniforms = [[0.0; 4]; 17];
+            uniforms[0] = rect;
+            uniforms[1] = rect;
+            uniforms[2] = [
+                context.target_size.width.to_f32(),
+                context.target_size.height.to_f32(),
+                context.scene_rect.x.to_f32(),
+                context.scene_rect.y.to_f32(),
+            ];
+            uniforms[3] = command.track.to_array();
+            let track_height = (command.height.to_pixels_f32() * scale)
+                .min(height)
+                .min(width);
+            let radius = track_height * 0.5;
+            let end_length = Dp(48.0).to_pixels_f32() * scale;
+            uniforms[4] = [
+                track_height,
+                radius - end_length + command.advance * (width + end_length - 2.0 * radius),
+                command.width.to_pixels_f32() * scale,
+                command.lower_edge,
+            ];
+            uniforms[5] = command.accent.to_array();
+            uniforms[6] = [
+                command.stretch[0],
+                command.stretch[1],
+                command.tail_opacity,
+                f32::from(command.mirrored),
+            ];
+            uniforms[7] = [command.opacity, 0.0, 0.0, 0.0];
             self.0.draw_quad(context, &uniforms);
         }
     }

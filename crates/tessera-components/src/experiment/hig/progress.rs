@@ -254,7 +254,10 @@ pub fn progress_bar(
         });
 }
 
+pub use indeterminate_bar::{IndeterminateBarSize, indeterminate_progress_bar};
 pub use spinner::{SpinnerSize, progress_spinner};
 
+#[path = "progress_indeterminate_bar.rs"]
+mod indeterminate_bar;
 #[path = "progress_spinner.rs"]
 mod spinner;

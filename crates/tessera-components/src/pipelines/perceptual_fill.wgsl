@@ -101,6 +101,46 @@ fn segment_distance(point: vec2<f32>, start: vec2<f32>, end: vec2<f32>) -> f32 {
     return length(point - start - fraction * line);
 }
 
+fn capsule_coverage(point: vec2<f32>, radius: f32, stretch: vec2<f32>) -> f32 {
+    let distance = length(point);
+    // Project a screen pixel onto the edge normal after stretching the cap.
+    // A fixed ramp in capsule space loses coverage at oblique edges.
+    let gradient = point / stretch;
+    let footprint = (gradient.x + gradient.y) / max(distance, 0.000001);
+    return clamp(0.5 - (distance - radius) / max(footprint, 0.000001), 0.0, 1.0);
+}
+
+@fragment
+fn fs_sweep(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    let local = position.xy - uniforms.rect.xy;
+    let profile = uniforms.corner;
+    let motion = uniforms.stroke_start_joint;
+    let opacity = uniforms.stroke_end_width.x;
+    let radius = profile.x * 0.5;
+    let extent = uniforms.rect.z;
+    let y = abs(local.y - uniforms.rect.w * 0.5);
+    let cap = max(abs(local.x - extent * 0.5) - max(extent * 0.5 - radius, 0.0), 0.0);
+    let coverage = capsule_coverage(vec2(cap, y), radius, vec2(1.0));
+    if coverage <= 0.0 { discard; }
+
+    let x = select(local.x, extent - local.x, motion.w > 0.5) - profile.y;
+    let tip = max((abs(x - profile.z * 0.5) - profile.z * 0.5) / motion.x + radius, 0.0);
+    let highlight = min(coverage, capsule_coverage(vec2(tip, y / motion.y), radius, motion.xy));
+    let gradient = mix(motion.z, 1.0, clamp(x / max(0.6 * profile.z, 0.000001), 0.0, 1.0));
+    let bottom = clamp(local.y - uniforms.rect.w * 0.5 - radius + 1.5, 0.0, 1.0);
+    let track_alpha = (uniforms.color.a + profile.w * bottom) * coverage;
+    let accent_alpha = uniforms.stroke_color.a * highlight * gradient;
+
+    let background = textureLoad(backdrop, vec2<i32>(floor(position.xy - uniforms.viewport_scene.zw)), 0);
+    let premultiplied = encode(background.rgb / max(background.a, 0.000001)) * background.a;
+    let track = mix(premultiplied, encode(uniforms.color.rgb), track_alpha);
+    let track_coverage = mix(background.a, 1.0, track_alpha);
+    let foreground = mix(track, encode(uniforms.stroke_color.rgb), accent_alpha);
+    let output_alpha = mix(background.a, mix(track_coverage, 1.0, accent_alpha), opacity);
+    let straight = mix(premultiplied, foreground, opacity) / max(output_alpha, 0.000001);
+    return vec4(decode(straight) * output_alpha, output_alpha);
+}
+
 @fragment
 fn fs_spokes(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let diagonal = inverseSqrt(2.0);
