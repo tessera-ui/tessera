@@ -12,8 +12,82 @@ use crate::{alignment::Alignment, boxed::boxed, modifier::ModifierExt as _};
 
 use super::{
     super::theme::{Appearance, HigTheme, hig_theme},
-    progress_bar,
+    SpinnerSize, progress_bar, progress_spinner,
 };
+
+#[tessera]
+fn spinner_fixture(probe: TestProbe<Option<State<bool>>>) {
+    let running = remember(|| false);
+    probe.set(Some(running));
+    boxed()
+        .alignment(Alignment::TopStart)
+        .modifier(Modifier::new().background(Color::WHITE))
+        .children(move || {
+            progress_spinner(running.get()).accessibility_label("Visible");
+            progress_spinner(running.get())
+                .size(SpinnerSize::Small)
+                .displayed_when_stopped(false)
+                .accessibility_label("Loading")
+                .modifier(Modifier::new().offset(Dp(40.0), Dp::ZERO));
+        });
+}
+
+fn check_spinner_start_and_stop() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(64, 40)
+        .scale_factor(1.0)
+        .rendered(crate::TesseraComponents)
+        .content(|| spinner_fixture(probe.clone()));
+    ui.frames(3);
+    let stopped = ui.read_pixels();
+    let (_, visible) = ui.accessibility_node("Visible");
+    assert_eq!(visible.role(), Role::ProgressIndicator);
+    assert_eq!(visible.numeric_value(), None);
+    assert!(!visible.supports_action(Action::Click));
+    assert!(stopped.chunks_exact(4).any(|pixel| pixel[0] < 160));
+    assert!(
+        ui.accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .iter()
+            .all(|(_, node)| node.label() != Some("Loading"))
+    );
+
+    let running = probe.get().unwrap();
+    running.set(true);
+    ui.frames(3);
+    let before = ui.read_pixels();
+    ui.advance(Duration::from_millis(220));
+    assert_ne!(ui.read_pixels(), before);
+    let (_, node) = ui.accessibility_node("Loading");
+    assert_eq!(node.role(), Role::ProgressIndicator);
+    assert_eq!(node.numeric_value(), None);
+    let bounds = node.bounds().unwrap();
+    assert_eq!((bounds.x1 - bounds.x0, bounds.y1 - bounds.y0), (16.0, 16.0));
+
+    running.set(false);
+    ui.frames(3);
+    assert_eq!(ui.read_pixels(), stopped);
+    ui.advance(Duration::from_secs(2));
+    assert_eq!(ui.read_pixels(), stopped);
+    assert!(
+        ui.accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .iter()
+            .all(|(_, node)| node.label() != Some("Loading"))
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for spinner pixels"]
+fn indeterminate_spinner_animates_and_restores_stopped_visibility() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::progress::tests::indeterminate_spinner_animates_and_restores_stopped_visibility",
+        check_spinner_start_and_stop,
+    );
+}
 
 #[derive(Clone, Copy)]
 struct Controls {

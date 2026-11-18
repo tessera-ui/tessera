@@ -42,6 +42,30 @@ pub(crate) struct PerceptualPath {
     pub dot_radius: Dp,
 }
 
+#[derive(Clone, PartialEq)]
+pub(crate) struct PerceptualSpokesCommand {
+    pub tint: Color,
+    pub inner: Dp,
+    pub outer: Dp,
+    pub radius: Dp,
+    pub edge_width_px: f32,
+    pub weights: [f32; 8],
+}
+
+impl DrawCommand for PerceptualSpokesCommand {
+    fn sample_region(&self) -> Option<SampleRegion> {
+        Some(SampleRegion::PaddedLocal(PaddingRect::uniform(Px::ZERO)))
+    }
+
+    fn draw_region(&self) -> DrawRegion {
+        DrawRegion::PaddedLocal(PaddingRect::uniform(Px::ZERO))
+    }
+
+    fn apply_opacity(&mut self, opacity: f32) {
+        self.tint.a *= opacity;
+    }
+}
+
 impl DrawCommand for PerceptualFillCommand {
     fn sample_region(&self) -> Option<SampleRegion> {
         Some(SampleRegion::PaddedLocal(self.padding()))
@@ -81,6 +105,15 @@ pub(crate) struct PerceptualFillPipeline {
 
 impl PerceptualFillPipeline {
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat, samples: u32) -> Self {
+        Self::with_fragment(device, format, samples, "fs_main")
+    }
+
+    fn with_fragment(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        samples: u32,
+        entry_point: &str,
+    ) -> Self {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Perceptual fill"),
             entries: &[
@@ -126,7 +159,7 @@ impl PerceptualFillPipeline {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_main"),
+                entry_point: Some(entry_point),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend: None,
@@ -144,6 +177,35 @@ impl PerceptualFillPipeline {
             cache: None,
         });
         Self { pipeline, layout }
+    }
+
+    fn draw_quad<T: DrawCommand>(
+        &self,
+        context: &mut DrawContext<'_, '_, '_, T>,
+        uniforms: &[[f32; 4]; 17],
+    ) {
+        let buffer = context
+            .graphics
+            .frame_buffer(wgpu::BufferUsages::UNIFORM, bytemuck::cast_slice(uniforms));
+        let bindings = context
+            .graphics
+            .cached_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Perceptual fill"),
+                layout: &self.layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(context.scene_texture_view),
+                    },
+                ],
+            });
+        context.render_pass.set_pipeline(&self.pipeline);
+        context.render_pass.set_bind_group(0, &bindings, &[]);
+        context.render_pass.draw(0..6, 0..1);
     }
 }
 
@@ -263,30 +325,53 @@ impl DrawablePipeline<PerceptualFillCommand> for PerceptualFillPipeline {
                     0.0,
                 ];
             }
-            let buffer = context
-                .graphics
-                .frame_buffer(wgpu::BufferUsages::UNIFORM, bytemuck::cast_slice(&uniforms));
-            let bindings = context
-                .graphics
-                .cached_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("Perceptual fill"),
-                    layout: &self.layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: buffer.binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(
-                                context.scene_texture_view,
-                            ),
-                        },
-                    ],
-                });
-            context.render_pass.set_pipeline(&self.pipeline);
-            context.render_pass.set_bind_group(0, &bindings, &[]);
-            context.render_pass.draw(0..6, 0..1);
+            self.draw_quad(context, &uniforms);
+        }
+    }
+}
+
+pub(crate) struct PerceptualSpokesPipeline(PerceptualFillPipeline);
+
+impl PerceptualSpokesPipeline {
+    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat, samples: u32) -> Self {
+        Self(PerceptualFillPipeline::with_fragment(
+            device,
+            format,
+            samples,
+            "fs_spokes",
+        ))
+    }
+}
+
+impl DrawablePipeline<PerceptualSpokesCommand> for PerceptualSpokesPipeline {
+    fn draw(&mut self, context: &mut DrawContext<'_, '_, '_, PerceptualSpokesCommand>) {
+        for (command, geometry) in context.commands {
+            let [width, height] = geometry.window_size();
+            if width <= 0.0 || height <= 0.0 {
+                continue;
+            }
+            let origin = geometry.window_origin();
+            let scale = geometry.local_to_window.scale();
+            let rect = [origin.x, origin.y, width, height];
+            let mut uniforms = [[0.0; 4]; 17];
+            uniforms[0] = rect;
+            uniforms[1] = rect;
+            uniforms[2] = [
+                context.target_size.width.to_f32(),
+                context.target_size.height.to_f32(),
+                context.scene_rect.x.to_f32(),
+                context.scene_rect.y.to_f32(),
+            ];
+            uniforms[3] = command.tint.to_array();
+            uniforms[4] = [
+                command.inner.to_pixels_f32() * scale,
+                command.outer.to_pixels_f32() * scale,
+                command.radius.to_pixels_f32() * scale,
+                command.edge_width_px,
+            ];
+            uniforms[5].copy_from_slice(&command.weights[..4]);
+            uniforms[6].copy_from_slice(&command.weights[4..]);
+            self.0.draw_quad(context, &uniforms);
         }
     }
 }

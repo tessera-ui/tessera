@@ -1,8 +1,8 @@
-//! Determinate horizontal progress bars.
+//! Progress bars and activity indicators.
 //!
 //! ## Usage
 //!
-//! Show the completed portion of a bounded operation.
+//! Show the completion of a bounded operation or indicate that work is ongoing.
 
 use std::ops::RangeInclusive;
 
@@ -253,3 +253,8 @@ pub fn progress_bar(
             progress_indicator((value - min) / (max - min), fill);
         });
 }
+
+pub use spinner::{SpinnerSize, progress_spinner};
+
+#[path = "progress_spinner.rs"]
+mod spinner;

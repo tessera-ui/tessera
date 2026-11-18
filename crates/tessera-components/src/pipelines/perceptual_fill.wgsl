@@ -101,6 +101,33 @@ fn segment_distance(point: vec2<f32>, start: vec2<f32>, end: vec2<f32>) -> f32 {
     return length(point - start - fraction * line);
 }
 
+@fragment
+fn fs_spokes(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    let diagonal = inverseSqrt(2.0);
+    let directions = array<vec2<f32>, 8>(
+        vec2(0.0, -1.0), vec2(diagonal, -diagonal), vec2(1.0, 0.0), vec2(diagonal, diagonal),
+        vec2(0.0, 1.0), vec2(-diagonal, diagonal), vec2(-1.0, 0.0), vec2(-diagonal, -diagonal),
+    );
+    let point = position.xy - uniforms.rect.xy - uniforms.rect.zw * 0.5;
+    let profile = uniforms.corner;
+    let weights = array<vec4<f32>, 2>(uniforms.stroke_color, uniforms.stroke_start_joint);
+    var transmission = 1.0;
+    for (var i = 0u; i < 8u; i++) {
+        let axis = directions[i];
+        let distance = segment_distance(point, axis * profile.x, axis * profile.y) - profile.z;
+        let coverage = clamp(0.5 - distance / profile.w, 0.0, 1.0);
+        transmission *= 1.0 - coverage * weights[i / 4u][i % 4u];
+    }
+    let alpha = uniforms.color.a * (1.0 - transmission);
+    if alpha <= 0.0 { discard; }
+    let background = textureLoad(backdrop, vec2<i32>(floor(position.xy - uniforms.viewport_scene.zw)), 0);
+    let straight = encode(background.rgb / max(background.a, 0.000001));
+    let remaining = background.a * (1.0 - alpha);
+    let output_alpha = remaining + alpha;
+    let color = (encode(uniforms.color.rgb) * alpha + straight * remaining) / output_alpha;
+    return vec4(decode(color) * output_alpha, output_alpha);
+}
+
 fn mask_coverage(point: vec2<f32>, start: vec2<f32>, joint: vec2<f32>, end: vec2<f32>) -> f32 {
     let distance = min(segment_distance(point, start, joint), segment_distance(point, joint, end));
     return clamp(uniforms.stroke_end_width.z * 0.5 + 0.5 - distance, 0.0, 1.0);
