@@ -67,14 +67,35 @@ impl DrawModifierNode for ProgressFill {
             .unwrap_or(ComputedData::ZERO)
             .width
             .to_f32();
-        let fill_width = self.fraction.map_or(width, |fraction| {
-            (width * fraction as f32 - Dp(0.8).to_pixels_f32())
-                .max(Dp(4.0).to_pixels_f32())
-                .min(width)
-        });
-        let radius_x = self.fraction.map_or(Dp(4.0), |_| {
-            Dp((Dp::from(Px(1)).0 * fill_width as f64 * 0.625).min(4.0))
-        });
+        let single_density = Dp(1.0).to_pixels_f32() == 1.0;
+        let mut fill_width = width;
+        let mut radii = [Dp(4.0); 2];
+        let mut edge_smoothness = 1.0;
+        if let Some(fraction) = self.fraction {
+            let requested = width * fraction as f32;
+            let minimum = Dp(4.0).to_pixels_f32();
+            // The minimum cap stays fixed until the nominal fill exceeds the
+            // track height. This footprint is calibrated at 1x.
+            if single_density && requested <= Dp(8.0).to_pixels_f32() {
+                fill_width = minimum.min(width);
+                radii = [Dp(3.6), Dp(3.28)];
+                edge_smoothness = 1.19;
+            } else {
+                fill_width = (requested - Dp(0.8).to_pixels_f32())
+                    .max(minimum)
+                    .min(width);
+                radii[0] = Dp((Dp::from(Px(1)).0 * fill_width as f64 * 0.625).min(4.0));
+                // At 1x the half-point track inset rounds away; a one-pixel
+                // ramp gives the straight top and bottom rows full coverage.
+                edge_smoothness = if single_density {
+                    // Keep the full vertical radius when the two caps nearly meet.
+                    radii[0] = Dp((fill_width as f64 * 0.5).min(4.0));
+                    1.0 + 0.25 * (9.5 - fill_width).clamp(0.0, 1.0)
+                } else {
+                    1.3
+                };
+            }
+        }
         let end_inset = Dp(Dp::from(Px(1)).0 * (width - fill_width) as f64);
         context
             .render_input
@@ -85,11 +106,11 @@ impl DrawModifierNode for ProgressFill {
                 snap_to_pixels: false,
                 path: None,
                 color: self.color,
-                radii: [radius_x, Dp(4.0)],
+                radii,
                 insets: [Dp(0.0), end_inset, Dp(0.0), Dp(0.0)],
                 clip_radius: self.fraction.map(|_| Dp(4.0)),
                 line: None,
-                edge_smoothness: if self.fraction.is_some() { 1.3 } else { 1.0 },
+                edge_smoothness,
                 stroke: None,
             });
         content.draw(context.render_input);

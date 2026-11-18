@@ -225,3 +225,53 @@ fn retained_fill_track_cap_appearance_and_zero_width_recovery_update_pixels_with
         check_progress_pixels,
     );
 }
+
+fn check_active_single_density_cap() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(320, 80)
+        .scale_factor(1.0)
+        .samples(4)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    ui.frames(2);
+    let controls = probe.get().unwrap();
+    controls.active.set(true);
+    controls.dark.set(true);
+    for width in [180.0, 240.0] {
+        controls.width.set(Dp(width));
+        controls.value.set(0.0);
+        ui.frame();
+        let minimum = ui.read_pixels();
+        assert!(ui.pixel(2, 9)[2].abs_diff(255) <= 6);
+        assert!(ui.pixel(6, 9)[2].abs_diff(43) <= 6);
+
+        controls.value.set(8.0 / width);
+        ui.frame();
+        assert_eq!(ui.read_pixels(), minimum);
+        controls.value.set(8.2 / width);
+        ui.frame();
+        assert!(ui.pixel(6, 9)[2].abs_diff(255) <= 16);
+    }
+    controls.value.set(0.25);
+    ui.frame();
+    for y in [6, 13] {
+        let edge = ui.pixel(20, y);
+        assert!(
+            edge[..3]
+                .iter()
+                .zip([0_u8, 122, 255])
+                .all(|(a, b)| a.abs_diff(b) <= 6),
+            "{edge:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for progress pixels"]
+fn active_single_density_fill_keeps_its_minimum_cap_and_covers_flat_edges() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::progress::tests::active_single_density_fill_keeps_its_minimum_cap_and_covers_flat_edges",
+        check_active_single_density_cap,
+    );
+}
