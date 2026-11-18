@@ -1,3 +1,122 @@
+## [v3.0.0] - 2026-11-16
+
+### Breaking changes
+
+- **Renamed from `tessera-ui-basic-components`.** Update the dependency and
+  import paths:
+
+  ```toml
+  # before
+  tessera-ui-basic-components = "2"
+  # after
+  tessera-components = "3"
+  ```
+
+  `tessera_ui_basic_components::*` becomes `tessera_components::*`.
+- **Material components moved to `tessera_components::md3`.** The crate root
+  keeps design-system-independent primitives (`row`, `column`, `boxed`,
+  `flow_row`, `flow_column`, `spacer`, `image`, `image_vector`, `pager`,
+  `painter`, `alignment`, `shape_def`). Buttons, text, icons, surfaces, theme,
+  scrolling, lazy lists, text input, and all other Material components are
+  imported from `md3`, for example `tessera_components::md3::button::button`.
+- **Register the package at the entry.** Replace
+  `pipelines::register_pipelines(registry)` with
+  `EntryPoint::new(app).package(tessera_components::ComponentsPackage)`, which
+  also registers the platform clipboard.
+- **Builder APIs.** Components follow the Tessera 3 component model: required
+  values are entry arguments and options are chained setters instead of
+  `*Args` structs and `*ArgsBuilder`s.
+
+  ```rust
+  // 2.x
+  text(TextArgsBuilder::default().text("Hi".to_string()).size(Dp(12.0)).build().unwrap());
+  // 3.0
+  text("Hi").size(Dp(12.0));
+  ```
+
+  Sizing and padding fields (`width`, `height`, `padding`) are replaced by
+  modifiers.
+- **Controls take their value at entry.** `checkbox(checked)`,
+  `switch(checked)`, `radio_button(selected)`, `slider(value)`,
+  `range_slider(value)`, and `tabs(selected)` take the current value and
+  report changes through `on_toggle`, `on_select`, or `on_change` callbacks;
+  `CheckboxState`, `SwitchState`, `SliderState`, and `TabsState` are removed.
+  Remaining imperative state holders are named `*Controller` (for example
+  `ScrollableState` → `ScrollableController`, `DialogProviderState` →
+  `DialogController`) and are optional: components create one internally
+  when none is passed.
+- **Theming.** Colors, typography, and shapes come from a single
+  `md3::theme::MaterialTheme` provided by `material_theme()`
+  (`MaterialTheme::from_seed` and `from_color_scheme` build custom themes).
+  The `material_color` module and `global_material_scheme` are removed.
+- **Modifiers.** Layout, semantics, and generic visual modifiers (`padding`,
+  `size`, `fill_*`, `alpha`, `clip_shape`, ...) come from
+  `tessera_foundation::modifier::ModifierExt`.
+  Generic interaction modifiers (`clickable`, `combined_clickable`,
+  `toggleable`, `selectable`, and `draggable`) and `InteractionState` also
+  belong to `tessera_foundation::modifier`; the
+  `tessera_components::interaction_state` module is removed.
+  `tessera_components::modifier::ModifierExt` provides drawing extensions
+  only (backgrounds and borders); scrolling and Material shadows come from
+  `md3::modifier::ModifierExt`. Foundation interaction modifiers do not add
+  Material ripples; use Material controls or supply custom visual feedback.
+- **Removed and replaced components.** `text_editor` is replaced by
+  `md3::text_input` and `md3::text_field`; `bottom_nav_bar` by
+  `md3::navigation_bar`; `side_bar` is removed (use `md3::navigation_drawer`
+  or `md3::side_sheet`). `fluid_glass` became the experimental
+  `experiment::hig::glass::glass`, which no longer reads the Material theme;
+  `glass_button`, `glass_progress`, `glass_slider`, and `glass_switch` are
+  removed. The root `RippleState` re-export is removed (use
+  `md3::ripple_state`).
+- **Fonts.** Text uses the platform's system fonts instead of bundled fonts.
+  Register `fonts::Fonts` for packaged fonts, or `fonts::FontStylesheet` for a
+  web font stylesheet; web builds bundle a startup font and load more from a
+  CDN.
+- **Images.** Images load asynchronously from generated assets or in-memory
+  bytes through `painter`; synchronous `raster` / `vector` / `try_painter`
+  loaders are removed.
+
+### Added
+
+- Material Design 3 components: app bars, badges, button groups, cards,
+  carousels, chips, date and time pickers, dialogs, dividers, floating action
+  buttons and menus, lazy grids and staggered grids, list items, loading and
+  wavy progress indicators, menus, navigation bars, drawers, and rails, pull to
+  refresh, radio buttons, scaffold, search, segmented and split buttons, side
+  and bottom sheets, snackbars, text fields, text tables, toolbars, and
+  tooltips.
+- Layout primitives `flow_row`, `flow_column`, and `pager`, and keyed items in
+  `md3` lazy lists and grids.
+- Vertical sliders, discrete steps, and range and centered sliders.
+- Typography with font family, weight, tracking, line height, and
+  single-line ellipsizing.
+- Built-in component labels are localized (English and Simplified Chinese)
+  and follow the language registered at the entry.
+- Keyboard focus, focus indicators, and accessibility semantics across
+  components.
+- `experiment::hig::glass::glass` with Regular, Clear, and Custom liquid glass
+  materials.
+
+### Fixed
+
+- Text-field context menus open on completed right clicks and long presses,
+  remain open through release, and tolerate small pointer movements without
+  treating drags as clicks. Focused editors no longer swallow the menu trigger.
+- Menus dismiss when focus leaves their scope, including text-field context menus.
+- Fixed-height multiline text fields use the full content area and keep the
+  indicator at the bottom of the field.
+
+### Performance
+
+- Shadows are drawn analytically in the shape pipeline without offscreen
+  textures or blur passes.
+- Text measurement reuses shaped glyph runs when only constraints change, and
+  the system font scan runs in the background at startup.
+- Pipelines are created on first use, and vector icons rasterize in the frame
+  submission with retained atlas entries.
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-basic-components-v2.7.0...tessera-components-v3.0.0)
+
 ## [v2.7.0] - 2025-11-18 +08:00
 
 ### Changes

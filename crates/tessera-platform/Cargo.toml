@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Platform services and plugins for Tessera."
+metadata = { tessera = {} }
 
 [dependencies]
 parking_lot.workspace = true

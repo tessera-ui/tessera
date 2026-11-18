@@ -1,3 +1,45 @@
+## [v1.0.0] - 2026-11-16
+
+### Breaking changes
+
+- **Renamed from `tessera-ui-macros`.** Applications normally use the macros
+  through `tessera_ui::{tessera, entry, lint}` and `tessera_shard::shard`;
+  depend on `tessera-macros` only if you imported it directly.
+- **`#[tessera]` generates a props type and builder.** The function's
+  parameters become props: required parameters are entry arguments,
+  `Option<T>` parameters become setters, `Callback` / `RenderSlot` parameters
+  get closure and `*_shared` setters, and the entry returns the builder.
+  `#[prop(into)]`, `#[prop(skip_setter)]`, and `#[prop(skip_eq)]` adjust the
+  generated surface. Parameters must be owned `Clone + 'static` values.
+- The injected `measure`, `input_handler`, `on_minimize`, and `on_close`
+  helpers are removed; use `tessera_ui::layout::layout` with a `LayoutPolicy`,
+  input modifiers, and plugin lifecycle hooks. `#[default(...)]` parameter
+  attributes are removed; resolve `Option` defaults in the body.
+- `#[tessera]` and `#[shard]` no longer accept attribute arguments.
+- **`#[shard]` no longer injects `#[state]` parameters.** Other parameters
+  become fields of the generated `*Destination`; take a `Model<T>` parameter
+  for state that lives as long as the route, and read the router with
+  `tessera_shard::use_router()`.
+
+### Added
+
+- `#[tessera_ui::entry]` on a shared `pub fn run() -> EntryPoint` generates
+  the Android entry point; desktop, iOS, and web entries call `run()`.
+- `#[tessera_ui::lint(...)]` sets Tessera lint levels for an item or module,
+  applied by `cargo tessera check`.
+- Generic `#[tessera]` components.
+- `Model<T>` parameters are injected from the nearest `ModelStore`, or owned
+  by the component when none is provided.
+- Control-flow instrumentation keeps remembered state stable across `if`,
+  `match`, and loops.
+
+### Performance
+
+- Generated components register plain required props directly and keep
+  per-component generic code small, reducing compile time and code size.
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-macros-v0.4.4...tessera-macros-v1.0.0)
+
 ## [v0.4.4] - 2025-11-15 +08:00
 
 ### Changes

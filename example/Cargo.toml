@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 build = "build.rs"
+metadata = { tessera = {} }
 
 [lib]
 crate-type = ["rlib", "cdylib"]
