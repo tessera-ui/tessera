@@ -4,10 +4,7 @@
 //!
 //! Increase or decrease a quantity by a fixed increment.
 
-use std::{
-    ops::RangeInclusive,
-    time::{Duration, Instant},
-};
+use std::{ops::RangeInclusive, time::Duration};
 
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
@@ -20,7 +17,9 @@ use tessera_ui::{
     launch,
     layout::{MeasureScope, Stack, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context,
     winit::{
         event::ElementState,
         keyboard::{Key, NamedKey},
