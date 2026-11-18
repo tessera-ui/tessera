@@ -556,3 +556,56 @@ fn momentary_focus_draws_outside_hit_bounds_and_erases_on_traversal() {
         check_momentary_exterior_focus,
     );
 }
+
+fn check_momentary_press_dividers() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 160)
+        .scale_factor(1.0)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone(), SegmentTracking::Momentary));
+    ui.frames(3);
+    let seams = ["Week", "Month"].map(|label| {
+        let bounds = ui.accessibility_node(label).1.bounds().unwrap();
+        ((bounds.y0 as usize + 7) * 400 + bounds.x0 as usize) * 4
+    });
+    let read = |ui: &UiTest<'_>| {
+        let pixels = ui.read_pixels();
+        seams.map(|i| pixels[i])
+    };
+    let rest = read(&ui);
+    let day = center(&ui, "Day");
+    let month = center(&ui, "Month");
+    ui.pointer_press(MOUSE_POINTER_ID, day, PressKeyEventType::Left);
+    ui.frames(2);
+    assert!(read(&ui)[0] > rest[0]);
+    assert_eq!(read(&ui)[1], rest[1]);
+    ui.pointer_move(MOUSE_POINTER_ID, month);
+    ui.frames(2);
+    assert_eq!(read(&ui), rest);
+    ui.pointer_release(MOUSE_POINTER_ID, month, PressKeyEventType::Left);
+    ui.frames(2);
+
+    let week = center(&ui, "Week");
+    ui.pointer_press(MOUSE_POINTER_ID, week, PressKeyEventType::Left);
+    ui.frames(2);
+    assert!(
+        read(&ui)
+            .into_iter()
+            .zip(rest)
+            .all(|(held, rest)| held > rest)
+    );
+    ui.pointer_release(MOUSE_POINTER_ID, week, PressKeyEventType::Left);
+    ui.frames(2);
+    assert_eq!(read(&ui), rest);
+    assert_eq!(probe.get().unwrap().requests.get(), [1]);
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for divider pixels"]
+fn momentary_press_hides_only_the_adjacent_dividers() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::segmented_control::tests::momentary_press_hides_only_the_adjacent_dividers",
+        check_momentary_press_dividers,
+    );
+}

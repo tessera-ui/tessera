@@ -387,6 +387,21 @@ struct Action {
     callback: CallbackWith<usize>,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+struct MomentaryPress {
+    pointer: State<InteractionState>,
+    keyboard: State<bool>,
+}
+
+impl MomentaryPress {
+    fn is_visible(self) -> bool {
+        self.keyboard.get()
+            || self
+                .pointer
+                .with(|state| state.is_pressed() && state.is_hovered())
+    }
+}
+
 #[tessera]
 fn segment_item(
     index: usize,
@@ -398,6 +413,7 @@ fn segment_item(
     active: bool,
     callback: CallbackWith<usize>,
     multi_pointer: Option<(State<Option<TrackingPress>>, State<Vec<Option<FloatRect>>>)>,
+    momentary_press: Option<(MomentaryPress, Option<MomentaryPress>)>,
 ) {
     let choosing = tracking == SegmentTracking::SelectOne;
     let multiple = tracking == SegmentTracking::SelectAny;
@@ -417,8 +433,11 @@ fn segment_item(
         }
     });
     let requester = remember(FocusRequester::new).get();
-    let interaction = remember(InteractionState::new);
-    let held = remember(|| false);
+    let (interaction, held) = if let Some((current, _)) = momentary_press {
+        (current.pointer, current.keyboard)
+    } else {
+        (remember(InteractionState::new), remember(|| false))
+    };
     if !item.enabled {
         if held.get() {
             held.set(false);
@@ -538,6 +557,9 @@ fn segment_item(
                     }
                 });
     }
+    let pressing_neighbor = active
+        && momentary_press
+            .is_some_and(|(_, previous)| previous.is_some_and(MomentaryPress::is_visible));
     let divider = if joined[0] {
         Some(if active {
             match theme.appearance {
@@ -548,6 +570,8 @@ fn segment_item(
             tint.with_alpha(if item.enabled { 0.42 } else { 0.41 })
         })
     } else if divider
+        && !pressing_neighbor
+        && !(momentary_press.is_some() && pressed)
         && !(multiple
             && (pressed
                 || pointed
@@ -716,6 +740,15 @@ pub fn segmented_control(
         SegmentTracking::Momentary => false,
     };
     let segment_count = segments.len();
+    let mut momentary_presses = Vec::new();
+    if tracking == SegmentTracking::Momentary {
+        for index in 0..segment_count {
+            momentary_presses.push(key(index, || MomentaryPress {
+                pointer: remember(InteractionState::new),
+                keyboard: remember(|| false),
+            }));
+        }
+    }
     layout(SegmentsLayout).modifier(modifier).child(move || {
         for (index, mut item) in segments.clone().into_iter().enumerate() {
             item.enabled &= enabled;
@@ -729,11 +762,18 @@ pub fn segmented_control(
             } else {
                 [false; 2]
             };
+            let momentary_press = momentary_presses.get(index).copied().map(|current| {
+                let previous = index
+                    .checked_sub(1)
+                    .and_then(|previous| momentary_presses.get(previous).copied());
+                (current, previous)
+            });
             key((index, tracking), move || {
                 segment_item(
                     index, item, tracking, selected, divider, joined, active, callback,
                 )
-                .multi_pointer_optional(multi_pointer);
+                .multi_pointer_optional(multi_pointer)
+                .momentary_press_optional(momentary_press);
             });
         }
     });
