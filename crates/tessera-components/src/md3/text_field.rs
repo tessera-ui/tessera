@@ -894,7 +894,9 @@ fn outlined_border(
 type FieldContentData = (TextFieldProps, TextInputProps, MaterialTheme, bool, bool);
 
 #[derive(Clone, PartialEq)]
-struct FieldBodyHeight;
+struct FieldBodyHeight {
+    target_height: Option<Px>,
+}
 
 impl tessera_ui::LayoutPolicy for FieldBodyHeight {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
@@ -904,7 +906,10 @@ impl tessera_ui::LayoutPolicy for FieldBodyHeight {
         let natural_constraints =
             Constraint::new(input.parent_constraint().width(), AxisConstraint::NONE);
         let natural = child.probe_intrinsic(input, &natural_constraints)?;
-        let height = input.parent_constraint().height().clamp(natural.height);
+        let height = input
+            .parent_constraint()
+            .height()
+            .clamp(self.target_height.unwrap_or(natural.height));
         let constraints = Constraint::new(
             input.parent_constraint().width(),
             AxisConstraint::exact(height),
@@ -1090,7 +1095,12 @@ fn text_field_body(
             .on_surface
             .with_alpha(DISABLED_CONTENT_ALPHA)
     };
-    tessera_ui::layout::layout(FieldBodyHeight).child(move || {
+    let target_height = if matches!(args.line_limit, TextFieldLineLimit::MultiLine) {
+        geometry.with(|geometry| geometry.outer.map(|outer| outer.local_size.height))
+    } else {
+        None
+    };
+    tessera_ui::layout::layout(FieldBodyHeight { target_height }).child(move || {
         boxed().children(move || {
             row()
                 .modifier(
@@ -1986,9 +1996,9 @@ mod native_field_regressions {
         Filled,
         Outlined,
         Multiline,
+        ExplicitHeightMultiline,
         Affixes,
         Secure,
-        ExplicitHeight,
     }
 
     #[derive(Clone, Default, PartialEq)]
@@ -2000,7 +2010,13 @@ mod native_field_regressions {
 
     #[tessera]
     fn fixture(case: Case, probe: Probe) {
-        let controller = remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
+        let controller = remember(|| {
+            let mut controller = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
+            if matches!(case, Case::ExplicitHeightMultiline) {
+                controller.set_text("Populated multiline field content");
+            }
+            controller
+        });
         let changes = remember(|| 0_usize);
         probe.editor.set(Some(controller));
         let bounds = probe.bounds.clone();
@@ -2026,25 +2042,35 @@ mod native_field_regressions {
                             let mut field_modifier = Modifier::new()
                                 .fill_max_width()
                                 .on_globally_positioned(move |rect| observe_bounds.call(rect));
-                            if matches!(case, Case::ExplicitHeight) {
+                            if matches!(case, Case::ExplicitHeightMultiline) {
                                 field_modifier = field_modifier.height(Dp(96.0));
                             }
                             field
                                 .controller(controller)
                                 .modifier(field_modifier)
                                 .min_width(Dp::ZERO)
-                                .min_height(Dp(if matches!(case, Case::Multiline) {
-                                    96.0
-                                } else {
-                                    56.0
-                                }))
+                                .min_height(Dp(
+                                    if matches!(
+                                        case,
+                                        Case::Multiline | Case::ExplicitHeightMultiline
+                                    ) {
+                                        96.0
+                                    } else {
+                                        56.0
+                                    },
+                                ))
                                 .label("Label")
                                 .placeholder("Placeholder text longer than the available input")
-                                .line_limit(if matches!(case, Case::Multiline) {
-                                    TextFieldLineLimit::MultiLine
-                                } else {
-                                    TextFieldLineLimit::SingleLine
-                                })
+                                .line_limit(
+                                    if matches!(
+                                        case,
+                                        Case::Multiline | Case::ExplicitHeightMultiline
+                                    ) {
+                                        TextFieldLineLimit::MultiLine
+                                    } else {
+                                        TextFieldLineLimit::SingleLine
+                                    },
+                                )
                                 .accessibility_label("Regression field")
                                 .leading_icon(|| {
                                     boxed()
@@ -2376,7 +2402,7 @@ mod native_field_regressions {
                 "horizontal editor scrolling must move the visible glyphs, not only its caret"
             );
         }
-        let (mut tall, probe) = renderer(Case::ExplicitHeight);
+        let (mut tall, probe) = renderer(Case::ExplicitHeightMultiline);
         assert_eq!(probe.bounds.get().unwrap().height, Dp(96.0).to_px());
         probe
             .editor
@@ -2384,6 +2410,26 @@ mod native_field_regressions {
             .unwrap()
             .with(|editor| editor.focus_handler().request_focus());
         tall.frames(4);
+        let field_bounds = probe.bounds.get().unwrap();
+        let tree = tall.accessibility_snapshot().unwrap();
+        let nodes: Vec<_> = tree
+            .nodes
+            .iter()
+            .map(|(_, node)| (node.role(), node.label().map(str::to_owned)))
+            .collect();
+        let input_bounds = tree
+            .nodes
+            .into_iter()
+            .find(|(_, node)| node.role() == Role::MultilineTextInput)
+            .unwrap_or_else(|| panic!("missing text input node: {nodes:?}"))
+            .1
+            .bounds()
+            .expect("text input bounds");
+        assert_eq!(
+            input_bounds.y0,
+            field_bounds.y.0 as f64 + Dp(24.0).to_pixels_f64()
+        );
+        assert_eq!(input_bounds.height(), Dp(64.0).to_pixels_f64());
         assert_eq!(
             probe.bounds.get().unwrap().height,
             Dp(96.0).to_px(),
