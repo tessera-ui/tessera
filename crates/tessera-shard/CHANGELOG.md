@@ -1,3 +1,51 @@
+## [v1.0.0] - 2026-11-16
+
+### Breaking changes
+
+- **Renamed from `tessera-ui-shard`.** Depend on `tessera-shard` and import
+  from `tessera_shard`; `tessera_ui` no longer re-exports the crate, the
+  `shard` macro, or a router module.
+- **Routers are scoped instead of global.** `Router::with_mut` and
+  `router_root` are replaced by `shard_home`, which owns a
+  `RouterController`; pages read it with `use_router()`.
+
+  ```rust
+  // before
+  Router::with_mut(|router| router.push(DetailsDestination { id }));
+
+  // after
+  #[tessera]
+  fn app() {
+      shard_home().root(HomeDestination {});
+  }
+
+  #[shard]
+  fn home() {
+      let router = use_router();
+      // in a callback:
+      router.with_mut(|router| router.push(DetailsDestination { id: 1 }));
+  }
+  ```
+
+- **Shard state is replaced by models.** `ShardState`,
+  `ShardStateLifeCycle`, `ShardRegistry`, the `#[state]` parameter, and
+  `task_handles` are removed. Take a `Model<T>` parameter in a `#[shard]`
+  function; each route entry owns a `ModelStore`, so the model lives until
+  its route is popped. Use `tessera_ui::Task` for cancellable work.
+- `RouterDestination` only renders its page (`fn render(&self)`); it no longer
+  executes components directly or exposes a destination ID.
+
+### Added
+
+- `RouterController` methods `push`, `pop`, `replace`, `reset`, `clear`,
+  `last`, `len`, and `current_is`, and `shard_home().controller(..)` to share
+  an external router state.
+- Android system back pops one route, and predictive back gestures preview
+  the previous route.
+- Navigation works on the web.
+
+[Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-shard-v0.4.2...tessera-shard-v1.0.0)
+
 ## [v0.4.2] - 2025-11-17 +08:00
 
 ### Changes

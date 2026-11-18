@@ -14,7 +14,7 @@ jobs:
       - env:
           TITLE: ${{ github.event.pull_request.title }}
         run: |
-          pattern='^(feat|fix|perf|refactor|docs|style|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: [^ ].*$'
+          pattern='^(feat|fix|perf|refactor|docs|style|test|build|ci|chore|revert|release)(\([a-z0-9._/-]+\))?!?: [^ ].*$'
           if ! printf '%s' "$TITLE" | grep -Eq "$pattern"; then
             echo "::error::Use a Conventional Commits title, such as 'fix(cargo-tessera): ...'; got: $TITLE"
             exit 1

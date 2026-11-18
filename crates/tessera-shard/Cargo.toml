@@ -1,6 +1,6 @@
 [package]
 name = "tessera-shard"
-version = "0.4.2"
+version = "1.0.0"
 description = "Provide easier state access and router for tessera-ui."
 license.workspace = true
 edition.workspace = true
