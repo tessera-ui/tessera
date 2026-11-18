@@ -130,12 +130,26 @@ fn pointer_selection_reselection_and_disabled_segments_use_caller_owned_values()
     );
     ui.frames(1);
     assert_eq!(controls.requests.get(), [1, 1]);
+    ui.pointer_press(
+        MOUSE_POINTER_ID,
+        center(&ui, "Day"),
+        PressKeyEventType::Left,
+    );
+    ui.frames(1);
+    ui.pointer_move(MOUSE_POINTER_ID, month);
+    ui.frames(1);
+    assert_eq!(controls.selected.get(), Some(1));
+    assert_eq!(controls.requests.get(), [1, 1]);
+    ui.pointer_release(MOUSE_POINTER_ID, month, PressKeyEventType::Left);
+    ui.frames(1);
+    assert_eq!(controls.selected.get(), Some(2));
+    assert_eq!(controls.requests.get(), [1, 1, 2]);
     controls.accept.set(false);
     controls.selected.set(None);
     ui.frames(1);
     ui.click_at(center(&ui, "Month"));
     assert_eq!(controls.selected.get(), None);
-    assert_eq!(controls.requests.get(), [1, 1, 2]);
+    assert_eq!(controls.requests.get(), [1, 1, 2, 2]);
     assert_eq!(
         ui.accessibility_node("Month").1.toggled(),
         Some(Toggled::False)
@@ -143,14 +157,14 @@ fn pointer_selection_reselection_and_disabled_segments_use_caller_owned_values()
     controls.segments.with_mut(|items| items[1].enabled = false);
     ui.frames(1);
     ui.click_at(center(&ui, "Week"));
-    assert_eq!(controls.requests.get(), [1, 1, 2]);
+    assert_eq!(controls.requests.get(), [1, 1, 2, 2]);
     let (_, week) = ui.accessibility_node("Week");
     assert!(week.is_disabled());
     assert!(!week.supports_action(Action::Click));
     controls.enabled.set(false);
     ui.frames(1);
     ui.click_at(center(&ui, "Day"));
-    assert_eq!(controls.requests.get(), [1, 1, 2]);
+    assert_eq!(controls.requests.get(), [1, 1, 2, 2]);
     assert!(ui.accessibility_node("Period").1.is_disabled());
     assert!(ui.accessibility_node("Day").1.is_disabled());
 }
@@ -367,6 +381,7 @@ fn check_keyboard_and_pixels() {
     controls.segments.with_mut(|items| items[1].enabled = false);
     ui.frames(1);
     let (month_id, _) = ui.accessibility_node("Month");
+    let (day_id, _) = ui.accessibility_node("Day");
     let initial = ui.read_pixels();
     ui.run(|| controls.before.request_focus());
     ui.frames(1);
@@ -383,12 +398,17 @@ fn check_keyboard_and_pixels() {
     ui.frames(1);
     key_up(&mut ui, NamedKey::ArrowRight);
     assert_eq!(ui.accessibility_snapshot().unwrap().focus, month_id);
-    assert_eq!(controls.selected.get(), Some(2));
-    assert_eq!(controls.requests.get(), [2]);
+    assert_eq!(controls.selected.get(), Some(0));
+    assert!(controls.requests.get().is_empty());
     assert_ne!(initial, ui.read_pixels());
+    ui.press_key(NamedKey::ArrowRight);
+    key_up(&mut ui, NamedKey::ArrowRight);
+    assert_eq!(ui.accessibility_snapshot().unwrap().focus, day_id);
+    assert!(controls.requests.get().is_empty());
     ui.press_key(NamedKey::ArrowLeft);
     ui.frames(1);
     key_up(&mut ui, NamedKey::ArrowLeft);
+    assert_eq!(ui.accessibility_snapshot().unwrap().focus, month_id);
     assert_eq!(controls.selected.get(), Some(0));
     ui.run(|| controls.after.request_focus());
     ui.frames(1);
