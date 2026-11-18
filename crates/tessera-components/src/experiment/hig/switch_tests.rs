@@ -320,6 +320,15 @@ fn stripe_image(width: u32, height: u32) -> ImageData {
 }
 
 #[tessera]
+fn lens_solid_backdrop() {
+    layout(Stack).modifier(
+        Modifier::new()
+            .size(Dp(160.0), Dp(80.0))
+            .background(Color::from_rgb(0.1, 0.6, 0.2)),
+    );
+}
+
+#[tessera]
 fn lens_fixture(probe: TestProbe<Option<LensControls>>) {
     let enabled = remember(|| true);
     let visible = remember(|| true);
@@ -339,11 +348,7 @@ fn lens_fixture(probe: TestProbe<Option<LensControls>>) {
         .modifier(Modifier::new().size(Dp(160.0), Dp(80.0)))
         .children(move || {
             if background.get() {
-                layout(Stack).modifier(
-                    Modifier::new()
-                        .size(Dp(160.0), Dp(80.0))
-                        .background(Color::from_rgb(0.1, 0.6, 0.2)),
-                );
+                lens_solid_backdrop();
             } else {
                 image()
                     .painter(stripes.get())
