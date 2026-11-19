@@ -35,6 +35,7 @@ pub(crate) fn text_node(
     metrics: TextMetrics,
     single_line: bool,
     perceptual: bool,
+    underline: Option<(Dp, Dp)>,
     label: Option<String>,
     description: Option<String>,
 ) {
@@ -56,6 +57,7 @@ pub(crate) fn text_node(
         color,
         shaped,
         perceptual,
+        underline,
     })
     .modifier(modifier.push_semantics(semantics));
 }
@@ -189,11 +191,13 @@ struct TextDraw {
     color: Color,
     shaped: Arc<Mutex<Option<CachedText>>>,
     perceptual: bool,
+    underline: Option<(Dp, Dp)>,
 }
 
 impl PartialEq for TextDraw {
     fn eq(&self, other: &Self) -> bool {
         self.color == other.color
+            && self.underline == other.underline
             && self.perceptual == other.perceptual
             && Arc::ptr_eq(&self.shaped, &other.shaped)
     }
@@ -216,6 +220,38 @@ impl tessera_ui::DrawModifierNode for TextDraw {
             return;
         };
         text_data.set_color(self.color);
+        if let Some((offset, thickness)) = self.underline {
+            let info = text_data.measure_info();
+            let mut metadata = input.metadata_mut();
+            if let Some(size) = metadata.computed_data() {
+                let end_x = size.width.to_f32().min(info.size[0] as f32);
+                let top = (info.first_baseline + offset.to_pixels_f32()).round();
+                let bottom =
+                    (top + thickness.to_pixels_f32().round().max(1.0)).min(size.height.to_f32());
+                if info.line_count == 1 && end_x > 0.0 && top >= 0.0 && top < bottom {
+                    let dp = |px: f32| Dp::from_pixels_f64(px as f64);
+                    metadata.fragment_mut().push_draw_command(
+                        crate::pipelines::perceptual_fill::PerceptualFillCommand {
+                            color: self.color,
+                            radii: [Dp::ZERO; 2],
+                            insets: [
+                                dp(top),
+                                dp(size.width.to_f32() - end_x),
+                                dp(size.height.to_f32() - bottom),
+                                Dp::ZERO,
+                            ],
+                            clip_radius: None,
+                            edge_smoothness: 1.0,
+                            stroke: None,
+                            path: None,
+                            line: None,
+                            outline_width: Dp::ZERO,
+                            snap_to_pixels: false,
+                        },
+                    );
+                }
+            }
+        }
         if self.perceptual {
             input
                 .metadata_mut()

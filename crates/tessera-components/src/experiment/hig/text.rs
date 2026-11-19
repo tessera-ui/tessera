@@ -24,6 +24,19 @@ impl<T: Into<String>> From<T> for TextContent {
     }
 }
 
+pub(super) fn metrics(style: TextStyle, size: Option<Dp>, line_height: Option<Dp>) -> TextMetrics {
+    let font_size = size.unwrap_or(style.font_size);
+    TextMetrics {
+        font_size,
+        line_height: line_height.unwrap_or(style.line_height),
+        weight: style.font_weight,
+        letter_spacing: style.letter_spacing,
+        family: style.font_family,
+        optical_size: Some(font_size.0.max(17.0) as f32),
+        point_size: Some(font_size.0 as f32),
+    }
+}
+
 /// # text
 ///
 /// Displays a HIG label or heading with inherited typography and foreground color.
@@ -92,15 +105,7 @@ pub fn text(
         content.0,
         modifier.unwrap_or_default(),
         color,
-        TextMetrics {
-            font_size: size.unwrap_or(style.font_size),
-            line_height: line_height.unwrap_or(style.line_height),
-            weight: style.font_weight,
-            letter_spacing: style.letter_spacing,
-            family: style.font_family,
-            optical_size: Some(size.unwrap_or(style.font_size).0.max(17.0) as f32),
-            point_size: Some(size.unwrap_or(style.font_size).0 as f32),
-        },
+        metrics(style, size, line_height),
         single_line.unwrap_or(false),
         true,
     )
