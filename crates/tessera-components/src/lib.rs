@@ -98,6 +98,7 @@ pub mod res;
 pub mod row;
 pub mod spacer;
 mod text_edit_core;
+mod text_edit_input;
 mod text_shared;
 
 #[cfg(test)]
