@@ -10,10 +10,9 @@ use material_color_utilities::{
 };
 use tessera_ui::{CallbackWith, Color, Dp, RenderSlot, provide_context, tessera};
 
-use crate::{
-    pipelines::text::pipeline::TextFormat,
-    shape_def::{RoundedCorner, Shape},
-};
+use crate::shape_def::{RoundedCorner, Shape};
+
+pub use crate::text_edit_core::TextStyle;
 
 const DEFAULT_SEED_ARGB: u32 = 0xFF6750A4;
 
@@ -76,45 +75,6 @@ impl TextSelectionColors {
 /// `None`.
 pub fn content_color_for(background: Color, scheme: &MaterialColorScheme) -> Option<Color> {
     scheme.content_color_for(background)
-}
-
-/// Font family, metrics, weight, and tracking for a single text style.
-#[derive(Clone, PartialEq, Copy, Debug)]
-pub struct TextStyle {
-    /// Font size in density-independent pixels (dp).
-    pub font_size: Dp,
-    /// Optional line height override in density-independent pixels (dp).
-    pub line_height: Option<Dp>,
-    /// CSS-compatible font weight, from 1 to 1000.
-    pub font_weight: u16,
-    /// Extra spacing between letters in density-independent pixels.
-    pub letter_spacing: Dp,
-    /// Optional named font family; `None` uses the default sans-serif family.
-    pub font_family: Option<&'static str>,
-}
-
-impl From<TextStyle> for TextFormat {
-    fn from(style: TextStyle) -> Self {
-        Self::new(
-            style.font_size,
-            style.line_height.unwrap_or(style.font_size),
-            style.font_weight,
-            style.letter_spacing,
-            style.font_family,
-        )
-    }
-}
-
-impl Default for TextStyle {
-    fn default() -> Self {
-        Self {
-            font_size: Dp(16.0),
-            line_height: Some(Dp(24.0)),
-            font_weight: 400,
-            letter_spacing: Dp(0.0),
-            font_family: None,
-        }
-    }
 }
 
 /// Material typography scale used by components to resolve default text styles.

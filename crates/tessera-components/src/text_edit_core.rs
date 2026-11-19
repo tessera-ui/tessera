@@ -17,16 +17,52 @@ use tessera_ui::{
 };
 use winit::keyboard::NamedKey;
 
-use crate::{
-    md3::theme::TextStyle,
-    pipelines::{
-        shape::command::ShapeCommand,
-        text::{
-            command::{TextCommand, TextConstraint},
-            pipeline::{TextData, color_to_glyphon, shaping_fonts},
-        },
+use crate::pipelines::{
+    shape::command::ShapeCommand,
+    text::{
+        command::{TextCommand, TextConstraint},
+        pipeline::{TextData, TextFormat, color_to_glyphon, shaping_fonts},
     },
 };
+
+/// Font family, metrics, weight, and tracking for editable text.
+#[derive(Clone, PartialEq, Copy, Debug)]
+pub struct TextStyle {
+    /// Font size in density-independent pixels (dp).
+    pub font_size: Dp,
+    /// Optional line height override in density-independent pixels (dp).
+    pub line_height: Option<Dp>,
+    /// CSS-compatible font weight, from 1 to 1000.
+    pub font_weight: u16,
+    /// Extra spacing between letters in density-independent pixels.
+    pub letter_spacing: Dp,
+    /// Optional named font family; `None` uses the default sans-serif family.
+    pub font_family: Option<&'static str>,
+}
+
+impl From<TextStyle> for TextFormat {
+    fn from(style: TextStyle) -> Self {
+        Self::new(
+            style.font_size,
+            style.line_height.unwrap_or(style.font_size),
+            style.font_weight,
+            style.letter_spacing,
+            style.font_family,
+        )
+    }
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self {
+            font_size: Dp(16.0),
+            line_height: Some(Dp(24.0)),
+            font_weight: 400,
+            letter_spacing: Dp(0.0),
+            font_family: None,
+        }
+    }
+}
 
 /// Width of the caret drawn by the text editor in device-independent pixels.
 const CURSOR_WIDTH: Dp = Dp(2.5);
@@ -3641,7 +3677,7 @@ pub fn text_edit_core(
 #[cfg(test)]
 mod tests {
     use super::{
-        ClickType, RectDef, TextEditorController, TextLayoutCacheKey, TextSelection,
+        ClickType, RectDef, TextEditorController, TextLayoutCacheKey, TextSelection, TextStyle,
         TransformedText, active_ime_rect, build_display_buffer, build_display_editor,
         compute_transformed_composition_rects, text_offset_to_cursor_in_buffer,
     };
@@ -3749,7 +3785,7 @@ mod tests {
         #[test]
         fn intrinsic_editor_probe_preserves_final_layout_and_invalidates_only_its_size_cache() {
             use super::super::{CURSOR_WIDTH, TextLayoutCacheKey};
-            use crate::{md3::theme::TextStyle, pipelines::text::command::TextConstraint};
+            use crate::{pipelines::text::command::TextConstraint, text_edit_core::TextStyle};
             use tessera_ui::Px;
 
             let probe = Probe::default();
@@ -4055,7 +4091,7 @@ mod tests {
             },
             controller.prepare_display(),
         );
-        controller.set_text_style(crate::md3::theme::TextStyle {
+        controller.set_text_style(TextStyle {
             font_size: Dp(28.0),
             line_height: Some(Dp(42.0)),
             ..Default::default()
@@ -5343,10 +5379,10 @@ mod tests {
             ..Default::default()
         };
         let before = controller.text_data(constraint.clone(), controller.prepare_display());
-        let style = crate::md3::theme::TextStyle {
+        let style = TextStyle {
             font_weight: 700,
             letter_spacing: Dp(1.0),
-            ..crate::md3::theme::MaterialTypography::default().body_large
+            ..TextStyle::default()
         };
         controller.set_text_style(style);
         assert_eq!(controller.selection(), selection);

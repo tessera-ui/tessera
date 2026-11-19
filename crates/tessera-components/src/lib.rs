@@ -97,6 +97,7 @@ pub mod pos_misc;
 pub mod res;
 pub mod row;
 pub mod spacer;
+mod text_edit_core;
 mod text_shared;
 
 #[cfg(test)]
