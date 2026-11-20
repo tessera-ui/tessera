@@ -5,11 +5,8 @@
 //! Register pipelines during renderer initialization before rendering
 //! components.
 
-pub(crate) mod blur;
 pub(crate) mod checkmark;
-pub(crate) mod contrast;
 pub(crate) mod divider;
-pub(crate) mod fluid_glass;
 pub(crate) mod image;
 pub(crate) mod image_vector;
 pub(crate) mod linear_wave;
@@ -22,7 +19,6 @@ pub(crate) mod shape;
 pub(crate) mod simple_rect;
 pub(crate) mod text;
 
-mod compute;
 mod draw;
 mod instanced;
 
@@ -31,7 +27,6 @@ pub fn register_pipelines(context: &mut tessera_ui::render::PipelineContext<'_>)
     // Independent renderer instances can reuse backend device identifiers.
     SharedQuad::clear();
     draw::register(context);
-    compute::register(context);
 }
 
 use std::{cell::RefCell, sync::Arc};
