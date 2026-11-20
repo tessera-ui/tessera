@@ -47,13 +47,21 @@ impl PlatformViewId {
 
     #[cfg(test)]
     pub(crate) fn new() -> Self {
-        let id = NEXT_PLATFORM_VIEW_ID
-            .fetch_update(
+        let mut id = NEXT_PLATFORM_VIEW_ID.load(std::sync::atomic::Ordering::Relaxed);
+        loop {
+            let next = id
+                .checked_add(1)
+                .expect("platform view identity space exhausted");
+            match NEXT_PLATFORM_VIEW_ID.compare_exchange_weak(
+                id,
+                next,
                 std::sync::atomic::Ordering::Relaxed,
                 std::sync::atomic::Ordering::Relaxed,
-                |next| next.checked_add(1),
-            )
-            .expect("platform view identity space exhausted");
+            ) {
+                Ok(_) => break,
+                Err(actual) => id = actual,
+            }
+        }
         Self(NonZeroU64::new(id).expect("platform view identities start at one"))
     }
 
