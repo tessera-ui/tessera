@@ -127,6 +127,7 @@ programming contract; the guidelines below also govern framework implementation.
 - Keep Compose, Measure, Place, and Paint dependencies separate. State reads during measurement invalidate measurement; placement-only calculations may use `MeasureScope::placement` or `LayoutModifierInput::placement` and must not determine sizes or constraints. Implement `LayoutPolicy::place` when a policy supports cached placement.
 - Draw-only properties must be excluded from both measurement and placement equality. Placement transforms invalidate window geometry without measuring. Parent-data modifiers should implement `equivalent` when their values can be compared.
 - Keep measured control dimensions in local units and share one inherited `LocalToWindow` transformation across rendering, clipping, pointer input, focus reveal, IME, and accessibility. Use `LayoutCoordinates` for local-size consumers; do not feed window rectangle dimensions back into local layout or drawing. See [local layout coordinates](docs/LOCAL_COORDINATES.md).
+- A `platform_view` is an ordered scene boundary owned by the renderer session's native host. Keep native layout sizes separate from transformed bounds, native hierarchy mutations on the platform UI thread, and Tessera scene slices in authoring order around the view.
 
 ---
 

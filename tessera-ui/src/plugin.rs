@@ -152,9 +152,29 @@ pub struct PluginContext {
     desktop: DesktopPlatformContext,
     #[cfg(target_os = "android")]
     android_app: AndroidApp,
+    #[cfg(target_os = "android")]
+    android_platform_views: Option<crate::android::platform_views::PlatformViewHost>,
+    #[cfg(target_os = "ios")]
+    ios_platform_views: Rc<RefCell<crate::ios::platform_views::IosPlatformViews>>,
 }
 
 impl PluginContext {
+    pub(crate) fn suspend_platform_views(&self) {
+        #[cfg(target_os = "android")]
+        if let Some(host) = &self.android_platform_views {
+            host.suspend();
+        }
+        #[cfg(target_os = "ios")]
+        self.ios_platform_views.borrow_mut().suspend();
+    }
+
+    pub(crate) fn resume_platform_views(&self) {
+        #[cfg(target_os = "android")]
+        if let Some(host) = &self.android_platform_views {
+            host.resume();
+        }
+    }
+
     /// Returns the context of the active session while its renderer is
     /// resumed.
     pub fn current() -> Option<Self> {
@@ -200,14 +220,90 @@ impl PluginContext {
     }
 
     #[cfg(target_os = "android")]
-    pub(crate) fn new(desktop: DesktopPlatformContext, android_app: AndroidApp) -> Self {
+    fn android_platform_views(
+        &self,
+    ) -> Result<
+        &crate::android::platform_views::PlatformViewHost,
+        crate::android::platform_views::AndroidPlatformViewError,
+    > {
+        self.android_platform_views
+            .as_ref()
+            .ok_or_else(crate::android::platform_views::AndroidPlatformViewError::host_unavailable)
+    }
+
+    #[cfg(target_os = "android")]
+    pub(crate) fn register_platform_view(
+        &self,
+        id: crate::PlatformViewId,
+        factory: crate::android::platform_views::AndroidPlatformViewFactoryHandle,
+    ) -> Result<(), crate::android::platform_views::AndroidPlatformViewError> {
+        self.android_platform_views()?
+            .register_factory(&self.android_app, id.as_raw(), factory)
+    }
+
+    #[cfg(target_os = "android")]
+    pub(crate) fn unregister_platform_view(
+        &self,
+        id: crate::PlatformViewId,
+    ) -> Result<(), crate::android::platform_views::AndroidPlatformViewError> {
+        self.android_platform_views()?
+            .unregister(&self.android_app, id.as_raw())?;
+        self.window().request_redraw();
+        Ok(())
+    }
+
+    #[cfg(target_os = "ios")]
+    pub(crate) fn register_platform_view(
+        &self,
+        id: crate::PlatformViewId,
+        factory: Rc<dyn crate::ios::platform_views::IosPlatformViewFactory>,
+    ) {
+        let main_thread = objc2::MainThreadMarker::new()
+            .expect("UIKit platform-view registration must run on the main thread");
+        self.ios_platform_views
+            .borrow_mut()
+            .register(id, factory, main_thread);
+    }
+
+    #[cfg(target_os = "ios")]
+    pub(crate) fn unregister_platform_view(
+        &self,
+        id: crate::PlatformViewId,
+    ) -> Result<(), crate::ios::platform_views::IosPlatformViewError> {
+        let main_thread = objc2::MainThreadMarker::new()
+            .expect("UIKit platform-view removal must run on the main thread");
+        self.ios_platform_views
+            .borrow_mut()
+            .unregister(id, main_thread)?;
+        self.window().request_redraw();
+        Ok(())
+    }
+
+    #[cfg(target_os = "android")]
+    pub(crate) fn new(
+        desktop: DesktopPlatformContext,
+        android_app: AndroidApp,
+        android_platform_views: Option<crate::android::platform_views::PlatformViewHost>,
+    ) -> Self {
         Self {
             desktop,
             android_app,
+            android_platform_views,
         }
     }
 
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "ios")]
+    pub(crate) fn new_ios(
+        desktop: DesktopPlatformContext,
+        ios_platform_views: Rc<RefCell<crate::ios::platform_views::IosPlatformViews>>,
+    ) -> Self {
+        Self {
+            desktop,
+            ios_platform_views,
+        }
+    }
+
+    #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
     pub(crate) fn new(desktop: DesktopPlatformContext) -> Self {
         Self { desktop }
     }
@@ -262,6 +358,7 @@ pub(crate) fn register_plugin<P: Plugin>(plugin: P) {
 }
 
 pub(crate) fn plugins_resumed(context: PluginContext) {
+    context.resume_platform_views();
     let plugins = crate::local_runtime_resource::<Plugins>();
     plugins.context.replace(Some(context.clone()));
     plugins.dispatch("resumed", &context, |plugin, context| {
@@ -274,6 +371,7 @@ pub(crate) fn plugins_suspended(context: &PluginContext) {
     plugins.dispatch("suspended", context, |plugin, context| {
         plugin.suspended(context)
     });
+    context.suspend_platform_views();
     plugins.context.replace(None);
 }
 

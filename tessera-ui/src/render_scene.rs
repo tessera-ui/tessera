@@ -83,6 +83,9 @@ pub enum Command {
     Draw(Box<dyn DrawCommand>),
     /// A GPU computation command processed by compute pipelines.
     Compute(Box<dyn ComputeCommand>),
+    /// An embedded native view at this point in scene paint order.
+    #[doc(hidden)]
+    PlatformView(u64),
     /// A command to push a clipping rectangle onto the stack.
     ClipPush(PxRect),
     /// Pushes a shape clip for this subtree.
@@ -107,7 +110,9 @@ impl Command {
             Self::Draw(command) => command.sample_region(),
             // Currently, compute can only be used for after effects,
             Self::Compute(command) => Some(command.barrier()),
-            Self::ClipPush(_) | Self::ShapeClipPush(_) | Self::ClipPop => None, /* Clipping commands do not require barriers */
+            Self::ClipPush(_) | Self::ShapeClipPush(_) | Self::ClipPop | Self::PlatformView(_) => {
+                None
+            }
         }
     }
 }
@@ -117,6 +122,7 @@ impl Clone for Command {
         match self {
             Self::Draw(cmd) => Self::Draw(cmd.clone()),
             Self::Compute(cmd) => Self::Compute(cmd.clone()),
+            Self::PlatformView(id) => Self::PlatformView(*id),
             Self::ClipPush(rect) => Self::ClipPush(*rect),
             Self::ShapeClipPush(region) => Self::ShapeClipPush(*region),
             Self::ClipPop => Self::ClipPop,

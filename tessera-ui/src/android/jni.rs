@@ -491,35 +491,34 @@ macro_rules! jni_bind {
                             android_app.activity_as_ptr().cast(),
                         )
                     };
-                    let class = $crate::android::jni::load_class(&mut env, &activity, $class)?;
+                    env.with_local_frame(16, |env| {
+                        let class = $crate::android::jni::load_class(env, &activity, $class)?;
 
-                    let mut signature = String::from("(");
-                    $(
+                        let mut signature = String::from("(");
+                        $(
+                            signature.push_str(
+                                <$arg_ty as $crate::android::jni::JniArg>::signature().as_ref(),
+                            );
+                        )*
+                        signature.push(')');
                         signature.push_str(
-                            <$arg_ty as $crate::android::jni::JniArg>::signature().as_ref(),
+                            <$ret as $crate::android::jni::JniReturn>::signature().as_ref(),
                         );
-                    )*
-                    signature.push(')');
-                    signature.push_str(
-                        <$ret as $crate::android::jni::JniReturn>::signature().as_ref(),
-                    );
 
-                    let mut args = Vec::new();
-                    $(
-                        args.push(
-                            <$arg_ty as $crate::android::jni::JniArg>::to_jvalue(
-                                &$arg_name,
-                                &mut env,
-                            )?,
-                        );
-                    )*
-                    let args_ref: Vec<$crate::android::jni::internal::JValue<'_, '_>> =
-                        args.iter().map(|value| value.borrow()).collect();
+                        let mut args = Vec::new();
+                        $(
+                            args.push(<$arg_ty as $crate::android::jni::JniArg>::to_jvalue(
+                                &$arg_name, env,
+                            )?);
+                        )*
+                        let args_ref: Vec<$crate::android::jni::internal::JValue<'_, '_>> =
+                            args.iter().map(|value| value.borrow()).collect();
 
-                    let value = env
-                        .call_static_method(class, stringify!($method), &signature, &args_ref)
-                        .map_err(|err| $crate::android::jni::map_jni_error(&mut env, err))?;
-                    <$ret as $crate::android::jni::JniReturn>::from_jvalue(&mut env, value)
+                        let value = env
+                            .call_static_method(class, stringify!($method), &signature, &args_ref)
+                            .map_err(|err| $crate::android::jni::map_jni_error(env, err))?;
+                        <$ret as $crate::android::jni::JniReturn>::from_jvalue(env, value)
+                    })
                 }
             )+
         }

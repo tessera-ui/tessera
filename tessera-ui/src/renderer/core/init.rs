@@ -12,8 +12,16 @@ use crate::{
 
 use super::{BlitState, FrameTargets, RenderCore, RenderPipelines};
 
+struct RenderContext {
+    instance: wgpu::Instance,
+    surface: Option<wgpu::Surface<'static>>,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+}
+
 impl RenderCore {
-    fn pick_alpha_mode(
+    pub(super) fn pick_alpha_mode(
         caps: &wgpu::SurfaceCapabilities,
         window_transparent: bool,
     ) -> wgpu::CompositeAlphaMode {
@@ -48,8 +56,8 @@ impl RenderCore {
     async fn request_adapter_for_surface(
         instance: &wgpu::Instance,
         surface: &wgpu::Surface<'_>,
-    ) -> wgpu::Adapter {
-        match instance
+    ) -> Result<wgpu::Adapter, wgpu::RequestAdapterError> {
+        instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::from_env().unwrap_or_default(),
                 compatible_surface: Some(surface),
@@ -57,12 +65,75 @@ impl RenderCore {
                 apply_limit_buckets: false,
             })
             .await
-        {
-            Ok(adapter) => adapter,
-            Err(e) => {
-                error!("Failed to find an appropriate adapter: {e:?}");
-                panic!("Failed to find an appropriate adapter: {e:?}");
+    }
+
+    async fn create_render_context(
+        descriptor: wgpu::InstanceDescriptor,
+        window: Option<&Arc<Window>>,
+        max_bindings: u32,
+    ) -> RenderContext {
+        #[cfg(target_os = "android")]
+        let mut descriptor = descriptor;
+        #[cfg(target_os = "android")]
+        if let Some(window) = window.filter(|_| {
+            descriptor
+                .backends
+                .contains(wgpu::Backends::VULKAN | wgpu::Backends::GL)
+        }) {
+            // Both backends can connect to the same ANativeWindow. Drop Vulkan's
+            // surface before opening EGL if Vulkan cannot initialize the device.
+            let mut vulkan = wgpu::InstanceDescriptor::new_without_display_handle();
+            vulkan.flags = descriptor.flags;
+            vulkan.backends = wgpu::Backends::VULKAN;
+            let instance = wgpu::Instance::new(vulkan);
+            match instance.create_surface(window.clone()) {
+                Ok(surface) => match Self::request_adapter_for_surface(&instance, &surface).await {
+                    Ok(adapter) => {
+                        match Self::request_device_and_queue_for_adapter(&adapter, max_bindings)
+                            .await
+                        {
+                            Ok((device, queue)) => {
+                                return RenderContext {
+                                    instance,
+                                    surface: Some(surface),
+                                    adapter,
+                                    device,
+                                    queue,
+                                };
+                            }
+                            Err(error) => {
+                                info!(%error, "Android Vulkan device unavailable; trying EGL")
+                            }
+                        }
+                    }
+                    Err(error) => info!(%error, "Android Vulkan adapter unavailable; trying EGL"),
+                },
+                Err(error) => info!(%error, "Android Vulkan surface unavailable; trying EGL"),
             }
+            descriptor.backends.remove(wgpu::Backends::VULKAN);
+        }
+
+        let instance = wgpu::Instance::new(descriptor);
+        let surface = window.map(|window| {
+            instance
+                .create_surface(window.clone())
+                .unwrap_or_else(|error| panic!("Failed to create surface: {error:?}"))
+        });
+        let adapter = match &surface {
+            Some(surface) => Self::request_adapter_for_surface(&instance, surface)
+                .await
+                .unwrap_or_else(|error| panic!("Failed to find an appropriate adapter: {error:?}")),
+            None => Self::request_adapter_offscreen(&instance).await,
+        };
+        let (device, queue) = Self::request_device_and_queue_for_adapter(&adapter, max_bindings)
+            .await
+            .unwrap_or_else(|error| panic!("Failed to create device: {error:?}"));
+        RenderContext {
+            instance,
+            surface,
+            adapter,
+            device,
+            queue,
         }
     }
 
@@ -90,7 +161,7 @@ impl RenderCore {
     async fn request_device_and_queue_for_adapter(
         adapter: &wgpu::Adapter,
         max_bindings: u32,
-    ) -> (wgpu::Device, wgpu::Queue) {
+    ) -> Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError> {
         let mut required_limits = if cfg!(target_arch = "wasm32") {
             wgpu::Limits::downlevel_webgl2_defaults()
         } else {
@@ -145,26 +216,15 @@ impl RenderCore {
             .request_device(&make_descriptor(requested_features))
             .await
         {
-            Ok((device, queue)) => (device, queue),
             Err(first_err) if requested_features.contains(wgpu::Features::PIPELINE_CACHE) => {
                 warn!(
                     "Failed to create device with PIPELINE_CACHE enabled: {first_err:?}; retrying without PIPELINE_CACHE"
                 );
-                match adapter
+                adapter
                     .request_device(&make_descriptor(base_features))
                     .await
-                {
-                    Ok((device, queue)) => (device, queue),
-                    Err(second_err) => {
-                        error!("Failed to create device: {second_err:?}");
-                        panic!("Failed to create device: {second_err:?}");
-                    }
-                }
             }
-            Err(err) => {
-                error!("Failed to create device: {err:?}");
-                panic!("Failed to create device: {err:?}");
-            }
+            result => result,
         }
     }
 
@@ -259,25 +319,27 @@ impl RenderCore {
         }
         instance_desc.backends = wgpu::Backends::from_env().unwrap_or(instance_desc.backends);
         info!("Using WGPU instance config: {instance_desc:#?}");
-        let instance: wgpu::Instance = wgpu::Instance::new(instance_desc);
-        let surface = match &window {
-            Some(window) => match instance.create_surface(window.clone()) {
-                Ok(surface) => Some(surface),
-                Err(e) => {
-                    error!("Failed to create surface: {e:?}");
-                    panic!("Failed to create surface: {e:?}");
-                }
-            },
-            None => None,
-        };
-        let adapter = match &surface {
-            Some(surface) => Self::request_adapter_for_surface(&instance, surface).await,
-            None => Self::request_adapter_offscreen(&instance).await,
-        };
+        let RenderContext {
+            instance,
+            surface,
+            adapter,
+            device,
+            queue,
+        } = Self::create_render_context(instance_desc, window.as_ref(), max_bindings).await;
         let adapter_info = adapter.get_info();
         info!("Using WGPU adapter: {adapter_info:#?}");
-        let (device, queue) =
-            Self::request_device_and_queue_for_adapter(&adapter, max_bindings).await;
+        #[cfg(target_os = "android")]
+        let sample_count = if adapter_info.backend == wgpu::Backend::Gl
+            && adapter_info
+                .name
+                .starts_with("Android Emulator OpenGL ES Translator")
+        {
+            // The legacy translator leaves stencil renderbuffers attached across passes.
+            // A single-sample scene keeps those framebuffers complete for the final blit.
+            1
+        } else {
+            sample_count
+        };
         // Offscreen cores have no surface capabilities to query.
         let config = match &surface {
             Some(surface) => {
@@ -287,11 +349,24 @@ impl RenderCore {
                 } else {
                     wgpu::PresentMode::Immediate
                 };
-                let alpha_mode = Self::pick_alpha_mode(&caps, window_transparent);
+                let alpha_mode = Self::pick_alpha_mode(
+                    &caps,
+                    window_transparent || cfg!(any(target_os = "android", target_os = "ios")),
+                );
                 info!("Using present mode: {present_mode:?}");
+                let format = caps.formats[0];
+                #[cfg(target_os = "android")]
+                let format = if adapter_info.backend == wgpu::Backend::Gl
+                    && caps.formats.contains(&TextureFormat::Rgba8Unorm)
+                {
+                    // EGL slice windows receive the same explicitly encoded sRGB bytes.
+                    TextureFormat::Rgba8Unorm
+                } else {
+                    format
+                };
                 let config = wgpu::SurfaceConfiguration {
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                    format: caps.formats[0],
+                    format,
                     color_space: wgpu::SurfaceColorSpace::Auto,
                     width: size.width.max(1),
                     height: size.height.max(1),
@@ -508,7 +583,15 @@ impl RenderCore {
             });
 
         let pipelines = RenderPipelines {
-            clipper: super::clip::ShapeClipper::new(&device, draw_config.format, sample_count),
+            clipper: super::clip::ShapeClipper::new(
+                &device,
+                draw_config.format,
+                sample_count,
+                adapter
+                    .get_downlevel_capabilities()
+                    .flags
+                    .contains(wgpu::DownlevelFlags::MULTISAMPLED_SHADING),
+            ),
             drawer,
             compute_registry: ComputePipelineRegistry::new(),
         };
@@ -554,10 +637,24 @@ impl RenderCore {
             pipeline_factories: Default::default(),
             pipeline_cache,
             adapter_info,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            adapter,
+            #[cfg(target_os = "android")]
+            android_slice_surfaces: Vec::new(),
+            #[cfg(target_os = "android")]
+            android_egl: None,
+            #[cfg(target_os = "ios")]
+            ios_slice_surfaces: Vec::new(),
+            #[cfg(target_os = "ios")]
+            ios_composition_active: false,
             targets,
             blit,
             frame_index: 0,
             previous_graph: None,
+            #[cfg(target_os = "android")]
+            android_platform_view_host: None,
+            #[cfg(target_os = "ios")]
+            ios_platform_views: None,
             last_render_breakdown: None,
             #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
             gpu_timing,

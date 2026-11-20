@@ -13,6 +13,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{NodeId, PxPosition, PxSize, modifier::OrderedModifierAction, time::Instant};
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use crate::{PxRect, render_graph::PlatformViewInputBlocker};
+
 use super::{
     ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, PointerDispatchPlan, PointerNodePlan,
     bounds_hit_path, record_frame_stage, resolve_node_input_context,
@@ -24,6 +27,10 @@ const MAX_CELLS: usize = 256;
 struct Entry {
     plan: Arc<PointerNodePlan>,
     order: Vec<usize>,
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    bounds: PxRect,
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    blocks_native_input: bool,
     coverage: Coverage,
 }
 
@@ -180,6 +187,8 @@ impl PointerIndex {
                 continue;
             }
             let raw_input = node.interaction().has_pointer_handlers();
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            let blocks_native_input = raw_input || node.modifier.has_pointer_input();
             let Some(metadata) = metadatas.get(&id) else {
                 self.remove(id);
                 continue;
@@ -305,6 +314,10 @@ impl PointerIndex {
                 Entry {
                     plan,
                     order: path,
+                    #[cfg(any(target_os = "android", target_os = "ios"))]
+                    bounds,
+                    #[cfg(any(target_os = "android", target_os = "ios"))]
+                    blocks_native_input,
                     coverage,
                 },
             );
@@ -420,6 +433,29 @@ impl PointerIndex {
             .collect();
         path.reverse();
         path
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub(super) fn platform_view_input_blockers(
+        &self,
+        views: &[(u64, Vec<usize>)],
+    ) -> Vec<PlatformViewInputBlocker> {
+        views
+            .iter()
+            .flat_map(|(id, view_order)| {
+                self.entries
+                    .values()
+                    .filter(move |entry| {
+                        entry.blocks_native_input
+                            && entry.coverage != Coverage::Hidden
+                            && entry.order.as_slice() >= view_order.as_slice()
+                    })
+                    .map(move |entry| PlatformViewInputBlocker {
+                        id: *id,
+                        bounds: entry.bounds,
+                    })
+            })
+            .collect()
     }
 
     pub(super) fn plan(
@@ -558,6 +594,7 @@ mod tests {
 
     #[derive(Clone, Default, PartialEq)]
     struct AsyncPointerProbe {
+        detector_starts: crate::testing::TestProbe<usize>,
         pressed: crate::testing::TestProbe<bool>,
         consumed: crate::testing::TestProbe<bool>,
         parent_pressed: crate::testing::TestProbe<bool>,
@@ -575,6 +612,7 @@ mod tests {
                 .pointer_input_once(move |mut scope| {
                     let probe = probe.clone();
                     async move {
+                        probe.detector_starts.with_mut(|count| *count += 1);
                         loop {
                             let Some(mut down) = scope
                                 .await_first_down(
@@ -641,6 +679,78 @@ mod tests {
         assert!(probe.pressed.get());
         assert!(probe.consumed.get());
         assert!(!probe.parent_pressed.get());
+    }
+
+    #[test]
+    fn density_recomposition_keeps_pointer_targets_and_detectors_live() {
+        let probe = AsyncPointerProbe::default();
+        let mut session = UiTest::new()
+            .content(|| async_pointer_control(probe.clone()))
+            .viewport(160, 160)
+            .scale_factor(2.625);
+        let position = PxPosition::new(Px(20), Px(20));
+        session.frame();
+        session.click_at(position);
+        assert!(probe.pressed.get());
+
+        for density in [2.375, 2.625] {
+            session.run(|| crate::dp::set_scale_factor(density));
+            session.frame();
+            probe.pressed.set(false);
+            probe.consumed.set(false);
+            session.click_at(position);
+            assert!(probe.pressed.get(), "no press at density {density}");
+            assert!(probe.consumed.get(), "press was not consumed at {density}");
+            assert!(!probe.parent_pressed.get());
+            assert_eq!(probe.detector_starts.get(), 1);
+        }
+    }
+
+    #[tessera]
+    fn removable_pointer_detector(
+        attachment: crate::testing::TestProbe<Option<State<bool>>>,
+        cancelled: crate::testing::TestProbe<bool>,
+    ) {
+        struct ObserveCancellation(crate::testing::TestProbe<bool>);
+
+        impl Drop for ObserveCancellation {
+            fn drop(&mut self) {
+                self.0.set(true);
+            }
+        }
+
+        let attached = remember(|| true);
+        attachment.set(Some(attached));
+        let size = remember(|| ComputedData {
+            width: Px(80),
+            height: Px(80),
+        });
+        let modifier = if attached.get() {
+            Modifier::new().pointer_input_once(move |_| {
+                let cancellation = ObserveCancellation(cancelled.clone());
+                async move {
+                    let _cancellation = cancellation;
+                    std::future::pending::<()>().await;
+                }
+            })
+        } else {
+            Modifier::new()
+        };
+        layout(ControlSize(size)).modifier(modifier);
+    }
+
+    #[test]
+    fn removing_pointer_modifier_cancels_its_detector_without_unmounting_layout() {
+        let attachment = crate::testing::TestProbe::default();
+        let cancelled = crate::testing::TestProbe::default();
+        let mut session = UiTest::new()
+            .viewport(80, 80)
+            .content(|| removable_pointer_detector(attachment.clone(), cancelled.clone()));
+        session.frames(2);
+        assert!(!cancelled.get());
+        attachment.get().unwrap().set(false);
+        session.frames(1);
+        assert!(cancelled.get());
     }
 
     #[test]

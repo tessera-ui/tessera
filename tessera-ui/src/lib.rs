@@ -27,6 +27,8 @@ pub mod color;
 mod component_call;
 mod dispatcher;
 mod graphics;
+#[cfg(target_os = "ios")]
+pub mod ios;
 mod work;
 
 pub use async_dispatch::{Dispatcher, Task, on, spawn, spawn_local, with_frame_time};
@@ -63,6 +65,7 @@ pub mod modifier;
 pub mod nested_scroll;
 pub(crate) mod pipeline_cache;
 mod pipeline_context;
+pub mod platform_view;
 pub mod plugin;
 #[cfg(feature = "profiling")]
 pub mod profiler;
@@ -88,6 +91,8 @@ pub use wgpu;
 pub use winit;
 
 pub(crate) use indextree::NodeId;
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+pub(crate) use platform_view::PlatformViewId;
 
 pub use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
@@ -123,6 +128,7 @@ pub use crate::{
         ParentDataMap, ParentDataModifierNode, PlacementModifierNode, PointerInputModifierNode,
         SemanticsModifierNode, StatefulLayoutPolicy,
     },
+    platform_view::{PlatformViewFactory, platform_view},
     plugin::{DesktopPlatformContext, Plugin, PluginContext, PluginResult, with_plugin},
     pointer_input::{
         DownRequirement, GestureEnd, LongPressResult, PointerDown, PointerEvent, PointerInputScope,

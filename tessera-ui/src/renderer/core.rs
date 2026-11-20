@@ -6,6 +6,9 @@
 
 use std::{any::TypeId, io, sync::Arc, time::Duration};
 
+#[cfg(target_os = "ios")]
+use std::{cell::RefCell, rc::Rc};
+
 use rustc_hash::FxHashMap;
 use winit::window::Window;
 
@@ -17,6 +20,8 @@ use crate::{
     },
 };
 
+#[cfg(target_os = "android")]
+mod android_egl;
 mod clip;
 mod frame;
 #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
@@ -115,14 +120,48 @@ pub struct RenderCore {
 
     pipeline_cache: Option<wgpu::PipelineCache>,
     adapter_info: wgpu::AdapterInfo,
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    adapter: wgpu::Adapter,
+    #[cfg(target_os = "android")]
+    android_slice_surfaces: Vec<Vec<AndroidSliceTarget>>,
+    #[cfg(target_os = "android")]
+    android_egl: Option<android_egl::SlicePresenter>,
+    #[cfg(target_os = "ios")]
+    ios_slice_surfaces: Vec<IosSliceTarget>,
+    #[cfg(target_os = "ios")]
+    ios_composition_active: bool,
 
     targets: FrameTargets,
     blit: BlitState,
     frame_index: u64,
     previous_graph: Option<crate::render::RenderGraph>,
+    #[cfg(target_os = "android")]
+    android_platform_view_host: Option<crate::android::platform_views::PlatformViewHost>,
+    #[cfg(target_os = "ios")]
+    ios_platform_views: Option<Rc<RefCell<crate::ios::platform_views::IosPlatformViews>>>,
     last_render_breakdown: Option<RenderTimingBreakdown>,
     #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
     gpu_timing: Option<gpu_timing::GpuTimingProbe>,
+}
+
+#[cfg(target_os = "android")]
+struct AndroidSliceTarget {
+    output: AndroidSliceOutput,
+    _native: crate::android::platform_views::AndroidSliceSurface,
+    size: (u32, u32),
+}
+
+#[cfg(target_os = "android")]
+enum AndroidSliceOutput {
+    Wgpu(wgpu::Surface<'static>),
+    Egl(android_egl::SliceSurface),
+}
+
+#[cfg(target_os = "ios")]
+struct IosSliceTarget {
+    _layer: objc2::rc::Retained<objc2_quartz_core::CAMetalLayer>,
+    surface: wgpu::Surface<'static>,
+    config: wgpu::SurfaceConfiguration,
 }
 
 /// Shared GPU resources used when creating pipelines.
@@ -208,6 +247,227 @@ impl RenderCore {
     /// Returns the timing breakdown for the most recent render call.
     pub(crate) fn last_render_breakdown(&self) -> Option<RenderTimingBreakdown> {
         self.last_render_breakdown
+    }
+
+    #[cfg(target_os = "android")]
+    pub(crate) fn set_android_platform_view_host(
+        &mut self,
+        host: Option<crate::android::platform_views::PlatformViewHost>,
+    ) {
+        self.android_platform_view_host = host;
+    }
+
+    #[cfg(target_os = "ios")]
+    pub(crate) fn set_ios_platform_views(
+        &mut self,
+        platform_views: Rc<RefCell<crate::ios::platform_views::IosPlatformViews>>,
+    ) {
+        self.ios_platform_views = Some(platform_views);
+    }
+
+    #[cfg(target_os = "ios")]
+    pub(crate) fn ensure_ios_slice_surfaces(&mut self, count: usize) -> Result<(), String> {
+        let root_layer = self
+            .ios_platform_views
+            .as_ref()
+            .and_then(|views| views.borrow().root_layer())
+            .ok_or_else(|| "UIKit platform-view root is not attached".to_owned())?;
+        while self.ios_slice_surfaces.len() < count {
+            let layer = objc2_quartz_core::CAMetalLayer::new();
+            layer.setOpaque(false);
+            layer.setHidden(true);
+            layer.setPresentsWithTransaction(true);
+            layer.setFrame(objc2_core_foundation::CGRect::new(
+                objc2_core_foundation::CGPoint::new(0.0, 0.0),
+                objc2_core_foundation::CGSize::new(self.size.width as f64, self.size.height as f64),
+            ));
+            layer.setContentsScale(
+                self.window
+                    .as_ref()
+                    .map_or(1.0, |window| window.scale_factor()),
+            );
+            root_layer.addSublayer(&layer);
+            let surface = unsafe {
+                self.instance
+                    .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(
+                        objc2::rc::Retained::as_ptr(&layer).cast_mut().cast(),
+                    ))
+            }
+            .map_err(|error| error.to_string())?;
+            let capabilities = surface.get_capabilities(&self.adapter);
+            let format = capabilities
+                .formats
+                .iter()
+                .copied()
+                .find(|format| *format == self.config.format)
+                .ok_or_else(|| {
+                    "Core Animation slice does not support the presentation format".to_owned()
+                })?;
+            let alpha_mode = capabilities
+                .alpha_modes
+                .iter()
+                .copied()
+                .find(|mode| *mode != wgpu::CompositeAlphaMode::Opaque)
+                .ok_or_else(|| {
+                    "Core Animation slice does not support alpha composition".to_owned()
+                })?;
+            let config = wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format,
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                width: self.config.width,
+                height: self.config.height,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode,
+                view_formats: Vec::new(),
+                desired_maximum_frame_latency: 2,
+            };
+            surface.configure(&self.device, &config);
+            self.ios_slice_surfaces.push(IosSliceTarget {
+                _layer: layer,
+                surface,
+                config,
+            });
+        }
+        for target in &mut self.ios_slice_surfaces[..count] {
+            if target.config.width != self.config.width
+                || target.config.height != self.config.height
+            {
+                target.config.width = self.config.width;
+                target.config.height = self.config.height;
+                target.surface.configure(&self.device, &target.config);
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "ios")]
+    pub(crate) fn ios_compositor_layers(
+        &self,
+    ) -> Vec<objc2::rc::Retained<objc2_quartz_core::CALayer>> {
+        self.ios_slice_surfaces
+            .iter()
+            .map(|target| target._layer.clone().into_super())
+            .collect()
+    }
+
+    #[cfg(target_os = "android")]
+    pub(crate) fn ensure_android_slice_surfaces(&mut self, count: usize) -> Result<(), String> {
+        if self.adapter_info.backend == wgpu::Backend::Gl && self.android_egl.is_none() {
+            self.android_egl = Some(android_egl::SlicePresenter::new(&self.device)?);
+        }
+        while self.android_slice_surfaces.len() < count {
+            let index = self.android_slice_surfaces.len();
+            let width = self.config.width;
+            let height = self.config.height;
+            let mut slots = Vec::with_capacity(2);
+            for slot in 0..2 {
+                let native = self
+                    .android_platform_view_host
+                    .as_ref()
+                    .and_then(|host| {
+                        host.slice_surface(index as i32, slot, width as i32, height as i32)
+                    })
+                    .ok_or_else(|| {
+                        format!("failed to create Android scene slice {index} buffer {slot}")
+                    })?;
+                let output = if let Some(presenter) = &self.android_egl {
+                    AndroidSliceOutput::Egl(presenter.create_surface(&native, (width, height))?)
+                } else {
+                    let target = wgpu::SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle: Some(
+                            winit::raw_window_handle::RawDisplayHandle::Android(
+                                winit::raw_window_handle::AndroidDisplayHandle::new(),
+                            ),
+                        ),
+                        raw_window_handle: native.raw_window_handle(),
+                    };
+                    let surface = unsafe { self.instance.create_surface_unsafe(target) }
+                        .map_err(|error| error.to_string())?;
+                    Self::configure_android_slice(
+                        &surface,
+                        &self.adapter,
+                        &self.device,
+                        &self.config,
+                    )?;
+                    AndroidSliceOutput::Wgpu(surface)
+                };
+                slots.push(AndroidSliceTarget {
+                    output,
+                    _native: native,
+                    size: (width, height),
+                });
+            }
+            self.android_slice_surfaces.push(slots);
+        }
+        for (index, slots) in self.android_slice_surfaces[..count].iter_mut().enumerate() {
+            for (slot, target) in slots.iter_mut().enumerate() {
+                let extent = (self.config.width, self.config.height);
+                if target.size != extent {
+                    // Resize TextureView producers before EGL re-creates their window
+                    // surfaces. Configuring WGPU alone only resizes its offscreen buffers.
+                    self.android_platform_view_host
+                        .as_ref()
+                        .and_then(|host| {
+                            host.slice_surface(
+                                index as i32,
+                                slot as i32,
+                                self.config.width as i32,
+                                self.config.height as i32,
+                            )
+                        })
+                        .ok_or_else(|| {
+                            format!("failed to resize Android scene slice {index} buffer {slot}")
+                        })?;
+                    match &mut target.output {
+                        AndroidSliceOutput::Wgpu(surface) => {
+                            Self::configure_android_slice(
+                                surface,
+                                &self.adapter,
+                                &self.device,
+                                &self.config,
+                            )?;
+                        }
+                        AndroidSliceOutput::Egl(surface) => {
+                            surface.resize(&target._native, extent)?
+                        }
+                    }
+                    target.size = extent;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "android")]
+    fn configure_android_slice(
+        surface: &wgpu::Surface<'_>,
+        adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+        scene: &wgpu::SurfaceConfiguration,
+    ) -> Result<(), String> {
+        let caps = surface.get_capabilities(adapter);
+        if !caps.formats.contains(&scene.format) {
+            return Err(
+                "Android slice surface does not support the renderer's presentation format".into(),
+            );
+        }
+        let alpha_mode = Self::pick_alpha_mode(&caps, true);
+        if alpha_mode == wgpu::CompositeAlphaMode::Opaque {
+            return Err("Android slice surface does not support alpha composition".into());
+        }
+        surface.configure(
+            device,
+            &wgpu::SurfaceConfiguration {
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode,
+                view_formats: Vec::new(),
+                desired_maximum_frame_latency: 2,
+                ..scene.clone()
+            },
+        );
+        Ok(())
     }
 
     /// Registers a new drawable pipeline for a specific command type.

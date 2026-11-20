@@ -12,7 +12,7 @@ struct Instance {
 struct VertexOutput {
     @builtin(position) position: vec4f,
     @location(0) @interpolate(flat) index: u32,
-    @location(1) @interpolate(linear, sample) local: vec2f,
+    @location(1) @interpolate(perspective, sample) local: vec2f,
 }
 
 @vertex

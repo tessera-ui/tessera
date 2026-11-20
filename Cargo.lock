@@ -26,6 +26,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "accesskit_android"
+version = "0.9.1"
+dependencies = [
+ "accesskit",
+ "accesskit_consumer",
+ "jni 0.21.1",
+ "log",
+]
+
+[[package]]
 name = "accesskit_atspi_common"
 version = "0.21.1"
 dependencies = [
@@ -2028,6 +2038,10 @@ dependencies = [
 name = "example"
 version = "0.1.0"
 dependencies = [
+ "jni 0.21.1",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
+ "objc2-ui-kit 0.3.2",
  "tessera-build",
  "tessera-components",
  "tessera-foundation",
@@ -7219,6 +7233,7 @@ name = "tessera-accesskit-winit"
 version = "0.34.2"
 dependencies = [
  "accesskit",
+ "accesskit_android",
  "accesskit_ios",
  "accesskit_macos",
  "accesskit_unix",
@@ -7447,18 +7462,21 @@ dependencies = [
  "dyn-clone",
  "futures-channel",
  "futures-util",
+ "glow",
  "hashbrown 0.17.1",
  "im",
  "indextree",
  "interprocess",
  "jni 0.21.1",
  "js-sys",
+ "khronos-egl",
  "libc",
  "memmap2",
  "ndk-context",
  "ndk-sys",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
+ "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
  "objc2-ui-kit 0.3.2",

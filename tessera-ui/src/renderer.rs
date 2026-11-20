@@ -16,6 +16,9 @@ use std::{
     },
 };
 
+#[cfg(target_os = "ios")]
+use std::cell::RefCell;
+
 use accesskit::{self, TreeUpdate};
 use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
 use tracing::{debug, error, instrument, warn};
@@ -339,6 +342,10 @@ pub struct Renderer<F> {
     event_loop_proxy: Option<winit::event_loop::EventLoopProxy<RendererUserEvent>>,
     #[cfg(target_os = "android")]
     android_back: Option<crate::android::system_back::BackBridge>,
+    #[cfg(target_os = "android")]
+    android_platform_view_host: Option<crate::android::platform_views::PlatformViewHost>,
+    #[cfg(target_os = "ios")]
+    ios_platform_views: Rc<RefCell<crate::ios::platform_views::IosPlatformViews>>,
     pending_desktop_window_action: Rc<Cell<Option<DesktopWindowAction>>>,
     #[cfg(target_os = "macos")]
     macos_titlebar: macos_titlebar::TitleBarInput,
@@ -416,6 +423,8 @@ where
             pending_desktop_window_action: Rc::default(),
             #[cfg(target_os = "macos")]
             macos_titlebar: macos_titlebar::TitleBarInput::default(),
+            #[cfg(target_os = "ios")]
+            ios_platform_views: Rc::default(),
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
@@ -533,6 +542,8 @@ where
             &android_app,
             session.run(crate::dispatcher::register_current),
         );
+        let android_platform_view_host =
+            crate::android::platform_views::PlatformViewHost::new(&android_app);
         let app = None;
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
@@ -554,6 +565,7 @@ where
             accessibility_active: false,
             event_loop_proxy: Some(event_loop_proxy),
             android_back,
+            android_platform_view_host,
             pending_desktop_window_action: Rc::default(),
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
@@ -1348,10 +1360,26 @@ where
         Some(PluginContext::new(
             desktop,
             event_loop.android_app().clone(),
+            self.android_platform_view_host.clone(),
         ))
     }
 
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "ios")]
+    fn plugin_context(&self, _event_loop: &ActiveEventLoop) -> Option<PluginContext> {
+        let _session = self.session.enter();
+        let desktop = self.desktop_platform_context()?;
+        let scale_factor = desktop.window().scale_factor();
+        let context = PluginContext::new_ios(desktop, self.ios_platform_views.clone());
+        if let (Some(root), Some(main_thread)) = (context.ui_view(), objc2::MainThreadMarker::new())
+        {
+            self.ios_platform_views
+                .borrow_mut()
+                .set_root(root, scale_factor, main_thread);
+        }
+        Some(context)
+    }
+
+    #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
     fn plugin_context(&self, _event_loop: &ActiveEventLoop) -> Option<PluginContext> {
         let _session = self.session.enter();
         let desktop = self.desktop_platform_context()?;
@@ -1776,6 +1804,8 @@ where
         if self.app.is_none() {
             return;
         }
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        self.receive_platform_view_focus();
         let modifiers = self.keyboard_state.modifiers();
         let keyboard = self.keyboard_state.take_events();
         let ime = self.ime_state.take_events();
@@ -1809,10 +1839,103 @@ where
                 .window(),
             request,
         );
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        self.send_platform_view_focus();
+    }
+
+    #[cfg(target_os = "android")]
+    fn receive_platform_view_focus(&self) {
+        if let Some(host) = &self.android_platform_view_host {
+            TesseraRuntime::with_mut(|runtime| {
+                host.receive_focus(runtime.component_tree.focus_owner_mut());
+            });
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    fn send_platform_view_focus(&self) {
+        if let Some(host) = &self.android_platform_view_host {
+            let target = TesseraRuntime::with(|runtime| {
+                runtime.component_tree.focus_owner().native_focus_target()
+            });
+            host.send_focus(target);
+        }
+    }
+
+    #[cfg(target_os = "ios")]
+    fn receive_platform_view_focus(&self) {
+        TesseraRuntime::with_mut(|runtime| {
+            self.ios_platform_views
+                .borrow_mut()
+                .sync_focus(runtime.component_tree.focus_owner_mut());
+        });
+    }
+
+    #[cfg(target_os = "ios")]
+    fn send_platform_view_focus(&self) {
+        let target = TesseraRuntime::with(|runtime| {
+            runtime.component_tree.focus_owner().native_focus_target()
+        });
+        if let Some((id, backwards)) = target {
+            let mut responders = self.ios_platform_views.borrow().keyboard_responders(id);
+            if responders.iter().any(|view| view.isFirstResponder()) {
+                return;
+            }
+            if backwards {
+                responders.reverse();
+            }
+            for view in responders {
+                if view.becomeFirstResponder() {
+                    return;
+                }
+            }
+        } else if self.ime_bridge_state.current_request.is_none() {
+            let root = self.ios_platform_views.borrow().keyboard_root();
+            if let Some(root) = root
+                && !root.isFirstResponder()
+            {
+                root.becomeFirstResponder();
+            }
+        }
+    }
+
+    #[cfg(target_os = "ios")]
+    fn try_native_tab(&self, event: &winit::event::KeyEvent) -> bool {
+        use winit::{
+            event::ElementState,
+            keyboard::{Key, NamedKey},
+        };
+
+        let modifiers = self.keyboard_state.modifiers();
+        if event.state != ElementState::Pressed
+            || event.logical_key != Key::Named(NamedKey::Tab)
+            || modifiers.control_key()
+            || modifiers.alt_key()
+            || modifiers.super_key()
+        {
+            return false;
+        }
+        let Some((id, _)) = TesseraRuntime::with(|runtime| {
+            runtime.component_tree.focus_owner().native_focus_target()
+        }) else {
+            return false;
+        };
+        let mut responders = self.ios_platform_views.borrow().keyboard_responders(id);
+        if modifiers.shift_key() {
+            responders.reverse();
+        }
+        let Some(index) = responders.iter().position(|view| view.isFirstResponder()) else {
+            return false;
+        };
+        responders[index + 1..]
+            .iter()
+            .any(|view| view.becomeFirstResponder())
     }
 
     fn handle_redraw_requested(&mut self, event_loop: &ActiveEventLoop) {
         let _session = self.session.enter();
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        self.receive_platform_view_focus();
         self.redraw_request_pending.store(false, Ordering::Release);
         let mut app = match self.app.take() {
             Some(app) => app,
@@ -1880,6 +2003,8 @@ where
         }
 
         self.app = Some(app);
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        self.send_platform_view_focus();
         #[cfg(target_os = "android")]
         if let Some(back) = self.android_back.as_mut() {
             back.set_enabled(crate::system_back::enabled());
@@ -2107,6 +2232,10 @@ where
                 self.config.window.transparent,
                 self.config.max_non_sampler_bindings,
             ));
+            #[cfg(target_os = "android")]
+            render_core.set_android_platform_view_host(self.android_platform_view_host.clone());
+            #[cfg(target_os = "ios")]
+            render_core.set_ios_platform_views(self.ios_platform_views.clone());
 
             // Register pipelines
             let mut context = PipelineContext::new(&mut render_core);
@@ -2298,6 +2427,13 @@ where
                 redraw_reasons.push(RedrawReason::ScaleFactorChanged);
             }
             WindowEvent::KeyboardInput { event, .. } => {
+                #[cfg(target_os = "ios")]
+                {
+                    self.receive_platform_view_focus();
+                    if self.try_native_tab(&event) {
+                        return;
+                    }
+                }
                 self.handle_keyboard_input(event);
                 self.flush_focused_input();
                 request_redraw = true;
@@ -2322,6 +2458,17 @@ where
                 redraw_reasons.push(RedrawReason::ImeEvent);
             }
             WindowEvent::Focused(focused) => {
+                // Android reports the Activity window losing focus even when input
+                // moves to one of this renderer's own windowless view roots.
+                #[cfg(target_os = "android")]
+                if !focused
+                    && self
+                        .android_platform_view_host
+                        .as_ref()
+                        .is_some_and(|host| host.routes_focus_to_embedded_window())
+                {
+                    return;
+                }
                 TesseraRuntime::with_mut(|runtime| {
                     runtime
                         .component_tree

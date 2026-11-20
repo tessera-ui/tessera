@@ -667,6 +667,7 @@ fn fragment_bounds(
                     }
                 },
                 Command::Compute(_) => geometry.window_bounds().outward(),
+                Command::PlatformView(_) => geometry.window_bounds().outward(),
                 _ => return None,
             };
             bounds.intersection(&viewport)

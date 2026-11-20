@@ -81,6 +81,10 @@ impl<'a> RenderPassGraph<'a> {
                         sampling_rect,
                     });
                 }
+                Command::PlatformView(_) => {
+                    flush_compute_pass(&mut passes, &mut compute_items);
+                    flush_draw_pass(&mut passes, &mut draw_builder);
+                }
                 Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => {
                     flush_compute_pass(&mut passes, &mut compute_items);
                     let clip = match command {

@@ -36,8 +36,23 @@ pub(super) struct ShapeClipper {
 }
 
 impl ShapeClipper {
-    pub(super) fn new(device: &wgpu::Device, format: wgpu::TextureFormat, samples: u32) -> Self {
-        let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/clip.wgsl"));
+    pub(super) fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        samples: u32,
+        sample_shading: bool,
+    ) -> Self {
+        let mut shader = wgpu::include_wgsl!("../shaders/clip.wgsl");
+        if samples == 1 || !sample_shading {
+            // Keep the same mask math on adapters that can only shade once per pixel.
+            // The vertices have constant clip-space w, so perspective interpolation is affine.
+            if let wgpu::ShaderSource::Wgsl(source) = &mut shader.source {
+                *source = source
+                    .replace("@interpolate(perspective, sample) ", "")
+                    .into();
+            }
+        }
+        let shader = device.create_shader_module(shader);
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Clip masks"),
             entries: &[wgpu::BindGroupLayoutEntry {

@@ -480,6 +480,8 @@ pub(crate) struct FocusRegistration {
     pub(crate) id: FocusHandleId,
     pub(crate) kind: FocusRegistrationKind,
     pub(crate) properties: FocusProperties,
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    pub(crate) platform_view: Option<crate::PlatformViewId>,
 }
 
 impl FocusRegistration {
@@ -488,6 +490,8 @@ impl FocusRegistration {
             id: node.id,
             kind: FocusRegistrationKind::Target,
             properties: FocusProperties::default(),
+            #[cfg(any(target_os = "android", target_os = "ios", test))]
+            platform_view: None,
         }
     }
 
@@ -496,6 +500,8 @@ impl FocusRegistration {
             id: scope.id,
             kind: FocusRegistrationKind::Scope,
             properties: FocusProperties::default().can_focus(false),
+            #[cfg(any(target_os = "android", target_os = "ios", test))]
+            platform_view: None,
         }
     }
 
@@ -506,6 +512,8 @@ impl FocusRegistration {
             properties: FocusProperties::default()
                 .can_focus(false)
                 .can_request_focus(false),
+            #[cfg(any(target_os = "android", target_os = "ios", test))]
+            platform_view: None,
         }
     }
 }
@@ -890,6 +898,8 @@ struct FocusTreeNode {
     state: FocusState,
     last_focused_descendant: Option<FocusHandleId>,
     restorer_fallback: Option<FocusRequesterId>,
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    platform_view: Option<crate::PlatformViewId>,
 }
 
 impl FocusTreeNode {
@@ -907,6 +917,8 @@ impl FocusTreeNode {
             state: FocusState::Inactive,
             last_focused_descendant: None,
             restorer_fallback: None,
+            #[cfg(any(target_os = "android", target_os = "ios", test))]
+            platform_view: None,
         }
     }
 
@@ -921,6 +933,8 @@ impl FocusTreeNode {
             state: FocusState::Inactive,
             last_focused_descendant: None,
             restorer_fallback: None,
+            #[cfg(any(target_os = "android", target_os = "ios", test))]
+            platform_view: None,
         }
     }
 
@@ -1010,6 +1024,10 @@ pub(crate) struct FocusOwner {
     pending_reveal: Option<FocusHandleId>,
     pending_navigation: Option<FocusDirection>,
     keyboard_barrier: KeyboardLayoutBarrier,
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    native_focusable: HashSet<u64>,
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    native_entry_backwards: bool,
 }
 
 impl FocusOwner {
@@ -1035,6 +1053,10 @@ impl FocusOwner {
             pending_reveal: None,
             pending_navigation: None,
             keyboard_barrier: KeyboardLayoutBarrier::None,
+            #[cfg(any(target_os = "android", target_os = "ios", test))]
+            native_focusable: HashSet::default(),
+            #[cfg(any(target_os = "android", target_os = "ios", test))]
+            native_entry_backwards: false,
         }
     }
 
@@ -1103,6 +1125,34 @@ impl FocusOwner {
 
     pub(crate) fn active_handle_id(&self) -> Option<FocusHandleId> {
         self.active
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    pub(crate) fn native_focus_target(&self) -> Option<(u64, bool)> {
+        let target = self.nodes.get(&self.active?)?.platform_view?;
+        Some((target.as_raw(), self.native_entry_backwards))
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    pub(crate) fn sync_native_focus(&mut self, focusable: &[u64], gained: u64, lost: u64) {
+        self.native_focusable.clear();
+        self.native_focusable.extend(focusable.iter().copied());
+        if gained != 0 {
+            let handle = self.nodes.iter().find_map(|(&handle, node)| {
+                (node.platform_view.is_some_and(|id| id.as_raw() == gained)
+                    && self.can_request_focus(handle))
+                .then_some(handle)
+            });
+            if let Some(handle) = handle {
+                self.request_focus(handle);
+                self.commit_pending();
+            }
+        } else if let Some(active) = self.active
+            && self.native_focus_target().is_some_and(|(id, _)| id == lost)
+        {
+            self.clear_focus(active);
+            self.commit_pending();
+        }
     }
 
     pub(crate) fn has_pending_reveal(&self) -> bool {
@@ -1333,6 +1383,10 @@ impl FocusOwner {
                 .entry(registration.id)
                 .or_insert_with(|| FocusTreeNode::new(registration.kind));
             entry.kind = registration.kind;
+            #[cfg(any(target_os = "android", target_os = "ios", test))]
+            {
+                entry.platform_view = registration.platform_view;
+            }
             entry.last_parent = parent;
             entry.last_scope_parent = scope;
             entry.props = registration.properties;
@@ -1570,6 +1624,10 @@ impl FocusOwner {
             None => self.resolve_move_target(direction),
         };
         let moved = target.is_some_and(|target| self.set_active(target));
+        #[cfg(any(target_os = "android", target_os = "ios", test))]
+        if moved {
+            self.native_entry_backwards = direction == FocusDirection::Previous;
+        }
         self.recompute_states();
         self.notify_state_changes_from(previous_states, Some(direction));
         moved
@@ -1867,6 +1925,10 @@ impl FocusOwner {
         self.discard_pending_focus_requests();
         let changed = self.active != Some(target) || self.captured.is_some_and(|id| id != target);
         self.active = Some(target);
+        #[cfg(any(target_os = "android", target_os = "ios", test))]
+        if changed {
+            self.native_entry_backwards = false;
+        }
         if self.captured.is_some_and(|id| id != target) {
             self.captured = None;
         }
@@ -2517,6 +2579,12 @@ impl FocusOwner {
 
     fn can_focus(&self, id: FocusHandleId) -> bool {
         self.nodes.get(&id).is_some_and(|node| {
+            #[cfg(any(target_os = "android", target_os = "ios", test))]
+            if let Some(view) = node.platform_view
+                && !self.native_focusable.contains(&view.as_raw())
+            {
+                return false;
+            }
             node.attachment.is_some_and(FocusAttachment::permits_focus) && node.props.can_focus
         })
     }

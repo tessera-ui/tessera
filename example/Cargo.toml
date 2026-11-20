@@ -29,6 +29,14 @@ tessera-platform.workspace = true
 tessera-shard.workspace = true
 tessera-ui = { workspace = true, features = ["headless"] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+jni.workspace = true
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2.workspace = true
+objc2-foundation = { workspace = true, features = ["NSString"] }
+objc2-ui-kit = { workspace = true, features = ["UIButton", "UIColor", "UIControl", "UIEvent", "UIResponder", "UITextField", "UIView", "objc2-core-foundation"] }
+
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen.workspace = true
 

@@ -71,6 +71,7 @@ fluent-bundle = "0.16"
 fluent-templates = { version = "0.15", default-features = false }
 futures-util = "0.3"
 futures-channel = "0.3"
+glow = "0.17"
 globset = "0.4"
 handlebars = "6.4"
 hashbrown = { version = "0.17.1", default-features = false }
@@ -85,7 +86,8 @@ indextree = "4.9"
 interprocess = "2.4"
 java-properties = "2.0"
 # `tessera-ui` re-exports `jni` types; 0.22 is a breaking API rewrite.
-jni = "0.21"
+jni = "0.21.1"
+khronos-egl = "6.0"
 js-sys = "0.3.107"
 libc = "0.2.191"
 log = "0.4.35"
@@ -99,6 +101,7 @@ ndk-context = "0.1.1"
 ndk-sys = "0.6"
 objc2 = { version = "0.6.5", default-features = false }
 objc2-app-kit = { version = "0.3", default-features = false }
+objc2-core-foundation = { version = "0.3.2", default-features = false }
 objc2-foundation = { version = "0.3.2", default-features = false }
 objc2-quartz-core = { version = "0.3.2", default-features = false }
 objc2-ui-kit = { version = "0.3", default-features = false }
