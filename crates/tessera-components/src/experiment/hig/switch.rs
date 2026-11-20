@@ -24,9 +24,7 @@ use crate::{
     boxed::boxed,
     modifier::ModifierExt as _,
     pipelines::{
-        fluid_glass::{
-            FluidGlassCommand, FluidGlassRenderArgs, LensContour, LensOptics, LensShadow,
-        },
+        liquid_glass::{LiquidGlassElement, lens::LiquidLensCommand},
         perceptual_fill::PerceptualFillCommand,
         shape::command::ShapeCommand,
     },
@@ -157,49 +155,20 @@ impl DrawModifierNode for ThumbLens {
         context: &mut DrawModifierContext<'_, '_>,
         content: &mut dyn DrawModifierContent,
     ) {
-        let corner = RoundedCorner::manual(Dp(15.5), 2.03);
         context
             .render_input
             .metadata_mut()
             .fragment_mut()
-            .push_draw_command(FluidGlassCommand {
-                render: FluidGlassRenderArgs {
-                    shape: Shape::RoundedRectangle {
-                        top_left: corner,
-                        top_right: corner,
-                        bottom_right: corner,
-                        bottom_left: corner,
-                    },
-                    pixels_per_dp: Dp(1.0).to_pixels_f32(),
-                    lens: Some(LensOptics {
-                        contour: Some(LensContour {
-                            controls: [
-                                [0.0, 22.501842 / 31.0],
-                                [3.697153 / 50.0, 12.862425 / 31.0],
-                                [12.134089 / 50.0, 6.410123 / 31.0],
-                                [20.571026 / 50.0, -0.042180 / 31.0],
-                                [29.207634 / 50.0, 0.217691 / 31.0],
-                            ],
-                            coverage_width: 0.994163,
-                        }),
-                        edge_width: 6.2,
-                        refraction_width: 31.5,
-                        refraction_corner_g2: 2.0,
-                        inner_refraction_width: 3.1,
-                        inner_refraction: -4.65,
-                        refraction: 7.75,
-                        dispersion_angle: -std::f32::consts::PI / 12.0,
-                        shadow: LensShadow {
-                            offset: 8.0,
-                            width: 4.0,
-                            blur: 3.0,
-                            opacity: 0.1,
-                        },
-                        dispersion: 0.4707,
-                        transmission: 1.0,
-                    }),
-                    ..Default::default()
+            .push_draw_command(LiquidLensCommand {
+                element: LiquidGlassElement {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 50.0,
+                    height: 31.0,
+                    radius: 15.5,
                 },
+                pixels_per_point: Dp(1.0).to_pixels_f32(),
+                opacity: 1.0,
             });
         content.draw(context.render_input);
     }

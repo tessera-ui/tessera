@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use encase::{ShaderType, StorageBuffer, UniformBuffer};
 use glam::{IVec4, Vec4};
 use tessera_ui::{
     render::{
@@ -13,16 +12,8 @@ use tessera_ui::{
 use super::{
     LiquidGlassCommand,
     params::{self, GlassParams, MAX_LEVELS},
+    shared::{BackdropParams, GlassTextures, Shared},
 };
-
-#[derive(ShaderType)]
-struct BackdropParams {
-    region: IVec4,
-    capture: IVec4,
-    scene: IVec4,
-    levels: IVec4,
-    sizes: IVec4,
-}
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct PreparedKey {
@@ -115,12 +106,10 @@ impl ChainLayout {
 }
 
 pub(crate) struct LiquidGlassPipeline {
+    shared: Shared,
     glass: wgpu::RenderPipeline,
-    glass_layout: wgpu::BindGroupLayout,
     base: wgpu::ComputePipeline,
     downsample: wgpu::ComputePipeline,
-    backdrop_layout: wgpu::BindGroupLayout,
-    sampler: wgpu::Sampler,
     prepared: HashMap<PreparedKey, Prepared>,
 }
 
@@ -131,192 +120,19 @@ impl LiquidGlassPipeline {
         config: &wgpu::SurfaceConfiguration,
         sample_count: u32,
     ) -> Self {
-        let glass_shader = gpu.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("liquid glass"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("glass.wgsl").into()),
-        });
-        let backdrop_shader = gpu.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("liquid glass backdrop"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("backdrop.wgsl").into()),
-        });
-        let texture = |binding, visibility, filterable| wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable },
-                view_dimension: wgpu::TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        };
-        let buffer = |binding, visibility, ty| wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility,
-            ty: wgpu::BindingType::Buffer {
-                ty,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-        let fragment = wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT;
-        let glass_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("liquid glass layout"),
-            entries: &[
-                buffer(0, fragment, wgpu::BufferBindingType::Uniform),
-                buffer(
-                    1,
-                    wgpu::ShaderStages::FRAGMENT,
-                    wgpu::BufferBindingType::Storage { read_only: true },
-                ),
-                texture(2, wgpu::ShaderStages::FRAGMENT, true),
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                texture(4, wgpu::ShaderStages::FRAGMENT, false),
-            ],
-        });
-        let backdrop_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("liquid glass backdrop layout"),
-            entries: &[
-                buffer(
-                    0,
-                    wgpu::ShaderStages::COMPUTE,
-                    wgpu::BufferBindingType::Uniform,
-                ),
-                texture(1, wgpu::ShaderStages::COMPUTE, false),
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                        format: wgpu::TextureFormat::Rgba16Float,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let glass_pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("liquid glass pipeline layout"),
-            bind_group_layouts: &[Some(&glass_layout)],
-            immediate_size: 0,
-        });
-        let glass = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("liquid glass"),
-            layout: Some(&glass_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &glass_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &glass_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    // The shader composites over the sampled scene itself.
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: tessera_ui::render::ui_stencil_state(),
-            multisample: wgpu::MultisampleState {
-                count: sample_count,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview_mask: None,
-            cache: pipeline_cache,
-        });
-        let backdrop_pipeline_layout =
-            gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("liquid glass backdrop pipeline layout"),
-                bind_group_layouts: &[Some(&backdrop_layout)],
-                immediate_size: 0,
-            });
-        let compute = |entry_point| {
-            gpu.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some(entry_point),
-                layout: Some(&backdrop_pipeline_layout),
-                module: &backdrop_shader,
-                entry_point: Some(entry_point),
-                compilation_options: Default::default(),
-                cache: pipeline_cache,
-            })
-        };
-        let sampler = gpu.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("liquid glass sampler"),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
+        let shared = Shared::new(gpu);
         Self {
-            glass,
-            glass_layout,
-            base: compute("cs_base"),
-            downsample: compute("cs_downsample"),
-            backdrop_layout,
-            sampler,
+            glass: shared.render(
+                gpu,
+                pipeline_cache,
+                ["vs_main", "fs_main"],
+                Some((config.format, sample_count)),
+            ),
+            base: shared.compute(gpu, pipeline_cache, "cs_base"),
+            downsample: shared.compute(gpu, pipeline_cache, "cs_downsample"),
+            shared,
             prepared: HashMap::new(),
         }
-    }
-
-    fn encode_level(
-        &self,
-        context: &mut DrawPreparationContext<'_, LiquidGlassCommand>,
-        pipeline: &wgpu::ComputePipeline,
-        uniforms: &BackdropParams,
-        source: &wgpu::TextureView,
-        scratch: &wgpu::TextureView,
-        size: [i32; 2],
-    ) {
-        let mut content = UniformBuffer::new(Vec::<u8>::new());
-        content
-            .write(uniforms)
-            .expect("liquid glass backdrop uniforms");
-        let buffer = context
-            .graphics
-            .frame_buffer(wgpu::BufferUsages::UNIFORM, content.as_ref());
-        let bindings = context
-            .graphics
-            .cached_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("liquid glass backdrop bindings"),
-                layout: &self.backdrop_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: buffer.binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(source),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(scratch),
-                    },
-                ],
-            });
-        let mut pass = context
-            .encoder
-            .begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("liquid glass backdrop"),
-                timestamp_writes: None,
-            });
-        pass.set_pipeline(pipeline);
-        pass.set_bind_group(0, &bindings, &[]);
-        pass.dispatch_workgroups(
-            (size[0] as u32).div_ceil(8),
-            (size[1] as u32).div_ceil(8),
-            1,
-        );
     }
 
     fn prepare_chain(
@@ -398,8 +214,9 @@ impl LiquidGlassPipeline {
                 levels: IVec4::new(source_rect[0], source_rect[1], 0, 0),
                 sizes: IVec4::new(source_rect[2], source_rect[3], rect[2], rect[3]),
             };
-            self.encode_level(
-                context,
+            self.shared.dispatch(
+                context.graphics,
+                context.encoder,
                 pipeline,
                 &uniforms,
                 &source,
@@ -489,50 +306,16 @@ impl DrawablePipeline<LiquidGlassCommand> for LiquidGlassPipeline {
             let Some(prepared) = self.prepared.get(&PreparedKey::new(command, geometry)) else {
                 continue;
             };
-            let mut uniforms = UniformBuffer::new(Vec::<u8>::new());
-            uniforms
-                .write(&prepared.params)
-                .expect("liquid glass uniforms");
-            let uniforms = context
-                .graphics
-                .frame_buffer(wgpu::BufferUsages::UNIFORM, uniforms.as_ref());
-            let mut elements = StorageBuffer::new(Vec::<u8>::new());
-            elements
-                .write(&params::element_data(command))
-                .expect("liquid glass elements");
-            let elements = context
-                .graphics
-                .frame_buffer(wgpu::BufferUsages::STORAGE, elements.as_ref());
-            let bindings = context
-                .graphics
-                .cached_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("liquid glass bindings"),
-                    layout: &self.glass_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: uniforms.binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: elements.binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::TextureView(&prepared.atlas),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: wgpu::BindingResource::Sampler(&self.sampler),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: wgpu::BindingResource::TextureView(
-                                context.scene_texture_view,
-                            ),
-                        },
-                    ],
-                });
+            let bindings = self.shared.bindings(
+                context.graphics,
+                &prepared.params,
+                &params::element_data(command),
+                GlassTextures {
+                    surface: &prepared.atlas,
+                    scene: context.scene_texture_view,
+                    original: context.scene_texture_view,
+                },
+            );
             context.render_pass.set_pipeline(&self.glass);
             context.render_pass.set_bind_group(0, &bindings, &[]);
             context.render_pass.draw(0..6, 0..1);

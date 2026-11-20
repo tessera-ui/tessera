@@ -98,3 +98,18 @@ fn cs_downsample(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     textureStore(destination, texel, colour);
 }
+
+// Full-resolution copy of a region given by its top-left target pixel (`region.xy`) and size
+// (`sizes.zw`), stored with rows from the bottom up.
+@compute @workgroup_size(8, 8)
+fn cs_copy(@builtin(global_invocation_id) id: vec3<u32>) {
+    let texel = vec2<i32>(id.xy);
+    if any(texel >= backdrop.sizes.zw) {
+        return;
+    }
+    let pixel = vec2(backdrop.region.x + texel.x, backdrop.region.y + backdrop.sizes.w - 1 - texel.y)
+        - backdrop.scene.xy;
+    let size = vec2<i32>(textureDimensions(source));
+    let stored = textureLoad(source, clamp(pixel, vec2(0), size - 1), 0);
+    textureStore(destination, texel, vec4(srgb_encode(stored.rgb), stored.a));
+}

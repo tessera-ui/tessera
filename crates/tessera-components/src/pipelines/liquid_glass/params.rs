@@ -51,6 +51,11 @@ pub(super) struct GlassParams {
     pub vibrant2: Vec4,
     pub vibrant3: Vec4,
     pub vibrant_bias: Vec4,
+    pub sampling: Vec4,
+    pub lens_displacement: Vec4,
+    pub lens_aberration: Vec4,
+    pub lens_directions: Vec4,
+    pub lens_edge: Vec4,
 }
 
 /// Inverse of a length where zero disables the dependent term.
@@ -201,6 +206,8 @@ pub(super) fn material_params(command: &LiquidGlassCommand) -> GlassParams {
             m.vibrant[2][4],
             m.vibrant[3][4],
         ),
+        // The blur chain samples a half-resolution capture.
+        sampling: Vec4::new(command.pixels_per_point * 0.5, 0.0, 0.0, 0.0),
         ..Default::default()
     }
 }

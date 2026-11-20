@@ -63,6 +63,16 @@ struct Params {
     vibrant3: vec4<f32>,
     // Bias column of the vibrant matrix.
     vibrant_bias: vec4<f32>,
+    // Backdrop texels per point, unused.
+    sampling: vec4<f32>,
+    // Lens displacement: height, curvature, amount in texels, unused.
+    lens_displacement: vec4<f32>,
+    // Lens chromatic aberration: amount, inverse height, offset, unused.
+    lens_aberration: vec4<f32>,
+    // Lens aberration direction, refraction direction.
+    lens_directions: vec4<f32>,
+    // Lens edge fade: start, end, opacity at start, opacity at end.
+    lens_edge: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -70,6 +80,7 @@ struct Params {
 @group(0) @binding(2) var surface_texture: texture_2d<f32>;
 @group(0) @binding(3) var surface_sampler: sampler;
 @group(0) @binding(4) var scene_texture: texture_2d<f32>;
+@group(0) @binding(5) var original_texture: texture_2d<f32>;
 
 const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
 const C0: f32 = 1.52866495;
@@ -286,7 +297,7 @@ fn glass_colour(px: vec2<f32>, p: vec2<f32>, uv0: vec2<f32>) -> vec4<f32> {
     var body = vec4(0.0);
     if coverage > 0.0 {
         let disp = refraction_offset(params.refraction.y, params.refraction.x, d);
-        let shift = vec2(grad.x, -grad.y);
+        let shift = vec2(grad.x, -grad.y) * params.sampling.x;
         let base = backdrop(uv0 + disp * shift, lod_for(blur_amount(disp + d)));
         let a_rgb = unpremultiply(base);
         var colour = vec4(a_rgb, 1.0);
@@ -414,5 +425,147 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let dst1 = glass + dst0 * (1.0 - glass.a);
     let dst2 = diffuse_highlight(p, dst1);
     let result = mix(dst0, dst2, params.origin_scale.w);
+    return vec4(srgb_decode(result.rgb), result.a);
+}
+
+// --- Pressed lens -----------------------------------------------------------------------------
+//
+// The lens passes render into half-float textures that cover the lens region with rows stored
+// from the bottom up and values kept sRGB encoded. `target_scene.zw` holds the region origin in
+// target pixels (top-down).
+
+@vertex
+fn vs_region(@builtin(vertex_index) index: u32) -> VertexOutput {
+    let corners = array<vec2<f32>, 6>(
+        vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0),
+        vec2(-1.0, 1.0), vec2(1.0, -1.0), vec2(1.0, 1.0),
+    );
+    var out: VertexOutput;
+    out.position = vec4(corners[index], 0.0, 1.0);
+    return out;
+}
+
+struct RegionPixel {
+    // Target pixel centre, top-down.
+    px: vec2<f32>,
+    // Region texel holding this pixel, bottom-up.
+    texel: vec2<i32>,
+};
+
+// Maps a fragment of a region texture to its target pixel; texture row r holds the r-th pixel
+// row counted from the bottom of the region.
+fn region_pixel(position: vec2<f32>) -> RegionPixel {
+    let size = vec2<f32>(textureDimensions(scene_texture));
+    var out: RegionPixel;
+    out.px = vec2(params.target_scene.z + position.x, params.target_scene.w + size.y - position.y);
+    out.texel = vec2<i32>(floor(position));
+    return out;
+}
+
+// Bottom-up texel coordinates of a target pixel inside the lens region.
+fn lens_uv(px: vec2<f32>) -> vec2<f32> {
+    let size = vec2<f32>(textureDimensions(scene_texture));
+    return vec2(px.x - params.target_scene.z, params.target_scene.w + size.y - px.y);
+}
+
+fn lens_profile(depth: f32, height: f32, curvature: f32) -> f32 {
+    let t = clamp(depth / height, 0.0, 1.0);
+    let step = select(1.0, 1.0 - 0.29289323, t < 1.0);
+    let circle = sqrt(max(1.0 - (1.0 - t) * (1.0 - t), 0.0));
+    return step + (circle - step) * curvature;
+}
+
+@fragment
+fn fs_lens_displace(in: VertexOutput) -> @location(0) vec4<f32> {
+    let pixel = region_pixel(in.position.xy);
+    let p = (pixel.px - params.origin_scale.xy) / params.origin_scale.z;
+    let field = group_field(p, params.field.y);
+    let depth = -field.x;
+    let fw = max(fwidthFine(depth), 1e-4);
+    let base = textureLoad(scene_texture, pixel.texel, 0);
+    var mask = clamp(depth / fw + 0.5, 0.0, 1.0) * field.w;
+    if depth < -5.0 {
+        mask = 0.0;
+    }
+    if mask < 1.0 / 255.0 {
+        return base;
+    }
+    let n = field.yz / max(length(field.yz), 1e-6);
+    let height = params.lens_displacement.x;
+    let s = lens_profile(depth, height, params.lens_displacement.y);
+    let inner = clamp((height - depth) / fw + 0.5, 0.0, 1.0);
+    let v = (1.0 - s) * n * inner;
+    let size = vec2<f32>(textureDimensions(surface_texture));
+    let uv = vec2<f32>(pixel.texel) + 0.5 + params.lens_displacement.z * vec2(v.x, -v.y);
+    let displaced = textureSampleLevel(surface_texture, surface_sampler, uv / size, 0.0);
+    return displaced * mask + base * (1.0 - mask);
+}
+
+@fragment
+fn fs_lens_background(in: VertexOutput) -> @location(0) vec4<f32> {
+    let pixel = region_pixel(in.position.xy);
+    let p = (pixel.px - params.origin_scale.xy) / params.origin_scale.z;
+    let dst = textureLoad(scene_texture, pixel.texel, 0);
+    let glass = glass_colour(pixel.px, p, vec2<f32>(pixel.texel) + 0.5);
+    return glass + dst * (1.0 - glass.a);
+}
+
+// Seven-tap colour separation along `offset`, unpremultiplied per tap.
+fn aberrate(uv: vec2<f32>, offset: vec2<f32>) -> vec4<f32> {
+    let size = vec2<f32>(textureDimensions(surface_texture));
+    var acc = vec4(0.0);
+    for (var i = 0; i < 3; i++) {
+        let w = 1.0 - f32(i) / 3.0;
+        let s = textureSampleLevel(surface_texture, surface_sampler, (uv + w * offset) / size, 0.0);
+        let a = max(s.a, 1e-4);
+        acc.r += w * s.r / a;
+        acc.g += (1.0 - w) * s.g / a;
+        acc.a += s.a;
+    }
+    for (var i = 0; i < 4; i++) {
+        let w = f32(i) / 3.0;
+        let s = textureSampleLevel(surface_texture, surface_sampler, (uv - w * offset) / size, 0.0);
+        let a = max(s.a, 1e-4);
+        acc.g += (1.0 - w) * s.g / a;
+        acc.b += w * s.b / a;
+        acc.a += s.a;
+    }
+    return vec4(acc.rgb * vec3(0.5, 1.0 / 3.0, 0.5), acc.a / 7.0);
+}
+
+fn lens_foreground(px: vec2<f32>, p: vec2<f32>) -> vec4<f32> {
+    let field = group_field(p, params.field.y);
+    let d = field.x;
+    let aa = max(fwidthFine(d), 1e-4);
+    if field.w < 0.001 {
+        return vec4(0.0);
+    }
+    let coverage = clamp(0.5 - d / aa, 0.0, 1.0) * field.w;
+    let g = field.yz;
+    let scale = params.sampling.x;
+    let a = params.lens_directions.xy;
+    let profile = params.lens_aberration.x
+        - clamp(sqrt(max((2.0 - clamp((-d - params.lens_aberration.z) * params.lens_aberration.y, 0.0, 1.0))
+            * clamp((-d - params.lens_aberration.z) * params.lens_aberration.y, 0.0, 1.0), 0.0)), 0.0, 1.0)
+            * params.lens_aberration.x;
+    let offset = profile * scale * vec2(-(a.y * g.x + a.x * g.y), a.x * g.x - a.y * g.y);
+    let sample = aberrate(lens_uv(px), offset);
+    let alpha = coverage * sample.a;
+    let edge = params.lens_edge;
+    let t = clamp((d - edge.x) / (edge.y - edge.x), 0.0, 1.0);
+    let fade = 1.0 - mix(edge.z, edge.w, t);
+    return vec4(sample.rgb * alpha, alpha) * fade;
+}
+
+@fragment
+fn fs_lens(in: VertexOutput) -> @location(0) vec4<f32> {
+    let px = in.position.xy;
+    let p = (px - params.origin_scale.xy) / params.origin_scale.z;
+    let texel = vec2<i32>(floor(lens_uv(px)));
+    let dst = textureLoad(scene_texture, texel, 0);
+    let foreground = lens_foreground(px, p);
+    let composed = diffuse_highlight(p, foreground + dst * (1.0 - foreground.a));
+    let stored = textureLoad(original_texture, texel, 0);
+    let result = mix(stored, composed, params.origin_scale.w);
     return vec4(srgb_decode(result.rgb), result.a);
 }

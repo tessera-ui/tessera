@@ -66,7 +66,7 @@ pub fn glass_group(
     let cache = remember(|| Arc::new(Mutex::new(Vec::new()))).get();
     let policy = GlassGroupLayout {
         material: material.unwrap_or_default(),
-        appearance: appearance.unwrap_or(GlassAppearance::Light),
+        appearance: appearance.unwrap_or_default(),
         spacing: spacing.unwrap_or(Dp(0.0)),
         gap: gap.unwrap_or(Dp(0.0)),
         corner_radius,
@@ -148,7 +148,8 @@ impl tessera_ui::DrawModifierNode for GlassGroupLayout {
         ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
-        if let Some(material) = self.material.liquid(self.appearance) {
+        {
+            let material = self.material.optics(self.appearance);
             let scale = Dp(1.0).to_pixels_f32();
             let elements = self
                 .rects

@@ -553,10 +553,10 @@ mod tests {
                 [("language", I18N.text("ui-language-chinese").into())],
             )
         });
-        let (blur_override, blur_radius) = session.run(|| {
+        let (click_action, spacing) = session.run(|| {
             (
-                I18N.text("ui-glass-custom-blur"),
-                I18N.text("ui-blur-radius"),
+                I18N.text("ui-glass-click-action"),
+                I18N.text("ui-glass-spacing"),
             )
         });
         let accessibility = session.inspect_accessibility().unwrap();
@@ -564,17 +564,17 @@ mod tests {
             .find(&language, Role::Button)
             .expect("language action")
             .0;
-        let blur_override = accessibility
-            .find(&blur_override, Role::Switch)
-            .expect("glass blur override after navigation")
+        let click_action = accessibility
+            .find(&click_action, Role::Switch)
+            .expect("glass click action after navigation")
             .0;
-        assert!(session.accessibility_action(blur_override, Action::Click));
+        assert!(session.accessibility_action(click_action, Action::Click));
         session.frames(1);
         let accessibility = session.inspect_accessibility().unwrap();
         let (slider, initial_value) = accessibility
-            .find(&blur_radius, Role::Slider)
+            .find(&spacing, Role::Slider)
             .map(|(id, node)| (id, node.numeric_value().unwrap()))
-            .expect("glass blur slider after enabling the override");
+            .expect("glass spacing slider");
         assert!(session.accessibility_action(slider, Action::Increment));
         session.frames(1);
         let accessibility = session.inspect_accessibility().unwrap();

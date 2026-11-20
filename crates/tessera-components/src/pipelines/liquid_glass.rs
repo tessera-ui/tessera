@@ -1,5 +1,7 @@
+pub mod lens;
 mod params;
 pub mod pipeline;
+mod shared;
 
 use glam::Vec4;
 use tessera_ui::{
