@@ -5,10 +5,11 @@ use jni::{
     JavaVM,
     objects::{JClass, JObject, JValue},
 };
-use tessera_components::md3::{
-    modifier::ModifierExt as _, scrollable::ScrollableController, theme::material_theme,
+use tessera_components::{
+    boxed::boxed,
+    md3::{modifier::ModifierExt as _, scrollable::ScrollableController, theme::material_theme},
+    modifier::ModifierExt as _,
 };
-use tessera_components::{boxed::boxed, modifier::ModifierExt as _};
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _};
 #[cfg(target_os = "android")]
 use tessera_ui::android::platform_views::AndroidPlatformViewFactoryHandle as ProbeFactory;
