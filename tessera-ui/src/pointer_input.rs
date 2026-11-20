@@ -514,6 +514,15 @@ struct PointerInputRuntime<K> {
     task: Rc<RefCell<Option<crate::Task>>>,
 }
 
+impl<K> Drop for PointerInputRuntime<K> {
+    fn drop(&mut self) {
+        // The build slot owns the detector. Its materialized nodes can detach
+        // during a full tree rebuild while the same slot is still in use.
+        self.queue.cancel();
+        self.task.borrow_mut().take();
+    }
+}
+
 impl<K: PartialEq> PointerInputRuntime<K> {
     fn restart<F, Fut>(&mut self, key: K, detector: &F)
     where
@@ -669,10 +678,5 @@ impl PointerInputModifierNode for PointerInputTask {
                 ime.update(request);
             }
         }
-    }
-
-    fn on_detach(&self, _context: crate::modifier::ModifierNodeContext) {
-        self.queue.cancel();
-        self.task.borrow_mut().take();
     }
 }

@@ -122,6 +122,11 @@ impl RenderFragment {
         self.push_op(Command::Compute(Box::new(command)), TypeId::of::<C>())
     }
 
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    pub(crate) fn push_platform_view(&mut self, id: u64) -> u32 {
+        self.push_op(Command::PlatformView(id), TypeId::of::<Command>())
+    }
+
     fn push_op(&mut self, command: Command, type_id: TypeId) -> u32 {
         let ops = Arc::make_mut(self.ops.get_or_insert_with(Arc::default));
         let index = ops.len() as u32;
@@ -171,12 +176,186 @@ pub struct RenderGraphOp {
     pub sequence_index: usize,
 }
 
+/// A native view's placement in the ordered scene.
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct PlatformViewPlacement {
+    pub(crate) id: u64,
+    pub(crate) geometry: DrawGeometry,
+    pub(crate) opacity: f32,
+    pub(crate) clip_bounds: Option<PxRect>,
+    pub(crate) unsupported_shape_clip: bool,
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[derive(Clone, Copy)]
+pub(crate) struct PlatformViewInputBlocker {
+    pub(crate) id: u64,
+    pub(crate) bounds: PxRect,
+}
+
+/// Tessera draw slices separated by native views in paint order.
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+pub(crate) struct PlatformViewSlices {
+    pub(crate) views: Vec<PlatformViewPlacement>,
+    pub(crate) draws: Vec<PlatformViewDrawSlice>,
+}
+
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+impl PlatformViewSlices {
+    fn compact(&mut self) {
+        if self.draws.iter().any(|slice| slice.samples_native_scene) {
+            return;
+        }
+        let mut previous = 0;
+        let mut previous_coverage = self.draws[0].coverage();
+        for index in 1..self.draws.len() {
+            let coverage = self.draws[index].coverage();
+            if coverage == SliceCoverage::Empty {
+                self.draws[index].ops.clear();
+                continue;
+            }
+            if let SliceCoverage::Bounded(bounds) = coverage
+                && previous_coverage.is_disjoint(bounds)
+                && self.views[previous..index].iter().all(|view| {
+                    view.visible_bounds()
+                        .is_none_or(|view_bounds| bounds.intersection(&view_bounds).is_none())
+                })
+            {
+                // Do not change which compositor blends overlapping Tessera pixels.
+                // Each slice's clip stack is balanced, so it can be appended intact.
+                let ops = std::mem::take(&mut self.draws[index].ops);
+                self.draws[previous].ops.extend(ops);
+                previous_coverage = match previous_coverage {
+                    SliceCoverage::Bounded(earlier) => {
+                        SliceCoverage::Bounded(earlier.union(&bounds))
+                    }
+                    _ => coverage,
+                };
+            } else {
+                previous = index;
+                previous_coverage = coverage;
+            }
+        }
+    }
+
+    pub(crate) fn overlays_after(&self) -> Vec<usize> {
+        self.draws
+            .iter()
+            .skip(1)
+            .enumerate()
+            .filter_map(|(index, slice)| {
+                slice
+                    .ops
+                    .iter()
+                    .any(|op| matches!(op.command, Command::Draw(_) | Command::Compute(_)))
+                    .then_some(index)
+            })
+            .collect()
+    }
+}
+
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+impl PlatformViewPlacement {
+    fn visible_bounds(&self) -> Option<PxRect> {
+        if self.opacity <= 0.0 || self.unsupported_shape_clip {
+            return None;
+        }
+        let bounds = self.geometry.window_bounds().outward();
+        let bounds = if let Some(clip) = self.clip_bounds {
+            bounds.intersection(&clip)?
+        } else {
+            bounds
+        };
+        Some(bounds)
+    }
+}
+
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[derive(Clone, Copy, PartialEq)]
+enum SliceCoverage {
+    Empty,
+    Bounded(PxRect),
+    Unknown,
+}
+
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+impl SliceCoverage {
+    fn is_disjoint(self, bounds: PxRect) -> bool {
+        match self {
+            Self::Empty => true,
+            Self::Bounded(other) => bounds.intersection(&other).is_none(),
+            Self::Unknown => false,
+        }
+    }
+}
+
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+pub(crate) struct PlatformViewDrawSlice {
+    pub(crate) ops: Vec<RenderGraphOp>,
+    pub(crate) samples_native_scene: bool,
+}
+
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+impl PlatformViewDrawSlice {
+    fn coverage(&self) -> SliceCoverage {
+        let mut coverage: Option<PxRect> = None;
+        let mut clips: SmallVec<[PxRect; 8]> = SmallVec::new();
+        for op in &self.ops {
+            let clip = match &op.command {
+                Command::ClipPush(bounds) => *bounds,
+                Command::ShapeClipPush(region) => region.bounds(),
+                Command::ClipPop => {
+                    if clips.pop().is_none() {
+                        return SliceCoverage::Unknown;
+                    }
+                    continue;
+                }
+                Command::Draw(command) if partial_redraw_safe(&op.command) => {
+                    let region = command.draw_region();
+                    if matches!(region, DrawRegion::Global) {
+                        return SliceCoverage::Unknown;
+                    }
+                    let bounds = draw_region_rect(region, op.geometry);
+                    let bounds = clips
+                        .last()
+                        .map_or(Some(bounds), |c| c.intersection(&bounds));
+                    if let Some(bounds) =
+                        bounds.filter(|b| b.width > Px::ZERO && b.height > Px::ZERO)
+                    {
+                        coverage = Some(coverage.map_or(bounds, |old| old.union(&bounds)));
+                    }
+                    continue;
+                }
+                _ => return SliceCoverage::Unknown,
+            };
+            let clip = clips.last().map_or(clip, |active| {
+                active.intersection(&clip).unwrap_or(PxRect::ZERO)
+            });
+            clips.push(clip);
+        }
+        if !clips.is_empty() {
+            return SliceCoverage::Unknown;
+        }
+        coverage.map_or(SliceCoverage::Empty, SliceCoverage::Bounded)
+    }
+
+    pub(crate) fn render_graph(&self) -> RenderGraph {
+        RenderGraphBuilder {
+            ops: self.ops.clone(),
+        }
+        .finish()
+    }
+}
+
 /// Frame-level render graph.
 #[derive(Clone, Default)]
 pub struct RenderGraph {
     data: Arc<RenderGraphData>,
     damage: Option<PxRect>,
     previous: Option<Weak<RenderGraphData>>,
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    platform_input_blockers: Vec<PlatformViewInputBlocker>,
 }
 
 #[derive(Default)]
@@ -234,6 +413,20 @@ impl RenderOrderPlan {
 }
 
 impl RenderGraph {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub(crate) fn with_platform_input_blockers(
+        mut self,
+        blockers: Vec<PlatformViewInputBlocker>,
+    ) -> Self {
+        self.platform_input_blockers = blockers;
+        self
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub(crate) fn platform_input_blockers(&self) -> &[PlatformViewInputBlocker] {
+        &self.platform_input_blockers
+    }
+
     pub(crate) fn cached_op_count(&self) -> Option<usize> {
         self.data.flat.get().map(|flat| flat.ops.len())
     }
@@ -246,6 +439,8 @@ impl RenderGraph {
             }),
             damage: None,
             previous: None,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            platform_input_blockers: Vec::new(),
         }
     }
 
@@ -313,6 +508,104 @@ impl RenderGraph {
             .indices
             .iter()
             .map(|&index| &ops[index])
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    pub(crate) fn has_platform_views(&self) -> bool {
+        self.ops()
+            .iter()
+            .any(|op| matches!(op.command, Command::PlatformView(_)))
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    pub(crate) fn platform_view_slices(&self) -> PlatformViewSlices {
+        let mut views = Vec::new();
+        let mut draws = vec![PlatformViewDrawSlice {
+            ops: Vec::new(),
+            samples_native_scene: false,
+        }];
+        let mut active_clips: Vec<RenderGraphOp> = Vec::new();
+        for op in self.ordered_ops(None) {
+            if let crate::render::Command::PlatformView(id) = &op.command {
+                let current = draws.last_mut().expect("scene has an initial slice");
+                for _ in 0..active_clips.len() {
+                    current
+                        .ops
+                        .push(state_op(Command::ClipPop, op.sequence_index));
+                }
+                let mut clip_bounds = None;
+                let mut unsupported_shape_clip = false;
+                for clip in &active_clips {
+                    let bounds = match &clip.command {
+                        Command::ClipPush(rect) => *rect,
+                        Command::ShapeClipPush(region) => {
+                            unsupported_shape_clip = true;
+                            region.bounds()
+                        }
+                        _ => continue,
+                    };
+                    clip_bounds = Some(clip_bounds.map_or(bounds, |current: PxRect| {
+                        current.intersection(&bounds).unwrap_or(PxRect::ZERO)
+                    }));
+                }
+                views.push(PlatformViewPlacement {
+                    id: *id,
+                    geometry: op.geometry,
+                    opacity: op.opacity,
+                    clip_bounds,
+                    unsupported_shape_clip,
+                });
+                let mut next = PlatformViewDrawSlice {
+                    ops: Vec::with_capacity(active_clips.len()),
+                    samples_native_scene: false,
+                };
+                next.ops.extend(active_clips.iter().cloned());
+                draws.push(next);
+            } else if matches!(op.command, Command::ClipPush(_) | Command::ShapeClipPush(_)) {
+                active_clips.push(op.clone());
+                draws
+                    .last_mut()
+                    .expect("scene has an initial slice")
+                    .ops
+                    .push(op.clone());
+            } else if matches!(op.command, Command::ClipPop) {
+                active_clips.pop();
+                draws
+                    .last_mut()
+                    .expect("scene has an initial slice")
+                    .ops
+                    .push(op.clone());
+            } else {
+                let draw = draws.last_mut().expect("scene has an initial slice");
+                draw.samples_native_scene |= match &op.command {
+                    Command::Draw(command) => command.sample_region().is_some(),
+                    Command::Compute(_) => true,
+                    _ => false,
+                } && !views.is_empty();
+                draw.ops.push(op.clone());
+            }
+        }
+        if let Some(last) = draws.last_mut() {
+            let sequence = self.ops().len();
+            for _ in 0..active_clips.len() {
+                last.ops.push(state_op(Command::ClipPop, sequence));
+            }
+        }
+        debug_assert_eq!(draws.len(), views.len() + 1);
+        let mut slices = PlatformViewSlices { views, draws };
+        slices.compact();
+        slices
+    }
+}
+
+#[cfg(any(target_os = "android", target_os = "ios", test))]
+fn state_op(command: Command, sequence_index: usize) -> RenderGraphOp {
+    RenderGraphOp {
+        command,
+        type_id: TypeId::of::<Command>(),
+        geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
+        opacity: 1.0,
+        sequence_index,
     }
 }
 
@@ -397,6 +690,8 @@ impl RenderGraphBuilder {
             }),
             damage: None,
             previous: None,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            platform_input_blockers: Vec::new(),
         }
     }
 
@@ -415,6 +710,7 @@ fn partial_redraw_safe(command: &Command) -> bool {
             command.sample_region().is_none() && command.supports_partial_redraw()
         }
         Command::Compute(_) => false,
+        Command::PlatformView(_) => false,
         _ => true,
     }
 }
@@ -462,9 +758,10 @@ impl OpInfo {
                 }
             }
             Command::Compute(_) => OpCategory::Compute,
-            Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => {
-                OpCategory::StateChange
-            }
+            Command::ClipPush(_)
+            | Command::ShapeClipPush(_)
+            | Command::ClipPop
+            | Command::PlatformView(_) => OpCategory::StateChange,
         };
 
         Self {
@@ -484,7 +781,10 @@ fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
             .sample_region()
             .map(|region| sample_region_rect(region, op.geometry)),
         Command::Compute(command) => Some(sample_region_rect(command.barrier(), op.geometry)),
-        Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => None,
+        Command::ClipPush(_)
+        | Command::ShapeClipPush(_)
+        | Command::ClipPop
+        | Command::PlatformView(_) => None,
     }
 }
 
@@ -496,7 +796,10 @@ fn scene_write_rect(op: &RenderGraphOp) -> Option<PxRect> {
                 .unwrap_or_else(|| draw_region_rect(command.draw_region(), op.geometry)),
         ),
         Command::Compute(_) => Some(op.geometry.window_bounds().outward()),
-        Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => None,
+        Command::ClipPush(_)
+        | Command::ShapeClipPush(_)
+        | Command::ClipPop
+        | Command::PlatformView(_) => None,
     }
 }
 
@@ -519,7 +822,10 @@ fn draw_region_rect(region: DrawRegion, geometry: DrawGeometry) -> PxRect {
 fn is_state_change(op: &RenderGraphOp) -> bool {
     matches!(
         op.command,
-        Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop
+        Command::ClipPush(_)
+            | Command::ShapeClipPush(_)
+            | Command::ClipPop
+            | Command::PlatformView(_)
     )
 }
 
@@ -580,6 +886,259 @@ mod tests {
         }
 
         fn apply_opacity(&mut self, _opacity: f32) {}
+    }
+
+    #[test]
+    fn native_view_boundaries_split_draws_without_changing_paint_order() {
+        let mut builder = RenderGraphBuilder::new();
+        let geometry = DrawGeometry::from_position_size(
+            PxPosition::from_f32_xy(12.5, 20.25),
+            PxSize::new(Px(80), Px(40)),
+        );
+        let mut fragment = RenderFragment::default();
+        fragment.push_draw_command(ProbeDraw {
+            id: 1,
+            sample: None,
+        });
+        builder.append_fragment(&fragment, geometry, 1.0);
+        fragment.clear();
+        fragment.push_platform_view(17);
+        builder.append_fragment(&fragment, geometry, 0.75);
+        fragment.clear();
+        fragment.push_draw_command(ProbeDraw {
+            id: 2,
+            sample: None,
+        });
+        builder.append_fragment(&fragment, geometry, 1.0);
+        fragment.clear();
+        fragment.push_platform_view(23);
+        builder.append_fragment(&fragment, geometry, 1.0);
+        fragment.clear();
+        fragment.push_draw_command(ProbeDraw {
+            id: 3,
+            sample: None,
+        });
+        builder.append_fragment(&fragment, geometry, 1.0);
+
+        let graph = builder.finish();
+        let slices = graph.platform_view_slices();
+
+        assert_eq!(slices.views.len(), 2);
+        assert_eq!(slices.draws.len(), 3);
+        assert_eq!(slices.overlays_after(), [0, 1]);
+        assert_eq!(
+            slices.views.iter().map(|view| view.id).collect::<Vec<_>>(),
+            [17, 23]
+        );
+        assert_eq!(slices.views[0].geometry, geometry);
+        assert_eq!(slices.views[0].opacity, 0.75);
+        let draw_ids = slices
+            .draws
+            .iter()
+            .map(|slice| {
+                slice
+                    .ops
+                    .iter()
+                    .map(|op| {
+                        op.command
+                            .downcast_draw_ref::<ProbeDraw>()
+                            .expect("slice contains draw commands")
+                            .id
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(draw_ids, [vec![1], vec![2], vec![3]]);
+    }
+
+    #[test]
+    fn platform_view_slices_merge_only_disjoint_visible_pixels() {
+        let at = |x, width| {
+            DrawGeometry::from_position_size(
+                PxPosition::from_f32_xy(x, 0.25),
+                PxSize::new(Px(width), Px(20)),
+            )
+        };
+        let draw = |id| {
+            let mut fragment = RenderFragment::default();
+            fragment.push_draw_command(ProbeDraw { id, sample: None });
+            fragment
+        };
+        let view = |id| {
+            let mut fragment = RenderFragment::default();
+            fragment.push_platform_view(id);
+            fragment
+        };
+        let mut builder = RenderGraphBuilder::new();
+        builder.append_fragment(&draw(1), at(0.0, 10), 1.0);
+        builder.append_fragment(&view(7), at(20.5, 10), 1.0);
+        // The draw nominally intersects the view, but the clip leaves it on the right.
+        let clip = PxRect::new(Px(31), Px(0), Px(10), Px(21));
+        builder.push_clip_push(clip);
+        builder.append_fragment(&draw(2), at(20.0, 30), 1.0);
+        builder.push_clip_pop();
+        builder.append_fragment(&view(8), at(50.5, 10), 1.0);
+        // Would cross the earlier native view as well as the empty boundary at view 8.
+        builder.append_fragment(&draw(3), at(16.0, 5), 1.0);
+        builder.append_fragment(&view(9), at(65.0, 10), 1.0);
+        // Does not touch view 9 but must not change how it blends with draw 3.
+        builder.append_fragment(&draw(4), at(16.0, 5), 1.0);
+
+        let slices = builder.finish().platform_view_slices();
+        assert_eq!(slices.overlays_after(), [1, 2]);
+        let underlay = slices.draws[0].render_graph();
+        assert!(matches!(underlay.ops()[1].command, Command::ClipPush(bounds) if bounds == clip));
+        assert_eq!(
+            underlay.ops()[2]
+                .command
+                .downcast_draw_ref::<ProbeDraw>()
+                .unwrap()
+                .id,
+            2
+        );
+        assert!(matches!(underlay.ops()[3].command, Command::ClipPop));
+    }
+
+    #[test]
+    fn platform_view_slices_reopen_clips_and_flag_native_scene_sampling() {
+        let geometry =
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(40), Px(30)));
+        let clip = PxRect::new(Px(3), Px(4), Px(20), Px(12));
+        let mut builder = RenderGraphBuilder::new();
+        builder.push_clip_push(clip);
+        let mut fragment = RenderFragment::default();
+        fragment.push_draw_command(ProbeDraw {
+            id: 1,
+            sample: None,
+        });
+        builder.append_fragment(&fragment, geometry, 1.0);
+        fragment.clear();
+        fragment.push_platform_view(9);
+        builder.append_fragment(&fragment, geometry, 1.0);
+        fragment.clear();
+        fragment.push_draw_command(ProbeDraw {
+            id: 2,
+            sample: Some(SampleRegion::Global),
+        });
+        builder.append_fragment(&fragment, geometry, 1.0);
+        builder.push_clip_pop();
+
+        let slices = builder.finish().platform_view_slices();
+
+        assert_eq!(slices.views[0].clip_bounds, Some(clip));
+        assert!(!slices.views[0].unsupported_shape_clip);
+        assert_eq!(slices.draws.len(), 2);
+        assert!(
+            matches!(slices.draws[0].ops.first().map(|op| &op.command), Some(Command::ClipPush(rect)) if *rect == clip)
+        );
+        assert!(matches!(
+            slices.draws[0].ops.last().map(|op| &op.command),
+            Some(Command::ClipPop)
+        ));
+        assert!(
+            matches!(slices.draws[1].ops.first().map(|op| &op.command), Some(Command::ClipPush(rect)) if *rect == clip)
+        );
+        assert!(matches!(
+            slices.draws[1].ops.last().map(|op| &op.command),
+            Some(Command::ClipPop)
+        ));
+        assert!(slices.draws[1].samples_native_scene);
+    }
+
+    #[test]
+    fn platform_view_slices_intersect_nested_clips_and_restore_the_outer_clip() {
+        let geometry =
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(40), Px(30)));
+        let outer = PxRect::new(Px(2), Px(3), Px(20), Px(15));
+        let mut builder = RenderGraphBuilder::new();
+        let mut fragment = RenderFragment::default();
+        builder.push_clip_push(outer);
+        builder.push_clip_push(PxRect::new(Px(10), Px(0), Px(20), Px(10)));
+        fragment.push_platform_view(1);
+        builder.append_fragment(&fragment, geometry, 1.0);
+        builder.push_clip_pop();
+        builder.push_clip_push(PxRect::new(Px(23), Px(3), Px(10), Px(10)));
+        fragment.clear();
+        fragment.push_platform_view(2);
+        builder.append_fragment(&fragment, geometry, 1.0);
+        builder.push_clip_pop();
+        fragment.clear();
+        fragment.push_draw_command(ProbeDraw {
+            id: 7,
+            sample: None,
+        });
+        builder.append_fragment(&fragment, geometry, 1.0);
+        fragment.clear();
+        fragment.push_platform_view(3);
+        builder.append_fragment(&fragment, geometry, 1.0);
+        builder.push_clip_pop();
+
+        let slices = builder.finish().platform_view_slices();
+        assert_eq!(
+            slices.views[0].clip_bounds,
+            Some(PxRect::new(Px(10), Px(3), Px(12), Px(7)))
+        );
+        assert_eq!(slices.views[1].clip_bounds, Some(PxRect::ZERO));
+        assert_eq!(slices.views[2].clip_bounds, Some(outer));
+        assert_eq!(slices.overlays_after(), [1]);
+    }
+
+    #[test]
+    fn platform_view_slices_report_shaped_clip_limits() {
+        let geometry =
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(40), Px(30)));
+        let mut builder = RenderGraphBuilder::new();
+        builder.push_shape_clip_push(crate::render::ClipRegion {
+            position: PxPosition::ZERO,
+            size: [24.0, 18.0],
+            shape: crate::render::ClipShape::Ellipse,
+        });
+        let mut fragment = RenderFragment::default();
+        fragment.push_platform_view(5);
+        builder.append_fragment(&fragment, geometry, 1.0);
+
+        let slices = builder.finish().platform_view_slices();
+        assert_eq!(
+            slices.views[0].clip_bounds,
+            Some(PxRect::new(Px(0), Px(0), Px(24), Px(18)))
+        );
+        assert!(slices.views[0].unsupported_shape_clip);
+    }
+
+    #[test]
+    fn platform_view_draw_slice_can_be_rendered_without_replaying_native_boundaries() {
+        let geometry =
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(32), Px(18)));
+        let mut builder = RenderGraphBuilder::new();
+        let mut fragment = RenderFragment::default();
+        fragment.push_draw_command(ProbeDraw {
+            id: 1,
+            sample: None,
+        });
+        builder.append_fragment(&fragment, geometry, 1.0);
+        fragment.clear();
+        fragment.push_platform_view(44);
+        builder.append_fragment(&fragment, geometry, 1.0);
+        fragment.clear();
+        fragment.push_draw_command(ProbeDraw {
+            id: 2,
+            sample: None,
+        });
+        builder.append_fragment(&fragment, geometry, 1.0);
+
+        let slices = builder.finish().platform_view_slices();
+        let second_slice = slices.draws[1].render_graph();
+
+        assert_eq!(second_slice.ops().len(), 1);
+        assert_eq!(
+            second_slice.ops()[0]
+                .command
+                .downcast_draw_ref::<ProbeDraw>()
+                .expect("the slice contains the later Tessera draw")
+                .id,
+            2
+        );
+        assert!(!second_slice.has_platform_views());
     }
 
     #[test]

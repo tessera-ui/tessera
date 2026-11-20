@@ -2214,6 +2214,21 @@ impl TesseraRuntime {
         }
     }
 
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub(crate) fn register_current_platform_focus(
+        &mut self,
+        node: FocusNode,
+        id: crate::PlatformViewId,
+    ) {
+        self.ensure_current_focus_target(node);
+        if let Some(current) = self.component_tree.current_node_mut()
+            && let Some(registration) = &mut current.interaction_mut().focus_registration
+            && registration.kind == FocusRegistrationKind::Target
+        {
+            registration.platform_view = Some(id);
+        }
+    }
+
     pub(crate) fn ensure_current_focus_group(&mut self, group: FocusGroupNode) {
         if let Some(current) = self.component_tree.current_node_mut() {
             if current.interaction().focus_registration.is_none() {

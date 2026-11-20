@@ -116,12 +116,56 @@ impl RenderCore {
 
         let render_start = Instant::now();
         self.last_render_breakdown = None;
+        #[cfg(target_os = "android")]
+        let android_host = self
+            .android_platform_view_host
+            .clone()
+            .filter(|host| graph.has_platform_views() || host.has_composition());
+        #[cfg(target_os = "android")]
+        let android_slot = if let (Some(host), Some(window)) = (&android_host, &self.window) {
+            let Some(slot) = host.next_slice_slot(window) else {
+                return;
+            };
+            slot
+        } else {
+            0
+        };
+        #[cfg(target_os = "android")]
+        if let Some(host) = android_host.as_ref() {
+            self.render_android_transaction(
+                host,
+                android_slot,
+                graph,
+                #[cfg(feature = "debug-dirty-overlay")]
+                dirty_overlay_rects,
+                render_start,
+            );
+            return;
+        }
         let acquire_start = Instant::now();
+        #[cfg(target_os = "ios")]
+        let ios_host = self
+            .ios_platform_views
+            .clone()
+            .filter(|_| graph.has_platform_views() || self.ios_composition_active);
         let (output_frame, reconfigure_after_present) = {
             let surface = self
                 .surface
                 .as_ref()
                 .expect("surface presence checked above");
+            #[cfg(target_os = "ios")]
+            if self.ios_platform_views.is_some() {
+                // WGPU reads this flag when acquiring a drawable, not when presenting it.
+                // SAFETY: The live surface owns the layer; changing its presentation flag
+                // on the UIKit thread does not change WGPU's configuration or ownership.
+                let metal = unsafe { surface.as_hal::<wgpu::hal::api::Metal>() }
+                    .expect("UIKit platform views require a Metal surface");
+                let layer = metal.render_layer().lock();
+                let transactional = ios_host.is_some();
+                if layer.presentsWithTransaction() != transactional {
+                    layer.setPresentsWithTransaction(transactional);
+                }
+            }
             match surface.get_current_texture() {
                 wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
                 wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
@@ -153,6 +197,69 @@ impl RenderCore {
             }
         };
         let acquire = acquire_start.elapsed();
+        #[cfg(target_os = "ios")]
+        let (graph, ios_transaction) = if let Some(host) = ios_host {
+            use crate::ios::platform_views::IosCompositionTransaction;
+
+            let main_thread =
+                objc2::MainThreadMarker::new().expect("iOS rendering must run on the main thread");
+            let transaction = IosCompositionTransaction::begin();
+            let mut placements = Vec::new();
+            let mut blockers = Vec::new();
+            let mut overlays_after = Vec::new();
+            let graph = if graph.has_platform_views() {
+                let slices = graph.platform_view_slices();
+                let overlays = slices.overlays_after();
+                if slices.draws.iter().any(|slice| slice.samples_native_scene) {
+                    warn!("Tessera cannot sample across a native platform-view boundary");
+                    graph
+                } else if let Err(error) = self.ensure_ios_slice_surfaces(overlays.len()) {
+                    warn!(%error, "Failed to initialize Core Animation scene slices");
+                    graph
+                } else {
+                    let frames: Option<Vec<_>> = self.ios_slice_surfaces[..overlays.len()]
+                        .iter()
+                        .map(|target| acquire_scene_slice(&target.surface))
+                        .collect();
+                    let Some(frames) = frames else {
+                        warn!("Dropping incomplete Core Animation platform-view frame");
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    };
+                    for (frame, &index) in frames.into_iter().zip(&overlays) {
+                        self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
+                    }
+                    placements = slices.views;
+                    overlays_after = overlays;
+                    blockers.extend_from_slice(graph.platform_input_blockers());
+                    self.previous_graph = None;
+                    slices.draws[0].render_graph()
+                }
+            } else {
+                graph
+            };
+            let scale = self
+                .window
+                .as_ref()
+                .map_or(1.0, |window| window.scale_factor()) as f32;
+            host.borrow_mut().apply_composition(
+                &placements,
+                &blockers,
+                &overlays_after,
+                &self.ios_compositor_layers(),
+                [
+                    self.config.width as f32 / scale,
+                    self.config.height as f32 / scale,
+                ],
+                main_thread,
+            );
+            self.ios_composition_active = !placements.is_empty();
+            (graph, Some(transaction))
+        } else {
+            (graph, None)
+        };
         let output_view = output_frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -168,12 +275,179 @@ impl RenderCore {
 
         let present_start = Instant::now();
         self.queue.present(output_frame);
+        #[cfg(target_os = "ios")]
+        drop(ios_transaction);
         if reconfigure_after_present {
             self.resize_surface();
         }
         if let Some(breakdown) = self.last_render_breakdown.as_mut() {
             breakdown.present = present_start.elapsed();
         }
+    }
+
+    #[cfg(target_os = "android")]
+    fn render_android_transaction(
+        &mut self,
+        host: &crate::android::platform_views::PlatformViewHost,
+        slot: usize,
+        graph: RenderGraph,
+        #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
+        render_start: Instant,
+    ) {
+        let slices = graph
+            .has_platform_views()
+            .then(|| graph.platform_view_slices());
+        let slices = slices.filter(|slices| {
+            if slices.draws.iter().any(|slice| slice.samples_native_scene) {
+                warn!("Tessera cannot sample across a native platform-view boundary");
+                return false;
+            }
+            true
+        });
+        let overlays = slices
+            .as_ref()
+            .map_or_else(Vec::new, |slices| slices.overlays_after());
+        let count = 1 + overlays.len();
+        let acquire_start = Instant::now();
+        if let Err(error) = self.ensure_android_slice_surfaces(count) {
+            warn!(%error, "Failed to initialize Android scene slice surfaces");
+            return;
+        }
+        if self.android_egl.is_some() {
+            let mut graphs = overlays
+                .iter()
+                .map(|&index| {
+                    slices.as_ref().expect("populated overlay").draws[index + 1].render_graph()
+                })
+                .collect::<Vec<_>>();
+            graphs.push(
+                slices
+                    .as_ref()
+                    .map_or_else(|| graph.clone(), |slices| slices.draws[0].render_graph()),
+            );
+            if let Err(error) = self.render_android_egl(
+                slot,
+                graphs,
+                #[cfg(feature = "debug-dirty-overlay")]
+                dirty_overlay_rects,
+                render_start,
+                acquire_start.elapsed(),
+            ) {
+                warn!(%error, "Failed to present Android EGL scene slices");
+                return;
+            }
+            let (views, blockers) = slices.as_ref().map_or((&[][..], &[][..]), |slices| {
+                (slices.views.as_slice(), graph.platform_input_blockers())
+            });
+            host.update(views, blockers, &overlays, slot);
+            return;
+        }
+        let frames: Option<Vec<_>> = self.android_slice_surfaces[..count]
+            .iter()
+            .map(|slots| match &slots[slot].output {
+                AndroidSliceOutput::Wgpu(surface) => acquire_scene_slice(surface),
+                AndroidSliceOutput::Egl(_) => unreachable!("EGL slices are already handled"),
+            })
+            .collect();
+        let Some(frames) = frames else {
+            warn!("Dropping incomplete Android platform-view frame");
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+            return;
+        };
+        let acquire = acquire_start.elapsed();
+        let mut frames = frames.into_iter();
+        let base = frames
+            .next()
+            .expect("the compositor always has a base slice");
+        let base_graph = if let Some(slices) = &slices {
+            for (frame, &index) in frames.zip(&overlays) {
+                self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
+            }
+            self.previous_graph = None;
+            slices.draws[0].render_graph()
+        } else {
+            graph.clone()
+        };
+        self.render_into_view(
+            base_graph,
+            &base
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+            #[cfg(feature = "debug-dirty-overlay")]
+            dirty_overlay_rects,
+            render_start,
+            acquire,
+        );
+        self.queue.present(base);
+        let (views, blockers) = slices.as_ref().map_or((&[][..], &[][..]), |slices| {
+            (slices.views.as_slice(), graph.platform_input_blockers())
+        });
+        host.update(views, blockers, &overlays, slot);
+    }
+
+    #[cfg(target_os = "android")]
+    fn render_android_egl(
+        &mut self,
+        slot: usize,
+        graphs: Vec<RenderGraph>,
+        #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
+        render_start: Instant,
+        acquire: std::time::Duration,
+    ) -> Result<(), String> {
+        self.android_egl
+            .as_ref()
+            .expect("EGL presentation enabled")
+            .wait_before_rendering();
+        let count = graphs.len();
+        // Render the base last, just as on the WGPU path, for retained frame bookkeeping.
+        for (index, graph) in (1..count).chain([0]).zip(graphs) {
+            let AndroidSliceOutput::Egl(surface) = &self.android_slice_surfaces[index][slot].output
+            else {
+                unreachable!("EGL scene requires EGL surfaces");
+            };
+            let view = surface
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            self.previous_graph = None;
+            self.render_into_view(
+                graph,
+                &view,
+                #[cfg(feature = "debug-dirty-overlay")]
+                if index == 0 { dirty_overlay_rects } else { &[] },
+                render_start,
+                acquire,
+            );
+        }
+        let surfaces = self.android_slice_surfaces[..count]
+            .iter()
+            .map(|slots| match &slots[slot].output {
+                AndroidSliceOutput::Egl(surface) => surface,
+                AndroidSliceOutput::Wgpu(_) => unreachable!("EGL scene requires EGL surfaces"),
+            })
+            .collect::<Vec<_>>();
+        self.android_egl
+            .as_ref()
+            .expect("EGL presentation enabled")
+            .present(&surfaces)
+    }
+
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    fn present_scene_slice(&mut self, output_frame: wgpu::SurfaceTexture, graph: RenderGraph) {
+        let output_view = output_frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        self.previous_graph = None;
+        self.render_into_view(
+            graph,
+            &output_view,
+            #[cfg(feature = "debug-dirty-overlay")]
+            &[],
+            Instant::now(),
+            std::time::Duration::ZERO,
+        );
+        self.queue.present(output_frame);
     }
 
     fn render_into_view(
@@ -293,6 +567,9 @@ impl RenderCore {
                 pass.set_pipeline(&state.blit.clear_pipeline);
                 set_scissor_rect_from_pxrect(&mut pass, damage);
                 pass.draw(0..3, 0..1);
+                if state.targets.msaa_view.is_some() {
+                    set_scissor_rect_from_pxrect(&mut pass, target_rect);
+                }
             }
         }
         state.pipelines.drawer.pipeline_registry.begin_all_frames(
@@ -853,6 +1130,15 @@ impl RenderCore {
     }
 }
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn acquire_scene_slice(surface: &wgpu::Surface<'_>) -> Option<wgpu::SurfaceTexture> {
+    match surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(frame)
+        | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => Some(frame),
+        _ => None,
+    }
+}
+
 fn rects_overlap(a: PxRect, b: PxRect) -> bool {
     let a_left = a.x.0;
     let a_top = a.y.0;
@@ -999,6 +1285,14 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     }
     if !buffer.is_empty() {
         flush!();
+    }
+    // WGPU's GLES resolve is a framebuffer blit. GL scissor can otherwise leave
+    // stale pixels outside the final batch in the single-sample target.
+    if resolve_target.is_some() {
+        set_scissor_rect_from_pxrect(
+            &mut rpass,
+            PxRect::from_position_size(PxPosition::ZERO, target_size),
+        );
     }
 
     drop(buffer);

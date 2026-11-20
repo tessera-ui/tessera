@@ -87,14 +87,19 @@ web-sys = { workspace = true, features = ["console", "CssStyleDeclaration", "Doc
 web-time.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
+accesskit_winit = { workspace = true, features = ["accesskit_android"] }
+glow.workspace = true
 jni.workspace = true
+khronos-egl.workspace = true
 ndk-context.workspace = true
 ndk-sys.workspace = true
 winit = { workspace = true, features = ["android-game-activity"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2.workspace = true
-objc2-ui-kit = { workspace = true, features = ["UIGeometry", "UIView", "UIResponder", "UIKeyboardLayoutGuide", "UILayoutGuide", "UITrackingLayoutGuide", "objc2-core-foundation"] }
+objc2-core-foundation.workspace = true
+objc2-ui-kit = { workspace = true, features = ["UIControl", "UIEvent", "UIGeometry", "UIView", "UIWindow", "UIResponder", "UIKeyboardLayoutGuide", "UILayoutGuide", "UITrackingLayoutGuide", "UIScrollView", "UITextField", "UITextView", "objc2-core-foundation", "objc2-quartz-core"] }
+objc2-quartz-core = { workspace = true, features = ["CALayer", "CAMetalLayer", "CATransaction"] }
 
 [dev-dependencies]
 criterion.workspace = true

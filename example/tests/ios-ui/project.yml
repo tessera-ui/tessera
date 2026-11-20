@@ -1,0 +1,19 @@
+name: TesseraProbe
+options:
+  deploymentTarget:
+    iOS: '15.0'
+targets:
+  TesseraProbeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [PlatformViewTests.swift]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.tessera.example.platform-view-probe.tests
+      GENERATE_INFOPLIST_FILE: YES
+schemes:
+  TesseraProbe:
+    build:
+      targets:
+        TesseraProbeUITests: [test]
+    test:
+      targets: [TesseraProbeUITests]

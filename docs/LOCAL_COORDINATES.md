@@ -67,6 +67,18 @@ transformation, and platform area sizes receive an integer enclosing extent.
 Accessibility publishes transformed bounds while preserving semantic identity,
 actions, selection, and focus behavior.
 
+## Platform views
+
+Embed a native control with `platform_view(factory, modifier)`. Tessera owns
+the native view for the lifetime of that component instance. Keep the component
+composed but unplaced to hide it without losing native state; use a different
+logical `key` or remove the component to release it.
+
+The host lays out a `platform_view` at `LayoutCoordinates::local_size`, then applies
+translation, uniform scale and ancestor clipping in the host coordinate space.
+Android uses physical pixels; UIKit converts local dimensions and translation
+to points.
+
 ## Geometry observers
 
 - `on_globally_positioned` reports outward integer bounds.

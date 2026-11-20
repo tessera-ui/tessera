@@ -2664,6 +2664,11 @@ impl ComponentTree {
             &mut cursor_position,
             modifiers,
         );
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        let graph = graph.with_platform_input_blockers(
+            self.pointer_index
+                .platform_view_input_blockers(&self.platform_view_order_paths(root_node)),
+        );
         record_frame_stage(&mut stage_timer, "pointer");
 
         diagnostics_snapshot.geometry_nodes_visited = self.metadatas.geometry_visits;
@@ -2703,6 +2708,33 @@ impl ComponentTree {
             pending_focus_reveal_retry,
             pending_keyboard_retry,
         )
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    fn platform_view_order_paths(&self, root_node: indextree::NodeId) -> Vec<(u64, Vec<usize>)> {
+        let mut views = Vec::new();
+        for node_id in root_node.descendants(&self.tree) {
+            let Some(metadata) = self.metadatas.get(&node_id) else {
+                continue;
+            };
+            let ids = metadata
+                .fragment
+                .ops()
+                .iter()
+                .filter_map(|op| match &op.command {
+                    crate::render::Command::PlatformView(id) => Some(*id),
+                    _ => None,
+                });
+            for id in ids {
+                let mut order: Vec<_> = node_id
+                    .ancestors(&self.tree)
+                    .map(|ancestor| sibling_index(ancestor, &self.tree))
+                    .collect();
+                order.reverse();
+                views.push((id, order));
+            }
+        }
+        views
     }
 }
 
@@ -5872,6 +5904,46 @@ mod tests {
             activations,
             [vec![root, popup, action], vec![root, trigger]]
         );
+    }
+
+    #[test]
+    fn native_focus_slot_joins_tab_order_only_when_the_host_reports_it_focusable() {
+        use crate::focus::{FocusNode, FocusRegistration};
+
+        let session = crate::RuntimeSession::new();
+        let _session = session.enter();
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let platform_id = crate::PlatformViewId::new();
+        let [before, native, after] = std::array::from_fn(|index| {
+            let mut item = node("target", index as u64 + 2, index as u64 + 2);
+            let mut target = FocusRegistration::target(FocusNode::new());
+            target.platform_view = (index == 1).then_some(platform_id);
+            item.interaction_mut().focus_registration = Some(target);
+            let id = tree.add_node(item);
+            tree.pop_node();
+            id
+        });
+        tree.pop_node();
+        let owner = &mut tree.focus_owner;
+        owner.sync_from_component_tree(root, &tree.tree);
+        assert!(owner.move_focus(FocusDirection::Next));
+        assert_eq!(owner.active_component_node_id(), Some(before));
+        assert!(owner.move_focus(FocusDirection::Next));
+        assert_eq!(owner.active_component_node_id(), Some(after));
+
+        let id = platform_id.as_raw();
+        owner.sync_native_focus(&[id], 0, 0);
+        assert!(owner.move_focus(FocusDirection::Previous));
+        assert_eq!(owner.native_focus_target(), Some((id, true)));
+        assert!(owner.move_focus(FocusDirection::Previous));
+        owner.sync_native_focus(&[id], 0, id);
+        assert_eq!(owner.active_component_node_id(), Some(before));
+
+        owner.sync_native_focus(&[id], id, 0);
+        assert_eq!(owner.active_component_node_id(), Some(native));
+        owner.sync_native_focus(&[], 0, id);
+        assert_eq!(owner.active_component_node_id(), None);
     }
 
     #[test]

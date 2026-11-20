@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application android:hasCode="true" android:supportsRtl="true" android:icon="@mipmap/tessera_icon"
         android:label="@string/tessera_app_name" android:theme="@style/AppTheme">
-        <activity android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" android:exported="true"
+        <activity android:configChanges="density|orientation|screenSize|screenLayout|keyboardHidden" android:exported="true"
             android:enableOnBackInvokedCallback="true"
             android:label="@string/tessera_app_name" android:name="com.tessera.TesseraGameActivity"
             android:windowLayoutInDisplayCutoutMode="shortEdges">
