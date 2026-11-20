@@ -1,3 +1,4 @@
+use tessera_components::experiment::hig::button::button;
 use tessera_ui::{
     MOUSE_POINTER_ID,
     accesskit::{Action, Node, Role, Toggled},
@@ -41,7 +42,7 @@ fn article_fixture(index: usize) {
 }
 
 #[test]
-fn directory_cards_follow_the_material_breakpoints_after_resize() {
+fn directory_cards_follow_the_breakpoints_and_margins_after_resize() {
     let mut ui = UiTest::new().viewport(900, 800).content(directory_fixture);
     setup(&ui);
     for (width, columns) in [(900, 2), (600, 1), (601, 2), (1294, 2), (1295, 3), (320, 1)] {
@@ -51,7 +52,8 @@ fn directory_cards_follow_the_material_breakpoints_after_resize() {
             .map(|index| ui.node(&format!("hig-component-card-{index}")).bounds())
             .collect::<Vec<_>>();
         for (index, card) in cards.iter().enumerate() {
-            assert!(card.x.0 >= 8 && card.x.0 + card.width.0 <= width as i32 - 8);
+            let margin = MARGIN as i32;
+            assert!(card.x.0 >= margin && card.x.0 + card.width.0 <= width as i32 - margin);
             if index > 0 {
                 if index % columns == 0 {
                     assert!(card.y.0 > cards[index - 1].y.0);
@@ -60,7 +62,7 @@ fn directory_cards_follow_the_material_breakpoints_after_resize() {
                     assert_eq!(card.y, cards[index - 1].y);
                     assert_eq!(
                         card.x.0,
-                        cards[index - 1].x.0 + cards[index - 1].width.0 + 8
+                        cards[index - 1].x.0 + cards[index - 1].width.0 + GAP as i32
                     );
                 }
             }
@@ -130,7 +132,7 @@ fn viewport_clamps_wheel_overshoot_and_reveals_keyboard_focus() {
 }
 
 #[test]
-fn article_previews_update_values_and_publish_disabled_states() {
+fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
     for index in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] {
         let mut ui = UiTest::new().viewport(600, 1200).content(move || {
             article_fixture(index);
@@ -242,28 +244,18 @@ fn article_previews_update_values_and_publish_disabled_states() {
             }
             _ => unreachable!(),
         }
-        activate(&mut ui, "States", Role::RadioButton);
-        if matches!(index, 0..=8 | 10) {
-            let snapshot = ui.inspect_accessibility().unwrap();
-            let disabled = snapshot
-                .nodes()
-                .iter()
-                .find(|(_, node)| {
-                    node.role() == Role::Group && crate::has_label(node, "Disabled example")
-                })
-                .unwrap()
-                .0;
+        if COMPONENTS[index].sections[1..]
+            .iter()
+            .any(|section| section.rows.contains(&"ui-hig-disabled"))
+        {
             assert!(
-                snapshot
-                    .subtree(disabled)
+                ui.inspect_accessibility()
+                    .unwrap()
+                    .nodes()
+                    .iter()
                     .any(|(_, node)| node.is_disabled())
             );
         }
-        activate(&mut ui, "Dark theme", Role::CheckBox);
-        assert_eq!(
-            control(&ui, "Dark theme", Role::CheckBox).1.toggled(),
-            Some(Toggled::True)
-        );
     }
 }
 

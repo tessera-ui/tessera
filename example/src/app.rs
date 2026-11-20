@@ -2,6 +2,10 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
+    experiment::hig::{
+        theme::{Appearance, HigTheme, hig_theme},
+        toolbar::{ToolbarSymbol, toolbar, toolbar_button},
+    },
     md3::{
         app_bar::top_app_bar,
         button::button,
@@ -78,6 +82,13 @@ pub(crate) fn app(
             scaffold()
                 .window_insets(WindowInsets::SafeDrawing)
                 .top_bar(move || {
+                    if nav_controller.with(|router| {
+                        router.current_is::<HigComponentsPageDestination>()
+                            || current_hig_article(router).is_some()
+                    }) {
+                        hig_top_bar(nav_controller, side_sheet_controller);
+                        return;
+                    }
                     let app_bar = top_app_bar()
                         .window_chrome(true)
                         .title(I18N.text(
@@ -86,11 +97,6 @@ pub(crate) fn app(
                                     || current_article(router).is_some()
                             }) {
                                 "Material Design 3"
-                            } else if nav_controller.with(|router| {
-                                router.current_is::<HigComponentsPageDestination>()
-                                    || current_hig_article(router).is_some()
-                            }) {
-                                "ui-hig-components"
                             } else {
                                 "ui-examples"
                             },
@@ -221,6 +227,84 @@ pub(crate) fn app(
     });
 }
 
+/// The macOS window toolbar shown above the HIG pages.
+#[tessera]
+fn hig_top_bar(router: State<RouterController>, drawer: State<SideSheetController>) {
+    let dark = use_context::<MaterialTheme>()
+        .unwrap()
+        .get()
+        .color_scheme
+        .is_dark;
+    hig_theme()
+        .theme(HigTheme {
+            appearance: if dark {
+                Appearance::Dark
+            } else {
+                Appearance::Light
+            },
+        })
+        .child(move || {
+            let bar = toolbar()
+                .window_chrome(true)
+                .title(I18N.text("ui-hig-components"))
+                .navigation(move || {
+                    let article = router.with(|router| current_hig_article(router).is_some());
+                    toolbar_button()
+                        .symbol(if article {
+                            ToolbarSymbol::Back
+                        } else {
+                            ToolbarSymbol::Sidebar
+                        })
+                        .accessibility_label(I18N.text(if article {
+                            "ui-back-to-components"
+                        } else {
+                            "ui-open-navigation-drawer"
+                        }))
+                        .on_click(move || {
+                            if router.with(|router| current_hig_article(router).is_some()) {
+                                router.with_mut(RouterController::pop);
+                            } else {
+                                drawer.with_mut(|drawer| {
+                                    if drawer.is_open() {
+                                        drawer.close();
+                                    } else {
+                                        drawer.open();
+                                    }
+                                });
+                            }
+                        });
+                });
+            if let Some(locale) = I18n::try_current() {
+                bar.actions(move || {
+                    let chinese = locale.locale() == langid!("zh-CN");
+                    toolbar_button()
+                        .label(if chinese { "English" } else { "简体中文" })
+                        .accessibility_label(
+                            I18N.format(
+                                "ui-switch-language",
+                                [(
+                                    "language",
+                                    I18N.text(if chinese {
+                                        "ui-english"
+                                    } else {
+                                        "ui-language-chinese"
+                                    })
+                                    .into(),
+                                )],
+                            ),
+                        )
+                        .on_click(move || {
+                            locale.set_locale(if chinese {
+                                langid!("en")
+                            } else {
+                                langid!("zh-CN")
+                            });
+                        });
+                });
+            }
+        });
+}
+
 #[tessera]
 fn drawer_header() {
     let theme = use_context::<MaterialTheme>().unwrap().get();
@@ -284,8 +368,7 @@ pub(crate) fn navigation_button(
     router: State<RouterController>,
     drawer: State<SideSheetController>,
 ) {
-    let back = router
-        .with(|router| current_article(router).is_some() || current_hig_article(router).is_some());
+    let back = router.with(|router| current_article(router).is_some());
     let target = if back { 1.0 } else { 0.0 };
     let fade = remember(|| target);
     launch(back, async move {
@@ -331,9 +414,7 @@ pub(crate) fn navigation_button(
                     "ui-open-navigation-drawer"
                 }))
                 .on_click(move || {
-                    if router.with(|router| {
-                        current_article(router).is_some() || current_hig_article(router).is_some()
-                    }) {
+                    if router.with(|router| current_article(router).is_some()) {
                         router.with_mut(RouterController::pop);
                     } else {
                         drawer.with_mut(|drawer| {
