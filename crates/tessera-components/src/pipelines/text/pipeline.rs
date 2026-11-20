@@ -579,6 +579,13 @@ impl TextData {
 
     /// Builds [`TextData`] directly from a pre-shaped glyphon buffer.
     pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
+        Self::from_editor_buffer(text_buffer, None)
+    }
+
+    pub(crate) fn from_editor_buffer(
+        text_buffer: glyphon::Buffer,
+        native_ink: Option<Color>,
+    ) -> Self {
         let styled_identity = text_buffer
             .lines
             .iter()
@@ -596,13 +603,15 @@ impl TextData {
             .flat_map(|line| line.glyphs.iter().map(|glyph| glyph.color_opt))
             .collect();
         let metrics = text_buffer.metrics();
+        let native_grid = native_ink.map(|_| Dp(1.0).to_pixels_f32());
+        let ink = native_ink.unwrap_or(Color::WHITE);
         Self {
-            layout: Arc::new(ShapedText::new(text_buffer, 0, None)),
-            base_color: Color::WHITE,
-            current_color: Color::WHITE,
+            layout: Arc::new(ShapedText::new(text_buffer, 0, native_grid)),
+            base_color: ink,
+            current_color: ink,
             text: Arc::from(""),
             format: TextFormat {
-                native_grid: None,
+                native_grid,
                 font_size: metrics.font_size,
                 line_height: metrics.line_height,
                 font: TextFont {

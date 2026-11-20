@@ -12,8 +12,7 @@ use tessera_ui::{
 
 use crate::pipelines::text::{
     command::{TextCommand, TextConstraint},
-    pipeline::perceptual::PerceptualTextCommand,
-    pipeline::{TextData, TextFormat, TextMeasureInfo},
+    pipeline::{TextData, TextFormat, TextMeasureInfo, perceptual::PerceptualTextCommand},
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -256,7 +255,10 @@ impl tessera_ui::DrawModifierNode for TextDraw {
             input
                 .metadata_mut()
                 .fragment_mut()
-                .push_draw_command(PerceptualTextCommand { data: text_data });
+                .push_draw_command(PerceptualTextCommand {
+                    data: text_data,
+                    tint: None,
+                });
         } else {
             input
                 .metadata_mut()

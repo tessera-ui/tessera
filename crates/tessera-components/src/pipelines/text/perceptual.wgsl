@@ -3,12 +3,14 @@ struct Uniforms {
     viewport_scene: vec4<f32>,
     color: vec4<f32>,
     bounds: vec4<f32>,
+    tint: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var coverage: texture_2d<f32>;
 @group(0) @binding(2) var backdrop: texture_2d<f32>;
 @group(0) @binding(3) var intrinsic_color: texture_2d<f32>;
+@group(0) @binding(4) var<storage, read> tint_bounds: array<vec4<f32>>;
 
 fn encode(value: vec3<f32>) -> vec3<f32> {
     return select(1.055 * pow(max(value, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, value * 12.92, value <= vec3(0.0031308));
@@ -36,7 +38,15 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let background = textureLoad(backdrop, scene_pixel, 0);
     let alpha = (mask + intrinsic.a) * uniforms.color.a;
     if alpha == 0.0 { discard; }
-    let foreground = (encode(uniforms.color.rgb) * mask + intrinsic.rgb) * uniforms.color.a;
+    var ink = uniforms.color.rgb;
+    for (var index = 0u; index < arrayLength(&tint_bounds); index++) {
+        let bounds = tint_bounds[index];
+        if all(position.xy >= bounds.xy) && all(position.xy < bounds.zw) {
+            ink = uniforms.tint.rgb;
+            break;
+        }
+    }
+    let foreground = (encode(ink) * mask + intrinsic.rgb) * uniforms.color.a;
     let background_color = encode(background.rgb / max(background.a, 0.000001));
     let output_alpha = background.a + alpha * (1.0 - background.a);
     let color = (foreground + background_color * background.a * (1.0 - alpha)) / output_alpha;

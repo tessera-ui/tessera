@@ -5,7 +5,8 @@ use std::{
 
 use lru::LruCache;
 use tessera_ui::{
-    Px, PxPosition, PxSize,
+    Color, Px, PxPosition, PxSize,
+    px::PxRect,
     render::{
         DrawCommand, DrawContext, DrawRegion, DrawablePipeline, FrameContext, PaddingRect,
         SampleRegion,
@@ -121,6 +122,7 @@ impl InkPixels {
 #[derive(Clone, PartialEq)]
 pub(crate) struct PerceptualTextCommand {
     pub data: TextData,
+    pub tint: Option<(Color, Vec<PxRect>)>,
 }
 
 impl DrawCommand for PerceptualTextCommand {
@@ -214,6 +216,16 @@ impl PerceptualTextPipeline {
                         sample_type: wgpu::TextureSampleType::Float { filterable: false },
                         view_dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
                     count: None,
                 },
@@ -330,11 +342,11 @@ impl PerceptualTextPipeline {
         }
         let mut pixels = InkPixels::new(area as usize);
         let mut fonts = shaping_fonts();
+        let x = fraction[0] - data.layout.buffer.scroll().horizontal * scale;
         for run in data.layout.buffer.layout_runs() {
             let baseline = line_baseline(&run, data.layout.native_grid);
             for glyph in run.glyphs {
-                let mut physical =
-                    glyph.physical((fraction[0], baseline * scale + fraction[1]), scale);
+                let mut physical = glyph.physical((x, baseline * scale + fraction[1]), scale);
                 if key.light_ink {
                     physical.cache_key.flags |=
                         glyphon::cosmic_text::CacheKeyFlags::NATIVE_LIGHT_INK;
@@ -478,6 +490,33 @@ impl DrawablePipeline<PerceptualTextCommand> for PerceptualTextPipeline {
                 continue;
             };
             let mask = self.masks.get(&key).expect("prepared coverage");
+            let (tint_color, tint_rects) = command
+                .tint
+                .as_ref()
+                .map_or((Color::TRANSPARENT, &[][..]), |(color, rects)| {
+                    (*color, rects.as_slice())
+                });
+            let tint_bounds: Vec<_> = tint_rects
+                .iter()
+                .map(|r| {
+                    let min = geometry
+                        .local_to_window
+                        .map_point(PxPosition::new(r.x, r.y));
+                    let max = geometry
+                        .local_to_window
+                        .map_point(PxPosition::new(r.x + r.width, r.y + r.height));
+                    [min.x, min.y, max.x, max.y]
+                })
+                .collect();
+            let tint_bounds = if tint_bounds.is_empty() {
+                &[[0.0; 4]][..]
+            } else {
+                &tint_bounds
+            };
+            let tint_buffer = context.graphics.frame_buffer(
+                wgpu::BufferUsages::STORAGE,
+                bytemuck::cast_slice(tint_bounds),
+            );
             let uniform = [
                 [
                     origin.x.floor(),
@@ -498,6 +537,7 @@ impl DrawablePipeline<PerceptualTextCommand> for PerceptualTextPipeline {
                     geometry.window_size()[0],
                     geometry.window_size()[1],
                 ],
+                tint_color.to_array(),
             ];
             let buffer = context
                 .graphics
@@ -529,6 +569,10 @@ impl DrawablePipeline<PerceptualTextCommand> for PerceptualTextPipeline {
                                     .as_ref()
                                     .map_or(&self.transparent, |(_, view)| view),
                             ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: tint_buffer.binding(),
                         },
                     ],
                 });

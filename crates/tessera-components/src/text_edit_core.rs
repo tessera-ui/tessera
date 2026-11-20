@@ -18,10 +18,14 @@ use tessera_ui::{
 use winit::keyboard::NamedKey;
 
 use crate::pipelines::{
+    perceptual_fill::PerceptualFillCommand,
     shape::command::ShapeCommand,
     text::{
         command::{TextCommand, TextConstraint},
-        pipeline::{TextData, TextFormat, color_to_glyphon, shaping_fonts},
+        pipeline::{
+            TextData, TextFormat, color_to_glyphon, perceptual::PerceptualTextCommand,
+            shaping_fonts,
+        },
     },
 };
 
@@ -512,6 +516,7 @@ struct TextEditState {
     text_color: Color,
     cursor_color: Color,
     style: TextStyle,
+    native_raster: bool,
     single_line: bool,
     pending_preview: Option<PendingPreview>,
 }
@@ -854,7 +859,7 @@ impl TextEditState {
             let alignment = buffer.lines.first().and_then(|line| line.align());
             buffer.set_text(
                 text,
-                &editor_font_attrs(self.style).color(color),
+                &editor_font_attrs(self.style, self.native_raster).color(color),
                 glyphon::Shaping::Advanced,
                 alignment,
             );
@@ -1977,9 +1982,9 @@ impl TextEditorController {
             constraint,
             self.wrap_mode(),
             glyphon::cosmic_text::Scroll::default(),
-            Some(self.edit_state.style),
+            editor_font_attrs(self.edit_state.style, self.edit_state.native_raster),
         );
-        let text_data = TextData::from_buffer(buffer);
+        let text_data = self.text_data_from_buffer(buffer);
         let size = measured_editor_size(&text_data, constraint, self.single_line());
         self.intrinsic_size_cache = Some((
             TextLayoutCacheKey::new(self.text_layout_version(), constraint),
@@ -2045,6 +2050,7 @@ impl TextEditorController {
                     line_height: Some(final_line_height),
                     ..Default::default()
                 },
+                native_raster: false,
                 single_line: false,
                 pending_preview: None,
             },
@@ -2121,7 +2127,7 @@ impl TextEditorController {
                 &constraint,
                 self.wrap_mode(),
                 scroll,
-                Some(self.edit_state.style),
+                editor_font_attrs(self.edit_state.style, self.edit_state.native_raster),
             );
             (Some(text_buffer), Some(transformed))
         } else {
@@ -2129,10 +2135,10 @@ impl TextEditorController {
         };
 
         let text_data = if let Some(buffer) = display_buffer.as_ref() {
-            TextData::from_buffer(buffer.clone())
+            self.text_data_from_buffer(buffer.clone())
         } else {
             self.edit_state
-                .with_buffer(|buffer| TextData::from_buffer(buffer.clone()))
+                .with_buffer(|buffer| self.text_data_from_buffer(buffer.clone()))
         };
         self.layout_state.set_text_snapshot_for_constraint(
             &constraint,
@@ -2220,10 +2226,27 @@ impl TextEditorController {
 
     /// Sets typography while preserving text and selection.
     pub fn set_text_style(&mut self, style: TextStyle) {
-        if self.edit_state.style == style {
+        self.set_text_raster_style(style, self.edit_state.native_raster);
+    }
+
+    pub(crate) fn native_ink(&self) -> Option<Color> {
+        self.edit_state.native_raster.then_some(self.text_color())
+    }
+
+    fn text_data_from_buffer(&self, buffer: glyphon::Buffer) -> TextData {
+        if let Some(ink) = self.native_ink() {
+            TextData::from_editor_buffer(buffer, Some(ink))
+        } else {
+            TextData::from_buffer(buffer)
+        }
+    }
+
+    pub(crate) fn set_text_raster_style(&mut self, style: TextStyle, native_raster: bool) {
+        if self.edit_state.style == style && self.edit_state.native_raster == native_raster {
             return;
         }
         self.edit_state.style = style;
+        self.edit_state.native_raster = native_raster;
         self.line_height = style
             .line_height
             .unwrap_or(Dp(style.font_size.0 * 1.2))
@@ -3340,8 +3363,8 @@ fn glyphon_color(color: Color) -> glyphon::Color {
     color_to_glyphon(color)
 }
 
-fn editor_font_attrs(style: TextStyle) -> glyphon::Attrs<'static> {
-    glyphon::Attrs::new()
+fn editor_font_attrs(style: TextStyle, native_raster: bool) -> glyphon::Attrs<'static> {
+    let mut attrs = glyphon::Attrs::new()
         .family(style.font_family.map_or(
             glyphon::fontdb::Family::SansSerif,
             glyphon::fontdb::Family::Name,
@@ -3351,7 +3374,15 @@ fn editor_font_attrs(style: TextStyle) -> glyphon::Attrs<'static> {
             (style.letter_spacing.0 / style.font_size.0) as f32
         } else {
             0.0
-        })
+        });
+    if native_raster {
+        let points = style.font_size.0 as f32;
+        attrs.optical_size = Some(cosmic_text::FontSize::new(points.max(17.0)));
+        attrs.point_size = Some(cosmic_text::FontSize::new(points));
+        attrs.cache_key_flags =
+            cosmic_text::CacheKeyFlags::DISABLE_HINTING | cosmic_text::CacheKeyFlags::NATIVE_RASTER;
+    }
+    attrs
 }
 
 fn build_display_buffer(
@@ -3362,7 +3393,7 @@ fn build_display_buffer(
     constraint: &TextConstraint,
     wrap: glyphon::Wrap,
     scroll: glyphon::cosmic_text::Scroll,
-    style: Option<TextStyle>,
+    attrs: glyphon::Attrs<'_>,
 ) -> glyphon::Buffer {
     let mut buffer = glyphon::Buffer::new(
         &mut shaping_fonts(),
@@ -3372,7 +3403,7 @@ fn build_display_buffer(
     buffer.set_size(constraint.max_width, constraint.max_height);
     buffer.set_text(
         text,
-        &editor_font_attrs(style.unwrap_or_default()).color(glyphon_color(color)),
+        &attrs.color(glyphon_color(color)),
         glyphon::Shaping::Advanced,
         None,
     );
@@ -3549,6 +3580,8 @@ impl tessera_ui::LayoutPolicy for TextEditLayout {
 struct TextEditDraw {
     controller: State<TextEditorController>,
     presentation_focused: bool,
+    window_active: bool,
+    selected_text_color: Option<Color>,
     blink: State<(u64, bool)>,
 }
 
@@ -3560,9 +3593,8 @@ impl tessera_ui::DrawModifierNode for TextEditDraw {
     ) {
         let input = &mut *ctx.render_input;
         let mut metadata = input.metadata_mut();
-        metadata.set_clips_children(true);
         let focus = self.controller.with(|c| c.focus_handler().clone());
-        let focused = focus.is_focused();
+        let focused = self.window_active && focus.is_focused();
         let (
             selection_rects,
             composition_rects,
@@ -3572,6 +3604,8 @@ impl tessera_ui::DrawModifierNode for TextEditDraw {
             cursor_color,
             cursor_visible,
             text_data,
+            native_raster,
+            empty_native_editor,
         ) = self.controller.with(|c| {
             let (blink_epoch, visible) = self.blink.get();
             let cursor_visible = if focused {
@@ -3588,19 +3622,75 @@ impl tessera_ui::DrawModifierNode for TextEditDraw {
                 c.cursor_color(),
                 cursor_visible,
                 c.current_text_data(),
+                c.edit_state.native_raster,
+                c.edit_state.native_raster
+                    && c.edit_state.editor.with_buffer(|buffer| {
+                        buffer.lines.iter().all(|line| line.text().is_empty())
+                    }),
             )
         });
+        // Only the empty editor's insertion point may extend into the field inset.
+        metadata.set_clips_children(!empty_native_editor);
         let fragment = metadata.fragment_mut();
         push_highlight_rects(fragment, &selection_rects, selection_color);
         push_highlight_rects(fragment, &composition_rects, composition_color);
-        if cursor_visible && let Some(cursor_rect) = cursor_rect {
-            push_rect(fragment, &cursor_rect, cursor_color);
+        if cursor_visible
+            && (!native_raster || selection_rects.is_empty())
+            && let Some(mut cursor_rect) = cursor_rect
+        {
+            if empty_native_editor {
+                cursor_rect.x -= Dp(1.0).to_px();
+            }
+            if native_raster && !empty_native_editor {
+                let index = fragment.push_draw_command(PerceptualFillCommand {
+                    color: cursor_color,
+                    radii: [Dp(0.8); 2],
+                    insets: [Dp::ZERO; 4],
+                    clip_radius: None,
+                    edge_smoothness: 1.0,
+                    stroke: None,
+                    path: None,
+                    line: None,
+                    outline_width: Dp::ZERO,
+                    snap_to_pixels: false,
+                });
+                let op = &mut fragment.ops_mut()[index as usize];
+                op.position_override = Some(PxPosition::new(cursor_rect.x, cursor_rect.y));
+                op.size_override = Some(tessera_ui::PxSize::new(
+                    cursor_rect.width,
+                    cursor_rect.height,
+                ));
+            } else {
+                push_rect(fragment, &cursor_rect, cursor_color);
+            }
         }
         if let Some(text_data) = text_data {
-            fragment.push_draw_command(TextCommand {
-                data: text_data,
-                offset: PxPosition::ZERO,
-            });
+            if native_raster {
+                let tint = self
+                    .selected_text_color
+                    .filter(|_| !selection_rects.is_empty())
+                    .map(|color| {
+                        let rects = selection_rects
+                            .into_iter()
+                            .map(|r| tessera_ui::px::PxRect {
+                                x: r.x,
+                                y: r.y,
+                                width: r.width,
+                                height: r.height,
+                            })
+                            .collect();
+                        (color, rects)
+                    });
+                fragment.push_draw_command(PerceptualTextCommand {
+                    data: text_data,
+                    tint,
+                });
+            } else {
+                fragment.push_draw_command(TextCommand {
+                    data: text_data,
+                    offset: PxPosition::ZERO,
+                });
+            }
         }
         content.draw(input);
     }
@@ -3619,11 +3709,15 @@ impl tessera_ui::DrawModifierNode for TextEditDraw {
 /// - `controller` — shared text, selection, and keyboard focus state.
 /// - `presentation_focused` — show a static caret without requesting focus;
 ///   actual keyboard focus continues to use its normal blinking caret.
+/// - `window_active` — whether to show the focused caret in the active window.
+/// - `selected_text_color` — optional foreground for selected native-raster text.
 
 #[tessera]
 pub fn text_edit_core(
     controller: Option<State<TextEditorController>>,
     presentation_focused: Option<bool>,
+    window_active: Option<bool>,
+    selected_text_color: Option<Color>,
 ) {
     let controller = controller.expect("text_edit_core requires a controller");
     let layout_version = controller.with(|c| c.layout_version());
@@ -3636,6 +3730,8 @@ pub fn text_edit_core(
     let draw = TextEditDraw {
         controller,
         presentation_focused: presentation_focused.unwrap_or(false),
+        window_active: window_active.unwrap_or(true),
+        selected_text_color,
         blink,
     };
     tessera_ui::layout::layout(policy)
@@ -4070,7 +4166,7 @@ mod tests {
             &constraint,
             controller.wrap_mode(),
             scroll,
-            Some(controller.text_style()),
+            super::editor_font_attrs(controller.text_style(), false),
         );
         controller.set_layout_snapshot_buffer(buffer, Some(transformed.clone()));
         transformed
@@ -5028,7 +5124,7 @@ mod tests {
             &constraint,
             controller.wrap_mode(),
             scroll,
-            Some(controller.text_style()),
+            super::editor_font_attrs(controller.text_style(), false),
         );
         controller.set_layout_snapshot_buffer(buffer.clone(), Some(transformed.clone()));
 
@@ -5123,7 +5219,7 @@ mod tests {
             &constraint,
             controller.wrap_mode(),
             scroll,
-            Some(controller.text_style()),
+            super::editor_font_attrs(controller.text_style(), false),
         );
         controller.set_layout_snapshot_buffer(buffer, Some(transformed));
         controller.set_text_and_selection("123456\nabcdef", TextSelection::collapsed(4));
@@ -5298,7 +5394,7 @@ mod tests {
             &constraint,
             glyphon::Wrap::None,
             glyphon::cosmic_text::Scroll::default(),
-            None,
+            super::editor_font_attrs(Default::default(), false),
         );
         let expected_start = text_offset_to_cursor_in_buffer(&buffer, transformed.map_from_raw(3));
         let expected_x = build_display_editor(buffer.clone(), expected_start, None)

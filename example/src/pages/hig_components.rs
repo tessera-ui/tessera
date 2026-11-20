@@ -18,6 +18,7 @@ use tessera_components::{
         stepper::stepper,
         switch::switch,
         text::text,
+        text_field::text_field,
         theme::{Appearance, HigTheme, TextStyle, hig_theme},
     },
     flow_row::flow_row,
@@ -68,6 +69,7 @@ const COMPONENTS: &[(&str, &str)] = &[
     ("ui-hig-group-boxes", "ui-hig-group-description"),
     ("ui-hig-glass", "ui-hig-glass-description"),
     ("ui-hig-text", "ui-hig-text-description"),
+    ("ui-hig-text-fields", "ui-hig-text-field-description"),
 ];
 
 struct DirectoryModel {
@@ -146,7 +148,7 @@ fn hig_catalog(scroll: State<ScrollState>, width: State<Dp>, on_open: CallbackWi
                         ("ui-hig-actions", 0, 3),
                         ("ui-hig-selection", 3, 7),
                         ("ui-hig-values", 7, 11),
-                        ("ui-hig-content", 11, 15),
+                        ("ui-hig-content", 11, COMPONENTS.len()),
                     ] {
                         gap(Dp(72.0));
                         boxed()
@@ -269,7 +271,7 @@ fn hig_article(index: usize, on_open: CallbackWith<usize>) {
                             });
                         gap(Dp(32.0));
                         preview(index, false);
-                        if tab.get() == 1 && matches!(index, 0..=8 | 10) {
+                        if tab.get() == 1 && matches!(index, 0..=8 | 10 | 15) {
                             gap(Dp(24.0));
                             heading(I18N.text("ui-hig-disabled"), Dp(24.0));
                             preview(index, true);
@@ -527,6 +529,12 @@ fn preview(index: usize, disabled: bool) {
                     14 => {
                         text(I18N.text("ui-hig-text")).size(Dp(24.0));
                         text(I18N.text("ui-hig-details"));
+                    }
+                    15 => {
+                        text_field()
+                            .enabled(!disabled)
+                            .placeholder(I18N.text("ui-hig-search"))
+                            .accessibility_label(I18N.text("ui-hig-search"));
                     }
                     _ => unreachable!(),
                 });
