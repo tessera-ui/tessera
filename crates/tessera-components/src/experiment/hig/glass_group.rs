@@ -18,6 +18,10 @@ use crate::{
     pipelines::liquid_glass::{LiquidGlassCommand, LiquidGlassElement},
 };
 
+#[cfg(test)]
+#[path = "glass_group_tests.rs"]
+mod tests;
+
 /// # glass_group
 ///
 /// Lays out its children in a row and renders one liquid glass shape behind each child, fusing

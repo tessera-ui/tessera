@@ -167,6 +167,14 @@ fn group_field(p: vec2<f32>, padding: f32) -> vec4<f32> {
     return field;
 }
 
+// Screen-space width of a field value. A pixel quad straddling the edge of an element's padded
+// quad sees the far sentinel of `group_field` beside a real distance, so the width is bounded to
+// a few pixels to keep that edge from blending glass into the backdrop.
+fn field_width(v: f32) -> f32 {
+    let w = fwidthFine(v);
+    return select(1e-4, clamp(w, 1e-4, 4.0 / params.origin_scale.z), w == w);
+}
+
 fn gauss_tail(x: f32) -> f32 {
     let y = saturate_nan(x * 0.70710677 * 0.25 + 0.5) * 4.0 - 2.0;
     let y2 = y * y;
@@ -253,7 +261,7 @@ fn glass_colour(px: vec2<f32>, p: vec2<f32>, uv0: vec2<f32>) -> vec4<f32> {
     let d = field.x;
     let grad = field.yz;
     let alpha = field.w;
-    let aa = max(fwidthFine(d), 1e-4);
+    let aa = field_width(d);
     let coverage = clamp(0.5 - d / aa, 0.0, 1.0) * alpha;
     let shadow_field = group_field(p - params.shadow.xy, params.field.y);
     let ring_field = group_field(p - params.ring.xy, params.field.y);
@@ -368,7 +376,7 @@ fn diffuse_highlight(p: vec2<f32>, dst: vec4<f32>) -> vec4<f32> {
     let inv_len = 1.0 / length(field.yz);
     let n = field.yz * inv_len;
     let depth = (-field.x - params.diffuse.w) * inv_len;
-    let fw = max(fwidthFine(depth), 1e-4);
+    let fw = field_width(depth);
     let k = dot(n, params.diffuse.xy);
     let inner = saturate_nan(depth / fw + 0.5);
     var bands = vec4(0.0);
@@ -481,7 +489,7 @@ fn fs_lens_displace(in: VertexOutput) -> @location(0) vec4<f32> {
     let p = (pixel.px - params.origin_scale.xy) / params.origin_scale.z;
     let field = group_field(p, params.field.y);
     let depth = -field.x;
-    let fw = max(fwidthFine(depth), 1e-4);
+    let fw = field_width(depth);
     let base = textureLoad(scene_texture, pixel.texel, 0);
     var mask = clamp(depth / fw + 0.5, 0.0, 1.0) * field.w;
     if depth < -5.0 {
@@ -536,7 +544,7 @@ fn aberrate(uv: vec2<f32>, offset: vec2<f32>) -> vec4<f32> {
 fn lens_foreground(px: vec2<f32>, p: vec2<f32>) -> vec4<f32> {
     let field = group_field(p, params.field.y);
     let d = field.x;
-    let aa = max(fwidthFine(d), 1e-4);
+    let aa = field_width(d);
     if field.w < 0.001 {
         return vec4(0.0);
     }
