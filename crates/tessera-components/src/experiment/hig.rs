@@ -20,3 +20,4 @@ pub mod switch;
 pub mod text;
 pub mod text_field;
 pub mod theme;
+pub mod toolbar;
