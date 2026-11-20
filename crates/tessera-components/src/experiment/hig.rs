@@ -5,6 +5,7 @@ pub mod checkbox;
 mod choice;
 pub mod disclosure_button;
 pub mod glass;
+pub mod glass_group;
 pub mod group_box;
 pub mod help_button;
 pub mod level_indicator;

@@ -27,6 +27,7 @@ use crate::{
         blur::command::DualBlurCommand,
         contrast::ContrastCommand,
         fluid_glass::{FluidGlassCommand, FluidGlassRenderArgs},
+        liquid_glass::{LiquidGlassMaterial, ToneMatrix},
     },
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
@@ -63,6 +64,115 @@ impl GlassMaterial {
             (Self::Custom, _) => return None,
         };
         Some((Dp(radius), tone))
+    }
+
+    /// Optical inputs of the fused glass rendering, or `None` for [`GlassMaterial::Custom`].
+    pub(crate) fn liquid(self, appearance: GlassAppearance) -> Option<LiquidGlassMaterial> {
+        const HIGHLIGHT_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
+        match self {
+            Self::Regular => {
+                let dark = appearance == GlassAppearance::Dark;
+                Some(LiquidGlassMaterial {
+                    margin: 16.0,
+                    field_extent: 8.890_358,
+                    inner_refraction: [-20.0, 10.0],
+                    outer_refraction: [16.0, 16.0],
+                    refraction_distance: [-1.0, 0.0],
+                    refraction_opacity: 0.6,
+                    blur_radius: 5.0,
+                    blur_opacity: [0.0, 0.0, 0.5, 1.0],
+                    blur_distance: [-20.0, -1.0, 0.0, 0.0],
+                    blur_fill_radius: 8.0,
+                    blur_fill: if dark {
+                        [0.9, 0.0, 0.5]
+                    } else {
+                        [0.0, 0.9, 0.5]
+                    },
+                    face: if dark {
+                        ToneMatrix {
+                            white: 1.125,
+                            black: 0.125,
+                            saturation: 1.3,
+                            fill: [0.0; 4],
+                        }
+                    } else {
+                        ToneMatrix {
+                            white: 1.03,
+                            black: 0.4,
+                            saturation: 1.2,
+                            fill: [1.0, 1.0, 1.0, 0.2],
+                        }
+                    },
+                    face_max_luma: if dark { 0.6 } else { 0.94 },
+                    face_opacity: 1.0,
+                    shadow: ToneMatrix {
+                        white: 1.0,
+                        black: 0.0,
+                        saturation: 1.0,
+                        fill: [0.0, 0.0, 0.0, 0.3],
+                    },
+                    shadow_opacity: 0.04,
+                    shadow_radius: 4.0,
+                    shadow_offset: 8.0,
+                    ring: [8.0, 4.0, 5.0, 0.06, 1.0],
+                    highlight: [
+                        HIGHLIGHT_ANGLE,
+                        1.0,
+                        if dark { 1.308_997 } else { 1.850_049 },
+                        0.4,
+                        -1.0,
+                        -0.25,
+                    ],
+                    clamp: if dark { 1.308_311 } else { 1.069_61 },
+                    vibrant: [
+                        [1.1202, -0.1894, -0.019, 0.0, 0.1471],
+                        [-0.0563, 0.9871, -0.0191, 0.0, 0.1471],
+                        [-0.0563, -0.1893, 1.1574, 0.0, 0.1471],
+                        [0.0, 0.0, 0.0, 1.0, 0.0],
+                    ],
+                })
+            }
+            Self::Clear => Some(LiquidGlassMaterial {
+                margin: 1.0,
+                field_extent: 2.0,
+                inner_refraction: [-26.0, 14.4],
+                outer_refraction: [8.0, 5.0],
+                refraction_distance: [-1.0, 0.0],
+                refraction_opacity: 0.0,
+                blur_radius: 0.75,
+                blur_opacity: [1.0, 0.5, 0.5, 1.0],
+                blur_distance: [-20.0, -1.0, 0.0, 0.0],
+                blur_fill_radius: 0.0,
+                blur_fill: [0.0; 3],
+                face: ToneMatrix {
+                    white: 1.08,
+                    black: 0.125,
+                    saturation: 1.06,
+                    fill: [1.0, 1.0, 1.0, 0.0],
+                },
+                face_max_luma: 1.0,
+                face_opacity: 1.0,
+                shadow: ToneMatrix {
+                    white: 1.0,
+                    black: 0.0,
+                    saturation: 1.2,
+                    fill: [0.0, 0.0, 0.0, 0.1],
+                },
+                shadow_opacity: 0.0,
+                shadow_radius: 0.0,
+                shadow_offset: 8.0,
+                ring: [0.0; 5],
+                highlight: [HIGHLIGHT_ANGLE, 1.0, 1.308_997, 0.4, -1.0, -0.25],
+                clamp: 1.191_748,
+                vibrant: [
+                    [1.3192, -0.0478, -0.0047, 0.0, 0.2],
+                    [-0.0142, 1.2856, -0.0048, 0.0, 0.2],
+                    [-0.0142, -0.0476, 1.3285, 0.0, 0.2],
+                    [0.0, 0.0, 0.0, 1.0, 0.0],
+                ],
+            }),
+            Self::Custom => None,
+        }
     }
 }
 

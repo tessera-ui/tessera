@@ -4,9 +4,10 @@ use crate::pipelines::{
     checkmark::pipeline::CheckmarkPipeline, divider::DividerPipeline,
     fluid_glass::pipeline::FluidGlassPipeline, image::pipeline::ImagePipeline,
     image_vector::pipeline::ImageVectorPipeline, linear_wave::pipeline::LinearWavePipeline,
-    loading_shape::pipeline::LoadingShapePipeline, path_stroke::pipeline::PathStrokePipeline,
-    progress_arc::pipeline::ProgressArcPipeline, shape::pipeline::ShapePipeline,
-    simple_rect::pipeline::SimpleRectPipeline, text::pipeline::GlyphonTextRender,
+    liquid_glass::pipeline::LiquidGlassPipeline, loading_shape::pipeline::LoadingShapePipeline,
+    path_stroke::pipeline::PathStrokePipeline, progress_arc::pipeline::ProgressArcPipeline,
+    shape::pipeline::ShapePipeline, simple_rect::pipeline::SimpleRectPipeline,
+    text::pipeline::GlyphonTextRender,
 };
 
 pub(super) fn register(context: &mut PipelineContext<'_>) {
@@ -95,6 +96,15 @@ pub(super) fn register(context: &mut PipelineContext<'_>) {
 
     context.register_draw_pipeline_factory(|resources| {
         FluidGlassPipeline::new(
+            resources.device,
+            resources.pipeline_cache,
+            resources.surface_config,
+            resources.sample_count,
+        )
+    });
+
+    context.register_draw_pipeline_factory(|resources| {
+        LiquidGlassPipeline::new(
             resources.device,
             resources.pipeline_cache,
             resources.surface_config,

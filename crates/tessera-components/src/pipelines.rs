@@ -13,6 +13,7 @@ pub(crate) mod fluid_glass;
 pub(crate) mod image;
 pub(crate) mod image_vector;
 pub(crate) mod linear_wave;
+pub(crate) mod liquid_glass;
 pub(crate) mod loading_shape;
 pub(crate) mod path_stroke;
 pub(crate) mod perceptual_fill;
