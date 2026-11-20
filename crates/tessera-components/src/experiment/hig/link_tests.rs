@@ -6,8 +6,9 @@ use tessera_ui::{
     winit::{event::ElementState, keyboard::NamedKey},
 };
 
-use super::{link, link_color};
 use crate::experiment::hig::theme::Appearance;
+
+use super::{link, link_color};
 
 #[test]
 fn appearance_link_colors_match_macos_27_appkit_semantic_colors() {

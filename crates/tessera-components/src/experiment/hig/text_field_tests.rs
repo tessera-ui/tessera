@@ -88,15 +88,15 @@ fn pointer_focus_ime_commit_and_submit_update_the_owned_editor() {
     assert_eq!(submits.get(), 1);
 }
 
+#[tessera]
+fn empty_field() {
+    text_field()
+        .placeholder("Enter a name")
+        .accessibility_label("Name");
+}
+
 #[test]
 fn empty_field_keeps_placeholder_out_of_its_accessible_value() {
-    #[tessera]
-    fn empty_field() {
-        text_field()
-            .placeholder("Enter a name")
-            .accessibility_label("Name");
-    }
-
     let mut ui = UiTest::new().content(empty_field);
     ui.frame();
     let (_, node) = ui.accessibility_node("Name");
@@ -105,22 +105,22 @@ fn empty_field_keeps_placeholder_out_of_its_accessible_value() {
     assert!(node.supports_action(Action::Focus));
 }
 
+#[tessera]
+fn read_only_field(probe: TestProbe<Option<State<TextFieldController>>>) {
+    let controller = remember(|| {
+        let mut controller = TextFieldController::new(Dp(13.0), Some(Dp(16.0)));
+        controller.set_text("Managed value");
+        controller
+    });
+    probe.set(Some(controller));
+    text_field()
+        .controller(controller)
+        .read_only(true)
+        .accessibility_label("Managed value");
+}
+
 #[test]
 fn read_only_field_keeps_its_value_when_focused_and_given_text_input() {
-    #[tessera]
-    fn read_only_field(probe: TestProbe<Option<State<TextFieldController>>>) {
-        let controller = remember(|| {
-            let mut controller = TextFieldController::new(Dp(13.0), Some(Dp(16.0)));
-            controller.set_text("Managed value");
-            controller
-        });
-        probe.set(Some(controller));
-        text_field()
-            .controller(controller)
-            .read_only(true)
-            .accessibility_label("Managed value");
-    }
-
     let probe = TestProbe::default();
     let mut ui = UiTest::new().content(|| read_only_field(probe.clone()));
     ui.frame();
