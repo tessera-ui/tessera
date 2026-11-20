@@ -29,8 +29,8 @@ use crate::{
 };
 
 use super::{
+    divider::divider,
     glass::{GlassAppearance, GlassMaterial, glass},
-    separator::separator,
     text::text,
     theme::{Appearance, HigTheme, TextStyle},
 };
@@ -194,7 +194,7 @@ pub fn toolbar(
                     }
                     spacer().modifier(Modifier::new().width(ITEM_SPACING));
                 });
-            separator();
+            divider();
         });
 }
 

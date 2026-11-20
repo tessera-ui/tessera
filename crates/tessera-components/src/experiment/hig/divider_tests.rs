@@ -13,12 +13,12 @@ use super::{
         button::button,
         theme::{Appearance, HigTheme, hig_theme},
     },
-    SeparatorOrientation, separator,
+    DividerOrientation, divider,
 };
 
 #[derive(Clone, Copy)]
 struct Controls {
-    orientation: State<SeparatorOrientation>,
+    orientation: State<DividerOrientation>,
     width: State<Option<Dp>>,
     height: State<Option<Dp>>,
     shift: State<Dp>,
@@ -38,7 +38,7 @@ impl PlacementModifierNode for FractionalOffset {
 
 #[tessera]
 fn fixture(probe: TestProbe<Option<Controls>>) {
-    let orientation = remember(|| SeparatorOrientation::Horizontal);
+    let orientation = remember(|| DividerOrientation::Horizontal);
     let width = remember(|| Some(Dp(240.0)));
     let height = remember(|| Some(Dp(8.0)));
     let shift = remember(|| Dp::ZERO);
@@ -80,9 +80,7 @@ fn fixture(probe: TestProbe<Option<Controls>>) {
                     if clipped.get() {
                         modifier = modifier.clip_to_bounds();
                     }
-                    separator()
-                        .orientation(orientation.get())
-                        .modifier(modifier);
+                    divider().orientation(orientation.get()).modifier(modifier);
                 });
         });
 }
@@ -97,18 +95,18 @@ fn orientation_changes_remeasure_the_bounded_length_and_natural_thickness() {
     let controls = probe.get().unwrap();
     controls.width.set(None);
     controls.height.set(None);
-    let horizontal = ui.frame().node("separator").bounds();
+    let horizontal = ui.frame().node("divider").bounds();
     assert_eq!((horizontal.width.0, horizontal.height.0), (320, 1));
-    controls.orientation.set(SeparatorOrientation::Vertical);
-    let vertical = ui.frame().node("separator").bounds();
+    controls.orientation.set(DividerOrientation::Vertical);
+    let vertical = ui.frame().node("divider").bounds();
     assert_eq!((vertical.width.0, vertical.height.0), (1, 120));
     controls.width.set(Some(Dp::ZERO));
     controls.height.set(Some(Dp::ZERO));
-    let collapsed = ui.frame().node("separator").bounds();
+    let collapsed = ui.frame().node("divider").bounds();
     assert_eq!((collapsed.width.0, collapsed.height.0), (0, 0));
     controls.width.set(Some(Dp(8.0)));
     controls.height.set(Some(Dp(80.0)));
-    let restored = ui.frame().node("separator").bounds();
+    let restored = ui.frame().node("divider").bounds();
     assert_eq!((restored.width.0, restored.height.0), (8, 80));
     assert_eq!(ui.accessibility_snapshot().unwrap().nodes.len(), 1);
 }
@@ -124,13 +122,13 @@ fn input_fixture(probe: TestProbe<Option<(State<u32>, State<bool>)>>) {
             .modifier(Modifier::new().size(Dp(120.0), Dp(24.0)))
             .on_click(move || clicks.set(clicks.get() + 1));
         if visible.get() {
-            separator().modifier(Modifier::new().size(Dp(120.0), Dp(24.0)));
+            divider().modifier(Modifier::new().size(Dp(120.0), Dp(24.0)));
         }
     });
 }
 
 #[test]
-fn a_separator_above_a_button_does_not_intercept_input_or_add_an_accessibility_target() {
+fn a_divider_above_a_button_does_not_intercept_input_or_add_an_accessibility_target() {
     let probe = TestProbe::default();
     let mut ui = UiTest::new()
         .viewport(240, 80)
@@ -162,14 +160,14 @@ fn check_scaled_layout() {
         ui.inspect_components()
             .nodes()
             .iter()
-            .find(|node| node.name().ends_with("separator"))
+            .find(|node| node.name().ends_with("divider"))
             .unwrap()
             .bounds()
             .unwrap()
     };
     let horizontal = bounds(&ui);
     assert_eq!((horizontal.width, horizontal.height), (450.0, 15.0));
-    controls.orientation.set(SeparatorOrientation::Vertical);
+    controls.orientation.set(DividerOrientation::Vertical);
     controls.width.set(Some(Dp(8.0)));
     controls.height.set(Some(Dp(80.0)));
     ui.frame();
@@ -178,9 +176,9 @@ fn check_scaled_layout() {
 }
 
 #[test]
-fn fractional_density_and_ancestor_scaling_preserve_the_separator_frame() {
+fn fractional_density_and_ancestor_scaling_preserve_the_divider_frame() {
     crate::test_utils::run_isolated_test(
-        "experiment::hig::separator::tests::fractional_density_and_ancestor_scaling_preserve_the_separator_frame",
+        "experiment::hig::divider::tests::fractional_density_and_ancestor_scaling_preserve_the_divider_frame",
         check_scaled_layout,
     );
 }
@@ -216,7 +214,7 @@ fn check_pixels() {
     assert_eq!(ui.pixel(80, 40), background);
     assert!(ui.pixel(80, 41)[0].abs_diff(218) <= 1);
     controls.clipped.set(false);
-    controls.orientation.set(SeparatorOrientation::Vertical);
+    controls.orientation.set(DividerOrientation::Vertical);
     controls.width.set(Some(Dp(8.0)));
     controls.height.set(Some(Dp(80.0)));
     ui.frame();
@@ -236,11 +234,11 @@ fn check_pixels() {
 }
 
 #[test]
-#[ignore = "requires a native GPU adapter for separator pixels"]
+#[ignore = "requires a native GPU adapter for divider pixels"]
 fn native_alignment_fractional_motion_clipping_theme_changes_and_collapsed_recovery_update_pixels()
 {
     crate::test_utils::run_isolated_test(
-        "experiment::hig::separator::tests::native_alignment_fractional_motion_clipping_theme_changes_and_collapsed_recovery_update_pixels",
+        "experiment::hig::divider::tests::native_alignment_fractional_motion_clipping_theme_changes_and_collapsed_recovery_update_pixels",
         check_pixels,
     );
 }

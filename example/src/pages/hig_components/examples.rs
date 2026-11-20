@@ -6,6 +6,7 @@ use tessera_components::{
         button::button,
         checkbox::{CheckboxState, checkbox},
         disclosure_button::disclosure_button,
+        divider::{DividerOrientation, divider},
         glass::{GlassAppearance, GlassMaterial, glass},
         glass_group::glass_group,
         group_box::group_box,
@@ -14,7 +15,6 @@ use tessera_components::{
         progress::{indeterminate_progress_bar, progress_bar, progress_spinner},
         radio_button::{radio_button, radio_group},
         segmented_control::{Segment, segmented_control},
-        separator::{SeparatorOrientation, separator},
         slider::slider,
         stepper::stepper,
         switch::switch,
@@ -190,8 +190,8 @@ pub(super) const COMPONENTS: &[Component] = &[
         ],
     },
     Component {
-        title: "ui-hig-separators",
-        description: "ui-hig-separator-description",
+        title: "ui-hig-dividers",
+        description: "ui-hig-divider-description",
         category: 3,
         sections: &[
             example(120.0),
@@ -476,7 +476,7 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
             11 => {
                 text(I18N.text("ui-hig-first"));
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
-                separator().modifier(Modifier::new().width(Dp(160.0)));
+                divider().modifier(Modifier::new().width(Dp(160.0)));
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
                 text(I18N.text("ui-hig-second"));
             }
@@ -601,10 +601,10 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
         }
         (11, _) => {
             if column == 0 {
-                separator().modifier(Modifier::new().width(Dp(96.0)));
+                divider().modifier(Modifier::new().width(Dp(96.0)));
             } else {
-                separator()
-                    .orientation(SeparatorOrientation::Vertical)
+                divider()
+                    .orientation(DividerOrientation::Vertical)
                     .modifier(Modifier::new().height(Dp(48.0)));
             }
         }

@@ -1,4 +1,4 @@
-//! Thin separators between related content groups.
+//! Thin dividers between related content groups.
 //!
 //! ## Usage
 //!
@@ -17,12 +17,12 @@ use crate::pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualLine};
 use super::theme::{Appearance, HigTheme};
 
 #[cfg(test)]
-#[path = "separator_tests.rs"]
+#[path = "divider_tests.rs"]
 mod tests;
 
-/// Direction in which a separator extends.
+/// Direction in which a divider extends.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SeparatorOrientation {
+pub enum DividerOrientation {
     /// Extend across the available width.
     #[default]
     Horizontal,
@@ -31,20 +31,20 @@ pub enum SeparatorOrientation {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-struct SeparatorLayout(SeparatorOrientation);
+struct DividerLayout(DividerOrientation);
 
-impl LayoutPolicy for SeparatorLayout {
+impl LayoutPolicy for DividerLayout {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = scope.parent_constraint();
         let (width, height) = match self.0 {
-            SeparatorOrientation::Horizontal => (
+            DividerOrientation::Horizontal => (
                 parent
                     .width()
                     .resolve_max()
                     .unwrap_or(parent.width().resolve_min()),
                 parent.height().clamp(Dp(1.0).into()),
             ),
-            SeparatorOrientation::Vertical => (
+            DividerOrientation::Vertical => (
                 parent.width().clamp(Dp(1.0).into()),
                 parent
                     .height()
@@ -57,18 +57,18 @@ impl LayoutPolicy for SeparatorLayout {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-struct SeparatorDraw {
-    orientation: SeparatorOrientation,
+struct DividerDraw {
+    orientation: DividerOrientation,
     color: Color,
 }
 
-impl DrawModifierNode for SeparatorDraw {
+impl DrawModifierNode for DividerDraw {
     fn draw(
         &self,
         context: &mut DrawModifierContext<'_, '_>,
         content: &mut dyn DrawModifierContent,
     ) {
-        let vertical = self.orientation == SeparatorOrientation::Vertical;
+        let vertical = self.orientation == DividerOrientation::Vertical;
         context
             .render_input
             .metadata_mut()
@@ -93,7 +93,7 @@ impl DrawModifierNode for SeparatorDraw {
     }
 }
 
-/// # separator
+/// # divider
 ///
 /// Visually separates groups of settings, menu items, or toolbar content.
 ///
@@ -109,22 +109,22 @@ impl DrawModifierNode for SeparatorDraw {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{column::column, experiment::hig::separator::separator};
+/// use tessera_components::{column::column, experiment::hig::divider::divider};
 /// use tessera_foundation::modifier::ModifierExt as _;
 /// use tessera_ui::{Dp, Modifier, tessera, testing::UiTest};
 /// #[tessera]
 /// fn app() {
 ///     column().children(|| {
-///         separator().modifier(Modifier::new().width(Dp(120.0)));
+///         divider().modifier(Modifier::new().width(Dp(120.0)));
 ///     });
 /// }
 /// let mut ui = UiTest::new().content(app);
 /// let frame = ui.frame();
-/// assert_eq!(frame.node("separator").bounds().width.0, 120);
-/// assert_eq!(frame.node("separator").bounds().height.0, 1);
+/// assert_eq!(frame.node("divider").bounds().width.0, 120);
+/// assert_eq!(frame.node("divider").bounds().height.0, 1);
 /// ```
 #[tessera]
-pub fn separator(orientation: Option<SeparatorOrientation>, modifier: Option<Modifier>) {
+pub fn divider(orientation: Option<DividerOrientation>, modifier: Option<Modifier>) {
     let orientation = orientation.unwrap_or_default();
     let dark = use_context::<HigTheme>()
         .map(|theme| theme.get().appearance == Appearance::Dark)
@@ -134,9 +134,9 @@ pub fn separator(orientation: Option<SeparatorOrientation>, modifier: Option<Mod
     } else {
         Color::BLACK.with_alpha(0.10)
     };
-    layout(SeparatorLayout(orientation)).modifier(
+    layout(DividerLayout(orientation)).modifier(
         modifier
             .unwrap_or_default()
-            .push_draw(SeparatorDraw { orientation, color }),
+            .push_draw(DividerDraw { orientation, color }),
     );
 }
