@@ -151,8 +151,18 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                         .any(|(_, node)| crate::has_label(node, "1"))
                 );
             }
-            "ui-hig-help-buttons" => {
-                activate(&mut ui, "Help buttons", Role::Button);
+            "ui-hig-links" => {
+                activate(&mut ui, "Privacy policy", Role::Link);
+                assert!(
+                    ui.inspect_accessibility()
+                        .unwrap()
+                        .nodes()
+                        .iter()
+                        .any(|(_, node)| crate::has_label(node, "1"))
+                );
+            }
+            "ui-hig-help-links" => {
+                activate(&mut ui, "Help links", Role::Button);
                 assert!(
                     ui.inspect_accessibility()
                         .unwrap()

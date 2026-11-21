@@ -31,7 +31,7 @@ use super::{
 };
 
 #[cfg(test)]
-#[path = "help_button_tests.rs"]
+#[path = "help_link_tests.rs"]
 mod tests;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -133,7 +133,7 @@ fn help_face(background: Color, foreground: Color, focused: bool) {
     layout(tessera_ui::layout::Stack).modifier(modifier);
 }
 
-/// # help_button
+/// # help_link
 ///
 /// Opens contextual help from a circular question-mark button.
 ///
@@ -152,23 +152,17 @@ fn help_face(background: Color, foreground: Color, focused: bool) {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::experiment::hig::help_button::help_button;
-/// use tessera_ui::{remember, tessera, testing::{TestProbe, UiTest}};
-/// #[tessera]
-/// fn app(probe: TestProbe<Option<tessera_ui::State<bool>>>) {
-///     let opened = remember(|| false);
-///     probe.set(Some(opened));
-///     help_button().on_click(move || opened.set(true));
-/// }
-/// let probe = TestProbe::default();
-/// let mut ui = UiTest::new().content(|| app(probe.clone()));
-/// ui.frame();
-/// let (id, _) = ui.accessibility_node("Help");
-/// assert!(ui.accessibility_action(id, tessera_ui::accesskit::Action::Click));
-/// assert!(probe.get().unwrap().get());
+/// use tessera_components::experiment::hig::help_link::help_link;
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+///
+/// help_link().on_click(|| println!("Show the export guide"));
+/// # }
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
-pub fn help_button(
+pub fn help_link(
     on_click: Option<Callback>,
     enabled: Option<bool>,
     window_active: Option<bool>,

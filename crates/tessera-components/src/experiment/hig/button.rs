@@ -37,8 +37,11 @@ use crate::{
 };
 
 use super::{
+    glass::{GlassAppearance, GlassMaterial, glass},
+    link::link_color,
+    motion::mix,
     text::text,
-    theme::{Appearance, HigTheme, TextStyle},
+    theme::{Appearance, ControlSize, HigTheme, TextStyle},
 };
 
 #[cfg(test)]
@@ -225,8 +228,8 @@ pub fn button_scope(child: Option<RenderSlotWith<ButtonScope>>) {
         });
 }
 
-fn button_shape() -> Shape {
-    let corner = RoundedCorner::manual(Dp(6.0), 2.0);
+fn button_shape(radius: Dp) -> Shape {
+    let corner = RoundedCorner::manual(radius, 2.0);
     Shape::RoundedRectangle {
         top_left: corner,
         top_right: corner,
@@ -257,8 +260,77 @@ impl SemanticsModifierNode for ButtonToggleSemantics {
     }
 }
 
+/// The appearance of a [`button`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ButtonStyle {
+    /// The platform default, a bordered push button on macOS.
+    #[default]
+    Automatic,
+    /// A rounded push button with a gray fill.
+    Bordered,
+    /// A rounded push button filled with the accent color.
+    BorderedProminent,
+    /// The title alone, with the push button's padding.
+    Borderless,
+    /// The title alone, dimmed while pressed.
+    Plain,
+    /// The title in the link color.
+    Link,
+    /// A compact button for accessory bars that shows a fill on hover.
+    AccessoryBar,
+    /// An action in an accessory bar, such as adding or removing an item.
+    AccessoryBarAction,
+    /// A capsule of glass.
+    Glass,
+    /// A capsule filled with the accent color.
+    GlassProminent,
+}
+
+/// The purpose of a [`button`], which can change its appearance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonRole {
+    /// Cancels the current operation.
+    Cancel,
+    /// Deletes data or performs another action that cannot be undone; shown in red.
+    Destructive,
+}
+
+#[derive(Clone, Copy)]
+struct SizeMetrics {
+    height: f64,
+    font: f64,
+    line: f64,
+    padding: f64,
+    radius: f64,
+}
+
+fn size_metrics(size: ControlSize) -> SizeMetrics {
+    let (height, font, line, padding, radius) = match size {
+        ControlSize::Mini => (16.0, 9.0, 11.0, 6.0, 4.0),
+        ControlSize::Small => (20.0, 11.0, 14.0, 8.0, 5.0),
+        ControlSize::Regular => (24.0, 13.0, 16.0, 12.0, 6.0),
+        ControlSize::Large => (32.0, 13.0, 16.0, 14.0, 8.0),
+        ControlSize::ExtraLarge => (40.0, 15.0, 19.0, 16.0, 10.0),
+    };
+    SizeMetrics {
+        height,
+        font,
+        line,
+        padding,
+        radius,
+    }
+}
+
+fn system_red(dark: bool) -> Color {
+    if dark {
+        srgb(255, 66, 69)
+    } else {
+        srgb(255, 56, 60)
+    }
+}
+
 #[derive(Clone, PartialEq)]
-struct ButtonBackground(Color);
+struct ButtonBackground(Color, Dp);
 
 impl DrawModifierNode for ButtonBackground {
     fn draw(
@@ -275,7 +347,7 @@ impl DrawModifierNode for ButtonBackground {
                 snap_to_pixels: false,
                 path: None,
                 color: self.0,
-                radii: [Dp(6.0); 2],
+                radii: [self.1; 2],
                 insets: [Dp(0.0); 4],
                 clip_radius: None,
                 line: None,
@@ -300,6 +372,10 @@ impl DrawModifierNode for ButtonBackground {
 /// - `on_click` — action invoked once per completed activation.
 /// - `enabled` — disables input, focus traversal, and accessibility activation when false.
 /// - `default_action`, `scope` — primary action and its explicit Return-key scope.
+/// - `style` — push button, title-only, link, accessory bar, or glass appearance; defaults to
+///   [`ButtonStyle::Automatic`].
+/// - `role` — cancel or destructive purpose; destructive buttons are red.
+/// - `control_size` — height, font, and padding; defaults to regular.
 /// - `window_active` — whether the containing window is active; defaults to true.
 /// - `modifier` — caller layout and semantics.
 /// - `interaction_state`, `focus_requester` — optional external interaction and focus handles.
@@ -327,6 +403,9 @@ pub fn button(
     enabled: Option<bool>,
     default_action: Option<bool>,
     scope: Option<ButtonScope>,
+    style: Option<ButtonStyle>,
+    role: Option<ButtonRole>,
+    control_size: Option<ControlSize>,
     window_active: Option<bool>,
     modifier: Option<Modifier>,
     interaction_state: Option<State<InteractionState>>,
@@ -339,6 +418,9 @@ pub fn button(
         .enabled_optional(enabled)
         .default_action_optional(default_action)
         .scope_optional(scope)
+        .style_optional(style)
+        .role_optional(role)
+        .control_size_optional(control_size)
         .window_active_optional(window_active)
         .modifier_optional(modifier)
         .interaction_state_optional(interaction_state)
@@ -358,6 +440,9 @@ pub(super) fn push_button(
     default_action: Option<bool>,
     toggled: Option<bool>,
     scope: Option<ButtonScope>,
+    style: Option<ButtonStyle>,
+    role: Option<ButtonRole>,
+    control_size: Option<ControlSize>,
     window_active: Option<bool>,
     modifier: Option<Modifier>,
     interaction_state: Option<State<InteractionState>>,
@@ -436,7 +521,26 @@ pub(super) fn push_button(
     let pressed = enabled
         && (pulsing || keyboard_pressed.get() || interaction.with(InteractionState::is_pressed));
     let focused = enabled && active && requester.is_focus_visible();
-    let highlighted = default_action || toggled == Some(true);
+    let style = style.unwrap_or_default();
+    let metrics = size_metrics(control_size.unwrap_or_default());
+    let destructive = role == Some(ButtonRole::Destructive);
+    let hovered = interaction.with(InteractionState::is_hovered);
+    let highlighted = default_action
+        || toggled == Some(true)
+        || matches!(
+            style,
+            ButtonStyle::BorderedProminent | ButtonStyle::GlassProminent
+        );
+    let accent = if destructive {
+        system_red(dark)
+    } else {
+        Color::from_rgb(0.0, 0.19461783, 1.0)
+    };
+    let tint = if dark { Color::WHITE } else { Color::BLACK };
+    let bordered = matches!(
+        style,
+        ButtonStyle::Automatic | ButtonStyle::Bordered | ButtonStyle::BorderedProminent
+    ) || highlighted;
     let fill = if !enabled && toggled == Some(true) && active {
         if dark {
             srgb(15, 98, 187)
@@ -445,12 +549,11 @@ pub(super) fn push_button(
         }
     } else if enabled && highlighted && active {
         if pressed {
-            Color::from_rgb(0.0, 0.18, 0.60)
+            mix(accent, Color::BLACK, 0.3)
         } else {
-            Color::from_rgb(0.0, 0.19461783, 1.0)
+            accent
         }
-    } else {
-        let tint = if dark { Color::WHITE } else { Color::BLACK };
+    } else if bordered {
         tint.with_alpha(match (dark, enabled, pressed && active) {
             (false, false, _) => 0.04,
             (false, true, true) => 0.16,
@@ -459,25 +562,54 @@ pub(super) fn push_button(
             (true, true, true) => 0.16,
             (true, true, false) => 0.08,
         })
+    } else if matches!(
+        style,
+        ButtonStyle::AccessoryBar | ButtonStyle::AccessoryBarAction
+    ) && enabled
+    {
+        tint.with_alpha(if pressed {
+            0.12
+        } else if hovered {
+            0.06
+        } else {
+            0.0
+        })
+    } else {
+        Color::TRANSPARENT
     };
     let on = toggled == Some(true) && active;
-    let ink = if enabled && highlighted && active || on || dark {
-        Color::WHITE
-    } else {
-        Color::BLACK
-    };
-    let ink = ink.with_alpha(if enabled && highlighted && active {
-        1.0
-    } else if on {
-        0.5
-    } else if enabled {
-        0.85
+    let filled = enabled && highlighted && active;
+    let ink = if filled || on {
+        Color::WHITE.with_alpha(if filled { 1.0 } else { 0.5 })
+    } else if !enabled {
+        tint.with_alpha(if dark { 0.25 } else { 0.26 })
+    } else if style == ButtonStyle::Link {
+        link_color(theme.appearance)
+    } else if destructive {
+        system_red(dark)
     } else if dark {
-        0.25
+        Color::WHITE.with_alpha(0.85)
     } else {
-        0.26
+        Color::BLACK.with_alpha(0.85)
+    };
+    let ink = if pressed
+        && matches!(
+            style,
+            ButtonStyle::Plain | ButtonStyle::Borderless | ButtonStyle::Link
+        ) {
+        ink.with_alpha(ink.a * 0.5)
+    } else {
+        ink
+    };
+    let capsule = matches!(style, ButtonStyle::Glass | ButtonStyle::GlassProminent);
+    let radius = Dp(if capsule {
+        metrics.height * 0.5
+    } else {
+        metrics.radius
     });
-    let shape = button_shape();
+    let bare = matches!(style, ButtonStyle::Plain | ButtonStyle::Link);
+    let glass_surface = style == ButtonStyle::Glass && !filled;
+    let shape = button_shape(radius);
     let mut modifier = modifier
         .unwrap_or_default()
         .push_keyboard_preview_input(ButtonKeyboard {
@@ -499,8 +631,14 @@ pub(super) fn push_button(
             focus_requester: Some(requester),
             ..Default::default()
         })
-        .hover_cursor_icon(CursorIcon::Default)
-        .default_min_size(Dp(28.0), Dp(24.0));
+        .hover_cursor_icon(if style == ButtonStyle::Link {
+            CursorIcon::Pointer
+        } else {
+            CursorIcon::Default
+        });
+    if !bare {
+        modifier = modifier.default_min_size(Dp(metrics.height + 4.0), Dp(metrics.height));
+    }
     if focused {
         modifier = modifier.border_with_shape(
             Dp(2.0),
@@ -508,21 +646,78 @@ pub(super) fn push_button(
             shape,
         );
     }
-    modifier = modifier
-        .push_semantics(ButtonToggleSemantics(toggled))
-        .push_draw(ButtonBackground(fill))
-        .padding(Padding::symmetric(Dp(12.0), Dp(4.0)));
-    boxed()
-        .alignment(Alignment::Center)
-        .modifier(modifier)
-        .children(move || {
-            text(label.clone())
-                .style(TextStyle::default())
-                .color(ink)
-                .single_line(true)
-                .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
-                    hidden: true,
-                    ..Default::default()
-                }));
+    modifier = modifier.push_semantics(ButtonToggleSemantics(toggled));
+    if !glass_surface {
+        modifier = modifier.push_draw(ButtonBackground(fill, radius));
+    }
+    let insets = if bare {
+        Padding::default()
+    } else {
+        Padding::symmetric(
+            Dp(metrics.padding),
+            Dp(((metrics.height - metrics.line) * 0.5).max(0.0)),
+        )
+    };
+    let title = ButtonTitle {
+        label,
+        ink,
+        font: Dp(metrics.font),
+        line: Dp(metrics.line),
+    };
+    if glass_surface {
+        boxed()
+            .alignment(Alignment::Center)
+            .modifier(modifier)
+            .children(move || glass_title(title.clone(), radius, insets, dark));
+    } else {
+        boxed()
+            .alignment(Alignment::Center)
+            .modifier(modifier.padding(insets))
+            .children(move || button_title(title.clone()));
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct ButtonTitle {
+    label: String,
+    ink: Color,
+    font: Dp,
+    line: Dp,
+}
+
+#[tessera]
+fn button_title(title: ButtonTitle) {
+    text(title.label)
+        .style(TextStyle {
+            font_size: title.font,
+            line_height: title.line,
+            ..Default::default()
+        })
+        .color(title.ink)
+        .single_line(true)
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
+            hidden: true,
+            ..Default::default()
+        }));
+}
+
+#[tessera]
+fn glass_title(title: ButtonTitle, radius: Dp, insets: Padding, dark: bool) {
+    glass()
+        .material(GlassMaterial::Regular)
+        .appearance(if dark {
+            GlassAppearance::Dark
+        } else {
+            GlassAppearance::Light
+        })
+        .corner_radius(radius)
+        .padding(Dp::ZERO)
+        .block_input(false)
+        .child(move || {
+            let title = title.clone();
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(Modifier::new().padding(insets))
+                .children(move || button_title(title.clone()));
         });
 }

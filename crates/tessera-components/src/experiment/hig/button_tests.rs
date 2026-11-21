@@ -12,7 +12,10 @@ use tessera_ui::{
 
 use crate::{column::column, modifier::ModifierExt as _};
 
-use super::{super::text::text, button, button_scope};
+use super::{
+    super::{text::text, theme::ControlSize},
+    ButtonRole, ButtonStyle, button, button_scope,
+};
 
 #[derive(Clone, Copy)]
 struct Controls {
@@ -418,5 +421,148 @@ fn pointer_and_accessibility_update_pressed_disabled_default_and_focus_pixels() 
     crate::test_utils::run_isolated_test(
         "experiment::hig::button::tests::pointer_and_accessibility_update_pressed_disabled_default_and_focus_pixels",
         check_accessibility_and_pixels,
+    );
+}
+
+fn tagged(tag: &str) -> Modifier {
+    Modifier::new().semantics(SemanticsArgs {
+        test_tag: Some(tag.into()),
+        ..Default::default()
+    })
+}
+
+#[test]
+fn control_sizes_set_button_heights_and_bare_styles_drop_the_bezel_padding() {
+    let mut ui = UiTest::new().viewport(400, 400).content(|| {
+        column().children(|| {
+            for (tag, size) in [
+                ("mini", ControlSize::Mini),
+                ("small", ControlSize::Small),
+                ("regular", ControlSize::Regular),
+                ("large", ControlSize::Large),
+                ("extra", ControlSize::ExtraLarge),
+            ] {
+                button("Go").control_size(size).modifier(tagged(tag));
+            }
+            button("Go")
+                .style(ButtonStyle::Plain)
+                .modifier(tagged("plain"));
+        });
+    });
+    let frame = ui.frame();
+    let heights: Vec<i32> = ["mini", "small", "regular", "large", "extra"]
+        .iter()
+        .map(|tag| frame.node(tag).bounds().height.0)
+        .collect();
+    assert_eq!(heights, [16, 20, 24, 32, 40]);
+    let plain = frame.node("plain").bounds();
+    assert_eq!(
+        plain.height.0, 16,
+        "a plain button is as tall as its title line"
+    );
+    assert!(plain.width.0 < frame.node("regular").bounds().width.0 - 20);
+}
+
+#[tessera]
+fn styles_fixture(probe: TestProbe<Option<State<Vec<ButtonStyle>>>>) {
+    let clicks = remember(Vec::new);
+    probe.set(Some(clicks));
+    column().children(move || {
+        for style in [
+            ButtonStyle::Automatic,
+            ButtonStyle::Bordered,
+            ButtonStyle::BorderedProminent,
+            ButtonStyle::Borderless,
+            ButtonStyle::Plain,
+            ButtonStyle::Link,
+            ButtonStyle::AccessoryBar,
+            ButtonStyle::AccessoryBarAction,
+            ButtonStyle::Glass,
+            ButtonStyle::GlassProminent,
+        ] {
+            button(format!("{style:?}"))
+                .style(style)
+                .on_click(move || clicks.with_mut(|clicks| clicks.push(style)));
+        }
+    });
+}
+
+#[test]
+fn every_style_is_an_activatable_button() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 600)
+        .content(|| styles_fixture(probe.clone()));
+    ui.frame();
+    let clicks: State<Vec<ButtonStyle>> = probe.get().expect("fixture state");
+    for label in [
+        "Automatic",
+        "Plain",
+        "Link",
+        "AccessoryBar",
+        "Glass",
+        "GlassProminent",
+    ] {
+        let (id, node) = ui.accessibility_node(label);
+        assert_eq!(node.role(), tessera_ui::accesskit::Role::Button);
+        assert!(ui.accessibility_action(id, tessera_ui::accesskit::Action::Click));
+    }
+    assert_eq!(
+        clicks.get(),
+        [
+            ButtonStyle::Automatic,
+            ButtonStyle::Plain,
+            ButtonStyle::Link,
+            ButtonStyle::AccessoryBar,
+            ButtonStyle::Glass,
+            ButtonStyle::GlassProminent
+        ]
+    );
+}
+
+fn check_role_and_hover_pixels() {
+    let mut ui = UiTest::new()
+        .viewport(200, 80)
+        .scale_factor(1.0)
+        .rendered(crate::TesseraComponents)
+        .content(|| {
+            column().children(|| {
+                button("Delete")
+                    .style(ButtonStyle::BorderedProminent)
+                    .role(ButtonRole::Destructive)
+                    .modifier(tagged("delete"));
+                button("More")
+                    .style(ButtonStyle::AccessoryBar)
+                    .modifier(tagged("more"));
+            });
+        });
+    let frame = ui.frames(2);
+    let delete = frame.node("delete").bounds();
+    let more = frame.node("more").bounds();
+    let fill = ui.pixel(delete.x.0 as u32 + 3, delete.y.0 as u32 + 12);
+    assert!(
+        fill[0] > 200 && fill[1] < 100,
+        "a destructive prominent button is red: {fill:?}"
+    );
+    let corner = (more.x.0 as u32 + 3, more.y.0 as u32 + 12);
+    let rest = ui.pixel(corner.0, corner.1);
+    ui.pointer_move(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(more.x.0 as f32 + 10.0, more.y.0 as f32 + 12.0),
+    );
+    ui.frames(2);
+    let hovered = ui.pixel(corner.0, corner.1);
+    assert!(
+        hovered[3] > rest[3],
+        "an accessory bar button shows a fill on hover: {rest:?} -> {hovered:?}"
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for button pixels"]
+fn destructive_prominent_buttons_are_red_and_accessory_bar_buttons_fill_on_hover() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::button::tests::destructive_prominent_buttons_are_red_and_accessory_bar_buttons_fill_on_hover",
+        check_role_and_hover_pixels,
     );
 }

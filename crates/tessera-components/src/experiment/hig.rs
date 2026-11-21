@@ -9,7 +9,7 @@ pub mod gauge;
 pub mod glass;
 pub mod glass_group;
 pub mod group_box;
-pub mod help_button;
+pub mod help_link;
 pub mod link;
 mod motion;
 pub mod picker;

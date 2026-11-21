@@ -18,7 +18,7 @@ use crate::{alignment::Alignment, boxed::boxed, column::column, modifier::Modifi
 
 use super::{
     super::theme::{Appearance, HigTheme, hig_theme},
-    help_button,
+    help_link,
 };
 
 #[derive(Clone, Copy)]
@@ -76,7 +76,7 @@ fn fixture(probe: TestProbe<Option<Controls>>, transparent: Option<bool>) {
                 .children(move || {
                     column().children(move || {
                         if visible.get() {
-                            help_button()
+                            help_link()
                                 .enabled(enabled.get())
                                 .window_active(active.get())
                                 .focus_requester(focus)
@@ -168,7 +168,7 @@ fn check_scaled_target() {
         .scale_factor(1.5)
         .content(|| {
             boxed().alignment(Alignment::TopStart).children(|| {
-                help_button();
+                help_link();
             });
         });
     natural.frame();
@@ -179,7 +179,7 @@ fn check_scaled_target() {
 #[test]
 fn fractional_density_scaled_targets_and_collapsed_recovery_preserve_actions() {
     crate::test_utils::run_isolated_test(
-        "experiment::hig::help_button::tests::fractional_density_scaled_targets_and_collapsed_recovery_preserve_actions",
+        "experiment::hig::help_link::tests::fractional_density_scaled_targets_and_collapsed_recovery_preserve_actions",
         check_scaled_target,
     );
 }
@@ -299,9 +299,9 @@ fn check_keyboard() {
 
 #[test]
 #[ignore = "requires a native GPU adapter for keyboard dispatch and help pixels"]
-fn keyboard_release_focus_cancellation_accessibility_and_removal_use_the_help_button() {
+fn keyboard_release_focus_cancellation_accessibility_and_removal_use_the_help_link() {
     crate::test_utils::run_isolated_test(
-        "experiment::hig::help_button::tests::keyboard_release_focus_cancellation_accessibility_and_removal_use_the_help_button",
+        "experiment::hig::help_link::tests::keyboard_release_focus_cancellation_accessibility_and_removal_use_the_help_link",
         check_keyboard,
     );
 }
@@ -351,7 +351,7 @@ fn check_retained_face() {
 #[ignore = "requires a native GPU adapter for retained help pixels"]
 fn inactive_face_theme_disabled_and_collapsed_recovery_update_retained_pixels() {
     crate::test_utils::run_isolated_test(
-        "experiment::hig::help_button::tests::inactive_face_theme_disabled_and_collapsed_recovery_update_retained_pixels",
+        "experiment::hig::help_link::tests::inactive_face_theme_disabled_and_collapsed_recovery_update_retained_pixels",
         check_retained_face,
     );
 }

@@ -3,21 +3,22 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     experiment::hig::{
-        button::button,
+        button::{ButtonRole, ButtonStyle, button},
         disclosure_button::disclosure_button,
         divider::{DividerOrientation, divider},
         gauge::{GaugeStyle, gauge},
         glass::{GlassAppearance, GlassMaterial, glass},
         glass_group::glass_group,
         group_box::group_box,
-        help_button::help_button,
+        help_link::help_link,
+        link::link,
         picker::{PickerStyle, picker},
         progress::{ProgressViewStyle, progress_view},
         slider::slider,
         stepper::stepper,
         text::text,
         text_field::text_field,
-        theme::{Appearance, HigTheme, TextStyle},
+        theme::{Appearance, ControlSize, HigTheme, TextStyle},
         toggle::{ToggleStyle, toggle},
     },
     image::{ImageData, image},
@@ -55,6 +56,30 @@ pub(super) const CATEGORIES: [&str; 4] = [
 
 const SINGLE: &[&str] = &[""];
 const ENABLED: &[&str] = &["ui-hig-enabled", "ui-hig-disabled"];
+const BUTTON_STYLES: &[&str] = &[
+    "ui-hig-style-automatic",
+    "ui-hig-style-bordered",
+    "ui-hig-style-bordered-prominent",
+    "ui-hig-style-borderless",
+    "ui-hig-style-plain",
+    "ui-hig-style-link",
+    "ui-hig-style-accessory-bar",
+    "ui-hig-style-accessory-bar-action",
+    "ui-hig-style-glass",
+    "ui-hig-style-glass-prominent",
+];
+const BUTTON_STYLE_VALUES: [ButtonStyle; 10] = [
+    ButtonStyle::Automatic,
+    ButtonStyle::Bordered,
+    ButtonStyle::BorderedProminent,
+    ButtonStyle::Borderless,
+    ButtonStyle::Plain,
+    ButtonStyle::Link,
+    ButtonStyle::AccessoryBar,
+    ButtonStyle::AccessoryBarAction,
+    ButtonStyle::Glass,
+    ButtonStyle::GlassProminent,
+];
 
 const fn example(height: f64) -> Section {
     Section {
@@ -84,13 +109,41 @@ pub(super) const COMPONENTS: &[Component] = &[
             Section {
                 title: "ui-hig-styles",
                 columns: ENABLED,
-                rows: &["ui-hig-push", "ui-hig-default"],
-                height: 64.0,
+                rows: BUTTON_STYLES,
+                height: 48.0,
+            },
+            Section {
+                title: "ui-hig-roles",
+                columns: &[
+                    "ui-hig-role-none",
+                    "ui-hig-role-cancel",
+                    "ui-hig-role-destructive",
+                ],
+                rows: &["ui-hig-style-bordered", "ui-hig-style-bordered-prominent"],
+                height: 56.0,
+            },
+            Section {
+                title: "ui-hig-control-sizes",
+                columns: &[
+                    "ui-hig-size-mini",
+                    "ui-hig-size-small",
+                    "ui-hig-size-regular",
+                    "ui-hig-size-large",
+                    "ui-hig-size-extra-large",
+                ],
+                rows: SINGLE,
+                height: 72.0,
             },
         ],
     },
     Component {
-        title: "ui-hig-help-buttons",
+        title: "ui-hig-links",
+        description: "ui-hig-links-description",
+        category: 0,
+        sections: &[example(120.0), states(ENABLED, SINGLE)],
+    },
+    Component {
+        title: "ui-hig-help-links",
         description: "ui-hig-help-description",
         category: 0,
         sections: &[example(120.0), states(ENABLED, SINGLE)],
@@ -395,9 +448,18 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
                 caption(values.clicks.to_string(), appearance);
             }
-            "ui-hig-help-buttons" => {
-                help_button()
-                    .accessibility_label(I18N.text("ui-hig-help-buttons"))
+            "ui-hig-links" => {
+                link(
+                    I18N.text("ui-hig-link-title"),
+                    "https://example.com/privacy",
+                )
+                .on_open(move |_| state.with_mut(|v| v.clicks += 1));
+                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                caption(values.clicks.to_string(), appearance);
+            }
+            "ui-hig-help-links" => {
+                help_link()
+                    .accessibility_label(I18N.text("ui-hig-help-links"))
                     .on_click(move || state.with_mut(|v| v.expanded = !v.expanded));
                 if values.expanded {
                     spacer().modifier(Modifier::new().height(Dp(8.0)));
@@ -534,14 +596,46 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
     let enabled = row == 0;
     let name = label(COMPONENTS[index].sections[section].columns[column]);
     match (COMPONENTS[index].title, section) {
-        ("ui-buttons", _) => {
+        ("ui-buttons", 1) => {
             button(I18N.text("ui-hig-action"))
+                .style(BUTTON_STYLE_VALUES[row])
                 .enabled(column == 0)
-                .default_action(row == 1)
                 .accessibility_label(name);
         }
-        ("ui-hig-help-buttons", _) => {
-            help_button().enabled(column == 0).accessibility_label(name);
+        ("ui-buttons", 2) => {
+            let role = [
+                None,
+                Some(ButtonRole::Cancel),
+                Some(ButtonRole::Destructive),
+            ][column];
+            button(I18N.text("ui-hig-action"))
+                .style([ButtonStyle::Bordered, ButtonStyle::BorderedProminent][row])
+                .role_optional(role)
+                .accessibility_label(name);
+        }
+        ("ui-buttons", _) => {
+            button(I18N.text("ui-hig-action"))
+                .control_size(
+                    [
+                        ControlSize::Mini,
+                        ControlSize::Small,
+                        ControlSize::Regular,
+                        ControlSize::Large,
+                        ControlSize::ExtraLarge,
+                    ][column],
+                )
+                .accessibility_label(name);
+        }
+        ("ui-hig-links", _) => {
+            link(
+                I18N.text("ui-hig-link-title"),
+                "https://example.com/privacy",
+            )
+            .enabled(column == 0)
+            .accessibility_label(name);
+        }
+        ("ui-hig-help-links", _) => {
+            help_link().enabled(column == 0).accessibility_label(name);
         }
         ("ui-hig-disclosure-buttons", _) => {
             disclosure_button(column == 1)

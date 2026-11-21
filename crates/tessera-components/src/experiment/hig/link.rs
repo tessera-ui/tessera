@@ -6,7 +6,7 @@
 
 use tessera_foundation::modifier::{ClickableArgs, ModifierExt as _};
 use tessera_ui::{
-    Callback, Color, Dp, FocusRequester, Modifier, accesskit::Role,
+    Callback, CallbackWith, Color, Dp, FocusRequester, Modifier, accesskit::Role,
     modifier::CursorModifierExt as _, remember, tessera, use_context, winit::window::CursorIcon,
 };
 
@@ -21,7 +21,21 @@ use super::{
 #[path = "link_tests.rs"]
 mod tests;
 
-fn link_color(appearance: Appearance) -> Color {
+/// Opens the destinations of [`link`]s in its subtree.
+///
+/// Provide it with [`tessera_ui::provide_context`] to route links to a browser, a router, or a
+/// help viewer.
+#[derive(Clone, Copy, PartialEq)]
+pub struct OpenUrlAction(CallbackWith<String>);
+
+impl OpenUrlAction {
+    /// Creates an action that receives each destination URL.
+    pub fn new(open: impl Fn(String) + 'static) -> Self {
+        Self(CallbackWith::new(open))
+    }
+}
+
+pub(super) fn link_color(appearance: Appearance) -> Color {
     match appearance {
         Appearance::Light => Color::from_rgb(
             srgb_channel_to_linear(0),
@@ -47,16 +61,17 @@ fn srgb_channel_to_linear(channel: u8) -> f32 {
 
 /// # link
 ///
-/// Opens related content from an underlined, keyboard-accessible link.
+/// Opens a destination URL from underlined, keyboard-accessible text.
 ///
 /// ## Usage
 ///
-/// Navigate to help, related settings, or a destination outside the current view.
+/// Navigate to help, related settings, or a web page outside the current view.
 ///
 /// ## Parameters
 ///
 /// - `label` — visible and default spoken link text.
-/// - `on_click` — navigation or action callback.
+/// - `destination` — URL handed to the [`OpenUrlAction`] in context.
+/// - `on_open` — opens the destination instead of the action in context.
 /// - `enabled` — whether pointer, keyboard, and accessibility activation are available.
 /// - `modifier` — layout and additional node behavior.
 /// - `color` — optional foreground override; otherwise uses the system link color for the HIG appearance.
@@ -65,25 +80,23 @@ fn srgb_channel_to_linear(channel: u8) -> f32 {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::experiment::hig::link::link;
-/// use tessera_ui::{remember, tessera, testing::{TestProbe, UiTest}};
-/// #[tessera]
-/// fn app(probe: TestProbe<Option<tessera_ui::State<bool>>>) {
-///     let opened = remember(|| false);
-///     probe.set(Some(opened));
-///     link("Learn more").on_click(move || opened.set(true));
-/// }
-/// let probe = TestProbe::default();
-/// let mut ui = UiTest::new().content(|| app(probe.clone()));
-/// ui.frame();
-/// let (id, _) = ui.accessibility_node("Learn more");
-/// assert!(ui.accessibility_action(id, tessera_ui::accesskit::Action::Click));
-/// assert!(probe.get().unwrap().get());
+/// use tessera_components::experiment::hig::link::{OpenUrlAction, link};
+/// use tessera_ui::provide_context;
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+///
+/// provide_context(OpenUrlAction::new(|url| println!("open {url}")), || {
+///     link("Privacy policy", "https://example.com/privacy");
+/// });
+/// # }
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn link(
     #[prop(into)] label: String,
-    on_click: Option<Callback>,
+    #[prop(into)] destination: String,
+    on_open: Option<CallbackWith<String>>,
     enabled: Option<bool>,
     color: Option<Color>,
     modifier: Option<Modifier>,
@@ -105,7 +118,13 @@ pub fn link(
         }
     });
     let requester = remember(FocusRequester::new).get();
-    let on_click = on_click.unwrap_or_else(Callback::noop);
+    let context = use_context::<OpenUrlAction>().map(|action| action.get().0);
+    let open = on_open.or(context);
+    let on_click = Callback::new(move || {
+        if let Some(open) = open {
+            open.call(destination.clone());
+        }
+    });
     let mut modifier = modifier.unwrap_or_default().clickable(ClickableArgs {
         on_click,
         enabled,
