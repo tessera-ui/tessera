@@ -265,7 +265,7 @@ fn overview_art() {
                             .offset(Dp((center - 20.0) * scale), Dp(168.0 * scale))
                             .size(Dp(40.0 * scale), Dp(40.0 * scale))
                             .background_with_shape(scheme.on_surface, Shape::Ellipse)
-                            .semantics(SemanticsArgs {
+                            .clear_and_set_semantics(SemanticsArgs {
                                 role: Some(Role::Note),
                                 label: Some(I18N.format(
                                     "ui-value-value-button",

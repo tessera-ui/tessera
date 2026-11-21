@@ -33,7 +33,6 @@ fn fixture(
                             .size(Dp(f64::from(width)), Dp(f64::from(height)))
                             .semantics(SemanticsArgs {
                                 test_tag: Some("drawer-host".into()),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )

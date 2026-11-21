@@ -83,7 +83,6 @@ fn canvas(is_switch: bool) {
                             )],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -106,7 +105,6 @@ fn canvas(is_switch: bool) {
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             label: Some(I18N.text("ui-adjacent-labels-app-viewport")),
-                            merge_descendants: true,
                             ..Default::default()
                         }),
                 )
@@ -161,7 +159,7 @@ fn label_modifier(modifier: Modifier, checked: State<bool>, focus: FocusRequeste
             }),
             ..Default::default()
         })
-        .semantics(SemanticsArgs {
+        .clear_and_set_semantics(SemanticsArgs {
             hidden: true,
             ..Default::default()
         })

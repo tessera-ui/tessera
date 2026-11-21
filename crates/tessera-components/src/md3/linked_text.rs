@@ -132,7 +132,6 @@ pub fn linked_text(
     tessera_ui::layout::layout(policy.clone())
         .modifier(modifier.unwrap_or_default().semantics(SemanticsArgs {
             role: Some(Role::Paragraph),
-            merge_descendants: true,
             ..Default::default()
         }))
         .draw(policy)
@@ -523,7 +522,7 @@ fn linked_run(
             }
         })
     } else {
-        Modifier::new().semantics(SemanticsArgs {
+        Modifier::new().clear_and_set_semantics(SemanticsArgs {
             role: Some(Role::Label),
             label: Some(run.text),
             ..Default::default()

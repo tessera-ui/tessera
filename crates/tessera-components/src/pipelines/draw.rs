@@ -1,15 +1,49 @@
 use tessera_ui::render::PipelineContext;
 
 use crate::pipelines::{
-    checkmark::pipeline::CheckmarkPipeline, divider::DividerPipeline,
-    fluid_glass::pipeline::FluidGlassPipeline, image::pipeline::ImagePipeline,
-    image_vector::pipeline::ImageVectorPipeline, linear_wave::pipeline::LinearWavePipeline,
-    loading_shape::pipeline::LoadingShapePipeline, path_stroke::pipeline::PathStrokePipeline,
-    progress_arc::pipeline::ProgressArcPipeline, shape::pipeline::ShapePipeline,
-    simple_rect::pipeline::SimpleRectPipeline, text::pipeline::GlyphonTextRender,
+    checkmark::pipeline::CheckmarkPipeline,
+    divider::DividerPipeline,
+    image::pipeline::ImagePipeline,
+    image_vector::pipeline::ImageVectorPipeline,
+    linear_wave::pipeline::LinearWavePipeline,
+    liquid_glass::{lens::LiquidLensPipeline, pipeline::LiquidGlassPipeline},
+    loading_shape::pipeline::LoadingShapePipeline,
+    path_stroke::pipeline::PathStrokePipeline,
+    progress_arc::pipeline::ProgressArcPipeline,
+    shape::pipeline::ShapePipeline,
+    simple_rect::pipeline::SimpleRectPipeline,
+    text::pipeline::GlyphonTextRender,
 };
 
 pub(super) fn register(context: &mut PipelineContext<'_>) {
+    context.register_draw_pipeline_factory(|resources| {
+        super::perceptual_fill::PerceptualSweepPipeline::new(
+            resources.device,
+            resources.surface_config.format,
+            resources.sample_count,
+        )
+    });
+    context.register_draw_pipeline_factory(|resources| {
+        super::perceptual_fill::PerceptualFillPipeline::new(
+            resources.device,
+            resources.surface_config.format,
+            resources.sample_count,
+        )
+    });
+    context.register_draw_pipeline_factory(|resources| {
+        super::perceptual_fill::PerceptualDialPipeline::new(
+            resources.device,
+            resources.surface_config.format,
+            resources.sample_count,
+        )
+    });
+    context.register_draw_pipeline_factory(|resources| {
+        super::perceptual_fill::PerceptualSpokesPipeline::new(
+            resources.device,
+            resources.surface_config.format,
+            resources.sample_count,
+        )
+    });
     context.register_draw_pipeline_factory(|resources| {
         SimpleRectPipeline::new(
             resources.device,
@@ -65,7 +99,24 @@ pub(super) fn register(context: &mut PipelineContext<'_>) {
     });
 
     context.register_draw_pipeline_factory(|resources| {
-        FluidGlassPipeline::new(
+        super::text::pipeline::perceptual::PerceptualTextPipeline::new(
+            resources.device,
+            resources.surface_config.format,
+            resources.sample_count,
+        )
+    });
+
+    context.register_draw_pipeline_factory(|resources| {
+        LiquidGlassPipeline::new(
+            resources.device,
+            resources.pipeline_cache,
+            resources.surface_config,
+            resources.sample_count,
+        )
+    });
+
+    context.register_draw_pipeline_factory(|resources| {
+        LiquidLensPipeline::new(
             resources.device,
             resources.pipeline_cache,
             resources.surface_config,

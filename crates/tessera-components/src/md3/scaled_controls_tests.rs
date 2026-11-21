@@ -44,7 +44,6 @@ impl tessera_ui::PlacementModifierNode for FractionalOrigin {
 fn observe(name: &'static str) -> Modifier {
     Modifier::new().semantics(tessera_foundation::modifier::SemanticsArgs {
         test_tag: Some(name.into()),
-        merge_descendants: true,
         ..Default::default()
     })
 }

@@ -492,7 +492,6 @@ fn specimen(kind: usize) {
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             role: Some(Role::Group),
             label: Some(I18N.text(&(figure))),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {
@@ -567,7 +566,7 @@ fn specimen_content(floating: bool) {
                             scheme.tertiary_container,
                             Shape::rounded_rectangle(Dp(0.0)),
                         )
-                        .semantics(SemanticsArgs {
+                        .clear_and_set_semantics(SemanticsArgs {
                             role: Some(Role::Image),
                             label: Some(I18N.text("ui-vacation-rental-photo")),
                             ..Default::default()
@@ -628,7 +627,6 @@ fn specimen_bar(kind: usize, status: State<String>) {
         Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Heading),
             label: Some(heading),
-            merge_descendants: true,
             ..Default::default()
         })
     } else {
@@ -1058,7 +1056,7 @@ fn mirrored_bar(rtl: bool) {
                 .height(Dp(64.0))
                 .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(0.0)))
                 .padding_symmetric(Dp(4.0), Dp(0.0))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Toolbar),
                     label: Some(
                         I18N.format("ui-value-app-bar", [("v0", I18N.text(&direction).into())]),
@@ -1419,7 +1417,6 @@ fn sample(
                                     "ui-value-bar",
                                     [("v0", I18N.text(&label.get()).into())],
                                 )),
-                                merge_descendants: true,
                                 ..Default::default()
                             }))
                             .children(move || {
@@ -1442,7 +1439,6 @@ fn sample(
                                             "ui-value-title",
                                             [("v0", I18N.text(&label.get()).into())],
                                         )),
-                                        merge_descendants: true,
                                         ..Default::default()
                                     }))
                                     .title_content_optional(logo.get().then_some(logo_slot))
@@ -1503,7 +1499,6 @@ fn sample(
                                                     "ui-value-scroll-content",
                                                     [("v0", I18N.text(&label.get()).into())],
                                                 )),
-                                                merge_descendants: true,
                                                 ..Default::default()
                                             }),
                                     )
@@ -1551,7 +1546,7 @@ fn brand() {
         crate::res::LOGO_PNG
     };
     boxed()
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             role: Some(Role::Image),
             label: Some(I18N.text("ui-tessera-brand")),
             ..Default::default()
@@ -1665,7 +1660,6 @@ fn search_sample(
                         .semantics(SemanticsArgs {
                             role: Some(Role::Toolbar),
                             label: Some(I18N.text("ui-search-app-bar")),
-                            merge_descendants: true,
                             ..Default::default()
                         })
                         .on_layout_coordinates(move |coordinates: LayoutCoordinates| {
@@ -1919,7 +1913,7 @@ fn baseline_bar(large: bool, #[prop(into)] label: Option<String>) {
                 .fill_max_width()
                 .height(Dp(if large { 152.0 } else { 112.0 }))
                 .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(0.0)))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Toolbar),
                     label: Some(I18N.text(&(label))),
                     ..Default::default()
@@ -2356,7 +2350,7 @@ fn color_figure(search: bool, dark: bool) {
                     scheme.surface_container_low,
                     Shape::rounded_rectangle(Dp(24.0)),
                 )
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     label: Some(
                         I18N.format(
@@ -2894,7 +2888,6 @@ fn search_figure(measurements: bool) {
                             )],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -3156,7 +3149,6 @@ fn app_figure(
                             )],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )

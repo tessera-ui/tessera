@@ -2,6 +2,10 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
+    experiment::hig::{
+        theme::{Appearance, HigTheme, hig_theme},
+        toolbar::{ToolbarSymbol, toolbar, toolbar_button},
+    },
     md3::{
         app_bar::top_app_bar,
         button::button,
@@ -30,6 +34,7 @@ use crate::{
     pages::{
         custom_shader::CustomShaderPageDestination,
         glass_components::GlassComponentsPageDestination,
+        hig_components::{HigComponentsPageDestination, current_article as current_hig_article},
         home::HomePageDestination,
         material_components::{MaterialComponentsPageDestination, current_article},
     },
@@ -77,6 +82,13 @@ pub(crate) fn app(
             scaffold()
                 .window_insets(WindowInsets::SafeDrawing)
                 .top_bar(move || {
+                    if nav_controller.with(|router| {
+                        router.current_is::<HigComponentsPageDestination>()
+                            || current_hig_article(router).is_some()
+                    }) {
+                        hig_top_bar(nav_controller, side_sheet_controller);
+                        return;
+                    }
                     let app_bar = top_app_bar()
                         .window_chrome(true)
                         .title(I18N.text(
@@ -161,6 +173,14 @@ pub(crate) fn app(
                                             .icon_asset(outlined::WIDGETS_SVG)
                                             .selected_icon_asset(filled::WIDGETS_SVG);
                                             nav_item(
+                                                "ui-hig-components",
+                                                HigComponentsPageDestination {},
+                                                nav_controller,
+                                                side_sheet_controller,
+                                            )
+                                            .icon_asset(outlined::WIDGETS_SVG)
+                                            .selected_icon_asset(filled::WIDGETS_SVG);
+                                            nav_item(
                                                 "ui-glass-components",
                                                 GlassComponentsPageDestination {},
                                                 nav_controller,
@@ -205,6 +225,84 @@ pub(crate) fn app(
             }),
         );
     });
+}
+
+/// The macOS window toolbar shown above the HIG pages.
+#[tessera]
+fn hig_top_bar(router: State<RouterController>, drawer: State<SideSheetController>) {
+    let dark = use_context::<MaterialTheme>()
+        .unwrap()
+        .get()
+        .color_scheme
+        .is_dark;
+    hig_theme()
+        .theme(HigTheme {
+            appearance: if dark {
+                Appearance::Dark
+            } else {
+                Appearance::Light
+            },
+        })
+        .child(move || {
+            let bar = toolbar()
+                .window_chrome(true)
+                .title(I18N.text("ui-hig-components"))
+                .navigation(move || {
+                    let article = router.with(|router| current_hig_article(router).is_some());
+                    toolbar_button()
+                        .symbol(if article {
+                            ToolbarSymbol::Back
+                        } else {
+                            ToolbarSymbol::Sidebar
+                        })
+                        .accessibility_label(I18N.text(if article {
+                            "ui-back-to-components"
+                        } else {
+                            "ui-open-navigation-drawer"
+                        }))
+                        .on_click(move || {
+                            if router.with(|router| current_hig_article(router).is_some()) {
+                                router.with_mut(RouterController::pop);
+                            } else {
+                                drawer.with_mut(|drawer| {
+                                    if drawer.is_open() {
+                                        drawer.close();
+                                    } else {
+                                        drawer.open();
+                                    }
+                                });
+                            }
+                        });
+                });
+            if let Some(locale) = I18n::try_current() {
+                bar.actions(move || {
+                    let chinese = locale.locale() == langid!("zh-CN");
+                    toolbar_button()
+                        .label(if chinese { "English" } else { "简体中文" })
+                        .accessibility_label(
+                            I18N.format(
+                                "ui-switch-language",
+                                [(
+                                    "language",
+                                    I18N.text(if chinese {
+                                        "ui-english"
+                                    } else {
+                                        "ui-language-chinese"
+                                    })
+                                    .into(),
+                                )],
+                            ),
+                        )
+                        .on_click(move || {
+                            locale.set_locale(if chinese {
+                                langid!("en")
+                            } else {
+                                langid!("zh-CN")
+                            });
+                        });
+                });
+            }
+        });
 }
 
 #[tessera]
@@ -270,7 +368,7 @@ pub(crate) fn navigation_button(
     router: State<RouterController>,
     drawer: State<SideSheetController>,
 ) {
-    let back = router.with(current_article).is_some();
+    let back = router.with(|router| current_article(router).is_some());
     let target = if back { 1.0 } else { 0.0 };
     let fade = remember(|| target);
     launch(back, async move {
@@ -316,7 +414,7 @@ pub(crate) fn navigation_button(
                     "ui-open-navigation-drawer"
                 }))
                 .on_click(move || {
-                    if router.with(current_article).is_some() {
+                    if router.with(|router| current_article(router).is_some()) {
                         router.with_mut(RouterController::pop);
                     } else {
                         drawer.with_mut(|drawer| {
@@ -429,6 +527,7 @@ mod tests {
             "Glass components",
             "Custom shader",
             "Material components",
+            "HIG components",
         ] {
             if !handles.directory.with(SideSheetController::is_open) {
                 click(&mut renderer, "Open navigation drawer");
@@ -447,6 +546,7 @@ mod tests {
                 "Glass components" => router.current_is::<GlassComponentsPageDestination>(),
                 "Custom shader" => router.current_is::<CustomShaderPageDestination>(),
                 "Material components" => router.current_is::<MaterialComponentsPageDestination>(),
+                "HIG components" => router.current_is::<HigComponentsPageDestination>(),
                 _ => unreachable!(),
             }));
             assert!(!handles.directory.with(SideSheetController::is_open));
@@ -534,10 +634,10 @@ mod tests {
                 [("language", I18N.text("ui-language-chinese").into())],
             )
         });
-        let (blur_override, blur_radius) = session.run(|| {
+        let (click_action, spacing) = session.run(|| {
             (
-                I18N.text("ui-glass-custom-blur"),
-                I18N.text("ui-blur-radius"),
+                I18N.text("ui-glass-click-action"),
+                I18N.text("ui-glass-spacing"),
             )
         });
         let accessibility = session.inspect_accessibility().unwrap();
@@ -545,17 +645,17 @@ mod tests {
             .find(&language, Role::Button)
             .expect("language action")
             .0;
-        let blur_override = accessibility
-            .find(&blur_override, Role::Switch)
-            .expect("glass blur override after navigation")
+        let click_action = accessibility
+            .find(&click_action, Role::Switch)
+            .expect("glass click action after navigation")
             .0;
-        assert!(session.accessibility_action(blur_override, Action::Click));
+        assert!(session.accessibility_action(click_action, Action::Click));
         session.frames(1);
         let accessibility = session.inspect_accessibility().unwrap();
         let (slider, initial_value) = accessibility
-            .find(&blur_radius, Role::Slider)
+            .find(&spacing, Role::Slider)
             .map(|(id, node)| (id, node.numeric_value().unwrap()))
-            .expect("glass blur slider after enabling the override");
+            .expect("glass spacing slider");
         assert!(session.accessibility_action(slider, Action::Increment));
         session.frames(1);
         let accessibility = session.inspect_accessibility().unwrap();

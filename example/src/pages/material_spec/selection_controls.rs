@@ -263,7 +263,6 @@ pub(super) fn checkbox_group() {
             .modifier(Modifier::new().width(Dp(400.0)).semantics(SemanticsArgs {
                 role: Some(tessera_ui::accesskit::Role::Group),
                 label: Some(I18N.text("ui-related-checkbox-choices")),
-                merge_descendants: true,
                 ..Default::default()
             }))
             .children(move || {

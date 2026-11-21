@@ -174,7 +174,6 @@ fn toolbar_control(
                     .unwrap_or_default()
                     .semantics(SemanticsArgs {
                         test_tag: Some("spec-toolbar-action-0".into()),
-                        merge_descendants: true,
                         ..Default::default()
                     }),
             )
@@ -204,7 +203,6 @@ fn toolbar_control(
                     .unwrap_or_default()
                     .semantics(SemanticsArgs {
                         test_tag: Some(format!("spec-toolbar-action-{index}")),
-                        merge_descendants: true,
                         ..Default::default()
                     }),
             )
@@ -222,7 +220,6 @@ fn toolbar_control(
                     .unwrap_or_default()
                     .semantics(SemanticsArgs {
                         test_tag: Some(format!("spec-toolbar-action-{index}")),
-                        merge_descendants: true,
                         ..Default::default()
                     }),
             )
@@ -254,7 +251,6 @@ fn toolbar_content(
         .unwrap_or_default()
         .semantics(SemanticsArgs {
             test_tag: Some("spec-toolbar-container".into()),
-            merge_descendants: true,
             ..Default::default()
         });
     let vibrant = color == ToolbarColorStyle::Vibrant;
@@ -322,7 +318,7 @@ fn baseline_figure() {
                             watch(geometry, "container")
                                 .fill_max_width()
                                 .height(Dp(80.0))
-                                .semantics(SemanticsArgs {
+                                .clear_and_set_semantics(SemanticsArgs {
                                     role: Some(Role::Toolbar),
                                     label: Some(I18N.text("ui-baseline-bottom-app-bar")),
                                     test_tag: Some("baseline-bottom-bar".into()),
@@ -483,7 +479,6 @@ fn figure(variant: Variant, color: ToolbarColorStyle, measurements: bool) {
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             test_tag: Some("spec-toolbar-figure".into()),
-                            merge_descendants: true,
                             label: Some(
                                 I18N.format(
                                     "ui-toolbar-value-figure",
@@ -954,7 +949,6 @@ fn tagged(tag: Option<String>) -> Modifier {
     match tag {
         Some(tag) => Modifier::new().semantics(SemanticsArgs {
             test_tag: Some(tag),
-            merge_descendants: true,
             ..Default::default()
         }),
         None => Modifier::new(),
@@ -1202,7 +1196,6 @@ fn stage(width: State<Dp>, content: RenderSlot) {
                 )
                 .semantics(SemanticsArgs {
                     test_tag: Some("toolbar-stage".into()),
-                    merge_descendants: true,
                     ..Default::default()
                 })
                 .padding_symmetric(Dp(padding), Dp(32.0)),
@@ -1729,7 +1722,7 @@ fn placement_figure(placement: Placement) {
                     scheme.surface_container_low,
                     Shape::rounded_rectangle(Dp(24.0)),
                 )
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     label: Some(I18N.text(match placement {
                         Placement::Docked => "ui-docked-toolbar-at-the-bottom-of-the-window",
@@ -1799,7 +1792,7 @@ fn placement_figure(placement: Placement) {
                                                 Dp::ZERO,
                                                 Dp::ZERO,
                                             ))
-                                            .semantics(SemanticsArgs {
+                                            .clear_and_set_semantics(SemanticsArgs {
                                                 role: Some(Role::Group),
                                                 label: Some(I18N.text("ui-navigation-rail")),
                                                 ..Default::default()
@@ -2129,7 +2122,7 @@ fn bottom_bar(icons: usize, fab: bool, notice: State<String>) {
             Modifier::new()
                 .fill_max_width()
                 .height(Dp(80.0))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Toolbar),
                     label: Some(I18N.text(if fab {
                         "ui-bottom-app-bar-with-fab"
@@ -3235,7 +3228,6 @@ fn phone_mock(#[prop(into)] title: String, toolbar: MockBar, nav_bar: bool) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(I18N.text(description)),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )

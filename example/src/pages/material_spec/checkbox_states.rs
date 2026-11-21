@@ -101,7 +101,6 @@ fn panel(dark: bool) {
                             )],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -115,7 +114,7 @@ fn panel(dark: bool) {
                             .offset(Dp(center - 12.0), Dp(84.0))
                             .size(Dp(24.0), Dp(24.0))
                             .background_with_shape(scheme.on_surface, Shape::Ellipse)
-                            .semantics(SemanticsArgs {
+                            .clear_and_set_semantics(SemanticsArgs {
                                 hidden: true,
                                 ..Default::default()
                             }),
@@ -196,10 +195,14 @@ fn hover_pointers() {
         0.5,
     );
     boxed()
-        .modifier(Modifier::new().fill_max_size().semantics(SemanticsArgs {
-            hidden: true,
-            ..Default::default()
-        }))
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .clear_and_set_semantics(SemanticsArgs {
+                    hidden: true,
+                    ..Default::default()
+                }),
+        )
         .children(move || {
             annotations::lines(Dp(1024.0), Dp(757.0), svg.clone());
         });

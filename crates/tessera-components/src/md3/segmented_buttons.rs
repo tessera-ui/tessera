@@ -63,7 +63,7 @@ impl SemanticsModifierNode for SegmentedGroupSemantics {
             Role::Group
         });
         node.orientation = Some(Orientation::Horizontal);
-        node.merge_descendants = true;
+        node.hide_descendants = false;
     }
 }
 

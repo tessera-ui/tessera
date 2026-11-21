@@ -74,7 +74,7 @@ fn fixture(observed: TestProbe<Option<State<Settings>>>) {
                         } else {
                             Modifier::new().width(settings.get().width)
                         })
-                        .semantics(SemanticsArgs {
+                        .clear_and_set_semantics(SemanticsArgs {
                             label: Some("View options".to_owned()),
                             description: Some("Calendar period".to_owned()),
                             ..Default::default()

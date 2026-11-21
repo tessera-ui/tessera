@@ -17,10 +17,10 @@ use tessera_ui::{
 
 use crate::{
     alignment::Alignment,
+    animation::cubic_bezier_easing,
     animation::{Motion, animate_to},
     boxed::boxed,
     md3::{
-        progress::cubic_bezier_easing,
         surface::surface,
         text::text,
         theme::{MaterialTheme, TextStyle},
@@ -328,7 +328,7 @@ fn label_layer(
         orientation: request.orientation,
         scale,
     })
-    .modifier(Modifier::new().semantics(SemanticsArgs {
+    .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
         hidden: true,
         ..Default::default()
     }))
@@ -341,7 +341,7 @@ fn label_layer(
                 Some(AxisConstraint::new(dp(44.0).to_px(), None)),
             );
             #[cfg(test)]
-            let modifier = modifier.semantics(SemanticsArgs {
+            let modifier = modifier.clear_and_set_semantics(SemanticsArgs {
                 test_tag: Some("slider-value-label".into()),
                 label: Some(request.label.clone()),
                 ..Default::default()

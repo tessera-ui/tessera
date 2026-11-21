@@ -500,7 +500,7 @@ fn switch_content(
         };
         modifier = modifier.toggleable(toggle_args);
     } else {
-        modifier = modifier.semantics(SemanticsArgs {
+        modifier = modifier.clear_and_set_semantics(SemanticsArgs {
             role: Some(Role::Switch),
             toggled: Some(if checked {
                 Toggled::True

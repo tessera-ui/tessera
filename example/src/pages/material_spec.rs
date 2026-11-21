@@ -124,7 +124,7 @@ fn heading(label: String, compact: Option<bool>, level: Option<u8>) {
         } else {
             type_style(45.0, 52.0)
         })
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             role: Some(tessera_ui::accesskit::Role::Heading),
             heading_level: Some(u32::from(level)),
             ..Default::default()
@@ -136,7 +136,7 @@ fn heading(label: String, compact: Option<bool>, level: Option<u8>) {
 fn subheading(label: String, level: Option<u8>) {
     text(I18N.text(label))
         .style(type_style(24.0, 32.0))
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             role: Some(tessera_ui::accesskit::Role::Heading),
             heading_level: Some(u32::from(level.unwrap_or(3).clamp(3, 4))),
             ..Default::default()

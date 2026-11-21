@@ -11,7 +11,9 @@ use tessera_ui::{
     accesskit, modifier::ModifierCapabilityExt as _, time::Instant,
 };
 
-use crate::pointer_gestures::{DragAxis, DragGestureConfig, detect_drag_gestures};
+use crate::pointer_gestures::{
+    DragAxis, DragGestureConfig, TapGestureConfig, detect_drag_gestures,
+};
 
 /// Context for pointer press/release callbacks.
 #[derive(Clone, PartialEq, Copy, Debug)]
@@ -34,6 +36,10 @@ pub struct ClickableArgs {
     pub on_click: Callback,
     /// Whether the element is enabled for interaction.
     pub enabled: bool,
+    /// Enables default Enter/Space handling. Disable when supplying custom keyboard activation.
+    pub keyboard_activation: bool,
+    /// Tap movement and exit behavior; input consumption and long presses use their dedicated options.
+    pub tap_config: TapGestureConfig,
     /// Whether to block input propagation when within bounds.
     pub block_input: bool,
     /// Optional press callback with normalized position and element size.
@@ -59,6 +65,8 @@ impl Default for ClickableArgs {
         Self {
             on_click: Callback::noop(),
             enabled: true,
+            keyboard_activation: true,
+            tap_config: TapGestureConfig::default(),
             block_input: true,
             on_press: None,
             on_release: None,

@@ -226,7 +226,6 @@ fn segmented_row(
                 "ui-value-segmented-buttons",
                 [("v0", I18N.text(&label).into())],
             )),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {

@@ -1458,7 +1458,7 @@ mod tests {
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
         let mut semantics = AccessibilityNode::new().with_role(Role::Button);
-        semantics.merge_descendants = false;
+        semantics.hide_descendants = true;
         let button = append_node(&mut tree, &mut metadatas, Some(root), Some(semantics));
         let wrapper = append_node(&mut tree, &mut metadatas, Some(button), None);
         append_node(
@@ -1757,7 +1757,7 @@ mod tests {
         assert_eq!(calls.get(), 1);
         edit_semantics(&mut metadatas, parent, |node| {
             node.hidden = false;
-            node.merge_descendants = false;
+            node.hide_descendants = true;
         });
         assert!(!dispatch_action(
             &tree,
@@ -1767,7 +1767,7 @@ mod tests {
             crate::time::Instant::now()
         ));
         assert_eq!(calls.get(), 1);
-        edit_semantics(&mut metadatas, parent, |node| node.merge_descendants = true);
+        edit_semantics(&mut metadatas, parent, |node| node.hide_descendants = false);
         let metadata = metadatas
             .get_mut(&parent)
             .expect("test fixture entry exists");

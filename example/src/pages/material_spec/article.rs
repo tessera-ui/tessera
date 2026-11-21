@@ -296,7 +296,6 @@ fn article_footer(
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     label: Some(I18N.text("ui-previous-and-up-next-articles")),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -768,7 +767,6 @@ fn article_tab_strip(
                 .semantics(SemanticsArgs {
                     role: Some(Role::TabList),
                     label: Some(I18N.text("ui-article-sections")),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -831,7 +829,6 @@ fn article_tab_strip(
                                 );
                                 modifier.semantics(SemanticsArgs {
                                     test_tag: Some(format!("article-tab-content-{index}")),
-                                    merge_descendants: true,
                                     ..Default::default()
                                 })
                             })

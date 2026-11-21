@@ -58,7 +58,6 @@ pub(super) fn space_geometry(geometry: &SpaceGeometry) -> BTreeMap<&'static str,
 pub(super) fn watch_observed(geometry: State<SpaceGeometry>, name: &'static str) -> Modifier {
     watch_in_space(geometry, name).semantics(SemanticsArgs {
         test_tag: Some(format!("observed-{name}")),
-        merge_descendants: true,
         ..Default::default()
     })
 }
@@ -199,7 +198,6 @@ pub(super) fn marker(number: usize, x: Dp, y: Dp) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.format("ui-anatomy-marker-value", [("v0", (number).into())])),
-                    merge_descendants: true,
                     ..Default::default()
                 })
                 .background_with_shape(srgb(247, 242, 250), Shape::rounded_rectangle(Dp(16.0)))
@@ -222,7 +220,6 @@ pub(super) fn dimension(label: String, x: Dp, y: Dp) {
         .modifier(Modifier::new().offset(x, y).semantics(SemanticsArgs {
             role: Some(Role::Note),
             label: Some(I18N.format("ui-dimension-value", [("v0", I18N.text(&label).into())])),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {

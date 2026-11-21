@@ -172,7 +172,6 @@ fn canvas_body(
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     label: Some(I18N.text(label)),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -256,7 +255,6 @@ pub(super) fn specimen(
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             label: Some(I18N.text(&(label))),
-                            merge_descendants: true,
                             ..Default::default()
                         }),
                 )
@@ -453,15 +451,17 @@ fn specimen_header(
                 } else {
                     Alignment::Center
                 })
-                .modifier(watch(geometry, "menu").size(Dp(56.0), Dp(48.0)).semantics(
-                    SemanticsArgs {
-                        role: Some(Role::Image),
-                        label: Some(
-                            I18N.format("ui-value-menu", [("v0", I18N.text(&label).into())]),
-                        ),
-                        ..Default::default()
-                    },
-                ))
+                .modifier(
+                    watch(geometry, "menu")
+                        .size(Dp(56.0), Dp(48.0))
+                        .clear_and_set_semantics(SemanticsArgs {
+                            role: Some(Role::Image),
+                            label: Some(
+                                I18N.format("ui-value-menu", [("v0", I18N.text(&label).into())]),
+                            ),
+                            ..Default::default()
+                        }),
+                )
                 .children(move || {
                     icon()
                         .painter(if expanded {
@@ -575,7 +575,6 @@ fn filled_marker(number: usize, x: Dp, y: Dp, dark: bool) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.format("ui-anatomy-marker-value", [("v0", (number).into())])),
-                    merge_descendants: true,
                     ..Default::default()
                 })
                 .background_with_shape(fill, Shape::rounded_rectangle(Dp(16.0))),
@@ -1590,7 +1589,7 @@ pub(super) fn screen(
                 .clip_shape(Shape::rounded_rectangle(Dp(20.0)))
                 .background(srgb(120, 117, 128))
                 .padding_all(Dp(4.0))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(I18N.text(label)),
                     ..Default::default()
@@ -1843,7 +1842,6 @@ pub(super) fn scene(#[prop(into)] label: String, height: Dp, content: RenderSlot
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     label: Some(I18N.text(label)),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1882,7 +1880,6 @@ pub(super) fn example(
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             label: Some(I18N.text(&(label))),
-                            merge_descendants: true,
                             ..Default::default()
                         }),
                 )

@@ -2202,7 +2202,6 @@ fn behavior_rail() {
                     role: Some(Role::Navigation),
                     label: Some(I18N.text("ui-interactive-mail-navigation")),
                     test_tag: Some("behavior-rail".into()),
-                    merge_descendants: true,
                     ..Default::default()
                 }))
                 .children(move || {
@@ -2219,7 +2218,6 @@ fn behavior_rail() {
                                 }))
                                 .modifier(Modifier::new().semantics(SemanticsArgs {
                                     test_tag: Some("behavior-rail-menu".into()),
-                                    merge_descendants: true,
                                     ..Default::default()
                                 }))
                                 .on_click(move || {
@@ -2231,7 +2229,6 @@ fn behavior_rail() {
                                 boxed()
                                     .modifier(Modifier::new().semantics(SemanticsArgs {
                                         test_tag: Some(format!("behavior-rail-item-{index}")),
-                                        merge_descendants: true,
                                         ..Default::default()
                                     }))
                                     .children(move || {
@@ -2257,7 +2254,6 @@ fn behavior_rail() {
             )))
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(format!("behavior-rail-destination-{}", selected.get())),
-                merge_descendants: true,
                 ..Default::default()
             }))
             .style(type_style(14.0, 20.0));
@@ -2288,7 +2284,6 @@ fn scrolling_rail_view(
                         role: Some(Role::Navigation),
                         label: Some(I18N.text("ui-fixed-mail-navigation-beside-scrolling-content")),
                         test_tag: Some("scrolling-rail".into()),
-                        merge_descendants: true,
                         ..Default::default()
                     }))
                     .children(move || {
@@ -2306,7 +2301,6 @@ fn scrolling_rail_view(
                                     .on_click(move || expanded.with_mut(|value| *value = !*value))
                                     .modifier(Modifier::new().semantics(SemanticsArgs {
                                         test_tag: Some("scrolling-rail-menu".into()),
-                                        merge_descendants: true,
                                         ..Default::default()
                                     }));
                             })
@@ -2315,7 +2309,6 @@ fn scrolling_rail_view(
                                     boxed()
                                         .modifier(Modifier::new().semantics(SemanticsArgs {
                                             test_tag: Some(format!("scrolling-rail-item-{index}")),
-                                            merge_descendants: true,
                                             ..Default::default()
                                         }))
                                         .children(move || {
@@ -2342,7 +2335,6 @@ fn scrolling_rail_view(
                             .padding_all(Dp(16.0))
                             .semantics(SemanticsArgs {
                                 test_tag: Some("scrolling-body".into()),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )
@@ -2361,7 +2353,6 @@ fn scrolling_rail_view(
                                         )
                                         .semantics(SemanticsArgs {
                                             test_tag: Some(format!("scrolling-message-{index}")),
-                                            merge_descendants: true,
                                             ..Default::default()
                                         }),
                                 )
@@ -2384,7 +2375,6 @@ fn scrolling_rail_view(
             .style(type_style(14.0, 20.0))
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(format!("scrolling-rail-destination-{}", selected.get())),
-                merge_descendants: true,
                 ..Default::default()
             }));
     });

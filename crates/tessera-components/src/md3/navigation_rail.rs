@@ -954,7 +954,7 @@ pub fn modal_navigation_rail(
                     .modifier(
                         Modifier::new()
                             .fill_max_size()
-                            .semantics(SemanticsArgs {
+                            .clear_and_set_semantics(SemanticsArgs {
                                 hidden: true,
                                 ..Default::default()
                             })

@@ -1332,7 +1332,6 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                             ("v1", I18N.text(&emphasis).into()),
                         ],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1557,7 +1556,7 @@ fn menu_color_marker(number: usize, role: String, x: Dp, y: Dp) {
                 .offset(x, y)
                 .size(Dp(24.0), Dp(32.0))
                 .background_with_shape(scheme.on_surface, Shape::rounded_rectangle(Dp(16.0)))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.format(
                         "ui-menu-color-role-value-value",

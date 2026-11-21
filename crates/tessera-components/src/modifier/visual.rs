@@ -265,10 +265,7 @@ mod tests {
                                 .children(move || {
                                     if stage.get() == 3 {
                                         crate::experiment::hig::glass::glass()
-                                            .blur_radius(Dp(4.0))
-                                            .contrast(1.1)
-                                            .tint_color(Color::BLUE)
-                                            .shape(Shape::RECTANGLE)
+                                            .corner_radius(Dp(0.0))
                                             .modifier(Modifier::new().fill_max_size())
                                             .child(|| {});
                                     } else if stage.get() == 1 {

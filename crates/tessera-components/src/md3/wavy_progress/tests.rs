@@ -81,7 +81,6 @@ fn fixture(circular: Option<bool>, probe: Option<TestProbe<Option<State<Settings
                     .offset(settings.with(|s| s.offset), settings.with(|s| s.offset))
                     .semantics(SemanticsArgs {
                         test_tag: Some("wave".into()),
-                        merge_descendants: true,
                         ..Default::default()
                     });
                 boxed().modifier(wrapper).children(move || {

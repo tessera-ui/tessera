@@ -266,7 +266,7 @@ fn mail_scene() {
                 .window_anchor(anchor)
                 .main_content(move || {
                     column()
-                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)).background_with_shape(scheme.surface_container_low, Shape::rounded_rectangle(Dp(24.0))).semantics(SemanticsArgs { role: Some(Role::Group), label: Some(I18N.text("ui-message-actions")), merge_descendants: true, ..Default::default() }))
+                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)).background_with_shape(scheme.surface_container_low, Shape::rounded_rectangle(Dp(24.0))).semantics(SemanticsArgs { role: Some(Role::Group), label: Some(I18N.text("ui-message-actions")),..Default::default() }))
                         .children(move || {
                             subheading("ui-weekend-plans".into());
                             gap(Dp(8.0));
@@ -287,7 +287,7 @@ fn mail_scene() {
                                     .shape(Shape::CAPSULE)
                                     .icon(filled::MORE_VERT_SVG)
                                     .accessibility_label(I18N.text("ui-more-message-options"))
-                                    .modifier(Modifier::new().on_layout_coordinates(move |coordinates| { anchor.set_if_changed(coordinates); }).semantics(SemanticsArgs { expanded: Some(menu.with(MenuController::is_open)), has_popup: Some(HasPopup::Menu), ..Default::default() }))
+                                    .modifier(Modifier::new().on_layout_coordinates(move |coordinates| { anchor.set_if_changed(coordinates); }).clear_and_set_semantics(SemanticsArgs { expanded: Some(menu.with(MenuController::is_open)), has_popup: Some(HasPopup::Menu), ..Default::default() }))
                                     .on_click(move || menu.with_mut(MenuController::toggle));
                             });
                             gap(Dp(16.0));

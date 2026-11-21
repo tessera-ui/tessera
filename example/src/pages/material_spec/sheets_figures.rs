@@ -49,7 +49,6 @@ fn badge_ink() -> Color {
 fn watch_figure(geometry: State<Geometry>, name: &'static str) -> Modifier {
     annotations::watch_precise(geometry, name).semantics(SemanticsArgs {
         test_tag: Some(format!("sheet-figure-{name}")),
-        merge_descendants: true,
         ..Default::default()
     })
 }
@@ -301,7 +300,6 @@ fn badge(
         .semantics(SemanticsArgs {
             role: Some(Role::Note),
             label: Some(I18N.text(name)),
-            merge_descendants: true,
             ..Default::default()
         });
     if outlined {

@@ -236,7 +236,7 @@ impl SemanticsModifierNode for ButtonGroupsSemantics {
     ) {
         node.role = Some(Role::Group);
         node.orientation = Some(Orientation::Horizontal);
-        node.merge_descendants = true;
+        node.hide_descendants = false;
     }
 }
 

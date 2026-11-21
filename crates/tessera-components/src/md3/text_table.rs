@@ -200,7 +200,6 @@ pub fn text_table(
     let cells = intrinsic.cells.clone();
     let modifier = modifier.unwrap_or_default().semantics(SemanticsArgs {
         role: Some(Role::Table),
-        merge_descendants: true,
         collection_info: Some((rows, columns, false)),
         ..Default::default()
     });
@@ -249,21 +248,19 @@ fn table_row(
     group()
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Row),
-            merge_descendants: true,
             collection_item_info: Some((row, 1, 0, columns, false)),
             ..Default::default()
         }))
         .child(move || {
             for cell in cells.iter().cloned() {
                 let heading = cell.heading != TextTableHeading::None;
-                let modifier = Modifier::new().semantics(SemanticsArgs {
+                let modifier = Modifier::new().clear_and_set_semantics(SemanticsArgs {
                     role: Some(match cell.heading {
                         TextTableHeading::None => Role::Cell,
                         TextTableHeading::Column => Role::ColumnHeader,
                         TextTableHeading::Row => Role::RowHeader,
                     }),
                     label: Some(cell.text.clone()),
-                    merge_descendants: false,
                     collection_item_info: Some((
                         cell.row,
                         cell.row_span,

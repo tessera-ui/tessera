@@ -541,7 +541,7 @@ pub(super) fn apply_range_slider_semantics(
     accessibility.description = args.accessibility_description.clone();
     accessibility.hidden = false;
     accessibility.focusable = false;
-    accessibility.merge_descendants = true;
+    accessibility.hide_descendants = false;
     accessibility.disabled = args.disabled;
 }
 

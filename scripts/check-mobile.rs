@@ -61,10 +61,9 @@ fn valid(record: &Value) -> bool {
     fn text(nodes: &Value) -> bool {
         nodes.as_array().is_some_and(|nodes| {
             nodes.iter().any(|node| {
-                node["fn_name"]
-                    .as_str()
-                    .is_some_and(|name| name.split("::").last() == Some("text"))
-                    || text(&node["children"])
+                node["fn_name"].as_str().is_some_and(|name| {
+                    matches!(name.rsplit("::").next(), Some("text" | "text_node"))
+                }) || text(&node["children"])
             })
         })
     }
@@ -464,7 +463,7 @@ mod tests {
                     writeln!(
                         file,
                         "{}",
-                        json!({"type":"frame", "frame":launches * 2 + offset, "render_time_ns":1, "components":[{"fn_name":"text"}], "redraw_reasons":[reason]})
+                        json!({"type":"frame", "frame":launches * 2 + offset, "render_time_ns":1, "components":[{"fn_name":"text_node"}], "redraw_reasons":[reason]})
                     )?;
                 }
                 Ok(format!(
@@ -497,7 +496,7 @@ mod tests {
         second["render_time_ns"] = json!(1);
         second["components"] = json!([]);
         assert!(!ready(&[first.clone(), second.clone()], true));
-        second["components"] = json!([{"children":[{"fn_name":"module::text"}]}]);
+        second["components"] = json!([{"children":[{"fn_name":"module::text_node"}]}]);
         assert!(ready(&[first, second], true));
     }
 

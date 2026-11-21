@@ -40,7 +40,7 @@ impl SemanticsModifierNode for TabListSemantics {
         _: &mut Option<tessera_ui::AccessibilityActionHandler>,
     ) {
         node.role = Some(tessera_ui::accesskit::Role::TabList);
-        node.merge_descendants = true;
+        node.hide_descendants = false;
     }
 }
 

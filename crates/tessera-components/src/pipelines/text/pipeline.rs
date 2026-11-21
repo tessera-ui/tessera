@@ -17,6 +17,9 @@ use tessera_ui::{
 
 use super::command::{TextCommand, TextConstraint};
 
+#[path = "perceptual.rs"]
+pub(crate) mod perceptual;
+
 struct TextResources {
     font_system: Arc<RwLock<glyphon::FontSystem>>,
     // Read and advanced under the font-system write lock.
@@ -33,6 +36,9 @@ struct TextLayoutKey {
     text: Arc<str>,
     metrics: [u32; 3],
     weight: u16,
+    optical_size: Option<glyphon::cosmic_text::FontSize>,
+    point_size: Option<glyphon::cosmic_text::FontSize>,
+    native_grid: Option<u32>,
     family: Option<&'static str>,
     bounds: [Option<u32>; 2],
     single_line: bool,
@@ -44,11 +50,15 @@ impl TextLayoutKey {
             font_size,
             line_height,
             font,
+            native_grid,
         } = format;
         Self {
             text: Arc::clone(text),
             metrics: [font_size, line_height, font.tracking].map(f32::to_bits),
             weight: font.weight,
+            optical_size: font.optical_size,
+            point_size: font.point_size,
+            native_grid: native_grid.map(f32::to_bits),
             family: font.family,
             bounds: [constraint.max_width, constraint.max_height]
                 .map(|bound| bound.map(f32::to_bits)),
@@ -175,6 +185,8 @@ pub(crate) fn color_to_glyphon(color: Color) -> glyphon::Color {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct TextFont {
     weight: u16,
+    optical_size: Option<glyphon::cosmic_text::FontSize>,
+    point_size: Option<glyphon::cosmic_text::FontSize>,
     tracking: f32,
     family: Option<&'static str>,
 }
@@ -184,6 +196,7 @@ pub(crate) struct TextFormat {
     font_size: f32,
     line_height: f32,
     font: TextFont,
+    native_grid: Option<f32>,
 }
 
 impl TextFormat {
@@ -198,8 +211,11 @@ impl TextFormat {
         Self {
             font_size,
             line_height: line_height.to_pixels_f32(),
+            native_grid: None,
             font: TextFont {
                 weight: weight.clamp(1, 1000),
+                optical_size: None,
+                point_size: None,
                 tracking: if font_size > 0.0 {
                     letter_spacing.to_pixels_f32() / font_size
                 } else {
@@ -212,6 +228,21 @@ impl TextFormat {
 
     pub(crate) fn family(&self) -> Option<&'static str> {
         self.font.family
+    }
+
+    pub(crate) fn with_optical_size(mut self, points: Option<f32>) -> Self {
+        self.font.optical_size = points.map(glyphon::cosmic_text::FontSize::new);
+        self
+    }
+
+    pub(crate) fn with_point_size(mut self, points: Option<f32>) -> Self {
+        self.font.point_size = points.map(glyphon::cosmic_text::FontSize::new);
+        self
+    }
+
+    pub(crate) fn with_native_rasterization(mut self, enabled: bool) -> Self {
+        self.native_grid = enabled.then(|| Dp(1.0).to_pixels_f32());
+        self
     }
 }
 
@@ -368,21 +399,23 @@ struct ShapedText {
     buffer: glyphon::Buffer,
     measure: TextMeasureInfo,
     font_revision: u32,
+    native_grid: Option<f32>,
 }
 
 impl ShapedText {
-    fn new(buffer: glyphon::Buffer, font_revision: u32) -> Self {
-        let measure = TextMeasureInfo::from_buffer(&buffer);
+    fn new(buffer: glyphon::Buffer, font_revision: u32, native_grid: Option<f32>) -> Self {
+        let measure = TextMeasureInfo::from_buffer(&buffer, native_grid);
         Self {
             buffer,
             measure,
             font_revision,
+            native_grid,
         }
     }
 
     fn reshape(&mut self, fonts: &mut glyphon::FontSystem) {
         self.buffer.shape_until_scroll(fonts, false);
-        self.measure = TextMeasureInfo::from_buffer(&self.buffer);
+        self.measure = TextMeasureInfo::from_buffer(&self.buffer, self.native_grid);
     }
 
     fn resize(&mut self, constraint: &TextConstraint, fonts: &mut glyphon::FontSystem) {
@@ -415,7 +448,7 @@ pub struct TextMeasureInfo {
 }
 
 impl TextMeasureInfo {
-    fn from_buffer(buffer: &glyphon::Buffer) -> Self {
+    fn from_buffer(buffer: &glyphon::Buffer, native_grid: Option<f32>) -> Self {
         let mut width = 0.0_f32;
         let mut first_baseline = 0.0;
         let mut last_baseline = 0.0;
@@ -423,9 +456,9 @@ impl TextMeasureInfo {
         for run in buffer.layout_runs() {
             width = width.max(run.line_w);
             if line_count == 0 {
-                first_baseline = run.line_y;
+                first_baseline = line_baseline(&run, native_grid);
             }
-            last_baseline = run.line_y;
+            last_baseline = line_baseline(&run, native_grid);
             line_count += 1;
         }
         if buffer.lines.iter().any(|line| {
@@ -450,6 +483,24 @@ impl TextMeasureInfo {
             line_count,
         }
     }
+}
+
+fn line_baseline(run: &glyphon::LayoutRun<'_>, grid: Option<f32>) -> f32 {
+    let Some(grid) = grid else {
+        return run.line_y;
+    };
+    let ascent = run
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.ascender)
+        .fold(0.0_f32, f32::max);
+    let descent = run
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.descender)
+        .fold(0.0_f32, f32::max);
+    let leading = run.line_height / grid - ((ascent + descent) / grid).ceil();
+    run.line_top + ((ascent / grid).round() + leading * 0.5) * grid
 }
 
 impl PartialEq for TextData {
@@ -528,6 +579,13 @@ impl TextData {
 
     /// Builds [`TextData`] directly from a pre-shaped glyphon buffer.
     pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
+        Self::from_editor_buffer(text_buffer, None)
+    }
+
+    pub(crate) fn from_editor_buffer(
+        text_buffer: glyphon::Buffer,
+        native_ink: Option<Color>,
+    ) -> Self {
         let styled_identity = text_buffer
             .lines
             .iter()
@@ -545,16 +603,21 @@ impl TextData {
             .flat_map(|line| line.glyphs.iter().map(|glyph| glyph.color_opt))
             .collect();
         let metrics = text_buffer.metrics();
+        let native_grid = native_ink.map(|_| Dp(1.0).to_pixels_f32());
+        let ink = native_ink.unwrap_or(Color::WHITE);
         Self {
-            layout: Arc::new(ShapedText::new(text_buffer, 0)),
-            base_color: Color::WHITE,
-            current_color: Color::WHITE,
+            layout: Arc::new(ShapedText::new(text_buffer, 0, native_grid)),
+            base_color: ink,
+            current_color: ink,
             text: Arc::from(""),
             format: TextFormat {
+                native_grid,
                 font_size: metrics.font_size,
                 line_height: metrics.line_height,
                 font: TextFont {
                     weight: 400,
+                    optical_size: None,
+                    point_size: None,
                     tracking: 0.0,
                     family: None,
                 },
@@ -608,6 +671,7 @@ impl TextData {
             font_size,
             line_height,
             font,
+            native_grid,
         } = format;
         let mut text_buffer =
             glyphon::Buffer::new_empty(glyphon::Metrics::new(font_size, line_height));
@@ -622,21 +686,28 @@ impl TextData {
         let single_line = (constraint.single_line && text.contains(['\r', '\n']))
             .then(|| text.replace(['\r', '\n'], " "));
         text_buffer.set_size(constraint.max_width, constraint.max_height);
+        let mut attrs = glyphon::Attrs::new()
+            .family(
+                font.family
+                    .map(fontdb::Family::Name)
+                    .unwrap_or(fontdb::Family::SansSerif),
+            )
+            .weight(glyphon::Weight(font.weight))
+            .letter_spacing(font.tracking);
+        attrs.optical_size = font.optical_size;
+        attrs.point_size = font.point_size;
+        if native_grid.is_some() {
+            attrs.cache_key_flags = glyphon::cosmic_text::CacheKeyFlags::DISABLE_HINTING
+                | glyphon::cosmic_text::CacheKeyFlags::NATIVE_RASTER;
+        }
         text_buffer.set_text(
             single_line.as_deref().unwrap_or(text),
-            &glyphon::Attrs::new()
-                .family(
-                    font.family
-                        .map(fontdb::Family::Name)
-                        .unwrap_or(fontdb::Family::SansSerif),
-                )
-                .weight(glyphon::Weight(font.weight))
-                .letter_spacing(font.tracking),
+            &attrs,
             glyphon::Shaping::Advanced,
             None,
         );
         text_buffer.shape_until_scroll(font_system, false);
-        Arc::new(ShapedText::new(text_buffer, font_revision))
+        Arc::new(ShapedText::new(text_buffer, font_revision, native_grid))
     }
 
     pub(crate) fn set_color(&mut self, color: Color) {
@@ -690,6 +761,75 @@ mod tests {
     use crate::md3::theme::MaterialTypography;
 
     use super::{TextConstraint, TextData, write_font_system};
+
+    #[test]
+    fn optical_size_and_point_size_have_independent_retained_layouts() {
+        let session = tessera_ui::RuntimeSession::new();
+        let _session = session.enter();
+        let format = super::TextFormat::new(
+            tessera_ui::Dp(16.0),
+            tessera_ui::Dp(24.0),
+            400,
+            tessera_ui::Dp(0.0),
+            None,
+        );
+        let shape = |format| {
+            TextData::shape_prepared(
+                "Independent sizing".into(),
+                Color::BLACK,
+                format,
+                TextConstraint::default(),
+            )
+        };
+        let original = shape(format);
+        let native = shape(format.with_native_rasterization(true));
+        assert!(!Arc::ptr_eq(&original.layout, &native.layout));
+        assert!(Arc::ptr_eq(
+            &native.layout,
+            &shape(format.with_native_rasterization(true)).layout
+        ));
+        assert!(
+            native
+                .layout
+                .buffer
+                .layout_runs()
+                .flat_map(|run| run.glyphs)
+                .all(|glyph| glyph
+                    .cache_key_flags
+                    .contains(glyphon::cosmic_text::CacheKeyFlags::NATIVE_RASTER))
+        );
+        assert!(
+            original
+                .layout
+                .buffer
+                .layout_runs()
+                .flat_map(|run| run.glyphs)
+                .all(|glyph| !glyph
+                    .cache_key_flags
+                    .contains(glyphon::cosmic_text::CacheKeyFlags::NATIVE_RASTER))
+        );
+        let optical = shape(format.with_optical_size(Some(17.0)));
+        let tracked = shape(format.with_point_size(Some(13.0)));
+        let combined = shape(
+            format
+                .with_optical_size(Some(17.0))
+                .with_point_size(Some(13.0)),
+        );
+        assert!(!Arc::ptr_eq(&original.layout, &optical.layout));
+        assert!(!Arc::ptr_eq(&original.layout, &tracked.layout));
+        assert!(!Arc::ptr_eq(&optical.layout, &combined.layout));
+        assert!(!Arc::ptr_eq(&tracked.layout, &combined.layout));
+        assert!(Arc::ptr_eq(&original.layout, &shape(format).layout));
+        assert!(Arc::ptr_eq(
+            &combined.layout,
+            &shape(
+                format
+                    .with_optical_size(Some(17.0))
+                    .with_point_size(Some(13.0))
+            )
+            .layout
+        ));
+    }
 
     #[test]
     fn independent_short_text_layouts_share_glyphs_until_constraints_or_fonts_change() {

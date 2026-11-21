@@ -290,7 +290,6 @@ fn stage(width: f64, height: f64, label: String, background: Color, child: Rende
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
                                 label: Some(I18N.text(&(label))),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )

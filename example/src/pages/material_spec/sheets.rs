@@ -950,7 +950,6 @@ fn token_row(#[prop(into)] name: String, value: String, swatch: Option<Color>) {
                             ("v1", I18N.text(&value).into()),
                         ],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )

@@ -145,7 +145,6 @@ fn bar_demo(
                 "ui-value-navigation-bar-example",
                 [("v0", I18N.text(&label).into())],
             )),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {

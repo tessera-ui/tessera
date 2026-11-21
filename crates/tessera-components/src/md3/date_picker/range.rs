@@ -577,7 +577,6 @@ fn range_calendar(
                         .semantics(SemanticsArgs {
                             role: Some(tessera_ui::accesskit::Role::Group),
                             label: Some(I18N.text("md3-date-range-calendar").into()),
-                            merge_descendants: true,
                             ..Default::default()
                         }),
                 ),
@@ -622,7 +621,6 @@ fn range_month(
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             label: Some(format_month_year(month)),
             role: Some(tessera_ui::accesskit::Role::Group),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {

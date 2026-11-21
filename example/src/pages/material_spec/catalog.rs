@@ -305,7 +305,6 @@ pub(crate) fn component_article(
                                 "ui-value-specifications",
                                 [("v0", I18N.text(&component.title).into())],
                             )),
-                            merge_descendants: true,
                             ..Default::default()
                         },
                     ))

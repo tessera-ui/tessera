@@ -1,0 +1,302 @@
+use std::{ops::RangeInclusive, time::Duration};
+
+use tessera_foundation::modifier::ModifierExt as _;
+use tessera_ui::{
+    Color, Dp, Modifier, PlacementModifierNode, PxPosition, State,
+    accesskit::{Action, Role},
+    modifier::ModifierCapabilityExt as _,
+    remember, scaled_box, tessera,
+    testing::{TestProbe, UiTest, WorkPhase},
+};
+
+use crate::{alignment::Alignment, boxed::boxed, modifier::ModifierExt as _};
+
+use super::{
+    super::{
+        button::button,
+        theme::{Appearance, HigTheme, hig_theme},
+    },
+    GaugeStyle, gauge,
+};
+
+#[derive(Clone, Copy)]
+struct Controls {
+    value: State<f64>,
+    range: State<RangeInclusive<f64>>,
+    style: State<GaugeStyle>,
+    size: State<(Dp, Dp)>,
+    shift: State<Dp>,
+    dark: State<bool>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct Offset(Dp);
+
+impl PlacementModifierNode for Offset {
+    fn transform_position(&self, position: PxPosition) -> PxPosition {
+        let shift = self.0.to_pixels_f32();
+        position + PxPosition::from_f32_xy(shift, shift)
+    }
+}
+
+#[tessera]
+fn fixture(probe: TestProbe<Option<Controls>>) {
+    let value = remember(|| 0.25);
+    let range = remember(|| 0.0..=1.0);
+    let style = remember(|| GaugeStyle::LinearCapacity);
+    let size = remember(|| (Dp(180.0), Dp(16.0)));
+    let shift = remember(|| Dp::ZERO);
+    let dark = remember(|| false);
+    probe.set(Some(Controls {
+        value,
+        range,
+        style,
+        size,
+        shift,
+        dark,
+    }));
+    hig_theme()
+        .theme(HigTheme {
+            appearance: if dark.get() {
+                Appearance::Dark
+            } else {
+                Appearance::Light
+            },
+        })
+        .child(move || {
+            boxed()
+                .alignment(Alignment::TopStart)
+                .modifier(Modifier::new().background(if dark.get() {
+                    Color::from_rgb(0.010022826, 0.010022826, 0.010022826)
+                } else {
+                    Color::from_rgb(0.8900054, 0.8900054, 0.8900054)
+                }))
+                .children(move || {
+                    let (width, height) = size.get();
+                    gauge(value.get())
+                        .range(range.get())
+                        .style(style.get())
+                        .accessibility_label("Storage")
+                        .accessibility_description("Used disk space")
+                        .modifier(
+                            Modifier::new()
+                                .push_placement(Offset(shift.get()))
+                                .size(width, height),
+                        );
+                });
+        });
+}
+
+#[test]
+fn caller_values_are_clamped_for_read_only_meter_semantics_without_edit_actions() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 100)
+        .content(|| fixture(probe.clone()));
+    ui.frame();
+    let controls = probe.get().expect("fixture state");
+    let (id, node) = ui.accessibility_node("Storage");
+    assert_eq!(node.role(), Role::Meter);
+    assert_eq!(node.numeric_value(), Some(0.25));
+    assert_eq!(node.description(), Some("Used disk space"));
+    for action in [
+        Action::Focus,
+        Action::Click,
+        Action::Increment,
+        Action::Decrement,
+        Action::SetValue,
+    ] {
+        assert!(!node.supports_action(action));
+        assert!(!ui.accessibility_action(id, action));
+    }
+    ui.click_at(PxPosition::from_f32_xy(150.0, 10.0));
+    assert_eq!(controls.value.get(), 0.25);
+    controls.value.set(2.0);
+    ui.frame();
+    assert_eq!(
+        ui.accessibility_node("Storage").1.numeric_value(),
+        Some(1.0)
+    );
+    controls.range.set(20.0..=80.0);
+    ui.frame();
+    let (current, node) = ui.accessibility_node("Storage");
+    assert_eq!(current, id);
+    assert_eq!(
+        (
+            node.numeric_value(),
+            node.min_numeric_value(),
+            node.max_numeric_value()
+        ),
+        (Some(20.0), Some(20.0), Some(80.0))
+    );
+    for style in [
+        GaugeStyle::AccessoryLinear,
+        GaugeStyle::AccessoryLinearCapacity,
+        GaugeStyle::AccessoryCircular,
+        GaugeStyle::AccessoryCircularCapacity,
+    ] {
+        controls.style.set(style);
+        ui.frame();
+        assert_eq!(ui.accessibility_node("Storage").1.role(), Role::Meter);
+    }
+    let mut labelled = UiTest::new().content(|| {
+        gauge(0.5).label("Battery");
+    });
+    labelled.frame();
+    let (_, node) = labelled.accessibility_node("Battery");
+    assert_eq!(
+        (
+            node.role(),
+            node.numeric_value(),
+            node.min_numeric_value(),
+            node.max_numeric_value()
+        ),
+        (Role::Meter, Some(0.5), Some(0.0), Some(1.0))
+    );
+}
+
+#[tessera]
+fn input_fixture(probe: TestProbe<Option<State<u32>>>) {
+    let clicks = remember(|| 0);
+    probe.set(Some(clicks));
+    boxed().alignment(Alignment::TopStart).children(move || {
+        button("Continue")
+            .accessibility_label("Continue action")
+            .modifier(Modifier::new().size(Dp(180.0), Dp(24.0)))
+            .on_click(move || clicks.set(clicks.get() + 1));
+        gauge(0.5)
+            .accessibility_label("Capacity")
+            .modifier(Modifier::new().size(Dp(180.0), Dp(24.0)));
+    });
+}
+
+#[test]
+fn read_only_gauges_do_not_consume_pointer_input_above_an_action() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(240, 80)
+        .content(|| input_fixture(probe.clone()));
+    ui.frame();
+    ui.click_at(PxPosition::from_f32_xy(60.0, 12.0));
+    assert_eq!(probe.get().expect("fixture state").get(), 1);
+}
+
+fn check_scaled_geometry() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(600, 200)
+        .scale_factor(1.5)
+        .content(|| {
+            let probe = probe.clone();
+            scaled_box(1.25).child(move || fixture(probe.clone()));
+        });
+    ui.frame();
+    let controls = probe.get().expect("fixture state");
+    let bounds = ui
+        .accessibility_node("Storage")
+        .1
+        .bounds()
+        .expect("meter bounds");
+    assert_eq!(
+        (bounds.x1 - bounds.x0, bounds.y1 - bounds.y0),
+        (337.5, 30.0)
+    );
+    controls.size.set((Dp::ZERO, Dp::ZERO));
+    ui.frame();
+    controls.size.set((Dp(180.0), Dp(16.0)));
+    ui.frame();
+    let bounds = ui
+        .accessibility_node("Storage")
+        .1
+        .bounds()
+        .expect("meter bounds");
+    assert_eq!(
+        (bounds.x1 - bounds.x0, bounds.y1 - bounds.y0),
+        (337.5, 30.0)
+    );
+    controls.value.set(0.9);
+    controls.dark.set(true);
+    ui.frame();
+    assert_eq!(ui.work().phase(WorkPhase::Measure).count(), 0);
+    let mut natural = UiTest::new()
+        .viewport(600, 200)
+        .scale_factor(1.5)
+        .content(|| {
+            boxed().alignment(Alignment::TopStart).children(|| {
+                gauge(0.25);
+            });
+        });
+    let bounds = natural.frame().node("capacity_bar").bounds();
+    assert_eq!(
+        (bounds.width.0, bounds.height.0),
+        (600, 24),
+        "the bar spans the available width at 16pt tall"
+    );
+}
+
+#[test]
+fn fractional_density_ancestor_scaling_and_collapsed_layout_preserve_local_geometry() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::gauge::tests::fractional_density_ancestor_scaling_and_collapsed_layout_preserve_local_geometry",
+        check_scaled_geometry,
+    );
+}
+
+fn check_capacity_pixels() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(440, 100)
+        .scale_factor(2.0)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    ui.frames(2);
+    let controls = probe.get().expect("fixture state");
+    let green = ui.pixel(30, 15);
+    assert_eq!(&green[..3], &[52, 199, 89]);
+    assert!(ui.pixel(300, 15)[0].abs_diff(225) <= 1);
+    assert!(
+        ui.pixel(30, 0)[1].abs_diff(173) <= 2,
+        "the outline darkens the top row"
+    );
+    controls.range.set(0.0..=5.0);
+    controls.value.set(0.6);
+    ui.frame();
+    assert_eq!(ui.pixel(43, 15), green);
+    assert!(ui.pixel(44, 15)[0].abs_diff(225) <= 1);
+    controls.range.set(0.0..=1.0);
+    controls.value.set(0.0);
+    ui.frame();
+    let empty = ui.read_pixels();
+    controls.value.set(0.001);
+    ui.frame();
+    assert_eq!(empty, ui.read_pixels());
+    controls.value.set(0.25);
+    controls.dark.set(true);
+    ui.frame();
+    assert_eq!(&ui.pixel(30, 15)[..3], &[48, 209, 88]);
+    assert!(ui.pixel(300, 15)[0].abs_diff(48) <= 1);
+    let dark = ui.read_pixels();
+    controls.shift.set(Dp(0.25));
+    ui.frame();
+    assert!(ui.pixel(0, 15)[0].abs_diff(25) <= 1);
+    assert!(ui.pixel(1, 15)[1].abs_diff(182) <= 2);
+    controls.shift.set(Dp::ZERO);
+    controls.size.set((Dp::ZERO, Dp::ZERO));
+    ui.frame();
+    assert!(ui.pixel(30, 15)[0].abs_diff(25) <= 1);
+    controls.size.set((Dp(180.0), Dp(16.0)));
+    ui.frame();
+    assert_eq!(dark, ui.read_pixels());
+    ui.advance(Duration::from_secs(1));
+    assert_eq!(dark, ui.read_pixels());
+    assert_eq!(ui.frame_clock_diagnostics().waiting_tasks, 0);
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for capacity pixels"]
+fn capacity_fill_outline_pixel_alignment_and_collapsed_recovery_update_retained_pixels() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::gauge::tests::capacity_fill_outline_pixel_alignment_and_collapsed_recovery_update_retained_pixels",
+        check_capacity_pixels,
+    );
+}

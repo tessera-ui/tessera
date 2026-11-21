@@ -48,7 +48,7 @@ pub mod surface;
 pub mod switch;
 pub mod tabs;
 pub mod text;
-mod text_edit_core;
+pub(crate) use crate::text_edit_core;
 pub mod text_field;
 pub mod text_input;
 pub mod text_table;

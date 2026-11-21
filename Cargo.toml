@@ -53,7 +53,8 @@ bytemuck = "1.25"
 colored = "3.1"
 criterion = { version = "0.8.2", default-features = false, features = ["plotters", "cargo_bench_support"] }
 console_error_panic_hook = "0.1"
-core-foundation = "0.10"
+# Match the minimum required by the macOS text backend.
+core-foundation = "0.10.1"
 deunicode = "1.6"
 dirs = "7.0"
 downcast-rs = "2.0"

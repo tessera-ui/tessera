@@ -207,7 +207,7 @@ fn email_diagram(scale: f64) {
                 .offset(Dp(339.0 * scale), Dp::ZERO)
                 .size(Dp(337.0 * scale), Dp(103.0 * scale))
                 .clip_to_bounds()
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(I18N.text("ui-food-photograph")),
                     ..Default::default()
@@ -420,7 +420,7 @@ fn reference_photo(source: usize, x: f64, y: f64, width: f64, height: f64, scale
                 .offset(Dp(x * scale), Dp(y * scale))
                 .size(Dp(width * scale), Dp(height * scale))
                 .clip_to_bounds()
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(I18N.text(if source == 6 {
                         "ui-flower-photograph"
@@ -544,7 +544,6 @@ fn counter_diagram(scale: f64) {
         .modifier(Modifier::new().fill_max_size().semantics(SemanticsArgs {
             role: Some(Role::Group),
             label: Some(I18N.text("ui-character-count-labeling-example")),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {
@@ -741,7 +740,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
                         Dp((x + if kind == 2 { 0.0 } else { 16.0 }) * scale),
                         Dp((y + 60.0) * scale),
                     )
-                    .semantics(SemanticsArgs {
+                    .clear_and_set_semantics(SemanticsArgs {
                         role: if kind == 2 { Some(Role::Alert) } else { None },
                         label: Some(I18N.text(if kind == 5 { "*required" } else { description })),
                         ..Default::default()

@@ -81,14 +81,16 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
                                     value.activations += 1;
                                 })
                             });
-                        spacer().modifier(Modifier::new().size(Dp(8.0), Dp(8.0)).semantics(
-                            SemanticsArgs {
-                                role: Some(Role::TextInput),
-                                label: Some("Custom validation".into()),
-                                invalid: value.generic_invalid.then_some(Invalid::Spelling),
-                                ..Default::default()
-                            },
-                        ));
+                        spacer().modifier(
+                            Modifier::new()
+                                .size(Dp(8.0), Dp(8.0))
+                                .clear_and_set_semantics(SemanticsArgs {
+                                    role: Some(Role::TextInput),
+                                    label: Some("Custom validation".into()),
+                                    invalid: value.generic_invalid.then_some(Invalid::Spelling),
+                                    ..Default::default()
+                                }),
+                        );
                     });
                 });
         });

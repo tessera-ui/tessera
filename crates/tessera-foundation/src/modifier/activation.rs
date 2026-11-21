@@ -126,52 +126,47 @@ async fn async_clickable_detector(
     on_release: Option<PressCallback>,
     interaction_state: Option<State<InteractionState>>,
     focus_requester: FocusRequester,
+    mut tap_config: TapGestureConfig,
 ) {
     if !enabled {
         return;
     }
-    detect_tap_gestures(
-        &mut scope,
-        TapGestureConfig {
-            consume_down: block_input,
-            consume_up: block_input,
-            long_press: on_long_click.map(|_| std::time::Duration::from_millis(500)),
-            ..Default::default()
-        },
-        |gesture| match gesture {
-            TapGesture::Pressed(down) => {
-                if let Some(state) = interaction_state {
-                    focus_requester.request_focus();
-                    state.with_mut(|state| state.set_pressed(true));
-                }
-                if let Some(callback) = on_press {
-                    callback.call(async_pointer_context(&down, &down.change));
-                }
+    tap_config.consume_down = block_input;
+    tap_config.consume_up = block_input;
+    tap_config.long_press = on_long_click.map(|_| std::time::Duration::from_millis(500));
+    detect_tap_gestures(&mut scope, tap_config, |gesture| match gesture {
+        TapGesture::Pressed(down) => {
+            if let Some(state) = interaction_state {
+                focus_requester.request_focus();
+                state.with_mut(|state| state.set_pressed(true));
             }
-            TapGesture::Released(down, up) => {
-                if let Some(state) = interaction_state {
-                    state.with_mut(InteractionState::release);
-                }
-                if let Some(callback) = on_release {
-                    callback.call(async_pointer_context(&down, &up));
-                }
+            if let Some(callback) = on_press {
+                callback.call(async_pointer_context(&down, &down.change));
             }
-            TapGesture::Tapped(_, _) if click_enabled => on_click(),
-            TapGesture::LongPressed(_) => {
-                if let Some(callback) = on_long_click {
-                    callback.call();
-                }
+        }
+        TapGesture::Released(down, up) => {
+            if let Some(state) = interaction_state {
+                state.with_mut(InteractionState::release);
             }
-            TapGesture::Cancelled => {
-                if let Some(state) = interaction_state
-                    && state.is_alive()
-                {
-                    state.with_mut(InteractionState::release);
-                }
+            if let Some(callback) = on_release {
+                callback.call(async_pointer_context(&down, &up));
             }
-            _ => {}
-        },
-    )
+        }
+        TapGesture::Tapped(_, _) if click_enabled => on_click(),
+        TapGesture::LongPressed(_) => {
+            if let Some(callback) = on_long_click {
+                callback.call();
+            }
+        }
+        TapGesture::Cancelled => {
+            if let Some(state) = interaction_state
+                && state.is_alive()
+            {
+                state.with_mut(InteractionState::release);
+            }
+        }
+        _ => {}
+    })
     .await;
 }
 
@@ -435,6 +430,8 @@ fn apply_combined_clickable_resolved(
         interaction_state,
         focus_requester,
         focus_properties,
+        keyboard_activation,
+        tap_config,
     } = args;
     let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
     let participates_in_focus =
@@ -469,7 +466,7 @@ fn apply_combined_clickable_resolved(
             on_long_click,
             click_enabled,
             on_click,
-            enabled,
+            enabled: enabled && keyboard_activation,
             focus_requester,
         })
         .pointer_input(
@@ -483,6 +480,7 @@ fn apply_combined_clickable_resolved(
                 on_release,
                 interaction_state,
                 focus.with(|(_, epoch)| *epoch),
+                tap_config,
             ),
             move |scope| {
                 async_clickable_detector(
@@ -496,6 +494,7 @@ fn apply_combined_clickable_resolved(
                     on_release,
                     interaction_state,
                     focus_requester,
+                    tap_config,
                 )
             },
         )
@@ -571,6 +570,7 @@ fn apply_toggleable_resolved(
                     on_release,
                     interaction_state,
                     focus_requester,
+                    TapGestureConfig::default(),
                 )
             },
         )
@@ -643,6 +643,7 @@ fn apply_selectable_resolved(
                     on_release,
                     interaction_state,
                     focus_requester,
+                    TapGestureConfig::default(),
                 )
             },
         )

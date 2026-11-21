@@ -51,6 +51,45 @@ pub struct DrawContext<'a, 'b, 'c, T> {
     pub clip_rect: Option<PxRect>,
 }
 
+/// Resources for preparing one draw before its render pass begins.
+///
+/// Encode dependent GPU work through `encoder`; it runs after the declared
+/// scene snapshot is copied and before any draws in the pass. Preparation is
+/// not clipped; the subsequent draw still owns clipping and opacity.
+pub struct DrawPreparationContext<'a, T> {
+    /// Renderer-owned uploads and pooled resources.
+    pub graphics: &'a crate::render::GraphicsDevice,
+    /// The WGPU device.
+    pub device: &'a wgpu::Device,
+    /// The WGPU queue.
+    pub queue: &'a wgpu::Queue,
+    /// The current surface configuration.
+    pub config: &'a wgpu::SurfaceConfiguration,
+    /// Target texture size for the upcoming pass.
+    pub target_size: PxSize,
+    /// Encoder for work consumed by the upcoming draw.
+    pub encoder: &'a mut wgpu::CommandEncoder,
+    /// The draw being prepared.
+    pub command: &'a T,
+    /// Local dimensions and their window mapping.
+    pub geometry: DrawGeometry,
+    /// Scene pixels, valid only for commands declaring a sample region.
+    pub scene_texture_view: &'a wgpu::TextureView,
+    /// Window rectangle of valid pixels at the scene texture's origin.
+    pub scene_rect: PxRect,
+}
+
+pub(crate) struct ErasedDrawPreparationContext<'a> {
+    pub graphics: &'a crate::render::GraphicsDevice,
+    pub device: &'a wgpu::Device,
+    pub queue: &'a wgpu::Queue,
+    pub config: &'a wgpu::SurfaceConfiguration,
+    pub target_size: PxSize,
+    pub encoder: &'a mut wgpu::CommandEncoder,
+    pub scene_texture_view: &'a wgpu::TextureView,
+    pub scene_rect: PxRect,
+}
+
 /// Type-erased context used for dispatching draw pipelines.
 pub(crate) struct ErasedDrawContext<'a, 'b> {
     /// Renderer-owned resource creation and uploads.
@@ -76,12 +115,16 @@ pub(crate) struct ErasedDrawContext<'a, 'b> {
 
 /// Draws commands of type `T`.
 ///
-/// Each frame calls `begin_frame`, then `draw` for each batch; `end_frame` runs
-/// after all passes and before submission.
+/// Each frame calls `begin_frame`, then `prepare` before each pass's draws and
+/// `draw` for each batch; `end_frame` runs after all passes and before submission.
 #[allow(unused_variables)]
 pub trait DrawablePipeline<T: DrawCommand> {
     /// Prepares resources once per frame, before render passes.
     fn begin_frame(&mut self, context: &FrameContext<'_>) {}
+
+    /// Encodes intermediate GPU work for one command before its render pass.
+    /// Keep pooled resources alive until all draws consuming them are recorded.
+    fn prepare(&mut self, context: &mut DrawPreparationContext<'_, T>) {}
 
     /// Renders the command batch. Honor `clip_rect` when setting scissor bounds.
     /// The scene texture is available for commands that declare background sampling.
@@ -96,6 +139,12 @@ pub(crate) trait ErasedDrawablePipeline {
     fn begin_frame(&mut self, context: &FrameContext<'_>);
     /// Called at the end of a frame for cleanup or readback.
     fn end_frame(&mut self, context: &FrameContext<'_>);
+    fn prepare_erased(
+        &mut self,
+        context: ErasedDrawPreparationContext<'_>,
+        command: &dyn DrawCommand,
+        geometry: DrawGeometry,
+    );
     /// Draws a batch of commands with type-erased dispatch.
     fn draw_erased(
         &mut self,
@@ -118,6 +167,28 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
 
     fn end_frame(&mut self, context: &FrameContext<'_>) {
         self.pipeline.end_frame(context);
+    }
+
+    fn prepare_erased(
+        &mut self,
+        context: ErasedDrawPreparationContext<'_>,
+        command: &dyn DrawCommand,
+        geometry: DrawGeometry,
+    ) {
+        self.pipeline.prepare(&mut DrawPreparationContext {
+            graphics: context.graphics,
+            device: context.device,
+            queue: context.queue,
+            config: context.config,
+            target_size: context.target_size,
+            encoder: context.encoder,
+            command: command
+                .downcast_ref::<T>()
+                .expect("registered draw command type"),
+            geometry,
+            scene_texture_view: context.scene_texture_view,
+            scene_rect: context.scene_rect,
+        });
     }
 
     fn draw_erased(
@@ -265,5 +336,17 @@ impl PipelineRegistry {
                 std::any::type_name_of_val(commands[0].0)
             );
         }
+    }
+
+    pub(crate) fn prepare(
+        &mut self,
+        context: ErasedDrawPreparationContext<'_>,
+        command: &dyn DrawCommand,
+        geometry: DrawGeometry,
+    ) {
+        self.pipelines
+            .get_mut(&command.as_any().type_id())
+            .expect("registered draw pipeline")
+            .prepare_erased(context, command, geometry);
     }
 }

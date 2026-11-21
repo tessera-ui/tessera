@@ -456,7 +456,7 @@ fn guide_marker() {
             Modifier::new()
                 .size(Dp(20.0), Dp(20.0))
                 .background_with_shape(scheme.on_surface, Shape::Ellipse)
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.text("ui-marker-1")),
                     ..Default::default()
@@ -530,7 +530,6 @@ fn mock_dialog(
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     label: Some(I18N.text(label)),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -870,7 +869,7 @@ fn calendar_scene() {
                                     scheme.primary_container,
                                     Shape::rounded_rectangle(Dp(16.0)),
                                 )
-                                .semantics(SemanticsArgs {
+                                .clear_and_set_semantics(SemanticsArgs {
                                     role: Some(Role::Image),
                                     label: Some(I18N.text("ui-floating-action-button")),
                                     ..Default::default()
@@ -965,7 +964,7 @@ fn guideline_hero() {
                             Shape::rounded_rectangle(Dp(28.0)),
                         )
                         .padding_all(Dp(24.0))
-                        .semantics(SemanticsArgs {
+                        .clear_and_set_semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             label: Some(I18N.text("ui-basic-dialog-in-isolation")),
                             ..Default::default()
@@ -1742,7 +1741,6 @@ fn basic_figure(measurements: bool) {
                                 .semantics(SemanticsArgs {
                                     test_tag: Some("dialog-figure-figure".into()),
                                     role: Some(Role::Group),
-                                    merge_descendants: true,
                                     label: Some(I18N.text(if measurements {
                                         "ui-basic-dialog-measurement-figure"
                                     } else {
@@ -1776,7 +1774,6 @@ fn basic_figure(measurements: bool) {
                                         .semantics(SemanticsArgs {
                                             test_tag: Some("dialog-figure-container".into()),
                                             role: Some(Role::Group),
-                                            merge_descendants: true,
                                             label: Some(I18N.text(if measurements {
                                                 "ui-basic-dialog-measurement-container"
                                             } else {
@@ -1952,7 +1949,7 @@ fn dialog_account_avatar(index: usize, scale: f64) {
             Modifier::new()
                 .size(Dp(40.0 * scale), Dp(40.0 * scale))
                 .clip_shape(Shape::Ellipse)
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(
                         I18N.format("ui-account-photo-value", [("v0", (index + 1).into())]),
@@ -1981,11 +1978,11 @@ fn dialog_body(geometry: State<Geometry>, measurements: bool, scale: f64) {
         } else {
             "ui-this-will-reset-your-app-preferences-back-to-their-default-settings-the-following-accounts-2276"
         })).style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
-            .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
+            .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()),
 ..Default::default() }).fill_max_width());
         if !measurements {
             gap(Dp(16.0 * scale));
-            spacer().modifier(watch(geometry, "divider").semantics(SemanticsArgs { test_tag: Some("dialog-figure-divider".into()), merge_descendants: true,
+            spacer().modifier(watch(geometry, "divider").semantics(SemanticsArgs { test_tag: Some("dialog-figure-divider".into()),
 ..Default::default() }).fill_max_width().height(Dp(scale)).background(scheme.outline_variant));
             gap(Dp(8.0 * scale));
             for (index, email) in ["leevillanuevanotes@google.com", "alloalejandro@google.com", "oliortega@google.com"].into_iter().enumerate() {
@@ -2228,7 +2225,6 @@ fn dialog_marker(number: usize, x: f64, y: f64, scale: f64) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.format("ui-anatomy-marker-value", [("v0", (number).into())])),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -2247,7 +2243,7 @@ fn dialog_dimension(label: String, x: f64, y: f64, scale: f64) {
         .modifier(
             Modifier::new()
                 .offset(Dp(x), Dp(y))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(
                         I18N.format("ui-dimension-value", [("v0", I18N.text(&label).into())]),
@@ -2292,7 +2288,6 @@ dialog_canvas(1024.0, 622.0, RenderSlot::new(move || {
             .semantics(SemanticsArgs {
                 role: Some(Role::Group),
                 label: Some(I18N.text("ui-dialogs-overview-figure")),
-                merge_descendants: true,
                 ..Default::default()
             })
             .clip_to_bounds().background_with_shape(scheme.secondary_container, Shape::rounded_rectangle(Dp(24.0))))
@@ -2356,7 +2351,7 @@ fn dialog_overview_badge(number: usize, center: f64, scale: f64) {
                 .offset(Dp((center - 20.0) * scale), Dp(25.0 * scale))
                 .size(Dp(40.0 * scale), Dp(40.0 * scale))
                 .background_with_shape(scheme.on_surface, Shape::Ellipse)
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.format("ui-dialog-variant-value", [("v0", (number).into())])),
                     ..Default::default()
@@ -2570,18 +2565,18 @@ fn basic_color_figure() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column().modifier(Modifier::new().fill_max_width()).children(move || {
 dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
-        boxed().modifier(watch(geometry, "figure").semantics(SemanticsArgs { test_tag: Some("dialog-figure-figure".into()), merge_descendants: true,
+        boxed().modifier(watch(geometry, "figure").semantics(SemanticsArgs { test_tag: Some("dialog-figure-figure".into()),
 ..Default::default() }).fill_max_width().height(Dp(486.0 * scale))
             .background_with_shape(scheme.surface_container_low, Shape::rounded_rectangle(Dp(24.0))))
             .children(move || {
                 spacer().modifier(Modifier::new().fill_max_size().background_with_shape(scheme.scrim.with_alpha(0.32), Shape::rounded_rectangle(Dp(24.0))));
-                boxed().modifier(watch(geometry, "container").semantics(SemanticsArgs { test_tag: Some("dialog-figure-container".into()), merge_descendants: true,
+                boxed().modifier(watch(geometry, "container").semantics(SemanticsArgs { test_tag: Some("dialog-figure-container".into()),
 ..Default::default() }).offset(Dp(341.0 * scale), Dp(114.0 * scale))
                     .size(Dp(340.0 * scale), Dp(264.0 * scale))
                     .background_with_shape(scheme.surface_container_high, Shape::rounded_rectangle(Dp(28.0 * scale)))
                     .padding_all(Dp(24.0 * scale)))
                     .children(move || {
-                        boxed().modifier(watch(geometry, "icon").semantics(SemanticsArgs { test_tag: Some("dialog-figure-icon".into()), merge_descendants: true,
+                        boxed().modifier(watch(geometry, "icon").semantics(SemanticsArgs { test_tag: Some("dialog-figure-icon".into()),
 ..Default::default() }).offset(Dp(134.0 * scale), Dp::ZERO).size(Dp(24.0 * scale), Dp(24.0 * scale)))
                             .children(move || {
                                 icon().painter(filled::PHONE_ANDROID_SVG).size(Dp(24.0 * scale)).tint(scheme.secondary);
@@ -2590,14 +2585,14 @@ dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
                                 });
                             });
                         text(I18N.text("ui-dialog-with-hero-icon")).style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface)
-                            .modifier(watch(geometry, "headline").semantics(SemanticsArgs { test_tag: Some("dialog-figure-headline".into()), merge_descendants: true,
+                            .modifier(watch(geometry, "headline").semantics(SemanticsArgs { test_tag: Some("dialog-figure-headline".into()),
 ..Default::default() }).offset(Dp::ZERO, Dp(40.0 * scale)).align(Alignment::TopCenter));
                         text(I18N.text("ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2295"))
                             .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
-                            .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
+                            .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()),
 ..Default::default() }).offset(Dp::ZERO, Dp(88.0 * scale)).width(Dp(292.0 * scale)));
                         dialog_touch_targets(RenderSlot::new(move || {
-                            boxed().modifier(watch(geometry, "actions").semantics(SemanticsArgs { test_tag: Some("dialog-figure-actions".into()), merge_descendants: true,
+                            boxed().modifier(watch(geometry, "actions").semantics(SemanticsArgs { test_tag: Some("dialog-figure-actions".into()),
 ..Default::default() }).offset(Dp(116.0 * scale), Dp(176.0 * scale)).size(Dp(176.0 * scale), Dp(40.0 * scale)))
                                 .children(move || {
                                     dialog_scene_action("ui-cancel".into(), "ui-cancel-color-dialog".into(), 0.0, 0.0, 80.0, scale,
@@ -2704,7 +2699,7 @@ fn dialog_color_marker(number: usize, role: String, x: f64, y: f64, scale: f64) 
                 .size(Dp(24.0 * scale), Dp(32.0 * scale))
                 .background_with_shape(super::BACKGROUND, Shape::CAPSULE)
                 .border_with_shape(Dp(scale), INK, Shape::CAPSULE)
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.format(
                         "ui-color-role-value-value",
@@ -2764,14 +2759,14 @@ fn full_spec_figure(mode: usize) {
         1024.0,
         [463.0, 508.0, 1030.0][mode],
         RenderSlot::new(move || {
-            boxed().modifier(watch(geometry, "figure").semantics(SemanticsArgs { test_tag: Some("dialog-figure-figure".into()), merge_descendants: true,
+            boxed().modifier(watch(geometry, "figure").semantics(SemanticsArgs { test_tag: Some("dialog-figure-figure".into()),
 ..Default::default() }).fill_max_width()
         .height(Dp([463.0, 508.0, 1030.0][mode] * scale)).clip_to_bounds()
         .background_with_shape(scheme.secondary_container, Shape::rounded_rectangle(Dp(24.0))))
         .children(move || {
             dialog_touch_targets(RenderSlot::new(move || {
                 dialog_diagram_theme(scale, RenderSlot::new(move || {
-                    boxed().modifier(watch(geometry, "container").semantics(SemanticsArgs { test_tag: Some("dialog-figure-container".into()), merge_descendants: true,
+                    boxed().modifier(watch(geometry, "container").semantics(SemanticsArgs { test_tag: Some("dialog-figure-container".into()),
 ..Default::default() }).offset(Dp(298.0 * scale), Dp(y * scale))
                         .size(Dp(428.0 * scale), Dp(909.0 * scale)))
                         .children(move || {
@@ -2792,10 +2787,10 @@ fn full_spec_figure(mode: usize) {
                                 if mode == 1 {
                                     text(I18N.text("ui-with-mam-s-birthday-around-the-corner-i-d-like-to-start-planning-location-and-food-i-can-h"))
                                         .style(dialog_type_style(16.0, 24.0, scale)).color(scheme.on_surface_variant)
-                                        .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
+                                        .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()),
 ..Default::default() }).offset(Dp(24.0 * scale), Dp(280.0 * scale)).width(Dp(364.0 * scale)));
                                 } else {
-                                    spacer().modifier(watch(geometry, "divider").semantics(SemanticsArgs { test_tag: Some("dialog-figure-divider".into()), merge_descendants: true,
+                                    spacer().modifier(watch(geometry, "divider").semantics(SemanticsArgs { test_tag: Some("dialog-figure-divider".into()),
 ..Default::default() }).offset(Dp(if mode == 0 {27.0} else {24.0} * scale), Dp(if mode == 0 {290.0} else {295.0} * scale))
                                         .size(Dp(if mode == 0 {358.0} else {364.0} * scale), Dp(scale)).background(scheme.outline_variant));
                                     for (row, caption) in ["ui-from", "ui-date-range-to"].into_iter().enumerate() {
@@ -2855,7 +2850,6 @@ fn full_spec_header(
             watch(geometry, "header")
                 .semantics(SemanticsArgs {
                     test_tag: Some("dialog-figure-header".into()),
-                    merge_descendants: true,
                     ..Default::default()
                 })
                 .offset(Dp::ZERO, Dp(y * scale))
@@ -2870,7 +2864,6 @@ fn full_spec_header(
                     watch(geometry, "close")
                         .semantics(SemanticsArgs {
                             test_tag: Some("dialog-figure-close".into()),
-                            merge_descendants: true,
                             ..Default::default()
                         })
                         .offset(Dp(8.0 * scale), Dp((center - 20.0) * scale))
@@ -2890,7 +2883,6 @@ fn full_spec_header(
                     watch(geometry, "headline")
                         .semantics(SemanticsArgs {
                             test_tag: Some("dialog-figure-headline".into()),
-                            merge_descendants: true,
                             ..Default::default()
                         })
                         .offset(Dp(56.0 * scale), Dp((center - 14.0) * scale))
@@ -2901,7 +2893,6 @@ fn full_spec_header(
                     watch(geometry, "confirm")
                         .semantics(SemanticsArgs {
                             test_tag: Some("dialog-figure-confirm".into()),
-                            merge_descendants: true,
                             ..Default::default()
                         })
                         .offset(Dp(336.0 * scale), Dp((center - 20.0) * scale))
@@ -3233,7 +3224,6 @@ fn full_figure() {
                             .height(Dp(544.0))
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                merge_descendants: true,
                                 label: Some(I18N.text("ui-full-screen-dialog-figure")),
                                 ..Default::default()
                             }),

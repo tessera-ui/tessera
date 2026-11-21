@@ -587,7 +587,6 @@ fn date_picker_content(args: DatePickerConfig) {
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Group),
                     label: Some(title.clone()),
-                    merge_descendants: true,
                     test_tag: cfg!(test).then(|| "date-picker".to_owned()),
                     ..Default::default()
                 }),
@@ -956,7 +955,6 @@ fn date_grid(
             .semantics(SemanticsArgs {
                 role: Some(tessera_ui::accesskit::Role::Group),
                 label: Some(format_month_year(snapshot.displayed_month)),
-                merge_descendants: true,
                 test_tag: cfg!(test).then(|| "date-grid".to_owned()),
                 ..Default::default()
             }),
@@ -1132,7 +1130,6 @@ fn date_year_grid(
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Group),
                     label: Some(I18N.text("md3-choose-year")),
-                    merge_descendants: true,
                     test_tag: cfg!(test).then(|| "date-years".to_owned()),
                     ..Default::default()
                 }),

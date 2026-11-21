@@ -37,7 +37,6 @@ struct FixtureOutput {
 fn tag(name: &str) -> Modifier {
     Modifier::new().semantics(SemanticsArgs {
         test_tag: Some(name.to_owned()),
-        merge_descendants: true,
         ..Default::default()
     })
 }

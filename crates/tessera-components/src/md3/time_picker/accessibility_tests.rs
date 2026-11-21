@@ -41,7 +41,6 @@ fn fixture(
                         .picker_modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             label: Some("Meeting time".to_owned()),
-                            merge_descendants: true,
                             ..Default::default()
                         }))
                         .picker_hour_step(steps.get().0)

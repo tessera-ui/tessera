@@ -68,7 +68,6 @@ pub(super) fn figure() {
                             role: Some(Role::Table),
                             label: Some(I18N.text("ui-icon-button-corner-radius-values")),
                             collection_info: Some((4, 6, false)),
-                            merge_descendants: true,
                             ..Default::default()
                         }))
                         .children(move || {
@@ -99,7 +98,6 @@ fn table_row(index: usize, values: [String; 6], ink: Color, header: Color, rule:
         .semantics(SemanticsArgs {
             role: Some(Role::Row),
             collection_item_info: Some((index, 1, 0, 6, false)),
-            merge_descendants: true,
             ..Default::default()
         });
     let modifier = if index == 0 {
@@ -148,7 +146,7 @@ fn cell(row: usize, column: usize, value: String, ink: Color, rule: Color) {
             Modifier::new()
                 .weight(if column == 0 { 2.0 } else { 1.0 })
                 .fill_max_height()
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(role),
                     label: Some(I18N.text(&(value))),
                     collection_item_info: Some((

@@ -623,7 +623,7 @@ fn time_number(state: State<TimePickerController>, field: TimePickerSelection, i
                 .modifier(
                     Modifier::new()
                         .size(Dp(width), Dp(height))
-                        .semantics(SemanticsArgs {
+                        .clear_and_set_semantics(SemanticsArgs {
                             value: Some(format_two_digit(value)),
                             selected: Some(selected),
                             ..Default::default()
@@ -661,7 +661,7 @@ fn period_visual_layer(
         .modifier(
             Modifier::new()
                 .clip_shape(theme.shapes.small)
-                .semantics(SemanticsArgs::clear()),
+                .clear_and_set_semantics(SemanticsArgs::default()),
         )
         .child(move || {
             for (index, (label, value)) in [("md3-am", DayPeriod::Am), ("md3-pm", DayPeriod::Pm)]
@@ -720,7 +720,6 @@ fn time_period_selector(state: State<TimePickerController>, input: bool) {
             test_tag: cfg!(test).then(|| "time-period".to_owned()),
             role: Some(Role::RadioGroup),
             label: Some(I18N.text("md3-am-pm")),
-            merge_descendants: true,
             ..Default::default()
         }))
         .child(move || {
@@ -732,7 +731,7 @@ fn time_period_selector(state: State<TimePickerController>, input: bool) {
                 surface()
                     .modifier(
                         Modifier::new()
-                            .semantics(SemanticsArgs::clear())
+                            .clear_and_set_semantics(SemanticsArgs::default())
                             .push_keyboard_input(PeriodNavigation {
                                 state,
                                 requesters,
@@ -1266,7 +1265,6 @@ fn time_clock(state: State<TimePickerController>, hour_step: u8, minute_step: u8
                         }
                         .to_owned(),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 })
                 .focus_restorer(
@@ -1343,7 +1341,7 @@ fn clock_value(
         .modifier(
             Modifier::new()
                 .size(Dp(48.0), Dp(48.0))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     selected: Some(selected),
                     ..Default::default()
                 })

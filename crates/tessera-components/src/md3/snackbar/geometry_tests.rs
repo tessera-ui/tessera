@@ -49,7 +49,6 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                 .modifier(Modifier::new().width(Dp(s.width)).semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     label: Some("Notification".into()),
-                    merge_descendants: true,
                     ..Default::default()
                 }))
                 .message(s.message)

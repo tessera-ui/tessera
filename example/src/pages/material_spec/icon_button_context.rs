@@ -297,7 +297,7 @@ fn photo_region(source: usize, x: f64, y: f64, width: f64, height: f64) {
                 .offset(Dp(x), Dp(y))
                 .size(Dp(width), Dp(height))
                 .clip_to_bounds()
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(I18N.text(if source == 2 && height < 45.0 && width < 45.0 {
                         "ui-so-duri-profile-photograph"
@@ -523,7 +523,6 @@ fn labeling_annotation(geometry: State<SpaceGeometry>, selected: State<bool>) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.text("ui-icon-button-label-and-role")),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -665,7 +664,6 @@ fn density_annotation(geometry: State<SpaceGeometry>) {
                 .background_with_shape(ink, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )

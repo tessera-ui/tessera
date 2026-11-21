@@ -418,7 +418,6 @@ fn picker_surface(
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Group),
             label: Some(I18N.format("ui-value-date-preview", [("v0", I18N.text(&label).into())])),
-            merge_descendants: true,
             ..Default::default()
         }))
         .child(move || {
@@ -966,7 +965,6 @@ fn date_overview() {
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             label: Some(I18N.text("ui-date-picker-variants")),
-                            merge_descendants: true,
                             ..Default::default()
                         }),
                 )
@@ -1009,7 +1007,7 @@ fn date_overview_variant(index: usize, scale: f64) {
                             scheme.on_surface,
                             Shape::rounded_rectangle(Dp(20.0 * scale)),
                         )
-                        .semantics(SemanticsArgs {
+                        .clear_and_set_semantics(SemanticsArgs {
                             role: Some(Role::Note),
                             label: Some(
                                 I18N.format(
@@ -1328,7 +1326,6 @@ fn date_color_pair(figure: Figure, menu: bool, year: bool) {
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             label: Some(I18N.text(date_color_title(figure, menu, year))),
-                            merge_descendants: true,
                             ..Default::default()
                         }),
                 )
@@ -1530,7 +1527,7 @@ fn date_figure(
                 if figure==Figure::Docked {
                     column().modifier(Modifier::new().width(Dp(312.0))).children(move || {
                         text_field().outlined().controller(controller).label(I18N.text("ui-date")).accessibility_label(I18N.text("ui-event-date-1862")).accessibility_description(I18N.text(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()})).is_error(!error.with(String::is_empty))
-                            .modifier(watch_observed(geometry,"field").width(Dp(312.0)).height(Dp(56.0)).semantics(SemanticsArgs {test_tag:Some("docked-date-field".into()), merge_descendants:true,..Default::default()})).min_width(Dp::ZERO)
+                            .modifier(watch_observed(geometry,"field").width(Dp(312.0)).height(Dp(56.0)).semantics(SemanticsArgs {test_tag:Some("docked-date-field".into()),..Default::default()})).min_width(Dp::ZERO)
                             .on_submit(move || {submit_docked_date(state,controller,committed,error);})
                             .trailing_icon(move || {icon_button().standard().icon(filled::CALENDAR_TODAY_SVG).accessibility_label(I18N.text("ui-toggle-event-date-calendar")).on_click(move || {
                                 if open.with(DialogController::is_open) {restore_docked_date(state,controller,committed,error);}
@@ -1917,7 +1914,6 @@ fn date_color_marker(number: usize, label: String, x: Dp, y: Dp) {
                         "ui-color-role-value-value",
                         [("v0", (number).into()), ("v1", I18N.text(&label).into())],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
