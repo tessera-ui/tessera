@@ -25,6 +25,7 @@ mod motion;
 pub mod navigation_split_view;
 pub mod picker;
 pub mod presentation;
+pub mod presentations;
 pub mod progress;
 mod radio_button;
 pub mod scroll_view;

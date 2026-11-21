@@ -208,6 +208,7 @@ pub(super) fn present(
                 content: RenderSlot::new(move || menu_panel(content, dismiss, scope, min_width)),
                 dismiss,
                 theme,
+                modal: false,
             },
         );
     } else {

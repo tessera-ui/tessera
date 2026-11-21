@@ -24,6 +24,7 @@ use tessera_components::{
         menu::{MenuStyle, context_menu, menu, menu_divider, menu_item, menu_section},
         navigation_split_view::{NavigationSplitViewVisibility, navigation_split_view},
         picker::{PickerStyle, picker},
+        presentations::{AlertAction, alert, confirmation_dialog, help, inspector, popover, sheet},
         progress::{ProgressViewStyle, progress_view},
         scroll_view::scroll_view,
         slider::slider,
@@ -62,13 +63,14 @@ pub(super) struct Section {
     pub height: f64,
 }
 
-pub(super) const CATEGORIES: [&str; 6] = [
+pub(super) const CATEGORIES: [&str; 7] = [
     "ui-hig-actions",
     "ui-hig-selection",
     "ui-hig-values",
     "ui-hig-content",
     "ui-hig-collections",
     "ui-hig-navigation-views",
+    "ui-hig-presentations",
 ];
 
 const SINGLE: &[&str] = &[""];
@@ -474,6 +476,36 @@ pub(super) const COMPONENTS: &[Component] = &[
         description: "ui-hig-content-unavailable-description",
         category: 3,
         sections: &[example(200.0)],
+    },
+    Component {
+        title: "ui-hig-tooltips",
+        description: "ui-hig-tooltips-description",
+        category: 6,
+        sections: &[example(120.0)],
+    },
+    Component {
+        title: "ui-hig-popovers",
+        description: "ui-hig-popovers-description",
+        category: 6,
+        sections: &[example(120.0)],
+    },
+    Component {
+        title: "ui-hig-alerts",
+        description: "ui-hig-alerts-description",
+        category: 6,
+        sections: &[example(120.0)],
+    },
+    Component {
+        title: "ui-hig-sheets",
+        description: "ui-hig-sheets-description",
+        category: 6,
+        sections: &[example(120.0)],
+    },
+    Component {
+        title: "ui-hig-inspectors",
+        description: "ui-hig-inspectors-description",
+        category: 6,
+        sections: &[example(220.0)],
     },
     Component {
         title: "ui-hig-labels",
@@ -1006,6 +1038,71 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                     .modifier(Modifier::new().size(Dp(320.0), Dp(160.0)))
                     .actions(|| {
                         button(I18N.text("ui-hig-clear-search"));
+                    });
+            }
+            "ui-hig-tooltips" => {
+                help(I18N.text("ui-hig-tooltip-text")).child(move || {
+                    button(I18N.text("ui-hig-action"));
+                });
+            }
+            "ui-hig-popovers" => {
+                popover(values.expanded)
+                    .on_dismiss(move || state.with_mut(|v| v.expanded = false))
+                    .content(move || caption(I18N.text("ui-hig-help-content"), appearance))
+                    .child(move || {
+                        button(I18N.text("ui-hig-details"))
+                            .on_click(move || state.with_mut(|v| v.expanded = true));
+                    });
+            }
+            "ui-hig-alerts" => {
+                button(I18N.text("ui-hig-delete"))
+                    .role(ButtonRole::Destructive)
+                    .on_click(move || state.with_mut(|v| v.expanded = true));
+                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                button(I18N.text("ui-hig-discard"))
+                    .on_click(move || state.with_mut(|v| v.on = true));
+                alert(I18N.text("ui-hig-delete-title"), values.expanded)
+                    .message(I18N.text("ui-hig-delete-message"))
+                    .actions(vec![
+                        AlertAction::new(I18N.text("ui-hig-cancel"), || {})
+                            .role(ButtonRole::Cancel),
+                        AlertAction::new(I18N.text("ui-hig-delete"), move || {
+                            state.with_mut(|v| v.clicks += 1)
+                        })
+                        .role(ButtonRole::Destructive),
+                    ])
+                    .on_dismiss(move || state.with_mut(|v| v.expanded = false));
+                confirmation_dialog(I18N.text("ui-hig-discard-title"), values.on)
+                    .actions(vec![
+                        AlertAction::new(I18N.text("ui-hig-discard"), || {})
+                            .role(ButtonRole::Destructive),
+                    ])
+                    .on_dismiss(move || state.with_mut(|v| v.on = false));
+            }
+            "ui-hig-sheets" => {
+                button(I18N.text("ui-hig-export"))
+                    .on_click(move || state.with_mut(|v| v.expanded = true));
+                sheet(values.expanded)
+                    .on_dismiss(move || state.with_mut(|v| v.expanded = false))
+                    .content(move || {
+                        caption(I18N.text("ui-hig-export"), appearance);
+                        spacer().modifier(Modifier::new().height(Dp(16.0)));
+                        button(I18N.text("ui-hig-done"))
+                            .default_action(true)
+                            .on_click(move || state.with_mut(|v| v.expanded = false));
+                    });
+            }
+            "ui-hig-inspectors" => {
+                toggle(values.on)
+                    .label(I18N.text("ui-hig-show-inspector"))
+                    .on_value_change(move |on| state.with_mut(|v| v.on = on));
+                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                boxed()
+                    .modifier(Modifier::new().size(Dp(480.0), Dp(160.0)))
+                    .children(move || {
+                        inspector(values.on)
+                            .content(move || caption(I18N.text("ui-hig-details"), appearance))
+                            .child(move || caption(I18N.text("ui-hig-help-content"), appearance));
                     });
             }
             "ui-hig-labels" => {

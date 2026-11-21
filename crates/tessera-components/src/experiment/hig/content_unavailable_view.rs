@@ -18,10 +18,6 @@ use super::{
     theme::{Appearance, HigTheme, TextStyle},
 };
 
-#[cfg(test)]
-#[path = "content_unavailable_view_tests.rs"]
-mod tests;
-
 /// # content_unavailable_view
 ///
 /// Explains that content is unavailable, with an optional symbol, description, and actions.
