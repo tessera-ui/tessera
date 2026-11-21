@@ -85,7 +85,9 @@ fn srgb(r: u8, g: u8, b: u8) -> Color {
 ///
 /// - `title` — window title shown after the navigation items.
 /// - `navigation` — leading navigational items, usually [`toolbar_button`]s.
-/// - `actions` — trailing items, usually [`toolbar_button`]s.
+/// - `actions` — trailing items, usually [`toolbar_button`]s and [`toolbar_spacer`]s.
+/// - `search` — a trailing search field, usually a
+///   [`search_field`](super::text_field::search_field).
 /// - `window_chrome` — reserves room for the system window controls, or draws them when the
 ///   window has no system title bar; defaults to false.
 /// - `modifier` — layout and semantics of the toolbar.
@@ -118,6 +120,7 @@ pub fn toolbar(
     #[prop(into)] title: Option<String>,
     navigation: Option<RenderSlot>,
     actions: Option<RenderSlot>,
+    search: Option<RenderSlot>,
     window_chrome: Option<bool>,
     modifier: Option<Modifier>,
 ) {
@@ -191,6 +194,10 @@ pub fn toolbar(
                         flow_row()
                             .item_spacing(ITEM_SPACING)
                             .children_shared(actions);
+                    }
+                    if let Some(search) = search {
+                        spacer().modifier(Modifier::new().width(ITEM_SPACING));
+                        toolbar_search(search);
                     }
                     spacer().modifier(Modifier::new().width(ITEM_SPACING));
                 });
@@ -413,4 +420,41 @@ impl DrawModifierNode for BackChevron {
             });
         content.draw(context.render_input);
     }
+}
+
+#[tessera]
+fn toolbar_search(search: RenderSlot) {
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(Modifier::new().width(Dp(180.0)))
+        .children_shared(search);
+}
+
+/// # toolbar_spacer
+///
+/// Separates groups of items in a [`toolbar`].
+///
+/// ## Usage
+///
+/// Set apart unrelated actions, such as sharing from editing, in a toolbar.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_components::experiment::hig::toolbar::{toolbar, toolbar_button, toolbar_spacer};
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+///
+/// toolbar().actions(|| {
+///     toolbar_button().label("Bold");
+///     toolbar_spacer();
+///     toolbar_button().label("Share");
+/// });
+/// # }
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
+/// ```
+#[tessera]
+pub fn toolbar_spacer() {
+    spacer().modifier(Modifier::new().width(Dp(8.0)));
 }

@@ -18,11 +18,14 @@ use tessera_components::{
         link::link,
         list::{ListStyle, list, list_row, list_section},
         menu::{MenuStyle, context_menu, menu, menu_divider, menu_item, menu_section},
+        navigation_split_view::{NavigationSplitViewVisibility, navigation_split_view},
         picker::{PickerStyle, picker},
         progress::{ProgressViewStyle, progress_view},
         scroll_view::scroll_view,
         slider::slider,
+        split_view::{h_split_view, v_split_view},
         stepper::stepper,
+        tab_view::tab_view,
         table::{TableColumn, TableSort, table},
         text::text,
         text_field::{TextFieldStyle, search_field, secure_field, text_editor, text_field},
@@ -55,12 +58,13 @@ pub(super) struct Section {
     pub height: f64,
 }
 
-pub(super) const CATEGORIES: [&str; 5] = [
+pub(super) const CATEGORIES: [&str; 6] = [
     "ui-hig-actions",
     "ui-hig-selection",
     "ui-hig-values",
     "ui-hig-content",
     "ui-hig-collections",
+    "ui-hig-navigation-views",
 ];
 
 const SINGLE: &[&str] = &[""];
@@ -412,6 +416,24 @@ pub(super) const COMPONENTS: &[Component] = &[
         description: "ui-hig-grids-description",
         category: 4,
         sections: &[example(200.0)],
+    },
+    Component {
+        title: "ui-hig-split-views",
+        description: "ui-hig-split-views-description",
+        category: 5,
+        sections: &[example(220.0)],
+    },
+    Component {
+        title: "ui-hig-navigation-split-views",
+        description: "ui-hig-navigation-split-views-description",
+        category: 5,
+        sections: &[example(260.0)],
+    },
+    Component {
+        title: "ui-hig-tab-views",
+        description: "ui-hig-tab-views-description",
+        category: 5,
+        sections: &[example(180.0)],
     },
     Component {
         title: "ui-hig-labels",
@@ -820,6 +842,69 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                             text(format!("{} {index}", I18N.text("ui-hig-tile")));
                         }
                     });
+            }
+            "ui-hig-split-views" => {
+                h_split_view()
+                    .leading_width(Dp(120.0))
+                    .modifier(Modifier::new().size(Dp(360.0), Dp(180.0)))
+                    .leading(move || caption(I18N.text("ui-hig-favorites"), appearance))
+                    .trailing(move || {
+                        v_split_view()
+                            .top_height(Dp(80.0))
+                            .top(move || caption(I18N.text("ui-hig-row"), appearance))
+                            .bottom(move || caption(I18N.text("ui-hig-details"), appearance));
+                    });
+            }
+            "ui-hig-navigation-split-views" => {
+                navigation_split_view()
+                    .column_visibility(if values.on {
+                        NavigationSplitViewVisibility::DetailOnly
+                    } else {
+                        NavigationSplitViewVisibility::All
+                    })
+                    .sidebar_width(Dp(150.0))
+                    .modifier(Modifier::new().size(Dp(420.0), Dp(200.0)))
+                    .sidebar(move || {
+                        list()
+                            .style(ListStyle::Sidebar)
+                            .selection(values.selected)
+                            .on_select(move |tag| state.with_mut(|v| v.selected = tag))
+                            .content(move || {
+                                for tag in 0..3 {
+                                    list_row(tag).content(move || {
+                                        text(format!("{} {}", I18N.text("ui-hig-row"), tag + 1));
+                                    });
+                                }
+                            });
+                    })
+                    .detail(move || {
+                        caption(
+                            format!("{} {}", I18N.text("ui-hig-row"), values.selected + 1),
+                            appearance,
+                        );
+                    });
+                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                toggle(values.on)
+                    .label(I18N.text("ui-hig-hide-sidebar"))
+                    .on_value_change(move |on| state.with_mut(|v| v.on = on));
+            }
+            "ui-hig-tab-views" => {
+                tab_view(
+                    values.selected.min(1),
+                    vec![I18N.text("ui-hig-general"), I18N.text("ui-hig-advanced")],
+                )
+                .on_select(move |index| state.with_mut(|v| v.selected = index))
+                .modifier(Modifier::new().width(Dp(320.0)))
+                .content(move |index| {
+                    caption(
+                        I18N.text(if index == 0 {
+                            "ui-hig-general"
+                        } else {
+                            "ui-hig-advanced"
+                        }),
+                        appearance,
+                    );
+                });
             }
             "ui-hig-labels" => {
                 hig_label(I18N.text("ui-hig-favorites")).icon(|| {

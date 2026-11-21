@@ -1,11 +1,10 @@
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, Modifier, State,
     accesskit::{Action, Role},
     remember, tessera,
     testing::{TestProbe, UiTest},
 };
-
-use tessera_foundation::modifier::ModifierExt as _;
 
 use crate::column::column;
 
