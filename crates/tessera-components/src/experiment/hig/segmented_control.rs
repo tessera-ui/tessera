@@ -1,9 +1,3 @@
-//! Segmented controls for related choices or actions.
-//!
-//! ## Usage
-//!
-//! Switch between related views, time ranges, or presentation modes.
-
 use tessera_foundation::{
     modifier::{ClickableArgs, InteractionState, ModifierExt as _, SemanticsArgs},
     pointer_gestures::TapGestureConfig,
@@ -36,7 +30,7 @@ mod tests;
 
 /// One labeled option in a [`segmented_control`].
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Segment {
+pub(super) struct Segment {
     /// Visible title and accessible name.
     pub label: String,
     /// Whether the option accepts input and keyboard focus.
@@ -55,7 +49,7 @@ impl Segment {
 
 /// How a segmented control responds to activation.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum SegmentTracking {
+pub(super) enum SegmentTracking {
     /// Request one selection among the segments.
     #[default]
     SelectOne,
@@ -78,14 +72,14 @@ impl LayoutPolicy for SegmentsLayout {
     }
 
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        // Every segment is as wide as the widest one.
         let children = scope.children();
-        let mut widths = Vec::with_capacity(children.len());
-        let mut natural = Px::ZERO;
+        let mut widest = Px::ZERO;
         for child in &children {
-            let width = child.probe_intrinsic(scope, &Constraint::NONE)?.width;
-            widths.push(width);
-            natural += width;
+            widest = widest.max(child.probe_intrinsic(scope, &Constraint::NONE)?.width);
         }
+        let widths = vec![widest; children.len()];
+        let natural = Px(widest.0 * children.len() as i32);
         let parent = *scope.parent_constraint().as_ref();
         let width = parent.width.clamp(natural);
         let height = parent.height.clamp(Dp(24.0).into());
@@ -628,46 +622,9 @@ fn segment_item(
     });
 }
 
-/// # segmented_control
-///
-/// Groups related labeled options or commands in one control.
-///
-/// ## Usage
-///
-/// Switch a content view or offer a pair of navigation commands.
-/// Arrow keys move keyboard focus; Space activates the focused segment.
-///
-/// ## Parameters
-///
-/// - `segments` — options in display order, including individual availability.
-/// - `tracking` — select one option by default, toggle independent choices, or invoke momentary commands.
-/// - `selected` — controlled selected index in select-one mode.
-/// - `selected_indices` — controlled selected indices in select-any mode; empty by default.
-/// - `on_select` — index requested on activation; toggle that index in select-any mode.
-/// - `enabled`, `window_active` — input availability and active window appearance; both default to true.
-/// - `modifier` — layout and semantics; extra width is distributed evenly between segments.
-/// - `accessibility_label`, `accessibility_description` — spoken group name and instructions.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::experiment::hig::segmented_control::{Segment, segmented_control};
-/// use tessera_ui::{PxPosition, remember, tessera, testing::UiTest};
-/// #[tessera]
-/// fn app() {
-///     let selected = remember(|| 0);
-///     segmented_control(vec![Segment::new("Day"), Segment::new("Week")])
-///         .selected(selected.get()).on_select(move |index| selected.set(index));
-/// }
-/// let mut ui = UiTest::new().content(app);
-/// ui.frame();
-/// let (_, week) = ui.accessibility_node("Week");
-/// let bounds = week.bounds().unwrap();
-/// ui.click_at(PxPosition::from_f32_xy(((bounds.x0 + bounds.x1) / 2.0) as f32, ((bounds.y0 + bounds.y1) / 2.0) as f32));
-/// assert_eq!(ui.accessibility_node("Week").1.toggled(), Some(tessera_ui::accesskit::Toggled::True));
-/// ```
+/// The segmented style of [`picker`](super::picker::picker).
 #[tessera]
-pub fn segmented_control(
+pub(super) fn segmented_control(
     segments: Vec<Segment>,
     tracking: Option<SegmentTracking>,
     selected: Option<usize>,

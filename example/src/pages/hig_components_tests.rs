@@ -195,22 +195,30 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                     Some(Toggled::False)
                 );
             }
-            "ui-radio-button" => {
-                activate(&mut ui, "Express", Role::RadioButton);
-                assert_eq!(
-                    control(&ui, "Express", Role::RadioButton).1.toggled(),
-                    Some(Toggled::True)
+            "ui-hig-pickers" => {
+                assert!(
+                    ui.inspect_accessibility()
+                        .unwrap()
+                        .nodes()
+                        .iter()
+                        .any(|(_, node)| node.role() == Role::RadioGroup
+                            && crate::has_label(node, "Delivery method"))
                 );
-                assert_eq!(
-                    control(&ui, "Standard", Role::RadioButton).1.toggled(),
-                    Some(Toggled::False)
-                );
-            }
-            "ui-hig-segmented-controls" => {
                 activate(&mut ui, "Express", Role::RadioButton);
+                let expressed = ui
+                    .inspect_accessibility()
+                    .unwrap()
+                    .nodes()
+                    .iter()
+                    .filter(|(_, node)| {
+                        node.role() == Role::RadioButton
+                            && crate::has_label(node, "Express")
+                            && node.toggled() == Some(Toggled::True)
+                    })
+                    .count();
                 assert_eq!(
-                    control(&ui, "Express", Role::RadioButton).1.toggled(),
-                    Some(Toggled::True)
+                    expressed, 4,
+                    "both pickers in both windows share the selection"
                 );
             }
             "ui-sliders" | "ui-hig-steppers" | "ui-progress-indicators" | "ui-hig-gauges" => {

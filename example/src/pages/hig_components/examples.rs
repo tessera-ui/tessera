@@ -11,9 +11,8 @@ use tessera_components::{
         glass_group::glass_group,
         group_box::group_box,
         help_button::help_button,
+        picker::{PickerStyle, picker},
         progress::{ProgressViewStyle, progress_view},
-        radio_button::{radio_button, radio_group},
-        segmented_control::{Segment, segmented_control},
         slider::slider,
         stepper::stepper,
         text::text,
@@ -126,19 +125,18 @@ pub(super) const COMPONENTS: &[Component] = &[
         ],
     },
     Component {
-        title: "ui-radio-button",
-        description: "ui-hig-radio-description",
+        title: "ui-hig-pickers",
+        description: "ui-hig-pickers-description",
         category: 1,
         sections: &[
-            example(120.0),
-            states(&["ui-hig-unselected", "ui-hig-selected"], ENABLED),
+            example(150.0),
+            Section {
+                title: "ui-hig-styles",
+                columns: &["ui-hig-segmented", "ui-hig-radio-group"],
+                rows: ENABLED,
+                height: 80.0,
+            },
         ],
-    },
-    Component {
-        title: "ui-hig-segmented-controls",
-        description: "ui-hig-segments-description",
-        category: 1,
-        sections: &[example(120.0), states(ENABLED, SINGLE)],
     },
     Component {
         title: "ui-sliders",
@@ -436,29 +434,16 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                         })
                     });
             }
-            "ui-radio-button" => {
-                radio_group()
-                    .accessibility_label(I18N.text("ui-hig-choice"))
-                    .child(move |group| {
-                        column().children(move || {
-                            for (option, key) in
-                                ["ui-hig-first", "ui-hig-second"].into_iter().enumerate()
-                            {
-                                radio_button(values.selected == option)
-                                    .group(group)
-                                    .label(I18N.text(key))
-                                    .on_select(move || state.with_mut(|v| v.selected = option));
-                            }
-                        });
-                    });
-            }
-            "ui-hig-segmented-controls" => {
-                segmented_control(vec![
-                    Segment::new(I18N.text("ui-hig-first")),
-                    Segment::new(I18N.text("ui-hig-second")),
-                ])
-                .selected(values.selected)
-                .on_select(move |next| state.with_mut(|v| v.selected = next));
+            "ui-hig-pickers" => {
+                let options = vec![I18N.text("ui-hig-first"), I18N.text("ui-hig-second")];
+                picker(values.selected, options.clone())
+                    .label(I18N.text("ui-hig-choice"))
+                    .style(PickerStyle::RadioGroup)
+                    .on_select(move |next| state.with_mut(|v| v.selected = next));
+                spacer().modifier(Modifier::new().height(Dp(12.0)));
+                picker(values.selected, options)
+                    .accessibility_label(I18N.text("ui-hig-view"))
+                    .on_select(move |next| state.with_mut(|v| v.selected = next));
             }
             "ui-sliders" => {
                 slider(values.fraction)
@@ -577,18 +562,13 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                 .enabled(section == 1)
                 .accessibility_label(name);
         }
-        ("ui-radio-button", _) => {
-            radio_button(column == 1)
-                .enabled(enabled)
-                .accessibility_label(name);
-        }
-        ("ui-hig-segmented-controls", _) => {
-            segmented_control(vec![
-                Segment::new(I18N.text("ui-hig-first")),
-                Segment::new(I18N.text("ui-hig-second")),
-            ])
-            .selected(0)
-            .enabled(column == 0)
+        ("ui-hig-pickers", _) => {
+            picker(
+                0,
+                vec![I18N.text("ui-hig-first"), I18N.text("ui-hig-second")],
+            )
+            .style([PickerStyle::Segmented, PickerStyle::RadioGroup][column])
+            .enabled(enabled)
             .accessibility_label(name);
         }
         ("ui-sliders", _) => {
