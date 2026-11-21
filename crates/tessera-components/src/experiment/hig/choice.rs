@@ -43,7 +43,7 @@ pub(super) struct ChoiceStyle {
     pub mark: Option<ChoiceMark>,
     /// Space between the glyph and the label.
     pub label_gap: Dp,
-    /// Label line height; SwiftUI centres 13pt labels in a 17pt line, AppKit uses 16pt.
+    /// Height of the line the label is centred in.
     pub label_line_height: Dp,
 }
 

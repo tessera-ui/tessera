@@ -18,11 +18,9 @@ use tessera_ui::{
 };
 
 use crate::{
+    animation::cubic_bezier_easing,
     animation::{Motion as FrameMotion, animate_to},
-    md3::{
-        progress::{ProgressStrokeCap, cubic_bezier_easing},
-        theme::MaterialTheme,
-    },
+    md3::{progress::ProgressStrokeCap, theme::MaterialTheme},
 };
 
 use self::{

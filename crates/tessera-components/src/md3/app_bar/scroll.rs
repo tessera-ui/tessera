@@ -152,7 +152,7 @@ impl AppBarScrollController {
 
     pub(super) fn color_fraction(&self) -> f32 {
         if self.range > 0.0 && self.behavior != AppBarScrollBehavior::Pinned {
-            crate::md3::progress::cubic_bezier_easing(self.collapsed_fraction(), 0.4, 0.0, 1.0, 1.0)
+            crate::animation::cubic_bezier_easing(self.collapsed_fraction(), 0.4, 0.0, 1.0, 1.0)
         } else {
             self.color.value().clamp(0.0, 1.0)
         }

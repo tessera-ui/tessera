@@ -15,11 +15,11 @@ use tessera_ui::{
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
+    animation::cubic_bezier_easing,
     column::column,
     md3::{
         icon_button::icon_button,
         material_icons::filled,
-        progress::cubic_bezier_easing,
         surface::surface,
         text::text,
         theme::{ContentColor, MaterialColorScheme, MaterialTheme},

@@ -17,10 +17,10 @@ use tessera_ui::{
 
 use crate::{
     alignment::Alignment,
+    animation::cubic_bezier_easing,
     animation::{Motion, animate_to},
     boxed::boxed,
     md3::{
-        progress::cubic_bezier_easing,
         surface::surface,
         text::text,
         theme::{MaterialTheme, TextStyle},

@@ -13,6 +13,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::Alignment,
+    animation::{Motion as _, test_instant},
     boxed::boxed,
     column::column,
     image::{ImageData, image},
@@ -24,7 +25,7 @@ use super::{
         button::{button, button_scope},
         theme::{Appearance, HigTheme, hig_theme},
     },
-    switch,
+    ThumbMotion, ThumbTarget, switch,
 };
 
 #[derive(Clone, Copy)]
@@ -154,7 +155,8 @@ fn check_keyboard_and_pixels() {
     assert_ne!(off, ui.read_pixels());
     let focused = ui.read_pixels();
     ui.press_key(NamedKey::Space);
-    ui.frames(1);
+    // The thumb starts lifting on the frame that observes the press.
+    ui.frames(3);
     assert!(controls.requests.get().is_empty());
     assert_ne!(focused, ui.read_pixels());
     let mut repeated = KeyboardEvent::named(NamedKey::Space, ElementState::Pressed);
@@ -168,7 +170,7 @@ fn check_keyboard_and_pixels() {
         ui.accessibility_node("Notifications").1.toggled(),
         Some(Toggled::True)
     );
-    let frame = ui.frames(1);
+    let frame = ui.frames(60);
     let bounds = frame.node("setting").bounds();
     let thumb = frame.node("switch_thumb").bounds();
     assert_eq!((bounds.width.0, bounds.height.0), (54, 24));
@@ -431,7 +433,7 @@ fn check_held_lens() {
         ui.frames(2);
         assert_eq!(held, ui.read_pixels());
         controls.value.set(true);
-        ui.frame();
+        ui.frames(90);
         assert_eq!(ui.frame().node("switch_thumb").bounds().x.0, 102);
         let held_on = ui.read_pixels();
         let outside = PxPosition::from_f32_xy(inside.x, 8.0);
@@ -440,20 +442,20 @@ fn check_held_lens() {
         assert_eq!(held_on, ui.read_pixels());
         assert_eq!(controls.requests.get(), 0);
         ui.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
-        ui.frame();
+        ui.frames(90);
         assert_eq!(ui.frame().node("switch_thumb").bounds().width.0, 64);
         assert_eq!(controls.requests.get(), 0);
         ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
         ui.frames(18);
         controls.enabled.set(false);
-        ui.frame();
+        ui.frames(90);
         assert_eq!(ui.frame().node("switch_thumb").bounds().width.0, 64);
         ui.pointer_release(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
         ui.frame();
         assert_eq!(controls.requests.get(), 0);
         controls.enabled.set(true);
         controls.value.set(false);
-        ui.frame();
+        ui.frames(90);
         ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
         ui.frames(18);
         controls.visible.set(false);
@@ -495,7 +497,7 @@ fn check_held_lens() {
         PxPosition::from_f32_xy(310.0, 150.0),
         PressKeyEventType::Left,
     );
-    ui.frames(2);
+    ui.frames(90);
     assert_eq!(controls.requests.get(), 0);
     assert_eq!(rest, ui.read_pixels());
     ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
@@ -507,7 +509,7 @@ fn check_held_lens() {
     ui.frames(18);
     assert_eq!(held, ui.read_pixels());
     ui.pointer_release(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
-    ui.frames(2);
+    ui.frames(90);
     assert_eq!(controls.requests.get(), 1);
     assert_eq!(rest, ui.read_pixels());
     ui.advance(Duration::from_secs(1));
@@ -530,7 +532,7 @@ fn check_held_lens() {
     ui.frames(3);
     let controls = probe.get().unwrap();
     controls.value.set(true);
-    ui.frames(2);
+    ui.frames(90);
     let rest = ui.read_pixels();
     ui.pointer_press(
         MOUSE_POINTER_ID,
@@ -551,7 +553,7 @@ fn check_held_lens() {
         PxPosition::from_f32_xy(155.0, 8.0),
         PressKeyEventType::Left,
     );
-    ui.frames(2);
+    ui.frames(90);
     assert_eq!(controls.requests.get(), 0);
     assert_eq!(rest, ui.read_pixels());
 }
@@ -608,11 +610,11 @@ fn check_independent_lens_rasters() {
         let first = PxPosition::from_f32_xy(64.0, 80.0);
         let second = PxPosition::from_f32_xy(284.0, 80.0);
         ui.pointer_press(1, first, PressKeyEventType::Left);
-        ui.frames(2);
+        ui.frames(18);
         let first_held = crop(&ui.read_pixels(), 6);
         assert_ne!(first_held, crop(&rest, 6));
         ui.pointer_press(2, second, PressKeyEventType::Left);
-        ui.frames(2);
+        ui.frames(18);
         let both = ui.read_pixels();
         assert_eq!(first_held, crop(&both, 6));
         let second_held = crop(&both, 222);
@@ -648,7 +650,7 @@ fn check_independent_lens_rasters() {
                 .find(|(_, (a, b))| a != b)
         );
         ui.pointer_release(2, second, PressKeyEventType::Left);
-        ui.frames(2);
+        ui.frames(90);
         assert_eq!(rest, ui.read_pixels());
     }
 }
@@ -659,5 +661,75 @@ fn simultaneous_lenses_keep_independent_rasters_during_motion_and_release() {
     crate::test_utils::run_isolated_test(
         "experiment::hig::switch::tests::simultaneous_lenses_keep_independent_rasters_during_motion_and_release",
         check_independent_lens_rasters,
+    );
+}
+
+fn ms(value: u64) -> tessera_ui::time::Instant {
+    test_instant(value * 1_000_000)
+}
+
+#[test]
+fn the_thumb_lifts_with_ease_in_out_and_releases_with_an_overshooting_spring() {
+    let mut motion = ThumbMotion::new(2.0);
+    motion.retarget(
+        ThumbTarget {
+            lifted: true,
+            x: 2.0,
+        },
+        ms(0),
+    );
+    motion.advance(ms(100));
+    assert!(
+        (motion.lift() - 0.5).abs() < 1.0e-3,
+        "half way through a symmetric ease"
+    );
+    motion.advance(ms(200));
+    assert_eq!(motion.lift(), 1.0);
+
+    motion.retarget(
+        ThumbTarget {
+            lifted: false,
+            x: 20.0,
+        },
+        ms(300),
+    );
+    let mut furthest: f32 = 0.0;
+    let mut time = 300;
+    while motion.advance(ms(time)) {
+        furthest = furthest.max(motion.x.value());
+        time += 8;
+        assert!(time < 3_000, "the release settles");
+    }
+    assert!(
+        furthest > 20.05,
+        "an underdamped release passes its rest position"
+    );
+    assert_eq!((motion.x.value(), motion.lift()), (20.0, 0.0));
+}
+
+#[test]
+fn releasing_during_the_lift_continues_from_the_current_height() {
+    let mut motion = ThumbMotion::new(2.0);
+    motion.retarget(
+        ThumbTarget {
+            lifted: true,
+            x: 2.0,
+        },
+        ms(0),
+    );
+    motion.advance(ms(60));
+    let before = motion.lift();
+    motion.retarget(
+        ThumbTarget {
+            lifted: false,
+            x: 20.0,
+        },
+        ms(60),
+    );
+    assert_eq!(motion.lift(), before, "release does not jump");
+    motion.advance(ms(68));
+    assert!(
+        motion.lift() > before,
+        "the rising lift keeps its speed briefly"
     );
 }

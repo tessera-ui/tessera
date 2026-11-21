@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use tessera_foundation::{
     modifier::{ClickableArgs, InteractionState, ModifierExt as _},
     pointer_gestures::TapGestureConfig,
@@ -7,14 +9,18 @@ use tessera_ui::{
     DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusRequester, Modifier,
     SemanticsModifierNode,
     accesskit::{Role, Toggled},
+    launch,
     layout::{Stack, layout},
     modifier::{CursorModifierExt as _, ModifierCapabilityExt as _},
-    remember, tessera, use_context,
+    remember, tessera,
+    time::Instant,
+    use_context,
     winit::window::CursorIcon,
 };
 
 use crate::{
     alignment::Alignment,
+    animation::{Animatable, FrameDelta, Motion, animate_to, cubic_bezier_easing},
     boxed::boxed,
     modifier::ModifierExt as _,
     pipelines::{
@@ -91,7 +97,114 @@ impl DrawModifierNode for Fill {
     }
 }
 
-struct ThumbShadow;
+/// Time for a pressed thumb to lift into a lens.
+const LIFT: Duration = Duration::from_millis(200);
+/// Angular frequency and damping ratio of the thumb's release and travel.
+const RELEASE: (f32, f32) = (13.49, 0.71);
+
+fn release_spring(value: f32) -> Animatable {
+    Animatable::spring(value, RELEASE.0, RELEASE.1)
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct Lifting {
+    start: Instant,
+    from: f32,
+}
+
+impl Lifting {
+    fn at(self, now: Instant) -> f32 {
+        let progress = now.saturating_duration_since(self.start).as_secs_f32() / LIFT.as_secs_f32();
+        self.from + (1.0 - self.from) * cubic_bezier_easing(progress, 0.42, 0.0, 0.58, 1.0)
+    }
+
+    fn done(self, now: Instant) -> bool {
+        now.saturating_duration_since(self.start) >= LIFT
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct ThumbTarget {
+    lifted: bool,
+    x: f32,
+}
+
+/// The thumb's lift (0 at rest, 1 as a lens) and leading edge in points.
+#[derive(Clone, Copy, PartialEq)]
+struct ThumbMotion {
+    lift: Animatable,
+    lifting: Option<Lifting>,
+    x: Animatable,
+    delta: FrameDelta,
+}
+
+impl ThumbMotion {
+    fn new(x: f32) -> Self {
+        Self {
+            lift: release_spring(0.0),
+            lifting: None,
+            x: release_spring(x),
+            delta: FrameDelta::default(),
+        }
+    }
+
+    fn lift(&self) -> f32 {
+        self.lift.value().clamp(0.0, 1.0)
+    }
+}
+
+impl Motion for ThumbMotion {
+    type Target = ThumbTarget;
+
+    fn is_settled_at(&self, target: &ThumbTarget) -> bool {
+        self.lifting.is_none()
+            && self.lift.target() == if target.lifted { 1.0 } else { 0.0 }
+            && self.lift.is_idle()
+            && self.x.target() == target.x
+            && self.x.is_idle()
+    }
+
+    fn retarget(&mut self, target: ThumbTarget, now: Instant) {
+        self.advance(now);
+        if target.lifted {
+            if self.lifting.is_none() && self.lift.target() != 1.0 {
+                self.lifting = Some(Lifting {
+                    start: now,
+                    from: self.lift(),
+                });
+            }
+        } else if let Some(lifting) = self.lifting.take() {
+            // An interrupted lift releases from its current height and speed.
+            let value = lifting.at(now);
+            let velocity = (lifting.at(now + Duration::from_millis(1)) - value) * 1000.0;
+            self.lift = release_spring(value).with_velocity(velocity);
+            self.lift.set_target(0.0);
+        } else {
+            self.lift.set_target(0.0);
+        }
+        self.x.set_target(target.x);
+    }
+
+    fn advance(&mut self, now: Instant) -> bool {
+        let dt = self.delta.step(now);
+        if let Some(lifting) = self.lifting {
+            if lifting.done(now) {
+                self.lifting = None;
+                self.lift = release_spring(1.0);
+            } else {
+                self.lift = release_spring(lifting.at(now));
+                self.lift.set_target(1.0);
+            }
+        } else {
+            self.lift.tick(dt);
+        }
+        self.x.tick(dt);
+        self.lifting.is_some() || !self.lift.is_idle() || !self.x.is_idle()
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct ThumbShadow(f32);
 
 impl DrawModifierNode for ThumbShadow {
     fn draw(
@@ -104,7 +217,7 @@ impl DrawModifierNode for ThumbShadow {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(ShapeCommand::Shadow {
-                color: Color::BLACK.with_alpha(0.28),
+                color: Color::BLACK.with_alpha(0.28 * self.0),
                 shape: ResolvedShape::Rounded {
                     corner_radii: [Dp(10.0).to_pixels_f32(); 4],
                     corner_g2: [2.0; 4],
@@ -115,39 +228,61 @@ impl DrawModifierNode for ThumbShadow {
     }
 }
 
+/// Width, height, and top-left corner of the thumb at leading edge `x` and lift `lift`; it
+/// grows about its centre from a 32 x 20 capsule into a 50 x 31 lens.
+fn thumb_frame(x: f32, lift: f32) -> (Dp, Dp, Dp, Dp) {
+    let width = 32.0 + 18.0 * lift;
+    let height = 20.0 + 11.0 * lift;
+    (
+        Dp(f64::from(width)),
+        Dp(f64::from(height)),
+        Dp(f64::from(x + 16.0 - width * 0.5)),
+        Dp(f64::from(12.0 - height * 0.5)),
+    )
+}
+
 #[tessera]
-fn switch_shadow(x: Dp) {
+fn switch_shadow(x: f32, lift: f32) {
+    let (width, height, left, top) = thumb_frame(x, lift);
     layout(Stack).modifier(
         Modifier::new()
-            .offset(x, Dp(4.0))
-            .size(Dp(32.0), Dp(20.0))
-            .push_draw(ThumbShadow),
+            .offset(left, Dp(top.0 + 2.0))
+            .required_size(width, height)
+            .push_draw(ThumbShadow(1.0 - lift)),
     );
 }
 
 #[tessera]
-fn switch_thumb(x: Dp, pressed: bool) {
-    if pressed {
-        layout(Stack).modifier(
-            Modifier::new()
-                .offset(Dp(x.0 - 9.0), Dp(-3.5))
-                .required_size(Dp(50.0), Dp(31.0))
-                .push_draw(ThumbLens),
-        );
-        return;
-    }
-    layout(Stack).modifier(
-        Modifier::new()
-            .offset(x, Dp(2.0))
-            .size(Dp(32.0), Dp(20.0))
-            .push_draw(Fill {
-                color: Color::WHITE,
-                radius: Dp(10.0),
-            }),
-    );
+fn switch_thumb(x: f32, lift: f32) {
+    let (width, height, left, top) = thumb_frame(x, lift);
+    let modifier = Modifier::new()
+        .offset(left, top)
+        .required_size(width, height);
+    let modifier = if lift > 0.0 {
+        modifier.push_draw(ThumbLens {
+            width: width.0 as f32,
+            height: height.0 as f32,
+            opacity: lift,
+        })
+    } else {
+        modifier
+    };
+    layout(Stack).modifier(if lift < 1.0 {
+        modifier.push_draw(Fill {
+            color: Color::WHITE.with_alpha(1.0 - lift),
+            radius: Dp(height.0 * 0.5),
+        })
+    } else {
+        modifier
+    });
 }
 
-struct ThumbLens;
+#[derive(Clone, PartialEq)]
+struct ThumbLens {
+    width: f32,
+    height: f32,
+    opacity: f32,
+}
 
 impl DrawModifierNode for ThumbLens {
     fn draw(
@@ -163,12 +298,12 @@ impl DrawModifierNode for ThumbLens {
                 element: LiquidGlassElement {
                     x: 0.0,
                     y: 0.0,
-                    width: 50.0,
-                    height: 31.0,
-                    radius: 15.5,
+                    width: self.width,
+                    height: self.height,
+                    radius: self.height * 0.5,
                 },
                 pixels_per_point: Dp(1.0).to_pixels_f32(),
-                opacity: 1.0,
+                opacity: self.opacity,
             });
         content.draw(context.render_input);
     }
@@ -189,7 +324,7 @@ fn switch_dash() {
 }
 
 #[tessera]
-fn switch_graphic(value: bool, mixed: bool, track: Color, pressed: bool, focused: bool) {
+fn switch_graphic(mixed: bool, track: Color, x: f32, lift: f32, focused: bool) {
     let mut modifier = Modifier::new().size(Dp(54.0), Dp(24.0)).push_draw(Fill {
         color: track,
         radius: Dp(12.0),
@@ -211,14 +346,13 @@ fn switch_graphic(value: bool, mixed: bool, track: Color, pressed: bool, focused
         .alignment(Alignment::TopStart)
         .modifier(modifier)
         .children(move || {
-            let x = Dp(if value { 20.0 } else { 2.0 });
             if mixed {
                 switch_dash();
             }
-            if !pressed {
-                switch_shadow(x);
+            if lift < 1.0 {
+                switch_shadow(x, lift);
             }
-            switch_thumb(x, pressed);
+            switch_thumb(x, lift);
         });
 }
 
@@ -271,38 +405,36 @@ pub(super) fn switch(
         held.set(false);
     }
     let pressed = enabled && active && (held.get() || interaction.with(|state| state.is_pressed()));
-    let theme = use_context::<HigTheme>()
-        .map(|theme| theme.get())
-        .unwrap_or_default();
-    let track = if value && active {
-        if pressed {
-            if theme.appearance == Appearance::Dark {
-                Color::from_rgb(0.012983031, 0.2541521, 1.0)
-            } else {
-                Color::from_rgb(0.0, 0.14412847, 0.7379104)
-            }
-        } else {
-            Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(if enabled { 1.0 } else { 0.7 })
-        }
-    } else {
-        let tint = if theme.appearance == Appearance::Dark {
-            Color::WHITE
-        } else {
-            Color::BLACK
-        };
-        tint.with_alpha(match (enabled, value) {
-            (true, false) => {
-                if pressed {
-                    0.20
-                } else {
-                    0.10
-                }
-            }
-            (true, true) => 0.14,
-            (false, false) => 0.05,
-            (false, true) => 0.07,
-        })
+    let dark = use_context::<HigTheme>()
+        .map(|theme| theme.get().appearance == Appearance::Dark)
+        .unwrap_or(false);
+    let rest_x = if value { 20.0 } else { 2.0 };
+    let motion = remember(|| ThumbMotion::new(rest_x));
+    launch(
+        (pressed, value),
+        animate_to(
+            motion,
+            ThumbTarget {
+                lifted: pressed,
+                x: rest_x,
+            },
+        ),
+    );
+    let (x, lift) = motion.with(|motion| (motion.x.value(), motion.lift()));
+    // The track follows the thumb between its off and on colors, and the lift between the
+    // resting and pressed colors.
+    let colors = |on: bool| {
+        mix(
+            track_color(on, false, enabled, active, dark),
+            track_color(on, true, enabled, active, dark),
+            lift,
+        )
     };
+    let track = mix(
+        colors(false),
+        colors(true),
+        ((x - 2.0) / 18.0).clamp(0.0, 1.0),
+    );
     let focused = enabled && active && requester.is_focus_visible();
     let modifier = modifier
         .unwrap_or_default()
@@ -331,5 +463,44 @@ pub(super) fn switch(
         .hover_cursor_icon(CursorIcon::Default);
     boxed()
         .modifier(modifier)
-        .children(move || switch_graphic(value, mixed, track, pressed, focused));
+        .children(move || switch_graphic(mixed, track, x, lift, focused));
+}
+
+fn mix(from: Color, to: Color, fraction: f32) -> Color {
+    let lerp = |a: f32, b: f32| a + (b - a) * fraction;
+    Color::new(
+        lerp(from.r, to.r),
+        lerp(from.g, to.g),
+        lerp(from.b, to.b),
+        lerp(from.a, to.a),
+    )
+}
+
+fn track_color(value: bool, pressed: bool, enabled: bool, active: bool, dark: bool) -> Color {
+    let pressed = pressed && enabled && active;
+    if value && active {
+        if pressed {
+            if dark {
+                Color::from_rgb(0.012983031, 0.2541521, 1.0)
+            } else {
+                Color::from_rgb(0.0, 0.14412847, 0.7379104)
+            }
+        } else {
+            Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(if enabled { 1.0 } else { 0.7 })
+        }
+    } else {
+        let tint = if dark { Color::WHITE } else { Color::BLACK };
+        tint.with_alpha(match (enabled, value) {
+            (true, false) => {
+                if pressed {
+                    0.20
+                } else {
+                    0.10
+                }
+            }
+            (true, true) => 0.14,
+            (false, false) => 0.05,
+            (false, true) => 0.07,
+        })
+    }
 }

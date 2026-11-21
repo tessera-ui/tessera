@@ -142,6 +142,32 @@ pub(crate) fn test_instant(nanos: u64) -> Instant {
     *ORIGIN + Duration::from_nanos(nanos)
 }
 
+fn cubic_bezier(t: f32, a: f32, b: f32, c: f32, d: f32) -> f32 {
+    let u = 1.0 - t;
+    (u * u * u * a) + (3.0 * u * u * t * b) + (3.0 * u * t * t * c) + (t * t * t * d)
+}
+
+/// Eases `progress` along the cubic Bézier through (0, 0), (x1, y1), (x2, y2) and (1, 1).
+pub(crate) fn cubic_bezier_easing(progress: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    let x = progress.clamp(0.0, 1.0);
+    let mut lo = 0.0;
+    let mut hi = 1.0;
+    let mut t = x;
+
+    for _ in 0..16 {
+        let mid = (lo + hi) * 0.5;
+        let mid_x = cubic_bezier(mid, 0.0, x1, x2, 1.0);
+        if mid_x < x {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+        t = mid;
+    }
+
+    cubic_bezier(t, 0.0, y1, y2, 1.0).clamp(0.0, 1.0)
+}
+
 /// Cubic ease-in-out mapping (smooth start and end).
 /// Input: linear progress in [0.0, 1.0].
 /// Output: eased progress in [0.0, 1.0].
