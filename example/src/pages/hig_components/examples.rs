@@ -4,10 +4,14 @@ use tessera_components::{
     column::column,
     experiment::hig::{
         button::{ButtonRole, ButtonStyle, button},
+        color_picker::color_picker,
+        content_unavailable_view::content_unavailable_view,
         control_group::{ControlGroupStyle, control_group},
+        date_picker::{CalendarDate, DatePickerStyle, date_picker},
         disclosure_button::disclosure_button,
         disclosure_group::{OutlineItem, disclosure_group, outline_group},
         divider::{DividerOrientation, divider},
+        form::{FormStyle, form, form_section, labeled_content},
         gauge::{GaugeStyle, gauge},
         glass::{GlassAppearance, GlassMaterial, glass},
         glass_group::glass_group,
@@ -434,6 +438,42 @@ pub(super) const COMPONENTS: &[Component] = &[
         description: "ui-hig-tab-views-description",
         category: 5,
         sections: &[example(180.0)],
+    },
+    Component {
+        title: "ui-hig-forms",
+        description: "ui-hig-forms-description",
+        category: 3,
+        sections: &[example(240.0)],
+    },
+    Component {
+        title: "ui-hig-date-pickers",
+        description: "ui-hig-date-pickers-description",
+        category: 2,
+        sections: &[
+            example(260.0),
+            Section {
+                title: "ui-hig-styles",
+                columns: &[
+                    "ui-hig-style-compact",
+                    "ui-hig-style-field",
+                    "ui-hig-style-stepper-field",
+                ],
+                rows: SINGLE,
+                height: 56.0,
+            },
+        ],
+    },
+    Component {
+        title: "ui-hig-color-pickers",
+        description: "ui-hig-color-pickers-description",
+        category: 2,
+        sections: &[example(120.0)],
+    },
+    Component {
+        title: "ui-hig-content-unavailable",
+        description: "ui-hig-content-unavailable-description",
+        category: 3,
+        sections: &[example(200.0)],
     },
     Component {
         title: "ui-hig-labels",
@@ -906,6 +946,68 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                     );
                 });
             }
+            "ui-hig-forms" => {
+                form()
+                    .style(if values.on {
+                        FormStyle::Grouped
+                    } else {
+                        FormStyle::Columns
+                    })
+                    .modifier(Modifier::new().width(Dp(360.0)))
+                    .content(move || {
+                        form_section()
+                            .header(I18N.text("ui-hig-general"))
+                            .content(move || {
+                                labeled_content(I18N.text("ui-hig-full-name")).content(|| {
+                                    text_field().modifier(Modifier::new().width(Dp(160.0)));
+                                });
+                                labeled_content(I18N.text("ui-hig-style-grouped")).content(
+                                    move || {
+                                        toggle(values.on)
+                                            .style(ToggleStyle::Switch)
+                                            .on_value_change(move |on| {
+                                                state.with_mut(|v| v.on = on)
+                                            });
+                                    },
+                                );
+                            });
+                    });
+            }
+            "ui-hig-date-pickers" => {
+                let day = CalendarDate::new(2026, 11, 1 + (values.count as u8 % 28)).unwrap_or(
+                    CalendarDate {
+                        year: 2026,
+                        month: 11,
+                        day: 1,
+                    },
+                );
+                date_picker(day)
+                    .style(DatePickerStyle::Graphical)
+                    .on_change(move |date: CalendarDate| {
+                        state.with_mut(|v| v.count = f64::from(date.day - 1))
+                    });
+                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                date_picker(day).on_change(move |date: CalendarDate| {
+                    state.with_mut(|v| v.count = f64::from(date.day - 1))
+                });
+            }
+            "ui-hig-color-pickers" => {
+                color_picker(if values.on {
+                    Color::from_rgb(0.0, 0.2, 1.0)
+                } else {
+                    Color::from_rgb(1.0, 0.6, 0.0)
+                })
+                .label(I18N.text("ui-hig-highlight"))
+                .on_change(move |_| state.with_mut(|v| v.on = !v.on));
+            }
+            "ui-hig-content-unavailable" => {
+                content_unavailable_view(I18N.text("ui-hig-no-results"))
+                    .description(I18N.text("ui-hig-no-results-description"))
+                    .modifier(Modifier::new().size(Dp(320.0), Dp(160.0)))
+                    .actions(|| {
+                        button(I18N.text("ui-hig-clear-search"));
+                    });
+            }
             "ui-hig-labels" => {
                 hig_label(I18N.text("ui-hig-favorites")).icon(|| {
                     text("★");
@@ -1146,6 +1248,21 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                         });
                     }
                 });
+        }
+        ("ui-hig-date-pickers", _) => {
+            date_picker(CalendarDate {
+                year: 2026,
+                month: 11,
+                day: 21,
+            })
+            .style(
+                [
+                    DatePickerStyle::Compact,
+                    DatePickerStyle::Field,
+                    DatePickerStyle::StepperField,
+                ][column],
+            )
+            .accessibility_label(name);
         }
         ("ui-hig-labels", _) => {
             hig_label(I18N.text("ui-hig-favorites"))
