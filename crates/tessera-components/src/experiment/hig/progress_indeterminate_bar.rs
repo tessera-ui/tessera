@@ -15,11 +15,11 @@ use tessera_ui::{
 
 use crate::pipelines::perceptual_fill::PerceptualSweepCommand;
 
-use super::super::theme::{Appearance, HigTheme};
+use super::super::theme::{Appearance, ControlSize, HigTheme};
 
 /// Size of an [`indeterminate_progress_bar`].
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum IndeterminateBarSize {
+pub(super) enum IndeterminateBarSize {
     /// 20 dp layout height, with an 8 dp track.
     #[default]
     Regular,
@@ -29,6 +29,17 @@ pub enum IndeterminateBarSize {
     Mini,
     /// Same dimensions as regular.
     Large,
+}
+
+impl From<ControlSize> for IndeterminateBarSize {
+    fn from(size: ControlSize) -> Self {
+        match size {
+            ControlSize::Mini => Self::Mini,
+            ControlSize::Small => Self::Small,
+            ControlSize::Regular => Self::Regular,
+            ControlSize::Large | ControlSize::ExtraLarge => Self::Large,
+        }
+    }
 }
 
 impl IndeterminateBarSize {
@@ -215,39 +226,9 @@ impl DrawModifierNode for BarPaint {
     }
 }
 
-/// # indeterminate_progress_bar
-///
-/// Shows ongoing work when the amount remaining is unknown.
-///
-/// ## Usage
-///
-/// Indicate that a background operation has started but has no measurable completion fraction.
-///
-/// ## Parameters
-///
-/// - `running` — whether to animate the bar.
-/// - `displayed_when_stopped` — keep a stationary bar after the sweep finishes; defaults to true.
-/// - `size` — bar height; defaults to regular.
-/// - `window_active` — use the active accent; defaults to true.
-/// - `modifier` — layout and additional semantics.
-/// - `accessibility_label`, `accessibility_description` — optional spoken name and context.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::experiment::hig::progress::indeterminate_progress_bar;
-/// use tessera_ui::{accesskit::Role, testing::UiTest};
-///
-/// let mut ui = UiTest::new().content(|| {
-///     indeterminate_progress_bar(true).accessibility_label("Preparing backup");
-/// });
-/// ui.frame();
-/// let (_, node) = ui.accessibility_node("Preparing backup");
-/// assert_eq!(node.role(), Role::ProgressIndicator);
-/// assert_eq!(node.numeric_value(), None);
-/// ```
+/// The indeterminate linear style of [`progress_view`](super::progress_view).
 #[tessera]
-pub fn indeterminate_progress_bar(
+pub(super) fn indeterminate_progress_bar(
     running: bool,
     displayed_when_stopped: Option<bool>,
     size: Option<IndeterminateBarSize>,

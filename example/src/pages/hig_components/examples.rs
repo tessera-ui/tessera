@@ -11,7 +11,7 @@ use tessera_components::{
         group_box::group_box,
         help_button::help_button,
         level_indicator::capacity_indicator,
-        progress::{indeterminate_progress_bar, progress_bar, progress_spinner},
+        progress::{ProgressViewStyle, progress_view},
         radio_button::{radio_button, radio_group},
         segmented_control::{Segment, segmented_control},
         slider::slider,
@@ -463,7 +463,8 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                 caption(format!("{:.0}", values.count), appearance);
             }
             "ui-progress-indicators" => {
-                progress_bar(values.fraction)
+                progress_view()
+                    .value(values.fraction)
                     .modifier(Modifier::new().width(Dp(160.0)))
                     .accessibility_label(I18N.text("ui-hig-value"));
                 spacer().modifier(Modifier::new().height(Dp(16.0)));
@@ -592,17 +593,19 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                 .accessibility_label(name);
         }
         ("ui-progress-indicators", 1) => {
-            progress_bar(column as f64 * 0.5)
+            progress_view()
+                .value(column as f64 * 0.5)
                 .modifier(Modifier::new().width(Dp(96.0)))
                 .accessibility_label(name);
         }
         ("ui-progress-indicators", _) => {
             if column == 0 {
-                indeterminate_progress_bar(true)
+                progress_view()
+                    .style(ProgressViewStyle::Linear)
                     .modifier(Modifier::new().width(Dp(96.0)))
                     .accessibility_label(name);
             } else {
-                progress_spinner(true).accessibility_label(name);
+                progress_view().accessibility_label(name);
             }
         }
         ("ui-hig-capacity-indicators", _) => {

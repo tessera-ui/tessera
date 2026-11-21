@@ -1,4 +1,4 @@
-use std::{ops::RangeInclusive, time::Duration};
+use std::time::Duration;
 
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
@@ -12,7 +12,7 @@ use crate::{alignment::Alignment, boxed::boxed, modifier::ModifierExt as _};
 
 use super::{
     super::theme::{Appearance, HigTheme, hig_theme},
-    IndeterminateBarSize, SpinnerSize, indeterminate_progress_bar, progress_bar, progress_spinner,
+    IndeterminateBarSize, SpinnerSize, indeterminate_progress_bar, progress_spinner, progress_view,
 };
 
 #[tessera]
@@ -224,7 +224,7 @@ fn indeterminate_spinner_animates_and_restores_stopped_visibility() {
 #[derive(Clone, Copy)]
 struct Controls {
     value: State<f64>,
-    range: State<RangeInclusive<f64>>,
+    total: State<f64>,
     width: State<Dp>,
     height: State<Dp>,
     dark: State<bool>,
@@ -234,14 +234,14 @@ struct Controls {
 #[tessera]
 fn fixture(probe: TestProbe<Option<Controls>>) {
     let value = remember(|| 0.25);
-    let range = remember(|| 0.0..=1.0);
+    let total = remember(|| 1.0);
     let width = remember(|| Dp(240.0));
     let height = remember(|| Dp(20.0));
     let dark = remember(|| false);
     let active = remember(|| false);
     probe.set(Some(Controls {
         value,
-        range,
+        total,
         width,
         height,
         dark,
@@ -264,8 +264,9 @@ fn fixture(probe: TestProbe<Option<Controls>>) {
                     Color::from_rgb(0.8900054, 0.8900054, 0.8900054)
                 }))
                 .children(move || {
-                    progress_bar(value.get())
-                        .range(range.get())
+                    progress_view()
+                        .value(value.get())
+                        .total(total.get())
                         .window_active(active.get())
                         .accessibility_label("Download")
                         .accessibility_description("Downloaded bytes")
@@ -275,7 +276,7 @@ fn fixture(probe: TestProbe<Option<Controls>>) {
 }
 
 #[test]
-fn retained_values_and_ranges_update_read_only_progress_semantics() {
+fn retained_values_and_totals_update_read_only_progress_semantics() {
     let probe = TestProbe::default();
     let mut ui = UiTest::new()
         .viewport(320, 80)
@@ -298,7 +299,7 @@ fn retained_values_and_ranges_update_read_only_progress_semantics() {
         Some(1.0)
     );
     assert_eq!(controls.value.get(), 1.5);
-    controls.range.set(20.0..=80.0);
+    controls.total.set(80.0);
     ui.frame();
     let (_, node) = ui.accessibility_node("Download");
     assert_eq!(
@@ -307,7 +308,7 @@ fn retained_values_and_ranges_update_read_only_progress_semantics() {
             node.min_numeric_value(),
             node.max_numeric_value()
         ),
-        (Some(20.0), Some(20.0), Some(80.0))
+        (Some(1.5), Some(0.0), Some(80.0))
     );
     controls.value.set(50.0);
     ui.frame();

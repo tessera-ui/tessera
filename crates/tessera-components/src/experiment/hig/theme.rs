@@ -39,6 +39,22 @@ impl Default for TextStyle {
     }
 }
 
+/// The size of a control, from the smallest to the largest.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ControlSize {
+    /// The smallest size, for dense inspectors and palettes.
+    Mini,
+    /// A compact size for secondary content.
+    Small,
+    /// The standard size.
+    #[default]
+    Regular,
+    /// A larger size for prominent controls.
+    Large,
+    /// The largest size.
+    ExtraLarge,
+}
+
 /// Colors and appearance inherited by HIG components.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HigTheme {

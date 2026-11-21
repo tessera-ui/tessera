@@ -1,11 +1,10 @@
-//! Progress bars and activity indicators.
+//! Progress views for bounded operations and ongoing activity.
 //!
 //! ## Usage
 //!
 //! Show the completion of a bounded operation or indicate that work is ongoing.
 
-use std::ops::RangeInclusive;
-
+use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
     Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutPolicy, LayoutResult,
@@ -16,9 +15,12 @@ use tessera_ui::{
     tessera, use_context,
 };
 
-use crate::pipelines::perceptual_fill::PerceptualFillCommand;
+use crate::pipelines::{
+    perceptual_fill::PerceptualFillCommand,
+    progress_arc::command::{ProgressArcCap, ProgressArcCommand},
+};
 
-use super::theme::{Appearance, HigTheme};
+use super::theme::{Appearance, ControlSize, HigTheme};
 
 #[cfg(test)]
 #[path = "progress_tests.rs"]
@@ -117,8 +119,9 @@ impl DrawModifierNode for ProgressFill {
     }
 }
 
+/// Lays out a linear bar of the given thickness, centred in a 20pt tall row.
 #[derive(Clone, Copy, PartialEq)]
-struct ProgressLayout;
+struct ProgressLayout(Dp);
 
 impl LayoutPolicy for ProgressLayout {
     fn measure_eq(&self, other: &Self) -> bool {
@@ -129,7 +132,7 @@ impl LayoutPolicy for ProgressLayout {
         let parent = *scope.parent_constraint().as_ref();
         let width = parent.width.clamp(Dp(160.0).into());
         let height = parent.height.clamp(Dp(20.0).into());
-        let bar = Px::from(Dp(8.0)).min(height);
+        let bar = Px::from(self.0).min(height);
         let inset = Px::from(Dp(0.5)).min(Px(bar.0 / 2)).min(Px(width.0 / 2));
         let mut result = LayoutResult::new(ComputedData { width, height });
         for (index, child) in scope.children().iter().enumerate() {
@@ -171,17 +174,32 @@ fn progress_indicator(fraction: f64, color: Color) {
     }));
 }
 
-/// # progress_bar
+/// The appearance of a [`progress_view`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ProgressViewStyle {
+    /// A bar for determinate progress and a spinner for indeterminate progress.
+    #[default]
+    Automatic,
+    /// A horizontal bar.
+    Linear,
+    /// A ring for determinate progress or a spinner for indeterminate progress.
+    Circular,
+}
+
+/// # progress_view
 ///
-/// Shows determinate completion for downloads and other bounded operations.
+/// Shows how much of an operation is complete, or that work is ongoing.
 ///
 /// ## Usage
 ///
-/// Publish the current amount of completed work without offering input actions.
+/// Report downloads, imports, and other long operations without offering input.
 ///
 /// ## Parameters
 ///
-/// - `value`, `range` — finite amount and increasing limits; the range defaults to `0.0..=1.0`.
+/// - `value`, `total` — completed amount out of `total` (default 1); without a value the view is
+///   indeterminate.
+/// - `style` — bar, ring, or spinner; defaults to [`ProgressViewStyle::Automatic`].
+/// - `control_size` — size of the bar, ring, or spinner; defaults to regular.
 /// - `window_active` — active accent appearance; defaults to true.
 /// - `modifier` — layout and additional semantics.
 /// - `accessibility_label`, `accessibility_description` — spoken name and context.
@@ -189,73 +207,174 @@ fn progress_indicator(fraction: f64, color: Color) {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::experiment::hig::progress::progress_bar;
-/// use tessera_ui::{remember, tessera, testing::{TestProbe, UiTest}};
-/// #[tessera]
-/// fn app(probe: TestProbe<Option<tessera_ui::State<f64>>>) {
-///     let completed = remember(|| 0.25);
-///     probe.set(Some(completed));
-///     progress_bar(completed.get()).accessibility_label("Download");
-/// }
-/// let probe = TestProbe::default();
-/// let mut ui = UiTest::new().content(|| app(probe.clone()));
-/// ui.frame();
-/// probe.get().unwrap().set(0.75);
-/// ui.frame();
-/// assert_eq!(ui.accessibility_node("Download").1.numeric_value(), Some(0.75));
+/// use tessera_components::experiment::hig::progress::{ProgressViewStyle, progress_view};
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+///
+/// progress_view().value(0.25).accessibility_label("Download");
+/// progress_view().value(3.0).total(8.0).style(ProgressViewStyle::Circular);
+/// progress_view().accessibility_label("Connecting");
+/// # }
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
-pub fn progress_bar(
-    value: f64,
-    range: Option<RangeInclusive<f64>>,
+pub fn progress_view(
+    value: Option<f64>,
+    total: Option<f64>,
+    style: Option<ProgressViewStyle>,
+    control_size: Option<ControlSize>,
     window_active: Option<bool>,
     modifier: Option<Modifier>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
-    let range = range.unwrap_or(0.0..=1.0);
-    let (min, max) = (*range.start(), *range.end());
+    let style = style.unwrap_or_default();
+    let size = control_size.unwrap_or_default();
+    let modifier = modifier.unwrap_or_default();
+    let Some(value) = value else {
+        if style == ProgressViewStyle::Linear {
+            indeterminate_progress_bar(true)
+                .size(IndeterminateBarSize::from(size))
+                .window_active_optional(window_active)
+                .modifier(modifier)
+                .accessibility_label_optional(accessibility_label)
+                .accessibility_description_optional(accessibility_description);
+        } else {
+            progress_spinner(true)
+                .size(SpinnerSize::from(size))
+                .modifier(modifier)
+                .accessibility_label_optional(accessibility_label)
+                .accessibility_description_optional(accessibility_description);
+        }
+        return;
+    };
+    let total = total.unwrap_or(1.0);
     assert!(
-        min.is_finite() && max.is_finite() && min < max && (max - min).is_finite(),
-        "progress range must be finite and increasing"
+        total.is_finite() && total > 0.0,
+        "progress total must be finite and positive"
     );
     assert!(value.is_finite(), "progress value must be finite");
-    let value = value.clamp(min, max);
+    let value = value.clamp(0.0, total);
+    let semantics = ProgressSemantics {
+        value,
+        min: 0.0,
+        max: total,
+        label: accessibility_label,
+        description: accessibility_description,
+    };
     let dark = use_context::<HigTheme>()
         .map(|theme| theme.get().appearance == Appearance::Dark)
         .unwrap_or(false);
+    let active = window_active.unwrap_or(true);
+    let modifier = modifier.push_semantics(semantics);
+    if style == ProgressViewStyle::Circular {
+        progress_ring(value / total, size, dark, active, modifier);
+    } else {
+        progress_bar(value / total, size, dark, active, modifier);
+    }
+}
+
+#[tessera]
+fn progress_bar(fraction: f64, size: ControlSize, dark: bool, active: bool, modifier: Modifier) {
     let tint = if dark { Color::WHITE } else { Color::BLACK };
     let track = if dark {
         Color::from_rgb(0.02415763, 0.02415763, 0.02415763)
     } else {
         Color::from_rgb(0.76815116, 0.76815116, 0.76815116)
     };
-    let fill = if window_active.unwrap_or(true) {
+    let fill = if active {
         Color::from_rgb(0.0, 0.19461783, 1.0)
     } else {
         Color::from_rgb(0.40197778, 0.40197778, 0.40197778)
     };
-    layout(ProgressLayout)
-        .modifier(
-            modifier
-                .unwrap_or_default()
-                .push_semantics(ProgressSemantics {
-                    value,
-                    min,
-                    max,
-                    label: accessibility_label,
-                    description: accessibility_description,
-                }),
-        )
+    let thickness = match size {
+        ControlSize::Mini | ControlSize::Small => Dp(6.0),
+        _ => Dp(8.0),
+    };
+    layout(ProgressLayout(thickness))
+        .modifier(modifier)
         .child(move || {
             progress_fill(tint.with_alpha(if dark { 0.11 } else { 0.13 }));
             progress_fill(track);
-            progress_indicator((value - min) / (max - min), fill);
+            progress_indicator(fraction, fill);
         });
 }
 
-pub use indeterminate_bar::{IndeterminateBarSize, indeterminate_progress_bar};
-pub use spinner::{SpinnerSize, progress_spinner};
+#[derive(Clone, PartialEq)]
+struct RingPaint {
+    fraction: f64,
+    track: Color,
+    fill: Color,
+}
+
+impl DrawModifierNode for RingPaint {
+    fn draw(
+        &self,
+        context: &mut DrawModifierContext<'_, '_>,
+        content: &mut dyn DrawModifierContent,
+    ) {
+        let stroke = Dp(5.0).to_pixels_f32();
+        let mut metadata = context.render_input.metadata_mut();
+        let fragment = metadata.fragment_mut();
+        fragment.push_draw_command(ProgressArcCommand {
+            color: self.track,
+            stroke_width_px: stroke,
+            start_angle_degrees: 0.0,
+            sweep_angle_degrees: 360.0,
+            cap: ProgressArcCap::Butt,
+        });
+        if self.fraction > 0.0 {
+            fragment.push_draw_command(ProgressArcCommand {
+                color: self.fill,
+                stroke_width_px: stroke,
+                start_angle_degrees: 270.0,
+                sweep_angle_degrees: (self.fraction * 360.0) as f32,
+                cap: ProgressArcCap::Round,
+            });
+        }
+        content.draw(context.render_input);
+    }
+}
+
+/// A determinate ring: 16pt across for mini and small sizes, 32pt otherwise, with a 5pt band.
+#[tessera]
+fn progress_ring(fraction: f64, size: ControlSize, dark: bool, active: bool, modifier: Modifier) {
+    let diameter = match size {
+        ControlSize::Mini | ControlSize::Small => Dp(16.0),
+        _ => Dp(32.0),
+    };
+    let (track, fill) = if dark {
+        (srgb(48, 48, 48), srgb(23, 105, 230))
+    } else {
+        (srgb(229, 229, 229), srgb(10, 129, 253))
+    };
+    let fill = if active {
+        fill
+    } else {
+        Color::from_rgb(0.40197778, 0.40197778, 0.40197778)
+    };
+    layout(Stack).modifier(modifier.size(diameter, diameter).push_draw(RingPaint {
+        fraction,
+        track,
+        fill,
+    }));
+}
+
+fn srgb(r: u8, g: u8, b: u8) -> Color {
+    let channel = |value: u8| {
+        let value = f32::from(value) / 255.0;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    Color::from_rgb(channel(r), channel(g), channel(b))
+}
+
+use indeterminate_bar::{IndeterminateBarSize, indeterminate_progress_bar};
+use spinner::{SpinnerSize, progress_spinner};
 
 #[path = "progress_indeterminate_bar.rs"]
 mod indeterminate_bar;

@@ -12,11 +12,11 @@ use tessera_ui::{
 
 use crate::pipelines::perceptual_fill::PerceptualSpokesCommand;
 
-use super::super::theme::{Appearance, HigTheme};
+use super::super::theme::{Appearance, ControlSize, HigTheme};
 
 /// Size of an indeterminate [`progress_spinner`].
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum SpinnerSize {
+pub(super) enum SpinnerSize {
     /// 32 dp diameter.
     #[default]
     Regular,
@@ -24,6 +24,16 @@ pub enum SpinnerSize {
     Small,
     /// 10 dp diameter.
     Mini,
+}
+
+impl From<ControlSize> for SpinnerSize {
+    fn from(size: ControlSize) -> Self {
+        match size {
+            ControlSize::Mini => Self::Mini,
+            ControlSize::Small => Self::Small,
+            ControlSize::Regular | ControlSize::Large | ControlSize::ExtraLarge => Self::Regular,
+        }
+    }
 }
 
 impl SpinnerSize {
@@ -38,7 +48,7 @@ impl SpinnerSize {
     fn spoke_profile(self) -> ([f64; 3], f32, f32) {
         match self {
             Self::Regular => ([8.0, 13.99, 1.814], 0.80, 0.597),
-            Self::Small => ([4.052, 6.955, 0.717], 0.74, 0.752),
+            Self::Small => ([4.0, 6.75, 1.0], 0.6, 0.54),
             Self::Mini => ([2.464, 4.285, 0.576], 0.67, 0.575),
         }
     }
@@ -100,38 +110,9 @@ impl DrawModifierNode for SpinnerPaint {
     }
 }
 
-/// # progress_spinner
-///
-/// Shows that an operation with no known completion fraction is in progress.
-///
-/// ## Usage
-///
-/// Indicate activity while loading or synchronizing content.
-///
-/// ## Parameters
-///
-/// - `running` — whether the indicator animates.
-/// - `displayed_when_stopped` — draw a stationary indicator when stopped; defaults to true.
-/// - `size` — indicator diameter; defaults to regular.
-/// - `modifier` — layout and additional semantics.
-/// - `accessibility_label`, `accessibility_description` — optional spoken name and context.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::experiment::hig::progress::progress_spinner;
-/// use tessera_ui::{accesskit::Role, testing::UiTest};
-///
-/// let mut ui = UiTest::new().content(|| {
-///     progress_spinner(true).accessibility_label("Syncing");
-/// });
-/// ui.frame();
-/// let (_, node) = ui.accessibility_node("Syncing");
-/// assert_eq!(node.role(), Role::ProgressIndicator);
-/// assert_eq!(node.numeric_value(), None);
-/// ```
+/// The indeterminate circular style of [`progress_view`](super::progress_view).
 #[tessera]
-pub fn progress_spinner(
+pub(super) fn progress_spinner(
     running: bool,
     displayed_when_stopped: Option<bool>,
     size: Option<SpinnerSize>,
