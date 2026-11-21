@@ -1,7 +1,7 @@
 //! Experimental components following Apple's Human Interface Guidelines.
 
 pub mod button;
-pub mod checkbox;
+mod checkbox;
 mod choice;
 pub mod disclosure_button;
 pub mod divider;
@@ -16,8 +16,9 @@ pub mod radio_button;
 pub mod segmented_control;
 pub mod slider;
 pub mod stepper;
-pub mod switch;
+mod switch;
 pub mod text;
 pub mod text_field;
 pub mod theme;
+pub mod toggle;
 pub mod toolbar;

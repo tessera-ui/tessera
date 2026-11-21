@@ -1,9 +1,3 @@
-//! Switches for immediately applied settings.
-//!
-//! ## Usage
-//!
-//! Turn an application setting on or off without a separate confirmation action.
-
 use tessera_foundation::{
     modifier::{ClickableArgs, InteractionState, ModifierExt as _},
     pointer_gestures::TapGestureConfig,
@@ -43,15 +37,21 @@ mod tests;
 #[derive(Clone, Copy, PartialEq)]
 struct Action {
     value: bool,
+    mixed: bool,
     enabled: bool,
     callback: CallbackWith<bool>,
 }
 
-struct SwitchSemantics(bool);
+struct SwitchSemantics {
+    value: bool,
+    mixed: bool,
+}
 
 impl SemanticsModifierNode for SwitchSemantics {
     fn apply(&self, node: &mut AccessibilityNode, _: &mut Option<AccessibilityActionHandler>) {
-        node.toggled = Some(if self.0 {
+        node.toggled = Some(if self.mixed {
+            Toggled::Mixed
+        } else if self.value {
             Toggled::True
         } else {
             Toggled::False
@@ -174,8 +174,22 @@ impl DrawModifierNode for ThumbLens {
     }
 }
 
+/// The mixed-state mark: a 7 x 2 capsule on the leading half of the track.
 #[tessera]
-fn switch_graphic(value: bool, track: Color, pressed: bool, focused: bool) {
+fn switch_dash() {
+    layout(Stack).modifier(
+        Modifier::new()
+            .offset(Dp(8.5), Dp(11.0))
+            .size(Dp(7.0), Dp(2.0))
+            .push_draw(Fill {
+                color: Color::WHITE,
+                radius: Dp(1.0),
+            }),
+    );
+}
+
+#[tessera]
+fn switch_graphic(value: bool, mixed: bool, track: Color, pressed: bool, focused: bool) {
     let mut modifier = Modifier::new().size(Dp(54.0), Dp(24.0)).push_draw(Fill {
         color: track,
         radius: Dp(12.0),
@@ -198,6 +212,9 @@ fn switch_graphic(value: bool, track: Color, pressed: bool, focused: bool) {
         .modifier(modifier)
         .children(move || {
             let x = Dp(if value { 20.0 } else { 2.0 });
+            if mixed {
+                switch_dash();
+            }
             if !pressed {
                 switch_shadow(x);
             }
@@ -205,45 +222,12 @@ fn switch_graphic(value: bool, track: Color, pressed: bool, focused: bool) {
         });
 }
 
-/// # switch
-///
-/// Requests changes to an immediately applied on/off setting with pointer or keyboard input.
-///
-/// ## Usage
-///
-/// Enable notifications, background activity, or other independent application settings.
-///
-/// ## Parameters
-///
-/// - `value`, `on_value_change` — controlled setting and requested updates.
-/// - `enabled` — input and focus availability; defaults to true.
-/// - `window_active` — containing window's active appearance; defaults to true.
-/// - `modifier`, `focus_requester` — layout, semantics, and optional external focus handle.
-/// - `accessibility_label`, `accessibility_description` — spoken name and instructions.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::experiment::hig::switch::switch;
-/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-/// use tessera_ui::{Modifier, remember, tessera, testing::UiTest};
-/// #[tessera]
-/// fn app() {
-///     let enabled = remember(|| false);
-///     switch(enabled.get()).accessibility_label("Notifications")
-///         .on_value_change(move |value| enabled.set(value))
-///         .modifier(Modifier::new().semantics(SemanticsArgs {
-///             test_tag: Some("notifications".into()), ..Default::default()
-///         }));
-/// }
-/// let mut ui = UiTest::new().content(app);
-/// ui.frame();
-/// ui.node("notifications").click();
-/// assert_eq!(ui.accessibility_node("Notifications").1.toggled(), Some(tessera_ui::accesskit::Toggled::True));
-/// ```
+/// The switch style of [`toggle`](super::toggle::toggle). A mixed switch shows its thumb on
+/// the trailing side with a dash on the track; activating it turns it on.
 #[tessera]
-pub fn switch(
+pub(super) fn switch(
     value: bool,
+    mixed: Option<bool>,
     on_value_change: Option<CallbackWith<bool>>,
     enabled: Option<bool>,
     window_active: Option<bool>,
@@ -254,8 +238,11 @@ pub fn switch(
 ) {
     let enabled = enabled.unwrap_or(true);
     let active = window_active.unwrap_or(true);
+    let mixed = mixed.unwrap_or(false);
+    let value = value || mixed;
     let next = Action {
         value,
+        mixed,
         enabled,
         callback: on_value_change.unwrap_or_else(CallbackWith::default_value),
     };
@@ -266,7 +253,7 @@ pub fn switch(
     let activate = Callback::new(move || {
         let action = action.get();
         if action.enabled {
-            action.callback.call(!action.value);
+            action.callback.call(action.mixed || !action.value);
         }
     });
     let requester = if let Some(requester) = focus_requester {
@@ -340,9 +327,9 @@ pub fn switch(
             held,
             activate,
         })
-        .push_semantics(SwitchSemantics(value))
+        .push_semantics(SwitchSemantics { value, mixed })
         .hover_cursor_icon(CursorIcon::Default);
     boxed()
         .modifier(modifier)
-        .children(move || switch_graphic(value, track, pressed, focused));
+        .children(move || switch_graphic(value, mixed, track, pressed, focused));
 }

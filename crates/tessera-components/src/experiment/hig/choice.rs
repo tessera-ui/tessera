@@ -41,6 +41,10 @@ pub(super) enum ChoiceMark {
 pub(super) struct ChoiceStyle {
     pub role: Role,
     pub mark: Option<ChoiceMark>,
+    /// Space between the glyph and the label.
+    pub label_gap: Dp,
+    /// Label line height; SwiftUI centres 13pt labels in a 17pt line, AppKit uses 16pt.
+    pub label_line_height: Dp,
 }
 
 struct ChoiceSemantics(Option<ChoiceMark>);
@@ -242,13 +246,16 @@ pub(super) fn choice_control(
             );
             if !label.is_empty() {
                 text(label.clone())
-                    .style(TextStyle::default())
+                    .style(TextStyle {
+                        line_height: style.label_line_height,
+                        ..Default::default()
+                    })
                     .color(ink)
                     .single_line(true)
                     .modifier(
                         Modifier::new()
                             .padding(Padding {
-                                left: Dp(6.0),
+                                left: style.label_gap,
                                 ..Default::default()
                             })
                             .clear_and_set_semantics(SemanticsArgs {

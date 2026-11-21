@@ -21,7 +21,7 @@ use super::{
         button::{button, button_scope},
         text::text,
     },
-    CheckboxState, checkbox,
+    checkbox,
 };
 
 #[test]
@@ -36,7 +36,7 @@ fn label_is_placed_beside_the_glyph_at_fractional_density() {
                     crate::boxed::boxed()
                         .alignment(crate::alignment::Alignment::TopStart)
                         .children(|| {
-                            checkbox(CheckboxState::Off)
+                            checkbox(false)
                                 .label("Option")
                                 .modifier(Modifier::new().size(Dp(160.0), Dp(20.0)));
                         });
@@ -52,17 +52,19 @@ fn label_is_placed_beside_the_glyph_at_fractional_density() {
                 text.width.0 > 50,
                 "title must retain its measured text width instead of being ellipsized inside the glyph"
             );
-            assert_eq!(text.y.0, 3);
+            // The 17pt label line is centred with the 16pt glyph, half a point above it.
+            assert_eq!(text.y.0, 2);
+            assert!((25..=26).contains(&text.height.0));
         },
     );
 }
 
 #[derive(Clone, Copy)]
 struct Controls {
-    value: State<CheckboxState>,
+    value: State<bool>,
     enabled: State<bool>,
     mixed: State<bool>,
-    changes: State<Vec<CheckboxState>>,
+    changes: State<Vec<bool>>,
     focus: FocusRequester,
     other_focus: FocusRequester,
     submits: State<u32>,
@@ -70,7 +72,7 @@ struct Controls {
 
 #[tessera]
 fn fixture(probe: TestProbe<Option<Controls>>) {
-    let value = remember(|| CheckboxState::Off);
+    let value = remember(|| false);
     let enabled = remember(|| true);
     let mixed = remember(|| false);
     let changes = remember(Vec::new);
@@ -93,7 +95,7 @@ fn fixture(probe: TestProbe<Option<Controls>>) {
                 checkbox(value.get())
                     .label("Option")
                     .enabled(enabled.get())
-                    .allows_mixed(mixed.get())
+                    .mixed(mixed.get())
                     .focus_requester(focus)
                     .on_value_change(move |next| {
                         changes.with_mut(|changes| changes.push(next));
@@ -117,7 +119,7 @@ fn fixture(probe: TestProbe<Option<Controls>>) {
 }
 
 #[test]
-fn label_clicks_cycle_controlled_selection_and_read_external_updates() {
+fn label_clicks_toggle_controlled_selection_and_mixed_turns_on() {
     let probe = TestProbe::default();
     let mut ui = UiTest::new()
         .viewport(300, 120)
@@ -126,30 +128,26 @@ fn label_clicks_cycle_controlled_selection_and_read_external_updates() {
     let controls = probe.get().unwrap();
     let label = PxPosition::from_f32_xy(50.0, 10.0);
     ui.click_at(label);
-    assert_eq!(controls.value.get(), CheckboxState::On);
+    assert!(controls.value.get());
     ui.click_at(label);
-    assert_eq!(controls.value.get(), CheckboxState::Off);
+    assert!(!controls.value.get());
     controls.mixed.set(true);
     ui.frames(1);
-    for expected in [CheckboxState::Mixed, CheckboxState::On, CheckboxState::Off] {
-        ui.click_at(label);
-        assert_eq!(controls.value.get(), expected);
-    }
-    controls.value.set(CheckboxState::On);
+    ui.click_at(label);
+    assert!(
+        controls.value.get(),
+        "activating a mixed checkbox turns it on"
+    );
+    ui.click_at(label);
+    assert!(
+        controls.value.get(),
+        "the caller still reports a mixed value"
+    );
+    controls.mixed.set(false);
     ui.frames(1);
     ui.click_at(label);
-    assert_eq!(controls.value.get(), CheckboxState::Off);
-    assert_eq!(
-        controls.changes.get(),
-        [
-            CheckboxState::On,
-            CheckboxState::Off,
-            CheckboxState::Mixed,
-            CheckboxState::On,
-            CheckboxState::Off,
-            CheckboxState::Off
-        ]
-    );
+    assert!(!controls.value.get());
+    assert_eq!(controls.changes.get(), [true, false, true, true, false]);
 }
 
 #[test]
@@ -170,12 +168,12 @@ fn dragging_out_and_back_tracks_the_press_and_disabling_cancels_activation() {
     ui.frames(1);
     ui.pointer_release(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
     ui.frames(1);
-    assert_eq!(controls.changes.get(), [CheckboxState::On]);
+    assert_eq!(controls.changes.get(), [true]);
     ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
     ui.frames(1);
     ui.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
     ui.frames(1);
-    assert_eq!(controls.changes.get(), [CheckboxState::On]);
+    assert_eq!(controls.changes.get(), [true]);
     ui.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
     ui.frames(1);
     controls.enabled.set(false);
@@ -183,15 +181,12 @@ fn dragging_out_and_back_tracks_the_press_and_disabling_cancels_activation() {
     ui.pointer_release(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
     ui.frames(1);
     ui.click_at(inside);
-    assert_eq!(controls.changes.get(), [CheckboxState::On]);
+    assert_eq!(controls.changes.get(), [true]);
     assert!(!ui.run(|| controls.focus.is_focused()));
     controls.enabled.set(true);
     ui.frames(1);
     ui.click_at(inside);
-    assert_eq!(
-        controls.changes.get(),
-        [CheckboxState::On, CheckboxState::Off]
-    );
+    assert_eq!(controls.changes.get(), [true, false]);
 }
 
 fn check_keyboard_and_semantics() {
@@ -238,7 +233,7 @@ fn check_keyboard_and_semantics() {
         ElementState::Released,
     ));
     ui.frames(2);
-    assert_eq!(controls.changes.get(), [CheckboxState::On]);
+    assert_eq!(controls.changes.get(), [true]);
     assert_eq!(
         ui.accessibility_node("Option").1.toggled(),
         Some(Toggled::True)
@@ -263,7 +258,7 @@ fn check_keyboard_and_semantics() {
     ));
     ui.frames(1);
     ui.set_key_modifiers(ModifiersState::empty());
-    assert_eq!(controls.changes.get(), [CheckboxState::On]);
+    assert_eq!(controls.changes.get(), [true]);
     ui.press_key(NamedKey::Space);
     ui.frames(1);
     ui.run(|| controls.other_focus.request_focus());
@@ -273,7 +268,7 @@ fn check_keyboard_and_semantics() {
         ElementState::Released,
     ));
     ui.frames(1);
-    assert_eq!(controls.changes.get(), [CheckboxState::On]);
+    assert_eq!(controls.changes.get(), [true]);
     ui.run(|| controls.focus.request_focus());
     ui.frames(1);
     ui.press_key(NamedKey::Space);
@@ -285,11 +280,10 @@ fn check_keyboard_and_semantics() {
         ElementState::Released,
     ));
     ui.frames(1);
-    assert_eq!(controls.changes.get(), [CheckboxState::On]);
+    assert_eq!(controls.changes.get(), [true]);
     controls.enabled.set(true);
     ui.frames(1);
     controls.mixed.set(true);
-    controls.value.set(CheckboxState::Mixed);
     ui.frames(2);
     assert_eq!(
         ui.accessibility_node("Option").1.toggled(),
@@ -303,8 +297,7 @@ fn check_keyboard_and_semantics() {
     );
     assert!(ui.accessibility_action(id, Action::Click));
     ui.frames(2);
-    assert_eq!(controls.value.get(), CheckboxState::On);
-    controls.value.set(CheckboxState::Mixed);
+    assert!(controls.value.get());
     controls.mixed.set(false);
     ui.frames(2);
     assert_eq!(
@@ -313,7 +306,7 @@ fn check_keyboard_and_semantics() {
     );
     assert!(ui.accessibility_action(id, Action::Click));
     ui.frames(2);
-    assert_eq!(controls.value.get(), CheckboxState::Off);
+    assert!(!controls.value.get());
     controls.enabled.set(false);
     ui.frames(2);
     let (_, disabled) = ui.accessibility_node("Option");
@@ -321,7 +314,7 @@ fn check_keyboard_and_semantics() {
     assert!(!disabled.supports_action(Action::Click));
     ui.accessibility_action(id, Action::Click);
     ui.frames(1);
-    assert_eq!(controls.value.get(), CheckboxState::Off);
+    assert!(!controls.value.get());
     assert_ne!(focused, ui.read_pixels());
     assert_eq!(
         ui.accessibility_snapshot()

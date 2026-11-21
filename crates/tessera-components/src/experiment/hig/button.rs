@@ -10,9 +10,10 @@ use tessera_foundation::modifier::{
     ClickableArgs, InteractionState, ModifierExt as _, Padding, SemanticsArgs,
 };
 use tessera_ui::{
-    Callback, Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode,
-    FocusRequester, KeyboardInput, KeyboardInputModifierNode, Modifier, RenderSlotWith, State,
-    accesskit::Role,
+    AccessibilityActionHandler, AccessibilityNode, Callback, Color, Dp, DrawModifierContent,
+    DrawModifierContext, DrawModifierNode, FocusRequester, KeyboardInput,
+    KeyboardInputModifierNode, Modifier, RenderSlotWith, SemanticsModifierNode, State,
+    accesskit::{Role, Toggled},
     launch_once,
     layout::{Stack, layout},
     modifier::{CursorModifierExt as _, ModifierCapabilityExt as _},
@@ -234,6 +235,28 @@ fn button_shape() -> Shape {
     }
 }
 
+fn srgb(r: u8, g: u8, b: u8) -> Color {
+    let channel = |value: u8| {
+        let value = f32::from(value) / 255.0;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    Color::from_rgb(channel(r), channel(g), channel(b))
+}
+
+struct ButtonToggleSemantics(Option<bool>);
+
+impl SemanticsModifierNode for ButtonToggleSemantics {
+    fn apply(&self, node: &mut AccessibilityNode, _: &mut Option<AccessibilityActionHandler>) {
+        if let Some(on) = self.0 {
+            node.toggled = Some(if on { Toggled::True } else { Toggled::False });
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 struct ButtonBackground(Color);
 
@@ -303,6 +326,37 @@ pub fn button(
     on_click: Option<Callback>,
     enabled: Option<bool>,
     default_action: Option<bool>,
+    scope: Option<ButtonScope>,
+    window_active: Option<bool>,
+    modifier: Option<Modifier>,
+    interaction_state: Option<State<InteractionState>>,
+    focus_requester: Option<FocusRequester>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+) {
+    push_button(label)
+        .on_click_optional(on_click)
+        .enabled_optional(enabled)
+        .default_action_optional(default_action)
+        .scope_optional(scope)
+        .window_active_optional(window_active)
+        .modifier_optional(modifier)
+        .interaction_state_optional(interaction_state)
+        .focus_requester_optional(focus_requester)
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description);
+}
+
+/// The push button behind [`button`] and the button style of
+/// [`toggle`](super::toggle::toggle). `toggled` publishes an on/off state and highlights the
+/// button while on.
+#[tessera]
+pub(super) fn push_button(
+    #[prop(into)] label: String,
+    on_click: Option<Callback>,
+    enabled: Option<bool>,
+    default_action: Option<bool>,
+    toggled: Option<bool>,
     scope: Option<ButtonScope>,
     window_active: Option<bool>,
     modifier: Option<Modifier>,
@@ -382,7 +436,14 @@ pub fn button(
     let pressed = enabled
         && (pulsing || keyboard_pressed.get() || interaction.with(InteractionState::is_pressed));
     let focused = enabled && active && requester.is_focus_visible();
-    let fill = if enabled && default_action && active {
+    let highlighted = default_action || toggled == Some(true);
+    let fill = if !enabled && toggled == Some(true) && active {
+        if dark {
+            srgb(15, 98, 187)
+        } else {
+            srgb(72, 154, 244)
+        }
+    } else if enabled && highlighted && active {
         if pressed {
             Color::from_rgb(0.0, 0.18, 0.60)
         } else {
@@ -399,13 +460,16 @@ pub fn button(
             (true, true, false) => 0.08,
         })
     };
-    let ink = if default_action && enabled && active || dark {
+    let on = toggled == Some(true) && active;
+    let ink = if enabled && highlighted && active || on || dark {
         Color::WHITE
     } else {
         Color::BLACK
     };
-    let ink = ink.with_alpha(if enabled && default_action && active {
+    let ink = ink.with_alpha(if enabled && highlighted && active {
         1.0
+    } else if on {
+        0.5
     } else if enabled {
         0.85
     } else if dark {
@@ -445,6 +509,7 @@ pub fn button(
         );
     }
     modifier = modifier
+        .push_semantics(ButtonToggleSemantics(toggled))
         .push_draw(ButtonBackground(fill))
         .padding(Padding::symmetric(Dp(12.0), Dp(4.0)));
     boxed()

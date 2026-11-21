@@ -164,23 +164,17 @@ impl DrawModifierNode for GroupFill {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::experiment::hig::{group_box::group_box, checkbox::{checkbox, CheckboxState}};
-/// use tessera_ui::{remember, tessera, testing::UiTest};
-/// #[tessera]
-/// fn app() {
-///     let enabled = remember(|| CheckboxState::Off);
-///     group_box().title("Notifications").child(move || {
-///         checkbox(enabled.get()).label("Email").accessibility_label("Email notifications")
-///             .on_value_change(move |next| enabled.set(next));
-///     });
-/// }
-/// let mut ui = UiTest::new().content(app);
-/// ui.frame();
-/// let (id, _) = ui.accessibility_node("Email notifications");
-/// ui.accessibility_action(id, tessera_ui::accesskit::Action::Click);
-/// ui.frame();
-/// assert_eq!(ui.accessibility_node("Email notifications").1.toggled(), Some(tessera_ui::accesskit::Toggled::True));
-/// assert!(ui.inspect_accessibility().unwrap().find("Notifications", tessera_ui::accesskit::Role::Group).is_some());
+/// use tessera_components::experiment::hig::{group_box::group_box, toggle::toggle};
+/// use tessera_ui::{remember, tessera};
+/// # #[tessera]
+/// # fn component() {
+///
+/// let email = remember(|| false);
+/// group_box().title("Notifications").child(move || {
+///     toggle(email.get()).label("Email").on_value_change(move |on| email.set(on));
+/// });
+/// # }
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn group_box(

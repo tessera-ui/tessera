@@ -133,14 +133,15 @@ fn viewport_clamps_wheel_overshoot_and_reveals_keyboard_focus() {
 
 #[test]
 fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
-    for index in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] {
+    for index in 0..COMPONENTS.len() {
+        let title = COMPONENTS[index].title;
         let mut ui = UiTest::new().viewport(600, 1200).content(move || {
             article_fixture(index);
         });
         setup(&ui);
         ui.frames(3);
-        match index {
-            0 => {
+        match title {
+            "ui-buttons" => {
                 activate(&mut ui, "Continue", Role::Button);
                 assert!(
                     ui.inspect_accessibility()
@@ -150,7 +151,7 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                         .any(|(_, node)| crate::has_label(node, "1"))
                 );
             }
-            1 => {
+            "ui-hig-help-buttons" => {
                 activate(&mut ui, "Help buttons", Role::Button);
                 assert!(
                     ui.inspect_accessibility()
@@ -163,7 +164,7 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                         ))
                 );
             }
-            2 => {
+            "ui-hig-disclosure-buttons" => {
                 activate(&mut ui, "Additional information", Role::DisclosureTriangle);
                 assert_eq!(
                     control(&ui, "Additional information", Role::DisclosureTriangle)
@@ -172,23 +173,29 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                     Some(true)
                 );
             }
-            3 => {
-                activate(&mut ui, "Enable notifications", Role::CheckBox);
+            "ui-hig-toggles" => {
                 assert_eq!(
-                    control(&ui, "Enable notifications", Role::CheckBox)
-                        .1
-                        .toggled(),
+                    control(&ui, "Select all", Role::CheckBox).1.toggled(),
                     Some(Toggled::Mixed)
                 );
-                activate(&mut ui, "Enable notifications", Role::CheckBox);
+                activate(&mut ui, "Select all", Role::CheckBox);
                 assert_eq!(
-                    control(&ui, "Enable notifications", Role::CheckBox)
+                    control(&ui, "Select all", Role::CheckBox).1.toggled(),
+                    Some(Toggled::True)
+                );
+                assert_eq!(
+                    control(&ui, "Enable notifications", Role::Switch)
                         .1
                         .toggled(),
                     Some(Toggled::True)
                 );
+                activate(&mut ui, "Enable notifications", Role::Switch);
+                assert_eq!(
+                    control(&ui, "Select all", Role::CheckBox).1.toggled(),
+                    Some(Toggled::False)
+                );
             }
-            4 => {
+            "ui-radio-button" => {
                 activate(&mut ui, "Express", Role::RadioButton);
                 assert_eq!(
                     control(&ui, "Express", Role::RadioButton).1.toggled(),
@@ -199,29 +206,23 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                     Some(Toggled::False)
                 );
             }
-            5 => {
-                activate(&mut ui, "Enable notifications", Role::Switch);
-                assert_eq!(
-                    control(&ui, "Enable notifications", Role::Switch)
-                        .1
-                        .toggled(),
-                    Some(Toggled::True)
-                );
-            }
-            6 => {
+            "ui-hig-segmented-controls" => {
                 activate(&mut ui, "Express", Role::RadioButton);
                 assert_eq!(
                     control(&ui, "Express", Role::RadioButton).1.toggled(),
                     Some(Toggled::True)
                 );
             }
-            7..=10 => {
-                let label = match index {
-                    9 => "Completion",
-                    10 => "Capacity",
+            "ui-sliders"
+            | "ui-hig-steppers"
+            | "ui-progress-indicators"
+            | "ui-hig-capacity-indicators" => {
+                let label = match title {
+                    "ui-progress-indicators" => "Completion",
+                    "ui-hig-capacity-indicators" => "Capacity",
                     _ => "Value",
                 };
-                let role = if index == 8 {
+                let role = if title == "ui-hig-steppers" {
                     Role::SpinButton
                 } else {
                     Role::Slider
@@ -233,7 +234,7 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                     control(&ui, label, role).1.numeric_value().unwrap()
                         > before.numeric_value().unwrap()
                 );
-                if index == 9 {
+                if title == "ui-progress-indicators" {
                     assert_eq!(
                         control(&ui, "Value", Role::ProgressIndicator)
                             .1
@@ -242,12 +243,11 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                     );
                 }
             }
-            _ => unreachable!(),
+            _ => {}
         }
-        if COMPONENTS[index].sections[1..]
-            .iter()
-            .any(|section| section.rows.contains(&"ui-hig-disabled"))
-        {
+        if COMPONENTS[index].sections[1..].iter().any(|section| {
+            section.title == "ui-hig-disabled" || section.rows.contains(&"ui-hig-disabled")
+        }) {
             assert!(
                 ui.inspect_accessibility()
                     .unwrap()

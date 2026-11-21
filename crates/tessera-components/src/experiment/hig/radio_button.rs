@@ -6,7 +6,7 @@
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Callback, FocusDirection, FocusRequester, FocusState, FocusTraversalPolicy, Modifier,
+    Callback, Dp, FocusDirection, FocusRequester, FocusState, FocusTraversalPolicy, Modifier,
     RenderSlotWith,
     accesskit::Role,
     focus,
@@ -194,6 +194,8 @@ pub fn radio_button(
         ChoiceStyle {
             role: Role::RadioButton,
             mark: selected.then_some(ChoiceMark::Dot),
+            label_gap: Dp(6.0),
+            label_line_height: Dp(16.0),
         },
         activate,
         label.unwrap_or_default(),

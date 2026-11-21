@@ -4,7 +4,6 @@ use tessera_components::{
     column::column,
     experiment::hig::{
         button::button,
-        checkbox::{CheckboxState, checkbox},
         disclosure_button::disclosure_button,
         divider::{DividerOrientation, divider},
         glass::{GlassAppearance, GlassMaterial, glass},
@@ -17,10 +16,10 @@ use tessera_components::{
         segmented_control::{Segment, segmented_control},
         slider::slider,
         stepper::stepper,
-        switch::switch,
         text::text,
         text_field::text_field,
         theme::{Appearance, HigTheme, TextStyle},
+        toggle::{ToggleStyle, toggle},
     },
     image::{ImageData, image},
     spacer::spacer,
@@ -107,12 +106,23 @@ pub(super) const COMPONENTS: &[Component] = &[
         ],
     },
     Component {
-        title: "ui-checkbox",
-        description: "ui-hig-checkbox-description",
+        title: "ui-hig-toggles",
+        description: "ui-hig-toggles-description",
         category: 1,
         sections: &[
             example(120.0),
-            states(&["ui-hig-off", "ui-hig-on", "ui-hig-mixed"], ENABLED),
+            Section {
+                title: "ui-hig-styles",
+                columns: &["ui-hig-off", "ui-hig-on", "ui-hig-mixed"],
+                rows: &["ui-hig-checkbox", "ui-hig-switch", "ui-hig-button"],
+                height: 56.0,
+            },
+            Section {
+                title: "ui-hig-disabled",
+                columns: &["ui-hig-off", "ui-hig-on", "ui-hig-mixed"],
+                rows: &["ui-hig-checkbox", "ui-hig-switch", "ui-hig-button"],
+                height: 56.0,
+            },
         ],
     },
     Component {
@@ -122,15 +132,6 @@ pub(super) const COMPONENTS: &[Component] = &[
         sections: &[
             example(120.0),
             states(&["ui-hig-unselected", "ui-hig-selected"], ENABLED),
-        ],
-    },
-    Component {
-        title: "ui-switch",
-        description: "ui-hig-switch-description",
-        category: 1,
-        sections: &[
-            example(120.0),
-            states(&["ui-hig-off", "ui-hig-on"], ENABLED),
         ],
     },
     Component {
@@ -277,7 +278,7 @@ pub(super) fn label(key: &str) -> String {
 pub(super) struct ExampleValues {
     clicks: u32,
     expanded: bool,
-    checked: CheckboxState,
+    mixed: bool,
     selected: usize,
     on: bool,
     fraction: f64,
@@ -289,7 +290,7 @@ impl Default for ExampleValues {
         Self {
             clicks: 0,
             expanded: false,
-            checked: CheckboxState::Off,
+            mixed: true,
             selected: 0,
             on: false,
             fraction: 0.5,
@@ -345,7 +346,7 @@ pub(super) fn cell(
     height: Dp,
 ) {
     let appearance = use_context::<HigTheme>().unwrap().get().appearance;
-    let backdrop = index == 13;
+    let backdrop = COMPONENTS[index].title == "ui-hig-glass";
     let image_data = remember(backdrop_image);
     boxed()
         .alignment(Alignment::Center)
@@ -376,15 +377,15 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
     let values = state.get();
     column()
         .cross_axis_alignment(CrossAxisAlignment::Center)
-        .children(move || match index {
-            0 => {
+        .children(move || match COMPONENTS[index].title {
+            "ui-buttons" => {
                 button(I18N.text("ui-hig-action"))
                     .default_action(true)
                     .on_click(move || state.with_mut(|v| v.clicks += 1));
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
                 caption(values.clicks.to_string(), appearance);
             }
-            1 => {
+            "ui-hig-help-buttons" => {
                 help_button()
                     .accessibility_label(I18N.text("ui-hig-help-buttons"))
                     .on_click(move || state.with_mut(|v| v.expanded = !v.expanded));
@@ -393,7 +394,7 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                     caption(I18N.text("ui-hig-help-content"), appearance);
                 }
             }
-            2 => {
+            "ui-hig-disclosure-buttons" => {
                 disclosure_button(values.expanded)
                     .accessibility_label(I18N.text("ui-hig-details"))
                     .on_expanded_change(move |next| state.with_mut(|v| v.expanded = next));
@@ -402,13 +403,28 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                     caption(I18N.text("ui-hig-details"), appearance);
                 }
             }
-            3 => {
-                checkbox(values.checked)
-                    .allows_mixed(true)
+            "ui-hig-toggles" => {
+                toggle(values.on)
+                    .mixed(values.mixed)
+                    .label(I18N.text("ui-hig-select-all"))
+                    .on_value_change(move |next| {
+                        state.with_mut(|v| {
+                            v.on = next;
+                            v.mixed = false;
+                        })
+                    });
+                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                toggle(values.on)
                     .label(I18N.text("ui-hig-option"))
-                    .on_value_change(move |next| state.with_mut(|v| v.checked = next));
+                    .style(ToggleStyle::Switch)
+                    .on_value_change(move |next| {
+                        state.with_mut(|v| {
+                            v.on = next;
+                            v.mixed = false;
+                        })
+                    });
             }
-            4 => {
+            "ui-radio-button" => {
                 radio_group()
                     .accessibility_label(I18N.text("ui-hig-choice"))
                     .child(move |group| {
@@ -424,12 +440,7 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                         });
                     });
             }
-            5 => {
-                switch(values.on)
-                    .accessibility_label(I18N.text("ui-hig-option"))
-                    .on_value_change(move |next| state.with_mut(|v| v.on = next));
-            }
-            6 => {
+            "ui-hig-segmented-controls" => {
                 segmented_control(vec![
                     Segment::new(I18N.text("ui-hig-first")),
                     Segment::new(I18N.text("ui-hig-second")),
@@ -437,13 +448,13 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                 .selected(values.selected)
                 .on_select(move |next| state.with_mut(|v| v.selected = next));
             }
-            7 => {
+            "ui-sliders" => {
                 slider(values.fraction)
                     .modifier(Modifier::new().width(Dp(160.0)))
                     .accessibility_label(I18N.text("ui-hig-value"))
                     .on_value_change(move |next| state.with_mut(|v| v.fraction = next));
             }
-            8 => {
+            "ui-hig-steppers" => {
                 stepper(values.count)
                     .range(0.0..=10.0)
                     .accessibility_label(I18N.text("ui-hig-value"))
@@ -451,7 +462,7 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
                 caption(format!("{:.0}", values.count), appearance);
             }
-            9 => {
+            "ui-progress-indicators" => {
                 progress_bar(values.fraction)
                     .modifier(Modifier::new().width(Dp(160.0)))
                     .accessibility_label(I18N.text("ui-hig-value"));
@@ -461,7 +472,7 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                     .accessibility_label(I18N.text("ui-hig-progress-value"))
                     .on_value_change(move |next| state.with_mut(|v| v.fraction = next));
             }
-            10 => {
+            "ui-hig-capacity-indicators" => {
                 capacity_indicator(values.fraction * 5.0)
                     .warning_value(3.0)
                     .critical_value(4.0)
@@ -473,14 +484,14 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                     .accessibility_label(I18N.text("ui-hig-capacity-value"))
                     .on_value_change(move |next| state.with_mut(|v| v.fraction = next));
             }
-            11 => {
+            "ui-hig-dividers" => {
                 text(I18N.text("ui-hig-first"));
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
                 divider().modifier(Modifier::new().width(Dp(160.0)));
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
                 text(I18N.text("ui-hig-second"));
             }
-            12 => {
+            "ui-hig-group-boxes" => {
                 group_box()
                     .title(I18N.text("ui-hig-group-boxes"))
                     .modifier(Modifier::new().width(Dp(200.0)))
@@ -488,7 +499,7 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                         text(I18N.text("ui-hig-details"));
                     });
             }
-            13 => {
+            "ui-hig-glass" => {
                 glass()
                     .material(GlassMaterial::Clear)
                     .appearance(glass_appearance(appearance))
@@ -497,7 +508,7 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                         text(I18N.text("ui-hig-glass"));
                     });
             }
-            14 => {
+            "ui-hig-text" => {
                 text(I18N.text("ui-hig-text")).style(TextStyle {
                     font_size: Dp(22.0),
                     line_height: Dp(28.0),
@@ -506,7 +517,7 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                 });
                 caption(I18N.text("ui-hig-details"), appearance);
             }
-            15 => {
+            "ui-hig-text-fields" => {
                 text_field()
                     .placeholder(I18N.text("ui-hig-search"))
                     .modifier(Modifier::new().width(Dp(200.0)))
@@ -525,38 +536,41 @@ fn caption(content: String, appearance: Appearance) {
 fn static_state(index: usize, section: usize, row: usize, column: usize, appearance: Appearance) {
     let enabled = row == 0;
     let name = label(COMPONENTS[index].sections[section].columns[column]);
-    match (index, section) {
-        (0, _) => {
+    match (COMPONENTS[index].title, section) {
+        ("ui-buttons", _) => {
             button(I18N.text("ui-hig-action"))
                 .enabled(column == 0)
                 .default_action(row == 1)
                 .accessibility_label(name);
         }
-        (1, _) => {
+        ("ui-hig-help-buttons", _) => {
             help_button().enabled(column == 0).accessibility_label(name);
         }
-        (2, _) => {
+        ("ui-hig-disclosure-buttons", _) => {
             disclosure_button(column == 1)
                 .enabled(enabled)
                 .accessibility_label(name);
         }
-        (3, _) => {
-            checkbox([CheckboxState::Off, CheckboxState::On, CheckboxState::Mixed][column])
-                .allows_mixed(true)
-                .enabled(enabled)
+        ("ui-hig-toggles", _) => {
+            toggle(column == 1)
+                .mixed(column == 2)
+                .label(I18N.text("ui-hig-option"))
+                .style(
+                    [
+                        ToggleStyle::Checkbox,
+                        ToggleStyle::Switch,
+                        ToggleStyle::Button,
+                    ][row],
+                )
+                .enabled(section == 1)
                 .accessibility_label(name);
         }
-        (4, _) => {
+        ("ui-radio-button", _) => {
             radio_button(column == 1)
                 .enabled(enabled)
                 .accessibility_label(name);
         }
-        (5, _) => {
-            switch(column == 1)
-                .enabled(enabled)
-                .accessibility_label(name);
-        }
-        (6, _) => {
+        ("ui-hig-segmented-controls", _) => {
             segmented_control(vec![
                 Segment::new(I18N.text("ui-hig-first")),
                 Segment::new(I18N.text("ui-hig-second")),
@@ -565,24 +579,24 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
             .enabled(column == 0)
             .accessibility_label(name);
         }
-        (7, _) => {
+        ("ui-sliders", _) => {
             slider(column as f64 * 0.5)
                 .enabled(enabled)
                 .modifier(Modifier::new().width(Dp(96.0)))
                 .accessibility_label(name);
         }
-        (8, _) => {
+        ("ui-hig-steppers", _) => {
             stepper(5.0)
                 .range(0.0..=10.0)
                 .enabled(column == 0)
                 .accessibility_label(name);
         }
-        (9, 1) => {
+        ("ui-progress-indicators", 1) => {
             progress_bar(column as f64 * 0.5)
                 .modifier(Modifier::new().width(Dp(96.0)))
                 .accessibility_label(name);
         }
-        (9, _) => {
+        ("ui-progress-indicators", _) => {
             if column == 0 {
                 indeterminate_progress_bar(true)
                     .modifier(Modifier::new().width(Dp(96.0)))
@@ -591,7 +605,7 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                 progress_spinner(true).accessibility_label(name);
             }
         }
-        (10, _) => {
+        ("ui-hig-capacity-indicators", _) => {
             capacity_indicator([2.0, 3.5, 4.5][column])
                 .warning_value(3.0)
                 .critical_value(4.0)
@@ -599,7 +613,7 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                 .modifier(Modifier::new().width(Dp(96.0)))
                 .accessibility_label(name);
         }
-        (11, _) => {
+        ("ui-hig-dividers", _) => {
             if column == 0 {
                 divider().modifier(Modifier::new().width(Dp(96.0)));
             } else {
@@ -608,7 +622,7 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                     .modifier(Modifier::new().height(Dp(48.0)));
             }
         }
-        (12, _) => {
+        ("ui-hig-group-boxes", _) => {
             group_box()
                 .title(if column == 0 {
                     I18N.text("ui-hig-group-boxes")
@@ -620,7 +634,7 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                     text(I18N.text("ui-hig-details"));
                 });
         }
-        (13, 1) => {
+        ("ui-hig-glass", 1) => {
             let rounded = column == 1;
             glass()
                 .material(if row == 0 {
@@ -632,7 +646,7 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                 .corner_radius_optional(rounded.then_some(Dp(12.0)))
                 .modifier(Modifier::new().size(Dp(96.0), Dp(if rounded { 64.0 } else { 40.0 })));
         }
-        (13, _) => {
+        ("ui-hig-glass", _) => {
             glass_group()
                 .material(if column == 0 {
                     GlassMaterial::Regular
@@ -647,10 +661,10 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                     spacer().modifier(Modifier::new().size(Dp(44.0), Dp(36.0)));
                 });
         }
-        (14, _) => {
+        ("ui-hig-text", _) => {
             text(I18N.text("ui-hig-text")).color(label_colors(appearance)[column]);
         }
-        (15, _) => {
+        ("ui-hig-text-fields", _) => {
             let filled = column == 1;
             text_field()
                 .placeholder(I18N.text("ui-hig-search"))
