@@ -33,6 +33,7 @@ use crate::{
 
 use super::{
     choice::ChoiceKeyboard,
+    motion::mix,
     theme::{Appearance, HigTheme},
 };
 
@@ -464,16 +465,6 @@ pub(super) fn switch(
     boxed()
         .modifier(modifier)
         .children(move || switch_graphic(mixed, track, x, lift, focused));
-}
-
-fn mix(from: Color, to: Color, fraction: f32) -> Color {
-    let lerp = |a: f32, b: f32| a + (b - a) * fraction;
-    Color::new(
-        lerp(from.r, to.r),
-        lerp(from.g, to.g),
-        lerp(from.b, to.b),
-        lerp(from.a, to.a),
-    )
 }
 
 fn track_color(value: bool, pressed: bool, enabled: bool, active: bool, dark: bool) -> Color {

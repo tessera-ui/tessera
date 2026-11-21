@@ -232,7 +232,7 @@ fn check_keyboard_and_semantics() {
         NamedKey::Space,
         ElementState::Released,
     ));
-    ui.frames(2);
+    ui.frames(12);
     assert_eq!(controls.changes.get(), [true]);
     assert_eq!(
         ui.accessibility_node("Option").1.toggled(),

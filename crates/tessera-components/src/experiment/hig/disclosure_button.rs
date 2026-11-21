@@ -13,6 +13,7 @@ use tessera_ui::{
     DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusRequester, Modifier,
     SemanticsModifierNode, State,
     accesskit::{Action, Role},
+    launch,
     layout::{Stack, layout},
     modifier::{CursorModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
@@ -21,6 +22,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::Alignment,
+    animation::animate_to,
     boxed::boxed,
     modifier::ModifierExt as _,
     pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualStroke},
@@ -29,6 +31,7 @@ use crate::{
 
 use super::{
     choice::ChoiceKeyboard,
+    motion::{DISCLOSURE, Eased},
     theme::{Appearance, HigTheme},
 };
 
@@ -82,10 +85,41 @@ impl SemanticsModifierNode for DisclosureSemantics {
     }
 }
 
+/// The chevron at `turn` (0 pointing right, 1 pointing down).
 #[derive(Clone, PartialEq)]
 struct Chevron {
-    expanded: bool,
+    turn: f32,
     color: Color,
+}
+
+const COLLAPSED: [[f32; 2]; 3] = [
+    [5.374 / 13.0, 2.893 / 13.0],
+    [8.721 / 13.0, 6.167 / 13.0],
+    [5.361 / 13.0, 9.489 / 13.0],
+];
+const EXPANDED: [[f32; 2]; 3] = [
+    [2.743 / 13.0, 5.152 / 13.0],
+    [6.039 / 13.0, 8.552 / 13.0],
+    [9.350 / 13.0, 5.173 / 13.0],
+];
+
+/// Rotates the collapsed chevron about the glyph centre and corrects it toward the expanded
+/// outline, so both ends of the turn are exact.
+fn chevron_points(turn: f32) -> [[f32; 2]; 3] {
+    let rotate = |[x, y]: [f32; 2], angle: f32| {
+        let (sin, cos) = angle.sin_cos();
+        let (dx, dy) = (x - 0.5, y - 0.5);
+        [0.5 + dx * cos - dy * sin, 0.5 + dx * sin + dy * cos]
+    };
+    let quarter = std::f32::consts::FRAC_PI_2;
+    std::array::from_fn(|index| {
+        let turned = rotate(COLLAPSED[index], quarter * turn);
+        let end = rotate(COLLAPSED[index], quarter);
+        [
+            turned[0] + (EXPANDED[index][0] - end[0]) * turn,
+            turned[1] + (EXPANDED[index][1] - end[1]) * turn,
+        ]
+    })
 }
 
 impl DrawModifierNode for Chevron {
@@ -94,19 +128,7 @@ impl DrawModifierNode for Chevron {
         context: &mut DrawModifierContext<'_, '_>,
         content: &mut dyn DrawModifierContent,
     ) {
-        let points = if self.expanded {
-            [
-                [2.743 / 13.0, 5.152 / 13.0],
-                [6.039 / 13.0, 8.552 / 13.0],
-                [9.350 / 13.0, 5.173 / 13.0],
-            ]
-        } else {
-            [
-                [5.374 / 13.0, 2.893 / 13.0],
-                [8.721 / 13.0, 6.167 / 13.0],
-                [5.361 / 13.0, 9.489 / 13.0],
-            ]
-        };
+        let points = chevron_points(self.turn);
         context
             .render_input
             .metadata_mut()
@@ -133,7 +155,7 @@ impl DrawModifierNode for Chevron {
 }
 
 #[tessera]
-fn disclosure_glyph(expanded: bool, color: Color, focused: bool) {
+fn disclosure_glyph(turn: f32, color: Color, focused: bool) {
     let mut modifier = Modifier::new().size(Dp(13.0), Dp(13.0));
     if focused {
         let corner = RoundedCorner::manual(Dp(3.0), 2.0);
@@ -148,7 +170,7 @@ fn disclosure_glyph(expanded: bool, color: Color, focused: bool) {
             },
         );
     }
-    layout(Stack).modifier(modifier.push_draw(Chevron { expanded, color }));
+    layout(Stack).modifier(modifier.push_draw(Chevron { turn, color }));
 }
 
 /// # disclosure_button
@@ -272,12 +294,16 @@ pub fn disclosure_button(
         })
         .push_semantics(DisclosureSemantics(value))
         .hover_cursor_icon(CursorIcon::Default);
+    let target = if expanded { 1.0 } else { 0.0 };
+    let turn = remember(|| Eased::new(target, DISCLOSURE));
+    launch(expanded, animate_to(turn, target));
+    let turn = turn.with(Eased::value);
     boxed()
         .alignment(Alignment::Center)
         .modifier(modifier)
         .children(move || {
             disclosure_glyph(
-                expanded,
+                turn,
                 color,
                 enabled && active && requester.is_focus_visible(),
             );

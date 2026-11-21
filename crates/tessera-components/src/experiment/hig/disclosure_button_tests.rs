@@ -333,11 +333,11 @@ fn check_keyboard_pixels_and_semantics() {
     assert_eq!(controls.changes.get(), [true, false, true]);
     controls.enabled.set(true);
     controls.active.set(false);
-    ui.frame();
+    ui.frames(15);
     let resting = ui.read_pixels();
     assert!(ui.pixel(19, 24)[0].abs_diff(191) <= 2);
     controls.expanded.set(false);
-    ui.frame();
+    ui.frames(15);
     assert_ne!(resting, ui.read_pixels());
     assert!(ui.pixel(24, 19)[0].abs_diff(191) <= 2);
     controls.enabled.set(false);
@@ -386,5 +386,22 @@ fn keyboard_feedback_cancellation_accessibility_and_retained_pixels_use_the_disc
     crate::test_utils::run_isolated_test(
         "experiment::hig::disclosure_button::tests::keyboard_feedback_cancellation_accessibility_and_retained_pixels_use_the_disclosure_button",
         check_keyboard_pixels_and_semantics,
+    );
+}
+
+#[test]
+fn the_chevron_turns_a_quarter_between_the_collapsed_and_expanded_outlines() {
+    use super::{COLLAPSED, EXPANDED, chevron_points};
+    for (turn, outline) in [(0.0, COLLAPSED), (1.0, EXPANDED)] {
+        for (point, expected) in chevron_points(turn).iter().zip(outline) {
+            assert!(
+                (point[0] - expected[0]).abs() < 1.0e-6 && (point[1] - expected[1]).abs() < 1.0e-6
+            );
+        }
+    }
+    let tip = chevron_points(0.5)[1];
+    assert!(
+        tip[0] > 0.5 && tip[1] > 0.5,
+        "halfway, the tip points down and to the right"
     );
 }

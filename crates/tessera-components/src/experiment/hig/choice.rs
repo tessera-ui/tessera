@@ -7,6 +7,7 @@ use tessera_ui::{
     DrawModifierContext, DrawModifierNode, FocusRequester, KeyboardInput,
     KeyboardInputModifierNode, Modifier, SemanticsModifierNode, State,
     accesskit::{Role, Toggled},
+    launch,
     layout::{Stack, layout},
     modifier::{CursorModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
@@ -19,6 +20,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::CrossAxisAlignment,
+    animation::animate_to,
     modifier::ModifierExt as _,
     pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualStroke},
     row::row,
@@ -26,6 +28,7 @@ use crate::{
 };
 
 use super::{
+    motion::{Eased, SELECTION, mix},
     text::text,
     theme::{Appearance, HigTheme, TextStyle},
 };
@@ -163,38 +166,60 @@ pub(super) fn choice_control(
         .unwrap_or_default();
     let dark = theme.appearance == Appearance::Dark;
     let selected = style.mark.is_some();
+    let target = if selected { 1.0 } else { 0.0 };
+    let selection = remember(|| Eased::new(target, SELECTION));
+    launch(selected, animate_to(selection, target));
+    let progress = selection.with(Eased::value);
+    // The last mark keeps drawing while it fades out.
+    let shown_mark = remember(|| style.mark);
+    if style.mark.is_some() && shown_mark.get() != style.mark {
+        shown_mark.set(style.mark);
+    }
     let tint = if dark { Color::WHITE } else { Color::BLACK };
-    let fill = if enabled && active && selected {
-        if pressed {
-            Color::from_rgb(0.0, 0.18, 0.60)
+    let fill_for = |selected: bool| {
+        if enabled && active && selected {
+            if pressed {
+                Color::from_rgb(0.0, 0.18, 0.60)
+            } else {
+                Color::from_rgb(0.0, 0.19461783, 1.0)
+            }
         } else {
-            Color::from_rgb(0.0, 0.19461783, 1.0)
+            tint.with_alpha(match (enabled, selected, pressed && active) {
+                (false, false, _) => 0.05,
+                (false, true, _) => 0.07,
+                (true, _, true) => 0.20,
+                (true, false, false) => 0.10,
+                (true, true, false) => 0.14,
+            })
         }
-    } else {
-        tint.with_alpha(match (enabled, selected, pressed && active) {
-            (false, false, _) => 0.05,
-            (false, true, _) => 0.07,
-            (true, _, true) => 0.20,
-            (true, false, false) => 0.10,
-            (true, true, false) => 0.14,
-        })
     };
+    let fill = mix(fill_for(false), fill_for(true), progress);
     let ink = if enabled {
         theme.label_color()
     } else {
         tint.with_alpha(if dark { 0.25 } else { 0.26 })
     };
     let mark_color = if enabled && active { Color::WHITE } else { ink };
-    let stroke = style.mark.map(|mark| PerceptualStroke {
-        raster_mask: false,
-        color: mark_color,
-        width: Dp(if mark == ChoiceMark::Dot { 5.0 } else { 2.04 }),
-        points: match mark {
-            ChoiceMark::Check => [[0.253, 0.548], [0.434, 0.750], [0.734, 0.298]],
-            ChoiceMark::Dash => [[0.35, 0.50], [0.50, 0.50], [0.65, 0.50]],
-            ChoiceMark::Dot => [[0.50, 0.50]; 3],
-        },
-    });
+    // Marks fade in while growing from 60% about the glyph centre; the dot grows from nothing.
+    let scale = 0.6 + 0.4 * progress;
+    let stroke = shown_mark
+        .get()
+        .filter(|_| progress > 0.0)
+        .map(|mark| PerceptualStroke {
+            raster_mask: false,
+            color: mark_color.with_alpha(mark_color.a * progress),
+            width: Dp(if mark == ChoiceMark::Dot {
+                5.0 * f64::from(progress)
+            } else {
+                2.04
+            }),
+            points: match mark {
+                ChoiceMark::Check => [[0.253, 0.548], [0.434, 0.750], [0.734, 0.298]],
+                ChoiceMark::Dash => [[0.35, 0.50], [0.50, 0.50], [0.65, 0.50]],
+                ChoiceMark::Dot => [[0.50, 0.50]; 3],
+            }
+            .map(|[x, y]| [0.5 + (x - 0.5) * scale, 0.5 + (y - 0.5) * scale]),
+        });
     let modifier = modifier
         .clickable(ClickableArgs {
             enabled,

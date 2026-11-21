@@ -9,17 +9,21 @@ use tessera_ui::{
     LayoutResult, MeasurementError, Modifier, PointerEventPass, PointerId, PointerInput,
     PointerInputModifierNode, PressKeyEventType, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action as AxAction, Role, Toggled},
-    key,
+    key, launch,
     layout::{MeasureScope, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, remember_with_key, tessera, use_context,
     winit::window::CursorIcon,
 };
 
-use crate::pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualStroke};
+use crate::{
+    animation::animate_to,
+    pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualStroke},
+};
 
 use super::{
     choice::ChoiceKeyboard,
+    motion::{Eased, SELECTION, mix},
     text::text,
     theme::{Appearance, HigTheme, TextStyle},
 };
@@ -465,44 +469,59 @@ fn segment_item(
         interaction.with(|state| state.is_pressed() && state.is_hovered())
     };
     let pressed = item.enabled && active && (held.get() || pointer_pressed);
-    let accent = selection && selected && active;
-    let color = if accent {
-        match (theme.appearance, item.enabled, pressed) {
-            (Appearance::Light, false, _) => Color::from_rgb(0.05448, 0.29614, 0.85499),
-            (Appearance::Dark, false, _) => Color::from_rgb(0.006995, 0.13563, 0.52712),
-            (Appearance::Light, true, false) => Color::from_rgb(0.0, 0.18448, 0.94731),
-            (Appearance::Light, true, true) => Color::from_rgb(0.0, 0.14703, 0.75294),
-            (Appearance::Dark, true, false) => Color::from_rgb(0.001821, 0.20508, 1.0),
-            (Appearance::Dark, true, true) => Color::from_rgb(0.012983, 0.25415, 1.0),
-        }
-    } else if selected {
-        tint.with_alpha(if !item.enabled {
-            0.0625
+    let target = if selection && selected { 1.0 } else { 0.0 };
+    let shown = remember(|| Eased::new(target, SELECTION));
+    launch(selected, animate_to(shown, target));
+    let progress = shown.with(Eased::value);
+    let color_for = |selected: bool| {
+        if selected && active {
+            match (theme.appearance, item.enabled, pressed) {
+                (Appearance::Light, false, _) => Color::from_rgb(0.05448, 0.29614, 0.85499),
+                (Appearance::Dark, false, _) => Color::from_rgb(0.006995, 0.13563, 0.52712),
+                (Appearance::Light, true, false) => Color::from_rgb(0.0, 0.18448, 0.94731),
+                (Appearance::Light, true, true) => Color::from_rgb(0.0, 0.14703, 0.75294),
+                (Appearance::Dark, true, false) => Color::from_rgb(0.001821, 0.20508, 1.0),
+                (Appearance::Dark, true, true) => Color::from_rgb(0.012983, 0.25415, 1.0),
+            }
+        } else if selected {
+            tint.with_alpha(if !item.enabled {
+                0.0625
+            } else if pressed {
+                0.20
+            } else {
+                0.125
+            })
         } else if pressed {
-            0.20
+            tint.with_alpha(if theme.appearance == Appearance::Dark {
+                0.165
+            } else {
+                0.16
+            })
         } else {
-            0.125
-        })
-    } else if pressed {
-        tint.with_alpha(if theme.appearance == Appearance::Dark {
-            0.165
-        } else {
-            0.16
-        })
-    } else {
-        Color::TRANSPARENT
+            Color::TRANSPARENT
+        }
     };
-    let ink = if accent {
-        // Dimming the white ink keeps the same raster mask as the enabled label.
-        Color::WHITE.with_alpha(if item.enabled { 1.0 } else { 0.5 })
-    } else if item.enabled {
-        theme.label_color()
-    } else {
-        tint.with_alpha(if theme.appearance == Appearance::Dark {
-            0.25
+    let ink_for = |selected: bool| {
+        if selected && active {
+            // Dimming the white ink keeps the same raster mask as the enabled label.
+            Color::WHITE.with_alpha(if item.enabled { 1.0 } else { 0.5 })
+        } else if item.enabled {
+            theme.label_color()
         } else {
-            0.26
-        })
+            tint.with_alpha(if theme.appearance == Appearance::Dark {
+                0.25
+            } else {
+                0.26
+            })
+        }
+    };
+    let (color, ink) = if selection {
+        (
+            mix(color_for(false), color_for(true), progress),
+            mix(ink_for(false), ink_for(true), progress),
+        )
+    } else {
+        (color_for(false), ink_for(false))
     };
     let mut modifier = if let Some((_, bounds)) = selection_pointer {
         let mut modifier = Modifier::new()

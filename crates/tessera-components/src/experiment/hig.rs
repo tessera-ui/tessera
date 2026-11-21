@@ -11,6 +11,7 @@ pub mod glass_group;
 pub mod group_box;
 pub mod help_button;
 pub mod link;
+mod motion;
 pub mod picker;
 pub mod progress;
 mod radio_button;
