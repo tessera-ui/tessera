@@ -54,7 +54,7 @@ pub enum ToolbarSymbol {
     Sidebar,
 }
 
-fn window_background(appearance: Appearance) -> Color {
+pub(super) fn window_background(appearance: Appearance) -> Color {
     match appearance {
         Appearance::Light => Color::WHITE,
         Appearance::Dark => srgb(30, 30, 30),

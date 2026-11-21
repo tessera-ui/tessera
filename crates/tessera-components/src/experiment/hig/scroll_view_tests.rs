@@ -3,7 +3,7 @@ use std::time::Duration;
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{Dp, MOUSE_POINTER_ID, Modifier, PxPosition, tessera, testing::UiTest};
 
-use crate::{column::column, spacer::spacer};
+use crate::{column::column, modifier::ModifierExt as _, spacer::spacer};
 
 use super::scroll_view;
 
@@ -67,7 +67,7 @@ fn check_scroller_fades() {
         -30.0,
     );
     ui.frames(3);
-    let thumb = ui.pixel(95, 20);
+    let thumb = ui.pixel(95, 50);
     assert!(
         thumb[3] > 0,
         "the scroller appears while scrolling: {thumb:?}"
@@ -75,8 +75,8 @@ fn check_scroller_fades() {
     ui.advance(Duration::from_millis(1500));
     ui.frames(30);
     assert_eq!(
-        ui.pixel(95, 20)[3],
-        rest[(20 * 200 + 95) * 4 + 3],
+        ui.pixel(95, 50)[3],
+        rest[(50 * 200 + 95) * 4 + 3],
         "the scroller fades out"
     );
 }
@@ -87,5 +87,53 @@ fn scrollers_appear_while_scrolling_and_fade_after_a_pause() {
     crate::test_utils::run_isolated_test(
         "experiment::hig::scroll_view::tests::scrollers_appear_while_scrolling_and_fade_after_a_pause",
         check_scroller_fades,
+    );
+}
+
+#[tessera]
+fn dark_content() {
+    column().children(|| {
+        scroll_view()
+            .modifier(Modifier::new().size(Dp(100.0), Dp(100.0)))
+            .child(|| {
+                spacer().modifier(
+                    Modifier::new()
+                        .size(Dp(100.0), Dp(300.0))
+                        .background(tessera_ui::Color::BLACK),
+                );
+            });
+    });
+}
+
+fn check_soft_edge() {
+    let mut ui = UiTest::new()
+        .viewport(200, 200)
+        .rendered(crate::TesseraComponents)
+        .content(dark_content);
+    ui.frames(2);
+    assert!(
+        ui.pixel(50, 1)[0] < 10,
+        "unscrolled content shows no edge effect"
+    );
+    ui.pointer_scroll(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(50.0, 50.0),
+        0.0,
+        -40.0,
+    );
+    ui.frames(3);
+    assert!(
+        ui.pixel(50, 1)[0] > 150,
+        "scrolled content fades under the top edge"
+    );
+    assert!(ui.pixel(50, 60)[0] < 10, "the fade stays near the edge");
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for edge effect pixels"]
+fn scrolled_content_fades_under_the_top_edge() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::scroll_view::tests::scrolled_content_fades_under_the_top_edge",
+        check_soft_edge,
     );
 }

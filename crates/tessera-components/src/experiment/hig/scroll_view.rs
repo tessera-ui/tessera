@@ -63,6 +63,22 @@ impl ScrollAxes {
     }
 }
 
+/// How content fades where it scrolls under the top edge of a [`scroll_view`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ScrollEdgeEffectStyle {
+    /// The platform default, a soft edge on macOS.
+    #[default]
+    Automatic,
+    /// Content fades into the window background over the top 24pt.
+    Soft,
+    /// A line separates the edge from content scrolled under it.
+    Hard,
+}
+
+/// Height of the soft edge effect, and the number of bands it is drawn with.
+const SOFT_EDGE: f64 = 24.0;
+const SOFT_EDGE_BANDS: usize = 12;
+
 /// Content and viewport sizes from the latest measurement, in physical pixels.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Extents {
@@ -108,12 +124,11 @@ impl LayoutPolicy for ScrollLayout {
             free(self.axes.horizontal(), parent.width),
             free(self.axes.vertical(), parent.height),
         );
+        // The first child is the content; the second draws scrollers and edge effects above it.
         let children = scope.children();
         let mut content = ComputedData::ZERO;
-        for child in &children {
-            let size = child.measure(scope, &child_constraint)?.size();
-            content.width = content.width.max(size.width);
-            content.height = content.height.max(size.height);
+        if let Some(child) = children.first() {
+            content = child.measure(scope, &child_constraint)?.size();
         }
         let viewport = ComputedData {
             width: parent.width.clamp(content.width),
@@ -130,8 +145,18 @@ impl LayoutPolicy for ScrollLayout {
         let x = -self.offset.0.clamp(0.0, max_x).round() as i32;
         let y = -self.offset.1.clamp(0.0, max_y).round() as i32;
         let mut result = LayoutResult::new(viewport);
-        for child in children {
-            result.place_child(child, PxPosition::new(Px(x), Px(y)));
+        if let Some(child) = children.first() {
+            result.place_child(*child, PxPosition::new(Px(x), Px(y)));
+        }
+        if let Some(overlay) = children.get(1) {
+            overlay.measure(
+                scope,
+                &Constraint::new(
+                    AxisConstraint::exact(viewport.width),
+                    AxisConstraint::exact(viewport.height),
+                ),
+            )?;
+            result.place_child(*overlay, PxPosition::ZERO);
         }
         Ok(result)
     }
@@ -203,6 +228,8 @@ struct Scrollers {
     offset: (f32, f32),
     extents: Arc<Mutex<Extents>>,
     color: Color,
+    /// The top edge effect and the window background it fades into.
+    edge: Option<(ScrollEdgeEffectStyle, Color)>,
 }
 
 impl PartialEq for Scrollers {
@@ -210,6 +237,7 @@ impl PartialEq for Scrollers {
         self.axes == other.axes
             && self.offset == other.offset
             && self.color == other.color
+            && self.edge == other.edge
             && Arc::ptr_eq(&self.extents, &other.extents)
     }
 }
@@ -236,14 +264,46 @@ impl DrawModifierNode for Scrollers {
         content: &mut dyn DrawModifierContent,
     ) {
         content.draw(context.render_input);
-        if self.color.a <= 0.0 {
-            return;
-        }
         let extents = self
             .extents
             .lock()
             .map(|extents| *extents)
             .unwrap_or_default();
+        if let Some((style, background)) = self.edge
+            && self.offset.1 > 0.0
+        {
+            let height = f64::from(Dp::from_pixels_f32(extents.viewport.1).0);
+            let mut metadata = context.render_input.metadata_mut();
+            let fragment = metadata.fragment_mut();
+            if style == ScrollEdgeEffectStyle::Hard {
+                fragment.push_draw_command(thumb(
+                    Color::BLACK.with_alpha(0.12),
+                    [Dp::ZERO, Dp::ZERO, Dp(height - 1.0), Dp::ZERO],
+                ));
+            } else {
+                // Stacked bands approximate a fade from the background to clear.
+                let band = SOFT_EDGE / SOFT_EDGE_BANDS as f64;
+                for index in 0..SOFT_EDGE_BANDS {
+                    let alpha = 0.85 * (1.0 - index as f32 / SOFT_EDGE_BANDS as f32);
+                    let top = band * index as f64;
+                    fragment.push_draw_command(PerceptualFillCommand {
+                        radii: [Dp::ZERO; 2],
+                        ..thumb(
+                            background.with_alpha(alpha),
+                            [
+                                Dp(top),
+                                Dp::ZERO,
+                                Dp((height - top - band).max(0.0)),
+                                Dp::ZERO,
+                            ],
+                        )
+                    });
+                }
+            }
+        }
+        if self.color.a <= 0.0 {
+            return;
+        }
         let (max_x, max_y) = extents.max_offset();
         let to_dp = |px: f32| f64::from(Dp::from_pixels_f32(px).0);
         let (width, height) = (to_dp(extents.viewport.0), to_dp(extents.viewport.1));
@@ -288,6 +348,8 @@ impl DrawModifierNode for Scrollers {
 ///
 /// - `axes` — directions the content scrolls in; defaults to [`ScrollAxes::Vertical`].
 /// - `shows_indicators` — whether scrollers appear while scrolling; defaults to true.
+/// - `edge_effect` — how content fades under the top edge once scrolled; defaults to
+///   [`ScrollEdgeEffectStyle::Automatic`].
 /// - `modifier` — size and placement; the view fills the space its container offers.
 /// - `child` — the scrolled content.
 ///
@@ -311,6 +373,7 @@ impl DrawModifierNode for Scrollers {
 pub fn scroll_view(
     axes: Option<ScrollAxes>,
     shows_indicators: Option<bool>,
+    edge_effect: Option<ScrollEdgeEffectStyle>,
     modifier: Option<Modifier>,
     child: Option<RenderSlot>,
 ) {
@@ -329,9 +392,10 @@ pub fn scroll_view(
         run_frames(shown, move |_, now| !hold.elapsed(now)).await;
         animate_to(shown, 0.0).await;
     });
-    let dark = use_context::<HigTheme>()
-        .map(|theme| theme.get().appearance == Appearance::Dark)
-        .unwrap_or(false);
+    let appearance = use_context::<HigTheme>()
+        .map(|theme| theme.get().appearance)
+        .unwrap_or_default();
+    let dark = appearance == Appearance::Dark;
     let alpha = if shows_indicators.unwrap_or(true) {
         shown.with(Eased::value)
     } else {
@@ -346,13 +410,17 @@ pub fn scroll_view(
             offset,
             activity,
             extents: extents.clone(),
-        })
-        .push_draw(Scrollers {
-            axes,
-            offset: offset.get(),
-            extents: extents.clone(),
-            color,
         });
+    let scrollers = Scrollers {
+        axes,
+        offset: offset.get(),
+        extents: extents.clone(),
+        color,
+        edge: Some((
+            edge_effect.unwrap_or_default(),
+            super::toolbar::window_background(appearance),
+        )),
+    };
     layout(ScrollLayout {
         axes,
         offset: offset.get(),
@@ -360,10 +428,16 @@ pub fn scroll_view(
     })
     .modifier(modifier)
     .child(move || {
-        if let Some(child) = child {
-            scroll_content(axes, child);
-        }
+        let child = child.unwrap_or_else(RenderSlot::empty);
+        scroll_content(axes, child);
+        scroll_overlay(scrollers.clone());
     });
+}
+
+#[tessera]
+fn scroll_overlay(scrollers: Scrollers) {
+    tessera_ui::layout::layout(tessera_ui::layout::Stack)
+        .modifier(Modifier::new().push_draw(scrollers));
 }
 
 /// Stacks the content along the scrolled axis.
