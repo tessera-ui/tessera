@@ -28,17 +28,22 @@ use tessera_ui::{
 };
 
 use crate::{
-    alignment::Alignment,
+    alignment::{Alignment, CrossAxisAlignment},
     animation::run_frames,
     boxed::boxed,
+    column::column,
     modifier::ModifierExt as _,
-    pipelines::perceptual_fill::PerceptualFillCommand,
+    pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualStroke},
+    row::row,
     shape_def::{RoundedCorner, Shape},
+    spacer::spacer,
 };
 
 use super::{
+    control_group::ControlGroupContext,
     glass::{GlassAppearance, GlassMaterial, glass},
     link::link_color,
+    menu::{MenuContext, menu_item},
     motion::mix,
     text::text,
     theme::{Appearance, ControlSize, HigTheme, TextStyle},
@@ -295,6 +300,89 @@ pub enum ButtonRole {
     Destructive,
 }
 
+/// A symbol after a button's title that shows it opens a menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ButtonIndicator {
+    /// A down chevron, for buttons that pull down a menu of commands.
+    PullDown,
+    /// Up and down chevrons, for buttons that pop up a menu of choices.
+    PopUp,
+}
+
+struct MenuButtonSemantics(bool);
+
+impl SemanticsModifierNode for MenuButtonSemantics {
+    fn apply(&self, node: &mut AccessibilityNode, _: &mut Option<AccessibilityActionHandler>) {
+        node.has_popup = Some(tessera_ui::accesskit::HasPopup::Menu);
+        node.expanded = Some(self.0);
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct Chevron {
+    points: [[f32; 2]; 3],
+    color: Color,
+}
+
+impl DrawModifierNode for Chevron {
+    fn draw(
+        &self,
+        context: &mut DrawModifierContext<'_, '_>,
+        content: &mut dyn DrawModifierContent,
+    ) {
+        context
+            .render_input
+            .metadata_mut()
+            .fragment_mut()
+            .push_draw_command(PerceptualFillCommand {
+                outline_width: Dp::ZERO,
+                snap_to_pixels: false,
+                path: None,
+                color: Color::TRANSPARENT,
+                radii: [Dp::ZERO; 2],
+                insets: [Dp::ZERO; 4],
+                clip_radius: None,
+                line: None,
+                edge_smoothness: 1.0,
+                stroke: Some(PerceptualStroke {
+                    raster_mask: true,
+                    color: self.color,
+                    width: Dp(1.5),
+                    points: self.points,
+                }),
+            });
+        content.draw(context.render_input);
+    }
+}
+
+#[tessera]
+fn chevron(points: [[f32; 2]; 3], color: Color) {
+    layout(Stack).modifier(
+        Modifier::new()
+            .size(Dp(8.0), Dp(5.0))
+            .push_draw(Chevron { points, color }),
+    );
+}
+
+const DOWN: [[f32; 2]; 3] = [[0.1, 0.15], [0.5, 0.85], [0.9, 0.15]];
+const UP: [[f32; 2]; 3] = [[0.1, 0.85], [0.5, 0.15], [0.9, 0.85]];
+
+#[tessera]
+fn indicator_glyph(indicator: ButtonIndicator, color: Color) {
+    column()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move || match indicator {
+            ButtonIndicator::PullDown => {
+                chevron(DOWN, color);
+            }
+            ButtonIndicator::PopUp => {
+                chevron(UP, color);
+                spacer().modifier(Modifier::new().height(Dp(2.0)));
+                chevron(DOWN, color);
+            }
+        });
+}
+
 #[derive(Clone, Copy)]
 struct SizeMetrics {
     height: f64,
@@ -331,6 +419,39 @@ fn system_red(dark: bool) -> Color {
 
 #[derive(Clone, PartialEq)]
 struct ButtonBackground(Color, Dp);
+
+/// A divider just past the trailing edge; the group clips the last one.
+#[derive(Clone, PartialEq)]
+struct TrailingDivider(Color);
+
+impl DrawModifierNode for TrailingDivider {
+    fn draw(
+        &self,
+        context: &mut DrawModifierContext<'_, '_>,
+        content: &mut dyn DrawModifierContent,
+    ) {
+        let mut metadata = context.render_input.metadata_mut();
+        if let Some(size) = metadata.computed_data() {
+            let width = Dp::from_pixels_f32(size.width.to_f32());
+            let line = Dp::from_pixels_f32(1.0);
+            metadata
+                .fragment_mut()
+                .push_draw_command(PerceptualFillCommand {
+                    outline_width: Dp::ZERO,
+                    snap_to_pixels: true,
+                    path: None,
+                    color: self.0,
+                    radii: [Dp::ZERO; 2],
+                    insets: [Dp(5.0), Dp(-line.0), Dp(5.0), width],
+                    clip_radius: None,
+                    line: None,
+                    edge_smoothness: 1.0,
+                    stroke: None,
+                });
+        }
+        content.draw(context.render_input);
+    }
+}
 
 impl DrawModifierNode for ButtonBackground {
     fn draw(
@@ -413,6 +534,14 @@ pub fn button(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
+    if use_context::<MenuContext>().is_some() {
+        menu_item(label)
+            .on_click_optional(on_click)
+            .enabled_optional(enabled)
+            .accessibility_label_optional(accessibility_label)
+            .accessibility_description_optional(accessibility_description);
+        return;
+    }
     push_button(label)
         .on_click_optional(on_click)
         .enabled_optional(enabled)
@@ -439,6 +568,8 @@ pub(super) fn push_button(
     enabled: Option<bool>,
     default_action: Option<bool>,
     toggled: Option<bool>,
+    indicator: Option<ButtonIndicator>,
+    expanded: Option<bool>,
     scope: Option<ButtonScope>,
     style: Option<ButtonStyle>,
     role: Option<ButtonRole>,
@@ -601,6 +732,12 @@ pub(super) fn push_button(
     } else {
         ink
     };
+    let grouped = use_context::<ControlGroupContext>().is_some();
+    let fill = if grouped {
+        tint.with_alpha(if pressed && enabled { 0.08 } else { 0.0 })
+    } else {
+        fill
+    };
     let capsule = matches!(style, ButtonStyle::Glass | ButtonStyle::GlassProminent);
     let radius = Dp(if capsule {
         metrics.height * 0.5
@@ -647,7 +784,14 @@ pub(super) fn push_button(
         );
     }
     modifier = modifier.push_semantics(ButtonToggleSemantics(toggled));
-    if !glass_surface {
+    if let Some(expanded) = expanded {
+        modifier = modifier.push_semantics(MenuButtonSemantics(expanded));
+    }
+    if grouped {
+        modifier = modifier
+            .push_draw(ButtonBackground(fill, Dp::ZERO))
+            .push_draw(TrailingDivider(tint.with_alpha(0.1)));
+    } else if !glass_surface {
         modifier = modifier.push_draw(ButtonBackground(fill, radius));
     }
     let insets = if bare {
@@ -660,6 +804,7 @@ pub(super) fn push_button(
     };
     let title = ButtonTitle {
         label,
+        indicator,
         ink,
         font: Dp(metrics.font),
         line: Dp(metrics.line),
@@ -680,6 +825,7 @@ pub(super) fn push_button(
 #[derive(Clone, PartialEq)]
 struct ButtonTitle {
     label: String,
+    indicator: Option<ButtonIndicator>,
     ink: Color,
     font: Dp,
     line: Dp,
@@ -687,6 +833,19 @@ struct ButtonTitle {
 
 #[tessera]
 fn button_title(title: ButtonTitle) {
+    row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move || {
+            title_text(title.clone());
+            if let Some(indicator) = title.indicator {
+                spacer().modifier(Modifier::new().width(Dp(6.0)));
+                indicator_glyph(indicator, title.ink);
+            }
+        });
+}
+
+#[tessera]
+fn title_text(title: ButtonTitle) {
     text(title.label)
         .style(TextStyle {
             font_size: title.font,

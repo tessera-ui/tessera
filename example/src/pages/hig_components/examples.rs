@@ -4,6 +4,7 @@ use tessera_components::{
     column::column,
     experiment::hig::{
         button::{ButtonRole, ButtonStyle, button},
+        control_group::{ControlGroupStyle, control_group},
         disclosure_button::disclosure_button,
         divider::{DividerOrientation, divider},
         gauge::{GaugeStyle, gauge},
@@ -12,6 +13,7 @@ use tessera_components::{
         group_box::group_box,
         help_link::help_link,
         link::link,
+        menu::{MenuStyle, context_menu, menu, menu_divider, menu_item, menu_section},
         picker::{PickerStyle, picker},
         progress::{ProgressViewStyle, progress_view},
         slider::slider,
@@ -178,6 +180,34 @@ pub(super) const COMPONENTS: &[Component] = &[
         ],
     },
     Component {
+        title: "ui-hig-menus",
+        description: "ui-hig-menus-description",
+        category: 0,
+        sections: &[
+            example(220.0),
+            Section {
+                title: "ui-hig-styles",
+                columns: ENABLED,
+                rows: &["ui-hig-style-bordered", "ui-hig-style-borderless"],
+                height: 56.0,
+            },
+        ],
+    },
+    Component {
+        title: "ui-hig-control-groups",
+        description: "ui-hig-control-groups-description",
+        category: 0,
+        sections: &[
+            example(120.0),
+            Section {
+                title: "ui-hig-styles",
+                columns: &["ui-hig-style-automatic", "ui-hig-style-menu"],
+                rows: SINGLE,
+                height: 56.0,
+            },
+        ],
+    },
+    Component {
         title: "ui-hig-pickers",
         description: "ui-hig-pickers-description",
         category: 1,
@@ -185,7 +215,7 @@ pub(super) const COMPONENTS: &[Component] = &[
             example(150.0),
             Section {
                 title: "ui-hig-styles",
-                columns: &["ui-hig-segmented", "ui-hig-radio-group"],
+                columns: &["ui-hig-pop-up", "ui-hig-segmented", "ui-hig-radio-group"],
                 rows: ENABLED,
                 height: 80.0,
             },
@@ -496,6 +526,46 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                         })
                     });
             }
+            "ui-hig-menus" => {
+                menu(I18N.text("ui-hig-sort")).content(move || {
+                    menu_section()
+                        .header(I18N.text("ui-hig-sort-by"))
+                        .content(move || {
+                            menu_item(I18N.text("ui-hig-first"))
+                                .checked(values.selected == 0)
+                                .on_click(move || state.with_mut(|v| v.selected = 0));
+                            menu_item(I18N.text("ui-hig-second"))
+                                .checked(values.selected == 1)
+                                .on_click(move || state.with_mut(|v| v.selected = 1));
+                        });
+                    menu_divider();
+                    menu_item(I18N.text("ui-hig-action"))
+                        .shortcut("⌘R")
+                        .on_click(move || state.with_mut(|v| v.clicks += 1));
+                });
+                spacer().modifier(Modifier::new().height(Dp(12.0)));
+                context_menu()
+                    .child(move || caption(I18N.text("ui-hig-context-hint"), appearance))
+                    .menu(move || {
+                        menu_item(I18N.text("ui-hig-action"))
+                            .on_click(move || state.with_mut(|v| v.clicks += 1));
+                    });
+                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                caption(values.clicks.to_string(), appearance);
+            }
+            "ui-hig-control-groups" => {
+                control_group()
+                    .label(I18N.text("ui-hig-navigation"))
+                    .content(move || {
+                        button(I18N.text("ui-hig-back")).on_click(move || {
+                            state.with_mut(|v| v.clicks = v.clicks.saturating_sub(1))
+                        });
+                        button(I18N.text("ui-hig-forward"))
+                            .on_click(move || state.with_mut(|v| v.clicks += 1));
+                    });
+                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                caption(values.clicks.to_string(), appearance);
+            }
             "ui-hig-pickers" => {
                 let options = vec![I18N.text("ui-hig-first"), I18N.text("ui-hig-second")];
                 picker(values.selected, options.clone())
@@ -656,12 +726,36 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                 .enabled(section == 1)
                 .accessibility_label(name);
         }
+        ("ui-hig-menus", _) => {
+            menu(I18N.text("ui-hig-sort"))
+                .style([MenuStyle::BorderedButton, MenuStyle::BorderlessButton][row])
+                .enabled(column == 0)
+                .accessibility_label(name)
+                .content(|| {
+                    menu_item(I18N.text("ui-hig-first"));
+                });
+        }
+        ("ui-hig-control-groups", _) => {
+            control_group()
+                .label(I18N.text("ui-hig-navigation"))
+                .style([ControlGroupStyle::Automatic, ControlGroupStyle::Menu][column])
+                .content(|| {
+                    button(I18N.text("ui-hig-back"));
+                    button(I18N.text("ui-hig-forward"));
+                });
+        }
         ("ui-hig-pickers", _) => {
             picker(
                 0,
                 vec![I18N.text("ui-hig-first"), I18N.text("ui-hig-second")],
             )
-            .style([PickerStyle::Segmented, PickerStyle::RadioGroup][column])
+            .style(
+                [
+                    PickerStyle::PopUpButton,
+                    PickerStyle::Segmented,
+                    PickerStyle::RadioGroup,
+                ][column],
+            )
             .enabled(enabled)
             .accessibility_label(name);
         }

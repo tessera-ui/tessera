@@ -134,3 +134,47 @@ fn unlabeled_pickers_start_at_the_control() {
         .expect("group node");
     assert_eq!(group.bounds().map(|bounds| bounds.x0), Some(0.0));
 }
+
+#[test]
+fn pop_up_buttons_open_with_the_selection_over_the_button_and_choose_from_the_menu() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new().viewport(400, 300).content(|| {
+        let probe = probe.clone();
+        super::super::presentation::presentation_host().child(move || {
+            fixture(PickerStyle::Automatic, true, probe.clone());
+        });
+    });
+    ui.frame();
+    let controls = probe.get().expect("fixture state");
+    controls.selection.set(1);
+    ui.frames(2);
+    let (button, node) = ui.accessibility_node("Delivery");
+    assert_eq!(node.role(), Role::Button);
+    assert_eq!(node.is_expanded(), Some(false));
+    let anchor = node.bounds().expect("button bounds");
+    assert!(ui.accessibility_action(button, Action::Click));
+    ui.frames(3);
+    let snapshot = ui.inspect_accessibility().expect("published semantics");
+    let (_, express) = snapshot
+        .find("Express", Role::MenuItemCheckBox)
+        .expect("selected option");
+    assert_eq!(express.toggled(), Some(Toggled::True));
+    let row = express.bounds().expect("item bounds");
+    assert!(
+        (((row.y0 + row.y1) - (anchor.y0 + anchor.y1)) / 2.0).abs() <= 1.0,
+        "the selected option opens over the button"
+    );
+    let (overnight, _) = snapshot
+        .find("Overnight", Role::MenuItemCheckBox)
+        .expect("other option");
+    assert!(ui.accessibility_action(overnight, Action::Click));
+    ui.frames(3);
+    assert_eq!(controls.requests.get(), [2]);
+    assert!(
+        ui.inspect_accessibility()
+            .expect("published semantics")
+            .find("Express", Role::MenuItemCheckBox)
+            .is_none(),
+        "choosing closes the menu"
+    );
+}

@@ -6,15 +6,19 @@
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    CallbackWith, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
-    PxPosition,
+    Callback, CallbackWith, ComputedData, Dp, FloatRect, FocusRequester, FocusScopeNode,
+    LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
     layout::{MeasureScope, layout},
-    tessera, use_context,
+    modifier::FocusModifierExt as _,
+    remember, tessera, use_context,
 };
 
 use crate::{alignment::CrossAxisAlignment, column::column, row::row, spacer::spacer};
 
 use super::{
+    button::{ButtonIndicator, push_button},
+    menu::{ITEM_HEIGHT, PANEL_INSET, menu_item, present},
+    presentation::PopupPlacement,
     radio_button::{RADIO_ROW_SPACING, radio_button, radio_group},
     segmented_control::{Segment, segmented_control},
     text::text,
@@ -66,8 +70,14 @@ impl LayoutPolicy for WholePoints {
 /// The appearance of a [`picker`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PickerStyle {
-    /// A row of joined segments with the selected one highlighted.
+    /// The platform default, a pop-up button on macOS.
     #[default]
+    Automatic,
+    /// A button showing the selection that opens a menu of the options.
+    Menu,
+    /// A pop-up button: the menu opens with the selected option over the button.
+    PopUpButton,
+    /// A row of joined segments with the selected one highlighted.
     Segmented,
     /// A column of radio buttons.
     RadioGroup,
@@ -79,7 +89,7 @@ pub enum PickerStyle {
 
 /// # picker
 ///
-/// Chooses one option from a set as segments or radio buttons.
+/// Chooses one option from a set as a pop-up button, segments, or radio buttons.
 ///
 /// ## Usage
 ///
@@ -90,7 +100,9 @@ pub enum PickerStyle {
 /// - `selection`, `on_select` — index of the chosen option and requested changes.
 /// - `options` — option titles, in order.
 /// - `label` — leading title and default accessible name; omit it to hide the label.
-/// - `style` — segments or radio buttons; defaults to [`PickerStyle::Segmented`].
+/// - `style` — pop-up button, segments, or radio buttons; defaults to
+///   [`PickerStyle::Automatic`]. Pop-up buttons appear in the nearest
+///   [`presentation_host`](super::presentation::presentation_host).
 /// - `enabled`, `window_active` — input availability and containing window appearance.
 /// - `modifier` — layout and additional semantics.
 /// - `accessibility_label`, `accessibility_description` — spoken content overrides.
@@ -126,14 +138,16 @@ pub fn picker(
 ) {
     let label = label.filter(|label| !label.is_empty());
     let spoken = accessibility_label.or_else(|| label.clone());
-    let radio = matches!(
-        style.unwrap_or_default(),
-        PickerStyle::RadioGroup | PickerStyle::Inline
+    let style = style.unwrap_or_default();
+    let radio = matches!(style, PickerStyle::RadioGroup | PickerStyle::Inline);
+    let pop_up = matches!(
+        style,
+        PickerStyle::Automatic | PickerStyle::Menu | PickerStyle::PopUpButton
     );
     layout(WholePoints)
         .modifier(modifier.unwrap_or_default())
         .child(move || {
-            picker_content(selection, options.clone(), radio)
+            picker_content(selection, options.clone(), radio, pop_up)
                 .on_select_optional(on_select)
                 .label_optional(label.clone())
                 .enabled_optional(enabled)
@@ -150,6 +164,7 @@ fn picker_content(
     on_select: Option<CallbackWith<usize>>,
     label: Option<String>,
     radio: bool,
+    pop_up: bool,
     enabled: Option<bool>,
     window_active: Option<bool>,
     spoken: Option<String>,
@@ -167,7 +182,15 @@ fn picker_content(
                 spacer().modifier(Modifier::new().width(Dp(8.0)));
             }
             let options = options.clone();
-            if radio {
+            if pop_up {
+                let button = pop_up_button(selection, options)
+                    .enabled_optional(enabled)
+                    .accessibility_label_optional(spoken.clone())
+                    .accessibility_description_optional(accessibility_description.clone());
+                if let Some(on_select) = on_select {
+                    button.on_select_shared(on_select);
+                }
+            } else if radio {
                 radio_group()
                     .accessibility_label_optional(spoken.clone())
                     .accessibility_description_optional(accessibility_description.clone())
@@ -221,4 +244,60 @@ fn picker_label(content: String) {
                 ..Default::default()
             }));
     });
+}
+
+#[tessera]
+fn pop_up_button(
+    selection: usize,
+    options: Vec<String>,
+    on_select: Option<CallbackWith<usize>>,
+    enabled: Option<bool>,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+) {
+    let enabled = enabled.unwrap_or(true);
+    let open = remember(|| false);
+    let anchor = remember(|| FloatRect::ZERO);
+    let requester = remember(FocusRequester::new).get();
+    let scope = remember(FocusScopeNode::new).get();
+    let dismiss = Callback::new(move || {
+        if open.get() {
+            open.set(false);
+            requester.request_focus();
+        }
+    });
+    if !enabled && open.get() {
+        open.set(false);
+    }
+    let row = Dp(f64::from(PANEL_INSET) + f64::from(ITEM_HEIGHT) * (selection as f64 + 0.5));
+    let items = options.clone();
+    present(
+        open.get() && enabled,
+        anchor.get(),
+        PopupPlacement::Over(row.to_pixels_f32()),
+        RenderSlot::new(move || {
+            for (index, option) in items.iter().enumerate() {
+                let item = menu_item(option.clone()).checked(index == selection);
+                if let Some(on_select) = on_select {
+                    item.on_click(move || on_select.call(index));
+                }
+            }
+        }),
+        dismiss,
+        scope,
+        anchor.get().width,
+    );
+    push_button(options.get(selection).cloned().unwrap_or_default())
+        .indicator(ButtonIndicator::PopUp)
+        .expanded(open.get())
+        .enabled(enabled)
+        .focus_requester(requester)
+        .on_click(move || open.set(!open.get()))
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description)
+        .modifier(Modifier::new().on_globally_positioned_precise(move |rect| {
+            if anchor.get() != rect {
+                anchor.set(rect);
+            }
+        }));
 }

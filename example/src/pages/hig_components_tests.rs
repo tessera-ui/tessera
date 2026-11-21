@@ -227,8 +227,18 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                     })
                     .count();
                 assert_eq!(
-                    expressed, 4,
-                    "both pickers in both windows share the selection"
+                    expressed, 2,
+                    "the radio pickers in both windows follow the selection"
+                );
+                assert!(
+                    ui.inspect_accessibility()
+                        .unwrap()
+                        .nodes()
+                        .iter()
+                        .any(|(_, node)| node.role() == Role::Button
+                            && crate::has_label(node, "View")
+                            && node.has_popup().is_some()),
+                    "the automatic picker is a pop-up button"
                 );
             }
             "ui-sliders" | "ui-hig-steppers" | "ui-progress-indicators" | "ui-hig-gauges" => {

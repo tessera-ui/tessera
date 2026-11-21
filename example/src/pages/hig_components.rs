@@ -5,6 +5,7 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     experiment::hig::{
+        presentation::presentation_host,
         text::text,
         theme::{Appearance, HigTheme, TextStyle, hig_theme},
     },
@@ -151,16 +152,18 @@ fn type_style(size: f64, line_height: f64, weight: u16) -> TextStyle {
 #[tessera]
 fn hig_catalog(scroll: State<ScrollState>, width: State<Dp>, on_open: CallbackWith<usize>) {
     hig_theme().child(move || {
-        viewport().scroll(scroll).child(move || {
-            column().modifier(track_width(width)).children(move || {
-                header("ui-hig-components".into(), "ui-hig-introduction".into());
-                for (category, title) in CATEGORIES.into_iter().enumerate() {
-                    gap(Dp(48.0));
-                    padded(move || heading(title.into(), 22.0, 2));
-                    gap(Dp(16.0));
-                    directory_group(category, width.get(), on_open);
-                }
-                gap(Dp(64.0));
+        presentation_host().child(move || {
+            viewport().scroll(scroll).child(move || {
+                column().modifier(track_width(width)).children(move || {
+                    header("ui-hig-components".into(), "ui-hig-introduction".into());
+                    for (category, title) in CATEGORIES.into_iter().enumerate() {
+                        gap(Dp(48.0));
+                        padded(move || heading(title.into(), 22.0, 2));
+                        gap(Dp(16.0));
+                        directory_group(category, width.get(), on_open);
+                    }
+                    gap(Dp(64.0));
+                });
             });
         });
     });
@@ -253,26 +256,28 @@ fn hig_article(index: usize, on_open: CallbackWith<usize>) {
     let state = remember(ExampleValues::default);
     let width = remember(|| Dp(900.0));
     hig_theme().child(move || {
-        viewport().child(move || {
-            column().modifier(track_width(width)).children(move || {
-                header(component.title.into(), component.description.into());
-                for section in 0..component.sections.len() {
-                    gap(Dp(40.0));
-                    padded(move || heading(component.sections[section].title.into(), 22.0, 2));
-                    gap(Dp(16.0));
-                    windows(index, section, state, width.get());
-                }
-                gap(Dp(56.0));
-                padded(move || {
-                    row()
-                        .modifier(Modifier::new().fill_max_width())
-                        .children(move || {
-                            neighbour(index, false, on_open);
-                            spacer().modifier(Modifier::new().width(Dp(GAP)));
-                            neighbour(index, true, on_open);
-                        });
+        presentation_host().child(move || {
+            viewport().child(move || {
+                column().modifier(track_width(width)).children(move || {
+                    header(component.title.into(), component.description.into());
+                    for section in 0..component.sections.len() {
+                        gap(Dp(40.0));
+                        padded(move || heading(component.sections[section].title.into(), 22.0, 2));
+                        gap(Dp(16.0));
+                        windows(index, section, state, width.get());
+                    }
+                    gap(Dp(56.0));
+                    padded(move || {
+                        row()
+                            .modifier(Modifier::new().fill_max_width())
+                            .children(move || {
+                                neighbour(index, false, on_open);
+                                spacer().modifier(Modifier::new().width(Dp(GAP)));
+                                neighbour(index, true, on_open);
+                            });
+                    });
+                    gap(Dp(64.0));
                 });
-                gap(Dp(64.0));
             });
         });
     });

@@ -3,6 +3,7 @@
 pub mod button;
 mod checkbox;
 mod choice;
+pub mod control_group;
 pub mod disclosure_button;
 pub mod divider;
 pub mod gauge;
@@ -11,8 +12,10 @@ pub mod glass_group;
 pub mod group_box;
 pub mod help_link;
 pub mod link;
+pub mod menu;
 mod motion;
 pub mod picker;
+pub mod presentation;
 pub mod progress;
 mod radio_button;
 mod segmented_control;
