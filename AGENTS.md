@@ -111,6 +111,7 @@ programming contract; the guidelines below also govern framework implementation.
 
 - The component tree is managed internally by `ComponentTree` and node metadata structures, supporting layout, rendering, and event dispatch.
 - Accessibility updates flatten layout and group nodes without semantics. Preserve explicit semantic nodes, their order, bounds, actions, and focus; synthesize only the root window node.
+- `semantics` describes a node and keeps descendant semantics published; `clear_and_set_semantics` makes the whole subtree read as that one node.
 - Publish item selection separately from checked/toggled state. Accessibility focus actions must not activate their target.
 
 ---

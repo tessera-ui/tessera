@@ -66,7 +66,6 @@ pub(super) fn selection_figure() {
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
                                 label: Some(I18N.text("ui-diet-selection-comparison")),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )
@@ -129,7 +128,6 @@ fn selection_column(multiple: bool) {
                         "ui-value-selection-diet-field",
                         [("v0", I18N.text(&mode).into())],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }))
                 .children(move || {
@@ -161,7 +159,6 @@ fn selection_column(multiple: bool) {
                     label: Some(
                         I18N.format("ui-value-selection-menu", [("v0", I18N.text(&mode).into())]),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }))
                 .children(move || {

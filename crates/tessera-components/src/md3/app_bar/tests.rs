@@ -90,13 +90,14 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                 if values.custom_title {
                     bar.title_content(|| {
                         surface().style(Color::BLACK.into()).modifier(
-                            Modifier::new().width(Dp(80.0)).height(Dp(24.0)).semantics(
-                                SemanticsArgs {
+                            Modifier::new()
+                                .width(Dp(80.0))
+                                .height(Dp(24.0))
+                                .clear_and_set_semantics(SemanticsArgs {
                                     role: Some(Role::Image),
                                     label: Some("Brand".to_owned()),
                                     ..Default::default()
-                                },
-                            ),
+                                }),
                         );
                     });
                 }

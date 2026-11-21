@@ -251,7 +251,7 @@ pub(super) fn choice_control(
                                 left: Dp(6.0),
                                 ..Default::default()
                             })
-                            .semantics(SemanticsArgs {
+                            .clear_and_set_semantics(SemanticsArgs {
                                 hidden: true,
                                 ..Default::default()
                             }),

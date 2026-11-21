@@ -118,9 +118,9 @@ pub struct AccessibilityNode {
     pub actions: Vec<Action>,
     /// Custom accessibility key provided by the component
     pub key: Option<String>,
-    /// Whether to merge child semantics into this node. When false, child
-    /// semantics are ignored.
-    pub merge_descendants: bool,
+    /// Whether descendant semantics are hidden, so the subtree reads as this
+    /// single node.
+    pub hide_descendants: bool,
     /// Optional padding applied to the semantic bounds without affecting
     /// layout.
     pub bounds_padding: Option<AccessibilityPadding>,
@@ -268,7 +268,7 @@ impl Default for AccessibilityNode {
             modal: false,
             actions: Vec::new(),
             key: None,
-            merge_descendants: true,
+            hide_descendants: false,
             bounds_padding: None,
             state_description: None,
             role_description: None,
@@ -296,7 +296,7 @@ pub(crate) struct SemanticDescription {
     label: Option<String>,
     description: Option<String>,
     key: Option<String>,
-    merge_descendants: bool,
+    hide_descendants: bool,
     tooltip: Option<String>,
 }
 
@@ -308,7 +308,7 @@ impl StoredSemantics {
                 label,
                 description,
                 key,
-                merge_descendants,
+                hide_descendants,
                 tooltip,
                 value: None,
                 numeric_value: None,
@@ -344,7 +344,7 @@ impl StoredSemantics {
                     label,
                     description,
                     key,
-                    merge_descendants,
+                    hide_descendants,
                     tooltip,
                 };
                 match storage {
@@ -361,8 +361,8 @@ impl StoredSemantics {
 
     pub(crate) fn descendant_context(&self) -> (bool, Option<&str>) {
         match self {
-            Self::Description(node) => (node.merge_descendants, node.tooltip.as_deref()),
-            Self::Extended(node) => (node.merge_descendants, node.tooltip.as_deref()),
+            Self::Description(node) => (!node.hide_descendants, node.tooltip.as_deref()),
+            Self::Extended(node) => (!node.hide_descendants, node.tooltip.as_deref()),
         }
     }
 
@@ -380,7 +380,7 @@ impl StoredSemantics {
                 label: node.label.clone(),
                 description: node.description.clone(),
                 key: node.key.clone(),
-                merge_descendants: node.merge_descendants,
+                hide_descendants: node.hide_descendants,
                 tooltip: node.tooltip.clone(),
                 ..AccessibilityNode::default()
             },

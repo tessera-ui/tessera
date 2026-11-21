@@ -373,7 +373,6 @@ fn picker_surface(
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Group),
             label: Some(I18N.format("ui-value-time-preview", [("v0", I18N.text(&label).into())])),
-            merge_descendants: true,
             ..Default::default()
         }))
         .child(move || {
@@ -558,7 +557,6 @@ fn time_color_pair(input: bool) {
                             )],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -759,7 +757,6 @@ fn time_configuration_pair(input: bool, twenty_four: bool) {
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
                                 label: Some(I18N.text(title)),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )
@@ -845,7 +842,6 @@ fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, lab
                         "ui-value-time-configuration",
                         [("v0", I18N.text(&label).into())],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1093,7 +1089,6 @@ fn time_figure(
                                         "ui-value-annotated-time-picker",
                                         [("v0", I18N.text(&label).into())],
                                     )),
-                                    merge_descendants: true,
                                     ..Default::default()
                                 },
                             ))
@@ -1240,7 +1235,6 @@ fn time_figure_contents(
             .modifier(watch_precise(geometry, "headline").semantics(
                 tessera_foundation::modifier::SemanticsArgs {
                     test_tag: Some("time-spec-headline".into()),
-                    merge_descendants: true,
                     ..Default::default()
                 },
             ));
@@ -1864,7 +1858,6 @@ fn time_color_marker(number: usize, label: String, x: Dp, y: Dp) {
                         "ui-time-color-role-value-value",
                         [("v0", (number).into()), ("v1", I18N.text(&label).into())],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )

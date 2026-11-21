@@ -167,7 +167,7 @@ pub fn progress_spinner(
             None
         };
         modifier = modifier
-            .semantics(SemanticsArgs {
+            .clear_and_set_semantics(SemanticsArgs {
                 role: Some(Role::ProgressIndicator),
                 label: accessibility_label,
                 description: accessibility_description,

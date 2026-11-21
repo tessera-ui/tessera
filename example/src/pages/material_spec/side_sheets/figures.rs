@@ -243,7 +243,7 @@ fn stage_canvas(width: f64, height: f64, label: String, dotted: bool, child: Opt
                             .required_size(Dp(width), Dp(height))
                             .background_with_shape(background, Shape::rounded_rectangle(Dp(24.0)))
                             .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
-                            .semantics(SemanticsArgs {
+                            .clear_and_set_semantics(SemanticsArgs {
                                 role: Some(Role::Image),
                                 label: Some(I18N.text(label)),
                                 ..Default::default()
@@ -293,7 +293,6 @@ pub(super) fn marker(number: usize, x: f64, y: f64, tag: Option<String>) {
                         I18N.format("ui-side-sheet-marker-value", [("v0", (number).into())]),
                     ),
                     test_tag: tag.clone(),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1147,7 +1146,6 @@ pub(super) fn measurement_tag(modal: bool, name: &str) -> String {
 fn part(geometry: State<SpaceGeometry>, modal: bool, name: &'static str) -> Modifier {
     watch_in_space(geometry, name).semantics(SemanticsArgs {
         test_tag: Some(measurement_tag(modal, name)),
-        merge_descendants: true,
         ..Default::default()
     })
 }

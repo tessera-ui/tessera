@@ -1543,7 +1543,7 @@ fn tab_trigger(args: Option<TabTriggerArgs>) {
         }
     });
     let mut tab_modifier = Modifier::new()
-        .semantics(SemanticsArgs {
+        .clear_and_set_semantics(SemanticsArgs {
             selected: Some(args.selected),
             ..Default::default()
         })

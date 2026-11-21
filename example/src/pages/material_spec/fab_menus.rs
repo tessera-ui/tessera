@@ -154,7 +154,6 @@ fn menu_demo(
                 "ui-value-fab-menu-example",
                 [("v0", I18N.text(&label).into())],
             )),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {

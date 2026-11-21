@@ -745,7 +745,6 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             role: Some(Role::Group),
             label: Some(I18N.format("ui-value-tabs-preview", [("v0", I18N.text(&label).into())])),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {
@@ -1529,7 +1528,7 @@ fn swipe_tabs(selected: State<usize>) {
                             })),
                             ..Default::default()
                         })
-                        .semantics(SemanticsArgs {
+                        .clear_and_set_semantics(SemanticsArgs {
                             role: Some(Role::TabPanel),
                             label: Some(
                                 I18N.format("ui-value-content", [("v0", I18N.text(&title).into())]),
@@ -2542,13 +2541,17 @@ fn scrolling_tabs() {
                                     let visible =
                                         1.0 - bar.with(AppBarScrollController::collapsed_fraction);
                                     column()
-                                        .modifier(Modifier::new().fill_max_width().semantics(
-                                            SemanticsArgs {
-                                                role: Some(Role::Group),
-                                                label: Some(I18N.text("ui-scrolling-tabs-header")),
-                                                ..Default::default()
-                                            },
-                                        ))
+                                        .modifier(
+                                            Modifier::new()
+                                                .fill_max_width()
+                                                .clear_and_set_semantics(SemanticsArgs {
+                                                    role: Some(Role::Group),
+                                                    label: Some(
+                                                        I18N.text("ui-scrolling-tabs-header"),
+                                                    ),
+                                                    ..Default::default()
+                                                }),
+                                        )
                                         .children(move || {
                                             tessera_components::md3::app_bar::top_app_bar()
                                                 .title(I18N.text("ui-travel"))
@@ -2582,7 +2585,7 @@ fn scrolling_tabs() {
                                             Modifier::new()
                                                 .fill_max_size()
                                                 .vertical_scroll(content)
-                                                .semantics(SemanticsArgs {
+                                                .clear_and_set_semantics(SemanticsArgs {
                                                     role: Some(Role::Group),
                                                     label: Some(
                                                         I18N.text("ui-scrolling-tabs-content"),

@@ -157,7 +157,7 @@ impl SemanticsModifierNode for HiddenRoute {
         _handler: &mut Option<AccessibilityActionHandler>,
     ) {
         node.hidden = true;
-        node.merge_descendants = false;
+        node.hide_descendants = true;
     }
 }
 

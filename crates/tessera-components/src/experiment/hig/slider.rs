@@ -202,7 +202,7 @@ impl SemanticsModifierNode for SliderSemantics {
         node.numeric_value_jump = Some(value.max - value.min);
         node.disabled = !value.enabled;
         node.focusable = value.enabled;
-        node.merge_descendants = false;
+        node.hide_descendants = true;
         node.actions.clear();
         if value.enabled {
             node.actions.extend([Action::Increment, Action::Decrement]);

@@ -370,7 +370,7 @@ impl SemanticsModifierNode for SegmentSemantics {
         node: &mut AccessibilityNode,
         handler: &mut Option<AccessibilityActionHandler>,
     ) {
-        node.merge_descendants = false;
+        node.hide_descendants = true;
         node.toggled = self.selected.map(|selected| {
             if selected {
                 Toggled::True
@@ -520,7 +520,7 @@ fn segment_item(
                     bounds[index] = Some(rect);
                 });
             })
-            .semantics(SemanticsArgs {
+            .clear_and_set_semantics(SemanticsArgs {
                 role: Some(if choosing {
                     Role::RadioButton
                 } else {
@@ -621,7 +621,7 @@ fn segment_item(
             .style(TextStyle::default())
             .color(ink)
             .single_line(true)
-            .modifier(Modifier::new().semantics(SemanticsArgs {
+            .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                 hidden: true,
                 ..Default::default()
             }));
@@ -712,7 +712,6 @@ pub fn segmented_control(
             label: accessibility_label,
             description: accessibility_description,
             disabled: !enabled,
-            merge_descendants: true,
             ..Default::default()
         })
         .push_draw(SegmentFill {

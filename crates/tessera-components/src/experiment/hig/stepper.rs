@@ -206,7 +206,7 @@ impl SemanticsModifierNode for StepperSemantics {
         node.numeric_value_step = Some(value.increment);
         node.disabled = !value.enabled;
         node.focusable = value.enabled;
-        node.merge_descendants = false;
+        node.hide_descendants = true;
         node.actions.clear();
         if value.available(true) {
             node.actions.push(Action::Increment);

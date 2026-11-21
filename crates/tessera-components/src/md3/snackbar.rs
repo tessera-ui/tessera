@@ -503,7 +503,7 @@ pub fn snackbar(
                     let message = message.clone();
                     move || {
                         text(message.clone())
-                            .modifier(Modifier::new().semantics(SemanticsArgs {
+                            .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                                 role: Some(Role::Status),
                                 live: Some(Live::Polite),
                                 ..Default::default()

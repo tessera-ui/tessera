@@ -370,7 +370,7 @@ fn menu_button(label: String, description: String, width: Dp, expanded: bool, ac
             Modifier::new()
                 .width(width)
                 .height(Dp(48.0))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     expanded: Some(expanded),
                     ..Default::default()
                 }),
@@ -448,7 +448,6 @@ fn date_cells_grid_docked(
             .semantics(SemanticsArgs {
                 role: Some(Role::Group),
                 label: Some(super::format_month_year(snapshot.displayed_month)),
-                merge_descendants: true,
                 ..Default::default()
             }),
     )
@@ -542,7 +541,6 @@ fn month_menu(state: State<DatePickerController>, menu: State<DockedDatePickerVi
                 .semantics(SemanticsArgs {
                     role: Some(Role::ListBox),
                     label: Some(I18N.text("md3-choose-month").into()),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -607,7 +605,6 @@ fn year_menu(state: State<DatePickerController>, menu: State<DockedDatePickerVie
                 .semantics(SemanticsArgs {
                     role: Some(Role::ListBox),
                     label: Some(I18N.text("md3-choose-year").into()),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -653,7 +650,6 @@ fn choice(label: String, selected: bool, enabled: bool, action: Callback) {
                 .height(Dp(48.0))
                 .semantics(SemanticsArgs {
                     selected: Some(selected),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )

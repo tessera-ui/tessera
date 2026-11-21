@@ -128,7 +128,6 @@ fn mode_demo(
                         Role::List
                     }),
                     label: Some(I18N.text(&(label))),
-                    merge_descendants: true,
                     ..Default::default()
                 }))
                 .children(move || {

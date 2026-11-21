@@ -218,7 +218,7 @@ pub fn circular_wavy_progress_indicator(
             modifier
                 .unwrap_or_default()
                 .clip_to_bounds()
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::ProgressIndicator),
                     label: accessibility_label,
                     description: accessibility_description,
@@ -539,7 +539,7 @@ pub fn linear_wavy_progress_indicator(
             modifier
                 .unwrap_or_default()
                 .clip_to_bounds()
-                .semantics(semantics),
+                .clear_and_set_semantics(semantics),
         )
         .draw(LinearWaveDraw {
             fractions,

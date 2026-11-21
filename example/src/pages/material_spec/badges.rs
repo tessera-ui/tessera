@@ -83,7 +83,7 @@ pub(super) fn badges_spec(route: Option<crate::pages::material_spec::article::Ar
 #[tessera]
 fn badged_icon(kind: usize, count: u32) {
     badged_box()
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             role: Some(Role::Image),
             label: Some(I18N.text(if count == 0 {
                 "ui-no-unread-items".to_owned()
@@ -105,7 +105,7 @@ fn badged_icon(kind: usize, count: u32) {
         })
         .badge(move || {
             if count > 0 {
-                let hidden = Modifier::new().semantics(SemanticsArgs {
+                let hidden = Modifier::new().clear_and_set_semantics(SemanticsArgs {
                     hidden: true,
                     ..Default::default()
                 });
@@ -140,7 +140,6 @@ fn navigation_examples(
                 "ui-value-badge-navigation",
                 [("v0", I18N.text(&label).into())],
             )),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {
@@ -217,13 +216,13 @@ fn specimens() {
         .item_spacing(Dp(40.0))
         .line_spacing(Dp(24.0))
         .children(move || {
-            badge().modifier(Modifier::new().semantics(SemanticsArgs {
+            badge().modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                 role: Some(Role::Image),
                 label: Some(I18N.text("ui-small-badge-specimen")),
                 ..Default::default()
             }));
             badge_with_content()
-                .modifier(Modifier::new().semantics(SemanticsArgs {
+                .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(I18N.text("ui-large-badge-specimen")),
                     ..Default::default()
@@ -232,7 +231,7 @@ fn specimens() {
                     text("7");
                 });
             badge_with_content()
-                .modifier(Modifier::new().semantics(SemanticsArgs {
+                .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(I18N.text("ui-maximum-badge-specimen")),
                     ..Default::default()

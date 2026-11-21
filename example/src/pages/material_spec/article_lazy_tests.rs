@@ -746,13 +746,16 @@ fn responsive_article_fixture() {
             vec![super::super::SpecSection {
                 title: "Container sizing",
                 content: RenderSlot::new(|| {
-                    boxed().modifier(Modifier::new().fill_max_width().height(Dp(64.0)).semantics(
-                        SemanticsArgs {
-                            role: Some(Role::Group),
-                            label: Some("Measured article body".into()),
-                            ..Default::default()
-                        },
-                    ));
+                    boxed().modifier(
+                        Modifier::new()
+                            .fill_max_width()
+                            .height(Dp(64.0))
+                            .clear_and_set_semantics(SemanticsArgs {
+                                role: Some(Role::Group),
+                                label: Some("Measured article body".into()),
+                                ..Default::default()
+                            }),
+                    );
                 }),
             }],
         );

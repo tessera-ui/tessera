@@ -124,7 +124,7 @@ fn clipped_scene_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles
                             } else {
                                 Color::BLUE
                             })
-                            .semantics(SemanticsArgs {
+                            .clear_and_set_semantics(SemanticsArgs {
                                 label: Some(format!("Clipped row {index}")),
                                 ..Default::default()
                             });
@@ -240,7 +240,7 @@ fn tile(index: u32, observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
             .size(current.width, Dp(8.0))
             .offset(current.offset, Dp::ZERO)
             .background(current.color)
-            .semantics(SemanticsArgs {
+            .clear_and_set_semantics(SemanticsArgs {
                 label: Some(format!("Tile {index}")),
                 ..Default::default()
             }),

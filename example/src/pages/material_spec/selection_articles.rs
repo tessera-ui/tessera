@@ -55,7 +55,7 @@ fn label_modifier(on_click: Callback) -> Modifier {
             on_click,
             ..Default::default()
         })
-        .semantics(SemanticsArgs {
+        .clear_and_set_semantics(SemanticsArgs {
             hidden: true,
             ..Default::default()
         })
@@ -73,7 +73,7 @@ pub(super) fn option_label(
     let modifier = if enabled {
         label_modifier(on_click)
     } else {
-        Modifier::new().semantics(SemanticsArgs {
+        Modifier::new().clear_and_set_semantics(SemanticsArgs {
             hidden: true,
             ..Default::default()
         })

@@ -36,7 +36,7 @@ impl SemanticsModifierNode for GroupSemantics {
         if node.label.is_none() {
             node.label = self.0.clone();
         }
-        node.merge_descendants = true;
+        node.hide_descendants = false;
     }
 }
 
@@ -212,7 +212,7 @@ pub fn group_box(
                         ..Default::default()
                     })
                     .single_line(true)
-                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                    .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                         hidden: true,
                         ..Default::default()
                     }));

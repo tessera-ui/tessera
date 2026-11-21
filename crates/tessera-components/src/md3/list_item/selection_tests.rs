@@ -45,7 +45,7 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
             .children(move || {
                 for index in 0..3 {
                     list_item()
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
+                        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                             test_tag: Some(format!("choice-{index}")),
                             tooltip: Some("Choice tooltip".into()),
                             ..Default::default()

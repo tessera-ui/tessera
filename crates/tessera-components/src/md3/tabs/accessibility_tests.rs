@@ -92,10 +92,12 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                             selected.set(index);
                         }
                     })
-                    .modifier(Modifier::new().width(Dp(301.0)).semantics(SemanticsArgs {
-                        label: Some("Transport views".to_owned()),
-                        ..Default::default()
-                    }))
+                    .modifier(Modifier::new().width(Dp(301.0)).clear_and_set_semantics(
+                        SemanticsArgs {
+                            label: Some("Transport views".to_owned()),
+                            ..Default::default()
+                        },
+                    ))
                     .variant(config.get().variant)
                     .activation_mode(config.get().mode)
                     .scrollable(config.get().scrollable)

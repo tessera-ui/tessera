@@ -269,7 +269,7 @@ fn check_accessibility_and_pixels() {
             .unwrap()
             .nodes
             .iter()
-            .filter(|(_, node)| node.label() == Some("Cancel"))
+            .filter(|(_, node)| !node.is_hidden() && node.label() == Some("Cancel"))
             .count(),
         1
     );

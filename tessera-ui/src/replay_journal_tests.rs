@@ -736,7 +736,7 @@ impl SemanticsModifierNode for Hint {
     fn apply(&self, node: &mut AccessibilityNode, _: &mut Option<AccessibilityActionHandler>) {
         node.role = Some(Role::Group);
         node.tooltip = Some(self.0.clone());
-        node.merge_descendants = true;
+        node.hide_descendants = false;
     }
 }
 

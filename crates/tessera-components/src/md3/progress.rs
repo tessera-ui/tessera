@@ -587,7 +587,7 @@ pub fn linear_progress_indicator(
             draw_stop_indicator,
             animation_cycle,
         })
-        .modifier(Modifier::new().semantics(semantics))
+        .modifier(Modifier::new().clear_and_set_semantics(semantics))
         .child(move || {
             if progress.is_some() {
                 surface()
@@ -751,7 +751,7 @@ pub fn circular_progress_indicator(
         elapsed,
     };
     tessera_ui::layout::layout(policy.clone())
-        .modifier(Modifier::new().semantics(semantics))
+        .modifier(Modifier::new().clear_and_set_semantics(semantics))
         .draw(policy);
 }
 

@@ -217,7 +217,7 @@ pub fn glass(
             modifier = modifier.block_touch_propagation();
         }
         if role.is_some() || accessibility_label.is_some() || accessibility_description.is_some() {
-            modifier = modifier.semantics(SemanticsArgs {
+            modifier = modifier.clear_and_set_semantics(SemanticsArgs {
                 role,
                 label: accessibility_label,
                 description: accessibility_description,

@@ -474,7 +474,6 @@ pub fn top_app_bar(
                 .clip_to_bounds()
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Toolbar),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -589,9 +588,8 @@ fn title_layer_modifier(modifier: Modifier, alpha: f32, semantics: bool) -> Modi
     if semantics {
         modifier
     } else {
-        modifier.semantics(SemanticsArgs {
+        modifier.clear_and_set_semantics(SemanticsArgs {
             hidden: true,
-            merge_descendants: false,
             ..Default::default()
         })
     }

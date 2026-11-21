@@ -220,7 +220,7 @@ fn traffic_labels(scale: f64) {
             .size(Dp(312.0 * scale), Dp(240.0 * scale))
             .background_with_shape(scheme.surface_container_high, Shape::rounded_rectangle(Dp(28.0 * scale)))
             .border_with_shape(Dp(4.0 * scale), scheme.tertiary, Shape::rounded_rectangle(Dp(28.0 * scale)))
-            .semantics(SemanticsArgs { role: Some(Role::AlertDialog), label: Some(I18N.text("ui-set-up-traffic-updates")), ..Default::default() }))
+            .clear_and_set_semantics(SemanticsArgs { role: Some(Role::AlertDialog), label: Some(I18N.text("ui-set-up-traffic-updates")), ..Default::default() }))
             .children(move || {
                 placed_text("ui-set-up-traffic-updates".into(), 24.0, 32.0, 24.0, 24.0, 264.0, scale);
                 text(I18N.text("ui-get-notified-when-traffic-is-impacted-along-your-usual-routes-add-your-preferred-routes-an"))
@@ -417,7 +417,6 @@ fn annotation_card(
                 .padding_all(Dp(22.0 * scale))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -478,7 +477,7 @@ fn photo_region(x: f64, y: f64, width: f64, height: f64, radius: f64, scale: f64
                 .offset(Dp(x * scale), Dp(y * scale))
                 .size(Dp(width * scale), Dp(height * scale))
                 .clip_shape(Shape::rounded_rectangle(Dp(radius * scale)))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(I18N.text("ui-family-photograph")),
                     ..Default::default()

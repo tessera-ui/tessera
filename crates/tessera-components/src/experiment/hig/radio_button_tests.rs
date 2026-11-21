@@ -272,7 +272,7 @@ fn check_keyboard_and_accessibility() {
             .unwrap()
             .nodes
             .iter()
-            .filter(|(_, node)| node.label() == Some("Middle"))
+            .filter(|(_, node)| !node.is_hidden() && node.label() == Some("Middle"))
             .count(),
         1
     );

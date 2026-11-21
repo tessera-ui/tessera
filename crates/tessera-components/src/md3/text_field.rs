@@ -2074,7 +2074,7 @@ mod native_field_regressions {
                                 .accessibility_label("Regression field")
                                 .leading_icon(|| {
                                     boxed()
-                                        .modifier(Modifier::new().semantics(
+                                        .modifier(Modifier::new().clear_and_set_semantics(
                                             tessera_foundation::modifier::SemanticsArgs {
                                                 role: Some(Role::Image),
                                                 label: Some("Leading search decoration".into()),

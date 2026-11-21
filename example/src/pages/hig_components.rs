@@ -350,7 +350,6 @@ fn window(index: usize, section: usize, appearance: Appearance, state: ExampleSt
                         role: Some(Role::Group),
                         label: Some(I18N.text(title)),
                         test_tag: Some(format!("hig-window-{section}-{}", dark as u8)),
-                        merge_descendants: true,
                         ..Default::default()
                     }),
             )
@@ -507,7 +506,7 @@ fn header(title: String, description: String) {
             text(I18N.text(&title))
                 .style(type_style(34.0, 41.0, 700))
                 .color(colors[0])
-                .modifier(Modifier::new().semantics(SemanticsArgs {
+                .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Heading),
                     heading_level: Some(1),
                     ..Default::default()
@@ -524,7 +523,7 @@ fn heading(key: String, size: f64, level: u32) {
     text(I18N.text(&key))
         .style(type_style(size, size + 6.0, 700))
         .color(label_colors(Appearance::Light)[0])
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             role: Some(Role::Heading),
             heading_level: Some(level),
             ..Default::default()

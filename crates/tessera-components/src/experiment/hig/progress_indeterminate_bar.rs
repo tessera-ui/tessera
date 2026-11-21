@@ -275,7 +275,7 @@ pub fn indeterminate_progress_bar(
             Color::from_rgb(0.40197778, 0.40197778, 0.40197778)
         };
         modifier = modifier
-            .semantics(SemanticsArgs {
+            .clear_and_set_semantics(SemanticsArgs {
                 role: Some(Role::ProgressIndicator),
                 label: accessibility_label,
                 description: accessibility_description,

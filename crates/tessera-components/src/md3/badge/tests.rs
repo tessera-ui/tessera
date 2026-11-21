@@ -127,19 +127,21 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
                                 .child(move || {
                                     badged_box()
                                         .modifier(
-                                            Modifier::new().semantics(SemanticsArgs {
-                                                test_tag: Some("group".into()),
-                                                role: Some(Role::Image),
-                                                label: Some(
-                                                    if settings.get().count {
-                                                        "Inbox, 3 unread items"
-                                                    } else {
-                                                        "Inbox, new activity"
-                                                    }
-                                                    .into(),
-                                                ),
-                                                ..Default::default()
-                                            }),
+                                            Modifier::new().clear_and_set_semantics(
+                                                SemanticsArgs {
+                                                    test_tag: Some("group".into()),
+                                                    role: Some(Role::Image),
+                                                    label: Some(
+                                                        if settings.get().count {
+                                                            "Inbox, 3 unread items"
+                                                        } else {
+                                                            "Inbox, new activity"
+                                                        }
+                                                        .into(),
+                                                    ),
+                                                    ..Default::default()
+                                                },
+                                            ),
                                         )
                                         .content(|| {
                                             spacer().modifier(
@@ -147,12 +149,13 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
                                             );
                                         })
                                         .badge(move || {
-                                            let modifier =
-                                                Modifier::new().semantics(SemanticsArgs {
+                                            let modifier = Modifier::new().clear_and_set_semantics(
+                                                SemanticsArgs {
                                                     test_tag: Some("badge".into()),
                                                     hidden: true,
                                                     ..Default::default()
-                                                });
+                                                },
+                                            );
                                             if settings.get().count {
                                                 badge_with_content()
                                                     .modifier(modifier)

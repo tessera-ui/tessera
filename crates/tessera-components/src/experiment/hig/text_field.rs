@@ -320,7 +320,7 @@ pub fn text_field(
                 text(placeholder)
                     .color(placeholder_color)
                     .single_line(true)
-                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                    .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                         hidden: true,
                         ..Default::default()
                     }));

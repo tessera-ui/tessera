@@ -53,7 +53,7 @@ struct FixtureHandles {
 #[tessera]
 fn sized_icon(index: usize) {
     boxed()
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             role: Some(Role::Image),
             label: Some(format!("Split icon {index}")),
             ..Default::default()

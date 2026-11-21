@@ -553,7 +553,6 @@ fn carousel_content(
                     carousel(6)
                         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
                             test_tag: Some("spec-carousel-container".into()),
-                            merge_descendants: true,
                             ..Default::default()
                         }))
                         .variant(variant)
@@ -764,7 +763,6 @@ fn layout_figure(
                 )
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    merge_descendants: true,
                     label: Some(
                         I18N.format(
                             "ui-value-value-figure",
@@ -1179,7 +1177,6 @@ fn colors() {
                 .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    merge_descendants: true,
                     label: Some(
                         I18N.text("ui-2-color-roles-of-a-carousel-in-light-and-dark-schemes"),
                     ),
@@ -1284,7 +1281,6 @@ fn states(
                 .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    merge_descendants: true,
                     label: Some(I18N.text("ui-5-states-of-a-carousel-in-light-and-dark-schemes")),
                     ..Default::default()
                 }),

@@ -449,7 +449,6 @@ fn stage(
         modifier.semantics(SemanticsArgs {
             role: Some(Role::Image),
             label: Some(I18N.text(label)),
-            merge_descendants: true,
             ..Default::default()
         })
     };
@@ -770,7 +769,6 @@ fn pin(tone: u8, number: usize, #[prop(into)] label: String, background: Color) 
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.text(&(label))),
-                    merge_descendants: true,
                     ..Default::default()
                 })
                 .background_with_shape(fill, Shape::CAPSULE);
@@ -961,7 +959,6 @@ fn measure_figure() {
                                     SemanticsArgs {
                                         role: Some(Role::Note),
                                         label: Some(I18N.text("ui-dimension-1dp-thickness")),
-                                        merge_descendants: true,
                                         ..Default::default()
                                     },
                                 ))
@@ -991,7 +988,6 @@ fn measure_figure() {
                             .modifier(Modifier::new().width(Dp(236.0)).semantics(SemanticsArgs {
                                 role: Some(Role::Note),
                                 label: Some(I18N.text("ui-dimension-available-width")),
-                                merge_descendants: true,
                                 ..Default::default()
                             }))
                             .children(|| {

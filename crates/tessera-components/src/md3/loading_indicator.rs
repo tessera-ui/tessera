@@ -232,7 +232,7 @@ pub fn loading_indicator(
                 .unwrap_or_default()
                 .background_with_shape(background, container_shape.unwrap_or(Shape::CAPSULE))
                 .clip_to_bounds()
-                .semantics(semantics),
+                .clear_and_set_semantics(semantics),
         )
         .draw(LoadingDraw { pose, color });
 }
@@ -275,7 +275,6 @@ mod tests {
                     boxed()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             test_tag: Some(format!("indicator-{index}")),
-                            merge_descendants: true,
                             ..Default::default()
                         }))
                         .children(move || {

@@ -250,7 +250,6 @@ fn dialog_content_wrapper(
         description: accessibility_description.or(inferred.description),
         modal: true,
         focusable: true,
-        merge_descendants: true,
         ..Default::default()
     });
     if just_opened {
@@ -502,7 +501,7 @@ fn dialog_provider_render(
                 .modifier(
                     Modifier::new()
                         .fill_max_size()
-                        .semantics(SemanticsArgs {
+                        .clear_and_set_semantics(SemanticsArgs {
                             hidden: true,
                             ..Default::default()
                         })

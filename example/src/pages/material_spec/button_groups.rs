@@ -322,7 +322,7 @@ fn group(
         state
     });
     let builder = button_groups()
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             label: Some(I18N.text(label.as_deref().unwrap_or("ui-button-group"))),
             ..Default::default()
         }))
@@ -341,7 +341,7 @@ fn group(
                 let item = item.clone();
                 row()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                    .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                         label: Some(I18N.text(item.description)),
                         ..Default::default()
                     }))
@@ -650,7 +650,7 @@ fn playground() {
                     });
                 gap(Dp(32.0));
                 button_groups()
-                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                    .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                         label: Some(I18N.text("ui-configured-group")),
                         ..Default::default()
                     }))
@@ -1583,10 +1583,12 @@ fn guidelines_anatomy() {
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
                 button_groups()
-                    .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
-                        label: Some(I18N.text("ui-full-width-group")),
-                        ..Default::default()
-                    }))
+                    .modifier(Modifier::new().fill_max_width().clear_and_set_semantics(
+                        SemanticsArgs {
+                            label: Some(I18N.text("ui-full-width-group")),
+                            ..Default::default()
+                        },
+                    ))
                     .style(ButtonGroupsStyle::Connected)
                     .size(ButtonGroupsSize::Small)
                     .selection_mode(ButtonGroupsSelectionMode::Single)

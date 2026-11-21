@@ -328,7 +328,7 @@ fn check_keyboard_and_semantics() {
             .unwrap()
             .nodes
             .iter()
-            .filter(|(_, node)| node.label() == Some("Option"))
+            .filter(|(_, node)| !node.is_hidden() && node.label() == Some("Option"))
             .count(),
         1
     );

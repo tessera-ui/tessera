@@ -455,7 +455,7 @@ pub fn button(
                 .style(TextStyle::default())
                 .color(ink)
                 .single_line(true)
-                .modifier(Modifier::new().semantics(SemanticsArgs {
+                .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                     hidden: true,
                     ..Default::default()
                 }));

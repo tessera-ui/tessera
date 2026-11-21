@@ -1052,7 +1052,7 @@ fn sheet_header(
             Dp(12.0),
         )))
         .children(move || {
-            let heading = Modifier::new().semantics(SemanticsArgs {
+            let heading = Modifier::new().clear_and_set_semantics(SemanticsArgs {
                 role: Some(Role::Heading),
                 heading_level: Some(2),
                 ..Default::default()
@@ -1284,7 +1284,6 @@ fn sheet_content(
                 .background(scheme.surface_container_low)
                 .semantics(SemanticsArgs {
                     test_tag: Some("side-sheet-live-content".into()),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )

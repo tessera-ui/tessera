@@ -144,13 +144,15 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
                                 } else {
                                     ButtonGroupsSelectionMode::Single
                                 })
-                                .modifier(Modifier::new().width(settings.get().width).semantics(
-                                    SemanticsArgs {
-                                        label: Some(format!("Group {index}")),
-                                        description: Some("Related choices".to_string()),
-                                        ..Default::default()
-                                    },
-                                ));
+                                .modifier(
+                                    Modifier::new()
+                                        .width(settings.get().width)
+                                        .clear_and_set_semantics(SemanticsArgs {
+                                            label: Some(format!("Group {index}")),
+                                            description: Some("Related choices".to_string()),
+                                            ..Default::default()
+                                        }),
+                                );
                             for item in 0..settings.get().items {
                                 group.child(
                                     move || {

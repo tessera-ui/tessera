@@ -27,7 +27,6 @@ pub(crate) fn dialog_semantics_with_role(
         label,
         modal,
         focusable: true,
-        merge_descendants: true,
         ..Default::default()
     })
 }

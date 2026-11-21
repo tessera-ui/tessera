@@ -54,7 +54,6 @@ fn watch_color(geometry: State<PreciseGeometry>, dark: bool, name: &'static str)
             "sheet-color-{}-{name}",
             if dark { "dark" } else { "light" }
         )),
-        merge_descendants: true,
         ..Default::default()
     })
 }
@@ -443,7 +442,6 @@ fn marker(number: usize, side: bool, dark: bool, x: f64, y: f64) {
                             ],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )

@@ -84,7 +84,6 @@ pub fn radio_group(
             role: Some(Role::RadioGroup),
             label: accessibility_label,
             description: accessibility_description,
-            merge_descendants: true,
             ..Default::default()
         });
     layout(Stack).modifier(modifier).child(move || {

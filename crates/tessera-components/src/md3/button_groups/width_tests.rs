@@ -68,12 +68,14 @@ fn fixture(settings_observed: TestProbe<Option<State<Settings>>>, clicks: TestPr
                 let clicks = clicks.clone();
                 group.child(
                     move || {
-                        layout(Stack).modifier(Modifier::new().size(Dp(68.0), Dp(20.0)).semantics(
-                            SemanticsArgs {
-                                label: Some(format!("Item {index}")),
-                                ..Default::default()
-                            },
-                        ))
+                        layout(Stack).modifier(
+                            Modifier::new()
+                                .size(Dp(68.0), Dp(20.0))
+                                .clear_and_set_semantics(SemanticsArgs {
+                                    label: Some(format!("Item {index}")),
+                                    ..Default::default()
+                                }),
+                        )
                     },
                     move |_| clicks.with_mut(|count| *count += 1),
                 );

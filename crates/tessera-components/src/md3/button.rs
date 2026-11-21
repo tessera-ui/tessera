@@ -952,7 +952,7 @@ mod tests {
     #[tessera]
     fn icon_probe(index: usize) {
         boxed()
-            .modifier(Modifier::new().semantics(SemanticsArgs {
+            .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                 role: Some(Role::Image),
                 label: Some(format!("Icon {index}")),
                 ..Default::default()
