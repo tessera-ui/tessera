@@ -12,6 +12,7 @@ use tessera_components::{
         glass_group::glass_group,
         group_box::group_box,
         help_link::help_link,
+        label::{LabelStyle, label as hig_label},
         link::link,
         menu::{MenuStyle, context_menu, menu, menu_divider, menu_item, menu_section},
         picker::{PickerStyle, picker},
@@ -19,7 +20,7 @@ use tessera_components::{
         slider::slider,
         stepper::stepper,
         text::text,
-        text_field::text_field,
+        text_field::{TextFieldStyle, search_field, secure_field, text_editor, text_field},
         theme::{Appearance, ControlSize, HigTheme, TextStyle},
         toggle::{ToggleStyle, toggle},
     },
@@ -350,8 +351,36 @@ pub(super) const COMPONENTS: &[Component] = &[
         description: "ui-hig-text-field-description",
         category: 3,
         sections: &[
-            example(120.0),
+            example(260.0),
             states(&["ui-hig-empty", "ui-hig-filled"], ENABLED),
+            Section {
+                title: "ui-hig-styles",
+                columns: &[
+                    "ui-hig-style-rounded",
+                    "ui-hig-style-square",
+                    "ui-hig-style-plain",
+                ],
+                rows: SINGLE,
+                height: 56.0,
+            },
+        ],
+    },
+    Component {
+        title: "ui-hig-labels",
+        description: "ui-hig-labels-description",
+        category: 3,
+        sections: &[
+            example(120.0),
+            Section {
+                title: "ui-hig-styles",
+                columns: &[
+                    "ui-hig-style-title-and-icon",
+                    "ui-hig-style-icon-only",
+                    "ui-hig-style-title-only",
+                ],
+                rows: SINGLE,
+                height: 56.0,
+            },
         ],
     },
 ];
@@ -648,9 +677,26 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
             }
             "ui-hig-text-fields" => {
                 text_field()
-                    .placeholder(I18N.text("ui-hig-search"))
+                    .placeholder(I18N.text("ui-hig-full-name"))
                     .modifier(Modifier::new().width(Dp(200.0)))
-                    .accessibility_label(I18N.text("ui-hig-search"));
+                    .accessibility_label(I18N.text("ui-hig-full-name"));
+                spacer().modifier(Modifier::new().height(Dp(10.0)));
+                secure_field()
+                    .placeholder(I18N.text("ui-hig-password"))
+                    .modifier(Modifier::new().width(Dp(200.0)));
+                spacer().modifier(Modifier::new().height(Dp(10.0)));
+                search_field()
+                    .placeholder(I18N.text("ui-hig-search"))
+                    .modifier(Modifier::new().width(Dp(200.0)));
+                spacer().modifier(Modifier::new().height(Dp(10.0)));
+                text_editor()
+                    .accessibility_label(I18N.text("ui-hig-notes"))
+                    .modifier(Modifier::new().size(Dp(200.0), Dp(80.0)));
+            }
+            "ui-hig-labels" => {
+                hig_label(I18N.text("ui-hig-favorites")).icon(|| {
+                    text("★");
+                });
             }
             _ => unreachable!(),
         });
@@ -861,6 +907,32 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
         }
         ("ui-hig-text", _) => {
             text(I18N.text("ui-hig-text")).color(label_colors(appearance)[column]);
+        }
+        ("ui-hig-text-fields", 2) => {
+            text_field()
+                .placeholder(I18N.text("ui-hig-search"))
+                .style(
+                    [
+                        TextFieldStyle::RoundedBorder,
+                        TextFieldStyle::SquareBorder,
+                        TextFieldStyle::Plain,
+                    ][column],
+                )
+                .modifier(Modifier::new().width(Dp(120.0)))
+                .accessibility_label(name);
+        }
+        ("ui-hig-labels", _) => {
+            hig_label(I18N.text("ui-hig-favorites"))
+                .style(
+                    [
+                        LabelStyle::TitleAndIcon,
+                        LabelStyle::IconOnly,
+                        LabelStyle::TitleOnly,
+                    ][column],
+                )
+                .icon(|| {
+                    text("★");
+                });
         }
         ("ui-hig-text-fields", _) => {
             let filled = column == 1;

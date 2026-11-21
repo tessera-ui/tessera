@@ -6,7 +6,10 @@ use tessera_ui::{
     winit::{event::ElementState, keyboard::NamedKey},
 };
 
-use super::{TextFieldController, text_field};
+use super::{
+    BULLET, TextFieldController, apply_secure_edit, search_field, secure_field, text_editor,
+    text_field,
+};
 
 #[tessera]
 fn fixture(probe: TestProbe<Option<(State<bool>, State<TextFieldController>, State<u32>)>>) {
@@ -139,5 +142,168 @@ fn read_only_field_keeps_its_value_when_focused_and_given_text_input() {
     assert_eq!(
         ui.accessibility_node("Managed value").1.value(),
         Some("Managed value")
+    );
+}
+
+#[test]
+fn secure_edits_map_bullet_changes_back_onto_the_real_text() {
+    let b = |count: usize| std::iter::repeat_n(BULLET, count).collect::<String>();
+    assert_eq!(
+        apply_secure_edit("pas", &b(3), &format!("{}s", b(3)), (3, 3)),
+        "pass"
+    );
+    assert_eq!(
+        apply_secure_edit("pass", &b(4), &format!("{}X{}", b(2), b(2)), (2, 2)),
+        "paXss",
+        "typing in the middle"
+    );
+    assert_eq!(
+        apply_secure_edit("pass", &b(4), &b(3), (4, 4)),
+        "pas",
+        "backspace at the end"
+    );
+    assert_eq!(
+        apply_secure_edit("pass", &b(4), &b(3), (2, 2)),
+        "pss",
+        "backspace in the middle"
+    );
+    assert_eq!(
+        apply_secure_edit("pass", &b(4), &b(2), (1, 3)),
+        "ps",
+        "deleting a selection"
+    );
+    assert_eq!(
+        apply_secure_edit("secret", &b(6), &format!("{}new{}", b(2), b(1)), (2, 5)),
+        "senewt",
+        "replacing a selection with pasted text"
+    );
+}
+
+#[tessera]
+fn secure_fixture(probe: TestProbe<Option<State<Vec<String>>>>) {
+    let values = remember(Vec::new);
+    probe.set(Some(values));
+    secure_field()
+        .placeholder("Password")
+        .on_change(move |value: String| {
+            values.with_mut(|values| values.push(value.clone()));
+            value
+        });
+}
+
+fn focus_center(ui: &mut UiTest, label: &str) {
+    let bounds = ui
+        .accessibility_node(label)
+        .1
+        .bounds()
+        .expect("field bounds");
+    ui.click_at(PxPosition::from_f32_xy(
+        ((bounds.x0 + bounds.x1) * 0.5) as f32,
+        ((bounds.y0 + bounds.y1) * 0.5) as f32,
+    ));
+    ui.frame();
+}
+
+#[test]
+fn secure_fields_report_real_text_but_show_and_publish_only_bullets() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(300, 80)
+        .content(|| secure_fixture(probe.clone()));
+    ui.frame();
+    let values = probe.get().expect("fixture state");
+    focus_center(&mut ui, "Password");
+    ui.inject_text("pa");
+    ui.frame();
+    ui.inject_text("ss");
+    ui.frame();
+    assert_eq!(values.get().last().map(String::as_str), Some("pass"));
+    ui.press_key(NamedKey::Backspace);
+    ui.frame();
+    assert_eq!(values.get().last().map(String::as_str), Some("pas"));
+    let (_, node) = ui.accessibility_node("Password");
+    assert_eq!(node.role(), Role::PasswordInput);
+    assert!(
+        node.value().is_none_or(|value| !value.contains('p')),
+        "the secret is never published"
+    );
+}
+
+#[tessera]
+fn search_fixture(probe: TestProbe<Option<(State<Vec<String>>, State<TextFieldController>)>>) {
+    let values = remember(Vec::new);
+    let controller = remember(|| TextFieldController::new(Dp(13.0), Some(Dp(16.0))));
+    probe.set(Some((values, controller)));
+    search_field()
+        .controller(controller)
+        .modifier(tessera_ui::Modifier::new())
+        .on_change(move |value: String| {
+            values.with_mut(|values| values.push(value.clone()));
+            value
+        });
+}
+
+#[test]
+fn the_search_clear_button_empties_the_query() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(300, 80)
+        .content(|| search_fixture(probe.clone()));
+    ui.frame();
+    let (values, controller) = probe.get().expect("fixture state");
+    focus_center(&mut ui, "Search");
+    ui.inject_text("tessera");
+    ui.frames(2);
+    assert_eq!(
+        controller.with(|editor| editor.text().to_string()),
+        "tessera"
+    );
+    let bounds = ui
+        .accessibility_node("Search")
+        .1
+        .bounds()
+        .expect("field bounds");
+    ui.click_at(PxPosition::from_f32_xy(
+        (bounds.x1 - 10.0) as f32,
+        ((bounds.y0 + bounds.y1) * 0.5) as f32,
+    ));
+    ui.frames(2);
+    assert_eq!(controller.with(|editor| editor.text().to_string()), "");
+    assert_eq!(values.get().last().map(String::as_str), Some(""));
+}
+
+#[tessera]
+fn editor_fixture(probe: TestProbe<Option<State<TextFieldController>>>) {
+    let controller = remember(|| TextFieldController::new(Dp(13.0), Some(Dp(16.0))));
+    probe.set(Some(controller));
+    text_editor()
+        .controller(controller)
+        .accessibility_label("Notes");
+}
+
+#[test]
+fn text_editors_take_several_lines() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(300, 200)
+        .content(|| editor_fixture(probe.clone()));
+    ui.frame();
+    let controller = probe.get().expect("fixture state");
+    let bounds = ui
+        .accessibility_node("Notes")
+        .1
+        .bounds()
+        .expect("editor bounds");
+    assert!(bounds.y1 - bounds.y0 >= 80.0);
+    focus_center(&mut ui, "Notes");
+    ui.inject_text("first");
+    ui.frame();
+    ui.press_key(NamedKey::Enter);
+    ui.frame();
+    ui.inject_text("second");
+    ui.frame();
+    assert_eq!(
+        controller.with(|editor| editor.text().to_string()),
+        "first\nsecond"
     );
 }

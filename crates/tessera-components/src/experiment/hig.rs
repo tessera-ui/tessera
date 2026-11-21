@@ -11,6 +11,7 @@ pub mod glass;
 pub mod glass_group;
 pub mod group_box;
 pub mod help_link;
+pub mod label;
 pub mod link;
 pub mod menu;
 mod motion;
