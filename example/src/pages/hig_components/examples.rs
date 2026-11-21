@@ -6,19 +6,24 @@ use tessera_components::{
         button::{ButtonRole, ButtonStyle, button},
         control_group::{ControlGroupStyle, control_group},
         disclosure_button::disclosure_button,
+        disclosure_group::{OutlineItem, disclosure_group, outline_group},
         divider::{DividerOrientation, divider},
         gauge::{GaugeStyle, gauge},
         glass::{GlassAppearance, GlassMaterial, glass},
         glass_group::glass_group,
+        grid::{GridItem, grid},
         group_box::group_box,
         help_link::help_link,
         label::{LabelStyle, label as hig_label},
         link::link,
+        list::{ListStyle, list, list_row, list_section},
         menu::{MenuStyle, context_menu, menu, menu_divider, menu_item, menu_section},
         picker::{PickerStyle, picker},
         progress::{ProgressViewStyle, progress_view},
+        scroll_view::scroll_view,
         slider::slider,
         stepper::stepper,
+        table::{TableColumn, TableSort, table},
         text::text,
         text_field::{TextFieldStyle, search_field, secure_field, text_editor, text_field},
         theme::{Appearance, ControlSize, HigTheme, TextStyle},
@@ -50,11 +55,12 @@ pub(super) struct Section {
     pub height: f64,
 }
 
-pub(super) const CATEGORIES: [&str; 4] = [
+pub(super) const CATEGORIES: [&str; 5] = [
     "ui-hig-actions",
     "ui-hig-selection",
     "ui-hig-values",
     "ui-hig-content",
+    "ui-hig-collections",
 ];
 
 const SINGLE: &[&str] = &[""];
@@ -364,6 +370,48 @@ pub(super) const COMPONENTS: &[Component] = &[
                 height: 56.0,
             },
         ],
+    },
+    Component {
+        title: "ui-hig-scroll-views",
+        description: "ui-hig-scroll-views-description",
+        category: 4,
+        sections: &[example(180.0)],
+    },
+    Component {
+        title: "ui-hig-lists",
+        description: "ui-hig-lists-description",
+        category: 4,
+        sections: &[
+            example(200.0),
+            Section {
+                title: "ui-hig-styles",
+                columns: &[
+                    "ui-hig-style-inset",
+                    "ui-hig-style-plain",
+                    "ui-hig-style-sidebar",
+                ],
+                rows: SINGLE,
+                height: 120.0,
+            },
+        ],
+    },
+    Component {
+        title: "ui-hig-disclosure-groups",
+        description: "ui-hig-disclosure-groups-description",
+        category: 4,
+        sections: &[example(200.0)],
+    },
+    Component {
+        title: "ui-hig-tables",
+        description: "ui-hig-tables-description",
+        category: 4,
+        sections: &[example(200.0)],
+    },
+    Component {
+        title: "ui-hig-grids",
+        description: "ui-hig-grids-description",
+        category: 4,
+        sections: &[example(200.0)],
     },
     Component {
         title: "ui-hig-labels",
@@ -693,6 +741,86 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                     .accessibility_label(I18N.text("ui-hig-notes"))
                     .modifier(Modifier::new().size(Dp(200.0), Dp(80.0)));
             }
+            "ui-hig-scroll-views" => {
+                scroll_view()
+                    .modifier(Modifier::new().size(Dp(240.0), Dp(140.0)))
+                    .child(move || {
+                        for line in 1..=30 {
+                            text(format!("{} {line}", I18N.text("ui-hig-row")));
+                        }
+                    });
+            }
+            "ui-hig-lists" => {
+                list()
+                    .selection(values.selected)
+                    .on_select(move |tag| state.with_mut(|v| v.selected = tag))
+                    .alternating_row_backgrounds(true)
+                    .modifier(Modifier::new().size(Dp(240.0), Dp(160.0)))
+                    .content(move || {
+                        list_section()
+                            .header(I18N.text("ui-hig-favorites"))
+                            .content(move || {
+                                for tag in 0..5 {
+                                    list_row(tag).content(move || {
+                                        text(format!("{} {}", I18N.text("ui-hig-row"), tag + 1));
+                                    });
+                                }
+                            });
+                    });
+            }
+            "ui-hig-disclosure-groups" => {
+                disclosure_group(I18N.text("ui-hig-details")).content(move || {
+                    caption(I18N.text("ui-hig-help-content"), appearance);
+                });
+                spacer().modifier(Modifier::new().height(Dp(12.0)));
+                outline_group(vec![
+                    OutlineItem::new("Documents").with_children(vec![
+                        OutlineItem::new("Reports").with_children(vec![OutlineItem::new("Q3.pdf")]),
+                        OutlineItem::new("Notes.txt"),
+                    ]),
+                    OutlineItem::new("Downloads"),
+                ]);
+            }
+            "ui-hig-tables" => {
+                let ascending = values.on;
+                let mut rows = vec![
+                    ("Report.pdf", "2 MB"),
+                    ("Notes.txt", "4 KB"),
+                    ("Photo.jpg", "3 MB"),
+                ];
+                rows.sort_by_key(|(name, _)| *name);
+                if !ascending {
+                    rows.reverse();
+                }
+                table(
+                    vec![
+                        TableColumn::new(I18N.text("ui-hig-name")),
+                        TableColumn::new(I18N.text("ui-hig-size")).width(Dp(80.0)),
+                    ],
+                    rows.len(),
+                )
+                .sort(TableSort {
+                    column: 0,
+                    ascending,
+                })
+                .on_sort(move |sort: TableSort| state.with_mut(|v| v.on = sort.ascending))
+                .selection(values.selected)
+                .on_select(move |row| state.with_mut(|v| v.selected = row))
+                .modifier(Modifier::new().size(Dp(300.0), Dp(140.0)))
+                .cell(move |(row, column)| {
+                    let (name, size) = rows[row];
+                    text(if column == 0 { name } else { size });
+                });
+            }
+            "ui-hig-grids" => {
+                grid(vec![GridItem::Adaptive { min: Dp(64.0) }])
+                    .modifier(Modifier::new().width(Dp(300.0)))
+                    .content(move || {
+                        for index in 1..=8 {
+                            text(format!("{} {index}", I18N.text("ui-hig-tile")));
+                        }
+                    });
+            }
             "ui-hig-labels" => {
                 hig_label(I18N.text("ui-hig-favorites")).icon(|| {
                     text("★");
@@ -920,6 +1048,19 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                 )
                 .modifier(Modifier::new().width(Dp(120.0)))
                 .accessibility_label(name);
+        }
+        ("ui-hig-lists", _) => {
+            list()
+                .style([ListStyle::Inset, ListStyle::Plain, ListStyle::Sidebar][column])
+                .selection(0)
+                .modifier(Modifier::new().size(Dp(120.0), Dp(100.0)))
+                .content(|| {
+                    for tag in 0..3 {
+                        list_row(tag).content(move || {
+                            text(format!("{}", tag + 1));
+                        });
+                    }
+                });
         }
         ("ui-hig-labels", _) => {
             hig_label(I18N.text("ui-hig-favorites"))
