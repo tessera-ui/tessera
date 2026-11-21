@@ -168,6 +168,56 @@ fn fs_spokes(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     return vec4(decode(color) * output_alpha, output_alpha);
 }
 
+fn dial_coverage(point: vec2<f32>) -> f32 {
+    let size = uniforms.rect.zw;
+    let shape = uniforms.corner;
+    var distance = 0.0;
+    if shape.w > 1.5 {
+        let half = size * 0.5;
+        let radius = min(half.x, half.y);
+        let q = abs(point) - half + vec2(radius);
+        distance = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
+    } else {
+        let stroke = shape.x;
+        let radius = min(size.x, size.y) * 0.5 - stroke * 0.5;
+        distance = abs(length(point) - radius) - stroke * 0.5;
+        if shape.w < 0.5 {
+            var angle = degrees(atan2(point.y, point.x)) - shape.y;
+            angle = angle - floor(angle / 360.0) * 360.0;
+            if angle > shape.z {
+                let start = radians(shape.y);
+                let end = radians(shape.y + shape.z);
+                let start_cap = length(point - vec2(cos(start), sin(start)) * radius) - stroke * 0.5;
+                let end_cap = length(point - vec2(cos(end), sin(end)) * radius) - stroke * 0.5;
+                distance = min(start_cap, end_cap);
+            }
+        }
+    }
+    var coverage = clamp(0.5 - distance, 0.0, 1.0);
+    let marker = uniforms.stroke_color;
+    if marker.z > 0.0 {
+        let from_marker = length(point - marker.xy);
+        coverage = coverage * clamp(from_marker - marker.z + 0.5, 0.0, 1.0);
+        if marker.w > 0.0 {
+            coverage = max(coverage, clamp(0.5 - (from_marker - marker.w), 0.0, 1.0));
+        }
+    }
+    return coverage;
+}
+
+@fragment
+fn fs_dial(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    let point = position.xy - uniforms.rect.xy - uniforms.rect.zw * 0.5;
+    let alpha = uniforms.color.a * dial_coverage(point);
+    if alpha <= 0.0 { discard; }
+    let background = textureLoad(backdrop, vec2<i32>(floor(position.xy - uniforms.viewport_scene.zw)), 0);
+    let straight = encode(background.rgb / max(background.a, 0.000001));
+    let remaining = background.a * (1.0 - alpha);
+    let output_alpha = remaining + alpha;
+    let color = (encode(uniforms.color.rgb) * alpha + straight * remaining) / output_alpha;
+    return vec4(decode(color) * output_alpha, output_alpha);
+}
+
 fn mask_coverage(point: vec2<f32>, start: vec2<f32>, joint: vec2<f32>, end: vec2<f32>) -> f32 {
     let distance = min(segment_distance(point, start, joint), segment_distance(point, joint, end));
     return clamp(uniforms.stroke_end_width.z * 0.5 + 0.5 - distance, 0.0, 1.0);

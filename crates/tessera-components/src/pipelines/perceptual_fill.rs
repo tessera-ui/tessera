@@ -94,6 +94,42 @@ impl DrawCommand for PerceptualSweepCommand {
     }
 }
 
+/// The outline of a gauge dial, blended in gamma space like the other perceptual fills.
+#[derive(Clone, PartialEq)]
+pub(crate) struct PerceptualDialCommand {
+    pub color: Color,
+    pub shape: DialShape,
+    /// Stroke width of arcs, in points.
+    pub stroke: Dp,
+    /// Circle removed from the shape and an optional dot drawn at its centre: centre offset from
+    /// the node centre, cut radius, and dot radius, in points. A zero cut radius removes nothing.
+    pub marker: [Dp; 4],
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum DialShape {
+    /// An arc with round ends; angles in degrees clockwise from three o'clock.
+    Arc { start: f32, sweep: f32 },
+    /// A full ring.
+    Ring,
+    /// A capsule filling the node.
+    Capsule,
+}
+
+impl DrawCommand for PerceptualDialCommand {
+    fn sample_region(&self) -> Option<SampleRegion> {
+        Some(SampleRegion::PaddedLocal(PaddingRect::uniform(Px::ZERO)))
+    }
+
+    fn draw_region(&self) -> DrawRegion {
+        DrawRegion::PaddedLocal(PaddingRect::uniform(Px::ZERO))
+    }
+
+    fn apply_opacity(&mut self, opacity: f32) {
+        self.color.a *= opacity;
+    }
+}
+
 impl DrawCommand for PerceptualFillCommand {
     fn sample_region(&self) -> Option<SampleRegion> {
         Some(SampleRegion::PaddedLocal(self.padding()))
@@ -399,6 +435,49 @@ impl DrawablePipeline<PerceptualSpokesCommand> for PerceptualSpokesPipeline {
             ];
             uniforms[5].copy_from_slice(&command.weights[..4]);
             uniforms[6].copy_from_slice(&command.weights[4..]);
+            self.0.draw_quad(context, &uniforms);
+        }
+    }
+}
+
+pub(crate) struct PerceptualDialPipeline(PerceptualFillPipeline);
+
+impl PerceptualDialPipeline {
+    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat, samples: u32) -> Self {
+        Self(PerceptualFillPipeline::with_fragment(
+            device, format, samples, "fs_dial",
+        ))
+    }
+}
+
+impl DrawablePipeline<PerceptualDialCommand> for PerceptualDialPipeline {
+    fn draw(&mut self, context: &mut DrawContext<'_, '_, '_, PerceptualDialCommand>) {
+        for (command, geometry) in context.commands {
+            let [width, height] = geometry.window_size();
+            if width <= 0.0 || height <= 0.0 {
+                continue;
+            }
+            let origin = geometry.window_origin();
+            let scale = geometry.local_to_window.scale();
+            let px = |value: Dp| value.to_pixels_f32() * scale;
+            let rect = [origin.x, origin.y, width, height];
+            let mut uniforms = [[0.0; 4]; 17];
+            uniforms[0] = rect;
+            uniforms[1] = rect;
+            uniforms[2] = [
+                context.target_size.width.to_f32(),
+                context.target_size.height.to_f32(),
+                context.scene_rect.x.to_f32(),
+                context.scene_rect.y.to_f32(),
+            ];
+            uniforms[3] = command.color.to_array();
+            let (kind, start, sweep) = match command.shape {
+                DialShape::Arc { start, sweep } => (0.0, start, sweep),
+                DialShape::Ring => (1.0, 0.0, 360.0),
+                DialShape::Capsule => (2.0, 0.0, 0.0),
+            };
+            uniforms[4] = [px(command.stroke), start, sweep, kind];
+            uniforms[5] = command.marker.map(px);
             self.0.draw_quad(context, &uniforms);
         }
     }

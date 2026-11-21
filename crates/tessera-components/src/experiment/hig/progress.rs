@@ -200,6 +200,7 @@ pub enum ProgressViewStyle {
 ///   indeterminate.
 /// - `style` — bar, ring, or spinner; defaults to [`ProgressViewStyle::Automatic`].
 /// - `control_size` — size of the bar, ring, or spinner; defaults to regular.
+/// - `tint` — color of the completed part; defaults to the accent color.
 /// - `window_active` — active accent appearance; defaults to true.
 /// - `modifier` — layout and additional semantics.
 /// - `accessibility_label`, `accessibility_description` — spoken name and context.
@@ -224,6 +225,7 @@ pub fn progress_view(
     total: Option<f64>,
     style: Option<ProgressViewStyle>,
     control_size: Option<ControlSize>,
+    tint: Option<Color>,
     window_active: Option<bool>,
     modifier: Option<Modifier>,
     #[prop(into)] accessibility_label: Option<String>,
@@ -269,14 +271,21 @@ pub fn progress_view(
     let active = window_active.unwrap_or(true);
     let modifier = modifier.push_semantics(semantics);
     if style == ProgressViewStyle::Circular {
-        progress_ring(value / total, size, dark, active, modifier);
+        progress_ring(value / total, size, dark, active, modifier).tint_optional(tint);
     } else {
-        progress_bar(value / total, size, dark, active, modifier);
+        progress_bar(value / total, size, dark, active, modifier).tint_color_optional(tint);
     }
 }
 
 #[tessera]
-fn progress_bar(fraction: f64, size: ControlSize, dark: bool, active: bool, modifier: Modifier) {
+fn progress_bar(
+    fraction: f64,
+    size: ControlSize,
+    dark: bool,
+    active: bool,
+    tint_color: Option<Color>,
+    modifier: Modifier,
+) {
     let tint = if dark { Color::WHITE } else { Color::BLACK };
     let track = if dark {
         Color::from_rgb(0.02415763, 0.02415763, 0.02415763)
@@ -284,7 +293,7 @@ fn progress_bar(fraction: f64, size: ControlSize, dark: bool, active: bool, modi
         Color::from_rgb(0.76815116, 0.76815116, 0.76815116)
     };
     let fill = if active {
-        Color::from_rgb(0.0, 0.19461783, 1.0)
+        tint_color.unwrap_or(Color::from_rgb(0.0, 0.19461783, 1.0))
     } else {
         Color::from_rgb(0.40197778, 0.40197778, 0.40197778)
     };
@@ -339,7 +348,14 @@ impl DrawModifierNode for RingPaint {
 
 /// A determinate ring: 16pt across for mini and small sizes, 32pt otherwise, with a 5pt band.
 #[tessera]
-fn progress_ring(fraction: f64, size: ControlSize, dark: bool, active: bool, modifier: Modifier) {
+fn progress_ring(
+    fraction: f64,
+    size: ControlSize,
+    dark: bool,
+    active: bool,
+    tint: Option<Color>,
+    modifier: Modifier,
+) {
     let diameter = match size {
         ControlSize::Mini | ControlSize::Small => Dp(16.0),
         _ => Dp(32.0),
@@ -350,7 +366,7 @@ fn progress_ring(fraction: f64, size: ControlSize, dark: bool, active: bool, mod
         (srgb(229, 229, 229), srgb(10, 129, 253))
     };
     let fill = if active {
-        fill
+        tint.unwrap_or(fill)
     } else {
         Color::from_rgb(0.40197778, 0.40197778, 0.40197778)
     };

@@ -6,11 +6,11 @@ use tessera_components::{
         button::button,
         disclosure_button::disclosure_button,
         divider::{DividerOrientation, divider},
+        gauge::{GaugeStyle, gauge},
         glass::{GlassAppearance, GlassMaterial, glass},
         glass_group::glass_group,
         group_box::group_box,
         help_button::help_button,
-        level_indicator::capacity_indicator,
         progress::{ProgressViewStyle, progress_view},
         radio_button::{radio_button, radio_group},
         segmented_control::{Segment, segmented_control},
@@ -179,15 +179,27 @@ pub(super) const COMPONENTS: &[Component] = &[
         ],
     },
     Component {
-        title: "ui-hig-capacity-indicators",
-        description: "ui-hig-capacity-description",
+        title: "ui-hig-gauges",
+        description: "ui-hig-gauges-description",
         category: 2,
         sections: &[
-            example(120.0),
-            states(
-                &["ui-hig-normal", "ui-hig-warning", "ui-hig-critical"],
-                ENABLED,
-            ),
+            example(140.0),
+            Section {
+                title: "ui-hig-linear",
+                columns: &[
+                    "ui-hig-capacity",
+                    "ui-hig-accessory-capacity",
+                    "ui-hig-accessory",
+                ],
+                rows: SINGLE,
+                height: 72.0,
+            },
+            Section {
+                title: "ui-hig-circular",
+                columns: &["ui-hig-accessory", "ui-hig-accessory-capacity"],
+                rows: SINGLE,
+                height: 80.0,
+            },
         ],
     },
     Component {
@@ -473,10 +485,9 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                     .accessibility_label(I18N.text("ui-hig-progress-value"))
                     .on_value_change(move |next| state.with_mut(|v| v.fraction = next));
             }
-            "ui-hig-capacity-indicators" => {
-                capacity_indicator(values.fraction * 5.0)
-                    .warning_value(3.0)
-                    .critical_value(4.0)
+            "ui-hig-gauges" => {
+                gauge(values.fraction)
+                    .label(I18N.text("ui-hig-storage"))
                     .modifier(Modifier::new().width(Dp(160.0)))
                     .accessibility_label(I18N.text("ui-hig-value"));
                 spacer().modifier(Modifier::new().height(Dp(16.0)));
@@ -608,12 +619,28 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                 progress_view().accessibility_label(name);
             }
         }
-        ("ui-hig-capacity-indicators", _) => {
-            capacity_indicator([2.0, 3.5, 4.5][column])
-                .warning_value(3.0)
-                .critical_value(4.0)
-                .enabled(enabled)
-                .modifier(Modifier::new().width(Dp(96.0)))
+        ("ui-hig-gauges", 1) => {
+            gauge(0.4)
+                .label(I18N.text("ui-hig-storage"))
+                .style(
+                    [
+                        GaugeStyle::LinearCapacity,
+                        GaugeStyle::AccessoryLinearCapacity,
+                        GaugeStyle::AccessoryLinear,
+                    ][column],
+                )
+                .modifier(Modifier::new().width(Dp(112.0)))
+                .accessibility_label(name);
+        }
+        ("ui-hig-gauges", _) => {
+            gauge(0.4)
+                .label("L")
+                .style(
+                    [
+                        GaugeStyle::AccessoryCircular,
+                        GaugeStyle::AccessoryCircularCapacity,
+                    ][column],
+                )
                 .accessibility_label(name);
         }
         ("ui-hig-dividers", _) => {

@@ -213,13 +213,10 @@ fn article_examples_update_values_and_state_grids_publish_disabled_controls() {
                     Some(Toggled::True)
                 );
             }
-            "ui-sliders"
-            | "ui-hig-steppers"
-            | "ui-progress-indicators"
-            | "ui-hig-capacity-indicators" => {
+            "ui-sliders" | "ui-hig-steppers" | "ui-progress-indicators" | "ui-hig-gauges" => {
                 let label = match title {
                     "ui-progress-indicators" => "Completion",
-                    "ui-hig-capacity-indicators" => "Capacity",
+                    "ui-hig-gauges" => "Capacity",
                     _ => "Value",
                 };
                 let role = if title == "ui-hig-steppers" {
