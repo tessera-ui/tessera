@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tessera_ui::{
     Callback, ComputedData, Constraint, CursorEventContent, Dp, FloatRect, LayoutPolicy,
     LayoutResult, MeasurementError, Modifier, PointerEventPass, PointerInput,
-    PointerInputModifierNode, Px, PxPosition, RenderSlot, State, key,
+    PointerInputModifierNode, Px, PxPosition, RenderSlot, State, key, launch,
     layout::{MeasureScope, Stack, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera,
@@ -48,40 +48,74 @@ pub(super) struct Popup {
     pub modal: bool,
 }
 
+/// Duration of a popup fading in or out.
+const POPUP_FADE: std::time::Duration = std::time::Duration::from_millis(180);
+/// Distance a top-centred popup slides while appearing.
+const SHEET_SLIDE: f64 = 12.0;
+
+/// A shown popup; closing popups fade out before they are removed.
+#[derive(Clone, Copy, PartialEq)]
+struct Entry {
+    key: u64,
+    popup: Popup,
+    closing: bool,
+}
+
 /// Popups currently shown by a [`presentation_host`].
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct Presentations {
-    popups: State<Vec<(u64, Popup)>>,
+    popups: State<Vec<Entry>>,
     origin: State<FloatRect>,
 }
 
 impl Presentations {
     /// Shows or updates the popup registered under `key`.
     pub(super) fn show(self, key: u64, popup: Popup) {
+        let next = Entry {
+            key,
+            popup,
+            closing: false,
+        };
         let current = self
             .popups
-            .with(|popups| popups.iter().find(|(id, _)| *id == key).map(|(_, p)| *p));
-        if current == Some(popup) {
+            .with(|popups| popups.iter().find(|entry| entry.key == key).copied());
+        if current == Some(next) {
             return;
         }
         self.popups.with_mut(|popups| {
-            if let Some(entry) = popups.iter_mut().find(|(id, _)| *id == key) {
-                entry.1 = popup;
+            if let Some(entry) = popups.iter_mut().find(|entry| entry.key == key) {
+                *entry = next;
             } else {
-                popups.push((key, popup));
+                popups.push(next);
             }
         });
     }
 
-    /// Removes the popup registered under `key`.
+    /// Fades out the popup registered under `key`.
     pub(super) fn hide(self, key: u64) {
+        if self.popups.is_alive()
+            && self.popups.with(|popups| {
+                popups
+                    .iter()
+                    .any(|entry| entry.key == key && !entry.closing)
+            })
+        {
+            self.popups.with_mut(|popups| {
+                for entry in popups.iter_mut().filter(|entry| entry.key == key) {
+                    entry.closing = true;
+                }
+            });
+        }
+    }
+
+    fn remove(self, key: u64) {
         if self.popups.is_alive()
             && self
                 .popups
-                .with(|popups| popups.iter().any(|(id, _)| *id == key))
+                .with(|popups| popups.iter().any(|entry| entry.key == key && entry.closing))
         {
             self.popups
-                .with_mut(|popups| popups.retain(|(id, _)| *id != key));
+                .with_mut(|popups| popups.retain(|entry| entry.key != key || !entry.closing));
         }
     }
 
@@ -89,8 +123,8 @@ impl Presentations {
         let dismiss: Vec<Callback> = self.popups.with(|popups| {
             popups
                 .iter()
-                .filter(|(_, popup)| !popup.modal)
-                .map(|(_, popup)| popup.dismiss)
+                .filter(|entry| !entry.closing && !entry.popup.modal)
+                .map(|entry| entry.popup.dismiss)
                 .collect()
         });
         for callback in dismiss.into_iter().rev() {
@@ -120,6 +154,7 @@ impl Drop for PopupLease {
 #[derive(Clone, PartialEq)]
 struct HostLayout {
     origin: FloatRect,
+    catcher: bool,
     popups: Vec<(FloatRect, PopupPlacement)>,
 }
 
@@ -145,7 +180,7 @@ impl LayoutPolicy for HostLayout {
             tessera_ui::AxisConstraint::new(Px::ZERO, Some(size.height)),
         );
         let mut rest = rest.iter();
-        if !self.popups.is_empty()
+        if self.catcher
             && let Some(catcher) = rest.next()
         {
             catcher.measure(
@@ -246,11 +281,13 @@ pub fn presentation_host(child: Option<RenderSlot>) {
     let origin = remember(|| FloatRect::ZERO);
     let presentations = Presentations { popups, origin };
     let shown = popups.get();
+    let catcher = shown.iter().any(|entry| !entry.closing);
     let policy = HostLayout {
         origin: origin.get(),
+        catcher,
         popups: shown
             .iter()
-            .map(|(_, popup)| (popup.anchor, popup.placement))
+            .map(|entry| (entry.popup.anchor, entry.popup.placement))
             .collect(),
     };
     provide_context(presentations, move || {
@@ -265,11 +302,13 @@ pub fn presentation_host(child: Option<RenderSlot>) {
                 if let Some(child) = child {
                     host_content(child);
                 }
-                if !shown.is_empty() {
+                if catcher {
                     dismiss_layer(presentations);
                 }
-                for (id, popup) in shown.iter().copied() {
-                    key(id, move || popup_layer(popup));
+                for entry in shown.iter().copied() {
+                    key(entry.key, move || {
+                        popup_layer(entry.popup, entry.closing, presentations, entry.key);
+                    });
                 }
             });
     });
@@ -286,8 +325,35 @@ fn dismiss_layer(presentations: Presentations) {
 }
 
 #[tessera]
-fn popup_layer(popup: Popup) {
-    layout(Stack).child(move || {
+fn popup_layer(popup: Popup, closing: bool, presentations: Presentations, key: u64) {
+    let target = if closing { 0.0 } else { 1.0 };
+    let shown = remember(|| super::motion::Eased::new(0.0, POPUP_FADE));
+    launch(closing, async move {
+        crate::animation::animate_to(shown, target).await;
+        if closing {
+            presentations.remove(key);
+        }
+    });
+    let visibility = shown.with(super::motion::Eased::value);
+    let slide = if popup.placement == PopupPlacement::TopCenter {
+        Dp(-SHEET_SLIDE * f64::from(1.0 - visibility))
+    } else {
+        Dp::ZERO
+    };
+    let mut modifier = tessera_foundation::modifier::ModifierExt::alpha(
+        tessera_foundation::modifier::ModifierExt::offset(Modifier::new(), Dp::ZERO, slide),
+        visibility,
+    );
+    if closing {
+        modifier = tessera_foundation::modifier::ModifierExt::clear_and_set_semantics(
+            modifier,
+            tessera_foundation::modifier::SemanticsArgs {
+                hidden: true,
+                ..Default::default()
+            },
+        );
+    }
+    layout(Stack).modifier(modifier).child(move || {
         hig_theme().theme(popup.theme).child_shared(popup.content);
     });
 }

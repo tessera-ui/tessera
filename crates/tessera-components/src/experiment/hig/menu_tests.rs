@@ -201,3 +201,46 @@ fn secondary_clicks_and_the_show_menu_action_open_the_context_menu_at_the_pointe
     ui.frames(3);
     assert_eq!(items(&ui), ["Open"]);
 }
+
+/// Rows below the menu button, where only the menu draws.
+fn panel_rows(pixels: &[u8]) -> &[u8] {
+    &pixels[40 * 400 * 4..200 * 400 * 4]
+}
+
+fn check_menu_fades() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 300)
+        .rendered(crate::TesseraComponents)
+        .content(|| fixture(probe.clone()));
+    ui.frames(2);
+    let before = ui.read_pixels();
+    let (button, _) = ui.accessibility_node("Actions");
+    assert!(ui.accessibility_action(button, Action::Click));
+    ui.frames(2);
+    let early = ui.read_pixels();
+    ui.frames(20);
+    let open = ui.read_pixels();
+    assert_ne!(early, open, "the menu fades in");
+    ui.frames(2);
+    assert_eq!(open, ui.read_pixels(), "the open menu rests");
+    ui.press_key(NamedKey::Escape);
+    ui.frames(2);
+    let closing = ui.read_pixels();
+    assert_ne!(
+        panel_rows(&closing),
+        panel_rows(&before),
+        "the menu fades out instead of vanishing"
+    );
+    ui.frames(24);
+    assert_eq!(panel_rows(&ui.read_pixels()), panel_rows(&before));
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for menu pixels"]
+fn menus_fade_in_and_out() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::menu::tests::menus_fade_in_and_out",
+        check_menu_fades,
+    );
+}

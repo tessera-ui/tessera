@@ -40,6 +40,7 @@ struct Value {
     current: f64,
     min: f64,
     max: f64,
+    step: Option<f64>,
     enabled: bool,
     callback: CallbackWith<f64>,
 }
@@ -49,15 +50,24 @@ impl Value {
         (self.current - self.min) / (self.max - self.min)
     }
 
+    /// Distance moved by one key press or accessibility increment.
+    fn increment(self) -> f64 {
+        self.step.unwrap_or((self.max - self.min) * 0.05)
+    }
+
     fn request(self, value: f64) {
-        let value = value.clamp(self.min, self.max);
+        let value = match self.step {
+            Some(step) => self.min + ((value - self.min) / step).round() * step,
+            None => value,
+        }
+        .clamp(self.min, self.max);
         if self.enabled && value != self.current {
             self.callback.call(value);
         }
     }
 
     fn adjust(self, direction: f64) {
-        self.request(self.current + (self.max - self.min) * 0.05 * direction);
+        self.request(self.current + self.increment() * direction);
     }
 }
 
@@ -163,7 +173,7 @@ impl KeyboardInputModifierNode for SliderKeyboard {
         }
         input.keyboard_events.retain(|event| {
             let value = self.0.get();
-            let step = (value.max - value.min) * 0.05;
+            let step = value.increment();
             let requested = match event.logical_key {
                 Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => value.current + step,
                 Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => value.current - step,
@@ -198,7 +208,7 @@ impl SemanticsModifierNode for SliderSemantics {
         node.numeric_value = Some(value.current);
         node.min_numeric_value = Some(value.min);
         node.max_numeric_value = Some(value.max);
-        node.numeric_value_step = Some((value.max - value.min) * 0.05);
+        node.numeric_value_step = Some(value.increment());
         node.numeric_value_jump = Some(value.max - value.min);
         node.disabled = !value.enabled;
         node.focusable = value.enabled;
@@ -271,8 +281,9 @@ impl DrawModifierNode for Shadow {
     }
 }
 
+/// Places the track and thumb in the top 16pt, leaving room below for tick marks.
 #[derive(Clone, Copy, PartialEq)]
-struct SliderLayout(f64);
+struct SliderLayout(f64, bool);
 
 impl LayoutPolicy for SliderLayout {
     fn measure_eq(&self, other: &Self) -> bool {
@@ -285,12 +296,25 @@ impl LayoutPolicy for SliderLayout {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = *scope.parent_constraint().as_ref();
         let width = parent.width.clamp(Dp(160.0).into());
-        let height = parent.height.clamp(Dp(16.0).into());
+        let height = parent
+            .height
+            .clamp(Dp(if self.1 { 22.0 } else { 16.0 }).into());
+        let height = if self.1 {
+            height.min(Px::from(Dp(16.0)))
+        } else {
+            height
+        };
+        let full_height = parent
+            .height
+            .clamp(Dp(if self.1 { 22.0 } else { 16.0 }).into());
         let thumb = Px::from(Dp(20.0)).min(width);
         let thumb_height = Px::from(Dp(16.0)).min(height);
         let track = Px::from(Dp(6.0)).min(height);
         let x = (width - thumb).to_f32() * self.0 as f32;
-        let mut result = LayoutResult::new(ComputedData { width, height });
+        let mut result = LayoutResult::new(ComputedData {
+            width,
+            height: full_height,
+        });
         for (index, child) in scope.children().iter().enumerate() {
             let (w, h, left, top) = match index {
                 0 => (width, track, 0.0, (height - track).to_f32() * 0.5),
@@ -319,6 +343,48 @@ impl LayoutPolicy for SliderLayout {
             result.place_child(*child, PxPosition::from_f32_xy(left, top));
         }
         Ok(result)
+    }
+}
+
+/// Tick marks below the track, one per step, aligned with the thumb's centre positions.
+#[derive(Clone, PartialEq)]
+struct Ticks {
+    count: usize,
+    color: Color,
+}
+
+impl DrawModifierNode for Ticks {
+    fn draw(
+        &self,
+        context: &mut DrawModifierContext<'_, '_>,
+        content: &mut dyn DrawModifierContent,
+    ) {
+        let mut metadata = context.render_input.metadata_mut();
+        if let Some(size) = metadata.computed_data()
+            && self.count > 1
+        {
+            let width = f64::from(Dp::from_pixels_f32(size.width.to_f32()).0);
+            let height = f64::from(Dp::from_pixels_f32(size.height.to_f32()).0);
+            let travel = width - 20.0;
+            let fragment = metadata.fragment_mut();
+            for index in 0..self.count {
+                let x = 10.0 + travel * index as f64 / (self.count - 1) as f64;
+                fragment.push_draw_command(PerceptualFillCommand {
+                    outline_width: Dp::ZERO,
+                    snap_to_pixels: true,
+                    path: None,
+                    color: self.color,
+                    radii: [Dp(0.5); 2],
+                    // Insets are top, right, bottom, left.
+                    insets: [Dp(height - 4.0), Dp(width - x - 0.5), Dp::ZERO, Dp(x - 0.5)],
+                    clip_radius: None,
+                    line: None,
+                    edge_smoothness: 1.0,
+                    stroke: None,
+                });
+            }
+        }
+        content.draw(context.render_input);
     }
 }
 
@@ -371,6 +437,7 @@ fn slider_thumb(pressed: bool, focused: bool) {
 ///
 /// - `value`, `on_value_change` — controlled value and requested updates.
 /// - `range` — finite increasing limits, defaulting to `0.0..=1.0`; values are clamped for display.
+/// - `step` — snaps values to multiples of the step from the minimum and shows tick marks.
 /// - `enabled`, `window_active` — input availability and active appearance; default to true.
 /// - `modifier`, `focus_requester` — layout, semantics, and optional external focus handle.
 /// - `accessibility_label`, `accessibility_description` — spoken name and instructions.
@@ -397,6 +464,7 @@ fn slider_thumb(pressed: bool, focused: bool) {
 pub fn slider(
     value: f64,
     range: Option<RangeInclusive<f64>>,
+    step: Option<f64>,
     on_value_change: Option<CallbackWith<f64>>,
     enabled: Option<bool>,
     window_active: Option<bool>,
@@ -418,6 +486,7 @@ pub fn slider(
         current: value.clamp(min, max),
         min,
         max,
+        step: step.filter(|step| step.is_finite() && *step > 0.0),
         enabled,
         callback: on_value_change.unwrap_or_else(CallbackWith::default_value),
     };
@@ -464,9 +533,19 @@ pub fn slider(
     if enabled {
         modifier = modifier.focusable().focus_requester(requester);
     }
+    let ticks = next
+        .step
+        .map(|step| ((max - min) / step).round() as usize + 1)
+        .filter(|count| (2..=64).contains(count));
+    if let Some(count) = ticks {
+        modifier = modifier.push_draw(Ticks {
+            count,
+            color: tint.with_alpha(if enabled { 0.35 } else { 0.15 }),
+        });
+    }
     let focused = enabled && active && requester.is_focus_visible();
     let pressed = enabled && active && drag.get().is_some();
-    layout(SliderLayout(next.fraction()))
+    layout(SliderLayout(next.fraction(), ticks.is_some()))
         .modifier(modifier)
         .child(move || {
             slider_fill(tint.with_alpha(0.10));

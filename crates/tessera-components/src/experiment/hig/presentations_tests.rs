@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Dp, Modifier, PxPosition, State,
+    Modifier, PxPosition, State,
     accesskit::{Action, Role},
     remember, tessera,
     testing::{TestProbe, UiTest},

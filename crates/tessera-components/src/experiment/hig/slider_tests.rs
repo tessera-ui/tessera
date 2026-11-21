@@ -302,3 +302,45 @@ fn keyboard_and_accessibility_adjust_the_latest_controlled_value_without_focus_a
         check_keyboard,
     );
 }
+
+#[tessera]
+fn stepped_fixture(probe: TestProbe<Option<State<f64>>>) {
+    let value = remember(|| 0.3);
+    probe.set(Some(value));
+    column().children(move || {
+        slider(value.get())
+            .step(0.25)
+            .accessibility_label("Quality")
+            .on_value_change(move |next| value.set(next));
+        slider(0.5).accessibility_label("Volume");
+    });
+}
+
+#[test]
+fn steps_snap_requested_values_and_add_tick_marks() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(300, 200)
+        .content(|| stepped_fixture(probe.clone()));
+    ui.frame();
+    let value = probe.get().expect("fixture state");
+    let (id, node) = ui.accessibility_node("Quality");
+    assert_eq!(node.numeric_value_step(), Some(0.25));
+    assert!(ui.accessibility_action(id, Action::Increment));
+    ui.frame();
+    assert_eq!(value.get(), 0.5, "0.55 snaps to the nearest step");
+    let height = |label: &str| {
+        let bounds = ui
+            .accessibility_node(label)
+            .1
+            .bounds()
+            .expect("slider bounds");
+        bounds.y1 - bounds.y0
+    };
+    assert_eq!(
+        height("Quality"),
+        22.0,
+        "tick marks add room below the track"
+    );
+    assert_eq!(height("Volume"), 16.0);
+}
