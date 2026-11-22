@@ -355,7 +355,7 @@ pub(super) fn medium_style(size: f64, line: f64) -> TextStyle {
 fn minor_heading(#[prop(into)] label: String) {
     text(I18N.text(label))
         .style(medium_style(16.0, 24.0))
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             role: Some(Role::Heading),
             heading_level: Some(4),
             ..Default::default()

@@ -61,7 +61,6 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                                     .height(Dp(300.0))
                                     .semantics(tessera_foundation::modifier::SemanticsArgs {
                                         test_tag: Some("scroll-native-scene".into()),
-                                        merge_descendants: true,
                                         ..Default::default()
                                     }),
                             );

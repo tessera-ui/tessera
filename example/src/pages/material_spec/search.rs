@@ -287,7 +287,6 @@ fn email_results(
     column()
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             role: Some(Role::List),
-            merge_descendants: true,
             live: Some(tessera_ui::accesskit::Live::Polite),
             label: Some(I18N.text(if submitted.get() {
                 "ui-email-search-results"
@@ -554,7 +553,6 @@ fn results(controller: State<SearchBarController>, submitted: State<bool>) {
                 .height(Dp(244.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::List),
-                    merge_descendants: true,
                     live: Some(tessera_ui::accesskit::Live::Polite),
                     label: Some(if submitted.get() {
                         I18N.format("ui-value-search-results", [("v0", (count).into())])
@@ -776,7 +774,6 @@ fn phone(geometry: State<Geometry>, active: bool) {
                 .size(Dp(336.0), Dp(272.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    merge_descendants: true,
                     label: Some(I18N.text(if active {
                         "ui-focused-search-phone"
                     } else {

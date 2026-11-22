@@ -8,7 +8,7 @@ use crate::{
     render::{
         DrawCommand, SampleRegion, ScratchFit, ScratchTexture, ScratchTextureDescriptor,
         compute::{ErasedComputeBatchItem, ErasedDispatchContext},
-        drawer::ErasedDrawContext,
+        drawer::{ErasedDrawContext, ErasedDrawPreparationContext},
     },
     render_graph::{DrawGeometry, RenderGraph},
     render_pass::{ClipOps, ComputePlanItem, DrawOrClip, RenderPassGraph, RenderPassPlan},
@@ -535,8 +535,14 @@ impl RenderCore {
             pipelines: &mut self.pipelines,
             blit: &self.blit,
         };
+        // Sampling must see this frame's empty scene, not the retained predecessor.
+        let clear_before_sampling = full_redraw
+            && passes.first().is_none_or(|pass| match pass {
+                RenderPassPlan::Compute(_) => true,
+                RenderPassPlan::Draw { reads_scene, .. } => *reads_scene,
+            });
         if (!full_redraw && damage.width > Px::ZERO && damage.height > Px::ZERO)
-            || (full_redraw && passes.is_empty())
+            || clear_before_sampling
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Damage Clear Pass"),
@@ -580,7 +586,7 @@ impl RenderCore {
         );
 
         let mut scene = SceneState::Offscreen;
-        let mut scene_written = !full_redraw;
+        let mut scene_written = !full_redraw || clear_before_sampling;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
         for mut pass in passes {
             let timing = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
@@ -1184,6 +1190,30 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     };
 
     let timing = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
+    let scene = scene.unwrap_or((
+        write_target,
+        PxRect::from_position_size(PxPosition::ZERO, target_size),
+    ));
+    for op in commands_in_pass.iter() {
+        if let DrawOrClip::Draw(draw) = op
+            && draw.draw_rect.intersection(&damage).is_some()
+        {
+            drawer.pipeline_registry.prepare(
+                ErasedDrawPreparationContext {
+                    graphics,
+                    device,
+                    queue,
+                    config,
+                    target_size,
+                    encoder,
+                    scene_texture_view: scene.0,
+                    scene_rect: scene.1,
+                },
+                draw.command,
+                draw.geometry,
+            );
+        }
+    }
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("Render Pass"),
         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -1216,11 +1246,6 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     );
     clipper.restore(&mut rpass, target_size);
 
-    // Draws that do not sample the scene never read this placeholder.
-    let scene = scene.unwrap_or((
-        write_target,
-        PxRect::from_position_size(PxPosition::ZERO, target_size),
-    ));
     let mut buffer: SmallVec<[(&dyn DrawCommand, DrawGeometry); 16]> = SmallVec::new();
     let mut last_command_type_id = None;
     let mut current_batch_draw_rect: Option<PxRect> = None;
@@ -1618,6 +1643,85 @@ mod tests {
     #[derive(Clone)]
     struct SampleCommand(Option<SampleRegion>);
 
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn first_compute_samples_an_empty_scene_instead_of_retained_pixels() {
+        use std::sync::{Arc, Mutex};
+
+        use crate::render::ComputeContext;
+
+        #[derive(Clone)]
+        struct ObserveScene;
+
+        impl ComputeCommand for ObserveScene {
+            fn barrier(&self) -> SampleRegion {
+                SampleRegion::Global
+            }
+        }
+
+        struct Probe(Arc<Mutex<Option<wgpu::Texture>>>);
+
+        impl ComputablePipeline<ObserveScene> for Probe {
+            fn dispatch(&mut self, context: &mut ComputeContext<'_, '_, '_, ObserveScene>) {
+                *self.0.lock().expect("test lock") = Some(context.input_view.texture().clone());
+            }
+        }
+
+        let session = crate::RuntimeSession::new();
+        let _scope = session.enter();
+        for samples in [1, 4] {
+            let mut core = pollster::block_on(RenderCore::new_offscreen(
+                winit::dpi::PhysicalSize::new(16, 16),
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+                samples,
+                crate::renderer::DEFAULT_MAX_NON_SAMPLER_BINDINGS,
+            ));
+            let input = Arc::new(Mutex::new(None));
+            core.register_compute_pipeline_factory({
+                let input = input.clone();
+                move |_| Probe(input)
+            });
+            for _ in 0..2 {
+                let scene = core.targets.offscreen.texture();
+                let extent = scene.size();
+                core.queue.write_texture(
+                    scene.as_image_copy(),
+                    &[180, 60, 20, 255].repeat((extent.width * extent.height) as usize),
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(extent.width * 4),
+                        rows_per_image: Some(extent.height),
+                    },
+                    extent,
+                );
+                let mut fragment = crate::render_graph::RenderFragment::default();
+                fragment.push_compute_command(ObserveScene);
+                let mut graph = crate::render_graph::RenderGraphBuilder::new();
+                graph.append_fragment(
+                    &fragment,
+                    DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(16), Px(16))),
+                    1.0,
+                );
+                core.render(
+                    graph.finish(),
+                    #[cfg(feature = "debug-dirty-overlay")]
+                    &[],
+                );
+                let texture = input
+                    .lock()
+                    .expect("test lock")
+                    .take()
+                    .expect("compute input");
+                let pixels = core.read_texture_rgba(&texture).expect("GPU pixels");
+                assert!(
+                    pixels.iter().all(|byte| *byte == 0),
+                    "first compute read retained pixels at MSAA{samples}"
+                );
+            }
+        }
+    }
+
     impl DrawCommand for SampleCommand {
         fn sample_region(&self) -> Option<SampleRegion> {
             self.0
@@ -1632,7 +1736,9 @@ mod tests {
     fn deferred_pipelines_start_on_first_use_and_draw_receives_the_whole_frame() {
         use std::sync::{Arc, Mutex};
 
-        use crate::render::{ComputeContext, DrawContext, DrawablePipeline, FrameContext};
+        use crate::render::{
+            ComputeContext, DrawContext, DrawPreparationContext, DrawablePipeline, FrameContext,
+        };
 
         struct Probe(Arc<Mutex<Vec<&'static str>>>);
 
@@ -1667,6 +1773,13 @@ mod tests {
                     .lock()
                     .expect("test lock is not poisoned")
                     .push("draw");
+            }
+
+            fn prepare(&mut self, _: &mut DrawPreparationContext<'_, SampleCommand>) {
+                self.0
+                    .lock()
+                    .expect("test lock is not poisoned")
+                    .push("prepare");
             }
 
             fn end_frame(&mut self, _: &FrameContext<'_>) {
@@ -1728,7 +1841,9 @@ mod tests {
         render(&mut core, graph);
         assert_eq!(
             *events.lock().expect("test lock is not poisoned"),
-            ["create", "begin", "draw", "end", "begin", "draw", "end"]
+            [
+                "create", "begin", "prepare", "draw", "end", "begin", "prepare", "draw", "end"
+            ]
         );
         events.lock().expect("test lock is not poisoned").clear();
         let mut fragment = crate::render_graph::RenderFragment::default();

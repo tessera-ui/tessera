@@ -145,7 +145,6 @@ fn stage(width: f64, height: f64, label: String, child: RenderSlot) {
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
                                 label: Some(I18N.text(&(label))),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )

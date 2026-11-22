@@ -9,7 +9,7 @@ use std::time::Duration;
 use tessera_foundation::modifier::InteractionState;
 use tessera_ui::{Dp, time::Instant};
 
-use crate::{animation::Motion, md3::progress::cubic_bezier_easing};
+use crate::animation::{Motion, cubic_bezier_easing};
 
 #[derive(Clone, Copy, Default, PartialEq)]
 pub(super) enum Interaction {

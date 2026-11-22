@@ -148,10 +148,11 @@ pub trait ModifierExt {
     /// the region follows the system title bar preference.
     fn window_drag_region(self) -> Modifier;
 
-    /// Attaches accessibility semantics metadata to this subtree.
+    /// Describes this node to assistive technologies; descendant semantics stay published.
     fn semantics(self, args: SemanticsArgs) -> Modifier;
 
-    /// Clears descendant semantics and applies the provided metadata.
+    /// Describes this node to assistive technologies and hides descendant semantics, so the
+    /// subtree reads as this single node.
     fn clear_and_set_semantics(self, args: SemanticsArgs) -> Modifier;
 }
 
@@ -383,6 +384,7 @@ impl ModifierExt for Modifier {
                 interaction_state: args.interaction_state,
                 focus_requester: args.focus_requester,
                 focus_properties: args.focus_properties,
+                ..Default::default()
             },
         })
     }
@@ -404,11 +406,10 @@ impl ModifierExt for Modifier {
     }
 
     fn semantics(self, args: SemanticsArgs) -> Modifier {
-        semantics::apply_semantics_modifier(self, args)
+        semantics::apply_semantics_modifier(self, args, false)
     }
 
-    fn clear_and_set_semantics(self, mut args: SemanticsArgs) -> Modifier {
-        args.merge_descendants = false;
-        semantics::apply_semantics_modifier(self, args)
+    fn clear_and_set_semantics(self, args: SemanticsArgs) -> Modifier {
+        semantics::apply_semantics_modifier(self, args, true)
     }
 }

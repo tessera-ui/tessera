@@ -53,6 +53,8 @@ pub struct TapGestureConfig {
     pub button: PressKeyEventType,
     /// Maximum movement before the tap is cancelled.
     pub slop_px: f32,
+    /// Whether leaving the target cancels a pending tap. Releases outside never tap.
+    pub cancel_on_exit: bool,
     /// Whether to consume the press as soon as it is accepted.
     pub consume_down: bool,
     /// Whether to consume a completed release.
@@ -67,6 +69,7 @@ impl Default for TapGestureConfig {
             pass: PointerEventPass::Main,
             button: PressKeyEventType::Left,
             slop_px: 8.0,
+            cancel_on_exit: true,
             consume_down: false,
             consume_up: false,
             long_press: None,
@@ -185,7 +188,7 @@ async fn wait_for_tap(
                 continue;
             }
             if change.is_consumed()
-                || !within
+                || (config.cancel_on_exit && !within)
                 || down
                     .position
                     .zip(change.position())
@@ -195,7 +198,9 @@ async fn wait_for_tap(
             }
             match change.content {
                 CursorEventContent::Released(button) if button == config.button => {
-                    return if change.gesture_state == tessera_ui::GestureState::TapCandidate {
+                    return if within
+                        && change.gesture_state == tessera_ui::GestureState::TapCandidate
+                    {
                         LongPressResult::Released(change)
                     } else {
                         LongPressResult::Cancelled

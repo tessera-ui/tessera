@@ -202,3 +202,9 @@ md3-weekday-fri-narrow = 五
 md3-weekday-sat-narrow = 六
 
 md3-weekday-sun-narrow = 日
+
+hig-close-window = 关闭
+
+hig-minimize-window = 最小化
+
+hig-zoom-window = 缩放

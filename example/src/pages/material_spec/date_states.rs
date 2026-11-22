@@ -82,7 +82,6 @@ fn panel(dark: bool) {
                 .background(scheme.surface)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    merge_descendants: true,
                     label: Some(
                         I18N.format(
                             "ui-value-calendar-states",
@@ -107,7 +106,7 @@ fn panel(dark: bool) {
                             .size(Dp(24.0), Dp(24.0))
                             .offset(Dp(x - 12.0), Dp(33.0))
                             .background_with_shape(scheme.on_surface, Shape::CAPSULE)
-                            .semantics(SemanticsArgs {
+                            .clear_and_set_semantics(SemanticsArgs {
                                 role: Some(Role::Note),
                                 label: Some(
                                     I18N.format(
@@ -204,7 +203,6 @@ fn state_cell(dark: bool, column: usize, row: usize) {
                 .offset(Dp(x - width / 2.0), Dp(y - height / 2.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    merge_descendants: true,
                     label: Some(I18N.text(cell_name(dark, column, row))),
                     ..Default::default()
                 }),

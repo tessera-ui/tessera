@@ -18,11 +18,9 @@ use tessera_ui::{
 };
 
 use crate::{
+    animation::cubic_bezier_easing,
     animation::{Motion as FrameMotion, animate_to},
-    md3::{
-        progress::{ProgressStrokeCap, cubic_bezier_easing},
-        theme::MaterialTheme,
-    },
+    md3::{progress::ProgressStrokeCap, theme::MaterialTheme},
 };
 
 use self::{
@@ -218,7 +216,7 @@ pub fn circular_wavy_progress_indicator(
             modifier
                 .unwrap_or_default()
                 .clip_to_bounds()
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::ProgressIndicator),
                     label: accessibility_label,
                     description: accessibility_description,
@@ -539,7 +537,7 @@ pub fn linear_wavy_progress_indicator(
             modifier
                 .unwrap_or_default()
                 .clip_to_bounds()
-                .semantics(semantics),
+                .clear_and_set_semantics(semantics),
         )
         .draw(LinearWaveDraw {
             fractions,

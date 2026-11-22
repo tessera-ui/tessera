@@ -36,7 +36,6 @@ impl Default for Options {
 fn tagged(name: &str) -> Modifier {
     Modifier::new().semantics(SemanticsArgs {
         test_tag: Some(name.into()),
-        merge_descendants: true,
         ..Default::default()
     })
 }

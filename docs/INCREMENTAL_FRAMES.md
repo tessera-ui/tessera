@@ -33,7 +33,8 @@ redraw.
 
 Target recreation and a missing rendered predecessor force full redraw. Damage
 is relative to the preceding scene update, so it cannot be reused after a dropped
-changed frame.
+changed frame. A full redraw starts from a transparent scene, including when its
+first command samples or filters the background.
 
 Input and layout-observer state writes settle through bounded build/layout
 retries before presentation. Retries do not advance the frame clock or replay

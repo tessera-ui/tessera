@@ -80,7 +80,6 @@ fn artboard(configuration: bool) {
                     } else {
                         "ui-switch-anatomy-diagram"
                     })),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -194,7 +193,7 @@ fn anatomy_leaders() {
         annotations::dotted(&mut svg, x, y, length, vertical, "#322f35");
     }
     boxed()
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             hidden: true,
             ..Default::default()
         }))
@@ -241,7 +240,6 @@ fn marker(number: usize, x: Dp, y: Dp, circular: bool) {
                             ],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )

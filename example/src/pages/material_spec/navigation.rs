@@ -78,7 +78,6 @@ fn sample(
                     "ui-value-navigation-preview",
                     [("v0", I18N.text(&label).into())],
                 )),
-                merge_descendants: true,
                 ..Default::default()
             }),
         )
@@ -419,7 +418,6 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                         .background(backdrop)
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
-                            merge_descendants: true,
                             label: Some(I18N.format(
                                 "ui-value-value-color-roles",
                                 [
@@ -808,7 +806,6 @@ fn navigation_color_marker(number: usize, role: String, x: Dp, y: Dp) {
                         "ui-navigation-color-role-value-value",
                         [("v0", (number).into()), ("v1", I18N.text(&role).into())],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -936,7 +933,6 @@ fn baseline_figure(
                         .background(scheme.surface)
                         .semantics(SemanticsArgs {
                             role: Some(Role::TabList),
-                            merge_descendants: true,
                             label: Some(I18N.text(if rail {
                                 "ui-baseline-navigation-rail"
                             } else {

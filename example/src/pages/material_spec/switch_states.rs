@@ -87,7 +87,6 @@ fn panel(dark: bool) {
                         "ui-switch-state-theme",
                         [("theme", I18N.text(theme_name).into())],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -101,7 +100,7 @@ fn panel(dark: bool) {
                             .offset(Dp(marker_x - 12.0), Dp(if dark { 56.0 } else { 51.0 }))
                             .size(Dp(24.0), Dp(24.0))
                             .background_with_shape(scheme.on_surface, Shape::Ellipse)
-                            .semantics(SemanticsArgs {
+                            .clear_and_set_semantics(SemanticsArgs {
                                 hidden: true,
                                 ..Default::default()
                             }),
@@ -128,10 +127,14 @@ fn hover_pointers(dark: bool) {
     };
     let svg = super::pointer::hand_paths(&positions, 0.5);
     boxed()
-        .modifier(Modifier::new().fill_max_size().semantics(SemanticsArgs {
-            hidden: true,
-            ..Default::default()
-        }))
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .clear_and_set_semantics(SemanticsArgs {
+                    hidden: true,
+                    ..Default::default()
+                }),
+        )
         .children(move || {
             annotations::lines(Dp(1024.0), Dp(300.0), svg.clone());
         });

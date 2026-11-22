@@ -301,7 +301,7 @@ fn stage(
     let modifier = if label.is_empty() {
         modifier
     } else if live.unwrap_or(false) {
-        modifier.semantics(SemanticsArgs {
+        modifier.clear_and_set_semantics(SemanticsArgs {
             role: Some(Role::Group),
             label: Some(I18N.text(label)),
             ..Default::default()
@@ -310,7 +310,6 @@ fn stage(
         modifier.semantics(SemanticsArgs {
             role: Some(Role::Image),
             label: Some(I18N.text(label)),
-            merge_descendants: true,
             ..Default::default()
         })
     };
@@ -1276,7 +1275,6 @@ fn annotated(kind: u8, #[prop(into)] label: String, dark: Option<bool>, shape: O
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     label: Some(I18N.text(&(label))),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1764,7 +1762,6 @@ fn sample(
         .modifier(Modifier::new().width(Dp(360.0)).semantics(SemanticsArgs {
             role: Some(Role::Group),
             label: Some(I18N.text(name)),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {
@@ -1978,7 +1975,6 @@ fn queued() {
                         .modifier(Modifier::new().width(Dp(360.0)).semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             label: Some(I18N.text("ui-queued-snackbar-surface")),
-                            merge_descendants: true,
                             ..Default::default()
                         }))
                         .children(move || {

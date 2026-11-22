@@ -137,7 +137,6 @@ fn canvas(
                             test_tag: Some("date-instruction-figure".into()),
                             role: Some(Role::Group),
                             label: Some(I18N.text(&(label))),
-                            merge_descendants: true,
                             ..Default::default()
                         }),
                 )
@@ -178,7 +177,7 @@ fn annotation_contour(path: String) {
         .color_scheme
         .primary;
     boxed()
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             hidden: true,
             ..Default::default()
         }))
@@ -206,7 +205,7 @@ fn indication(x: f64, y: f64, width: f64, height: f64, radius: f64) {
                 scheme.primary,
                 Shape::rounded_rectangle(Dp(radius)),
             )
-            .semantics(SemanticsArgs {
+            .clear_and_set_semantics(SemanticsArgs {
                 hidden: true,
                 ..Default::default()
             }),
@@ -259,7 +258,6 @@ fn date_field(
             watch_precise(geometry, geometry_key.name())
                 .semantics(SemanticsArgs {
                     test_tag: Some(format!("date-instruction-{}", geometry_key.name())),
-                    merge_descendants: true,
                     ..Default::default()
                 })
                 .offset(Dp(x), Dp(y))
@@ -721,7 +719,6 @@ fn field_labels(
                                 .semantics(SemanticsArgs {
                                     expanded: Some(chooser.with(DialogController::is_open)),
                                     has_popup: Some(HasPopup::Dialog),
-                                    merge_descendants: true,
                                     ..Default::default()
                                 })
                                 .clickable(ClickableArgs {

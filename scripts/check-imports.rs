@@ -20,7 +20,7 @@
 //! edition = "2024"
 //!
 //! [dependencies]
-//! syn = { version = "2.0", features = ["full", "extra-traits", "parsing"] }
+//! syn = { version = "2.0", features = ["full", "extra-traits", "parsing", "visit"] }
 //! anyhow = "1.0"
 //! proc-macro2 = { version = "1.0", features = ["proc-macro", "span-locations"] }
 //! itertools = "0.10"
@@ -44,7 +44,7 @@ use itertools::Itertools;
 use proc_macro2::Span;
 use quote::quote;
 use rayon::prelude::*;
-use syn::{Expr, File, Item, Lit, Meta, UseTree, Visibility, spanned::Spanned};
+use syn::{Expr, File, Item, Lit, Meta, UseTree, Visibility, spanned::Spanned, visit::Visit};
 
 /// Checks and fixes `use` statements in Rust files and directories, respecting
 /// .gitignore.
@@ -625,6 +625,24 @@ fn check_design_system_layering(path: &Path) -> Result<()> {
         .next()
         .unwrap_or(relative)
         .trim_end_matches(".rs");
+    let ast = syn::parse_file(&fs::read_to_string(&path)?)?;
+    let forbidden: &[&str] = if relative == "md3.rs" || relative.starts_with("md3/") {
+        &["experiment", "hig"]
+    } else if relative == "experiment/hig.rs" || relative.starts_with("experiment/hig/") {
+        &["md3"]
+    } else {
+        &[]
+    };
+    if !forbidden.is_empty() {
+        let mut boundary = DesignSystemBoundary {
+            forbidden,
+            line: None,
+        };
+        boundary.visit_file(&ast);
+        if let Some(line) = boundary.line {
+            bail!("Line {line}: md3 and hig must not reference each other, including tests.");
+        }
+    }
     if relative == "md3.rs"
         || relative.starts_with("md3/")
         || stem == "tests"
@@ -633,11 +651,54 @@ fn check_design_system_layering(path: &Path) -> Result<()> {
     {
         return Ok(());
     }
-    let ast = syn::parse_file(&fs::read_to_string(&path)?)?;
     if let Some(line) = md3_import_line(&ast.items) {
         bail!("Line {line}: only the md3 design system and tests may import `crate::md3`.");
     }
     Ok(())
+}
+
+struct DesignSystemBoundary<'a> {
+    forbidden: &'a [&'a str],
+    line: Option<usize>,
+}
+
+impl DesignSystemBoundary<'_> {
+    fn check(&mut self, path: &[String], span: Span) {
+        if matches!(
+            path.first().map(String::as_str),
+            Some("crate" | "tessera_components")
+        ) && path[1..]
+            .iter()
+            .map(String::as_str)
+            .take(self.forbidden.len())
+            .eq(self.forbidden.iter().copied())
+        {
+            self.line.get_or_insert(span.start().line);
+        }
+    }
+}
+
+impl<'ast> Visit<'ast> for DesignSystemBoundary<'_> {
+    fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
+        for path in collect_use_paths(&item.tree) {
+            self.check(
+                &path.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                item.span(),
+            );
+        }
+    }
+
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        self.check(
+            &path
+                .segments
+                .iter()
+                .map(|segment| segment.ident.to_string())
+                .collect::<Vec<_>>(),
+            path.span(),
+        );
+        syn::visit::visit_path(self, path);
+    }
 }
 
 fn md3_import_line(items: &[Item]) -> Option<usize> {
@@ -929,5 +990,39 @@ mod tests {
         let source = "use crate::modifier::ModifierExt as _;\n#[cfg(all(test, not(target_family = \"wasm\")))]\nuse crate::md3::text::text;\n";
         let ast = syn::parse_file(source).unwrap();
         assert_eq!(md3_import_line(&ast.items), None);
+    }
+
+    #[test]
+    fn design_system_boundaries_reject_grouped_imports_and_qualified_calls_in_tests() {
+        for (source, forbidden, expected) in [
+            (
+                "use crate::{boxed::boxed, experiment::hig::text};",
+                &["experiment", "hig"][..],
+                Some(1),
+            ),
+            (
+                "#[cfg(test)]\nmod tests { fn app() { crate::md3::text::text(\"Label\"); } }",
+                &["md3"][..],
+                Some(2),
+            ),
+            (
+                "fn app() { tessera_components::experiment::hig::text::text(\"Label\"); }",
+                &["experiment", "hig"][..],
+                Some(1),
+            ),
+            (
+                "use crate::{text_shared::text_node, pipelines::text};",
+                &["md3"][..],
+                None,
+            ),
+        ] {
+            let ast = syn::parse_file(source).unwrap();
+            let mut boundary = DesignSystemBoundary {
+                forbidden,
+                line: None,
+            };
+            boundary.visit_file(&ast);
+            assert_eq!(boundary.line, expected);
+        }
     }
 }

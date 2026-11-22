@@ -331,7 +331,7 @@ pub fn date_picker_year(
                         .modifier(Modifier::new().fill_max_size())
                         .children(move || {
                             text(label.clone())
-                                .modifier(Modifier::new().semantics(SemanticsArgs {
+                                .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                                     hidden: true,
                                     ..Default::default()
                                 }))
@@ -372,7 +372,7 @@ fn day_circle(
     .draw(visual)
     .child(move || {
         text(label.clone())
-            .modifier(Modifier::new().semantics(SemanticsArgs {
+            .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                 hidden: true,
                 ..Default::default()
             }))

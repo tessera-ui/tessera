@@ -179,7 +179,7 @@ fn value_example(editor: Option<State<TextInputController>>) {
         text(I18N.text("ui-enter-a-number-from-0-to-100"))
             .style(type_style(12.0, 16.0))
             .color(scheme.error)
-            .modifier(Modifier::new().semantics(SemanticsArgs {
+            .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                 role: Some(tessera_ui::accesskit::Role::Alert),
                 ..Default::default()
             }));
@@ -407,7 +407,6 @@ fn variants_figure() {
                                             "ui-slider-variant-marker-value",
                                             [("v0", (index + 1).into())],
                                         )),
-                                        merge_descendants: true,
                                         ..Default::default()
                                     }),
                             )
@@ -527,7 +526,6 @@ fn configuration_marker(number: usize, x: Dp, y: Dp) {
                         "ui-slider-configuration-marker-value",
                         [("v0", (number).into())],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -912,7 +910,6 @@ fn color_marker(number: usize, center_x: Dp, center_y: Dp, dark: bool) {
                             ],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1129,7 +1126,6 @@ fn state_specimen(
                             ],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1741,7 +1737,7 @@ fn size_annotation_geometry(
                 .size(Dp(24.0), Dp(24.0))
                 .offset(Dp(handle - 12.0), Dp(marker_y - 12.0))
                 .background_with_shape(scheme.inverse_surface, Shape::Ellipse)
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Note),
                     label: Some(
                         I18N.format("ui-slider-size-marker-value", [("v0", (index + 1).into())]),

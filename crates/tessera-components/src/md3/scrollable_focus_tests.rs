@@ -47,7 +47,6 @@ fn nested_reveal_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles
                     .vertical_scroll(outer)
                     .semantics(SemanticsArgs {
                         test_tag: Some("scroll-outer".into()),
-                        merge_descendants: true,
                         ..Default::default()
                     }),
             )
@@ -60,7 +59,6 @@ fn nested_reveal_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles
                             .vertical_scroll(inner)
                             .semantics(SemanticsArgs {
                                 test_tag: Some("scroll-inner".into()),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )
@@ -75,7 +73,6 @@ fn nested_reveal_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles
                                     role: Some(tessera_ui::accesskit::Role::Button),
                                     label: Some("Nested focus target".into()),
                                     test_tag: Some("scroll-target".into()),
-                                    merge_descendants: true,
                                     ..Default::default()
                                 }),
                         );
@@ -162,7 +159,6 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                     .modifier(Modifier::new().width(Dp(240.0)).height(Dp(56.0)).semantics(
                         SemanticsArgs {
                             test_tag: Some("scroll-field".into()),
-                            merge_descendants: true,
                             ..Default::default()
                         },
                     ))

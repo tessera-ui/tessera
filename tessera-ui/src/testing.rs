@@ -261,13 +261,13 @@ impl<'a> UiTest<'a> {
         self.frames(1);
     }
 
-    /// Finds the first published accessibility node whose label matches `label`.
+    /// Finds the first visible accessibility node whose label matches `label`.
     pub fn accessibility_node(&self, label: &str) -> (NodeId, Node) {
         self.accessibility_snapshot()
             .expect("accessibility tree")
             .nodes
             .into_iter()
-            .find(|(_, node)| text_matches(node.label(), label))
+            .find(|(_, node)| !node.is_hidden() && text_matches(node.label(), label))
             .unwrap_or_else(|| panic!("missing accessibility node {label:?}"))
     }
 

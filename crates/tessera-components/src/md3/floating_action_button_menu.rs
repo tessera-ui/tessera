@@ -575,7 +575,6 @@ pub fn floating_action_button_menu(
         boxed()
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 hidden: data.with(|data| data.expanded),
-                merge_descendants: true,
                 ..Default::default()
             }))
             .children_optional(main_content.clone());
@@ -637,7 +636,6 @@ fn fab_menu_panel(
             .focus_scope(Some(scope))
             .semantics(SemanticsArgs {
                 test_tag: cfg!(test).then(|| "fab-menu-panel".into()),
-                merge_descendants: true,
                 ..Default::default()
             }),
         move |mut input| {
@@ -671,7 +669,6 @@ fn fab_menu_panel(
                     .semantics(SemanticsArgs {
                         role: Some(Role::Menu),
                         hidden: !data.with(|data| data.expanded),
-                        merge_descendants: true,
                         ..Default::default()
                     }),
             )
@@ -711,7 +708,7 @@ fn fab_menu_panel(
             .modifier(
                 Modifier::new()
                     .size(Dp(56.0), Dp(56.0))
-                    .semantics(semantics)
+                    .clear_and_set_semantics(semantics)
                     .on_globally_positioned(move |_| {
                         if pending_focus.get() {
                             pending_focus.set(false);
@@ -790,7 +787,6 @@ fn fab_menu_action(
             .semantics(SemanticsArgs {
                 hidden: !visible || !snapshot.expanded,
                 test_tag: cfg!(test).then(|| format!("fab-menu-item-{index}")),
-                merge_descendants: true,
                 ..Default::default()
             }),
     )

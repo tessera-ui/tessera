@@ -615,7 +615,6 @@ fn visibility_panel(number: usize, initial: bool) {
                             .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                merge_descendants: true,
                                 label: Some(I18N.format(
                                     "ui-standard-drawer-viewport-value",
                                     [("v0", (number).into())],
@@ -631,7 +630,6 @@ fn visibility_panel(number: usize, initial: bool) {
                                         .required_size(Dp(360.0), Dp(600.0))
                                         .semantics(SemanticsArgs {
                                             role: Some(Role::Group),
-                                            merge_descendants: true,
                                             label: Some(I18N.format(
                                                 "ui-standard-drawer-surface-value",
                                                 [("v0", (number).into())],
@@ -654,7 +652,6 @@ fn visibility_panel(number: usize, initial: bool) {
                                     )
                                     .semantics(SemanticsArgs {
                                         role: Some(Role::Group),
-                                        merge_descendants: true,
                                         label: Some(I18N.format(
                                             "ui-standard-drawer-content-value",
                                             [("v0", (number).into())],
@@ -699,7 +696,6 @@ fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Call
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.text("ui-m3-expressive-navigation-recommendation")),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -800,7 +796,6 @@ fn live_drawer(
                     role: Some(Role::Navigation),
                     label: Some(I18N.text("ui-mail-destinations")),
                     test_tag: Some("live-drawer".into()),
-                    merge_descendants: true,
                     ..Default::default()
                 })
                 .vertical_scroll(scroll)
@@ -942,7 +937,6 @@ fn drawer_destinations(
     navigation_drawer_item()
         .modifier(observe(geometry, "label_row").semantics(SemanticsArgs {
             test_tag: open.map(|_| "drawer-personal".into()),
-            merge_descendants: true,
             ..Default::default()
         }))
         .label(I18N.text(if open.is_some() {
@@ -1082,7 +1076,6 @@ fn drawer_stage_canvas(
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
                                 label: Some(I18N.text(&(label))),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )
@@ -1191,10 +1184,12 @@ fn drawer_label_probes(geometry: State<Geometry>) {
                         "ui-drawer-value-measurement-probe",
                         [("v0", I18N.text(&name).into())],
                     ))
-                    .modifier(watch(geometry, name).semantics(SemanticsArgs {
-                        hidden: true,
-                        ..Default::default()
-                    }));
+                    .modifier(
+                        watch(geometry, name).clear_and_set_semantics(SemanticsArgs {
+                            hidden: true,
+                            ..Default::default()
+                        }),
+                    );
             });
     }
 }
@@ -1211,7 +1206,6 @@ fn drawer_marker(number: usize, x: f64, y: f64) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.format("ui-drawer-marker-value", [("v0", (number).into())])),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1614,7 +1608,7 @@ fn measurement_pair(modal: bool) {
 fn state_panel(number: usize, label: String, state: InteractionVisualState, x: f64, y: f64) {
     let theme = use_context::<MaterialTheme>().unwrap().get();
     boxed().modifier(Modifier::new().offset(Dp(x),Dp(y)).required_size(Dp(512.0),Dp(392.0)).clip_to_bounds()
-        .semantics(SemanticsArgs { role:Some(Role::Group),label:Some(I18N.format("ui-drawer-value-state-presentation", [("v0", I18N.text(&label).into())])),merge_descendants:true,..Default::default() }))
+        .semantics(SemanticsArgs { role:Some(Role::Group),label:Some(I18N.format("ui-drawer-value-state-presentation", [("v0", I18N.text(&label).into())])),..Default::default() }))
         .children(move || {
             drawer_marker(number, 20.0, 20.0);
             text(I18N.text(&(label))).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(60.0),Dp(26.0)));

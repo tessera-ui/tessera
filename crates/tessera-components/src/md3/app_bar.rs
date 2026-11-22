@@ -15,11 +15,11 @@ use tessera_ui::{
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
+    animation::cubic_bezier_easing,
     column::column,
     md3::{
         icon_button::icon_button,
         material_icons::filled,
-        progress::cubic_bezier_easing,
         surface::surface,
         text::text,
         theme::{ContentColor, MaterialColorScheme, MaterialTheme},
@@ -474,7 +474,6 @@ pub fn top_app_bar(
                 .clip_to_bounds()
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Toolbar),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -589,9 +588,8 @@ fn title_layer_modifier(modifier: Modifier, alpha: f32, semantics: bool) -> Modi
     if semantics {
         modifier
     } else {
-        modifier.semantics(SemanticsArgs {
+        modifier.clear_and_set_semantics(SemanticsArgs {
             hidden: true,
-            merge_descendants: false,
             ..Default::default()
         })
     }

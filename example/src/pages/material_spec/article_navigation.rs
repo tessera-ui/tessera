@@ -114,7 +114,6 @@ pub(super) fn article_tab_modifier(
     modifier
         .semantics(SemanticsArgs {
             selected: Some(selected),
-            merge_descendants: true,
             ..Default::default()
         })
         .push_keyboard_input(ArticleTabKeyboard { navigation, index })
@@ -437,7 +436,6 @@ mod tests {
                             Modifier::new().semantics(SemanticsArgs {
                                 role: Some(Role::TabList),
                                 label: Some("Article sections".into()),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                             navigation,

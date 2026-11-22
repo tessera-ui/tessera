@@ -16,6 +16,7 @@ use tessera_ui::{
 };
 
 use crate::{
+    animation::cubic_bezier_easing,
     md3::{surface::surface, theme::MaterialTheme},
     pipelines::progress_arc::command::{ProgressArcCap, ProgressArcCommand},
     shape_def::Shape,
@@ -309,31 +310,6 @@ impl ProgressIndicatorDefaults {
     pub const CIRCULAR_INDICATOR_TRACK_GAP_SIZE: Dp = Dp(4.0);
 }
 
-fn cubic_bezier(t: f32, a: f32, b: f32, c: f32, d: f32) -> f32 {
-    let u = 1.0 - t;
-    (u * u * u * a) + (3.0 * u * u * t * b) + (3.0 * u * t * t * c) + (t * t * t * d)
-}
-
-pub(crate) fn cubic_bezier_easing(progress: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
-    let x = progress.clamp(0.0, 1.0);
-    let mut lo = 0.0;
-    let mut hi = 1.0;
-    let mut t = x;
-
-    for _ in 0..16 {
-        let mid = (lo + hi) * 0.5;
-        let mid_x = cubic_bezier(mid, 0.0, x1, x2, 1.0);
-        if mid_x < x {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
-        t = mid;
-    }
-
-    cubic_bezier(t, 0.0, y1, y2, 1.0).clamp(0.0, 1.0)
-}
-
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
@@ -587,7 +563,7 @@ pub fn linear_progress_indicator(
             draw_stop_indicator,
             animation_cycle,
         })
-        .modifier(Modifier::new().semantics(semantics))
+        .modifier(Modifier::new().clear_and_set_semantics(semantics))
         .child(move || {
             if progress.is_some() {
                 surface()
@@ -751,7 +727,7 @@ pub fn circular_progress_indicator(
         elapsed,
     };
     tessera_ui::layout::layout(policy.clone())
-        .modifier(Modifier::new().semantics(semantics))
+        .modifier(Modifier::new().clear_and_set_semantics(semantics))
         .draw(policy);
 }
 

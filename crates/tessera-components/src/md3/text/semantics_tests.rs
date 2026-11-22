@@ -34,7 +34,7 @@ fn fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
         } else {
             "Visible heading"
         })
-        .modifier(Modifier::new().semantics(SemanticsArgs {
+        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             test_tag: Some("heading".into()),
             role: Some(Role::Heading),
             heading_level: Some(2),
@@ -53,7 +53,7 @@ fn fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
         } else {
             None
         });
-        text("Selected option").modifier(Modifier::new().semantics(SemanticsArgs {
+        text("Selected option").modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             test_tag: Some("option".into()),
             role: Some(Role::ListBoxOption),
             selected: Some(true),
@@ -69,7 +69,7 @@ fn fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
             test_tag: Some("plain".into()),
             ..Default::default()
         }));
-        text("Hidden text").modifier(Modifier::new().semantics(SemanticsArgs {
+        text("Hidden text").modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
             test_tag: Some("hidden".into()),
             hidden: true,
             ..Default::default()

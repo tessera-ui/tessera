@@ -24,7 +24,8 @@
 //! regions when an effect does not need the whole scene.
 //!
 //! [`DrawablePipeline`] provides frame and pass hooks for batched uploads and
-//! drawing. The renderer owns pass boundaries, clipping and submission.
+//! drawing. Use [`DrawablePipeline::prepare`] to encode intermediate passes that
+//! sample the captured scene before drawing. The renderer owns clipping and submission.
 
 pub(crate) mod compute;
 pub(crate) mod drawer;
@@ -47,5 +48,8 @@ pub use self::{
         ComputablePipeline, ComputeBatchItem, ComputeCommand, ComputeContext,
         ComputePipelineRegistry,
     },
-    drawer::{DrawCommand, DrawContext, DrawablePipeline, FrameContext, PipelineRegistry},
+    drawer::{
+        DrawCommand, DrawContext, DrawPreparationContext, DrawablePipeline, FrameContext,
+        PipelineRegistry,
+    },
 };

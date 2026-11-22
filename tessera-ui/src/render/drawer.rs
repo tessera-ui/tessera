@@ -6,9 +6,11 @@ mod pipeline;
 use crate::render_graph::DrawGeometry;
 
 pub use command::DrawCommand;
-pub use pipeline::{DrawContext, DrawablePipeline, FrameContext, PipelineRegistry};
+pub use pipeline::{
+    DrawContext, DrawPreparationContext, DrawablePipeline, FrameContext, PipelineRegistry,
+};
 
-pub(crate) use pipeline::ErasedDrawContext;
+pub(crate) use pipeline::{ErasedDrawContext, ErasedDrawPreparationContext};
 
 /// Drawer manages graphics pipelines and processes draw commands.
 #[derive(Default)]

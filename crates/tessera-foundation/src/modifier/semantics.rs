@@ -13,6 +13,10 @@ use tessera_ui::{
 
 use super::layout::Padding;
 
+#[cfg(test)]
+#[path = "semantics_tests.rs"]
+mod tests;
+
 /// Arguments for the `semantics` modifier.
 #[derive(Clone, Default)]
 pub struct SemanticsArgs {
@@ -54,8 +58,6 @@ pub struct SemanticsArgs {
     pub test_tag: Option<String>,
     /// Optional padding applied to semantic bounds.
     pub bounds_padding: Option<Padding>,
-    /// Whether to merge child semantics into this node.
-    pub merge_descendants: bool,
     /// Optional state description.
     pub state_description: Option<String>,
     /// Optional role description for custom controls.
@@ -81,18 +83,9 @@ pub struct SemanticsArgs {
     pub collection_item_info: Option<(usize, usize, usize, usize, bool)>,
 }
 
-impl SemanticsArgs {
-    /// Semantics that do not merge descendants.
-    pub fn clear() -> Self {
-        Self {
-            merge_descendants: false,
-            ..Default::default()
-        }
-    }
-}
-
 struct SemanticsModifierNodeImpl {
     args: SemanticsArgs,
+    hide_descendants: bool,
 }
 
 impl SemanticsModifierNode for SemanticsModifierNodeImpl {
@@ -121,7 +114,6 @@ impl SemanticsModifierNode for SemanticsModifierNodeImpl {
             actions,
             test_tag,
             bounds_padding,
-            merge_descendants,
             state_description,
             role_description,
             tooltip,
@@ -154,7 +146,10 @@ impl SemanticsModifierNode for SemanticsModifierNodeImpl {
         accessibility.modal = *modal;
         accessibility.actions = actions.clone();
         accessibility.key = test_tag.clone();
-        accessibility.merge_descendants = *merge_descendants;
+        // Plain semantics leave descendant visibility to other modifiers on the node.
+        if self.hide_descendants {
+            accessibility.hide_descendants = true;
+        }
         accessibility.state_description = state_description.clone();
         accessibility.role_description = role_description.clone();
         accessibility.tooltip = tooltip.clone();
@@ -179,6 +174,10 @@ impl SemanticsModifierNode for SemanticsModifierNodeImpl {
 pub(crate) fn apply_semantics_modifier(
     base: tessera_ui::Modifier,
     args: SemanticsArgs,
+    hide_descendants: bool,
 ) -> tessera_ui::Modifier {
-    base.push_semantics(SemanticsModifierNodeImpl { args })
+    base.push_semantics(SemanticsModifierNodeImpl {
+        args,
+        hide_descendants,
+    })
 }

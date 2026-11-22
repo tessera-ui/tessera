@@ -933,7 +933,6 @@ pub fn tooltip_anchor(
         .unwrap_or_default()
         .semantics(SemanticsArgs {
             role: Some(Role::Group),
-            merge_descendants: true,
             tooltip: Some(controller.with(|controller| controller.description.clone())),
             ..Default::default()
         })
@@ -993,6 +992,22 @@ fn tooltip_panel(
     if render_data.with(|current| current != &next) {
         render_data.set(next);
     }
+    let interactive = rich && (action_label.is_some() || has_actions);
+    let semantics = SemanticsArgs {
+        role: Some(if interactive {
+            Role::Dialog
+        } else {
+            Role::Tooltip
+        }),
+        label: Some(if rich {
+            headline.clone().unwrap_or_else(|| message.clone())
+        } else {
+            message.clone()
+        }),
+        live: Some(Live::Polite),
+        description: (rich && headline.is_some()).then(|| message.clone()),
+        ..Default::default()
+    };
     let modifier = modifier
         .unwrap_or_default()
         .size_in(Some(Dp(40.0)), Some(max_width), Some(Dp(24.0)), None)
@@ -1007,23 +1022,13 @@ fn tooltip_panel(
         .push_pointer_preview_input(TooltipPointer {
             controller,
             popup: true,
-        })
-        .semantics(SemanticsArgs {
-            role: Some(if rich && (action_label.is_some() || has_actions) {
-                Role::Dialog
-            } else {
-                Role::Tooltip
-            }),
-            label: Some(if rich {
-                headline.clone().unwrap_or_else(|| message.clone())
-            } else {
-                message.clone()
-            }),
-            live: Some(Live::Polite),
-            description: (rich && headline.is_some()).then(|| message.clone()),
-            merge_descendants: rich && (action_label.is_some() || has_actions),
-            ..Default::default()
         });
+    // Rich tooltips with actions keep their buttons reachable; others read as one node.
+    let modifier = if interactive {
+        modifier.semantics(semantics)
+    } else {
+        modifier.clear_and_set_semantics(semantics)
+    };
     surface()
         .modifier(modifier)
         .shape(Shape::rounded_rectangle(if rich {

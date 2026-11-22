@@ -553,7 +553,6 @@ fn tooltip_plain_mock(label: String) {
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Tooltip),
             label: Some(I18N.text(&(label))),
-            merge_descendants: true,
             ..Default::default()
         }))
         .child(move || {
@@ -1211,7 +1210,6 @@ fn tooltip_keyboard_table() {
                         .semantics(SemanticsArgs {
                             role: Some(Role::Table),
                             label: Some(I18N.text("ui-tooltip-keyboard-navigation")),
-                            merge_descendants: true,
                             collection_info: Some((3, 2, false)),
                             ..Default::default()
                         }),
@@ -1250,7 +1248,6 @@ fn tooltip_keyboard_table() {
                                             )
                                             .semantics(SemanticsArgs {
                                                 role: Some(Role::Row),
-                                                merge_descendants: true,
                                                 collection_item_info: Some((index, 1, 0, 2, false)),
                                                 ..Default::default()
                                             }),
@@ -1270,7 +1267,7 @@ fn tooltip_keyboard_table() {
                                                     Modifier::new()
                                                         .weight(weight)
                                                         .padding_all(Dp(16.0))
-                                                        .semantics(SemanticsArgs {
+                                                        .clear_and_set_semantics(SemanticsArgs {
                                                             role: Some(if index == 0 {
                                                                 Role::ColumnHeader
                                                             } else if column_index == 0 {
@@ -1286,7 +1283,6 @@ fn tooltip_keyboard_table() {
                                                                 false,
                                                             )),
                                                             label: Some(I18N.text(content)),
-                                                            merge_descendants: false,
                                                             ..Default::default()
                                                         }),
                                                 )
@@ -1298,7 +1294,7 @@ fn tooltip_keyboard_table() {
                                                     };
                                                     let modifier = Modifier::new();
                                                     let modifier = if index == 0 {
-                                                        modifier.semantics(SemanticsArgs { test_tag: Some(format!("tooltip-table-header-{column_index}")), merge_descendants: true,
+                                                        modifier.semantics(SemanticsArgs { test_tag: Some(format!("tooltip-table-header-{column_index}")),
 ..Default::default() })
                                                     } else { modifier };
                                                     text(I18N.text(content))
@@ -1333,7 +1329,6 @@ fn tooltip_focus_marker(number: usize, x: f64, y: f64) {
                     label: Some(
                         I18N.format("ui-focus-order-marker-value", [("v0", (number).into())]),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1403,7 +1398,6 @@ fn tooltip_focus_sequence() {
                                                         .semantics(SemanticsArgs {
                                                             role: Some(Role::Link),
                                                             label: Some(I18N.text("ui-permission-settings-link-illustration")),
-                                                            merge_descendants: true,
                                                             ..Default::default()
                                                         }),
                                                 )
@@ -1574,7 +1568,6 @@ fn tooltip_role_box(entries: Vec<(String, String)>, x: f64, y: f64, width: f64) 
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.text(label)),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1891,7 +1884,6 @@ fn tooltip_color_pair(rich: bool) {
                             )],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -1933,7 +1925,6 @@ fn tooltip_color_pair(rich: bool) {
                                             ],
                                         ),
                                     ),
-                                    merge_descendants: true,
                                     ..Default::default()
                                 }),
                             )
@@ -2046,7 +2037,7 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
             132.0
         });
     boxed().modifier(Modifier::new().offset(Dp(x.0-8.0),Dp(y.0-48.0)).required_size(Dp(328.0),Dp(popup_height+56.0)).semantics(SemanticsArgs {
-        role:Some(Role::Group),label:Some(I18N.format("ui-rich-tooltip-configuration-value", [("v0", (number).into())])),merge_descendants:true,..Default::default()
+        role:Some(Role::Group),label:Some(I18N.format("ui-rich-tooltip-configuration-value", [("v0", (number).into())])),..Default::default()
     })).children(move || {
         let content = RenderSlot::new(move || {
             let provider = tooltip_provider(I18N.text("ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-a-person-s"))
@@ -2175,7 +2166,6 @@ fn tooltip_stage(
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
                                 label: Some(I18N.text(&(label))),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )
@@ -2321,7 +2311,7 @@ fn tooltip_reference_popup(
             watch_in_space(geometry, "headline_label")
                 .size_in(None, Some(Dp(280.0)), None, None)
                 .alpha(0.0)
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     hidden: true,
                     ..Default::default()
                 }),
@@ -2768,7 +2758,6 @@ fn tooltip_color_marker(number: usize, label: String, x: Dp, y: Dp) {
                         "ui-tooltip-color-role-value-value",
                         [("v0", (number).into()), ("v1", I18N.text(&label).into())],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -2895,7 +2884,6 @@ fn placement_examples() {
                                     "ui-placement-preview-value",
                                     [("v0", format!("{:?}", alignment).into())],
                                 )),
-                                merge_descendants: true,
                                 ..Default::default()
                             }),
                     )

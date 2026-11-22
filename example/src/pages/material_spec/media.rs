@@ -429,7 +429,7 @@ pub(super) fn picture(#[prop(into)] title: String, width: Dp, height: Dp, thumbn
                 Modifier::new()
                     .size(width, height)
                     .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
-                    .semantics(SemanticsArgs {
+                    .clear_and_set_semantics(SemanticsArgs {
                         role: Some(Role::Image),
                         label: Some(I18N.format(
                             "ui-value-illustration",
@@ -543,7 +543,7 @@ fn header_title(title: String, description: String, width: Dp, compact: bool, wi
                                     type_style(88.0, 96.0)
                                 })
                                 .color(INK)
-                                .modifier(Modifier::new().semantics(SemanticsArgs {
+                                .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                                     role: Some(Role::Heading),
                                     heading_level: Some(1),
                                     ..Default::default()

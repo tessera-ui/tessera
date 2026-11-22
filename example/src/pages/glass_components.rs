@@ -2,7 +2,10 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
     column::column,
-    experiment::hig::glass::{GlassAppearance, GlassBorder, GlassMaterial, glass},
+    experiment::hig::{
+        glass::{GlassAppearance, GlassMaterial, glass},
+        glass_group::glass_group,
+    },
     flow_row::flow_row,
     md3::{
         button::button,
@@ -25,7 +28,7 @@ use tessera_components::{
 use tessera_foundation::modifier::{DragDelta, DraggableArgs, ModifierExt as _};
 use tessera_shard::shard;
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, LayoutCoordinates, Modifier, Px, RenderSlotWith, State,
+    Callback, CallbackWith, Color, Context, Dp, LayoutCoordinates, Modifier, RenderSlotWith, State,
     accesskit::Role, modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
@@ -43,28 +46,16 @@ const DEMO_WIDTH: Dp = Dp(TILE_SIZE.0 * TILE_COLUMNS as f64
     + TILE_SPACING.0 * (TILE_COLUMNS - 1) as f64
     + BACKDROP_PADDING.0 * 2.0);
 
-const MATERIALS: [(&str, GlassMaterial); 3] = [
+const MATERIALS: [(&str, GlassMaterial); 2] = [
     ("ui-glass-regular", GlassMaterial::Regular),
     ("ui-glass-clear", GlassMaterial::Clear),
-    ("ui-glass-custom", GlassMaterial::Custom),
 ];
 const APPEARANCES: [(&str, Option<GlassAppearance>); 3] = [
     ("ui-glass-theme", None),
     ("ui-glass-light", Some(GlassAppearance::Light)),
     ("ui-glass-dark", Some(GlassAppearance::Dark)),
 ];
-const SHAPES: [(&str, LensShape); 5] = [
-    ("ui-glass-auto", LensShape::Automatic),
-    ("ui-glass-capsule", LensShape::Capsule),
-    ("ui-glass-rectangle", LensShape::Rectangle),
-    ("ui-glass-rounded-rectangle", LensShape::RoundedRectangle),
-    ("ui-glass-ellipse", LensShape::Ellipse),
-];
-const INTERACTIONS: [(&str, Option<bool>); 3] = [
-    ("ui-glass-auto", None),
-    ("ui-glass-on", Some(true)),
-    ("ui-glass-off", Some(false)),
-];
+const SHAPES: [&str; 2] = ["ui-glass-capsule", "ui-glass-rounded-rectangle"];
 const ROLES: [(&str, Option<Role>); 4] = [
     ("ui-glass-auto", None),
     ("ui-glass-role-button", Some(Role::Button)),
@@ -72,37 +63,13 @@ const ROLES: [(&str, Option<Role>); 4] = [
     ("ui-glass-role-image", Some(Role::Image)),
 ];
 
-#[derive(Clone, Copy, PartialEq)]
-enum LensShape {
-    Automatic,
-    Capsule,
-    Rectangle,
-    RoundedRectangle,
-    Ellipse,
-}
-
 const LAYOUT_NUMBERS: [Number; 4] = [
     Number::Width,
     Number::Height,
     Number::Opacity,
     Number::Padding,
 ];
-const TINT_NUMBERS: [Number; 7] = [
-    Number::TintRed,
-    Number::TintGreen,
-    Number::TintBlue,
-    Number::TintAlpha,
-    Number::Noise,
-    Number::NoiseScale,
-    Number::Time,
-];
-const RIPPLE_NUMBERS: [Number; 5] = [
-    Number::RippleX,
-    Number::RippleY,
-    Number::RippleRadius,
-    Number::RippleAlpha,
-    Number::RippleStrength,
-];
+const FUSION_NUMBERS: [Number; 2] = [Number::Spacing, Number::Gap];
 
 #[derive(Clone, Copy, PartialEq)]
 enum Number {
@@ -111,25 +78,12 @@ enum Number {
     Opacity,
     Corner,
     Padding,
-    Border,
-    Blur,
-    Contrast,
-    TintRed,
-    TintGreen,
-    TintBlue,
-    TintAlpha,
-    Noise,
-    NoiseScale,
-    Time,
-    RippleX,
-    RippleY,
-    RippleRadius,
-    RippleAlpha,
-    RippleStrength,
+    Spacing,
+    Gap,
 }
 
 impl Number {
-    const COUNT: usize = Self::RippleStrength as usize + 1;
+    const COUNT: usize = Self::Gap as usize + 1;
 
     fn spec(self) -> (&'static str, f32, f32, &'static str) {
         match self {
@@ -138,21 +92,8 @@ impl Number {
             Self::Opacity => ("ui-glass-opacity", 0.0, 1.0, ""),
             Self::Corner => ("ui-glass-corner-radius", 0.0, 72.0, " dp"),
             Self::Padding => ("ui-glass-padding", 0.0, 32.0, " dp"),
-            Self::Border => ("ui-glass-border-width", 0.0, 12.0, " px"),
-            Self::Blur => ("ui-blur-radius", 0.0, 32.0, " dp"),
-            Self::Contrast => ("ui-glass-contrast", 0.0, 2.0, ""),
-            Self::TintRed => ("ui-glass-tint-red", 0.0, 1.0, ""),
-            Self::TintGreen => ("ui-glass-tint-green", 0.0, 1.0, ""),
-            Self::TintBlue => ("ui-glass-tint-blue", 0.0, 1.0, ""),
-            Self::TintAlpha => ("ui-glass-tint-alpha", 0.0, 1.0, ""),
-            Self::Noise => ("ui-glass-noise-amount", 0.0, 0.3, ""),
-            Self::NoiseScale => ("ui-glass-noise-scale", 0.1, 4.0, ""),
-            Self::Time => ("ui-glass-noise-time", 0.0, 30.0, ""),
-            Self::RippleX => ("ui-glass-ripple-x", 0.0, 1.0, ""),
-            Self::RippleY => ("ui-glass-ripple-y", 0.0, 1.0, ""),
-            Self::RippleRadius => ("ui-glass-ripple-radius", 0.0, 1.5, ""),
-            Self::RippleAlpha => ("ui-glass-ripple-alpha", 0.0, 1.0, ""),
-            Self::RippleStrength => ("ui-glass-ripple-strength", 0.0, 2.0, ""),
+            Self::Spacing => ("ui-glass-spacing", 0.0, 48.0, " dp"),
+            Self::Gap => ("ui-glass-gap", 0.0, 48.0, " dp"),
         }
     }
 }
@@ -163,11 +104,7 @@ struct LensSettings {
     material: usize,
     appearance: usize,
     shape: usize,
-    interaction: usize,
     role: usize,
-    custom_blur: bool,
-    custom_border: bool,
-    manual_ripple: bool,
     click: bool,
     block_input: bool,
     focusable: bool,
@@ -183,18 +120,8 @@ impl Default for LensSettings {
             (Number::Opacity, 1.0),
             (Number::Corner, 24.0),
             (Number::Padding, 8.0),
-            (Number::Border, 2.0),
-            (Number::Blur, 4.5),
-            (Number::Contrast, 1.0),
-            (Number::TintRed, 0.03),
-            (Number::TintGreen, 0.22),
-            (Number::TintBlue, 0.9),
-            (Number::NoiseScale, 1.0),
-            (Number::RippleX, 0.5),
-            (Number::RippleY, 0.5),
-            (Number::RippleRadius, 0.65),
-            (Number::RippleAlpha, 0.2),
-            (Number::RippleStrength, 1.0),
+            (Number::Spacing, 16.0),
+            (Number::Gap, 8.0),
         ] {
             numbers[parameter as usize] = value;
         }
@@ -203,11 +130,7 @@ impl Default for LensSettings {
             material: 0,
             appearance: 0,
             shape: 0,
-            interaction: 0,
             role: 0,
-            custom_blur: false,
-            custom_border: false,
-            manual_ripple: false,
             click: false,
             block_input: false,
             focusable: false,
@@ -225,14 +148,8 @@ impl LensSettings {
         Dp(f64::from(self.value(parameter)))
     }
 
-    fn shape(self) -> Option<Shape> {
-        match SHAPES[self.shape].1 {
-            LensShape::Automatic => None,
-            LensShape::Capsule => Some(Shape::CAPSULE),
-            LensShape::Rectangle => Some(Shape::RECTANGLE),
-            LensShape::RoundedRectangle => Some(Shape::rounded_rectangle(self.dp(Number::Corner))),
-            LensShape::Ellipse => Some(Shape::Ellipse),
-        }
+    fn corner_radius(self) -> Option<Dp> {
+        (self.shape == 1).then(|| self.dp(Number::Corner))
     }
 
     fn lens_size(self, stage_width: Dp) -> [Dp; 2] {
@@ -367,34 +284,20 @@ pub fn glass_components_page() {
                             )
                             .on_select(move |index| settings.with_mut(|s| s.appearance = index));
                         })
-                        .item(move || {
-                            toggle("ui-glass-custom-blur", settings.with(|s| s.custom_blur))
-                                .on_toggle(move |checked| {
-                                    settings.with_mut(|s| s.custom_blur = checked)
-                                });
-                        })
-                        .item(move || {
-                            number_control(settings, Number::Blur)
-                                .enabled(settings.with(|s| s.custom_blur));
-                        })
-                        .item(move || {
-                            number_control(settings, Number::Contrast);
-                        })
                         .item(|| {
                             section_title("ui-glass-shape-section");
                         })
                         .item(move || {
                             choices(
                                 "ui-glass-shape",
-                                labels(&SHAPES),
+                                SHAPES.to_vec(),
                                 settings.with(|s| s.shape),
                             )
                             .on_select(move |index| settings.with_mut(|s| s.shape = index));
                         })
                         .item(move || {
-                            number_control(settings, Number::Corner).enabled(
-                                settings.with(|s| SHAPES[s.shape].1 == LensShape::RoundedRectangle),
-                            );
+                            number_control(settings, Number::Corner)
+                                .enabled(settings.with(|s| s.shape == 1));
                         })
                         .items_with_key_shared(
                             LAYOUT_NUMBERS.len(),
@@ -403,36 +306,18 @@ pub fn glass_components_page() {
                                 number_control(settings, LAYOUT_NUMBERS[index]);
                             }),
                         )
-                        .item(move || {
-                            toggle("ui-glass-custom-border", settings.with(|s| s.custom_border))
-                                .on_toggle(move |checked| {
-                                    settings.with_mut(|s| s.custom_border = checked)
-                                });
-                        })
-                        .item(move || {
-                            number_control(settings, Number::Border)
-                                .enabled(settings.with(|s| s.custom_border));
-                        })
                         .item(|| {
-                            section_title("ui-glass-tint-section");
+                            section_title("ui-glass-fusion-section");
                         })
                         .items_with_key_shared(
-                            TINT_NUMBERS.len(),
-                            |index| ("glass-number", TINT_NUMBERS[index] as usize),
+                            FUSION_NUMBERS.len(),
+                            |index| ("glass-number", FUSION_NUMBERS[index] as usize),
                             RenderSlotWith::new(move |index| {
-                                number_control(settings, TINT_NUMBERS[index]);
+                                number_control(settings, FUSION_NUMBERS[index]);
                             }),
                         )
                         .item(|| {
                             section_title("ui-glass-interaction-section");
-                        })
-                        .item(move || {
-                            choices(
-                                "ui-glass-interactive",
-                                labels(&INTERACTIONS),
-                                settings.with(|s| s.interaction),
-                            )
-                            .on_select(move |index| settings.with_mut(|s| s.interaction = index));
                         })
                         .item(move || {
                             toggle("ui-glass-click-action", settings.with(|s| s.click))
@@ -452,20 +337,6 @@ pub fn glass_components_page() {
                                     settings.with_mut(|s| s.block_input = checked)
                                 });
                         })
-                        .item(move || {
-                            toggle("ui-glass-manual-ripple", settings.with(|s| s.manual_ripple))
-                                .on_toggle(move |checked| {
-                                    settings.with_mut(|s| s.manual_ripple = checked)
-                                });
-                        })
-                        .items_with_key_shared(
-                            RIPPLE_NUMBERS.len(),
-                            |index| ("glass-number", RIPPLE_NUMBERS[index] as usize),
-                            RenderSlotWith::new(move |index| {
-                                number_control(settings, RIPPLE_NUMBERS[index])
-                                    .enabled(settings.with(|s| s.manual_ripple));
-                            }),
-                        )
                         .item(|| {
                             section_title("ui-glass-content-section");
                         })
@@ -547,6 +418,7 @@ fn glass_preview(
                 )
                 .children(move || {
                     glass_backdrop();
+                    glass_pair(settings);
                     glass_lens(settings, position, stage_width, clicks, editors);
                 });
         });
@@ -565,11 +437,7 @@ fn glass_lens(
     let [x, y] = bounded_position(position.get(), [width, height], stage_width.get());
     let appearance = APPEARANCES[values.appearance].1;
     let theme = use_context::<MaterialTheme>().unwrap();
-    let dark = match appearance {
-        Some(appearance) => appearance == GlassAppearance::Dark,
-        None => theme.with(|theme| theme.color_scheme.is_dark),
-    };
-    let ripple = |parameter| values.manual_ripple.then(|| values.value(parameter));
+    let dark = is_dark(appearance, theme);
     let lens = glass()
         .modifier(
             Modifier::new()
@@ -596,33 +464,8 @@ fn glass_lens(
         } else {
             GlassAppearance::Light
         })
-        .shape_optional(values.shape())
-        .blur_radius_optional(values.custom_blur.then(|| values.dp(Number::Blur)))
-        .border_optional(
-            values
-                .custom_border
-                .then(|| GlassBorder::new(Px(values.value(Number::Border).round() as i32))),
-        )
+        .corner_radius_optional(values.corner_radius())
         .padding(values.dp(Number::Padding))
-        .contrast(values.value(Number::Contrast))
-        .tint_color(Color::new(
-            values.value(Number::TintRed),
-            values.value(Number::TintGreen),
-            values.value(Number::TintBlue),
-            values.value(Number::TintAlpha),
-        ))
-        .noise_amount(values.value(Number::Noise))
-        .noise_scale(values.value(Number::NoiseScale))
-        .time(values.value(Number::Time))
-        .ripple_center_optional(
-            values
-                .manual_ripple
-                .then(|| [values.value(Number::RippleX), values.value(Number::RippleY)]),
-        )
-        .ripple_radius_optional(ripple(Number::RippleRadius))
-        .ripple_alpha_optional(ripple(Number::RippleAlpha))
-        .ripple_strength_optional(ripple(Number::RippleStrength))
-        .interactive_optional(INTERACTIONS[values.interaction].1)
         .on_click_optional(
             values
                 .click
@@ -647,6 +490,39 @@ fn glass_lens(
                 });
         });
     }
+}
+
+fn is_dark(appearance: Option<GlassAppearance>, theme: Context<MaterialTheme>) -> bool {
+    match appearance {
+        Some(appearance) => appearance == GlassAppearance::Dark,
+        None => theme.with(|theme| theme.color_scheme.is_dark),
+    }
+}
+
+/// Two capsules in a fused group at the right edge of the stage.
+#[tessera]
+fn glass_pair(settings: State<LensSettings>) {
+    let values = settings.get();
+    let theme = use_context::<MaterialTheme>().unwrap();
+    let appearance = if is_dark(APPEARANCES[values.appearance].1, theme) {
+        GlassAppearance::Dark
+    } else {
+        GlassAppearance::Light
+    };
+    glass_group()
+        .material(MATERIALS[values.material].1)
+        .appearance(appearance)
+        .spacing(values.dp(Number::Spacing))
+        .gap(values.dp(Number::Gap))
+        .modifier(
+            Modifier::new()
+                .align(Alignment::BottomEnd)
+                .padding_all(Dp(16.0)),
+        )
+        .child(|| {
+            spacer().modifier(Modifier::new().size(Dp(56.0), Dp(40.0)));
+            spacer().modifier(Modifier::new().size(Dp(56.0), Dp(40.0)));
+        });
 }
 
 fn labels<T>(choices: &[(&'static str, T)]) -> Vec<&'static str> {
@@ -693,11 +569,7 @@ fn number_control(settings: State<LensSettings>, parameter: Number, enabled: Opt
     let enabled = enabled.unwrap_or(true);
     let (label, min, max, unit) = parameter.spec();
     let value = settings.with(|s| s.value(parameter));
-    let formatted = if parameter == Number::Border {
-        format!("{value:.0}{unit}")
-    } else {
-        format!("{value:.2}{unit}")
-    };
+    let formatted = format!("{value:.2}{unit}");
     let label = I18N.text(label);
     column()
         .modifier(Modifier::new().fill_max_width())
@@ -713,7 +585,7 @@ fn number_control(settings: State<LensSettings>, parameter: Number, enabled: Opt
                         text(formatted.clone());
                     }
                 });
-            let slider = slider((value - min) / (max - min))
+            slider((value - min) / (max - min))
                 .modifier(Modifier::new().fill_max_width())
                 .disabled(!enabled)
                 .value_label(formatted.clone())
@@ -722,9 +594,6 @@ fn number_control(settings: State<LensSettings>, parameter: Number, enabled: Opt
                     let value = min + (max - min) * fraction;
                     settings.with_mut(|s| s.numbers[parameter as usize] = value);
                 });
-            if parameter == Number::Border {
-                slider.steps((max - min) as usize - 1);
-            }
         });
 }
 

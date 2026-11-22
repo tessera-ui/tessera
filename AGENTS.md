@@ -38,6 +38,7 @@ programming contract; the guidelines below also govern framework implementation.
 - `tessera-components` places a component at the crate root only when it reads no design-system theme and implies no design-system visual, interaction, motion, or scrolling defaults. When in doubt, place it in a design-system module; promoting an API to the root later is additive.
 - Each design system owns its public text, icon, scrolling, lazy container, text editing, and interaction feedback components and their style types. Rendering pipelines and crate-private mechanisms, such as text shaping, editing, virtualization, and scroll control, may be shared.
 - Non-test code in root modules and other design systems must not depend on `md3`; `scripts/check-imports.rs` rejects such imports. Experimental design systems live under `experiment`.
+- `md3` and `experiment::hig` must never reference one another, including in tests and documentation. Share only design-system-independent internal mechanisms.
 
 ---
 
@@ -110,6 +111,7 @@ programming contract; the guidelines below also govern framework implementation.
 
 - The component tree is managed internally by `ComponentTree` and node metadata structures, supporting layout, rendering, and event dispatch.
 - Accessibility updates flatten layout and group nodes without semantics. Preserve explicit semantic nodes, their order, bounds, actions, and focus; synthesize only the root window node.
+- `semantics` describes a node and keeps descendant semantics published; `clear_and_set_semantics` makes the whole subtree read as that one node.
 - Publish item selection separately from checked/toggled state. Accessibility focus actions must not activate their target.
 
 ---
@@ -138,6 +140,7 @@ programming contract; the guidelines below also govern framework implementation.
   - **DrawablePipeline**/**ComputablePipeline**: GPU rendering/compute logic
   - **PipelineRegistry**: Registers all pipelines at startup
 - Components set draw/compute commands through `RenderInput`, `RenderMetadataMut`, and draw modifiers (`DrawModifierNode`, `LayoutNode::draw`)
+- Encode draw-dependent intermediate passes through `DrawablePipeline::prepare`, after scene capture and before the render pass. Keep scratch leases alive until all consuming draws are recorded; preserve the final draw's stencil, clipping, and opacity behavior.
 - Draw commands use the measured bounds at their position in the modifier chain.
 - The components crate provides common pipelines; applications register them by adding `tessera_components::ComponentsPackage` to their `EntryPoint`
 

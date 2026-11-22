@@ -130,7 +130,6 @@ fn sample(
         .modifier(modifier.semantics(SemanticsArgs {
             role: Some(Role::Group),
             label: Some(I18N.format("ui-value-field-preview", [("v0", I18N.text(&name).into())])),
-            merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {
@@ -246,7 +245,6 @@ fn sample(
                         "ui-value-container",
                         [("v0", I18N.text(&label.get()).into())],
                     )),
-                    merge_descendants: true,
                     ..Default::default()
                 }))
                 .children(move || {
@@ -301,7 +299,6 @@ fn sample(
                                         "ui-value-leading-icon",
                                         [("v0", I18N.text(&label.get()).into())],
                                     )),
-                                    merge_descendants: true,
                                     ..Default::default()
                                 }))
                                 .children(|| {
@@ -362,7 +359,7 @@ fn sample(
                     } else {
                         scheme.on_surface_variant
                     })
-                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                    .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                         role: Some(if invalid.get() {
                             Role::Alert
                         } else {
@@ -744,11 +741,13 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                 field.trailing_icon(move || {
                                     if error {
                                         boxed()
-                                            .modifier(Modifier::new().semantics(SemanticsArgs {
-                                                role: Some(Role::Image),
-                                                label: Some(I18N.text("ui-error")),
-                                                ..Default::default()
-                                            }))
+                                            .modifier(Modifier::new().clear_and_set_semantics(
+                                                SemanticsArgs {
+                                                    role: Some(Role::Image),
+                                                    label: Some(I18N.text("ui-error")),
+                                                    ..Default::default()
+                                                },
+                                            ))
                                             .children(|| {
                                                 icon().painter(filled::ERROR_SVG).size(Dp(24.0));
                                             });
@@ -783,7 +782,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                             .modifier(
                                 watch_in_space(geometry, "support")
                                     .padding_symmetric(Dp(16.0), Dp::ZERO)
-                                    .semantics(SemanticsArgs {
+                                    .clear_and_set_semantics(SemanticsArgs {
                                         role: Some(if error { Role::Alert } else { Role::Label }),
                                         ..Default::default()
                                     }),
@@ -980,7 +979,7 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
                         scheme.on_surface,
                         Shape::rounded_rectangle(Dp(20.0 * scale)),
                     )
-                    .semantics(SemanticsArgs {
+                    .clear_and_set_semantics(SemanticsArgs {
                         role: Some(Role::Note),
                         label: Some(I18N.format(
                             "ui-value-value-text-field",
@@ -1101,7 +1100,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
             }
             if mode == 4 {
                 field.prefix(move || {
-                    text("$").modifier(Modifier::new().semantics(SemanticsArgs {
+                    text("$").modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                         role: Some(Role::Label),
                         label: Some(I18N.text("ui-us-dollars")),
                         ..Default::default()
@@ -1110,17 +1109,19 @@ fn form_field(label: String, outlined: bool, mode: u8) {
             }
             if mode == 5 {
                 field.suffix(move || {
-                    text("@gmail.com").modifier(Modifier::new().semantics(SemanticsArgs {
-                        role: Some(Role::Label),
-                        label: Some(I18N.text("ui-at-gmail-dot-com")),
-                        ..Default::default()
-                    }));
+                    text("@gmail.com").modifier(Modifier::new().clear_and_set_semantics(
+                        SemanticsArgs {
+                            role: Some(Role::Label),
+                            label: Some(I18N.text("ui-at-gmail-dot-com")),
+                            ..Default::default()
+                        },
+                    ));
                 });
             }
             if mode == 7 {
                 field.trailing_icon(move || {
                     boxed()
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
+                        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                             role: Some(Role::Image),
                             label: Some(I18N.text("ui-error")),
                             ..Default::default()
@@ -1177,7 +1178,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                         } else {
                             scheme.on_surface_variant
                         })
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
+                        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                             role: Some(if mode == 7 || overflow {
                                 Role::Alert
                             } else {
@@ -1196,7 +1197,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                                 scheme.on_surface_variant
                             })
                             .style(type_style(12.0, 16.0))
-                            .modifier(Modifier::new().semantics(SemanticsArgs {
+                            .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                                 role: Some(Role::Label),
                                 label: Some(I18N.format(
                                     "ui-character-count-value-of-100",
@@ -1369,7 +1370,7 @@ fn field_container_diagram() {
                                         bottom_right: RoundedCorner::ZERO,
                                     },
                                 )
-                                .semantics(SemanticsArgs {
+                                .clear_and_set_semantics(SemanticsArgs {
                                     role: Some(Role::Group),
                                     label: Some(I18N.text("ui-filled-text-field-container")),
                                     ..Default::default()
@@ -1392,7 +1393,7 @@ fn field_container_diagram() {
                                 scheme.primary,
                                 Shape::rounded_rectangle(Dp(4.0 * scale)),
                             )
-                            .semantics(SemanticsArgs {
+                            .clear_and_set_semantics(SemanticsArgs {
                                 role: Some(Role::Group),
                                 label: Some(I18N.text("ui-outlined-text-field-container")),
                                 ..Default::default()
@@ -1503,7 +1504,7 @@ fn field_error_icon_example(password: bool, scale: f64) {
                 .accessibility_description(I18N.text(support))
                 .trailing_icon(move || {
                     boxed()
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
+                        .modifier(Modifier::new().clear_and_set_semantics(SemanticsArgs {
                             role: Some(Role::Image),
                             label: Some(I18N.text("ui-error")),
                             ..Default::default()
@@ -1530,7 +1531,7 @@ fn field_error_icon_example(password: bool, scale: f64) {
                 .modifier(
                     Modifier::new()
                         .padding_symmetric(Dp(16.0 * scale), Dp::ZERO)
-                        .semantics(SemanticsArgs {
+                        .clear_and_set_semantics(SemanticsArgs {
                             role: Some(Role::Alert),
                             label: Some(I18N.text(support)),
                             ..Default::default()
@@ -1644,7 +1645,7 @@ fn field_icon_example(kind: usize, scale: f64) {
                     scheme.on_surface,
                     Shape::rounded_rectangle(Dp(12.0 * scale)),
                 )
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(
                         I18N.format("ui-text-field-icon-example-value", [("v0", (kind).into())]),
@@ -1751,7 +1752,7 @@ fn field_payment_image(scale: f64) {
             Modifier::new()
                 .size(Dp(32.0 * scale), Dp(24.0 * scale))
                 .background(srgb(0, 0, 0))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(I18N.text("ui-payment-card")),
                     ..Default::default()
@@ -2172,7 +2173,6 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
                                     ],
                                 ),
                             ),
-                            merge_descendants: true,
                             ..Default::default()
                         }),
                 )
@@ -2296,7 +2296,6 @@ fn field_color_scheme(outlined: bool, dark: bool) {
                                             ],
                                         ),
                                     ),
-                                    merge_descendants: true,
                                     ..Default::default()
                                 }),
                         )
@@ -2450,7 +2449,7 @@ fn field_color_callouts(outlined: bool, scale: f64) {
                     .offset(Dp(x * scale), Dp(y * scale))
                     .size(Dp(24.0 * scale), Dp(32.0 * scale))
                     .background_with_shape(scheme.on_surface, Shape::CAPSULE)
-                    .semantics(SemanticsArgs {
+                    .clear_and_set_semantics(SemanticsArgs {
                         role: Some(Role::Note),
                         label: Some(I18N.format(
                             "ui-color-role-value-value",
@@ -2739,7 +2738,7 @@ fn field_configurations(outlined: bool) {
                                                 scheme.on_surface_variant,
                                                 Shape::Ellipse,
                                             )
-                                            .semantics(SemanticsArgs {
+                                            .clear_and_set_semantics(SemanticsArgs {
                                                 role: Some(Role::Note),
                                                 label: Some(I18N.format(
                                                     "ui-configuration-value",
@@ -3033,7 +3032,6 @@ fn field_measurement_item(
                                 )],
                             ),
                         ),
-                        merge_descendants: true,
                         ..Default::default()
                     }),
                 )
@@ -3090,22 +3088,24 @@ fn field_measurement_item(
                                             "empty-leading"
                                         },
                                     )
-                                    .semantics(SemanticsArgs {
-                                        role: Some(Role::Image),
-                                        label: Some(
-                                            I18N.format(
-                                                "ui-value-leading-icon",
-                                                [(
-                                                    "v0",
-                                                    I18N.text(&measurement_name(
-                                                        outlined, variant, populated,
-                                                    ))
-                                                    .into(),
-                                                )],
+                                    .clear_and_set_semantics(
+                                        SemanticsArgs {
+                                            role: Some(Role::Image),
+                                            label: Some(
+                                                I18N.format(
+                                                    "ui-value-leading-icon",
+                                                    [(
+                                                        "v0",
+                                                        I18N.text(&measurement_name(
+                                                            outlined, variant, populated,
+                                                        ))
+                                                        .into(),
+                                                    )],
+                                                ),
                                             ),
-                                        ),
-                                        ..Default::default()
-                                    }),
+                                            ..Default::default()
+                                        },
+                                    ),
                                 )
                                 .children(|| {
                                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
@@ -3158,22 +3158,24 @@ fn field_measurement_item(
                                     },
                                 )
                                 .weight(1.0)
-                                .semantics(SemanticsArgs {
-                                    role: Some(Role::Label),
-                                    label: Some(
-                                        I18N.format(
-                                            "ui-value-supporting-text",
-                                            [(
-                                                "v0",
-                                                I18N.text(&measurement_name(
-                                                    outlined, variant, populated,
-                                                ))
-                                                .into(),
-                                            )],
+                                .clear_and_set_semantics(
+                                    SemanticsArgs {
+                                        role: Some(Role::Label),
+                                        label: Some(
+                                            I18N.format(
+                                                "ui-value-supporting-text",
+                                                [(
+                                                    "v0",
+                                                    I18N.text(&measurement_name(
+                                                        outlined, variant, populated,
+                                                    ))
+                                                    .into(),
+                                                )],
+                                            ),
                                         ),
-                                    ),
-                                    ..Default::default()
-                                }),
+                                        ..Default::default()
+                                    },
+                                ),
                             );
                         if populated {
                             let count =
@@ -3183,16 +3185,18 @@ fn field_measurement_item(
                             text(format!("{count}/20"))
                                 .style(type_style(12.0, 16.0))
                                 .color(scheme.on_surface_variant)
-                                .modifier(watch_in_space(geometry, "counter").semantics(
-                                    SemanticsArgs {
-                                        role: Some(Role::Label),
-                                        label: Some(I18N.format(
-                                            "ui-measurement-character-count-value-of-20",
-                                            [("v0", (count).into())],
-                                        )),
-                                        ..Default::default()
-                                    },
-                                ));
+                                .modifier(
+                                    watch_in_space(geometry, "counter").clear_and_set_semantics(
+                                        SemanticsArgs {
+                                            role: Some(Role::Label),
+                                            label: Some(I18N.format(
+                                                "ui-measurement-character-count-value-of-20",
+                                                [("v0", (count).into())],
+                                            )),
+                                            ..Default::default()
+                                        },
+                                    ),
+                                );
                         }
                     });
             }
@@ -3614,7 +3618,7 @@ fn measurement_status_note(enabled: bool, x: f64, y: f64, width: f64, height: f6
             Modifier::new()
                 .offset(Dp(x), Dp(y))
                 .size(Dp(width), Dp(height))
-                .semantics(SemanticsArgs {
+                .clear_and_set_semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some(I18N.text(label)),
                     ..Default::default()
@@ -3715,7 +3719,6 @@ fn field_anatomy_marker(number: usize, x: Dp, y: Dp) {
                             ],
                         ),
                     ),
-                    merge_descendants: true,
                     ..Default::default()
                 })
                 .background_with_shape(scheme.surface_container_low, Shape::CAPSULE)

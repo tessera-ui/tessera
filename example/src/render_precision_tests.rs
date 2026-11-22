@@ -31,7 +31,6 @@ fn observed_region(label: &str) -> Modifier {
     Modifier::new().semantics(SemanticsArgs {
         role: Some(Role::Group),
         label: Some(label.to_owned()),
-        merge_descendants: true,
         ..Default::default()
     })
 }

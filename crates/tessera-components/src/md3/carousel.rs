@@ -887,7 +887,6 @@ fn carousel_item(
                 })
                 .semantics(SemanticsArgs {
                     role: Some(Role::ListItem),
-                    merge_descendants: true,
                     collection_item_info: Some(if vertical {
                         (index, 1, 0, 1, false)
                     } else {
@@ -1193,7 +1192,6 @@ pub fn carousel(
         )
         .semantics(SemanticsArgs {
             role: Some(Role::List),
-            merge_descendants: true,
             role_description: Some("carousel".into()),
             label: accessibility_label,
             collection_info: Some(if vertical {
@@ -2241,7 +2239,7 @@ mod tests {
     #[tessera]
     fn responsive_section(controller: State<CarouselController>) {
         column().modifier(Modifier::new().semantics(SemanticsArgs {
-            label: Some("Responsive carousel section".into()), merge_descendants: true, ..Default::default()
+            label: Some("Responsive carousel section".into()),..Default::default()
         })).children(move || {
             text("Carousel");
             text("Items retain their full size as masks expand and collapse. Drag horizontally or use arrow keys, Home, and End.");

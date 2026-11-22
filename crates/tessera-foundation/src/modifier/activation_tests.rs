@@ -10,9 +10,12 @@ use tessera_ui::{
     winit::keyboard::NamedKey,
 };
 
-use crate::modifier::{
-    ClickableArgs, CombinedClickableArgs, InteractionState, ModifierExt as _, SelectableArgs,
-    ToggleableArgs,
+use crate::{
+    modifier::{
+        ClickableArgs, CombinedClickableArgs, InteractionState, ModifierExt as _, SelectableArgs,
+        ToggleableArgs,
+    },
+    pointer_gestures::TapGestureConfig,
 };
 
 fn node(test: &UiTest, label: &str, role: Role) -> (NodeId, Node) {
@@ -27,6 +30,7 @@ fn click_target(
     clicks: State<usize>,
     interaction: State<InteractionState>,
     requester: FocusRequester,
+    custom: Option<bool>,
 ) {
     layout(Stack).modifier(
         Modifier::new()
@@ -34,6 +38,16 @@ fn click_target(
             .clickable(ClickableArgs {
                 on_click: Callback::new(move || clicks.with_mut(|count| *count += 1)),
                 enabled: enabled.get(),
+                keyboard_activation: !custom.unwrap_or(false),
+                tap_config: if custom.unwrap_or(false) {
+                    TapGestureConfig {
+                        slop_px: f32::INFINITY,
+                        cancel_on_exit: false,
+                        ..Default::default()
+                    }
+                } else {
+                    TapGestureConfig::default()
+                },
                 label: Some("Activate".into()),
                 interaction_state: Some(interaction),
                 focus_requester: Some(requester),
@@ -93,6 +107,48 @@ fn clickable_routes_input_preserves_held_press_on_blur_and_disables_activation()
     test.press_key(NamedKey::Enter);
     test.click_at(point);
     assert_eq!(clicks.get(), 3);
+}
+
+#[test]
+fn clickable_custom_activation_allows_reentry_but_rejects_outside_release() {
+    let test = UiTest::new().viewport(80, 80);
+    let enabled = test.state(true);
+    let clicks = test.state(0);
+    let interaction = test.state(InteractionState::new());
+    let requester = test.run(FocusRequester::new);
+    let mut test = test.content(|| {
+        click_target(enabled, clicks, interaction, requester).custom(true);
+    });
+    test.frame();
+    let (id, _) = node(&test, "Activate", Role::Button);
+    assert!(test.accessibility_action(id, Action::Focus));
+    test.frame();
+    test.press_key(NamedKey::Enter);
+    test.frame();
+    test.press_key(NamedKey::Space);
+    test.frame();
+    assert_eq!(clicks.get(), 0);
+    let inside = PxPosition::from_f32_xy(10.0, 10.0);
+    let outside = PxPosition::from_f32_xy(100.0, 100.0);
+    test.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+    test.frame();
+    test.pointer_move(MOUSE_POINTER_ID, outside);
+    test.frame();
+    assert!(interaction.get().is_pressed());
+    assert!(!interaction.get().is_hovered());
+    test.pointer_move(MOUSE_POINTER_ID, inside);
+    test.pointer_release(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+    test.frame();
+    assert_eq!(clicks.get(), 1);
+    assert!(!interaction.get().is_pressed());
+    test.pointer_press(MOUSE_POINTER_ID, inside, PressKeyEventType::Left);
+    test.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
+    test.frame();
+    assert_eq!(clicks.get(), 1);
+    assert!(!interaction.get().is_pressed());
+    assert!(test.accessibility_action(id, Action::Click));
+    test.frame();
+    assert_eq!(clicks.get(), 2);
 }
 
 #[tessera]
