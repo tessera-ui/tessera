@@ -30,7 +30,7 @@ use tessera_components::{
         slider::slider,
         split_view::{h_split_view, v_split_view},
         stepper::stepper,
-        tab_view::tab_view,
+        tab_view::{TabViewStyle, tab_view},
         table::{TableColumn, TableSort, table},
         text::text,
         text_field::{TextFieldStyle, search_field, secure_field, text_editor, text_field},
@@ -232,7 +232,12 @@ pub(super) const COMPONENTS: &[Component] = &[
             example(150.0),
             Section {
                 title: "ui-hig-styles",
-                columns: &["ui-hig-pop-up", "ui-hig-segmented", "ui-hig-radio-group"],
+                columns: &[
+                    "ui-hig-pop-up",
+                    "ui-hig-segmented",
+                    "ui-hig-radio-group",
+                    "ui-hig-style-tabs",
+                ],
                 rows: ENABLED,
                 height: 80.0,
             },
@@ -439,7 +444,19 @@ pub(super) const COMPONENTS: &[Component] = &[
         title: "ui-hig-tab-views",
         description: "ui-hig-tab-views-description",
         category: 5,
-        sections: &[example(180.0)],
+        sections: &[
+            example(180.0),
+            Section {
+                title: "ui-hig-styles",
+                columns: &[
+                    "ui-hig-style-grouped",
+                    "ui-hig-style-tab-bar-only",
+                    "ui-hig-style-sidebar",
+                ],
+                rows: SINGLE,
+                height: 140.0,
+            },
+        ],
     },
     Component {
         title: "ui-hig-forms",
@@ -1212,6 +1229,7 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                     PickerStyle::PopUpButton,
                     PickerStyle::Segmented,
                     PickerStyle::RadioGroup,
+                    PickerStyle::Tabs,
                 ][column],
             )
             .enabled(enabled)
@@ -1360,6 +1378,30 @@ fn static_state(index: usize, section: usize, row: usize, column: usize, appeara
                 ][column],
             )
             .accessibility_label(name);
+        }
+        ("ui-hig-tab-views", _) => {
+            tab_view(
+                0,
+                vec![I18N.text("ui-hig-general"), I18N.text("ui-hig-advanced")],
+            )
+            .style(
+                [
+                    TabViewStyle::Grouped,
+                    TabViewStyle::TabBarOnly,
+                    TabViewStyle::SidebarAdaptable,
+                ][column],
+            )
+            .modifier(Modifier::new().size(Dp(200.0), Dp(110.0)))
+            .content(move |index| {
+                caption(
+                    I18N.text(if index == 0 {
+                        "ui-hig-general"
+                    } else {
+                        "ui-hig-advanced"
+                    }),
+                    appearance,
+                );
+            });
         }
         ("ui-hig-labels", _) => {
             hig_label(I18N.text("ui-hig-favorites"))

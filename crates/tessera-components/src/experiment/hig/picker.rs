@@ -85,6 +85,8 @@ pub enum PickerStyle {
     Inline,
     /// A compact row of options; segments on macOS.
     Palette,
+    /// A row of tabs; segments on macOS.
+    Tabs,
 }
 
 /// # picker

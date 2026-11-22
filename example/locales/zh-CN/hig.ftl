@@ -201,3 +201,5 @@ ui-hig-cancel = 取消
 ui-hig-export = 导出
 ui-hig-done = 完成
 ui-hig-show-inspector = 显示检查器
+ui-hig-style-tabs = 标签
+ui-hig-style-tab-bar-only = 仅标签栏

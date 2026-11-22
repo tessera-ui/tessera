@@ -201,3 +201,5 @@ ui-hig-cancel = Cancel
 ui-hig-export = Export
 ui-hig-done = Done
 ui-hig-show-inspector = Show inspector
+ui-hig-style-tabs = Tabs
+ui-hig-style-tab-bar-only = Tab bar only
