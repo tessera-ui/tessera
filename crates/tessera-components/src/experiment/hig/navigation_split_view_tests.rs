@@ -3,7 +3,7 @@ use tessera_ui::{Modifier, tessera, testing::UiTest};
 
 use crate::spacer::spacer;
 
-use super::{NavigationSplitViewVisibility, navigation_split_view};
+use super::{NavigationSplitViewStyle, NavigationSplitViewVisibility, navigation_split_view};
 
 #[tessera]
 fn filler(tag: String) {
@@ -40,4 +40,21 @@ fn column_visibility_shows_or_collapses_the_leading_columns() {
         detail_bounds(NavigationSplitViewVisibility::DetailOnly),
         (0, 800)
     );
+}
+
+fn detail_start(style: NavigationSplitViewStyle) -> i32 {
+    let mut ui = UiTest::new().viewport(600, 400).content(move || {
+        navigation_split_view()
+            .style(style)
+            .sidebar(|| filler("sidebar".into()))
+            .detail(|| filler("detail".into()));
+    });
+    ui.frame().node("detail").bounds().x.0
+}
+
+#[test]
+fn prominent_detail_limits_the_sidebar_to_a_third_of_the_width() {
+    // The sidebar asks for 220pt; the detail starts after it and the divider.
+    assert_eq!(detail_start(NavigationSplitViewStyle::Balanced), 221);
+    assert_eq!(detail_start(NavigationSplitViewStyle::ProminentDetail), 201);
 }

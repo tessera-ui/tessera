@@ -37,6 +37,22 @@ pub enum NavigationSplitViewVisibility {
     DetailOnly,
 }
 
+/// How a [`navigation_split_view`] shares its width between the detail and the other columns.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NavigationSplitViewStyle {
+    /// The platform default, balanced on macOS.
+    #[default]
+    Automatic,
+    /// The leading columns keep their widths beside the detail.
+    Balanced,
+    /// The detail keeps the largest share: each leading column takes at most a third of the
+    /// width it divides.
+    ProminentDetail,
+}
+
+/// Largest share of the width a leading column takes in the prominent detail style.
+const PROMINENT_SHARE: f64 = 1.0 / 3.0;
+
 /// # navigation_split_view
 ///
 /// Shows a sidebar, an optional content column, and a detail column side by side.
@@ -51,6 +67,7 @@ pub enum NavigationSplitViewVisibility {
 /// - `content` — an optional middle column between the sidebar and the detail.
 /// - `detail` — the trailing column.
 /// - `column_visibility` — which columns are shown; defaults to all.
+/// - `style` — how the detail shares the width; defaults to [`NavigationSplitViewStyle::Automatic`].
 /// - `sidebar_width`, `content_width` — initial widths; default to 220pt and 260pt.
 /// - `modifier` — size and placement; the view fills the space its container offers.
 ///
@@ -86,6 +103,7 @@ pub fn navigation_split_view(
     content: Option<RenderSlot>,
     detail: Option<RenderSlot>,
     column_visibility: Option<NavigationSplitViewVisibility>,
+    style: Option<NavigationSplitViewStyle>,
     sidebar_width: Option<Dp>,
     content_width: Option<Dp>,
     modifier: Option<Modifier>,
@@ -98,6 +116,8 @@ pub fn navigation_split_view(
         NavigationSplitViewVisibility::DoubleColumn | NavigationSplitViewVisibility::DetailOnly
     );
     let content_hidden = visibility == NavigationSplitViewVisibility::DetailOnly;
+    let max_share =
+        (style == Some(NavigationSplitViewStyle::ProminentDetail)).then_some(PROMINENT_SHARE);
     let detail = detail.unwrap_or_else(RenderSlot::empty);
     let sidebar = sidebar.unwrap_or_else(RenderSlot::empty);
     let trailing = match content {
@@ -109,7 +129,8 @@ pub fn navigation_split_view(
                 content_hidden,
                 content,
                 detail,
-            );
+            )
+            .max_share_optional(max_share);
         }),
         None => detail,
     };
@@ -121,6 +142,7 @@ pub fn navigation_split_view(
         RenderSlot::new(move || sidebar_panel(sidebar)),
         trailing,
     )
+    .max_share_optional(max_share)
     .modifier(modifier.unwrap_or_default().semantics(SemanticsArgs {
         role: Some(Role::Group),
         ..Default::default()

@@ -36,12 +36,14 @@ pub(super) enum SplitAxis {
 }
 
 /// Places the first pane, the divider, and the second pane along the axis. `first` is the
-/// first pane's extent in points, kept within `min` of both edges.
+/// first pane's extent in points, kept within `min` of both edges and at most `max_share` of
+/// the total.
 #[derive(Clone, Copy, PartialEq)]
 struct SplitLayout {
     axis: SplitAxis,
     first: f64,
     min: f64,
+    max_share: f64,
     collapsed: bool,
 }
 
@@ -51,7 +53,9 @@ impl SplitLayout {
             return Px::ZERO;
         }
         let total = Dp::from_pixels_f32(total.to_f32()).0;
-        let upper = (total - DIVIDER - self.min).max(self.min);
+        let upper = (total - DIVIDER - self.min)
+            .min(total * self.max_share)
+            .max(self.min);
         Px::from(Dp(self.first.clamp(self.min.min(upper), upper)))
     }
 }
@@ -190,6 +194,7 @@ pub(super) fn split(
     min: f64,
     collapsed: bool,
     first_pane: RenderSlot,
+    max_share: Option<f64>,
     second_pane: RenderSlot,
     modifier: Option<Modifier>,
 ) {
@@ -206,6 +211,7 @@ pub(super) fn split(
         axis,
         first: first.get(),
         min,
+        max_share: max_share.unwrap_or(1.0),
         collapsed,
     })
     .modifier(modifier.unwrap_or_default().clip_to_bounds())
