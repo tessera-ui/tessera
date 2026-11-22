@@ -23,6 +23,7 @@ pub mod list;
 pub mod menu;
 mod motion;
 pub mod navigation_split_view;
+pub mod navigation_stack;
 pub mod picker;
 pub mod presentation;
 pub mod presentations;

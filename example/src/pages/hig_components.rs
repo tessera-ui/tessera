@@ -96,6 +96,11 @@ pub fn hig_article_page(index: usize) {
     });
 }
 
+/// The localized title of the article at `index`.
+pub(crate) fn article_title(index: usize) -> String {
+    label(COMPONENTS[index].title)
+}
+
 pub(crate) fn current_article(router: &RouterController) -> Option<usize> {
     (router.last()? as &dyn std::any::Any)
         .downcast_ref::<HigArticlePageDestination>()

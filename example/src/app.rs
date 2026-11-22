@@ -3,8 +3,9 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     experiment::hig::{
+        navigation_stack::navigation_stack,
         theme::{Appearance, HigTheme, hig_theme},
-        toolbar::{ToolbarSymbol, toolbar, toolbar_button},
+        toolbar::{ToolbarSymbol, toolbar_button},
     },
     md3::{
         app_bar::top_app_bar,
@@ -34,7 +35,9 @@ use crate::{
     pages::{
         custom_shader::CustomShaderPageDestination,
         glass_components::GlassComponentsPageDestination,
-        hig_components::{HigComponentsPageDestination, current_article as current_hig_article},
+        hig_components::{
+            HigComponentsPageDestination, article_title, current_article as current_hig_article,
+        },
         home::HomePageDestination,
         material_components::{MaterialComponentsPageDestination, current_article},
     },
@@ -244,38 +247,30 @@ fn hig_top_bar(router: State<RouterController>, drawer: State<SideSheetControlle
             },
         })
         .child(move || {
-            let bar = toolbar()
+            let article = router.with(current_hig_article);
+            let stack = navigation_stack(I18N.text("ui-hig-components"))
                 .window_chrome(true)
-                .title(I18N.text("ui-hig-components"))
-                .navigation(move || {
-                    let article = router.with(|router| current_hig_article(router).is_some());
+                .path(article.map(article_title).into_iter().collect())
+                .back_label(I18N.text("ui-back-to-components"))
+                .on_back(move || {
+                    router.with_mut(RouterController::pop);
+                })
+                .leading(move || {
                     toolbar_button()
-                        .symbol(if article {
-                            ToolbarSymbol::Back
-                        } else {
-                            ToolbarSymbol::Sidebar
-                        })
-                        .accessibility_label(I18N.text(if article {
-                            "ui-back-to-components"
-                        } else {
-                            "ui-open-navigation-drawer"
-                        }))
+                        .symbol(ToolbarSymbol::Sidebar)
+                        .accessibility_label(I18N.text("ui-open-navigation-drawer"))
                         .on_click(move || {
-                            if router.with(|router| current_hig_article(router).is_some()) {
-                                router.with_mut(RouterController::pop);
-                            } else {
-                                drawer.with_mut(|drawer| {
-                                    if drawer.is_open() {
-                                        drawer.close();
-                                    } else {
-                                        drawer.open();
-                                    }
-                                });
-                            }
+                            drawer.with_mut(|drawer| {
+                                if drawer.is_open() {
+                                    drawer.close();
+                                } else {
+                                    drawer.open();
+                                }
+                            });
                         });
                 });
             if let Some(locale) = I18n::try_current() {
-                bar.actions(move || {
+                stack.actions(move || {
                     let chinese = locale.locale() == langid!("zh-CN");
                     toolbar_button()
                         .label(if chinese { "English" } else { "简体中文" })
@@ -608,6 +603,56 @@ mod tests {
             "Open Button groups specifications",
         );
         assert!(session.accessibility_action(article, Action::Click));
+    }
+
+    #[test]
+    fn hig_toolbar_titles_the_open_article_and_its_back_button_returns_to_the_directory() {
+        use crate::pages::hig_components::{
+            HigArticlePageDestination, HigComponentsPageDestination,
+        };
+
+        let navigation = TestProbe::default();
+        let mut session = UiTest::new()
+            .content(|| app_fixture(navigation.clone()))
+            .viewport(1200, 1600);
+        session.run(|| tessera_ui::EntryRegistry::new().register_package(crate::res::i18n()));
+        session.frame();
+        let router = navigation.get().unwrap().router;
+        session.run(|| {
+            router.with_mut(|router| {
+                router.push(HigComponentsPageDestination {});
+                router.push(HigArticlePageDestination { index: 0 });
+            })
+        });
+        session.advance(std::time::Duration::from_millis(500));
+        let title = session.run(|| article_title(0));
+        let snapshot = session.inspect_accessibility().unwrap();
+        assert!(
+            snapshot
+                .nodes()
+                .iter()
+                .any(|(_, node)| crate::has_label(node, &title) && node.role() != Role::Button),
+            "the toolbar titles the open article"
+        );
+        let back = snapshot
+            .find("Back to components", Role::Button)
+            .map(|(id, _)| id)
+            .expect("back button");
+        assert!(session.accessibility_action(back, Action::Click));
+        session.advance(std::time::Duration::from_millis(500));
+        assert!(
+            session.run(|| {
+                router.with(RouterController::current_is::<HigComponentsPageDestination>)
+            })
+        );
+        assert!(
+            session
+                .inspect_accessibility()
+                .unwrap()
+                .find("Back to components", Role::Button)
+                .is_none(),
+            "the directory shows the sidebar button instead"
+        );
     }
 
     #[test]
