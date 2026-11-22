@@ -24,6 +24,7 @@ use crate::{
 };
 
 use super::{
+    disclosure_button::disclosure_button,
     scroll_view::scroll_view,
     text::text,
     theme::{Appearance, HigTheme, TextStyle, hig_theme},
@@ -82,6 +83,18 @@ pub struct TableSort {
     /// Whether values increase down the table.
     pub ascending: bool,
 }
+
+/// Where a row sits in an outline of expandable rows in a [`table`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TableDisclosure {
+    /// Nesting depth; top-level rows are at depth 0.
+    pub depth: usize,
+    /// Whether the row's children are shown, or `None` for a row without children.
+    pub expanded: Option<bool>,
+}
+
+/// Indent of one outline level in the first column.
+const OUTLINE_INDENT: f64 = 16.0;
 
 /// Lays out cells side by side at their column widths.
 #[derive(Clone, PartialEq)]
@@ -229,6 +242,9 @@ struct TableContext {
 /// - `selection`, `on_select` — selected row and requested changes.
 /// - `sort`, `on_sort` — the sorted column and requested changes from header clicks; the caller
 ///   sorts its rows.
+/// - `disclosure`, `on_expanded_change` — outline position of each row and requested expansion
+///   changes as `(row, expanded)`; the first column shows indentation and disclosure triangles.
+///   The caller lists only the rows whose ancestors are expanded.
 /// - `style` — inset or bordered; defaults to [`TableStyle::Automatic`].
 /// - `alternating_row_backgrounds` — shades every other row; defaults to true.
 /// - `modifier` — size and placement; the table fills the space its container offers.
@@ -263,6 +279,8 @@ pub fn table(
     on_select: Option<CallbackWith<usize>>,
     sort: Option<TableSort>,
     on_sort: Option<CallbackWith<TableSort>>,
+    disclosure: Option<Vec<TableDisclosure>>,
+    on_expanded_change: Option<CallbackWith<(usize, bool)>>,
     style: Option<TableStyle>,
     alternating_row_backgrounds: Option<bool>,
     modifier: Option<Modifier>,
@@ -308,10 +326,13 @@ pub fn table(
                 .sort_optional(sort)
                 .on_sort_optional(on_sort);
             let widths = widths.clone();
+            let disclosure = disclosure.clone();
             scroll_view().child(move || {
                 rows(row_count, widths.clone(), alternating, inset, dark)
                     .selection_optional(selection)
                     .on_select_optional(on_select)
+                    .disclosure_optional(disclosure.clone())
+                    .on_expanded_change_optional(on_expanded_change)
                     .cell_optional(cell);
             });
         });
@@ -412,6 +433,8 @@ fn rows(
     dark: bool,
     selection: Option<usize>,
     on_select: Option<CallbackWith<usize>>,
+    disclosure: Option<Vec<TableDisclosure>>,
+    on_expanded_change: Option<CallbackWith<(usize, bool)>>,
     cell: Option<RenderSlotWith<(usize, usize)>>,
 ) {
     let columns = widths.0.len();
@@ -433,6 +456,8 @@ fn rows(
                     dark,
                 )
                 .on_select_optional(on_select)
+                .disclosure_optional(disclosure.as_ref().and_then(|rows| rows.get(row).copied()))
+                .on_expanded_change_optional(on_expanded_change)
                 .cell_optional(cell);
             }
         });
@@ -460,6 +485,8 @@ fn table_row(
     inset: bool,
     dark: bool,
     on_select: Option<CallbackWith<usize>>,
+    disclosure: Option<TableDisclosure>,
+    on_expanded_change: Option<CallbackWith<(usize, bool)>>,
     cell: Option<RenderSlotWith<(usize, usize)>>,
 ) {
     let tint = if dark { Color::WHITE } else { Color::BLACK };
@@ -512,14 +539,24 @@ fn table_row(
     layout(widths).modifier(modifier).child(move || {
         hig_theme().theme(HigTheme { appearance }).child(move || {
             for column in 0..columns {
-                table_cell(row, column).cell_optional(cell);
+                let outline = disclosure.filter(|_| column == 0);
+                table_cell(row, column)
+                    .disclosure_optional(outline)
+                    .on_expanded_change_optional(on_expanded_change)
+                    .cell_optional(cell);
             }
         });
     });
 }
 
 #[tessera]
-fn table_cell(row: usize, column: usize, cell: Option<RenderSlotWith<(usize, usize)>>) {
+fn table_cell(
+    row: usize,
+    column: usize,
+    disclosure: Option<TableDisclosure>,
+    on_expanded_change: Option<CallbackWith<(usize, bool)>>,
+    cell: Option<RenderSlotWith<(usize, usize)>>,
+) {
     crate::row::row()
         .cross_axis_alignment(crate::alignment::CrossAxisAlignment::Center)
         .modifier(
@@ -534,6 +571,22 @@ fn table_cell(row: usize, column: usize, cell: Option<RenderSlotWith<(usize, usi
                 }),
         )
         .children(move || {
+            if let Some(outline) = disclosure {
+                crate::spacer::spacer()
+                    .modifier(Modifier::new().width(Dp(OUTLINE_INDENT * outline.depth as f64)));
+                match outline.expanded {
+                    Some(expanded) => {
+                        let triangle = disclosure_button(expanded);
+                        if let Some(on_change) = on_expanded_change {
+                            triangle.on_expanded_change(move |next| on_change.call((row, next)));
+                        }
+                    }
+                    None => {
+                        crate::spacer::spacer().modifier(Modifier::new().width(Dp(13.0)));
+                    }
+                }
+                crate::spacer::spacer().modifier(Modifier::new().width(Dp(4.0)));
+            }
             if let Some(cell) = cell {
                 cell.render((row, column));
             }

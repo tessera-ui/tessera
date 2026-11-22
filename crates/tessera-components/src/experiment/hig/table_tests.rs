@@ -8,7 +8,7 @@ use tessera_ui::{
 
 use crate::column::column;
 
-use super::{super::text::text, TableColumn, TableSort, table};
+use super::{super::text::text, TableColumn, TableDisclosure, TableSort, table};
 
 #[derive(Clone, Copy)]
 struct Controls {
@@ -119,4 +119,91 @@ fn fixed_columns_keep_their_width_and_flexible_columns_share_the_rest() {
     };
     assert_eq!(width("Size"), 60.0);
     assert_eq!(width("Name"), 200.0);
+}
+
+#[tessera]
+fn outline_fixture(probe: TestProbe<Option<State<bool>>>) {
+    let expanded = remember(|| false);
+    probe.set(Some(expanded));
+    let open = expanded.get();
+    let mut names = vec!["Documents"];
+    let mut outline = vec![TableDisclosure {
+        depth: 0,
+        expanded: Some(open),
+    }];
+    if open {
+        names.push("Report.pdf");
+        outline.push(TableDisclosure {
+            depth: 1,
+            expanded: None,
+        });
+    }
+    names.push("Downloads");
+    outline.push(TableDisclosure {
+        depth: 0,
+        expanded: None,
+    });
+    column().children(move || {
+        let names = names.clone();
+        table(vec![TableColumn::new("Name")], names.len())
+            .disclosure(outline.clone())
+            .on_expanded_change(move |(row, next)| {
+                assert_eq!(row, 0);
+                expanded.set(next);
+            })
+            .modifier(Modifier::new().size(Dp(260.0), Dp(200.0)))
+            .cell(move |(row, _)| {
+                text(names[row]);
+            });
+    });
+}
+
+fn labels(ui: &UiTest) -> Vec<String> {
+    ui.inspect_accessibility()
+        .expect("published semantics")
+        .nodes()
+        .iter()
+        .filter(|(_, node)| node.role() == Role::Label)
+        .filter_map(|(_, node)| node.label().map(str::to_owned))
+        .collect()
+}
+
+#[test]
+fn disclosure_rows_expand_and_indent_their_children() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(300, 300)
+        .content(|| outline_fixture(probe.clone()));
+    ui.frame();
+    let expanded = probe.get().expect("fixture state");
+    assert_eq!(labels(&ui), ["Name", "Documents", "Downloads"]);
+    let snapshot = ui.inspect_accessibility().expect("published semantics");
+    let (triangle, node) = snapshot
+        .nodes()
+        .iter()
+        .find(|(_, node)| node.role() == Role::DisclosureTriangle)
+        .map(|(id, node)| (*id, node.clone()))
+        .expect("disclosure triangle");
+    assert_eq!(node.is_expanded(), Some(false));
+    assert!(ui.accessibility_action(triangle, Action::Expand));
+    ui.frames(2);
+    assert!(expanded.get());
+    assert_eq!(
+        labels(&ui),
+        ["Name", "Documents", "Report.pdf", "Downloads"]
+    );
+    let x = |label: &str| {
+        ui.inspect_accessibility()
+            .expect("published semantics")
+            .find(label, Role::Label)
+            .and_then(|(_, node)| node.bounds())
+            .expect("label bounds")
+            .x0
+    };
+    assert_eq!(
+        x("Report.pdf") - x("Documents"),
+        16.0,
+        "children indent one level"
+    );
+    assert_eq!(x("Documents"), x("Downloads"));
 }

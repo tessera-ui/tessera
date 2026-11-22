@@ -34,7 +34,7 @@ use tessera_components::{
         split_view::{h_split_view, v_split_view},
         stepper::stepper,
         tab_view::{TabViewStyle, tab_view},
-        table::{TableColumn, TableSort, table},
+        table::{TableColumn, TableDisclosure, TableSort, table},
         text::text,
         text_field::{TextFieldStyle, search_field, secure_field, text_editor, text_field},
         theme::{Appearance, ControlSize, HigTheme, TextStyle},
@@ -897,15 +897,31 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
             }
             "ui-hig-tables" => {
                 let ascending = values.on;
-                let mut rows = vec![
-                    ("Report.pdf", "2 MB"),
-                    ("Notes.txt", "4 KB"),
-                    ("Photo.jpg", "3 MB"),
-                ];
-                rows.sort_by_key(|(name, _)| *name);
+                let mut files = vec![("Notes.txt", "4 KB"), ("Report.pdf", "2 MB")];
+                files.sort_by_key(|(name, _)| *name);
                 if !ascending {
-                    rows.reverse();
+                    files.reverse();
                 }
+                // A folder that expands to show its files, then a top-level file.
+                let mut rows = vec![("Documents", "--")];
+                let mut outline = vec![TableDisclosure {
+                    depth: 0,
+                    expanded: Some(values.expanded),
+                }];
+                if values.expanded {
+                    for file in files {
+                        rows.push(file);
+                        outline.push(TableDisclosure {
+                            depth: 1,
+                            expanded: None,
+                        });
+                    }
+                }
+                rows.push(("Photo.jpg", "3 MB"));
+                outline.push(TableDisclosure {
+                    depth: 0,
+                    expanded: None,
+                });
                 table(
                     vec![
                         TableColumn::new(I18N.text("ui-hig-name")),
@@ -918,6 +934,8 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                     ascending,
                 })
                 .on_sort(move |sort: TableSort| state.with_mut(|v| v.on = sort.ascending))
+                .disclosure(outline)
+                .on_expanded_change(move |(_, expanded)| state.with_mut(|v| v.expanded = expanded))
                 .selection(values.selected)
                 .on_select(move |row| state.with_mut(|v| v.selected = row))
                 .modifier(Modifier::new().size(Dp(300.0), Dp(140.0)))
