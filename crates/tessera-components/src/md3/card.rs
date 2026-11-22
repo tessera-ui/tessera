@@ -6,8 +6,8 @@
 
 use tessera_foundation::modifier::InteractionState;
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, launch_once, remember,
-    tessera, time::Instant, use_context,
+    Callback, Color, Dp, FocusRequester, Modifier, RenderSlot, State, accesskit::Role, launch_once,
+    remember, tessera, time::Instant, use_context,
 };
 
 use crate::{
@@ -157,7 +157,12 @@ impl CardElevation {
         self.default_elevation
     }
 
-    fn target(self, enabled: bool, interaction_state: Option<State<InteractionState>>) -> Dp {
+    fn target(
+        self,
+        enabled: bool,
+        interaction_state: Option<State<InteractionState>>,
+        focus_visible: bool,
+    ) -> Dp {
         if !enabled {
             return self.disabled_elevation;
         }
@@ -171,7 +176,7 @@ impl CardElevation {
                 self.dragged_elevation
             } else if s.is_pressed() {
                 self.pressed_elevation
-            } else if s.is_focused() {
+            } else if focus_visible {
                 self.focused_elevation
             } else if s.is_hovered() {
                 self.hovered_elevation
@@ -385,6 +390,8 @@ pub fn card(
     });
 
     let clickable = on_click.is_some();
+    let focus = remember(FocusRequester::new).get();
+    let focus_visible = focus.is_focus_visible();
     let interaction_state = if clickable {
         Some(if let Some(state) = interaction_state {
             state
@@ -404,10 +411,9 @@ pub fn card(
         None if matches!(variant, CardVariant::Outlined) => {
             let mut border = CardDefaults::outlined_card_border(&theme, enabled);
             if enabled
+                && focus_visible
                 && interaction_state.is_some_and(|state| {
-                    state.with(|state| {
-                        state.is_focused() && !state.is_pressed() && !state.is_dragged()
-                    })
+                    state.with(|state| !state.is_pressed() && !state.is_dragged())
                 })
             {
                 border.color = theme.color_scheme.on_surface;
@@ -419,7 +425,7 @@ pub fn card(
 
     let elevation_spring = remember(|| CardElevationSpring::new(elevation.default_elevation()));
 
-    let target = elevation.target(enabled, interaction_state);
+    let target = elevation.target(enabled, interaction_state, focus_visible);
     let should_update_spring = elevation_spring.with(|spring| {
         let mut next = spring.clone();
         next.set_target(target);
@@ -470,6 +476,7 @@ pub fn card(
         .elevation(shadow_elevation)
         .enabled(enabled)
         .style(style)
+        .focus_requester(focus)
         .interaction_state_optional(interaction_state)
         .on_click_optional(on_click)
         .accessibility_role_optional(clickable.then_some(Role::Button))

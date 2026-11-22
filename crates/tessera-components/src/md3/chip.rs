@@ -5,7 +5,7 @@
 //! Present compact actions, filters, or input tokens in dense UIs.
 use tessera_foundation::modifier::{InteractionState, ModifierExt as _, Padding};
 use tessera_ui::{
-    Callback, Color, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    Callback, Color, Dp, FocusRequester, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     accesskit::{Role, Toggled},
     launch,
     layout::{MeasureScope, Stack, layout},
@@ -582,7 +582,8 @@ pub fn chip(
     {
         interaction_state.set(InteractionState::default());
     }
-    let interaction = Interaction::from_state(interaction_state.get());
+    let focus = remember(FocusRequester::new).get();
+    let interaction = Interaction::from_state(interaction_state.get(), focus.is_focus_visible());
     if !custom_border && args.enabled && interaction == Interaction::Focus {
         if let Some(border) = &mut border {
             border.color = if variant == ChipVariant::Assist {
@@ -729,6 +730,7 @@ pub fn chip(
             .ripple_color(label_color)
             .elevation(shadow_elevation)
             .interaction_state(interaction_state)
+            .focus_requester(focus)
             .on_click_optional(args.on_click)
             .accessibility_role_optional((has_on_click || selectable).then_some(if selectable {
                 Role::CheckBox

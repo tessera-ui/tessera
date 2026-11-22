@@ -22,12 +22,12 @@ pub(super) enum Interaction {
 }
 
 impl Interaction {
-    pub fn from_state(state: InteractionState) -> Self {
+    pub fn from_state(state: InteractionState, focus_visible: bool) -> Self {
         if state.is_dragged() {
             Self::Drag
         } else if state.is_pressed() {
             Self::Press
-        } else if state.is_focused() {
+        } else if focus_visible {
             Self::Focus
         } else if state.is_hovered() {
             Self::Hover

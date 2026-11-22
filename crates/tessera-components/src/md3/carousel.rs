@@ -1814,6 +1814,16 @@ mod tests {
                 .any(|(id, node)| *id == focused.focus && node.label() == Some("Item 0"))
         );
         assert!(
+            renderer.read_pixels() == initial,
+            "pointer focus leaves no highlight"
+        );
+        renderer.press_key(tessera_ui::winit::keyboard::NamedKey::Shift);
+        renderer.frames(12);
+        assert_eq!(
+            renderer.accessibility_snapshot().unwrap().focus,
+            focused.focus
+        );
+        assert!(
             renderer.read_pixels() != initial,
             "focus feedback must remain visible over opaque carousel images"
         );

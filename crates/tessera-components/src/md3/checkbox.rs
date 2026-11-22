@@ -24,7 +24,7 @@ use crate::{
     md3::{
         checkmark::checkmark,
         ripple_state::{RippleSpec, RippleState},
-        surface::{SurfaceStyle, surface},
+        surface::{SurfaceStyle, resolve_visual_interaction, surface},
         theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
     },
     shape_def::{RoundedCorner, Shape},
@@ -423,9 +423,14 @@ fn checkbox_inner(
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let visual = interaction_state
-        .map(|state| state.with(|state| state.with_presentation(presentation_state, enabled)))
-        .unwrap_or_else(|| InteractionState::new().with_presentation(presentation_state, enabled));
+    let visual = resolve_visual_interaction(
+        interaction_state
+            .map(|state| state.get())
+            .unwrap_or_default(),
+        presentation_state,
+        enabled,
+        focus_requester.map(|focus| focus.is_focus_visible()),
+    );
     let color = if visual.is_hovered() || visual.is_focused() || visual.is_pressed() {
         unchecked_interaction_color.unwrap_or(scheme.on_surface)
     } else {

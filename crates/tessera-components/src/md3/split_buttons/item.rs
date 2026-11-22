@@ -1,7 +1,7 @@
 use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Dp, LayoutResult, MeasurementError, Modifier,
-    PxPosition, RenderSlot, SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, Dp, FocusRequester, LayoutResult,
+    MeasurementError, Modifier, PxPosition, RenderSlot, SemanticsModifierNode, State,
     accesskit::{HasPopup, Role},
     launch,
     layout::MeasureScope,
@@ -162,7 +162,8 @@ pub(super) fn split_button_item(
     }
     let pressed = enabled && interaction.with(InteractionState::is_pressed);
     let hovered = enabled && interaction.with(InteractionState::is_hovered);
-    let focused = enabled && interaction.with(InteractionState::is_focused);
+    let focus = remember(FocusRequester::new).get();
+    let focused = enabled && focus.is_focus_visible();
     let checked = !leading && expanded.unwrap_or(false);
     let (fraction, radius) = if shape.is_some() {
         (0.0, 0.0)
@@ -252,6 +253,7 @@ pub(super) fn split_button_item(
         .enabled(enabled)
         .ripple_color(content_color)
         .interaction_state(interaction)
+        .focus_requester(focus)
         .tonal_elevation(args.tonal_elevation)
         .elevation(Dp(
             motion.with(|motion| motion.elevation.value()).max(0.0) as f64

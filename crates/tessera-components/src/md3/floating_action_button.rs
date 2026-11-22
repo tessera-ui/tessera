@@ -5,8 +5,8 @@
 //! Emphasize a primary action with a prominent floating button.
 use tessera_foundation::modifier::{InteractionState, ModifierExt as _};
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, launch, provide_context,
-    remember, tessera, use_context,
+    Callback, Color, Dp, FocusRequester, Modifier, RenderSlot, State, accesskit::Role, launch,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -89,6 +89,7 @@ impl FloatingActionButtonElevation {
         self,
         enabled: bool,
         interaction_state: Option<State<InteractionState>>,
+        focus_visible: bool,
     ) -> Dp {
         if !enabled {
             return self.default_elevation;
@@ -101,7 +102,7 @@ impl FloatingActionButtonElevation {
         state.with(|state| {
             if state.is_pressed() {
                 self.pressed_elevation
-            } else if state.is_focused() {
+            } else if focus_visible {
                 self.focused_elevation
             } else if state.is_hovered() {
                 self.hovered_elevation
@@ -319,7 +320,9 @@ pub fn floating_action_button(
         interaction_state
     };
 
-    let target_elevation = elevation.shadow_elevation(enabled, interaction_state);
+    let focus = remember(FocusRequester::new).get();
+    let target_elevation =
+        elevation.shadow_elevation(enabled, interaction_state, focus.is_focus_visible());
     let motion = remember(|| elevation_motion(target_elevation));
     let target = target_elevation.0 as f32;
     launch(target, animate_to(motion, target));
@@ -341,6 +344,7 @@ pub fn floating_action_button(
         .accessibility_role(Role::Button)
         .accessibility_focusable(enabled)
         .interaction_state_optional(interaction_state)
+        .focus_requester(focus)
         .on_click_optional(on_click)
         .accessibility_label_optional(accessibility_label)
         .accessibility_description_optional(accessibility_description)

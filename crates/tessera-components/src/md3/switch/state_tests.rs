@@ -287,6 +287,9 @@ fn check_states() {
                         PressKeyEventType::Left,
                     );
                     renderer.frames(30);
+                    assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
+                    assert_pixel(&renderer, x, 62, thumb, "cancelled switch thumb");
+                    assert_pixel(&renderer, x, 12, scheme.surface, "cancelled state layer");
                     assert!(action(&mut renderer, Action::Focus));
                     renderer.frames(30);
                     assert_pixel(&renderer, x, 62, active, "focused thumb");

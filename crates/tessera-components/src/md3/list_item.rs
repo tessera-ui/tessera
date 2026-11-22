@@ -6,7 +6,7 @@
 
 use tessera_foundation::modifier::{InteractionState, ModifierExt as _, Padding};
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State, launch,
+    Callback, CallbackWith, Color, Dp, FocusRequester, Modifier, RenderSlot, State, launch,
     modifier::ModifierCapabilityExt as _, provide_context, remember, tessera, use_context,
 };
 
@@ -422,6 +422,7 @@ pub fn list_item(
         remember(InteractionState::new)
     };
     let interactive = enabled && (has_on_click || on_long_click.is_some());
+    let focus = remember(FocusRequester::new).get();
     let shapes = shapes
         .unwrap_or_else(|| ListItemShapes::from_theme(&theme))
         .segmented(position.unwrap_or_default(), theme.shapes.large);
@@ -433,7 +434,7 @@ pub fn list_item(
         shapes.dragged_shape
     } else if selected {
         shapes.selected_shape
-    } else if interactive && interaction.with(InteractionState::is_focused) {
+    } else if interactive && focus.is_focus_visible() {
         shapes.focused_shape
     } else if interactive && interaction.with(InteractionState::is_hovered) {
         shapes.hovered_shape
@@ -505,6 +506,7 @@ pub fn list_item(
         .accessibility_role(selection_mode.role())
         .elevation_optional(elevation)
         .interaction_state(interaction)
+        .focus_requester(focus)
         .on_click_optional(has_on_click.then_some(on_activate))
         .on_long_click_optional(on_long_click)
         .accessibility_focusable(interactive)

@@ -567,7 +567,7 @@ struct SurfaceLayout {
     scheme: MaterialColorScheme,
     absolute_tonal_elevation: Dp,
     ripple: Option<RippleAnimation>,
-    focus_visible: bool,
+    focus_visible: Option<bool>,
 }
 
 impl SurfaceLayout {
@@ -595,6 +595,19 @@ impl PartialEq for SurfaceLayout {
             && self.scheme == other.scheme
             && self.absolute_tonal_elevation == other.absolute_tonal_elevation
     }
+}
+
+pub(super) fn resolve_visual_interaction(
+    live: InteractionState,
+    presentation: Option<InteractionVisualState>,
+    enabled: bool,
+    focus_visible: Option<bool>,
+) -> InteractionState {
+    let mut visual = live.with_presentation(presentation, enabled);
+    if live.is_focused() && focus_visible == Some(false) {
+        visual.set_focused(false);
+    }
+    visual
 }
 
 impl tessera_ui::LayoutPolicy for SurfaceLayout {
@@ -764,7 +777,12 @@ impl tessera_ui::DrawModifierNode for SurfaceForeground {
             .interaction_state
             .map(|state| state.get())
             .unwrap_or_default();
-        let visual = live.with_presentation(policy.args.presentation_state, policy.args.enabled);
+        let visual = resolve_visual_interaction(
+            live,
+            policy.args.presentation_state,
+            policy.args.enabled,
+            policy.focus_visible,
+        );
         let alpha = if policy.args.enabled && policy.args.show_state_layer {
             visual.state_layer_alpha()
         } else {
@@ -812,7 +830,7 @@ impl tessera_ui::DrawModifierNode for SurfaceForeground {
         }
         if policy.args.show_focus_indicator
             && visual.is_focused()
-            && (!live.is_focused() || policy.focus_visible)
+            && (!live.is_focused() || policy.focus_visible == Some(true))
         {
             record_focus_indicator(ctx.render_input, policy.args.shape, policy.scheme.secondary);
         }
@@ -905,10 +923,9 @@ fn surface_content(
     ripple_state: Option<State<RippleState>>,
 ) {
     let surface = resolved.expect("surface_content requires resolved args");
-    let focus_visible = surface.show_focus_indicator
-        && surface
-            .focus_requester
-            .is_some_and(|requester| requester.is_focus_visible());
+    let focus_visible = surface
+        .focus_requester
+        .map(|requester| requester.is_focus_visible());
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1046,7 +1063,7 @@ fn surface_content(
 ///   disabled styling take precedence.
 /// - `presentation_ripple` — optional static circular ripple for an idle
 ///   pressed presentation.
-/// - `show_focus_indicator` — show a 3dp focus outline with a 2dp gap; defaults
+/// - `show_focus_indicator` — show a 3dp focus-visible outline with a 2dp gap; defaults
 ///   to false.
 /// - `show_state_layer` — optional state-layer visibility flag.
 /// - `show_ripple` — optional ripple visibility flag.
@@ -1169,7 +1186,9 @@ pub fn surface(
     let interactive = resolved.enabled && clickable;
     let internal_focus_requester = remember(FocusRequester::new).get();
     let bound_focus_requester = resolved.focus_requester.unwrap_or(internal_focus_requester);
-    resolved.focus_requester = Some(bound_focus_requester);
+    if interactive {
+        resolved.focus_requester = Some(bound_focus_requester);
+    }
     let interaction_state = if let Some(state) = resolved.interaction_state {
         Some(state)
     } else if interactive {
@@ -1430,7 +1449,7 @@ mod tests {
             interaction_state: None,
             ripple_state: None,
             ripple: None,
-            focus_visible: false,
+            focus_visible: None,
             scheme: MaterialColorScheme::default(),
             absolute_tonal_elevation: Dp(0.0),
         }

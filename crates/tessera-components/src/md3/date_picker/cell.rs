@@ -17,7 +17,7 @@ use tessera_ui::{
 
 use crate::{
     md3::{
-        surface::record_focus_indicator,
+        surface::{record_focus_indicator, resolve_visual_interaction},
         text::text,
         theme::{MaterialAlpha, MaterialTheme, TextStyle},
     },
@@ -156,7 +156,7 @@ pub fn date_picker_day(
         interaction,
         presentation_state,
         enabled,
-        disabled_focus: !enabled && focus.is_focused(),
+        focus_visible: focus.is_focus_visible(),
     };
     let range_band = range_position.map(CalendarRangePosition::band);
     let label =
@@ -196,7 +196,7 @@ pub fn date_picker_day(
         day_circle(
             visual,
             scheme.secondary,
-            focus.is_focus_visible(),
+            visual.focus_visible,
             label.clone(),
             theme.typography.body_large,
             color,
@@ -291,7 +291,7 @@ pub fn date_picker_year(
         interaction,
         presentation_state,
         enabled,
-        disabled_focus: !enabled && focus.is_focused(),
+        focus_visible: focus.is_focus_visible(),
     };
     let label = label_formatter.map_or_else(|| year.to_string(), |formatter| formatter.call(year));
     layout(Stack)
@@ -318,7 +318,7 @@ pub fn date_picker_year(
                         .size(Dp(72.0), Dp(36.0))
                         .offset(Dp(20.0), Dp(8.0))
                         .push_draw(CalendarFocusIndicator {
-                            visible: focus.is_focus_visible(),
+                            visible: visual.focus_visible,
                             shape: Shape::CAPSULE,
                             color: scheme.secondary,
                         }),
@@ -434,7 +434,7 @@ struct CalendarCellVisual {
     interaction: State<InteractionState>,
     presentation_state: Option<InteractionVisualState>,
     enabled: bool,
-    disabled_focus: bool,
+    focus_visible: bool,
 }
 
 impl tessera_ui::DrawModifierNode for CalendarCellVisual {
@@ -444,12 +444,19 @@ impl tessera_ui::DrawModifierNode for CalendarCellVisual {
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
         let live = self.interaction.get();
-        let visual = live.with_presentation(self.presentation_state, self.enabled);
-        let alpha = visual.state_layer_alpha().max(if self.disabled_focus {
-            MaterialAlpha::FOCUSED
-        } else {
-            0.0
-        });
+        let visual = resolve_visual_interaction(
+            live,
+            self.presentation_state,
+            self.enabled,
+            Some(self.focus_visible),
+        );
+        let alpha = visual
+            .state_layer_alpha()
+            .max(if !self.enabled && self.focus_visible {
+                MaterialAlpha::FOCUSED
+            } else {
+                0.0
+            });
         let fill = self
             .fill
             .blend_over(self.content_color.with_alpha(1.0), alpha);

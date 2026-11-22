@@ -96,7 +96,7 @@ fn clickable_routes_input_preserves_held_press_on_blur_and_disables_activation()
 }
 
 #[test]
-fn clickable_clears_pointer_focus_when_press_is_dragged_outside() {
+fn clickable_keeps_focus_but_cancels_press_when_dragged_outside() {
     let test = UiTest::new();
     let enabled = test.state(true);
     let clicks = test.state(0);
@@ -114,7 +114,7 @@ fn clickable_clears_pointer_focus_when_press_is_dragged_outside() {
     test.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(100.0, 10.0));
     test.frame();
 
-    assert!(!requester.is_focused());
+    assert!(requester.is_focused());
     assert!(!interaction.get().is_pressed());
     test.pointer_release(
         MOUSE_POINTER_ID,
@@ -123,6 +123,9 @@ fn clickable_clears_pointer_focus_when_press_is_dragged_outside() {
     );
     test.frame();
     assert_eq!(clicks.get(), 0);
+    test.press_key(NamedKey::Enter);
+    test.frame();
+    assert_eq!(clicks.get(), 1);
 }
 
 #[tessera]
