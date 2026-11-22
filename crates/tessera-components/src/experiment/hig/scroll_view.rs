@@ -11,12 +11,14 @@ use std::{
 
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Constraint, CursorEventContent, Dp, DrawModifierContent,
-    DrawModifierContext, DrawModifierNode, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
-    PointerEventPass, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, State,
+    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, CursorEventContent, Dp,
+    DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutPolicy, LayoutResult,
+    MeasurementError, Modifier, PointerEventPass, PointerInput, PointerInputModifierNode, Px,
+    PxPosition, RenderSlot, ScrollDeltaUnit, State,
+    focus::FocusRevealRequest,
     launch,
     layout::{MeasureScope, layout},
-    modifier::ModifierCapabilityExt as _,
+    modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
 };
 
@@ -40,6 +42,33 @@ mod tests;
 const SCROLLER_HOLD: Duration = Duration::from_secs(1);
 /// How long scrollers take to fade out.
 const SCROLLER_FADE: Duration = Duration::from_millis(250);
+/// Pause after the last precise scroll before stretched content springs back.
+const STRETCH_HOLD: Duration = Duration::from_millis(80);
+/// Rate at which stretched content springs back, per second.
+const STRETCH_DECAY: f32 = 16.0;
+
+/// Distance content moves when scrolled `excess` past an end of a viewport `extent` long; the
+/// resistance grows as the content is pulled further.
+fn rubber_band(excess: f32, extent: f32) -> f32 {
+    if extent <= 0.0 {
+        return 0.0;
+    }
+    let pulled = excess.abs();
+    excess.signum() * (1.0 - 1.0 / (pulled * 0.55 / extent + 1.0)) * extent
+}
+
+/// Scrolls `offset` by `delta` within `0..=max`. Precise scrolling stretches past the ends and
+/// returns no remainder; other scrolling returns what is left over for enclosing scroll views.
+/// Returns the new offset, the new stretch, and the remainder.
+fn scroll_axis(offset: f32, stretch: f32, delta: f32, max: f32, precise: bool) -> (f32, f32, f32) {
+    let position = offset.clamp(0.0, max) + if precise { stretch } else { 0.0 } - delta;
+    let next = position.clamp(0.0, max);
+    if precise && max > 0.0 {
+        (next, position - next, 0.0)
+    } else {
+        (next, 0.0, next - position)
+    }
+}
 
 /// The directions a [`scroll_view`] scrolls in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -99,6 +128,7 @@ impl Extents {
 struct ScrollLayout {
     axes: ScrollAxes,
     offset: (f32, f32),
+    stretch: (f32, f32),
     extents: Arc<Mutex<Extents>>,
 }
 
@@ -106,6 +136,7 @@ impl PartialEq for ScrollLayout {
     fn eq(&self, other: &Self) -> bool {
         self.axes == other.axes
             && self.offset == other.offset
+            && self.stretch == other.stretch
             && Arc::ptr_eq(&self.extents, &other.extents)
     }
 }
@@ -142,8 +173,10 @@ impl LayoutPolicy for ScrollLayout {
             *current = extents;
         }
         let (max_x, max_y) = extents.max_offset();
-        let x = -self.offset.0.clamp(0.0, max_x).round() as i32;
-        let y = -self.offset.1.clamp(0.0, max_y).round() as i32;
+        let x = -(self.offset.0.clamp(0.0, max_x) + rubber_band(self.stretch.0, extents.viewport.0))
+            .round() as i32;
+        let y = -(self.offset.1.clamp(0.0, max_y) + rubber_band(self.stretch.1, extents.viewport.1))
+            .round() as i32;
         let mut result = LayoutResult::new(viewport);
         if let Some(child) = children.first() {
             result.place_child(*child, PxPosition::new(Px(x), Px(y)));
@@ -165,7 +198,9 @@ impl LayoutPolicy for ScrollLayout {
 struct ScrollInput {
     axes: ScrollAxes,
     offset: State<(f32, f32)>,
+    stretch: State<(f32, f32)>,
     activity: State<u64>,
+    stretching: State<u64>,
     extents: Arc<Mutex<Extents>>,
 }
 
@@ -188,26 +223,29 @@ impl PointerInputModifierNode for ScrollInput {
                 continue;
             };
             let (dx, dy) = scroll.pixel_delta();
+            let precise = scroll.unit == ScrollDeltaUnit::Pixel;
             let (x, y) = self.offset.get();
-            let x = x.clamp(0.0, max_x);
-            let y = y.clamp(0.0, max_y);
-            let next_x = if self.axes.horizontal() {
-                (x - dx).clamp(0.0, max_x)
+            let (stretch_x, stretch_y) = self.stretch.get();
+            let (next_x, next_stretch_x, remaining_x) = if self.axes.horizontal() {
+                scroll_axis(x, stretch_x, dx, max_x, precise)
             } else {
-                x
+                (x, stretch_x, dx)
             };
-            let next_y = if self.axes.vertical() {
-                (y - dy).clamp(0.0, max_y)
+            let (next_y, next_stretch_y, remaining_y) = if self.axes.vertical() {
+                scroll_axis(y, stretch_y, dy, max_y, precise)
             } else {
-                y
+                (y, stretch_y, dy)
             };
-            let (used_x, used_y) = (x - next_x, y - next_y);
-            if used_x != 0.0 || used_y != 0.0 {
+            let (used_x, used_y) = (dx - remaining_x, dy - remaining_y);
+            if (next_x, next_y) != (x, y) {
                 self.offset.set((next_x, next_y));
                 self.activity.set(self.activity.get() + 1);
             }
-            let remaining_x = dx - used_x;
-            let remaining_y = dy - used_y;
+            let stretch = (next_stretch_x, next_stretch_y);
+            if stretch != (stretch_x, stretch_y) {
+                self.stretch.set(stretch);
+                self.stretching.set(self.stretching.get() + 1);
+            }
             if remaining_x.abs() < f32::EPSILON && remaining_y.abs() < f32::EPSILON {
                 change.consume();
             } else if used_x != 0.0 || used_y != 0.0 {
@@ -353,6 +391,10 @@ impl DrawModifierNode for Scrollers {
 /// - `modifier` — size and placement; the view fills the space its container offers.
 /// - `child` — the scrolled content.
 ///
+/// Precise scrolling, such as from a trackpad, stretches past the ends and springs back; line
+/// scrolling past an end continues in enclosing scroll views. Content that receives keyboard
+/// focus scrolls into view.
+///
 /// ## Examples
 ///
 /// ```
@@ -379,7 +421,9 @@ pub fn scroll_view(
 ) {
     let axes = axes.unwrap_or_default();
     let offset = remember(|| (0.0f32, 0.0f32));
+    let stretch = remember(|| (0.0f32, 0.0f32));
     let activity = remember(|| 0u64);
+    let stretching = remember(|| 0u64);
     let extents = remember(|| Arc::new(Mutex::new(Extents::default()))).get();
     let shown = remember(|| Eased::new(0.0, SCROLLER_FADE));
     let count = activity.get();
@@ -391,6 +435,30 @@ pub fn scroll_view(
         let mut hold = Delay::new(None, SCROLLER_HOLD);
         run_frames(shown, move |_, now| !hold.elapsed(now)).await;
         animate_to(shown, 0.0).await;
+    });
+    let pulls = stretching.get();
+    launch(pulls, async move {
+        if pulls == 0 {
+            return;
+        }
+        let mut hold = Delay::new(None, STRETCH_HOLD);
+        run_frames(stretch, move |_, now| !hold.elapsed(now)).await;
+        let mut last = None;
+        run_frames(stretch, move |stretch, now| {
+            let elapsed = last
+                .map(|last| now.saturating_duration_since(last).as_secs_f32())
+                .unwrap_or(0.0);
+            last = Some(now);
+            let decay = (-STRETCH_DECAY * elapsed).exp();
+            stretch.0 *= decay;
+            stretch.1 *= decay;
+            if stretch.0.abs() < 0.5 && stretch.1.abs() < 0.5 {
+                *stretch = (0.0, 0.0);
+                return false;
+            }
+            true
+        })
+        .await;
     });
     let appearance = use_context::<HigTheme>()
         .map(|theme| theme.get().appearance)
@@ -408,8 +476,42 @@ pub fn scroll_view(
         .push_pointer_input(ScrollInput {
             axes,
             offset,
+            stretch,
             activity,
+            stretching,
             extents: extents.clone(),
+        })
+        .focus_reveal_handler({
+            let extents = extents.clone();
+            CallbackWith::new(move |request: FocusRevealRequest| {
+                let target = request.local_target_bounds();
+                let viewport = request.local_viewport_bounds();
+                let (max_x, max_y) = extents
+                    .lock()
+                    .map(|extents| extents.max_offset())
+                    .unwrap_or_default();
+                let (x, y) = offset.get();
+                let next = (
+                    if axes.horizontal() {
+                        reveal(x, target.x, target.width, viewport.x, viewport.width)
+                            .clamp(0.0, max_x)
+                    } else {
+                        x
+                    },
+                    if axes.vertical() {
+                        reveal(y, target.y, target.height, viewport.y, viewport.height)
+                            .clamp(0.0, max_y)
+                    } else {
+                        y
+                    },
+                );
+                if next == (x, y) {
+                    return false;
+                }
+                offset.set(next);
+                activity.set(activity.get() + 1);
+                true
+            })
         });
     let scrollers = Scrollers {
         axes,
@@ -424,6 +526,7 @@ pub fn scroll_view(
     layout(ScrollLayout {
         axes,
         offset: offset.get(),
+        stretch: stretch.get(),
         extents,
     })
     .modifier(modifier)
@@ -447,5 +550,16 @@ fn scroll_content(axes: ScrollAxes, child: RenderSlot) {
         row().children_shared(child);
     } else {
         column().children_shared(child);
+    }
+}
+
+/// The offset that brings a target into view along one axis, scrolling as little as possible.
+fn reveal(offset: f32, start: f32, length: f32, viewport: f32, extent: f32) -> f32 {
+    if start < viewport {
+        offset - (viewport - start)
+    } else if start + length > viewport + extent {
+        offset + (start + length - viewport - extent)
+    } else {
+        offset
     }
 }
