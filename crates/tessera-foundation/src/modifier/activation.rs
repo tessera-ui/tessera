@@ -163,6 +163,7 @@ async fn async_clickable_detector(
                 }
             }
             TapGesture::Cancelled => {
+                focus_requester.clear_focus();
                 if let Some(state) = interaction_state
                     && state.is_alive()
                 {
