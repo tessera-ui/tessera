@@ -1849,7 +1849,7 @@ mod tests {
     }
 
     #[tessera_ui::tessera]
-    fn weighted_field_and_button_fixture() {
+    fn weighted_row_with_text_field_and_button() {
         use tessera_foundation::modifier::ModifierExt as _;
         use tessera_ui::Modifier;
 
@@ -1869,7 +1869,7 @@ mod tests {
     }
 
     #[tessera_ui::tessera]
-    fn unweighted_field_and_button_fixture() {
+    fn unweighted_row_with_text_field_and_button() {
         use tessera_foundation::modifier::ModifierExt as _;
         use tessera_ui::{Dp, Modifier};
 
@@ -1898,7 +1898,7 @@ mod tests {
 
         let mut session = UiTest::new()
             .viewport(400, 120)
-            .content(weighted_field_and_button_fixture);
+            .content(weighted_row_with_text_field_and_button);
         session.frames(2);
         let nodes = session.accessibility_snapshot().unwrap().nodes;
         let bounds = |label| {
@@ -1930,7 +1930,7 @@ mod tests {
 
         let mut session = UiTest::new()
             .viewport(400, 120)
-            .content(unweighted_field_and_button_fixture);
+            .content(unweighted_row_with_text_field_and_button);
         session.frames(2);
         let nodes = session.accessibility_snapshot().unwrap().nodes;
         let bounds = |label| {
