@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    Modifier, PxPosition, State,
+    Dp, Modifier, PxPosition, State,
     accesskit::{Action, Role},
     remember, tessera,
     testing::{TestProbe, UiTest},
@@ -17,7 +17,7 @@ use super::{
         presentation::presentation_host,
         text::text,
     },
-    AlertAction, alert, confirmation_dialog, help, inspector, popover, sheet,
+    AlertAction, DialogSeverity, alert, confirmation_dialog, help, inspector, popover, sheet,
 };
 
 fn shows(ui: &UiTest, label: &str) -> bool {
@@ -261,4 +261,70 @@ fn inspectors_slide_in_and_narrow_the_content() {
     ui.advance(Duration::from_millis(400));
     ui.frames(4);
     assert_eq!(ui.frame().node("main").bounds().width.0, 340);
+}
+
+#[tessera]
+fn extras_fixture(probe: TestProbe<Option<State<Vec<bool>>>>) {
+    let changes = remember(Vec::new);
+    probe.set(Some(changes));
+    presentation_host().child(move || {
+        alert("Erase the disk?", true)
+            .severity(DialogSeverity::Critical)
+            .icon(|| {
+                spacer().modifier(Modifier::new().size(Dp(48.0), Dp(48.0)).semantics(
+                    SemanticsArgs {
+                        test_tag: Some("icon".into()),
+                        ..Default::default()
+                    },
+                ));
+            })
+            .suppressed(false)
+            .on_suppressed_change(move |suppressed| changes.with_mut(|c| c.push(suppressed)));
+    });
+}
+
+#[test]
+fn alerts_show_their_icon_above_the_title_and_a_suppression_checkbox() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 400)
+        .content(|| extras_fixture(probe.clone()));
+    ui.frames(3);
+    let changes = probe.get().expect("fixture state");
+    let icon = ui.frame().node("icon").bounds();
+    let snapshot = ui.inspect_accessibility().expect("published semantics");
+    let (_, title) = snapshot
+        .nodes()
+        .iter()
+        .find(|(_, node)| {
+            node.label() == Some("Erase the disk?") && node.role() != Role::AlertDialog
+        })
+        .expect("title");
+    assert!(
+        f64::from(icon.y.0 + icon.height.0) <= title.bounds().expect("title bounds").y0,
+        "the icon sits above the title"
+    );
+    let (checkbox, node) = snapshot
+        .find("Don’t ask again", Role::CheckBox)
+        .expect("suppression checkbox");
+    assert_eq!(node.toggled(), Some(tessera_ui::accesskit::Toggled::False));
+    assert!(ui.accessibility_action(checkbox, Action::Click));
+    ui.frames(2);
+    assert_eq!(changes.get(), [true]);
+}
+
+#[test]
+fn alerts_without_suppression_have_no_checkbox() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 400)
+        .content(|| alert_fixture(false, probe.clone()));
+    ui.frames(3);
+    assert!(
+        ui.inspect_accessibility()
+            .expect("published semantics")
+            .nodes()
+            .iter()
+            .all(|(_, node)| node.role() != Role::CheckBox)
+    );
 }

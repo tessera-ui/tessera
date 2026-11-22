@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, Color, ComputedData,
-    Constraint, Dp, FloatRect, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
-    PointerEventPass, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot,
+    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
+    ComputedData, Constraint, Dp, FloatRect, LayoutPolicy, LayoutResult, MeasurementError,
+    Modifier, PointerEventPass, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot,
     SemanticsModifierNode, State,
     accesskit::Role,
     launch,
@@ -20,10 +20,12 @@ use tessera_ui::{
 };
 
 use crate::{
-    alignment::{CrossAxisAlignment, MainAxisAlignment},
+    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation::{Delay, animate_to, run_frames},
+    boxed::boxed,
     column::column,
     modifier::ModifierExt as _,
+    shape_def::Shape,
     spacer::spacer,
 };
 
@@ -33,6 +35,7 @@ use super::{
     presentation::{PopupPlacement, SurfaceStyle, present_surface},
     text::text,
     theme::{Appearance, HigTheme, TextStyle},
+    toggle::{ToggleStyle, toggle},
 };
 
 #[cfg(test)]
@@ -263,6 +266,34 @@ impl AlertAction {
     }
 }
 
+/// How serious the decision an [`alert`] asks for is.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DialogSeverity {
+    /// The platform default, standard severity.
+    #[default]
+    Automatic,
+    /// An ordinary alert.
+    Standard,
+    /// An alert about data loss or another serious consequence; shows a caution badge.
+    Critical,
+}
+
+/// The suppression checkbox of an alert.
+#[derive(Clone, PartialEq)]
+struct Suppression {
+    title: String,
+    suppressed: bool,
+    on_change: Option<CallbackWith<bool>>,
+}
+
+/// The parts of an alert other than its text and buttons.
+#[derive(Clone, PartialEq)]
+struct AlertExtras {
+    icon: Option<RenderSlot>,
+    critical: bool,
+    suppression: Option<Suppression>,
+}
+
 /// # alert
 ///
 /// Shows an important message with buttons in a modal panel.
@@ -278,6 +309,11 @@ impl AlertAction {
 /// - `actions` — the buttons; defaults to a single OK button. The last non-cancel action is
 ///   the default action for Return.
 /// - `on_dismiss` — called after any action closes the alert, and on Escape.
+/// - `icon` — optional symbol above the title.
+/// - `severity` — critical alerts show a caution badge; defaults to [`DialogSeverity::Automatic`].
+/// - `suppressed`, `on_suppressed_change` — shows a checkbox that lets people stop seeing the
+///   alert, and its requested changes.
+/// - `suppression_title` — the checkbox title; defaults to “Don’t ask again”.
 ///
 /// The alert appears in the nearest
 /// [`presentation_host`](super::presentation::presentation_host).
@@ -314,7 +350,21 @@ pub fn alert(
     #[prop(into)] message: Option<String>,
     actions: Option<Vec<AlertAction>>,
     on_dismiss: Option<Callback>,
+    icon: Option<RenderSlot>,
+    severity: Option<DialogSeverity>,
+    suppressed: Option<bool>,
+    on_suppressed_change: Option<CallbackWith<bool>>,
+    #[prop(into)] suppression_title: Option<String>,
 ) {
+    let extras = AlertExtras {
+        icon,
+        critical: severity == Some(DialogSeverity::Critical),
+        suppression: suppressed.map(|suppressed| Suppression {
+            title: suppression_title.unwrap_or_else(|| "Don’t ask again".to_owned()),
+            suppressed,
+            on_change: on_suppressed_change,
+        }),
+    };
     let dismiss = on_dismiss.unwrap_or_else(Callback::noop);
     let actions = actions.unwrap_or_else(|| vec![AlertAction::new("OK", || {})]);
     let cancel = actions
@@ -338,7 +388,8 @@ pub fn alert(
             focus: true,
         },
         RenderSlot::new(move || {
-            alert_body(title.clone(), actions.clone(), dismiss).message_optional(message.clone());
+            alert_body(title.clone(), actions.clone(), dismiss, extras.clone())
+                .message_optional(message.clone());
         }),
         escape,
     );
@@ -349,6 +400,7 @@ fn alert_body(
     title: String,
     actions: Vec<AlertAction>,
     dismiss: Callback,
+    extras: AlertExtras,
     message: Option<String>,
 ) {
     let dark = use_context::<HigTheme>()
@@ -368,6 +420,10 @@ fn alert_body(
             ..Default::default()
         }))
         .children(move || {
+            if extras.icon.is_some() || extras.critical {
+                alert_icon(extras.critical).icon_optional(extras.icon);
+                spacer().modifier(Modifier::new().height(Dp(10.0)));
+            }
             text(title.clone())
                 .style(TextStyle {
                     font_weight: 700,
@@ -378,12 +434,66 @@ fn alert_body(
                 spacer().modifier(Modifier::new().height(Dp(6.0)));
                 text(message).color(tint.with_alpha(0.85));
             }
+            if let Some(suppression) = extras.suppression.clone() {
+                spacer().modifier(Modifier::new().height(Dp(12.0)));
+                let checkbox = toggle(suppression.suppressed)
+                    .style(ToggleStyle::Checkbox)
+                    .label(suppression.title);
+                if let Some(on_change) = suppression.on_change {
+                    checkbox.on_value_change_shared(on_change);
+                }
+            }
             spacer().modifier(Modifier::new().height(Dp(16.0)));
             let actions = actions.clone();
             button_scope().child(move |scope| {
                 alert_buttons(actions.clone(), dismiss, scope).default_optional(default);
             });
         });
+}
+
+/// The alert's symbol; a critical alert adds a caution badge at its bottom-trailing corner, or
+/// shows the badge alone.
+#[tessera]
+fn alert_icon(critical: bool, icon: Option<RenderSlot>) {
+    let badge = if icon.is_some() { 20.0 } else { 36.0 };
+    boxed().alignment(Alignment::BottomEnd).children(move || {
+        if let Some(icon) = icon {
+            icon.render();
+        }
+        if critical {
+            caution_badge(badge);
+        }
+    });
+}
+
+#[tessera]
+fn caution_badge(size: f64) {
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .size(Dp(size), Dp(size))
+                .background_with_shape(caution_yellow(), Shape::Ellipse)
+                .clear_and_set_semantics(SemanticsArgs {
+                    hidden: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            text("!")
+                .style(TextStyle {
+                    font_size: Dp(size * 0.6),
+                    line_height: Dp(size * 0.75),
+                    font_weight: 800,
+                    ..Default::default()
+                })
+                .color(Color::BLACK.with_alpha(0.85));
+        });
+}
+
+fn caution_yellow() -> Color {
+    // sRGB 255, 204, 0.
+    Color::from_rgb(1.0, 0.6038, 0.0)
 }
 
 #[tessera]
@@ -434,6 +544,8 @@ fn alert_buttons(
 /// - `message` — optional explanation below the title.
 /// - `actions` — the confirming buttons.
 /// - `on_dismiss` — called after any action closes the dialog, including Cancel and Escape.
+/// - `icon`, `severity`, `suppressed`, `on_suppressed_change`, `suppression_title` — as for
+///   [`alert`].
 ///
 /// ## Examples
 ///
@@ -465,6 +577,11 @@ pub fn confirmation_dialog(
     #[prop(into)] message: Option<String>,
     actions: Option<Vec<AlertAction>>,
     on_dismiss: Option<Callback>,
+    icon: Option<RenderSlot>,
+    severity: Option<DialogSeverity>,
+    suppressed: Option<bool>,
+    on_suppressed_change: Option<CallbackWith<bool>>,
+    #[prop(into)] suppression_title: Option<String>,
 ) {
     let mut actions = actions.unwrap_or_default();
     if !actions
@@ -473,10 +590,19 @@ pub fn confirmation_dialog(
     {
         actions.push(AlertAction::new("Cancel", || {}).role(ButtonRole::Cancel));
     }
-    alert(title, is_presented)
+    let alert = alert(title, is_presented)
         .message_optional(message)
         .actions(actions)
-        .on_dismiss_optional(on_dismiss);
+        .on_dismiss_optional(on_dismiss)
+        .severity_optional(severity)
+        .suppressed_optional(suppressed)
+        .suppression_title_optional(suppression_title);
+    if let Some(icon) = icon {
+        alert.icon_shared(icon);
+    }
+    if let Some(on_change) = on_suppressed_change {
+        alert.on_suppressed_change_shared(on_change);
+    }
 }
 
 /// # sheet

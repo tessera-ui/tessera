@@ -24,7 +24,10 @@ use tessera_components::{
         menu::{MenuStyle, context_menu, menu, menu_divider, menu_item, menu_section},
         navigation_split_view::{NavigationSplitViewVisibility, navigation_split_view},
         picker::{PickerStyle, picker},
-        presentations::{AlertAction, alert, confirmation_dialog, help, inspector, popover, sheet},
+        presentations::{
+            AlertAction, DialogSeverity, alert, confirmation_dialog, help, inspector, popover,
+            sheet,
+        },
         progress::{ProgressViewStyle, progress_view},
         scroll_view::scroll_view,
         slider::slider,
@@ -1088,6 +1091,11 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                         })
                         .role(ButtonRole::Destructive),
                     ])
+                    .severity(DialogSeverity::Critical)
+                    .suppressed(values.mixed)
+                    .on_suppressed_change(move |suppressed| {
+                        state.with_mut(|v| v.mixed = suppressed)
+                    })
                     .on_dismiss(move || state.with_mut(|v| v.expanded = false));
                 confirmation_dialog(I18N.text("ui-hig-discard-title"), values.on)
                     .actions(vec![
