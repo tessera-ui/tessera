@@ -16,7 +16,12 @@ use std::{
     },
 };
 
-#[cfg(target_os = "ios")]
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux"
+))]
 use std::cell::RefCell;
 
 use accesskit::{self, TreeUpdate};
@@ -346,6 +351,13 @@ pub struct Renderer<F> {
     android_platform_view_host: Option<crate::android::platform_views::PlatformViewHost>,
     #[cfg(target_os = "ios")]
     ios_platform_views: Rc<RefCell<crate::ios::platform_views::IosPlatformViews>>,
+    #[cfg(target_os = "macos")]
+    macos_platform_views: Rc<RefCell<crate::macos_platform_views::MacosPlatformViews>>,
+    #[cfg(target_os = "windows")]
+    windows_platform_views:
+        Option<Rc<RefCell<crate::windows_platform_views::WindowsPlatformViews>>>,
+    #[cfg(target_os = "linux")]
+    linux_platform_views: Option<Rc<RefCell<crate::linux_platform_views::LinuxPlatformViews>>>,
     pending_desktop_window_action: Rc<Cell<Option<DesktopWindowAction>>>,
     #[cfg(target_os = "macos")]
     macos_titlebar: macos_titlebar::TitleBarInput,
@@ -425,6 +437,12 @@ where
             macos_titlebar: macos_titlebar::TitleBarInput::default(),
             #[cfg(target_os = "ios")]
             ios_platform_views: Rc::default(),
+            #[cfg(target_os = "macos")]
+            macos_platform_views: Rc::default(),
+            #[cfg(target_os = "windows")]
+            windows_platform_views: None,
+            #[cfg(target_os = "linux")]
+            linux_platform_views: None,
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
@@ -1379,11 +1397,61 @@ where
         Some(context)
     }
 
-    #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
+    #[cfg(target_os = "macos")]
+    fn plugin_context(&self, _event_loop: &ActiveEventLoop) -> Option<PluginContext> {
+        let _session = self.session.enter();
+        let desktop = self.desktop_platform_context()?;
+        let scale_factor = desktop.window().scale_factor();
+        let context = PluginContext::new_macos(desktop, self.macos_platform_views.clone());
+        if let (Some(root), Some(main_thread)) = (context.ns_view(), objc2::MainThreadMarker::new())
+        {
+            self.macos_platform_views
+                .borrow_mut()
+                .set_root(root, scale_factor, main_thread);
+        }
+        Some(context)
+    }
+
+    #[cfg(target_os = "windows")]
+    fn plugin_context(&self, _event_loop: &ActiveEventLoop) -> Option<PluginContext> {
+        let _session = self.session.enter();
+        let desktop = self.desktop_platform_context()?;
+        Some(PluginContext::new_windows(
+            desktop,
+            self.windows_platform_views.clone(),
+        ))
+    }
+
+    #[cfg(target_os = "linux")]
+    fn plugin_context(&self, _event_loop: &ActiveEventLoop) -> Option<PluginContext> {
+        let _session = self.session.enter();
+        let desktop = self.desktop_platform_context()?;
+        Some(PluginContext::new_linux(
+            desktop,
+            self.linux_platform_views.clone(),
+        ))
+    }
+
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_os = "macos"),
+        not(target_os = "windows"),
+        not(target_os = "linux"),
+        not(target_family = "wasm")
+    ))]
     fn plugin_context(&self, _event_loop: &ActiveEventLoop) -> Option<PluginContext> {
         let _session = self.session.enter();
         let desktop = self.desktop_platform_context()?;
         Some(PluginContext::new(desktop))
+    }
+
+    #[cfg(target_family = "wasm")]
+    fn plugin_context(&self, _event_loop: &ActiveEventLoop) -> Option<PluginContext> {
+        let _session = self.session.enter();
+        let desktop = self.desktop_platform_context()?;
+        let host = self.app.as_ref()?.web_platform_views();
+        Some(PluginContext::new_web(desktop, host))
     }
 
     fn try_request_redraw(window: &Window, redraw_pending: &AtomicBool) {
@@ -2226,16 +2294,46 @@ where
 
         #[cfg(not(target_family = "wasm"))]
         {
+            #[cfg(target_os = "windows")]
+            {
+                self.windows_platform_views =
+                    match crate::windows_platform_views::WindowsPlatformViews::new(&window) {
+                        Ok(host) => Some(Rc::new(RefCell::new(host))),
+                        Err(error) => {
+                            warn!(%error, "Failed to initialize DirectComposition platform views");
+                            None
+                        }
+                    };
+            }
+            #[cfg(target_os = "linux")]
+            {
+                self.linux_platform_views =
+                    match crate::linux_platform_views::LinuxPlatformViews::new(&window) {
+                        Ok(host) => Some(Rc::new(RefCell::new(host))),
+                        Err(error) => {
+                            warn!(%error, "Failed to initialize X11 platform views");
+                            None
+                        }
+                    };
+            }
             let mut render_core = pollster::block_on(RenderCore::new(
                 window.clone(),
                 self.config.sample_count,
                 self.config.window.transparent,
                 self.config.max_non_sampler_bindings,
+                #[cfg(target_os = "windows")]
+                self.windows_platform_views.clone(),
             ));
             #[cfg(target_os = "android")]
             render_core.set_android_platform_view_host(self.android_platform_view_host.clone());
             #[cfg(target_os = "ios")]
             render_core.set_ios_platform_views(self.ios_platform_views.clone());
+            #[cfg(target_os = "macos")]
+            render_core.set_macos_platform_views(self.macos_platform_views.clone());
+            #[cfg(target_os = "windows")]
+            render_core.set_windows_platform_views(self.windows_platform_views.clone());
+            #[cfg(target_os = "linux")]
+            render_core.set_linux_platform_views(self.linux_platform_views.clone());
 
             // Register pipelines
             let mut context = PipelineContext::new(&mut render_core);
@@ -2318,6 +2416,14 @@ where
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let _session = self.session.enter();
+        #[cfg(target_os = "linux")]
+        if self
+            .linux_platform_views
+            .as_ref()
+            .is_some_and(|platform_views| platform_views.borrow_mut().sync_parent_visibility())
+        {
+            self.request_redraw_now();
+        }
         if cfg!(target_os = "ios") && self.redraw_request_pending.load(Ordering::Acquire) {
             // UIKit can coalesce view redraws while the Metal sublayer presents.
             self.handle_redraw_requested(event_loop);
@@ -2367,6 +2473,20 @@ where
                 request_redraw = true;
                 #[cfg(feature = "profiling")]
                 redraw_reasons.push(RedrawReason::WindowResized);
+            }
+            WindowEvent::Moved(_) => {
+                #[cfg(target_os = "linux")]
+                {
+                    request_redraw = true;
+                }
+            }
+            WindowEvent::Occluded(occluded) => {
+                #[cfg(target_os = "linux")]
+                {
+                    request_redraw = !occluded;
+                }
+                #[cfg(not(target_os = "linux"))]
+                let _ = occluded;
             }
             WindowEvent::CursorMoved {
                 device_id: _,

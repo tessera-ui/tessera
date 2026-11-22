@@ -147,6 +147,9 @@ web-time = "1.1"
 wgpu = "30.0.1"
 which = "8.0"
 windows = "0.62"
+x11-dl = "2.21"
+wayland-client = { version = "0.31", default-features = false }
+wayland-protocols = { version = "0.32", default-features = false }
 wuff = { version = "0.2", default-features = false }
 x509-certificate = "0.25"
 

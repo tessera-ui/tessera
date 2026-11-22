@@ -7498,10 +7498,13 @@ dependencies = [
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wayland-client",
+ "wayland-protocols",
  "web-sys",
  "web-time",
  "wgpu",
  "windows",
+ "x11-dl",
 ]
 
 [[package]]

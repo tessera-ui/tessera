@@ -6,7 +6,13 @@
 
 use std::{any::TypeId, io, sync::Arc, time::Duration};
 
-#[cfg(target_os = "ios")]
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm"
+))]
 use std::{cell::RefCell, rc::Rc};
 
 use rustc_hash::FxHashMap;
@@ -120,7 +126,14 @@ pub struct RenderCore {
 
     pipeline_cache: Option<wgpu::PipelineCache>,
     adapter_info: wgpu::AdapterInfo,
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux",
+        target_family = "wasm"
+    ))]
     adapter: wgpu::Adapter,
     #[cfg(target_os = "android")]
     android_slice_surfaces: Vec<Vec<AndroidSliceTarget>>,
@@ -130,6 +143,20 @@ pub struct RenderCore {
     ios_slice_surfaces: Vec<IosSliceTarget>,
     #[cfg(target_os = "ios")]
     ios_composition_active: bool,
+    #[cfg(target_os = "macos")]
+    macos_slice_surfaces: Vec<MacosSliceTarget>,
+    #[cfg(target_os = "macos")]
+    macos_composition_active: bool,
+    #[cfg(target_os = "windows")]
+    windows_slice_surfaces: Vec<WindowsSliceTarget>,
+    #[cfg(target_os = "windows")]
+    windows_composition_active: bool,
+    #[cfg(target_os = "linux")]
+    linux_slice_surfaces: Vec<wgpu::Surface<'static>>,
+    #[cfg(target_os = "linux")]
+    linux_composition_active: bool,
+    #[cfg(target_family = "wasm")]
+    web_slice_surfaces: Vec<wgpu::Surface<'static>>,
 
     targets: FrameTargets,
     blit: BlitState,
@@ -139,6 +166,15 @@ pub struct RenderCore {
     android_platform_view_host: Option<crate::android::platform_views::PlatformViewHost>,
     #[cfg(target_os = "ios")]
     ios_platform_views: Option<Rc<RefCell<crate::ios::platform_views::IosPlatformViews>>>,
+    #[cfg(target_os = "macos")]
+    macos_platform_views: Option<Rc<RefCell<crate::macos_platform_views::MacosPlatformViews>>>,
+    #[cfg(target_os = "windows")]
+    windows_platform_views:
+        Option<Rc<RefCell<crate::windows_platform_views::WindowsPlatformViews>>>,
+    #[cfg(target_os = "linux")]
+    linux_platform_views: Option<Rc<RefCell<crate::linux_platform_views::LinuxPlatformViews>>>,
+    #[cfg(target_family = "wasm")]
+    web_platform_views: Option<Rc<RefCell<crate::web_platform_views::WebPlatformViews>>>,
     last_render_breakdown: Option<RenderTimingBreakdown>,
     #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
     gpu_timing: Option<gpu_timing::GpuTimingProbe>,
@@ -164,6 +200,19 @@ struct IosSliceTarget {
     config: wgpu::SurfaceConfiguration,
 }
 
+#[cfg(target_os = "macos")]
+struct MacosSliceTarget {
+    _layer: objc2::rc::Retained<objc2_quartz_core::CAMetalLayer>,
+    surface: wgpu::Surface<'static>,
+    config: wgpu::SurfaceConfiguration,
+}
+
+#[cfg(target_os = "windows")]
+struct WindowsSliceTarget {
+    surface: wgpu::Surface<'static>,
+    config: wgpu::SurfaceConfiguration,
+}
+
 /// Shared GPU resources used when creating pipelines.
 pub struct RenderResources<'a> {
     /// Renderer-owned resource creation, uploads, and work observations.
@@ -181,6 +230,69 @@ pub struct RenderResources<'a> {
 }
 
 impl RenderCore {
+    #[cfg(target_family = "wasm")]
+    pub(crate) fn web_platform_views(
+        &self,
+    ) -> Option<Rc<RefCell<crate::web_platform_views::WebPlatformViews>>> {
+        self.web_platform_views.clone()
+    }
+
+    #[cfg(target_family = "wasm")]
+    fn ensure_web_slice_surfaces(&mut self, count: usize) -> Result<(), String> {
+        let host = self
+            .web_platform_views
+            .as_ref()
+            .ok_or("Web DOM scene host is unavailable")?;
+        while self.web_slice_surfaces.len() < count {
+            let canvas = host
+                .borrow_mut()
+                .create_slice_canvas([self.config.width, self.config.height])?;
+            let surface = match self
+                .instance
+                .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
+            {
+                Ok(surface) => surface,
+                Err(error) => {
+                    host.borrow_mut().discard_last_slice();
+                    return Err(error.to_string());
+                }
+            };
+            let capabilities = surface.get_capabilities(&self.adapter);
+            let mut config = self.config.clone();
+            if capabilities
+                .alpha_modes
+                .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
+            {
+                config.alpha_mode = wgpu::CompositeAlphaMode::PreMultiplied;
+            } else if capabilities
+                .alpha_modes
+                .contains(&wgpu::CompositeAlphaMode::PostMultiplied)
+            {
+                config.alpha_mode = wgpu::CompositeAlphaMode::PostMultiplied;
+            } else {
+                host.borrow_mut().discard_last_slice();
+                return Err("Web scene slice does not support alpha composition".to_owned());
+            }
+            if !capabilities.formats.contains(&config.format) {
+                host.borrow_mut().discard_last_slice();
+                return Err("Web scene slice does not support the presentation format".to_owned());
+            }
+            config.width = self.config.width.max(1);
+            config.height = self.config.height.max(1);
+            surface.configure(&self.device, &config);
+            self.web_slice_surfaces.push(surface);
+        }
+        for surface in &self.web_slice_surfaces[..count] {
+            if let Some(mut config) = surface.get_configuration()
+                && (config.width != self.config.width || config.height != self.config.height)
+            {
+                config.width = self.config.width.max(1);
+                config.height = self.config.height.max(1);
+                surface.configure(&self.device, &config);
+            }
+        }
+        Ok(())
+    }
     /// Returns shared GPU resources used for pipeline creation.
     pub fn resources(&self) -> RenderResources<'_> {
         RenderResources {
@@ -263,6 +375,30 @@ impl RenderCore {
         platform_views: Rc<RefCell<crate::ios::platform_views::IosPlatformViews>>,
     ) {
         self.ios_platform_views = Some(platform_views);
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn set_macos_platform_views(
+        &mut self,
+        platform_views: Rc<RefCell<crate::macos_platform_views::MacosPlatformViews>>,
+    ) {
+        self.macos_platform_views = Some(platform_views);
+    }
+
+    #[cfg(target_os = "windows")]
+    pub(crate) fn set_windows_platform_views(
+        &mut self,
+        platform_views: Option<Rc<RefCell<crate::windows_platform_views::WindowsPlatformViews>>>,
+    ) {
+        self.windows_platform_views = platform_views;
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn set_linux_platform_views(
+        &mut self,
+        platform_views: Option<Rc<RefCell<crate::linux_platform_views::LinuxPlatformViews>>>,
+    ) {
+        self.linux_platform_views = platform_views;
     }
 
     #[cfg(target_os = "ios")]
@@ -349,6 +485,218 @@ impl RenderCore {
             .iter()
             .map(|target| target._layer.clone().into_super())
             .collect()
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn ensure_macos_slice_surfaces(&mut self, count: usize) -> Result<(), String> {
+        let root_layer = self
+            .macos_platform_views
+            .as_ref()
+            .and_then(|views| views.borrow().root_layer())
+            .ok_or_else(|| "AppKit platform-view root is not attached".to_owned())?;
+        while self.macos_slice_surfaces.len() < count {
+            let layer = objc2_quartz_core::CAMetalLayer::new();
+            layer.setOpaque(false);
+            layer.setHidden(true);
+            layer.setPresentsWithTransaction(true);
+            layer.setFrame(objc2_core_foundation::CGRect::new(
+                objc2_core_foundation::CGPoint::new(0.0, 0.0),
+                objc2_core_foundation::CGSize::new(self.size.width as f64, self.size.height as f64),
+            ));
+            layer.setContentsScale(
+                self.window
+                    .as_ref()
+                    .map_or(1.0, |window| window.scale_factor()),
+            );
+            root_layer.addSublayer(&layer);
+            let surface = unsafe {
+                self.instance
+                    .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(
+                        objc2::rc::Retained::as_ptr(&layer).cast_mut().cast(),
+                    ))
+            }
+            .map_err(|error| error.to_string())?;
+            let capabilities = surface.get_capabilities(&self.adapter);
+            let format = capabilities
+                .formats
+                .iter()
+                .copied()
+                .find(|format| *format == self.config.format)
+                .ok_or_else(|| {
+                    "Core Animation slice does not support the presentation format".to_owned()
+                })?;
+            let alpha_mode = capabilities
+                .alpha_modes
+                .iter()
+                .copied()
+                .find(|mode| *mode != wgpu::CompositeAlphaMode::Opaque)
+                .ok_or_else(|| {
+                    "Core Animation slice does not support alpha composition".to_owned()
+                })?;
+            let config = wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format,
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                width: self.config.width,
+                height: self.config.height,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode,
+                view_formats: Vec::new(),
+                desired_maximum_frame_latency: 2,
+            };
+            surface.configure(&self.device, &config);
+            self.macos_slice_surfaces.push(MacosSliceTarget {
+                _layer: layer,
+                surface,
+                config,
+            });
+        }
+        for target in &mut self.macos_slice_surfaces[..count] {
+            if target.config.width != self.config.width
+                || target.config.height != self.config.height
+            {
+                target.config.width = self.config.width;
+                target.config.height = self.config.height;
+                target.surface.configure(&self.device, &target.config);
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn macos_compositor_layers(
+        &self,
+    ) -> Vec<objc2::rc::Retained<objc2_quartz_core::CALayer>> {
+        self.macos_slice_surfaces
+            .iter()
+            .map(|target| target._layer.clone().into_super())
+            .collect()
+    }
+
+    #[cfg(target_os = "windows")]
+    pub(crate) fn ensure_windows_slice_surfaces(&mut self, count: usize) -> Result<(), String> {
+        let host = self
+            .windows_platform_views
+            .as_ref()
+            .ok_or_else(|| "DirectComposition host is unavailable".to_owned())?;
+        while self.windows_slice_surfaces.len() < count {
+            let visual = host.borrow_mut().create_slice_visual()?;
+            let surface = unsafe {
+                self.instance
+                    .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CompositionVisual(visual))
+            }
+            .map_err(|error| error.to_string())?;
+            let capabilities = surface.get_capabilities(&self.adapter);
+            let format = capabilities
+                .formats
+                .iter()
+                .copied()
+                .find(|format| *format == self.config.format)
+                .ok_or_else(|| "DirectComposition slice format is unsupported".to_owned())?;
+            let alpha_mode = wgpu::CompositeAlphaMode::PreMultiplied;
+            if !capabilities.alpha_modes.contains(&alpha_mode) {
+                return Err("DirectComposition slice requires premultiplied alpha".to_owned());
+            }
+            let config = wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format,
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                width: self.config.width,
+                height: self.config.height,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode,
+                view_formats: Vec::new(),
+                desired_maximum_frame_latency: 2,
+            };
+            surface.configure(&self.device, &config);
+            self.windows_slice_surfaces
+                .push(WindowsSliceTarget { surface, config });
+        }
+        for target in &mut self.windows_slice_surfaces[..count] {
+            if target.config.width != self.config.width
+                || target.config.height != self.config.height
+            {
+                target.config.width = self.config.width;
+                target.config.height = self.config.height;
+                target.surface.configure(&self.device, &target.config);
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn ensure_linux_slice_surfaces(&mut self, count: usize, scale: f64) -> Result<(), String> {
+        let host = self
+            .linux_platform_views
+            .as_ref()
+            .ok_or("Linux platform-view host is unavailable")?;
+        while self.linux_slice_surfaces.len() < count {
+            let handles = host
+                .borrow_mut()
+                .create_slice_window([self.config.width, self.config.height])?;
+            match self.create_linux_overlay_surface(handles) {
+                Ok(surface) => self.linux_slice_surfaces.push(surface),
+                Err(error) => {
+                    host.borrow_mut().discard_last_slice();
+                    return Err(error);
+                }
+            }
+        }
+        host.borrow()
+            .prepare_slices(count, [self.config.width, self.config.height], scale)?;
+        for surface in &self.linux_slice_surfaces[..count] {
+            if let Some(mut config) = surface.get_configuration()
+                && (config.width != self.config.width || config.height != self.config.height)
+            {
+                config.width = self.config.width;
+                config.height = self.config.height;
+                surface.configure(&self.device, &config);
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn create_linux_overlay_surface(
+        &self,
+        (display, window): (
+            winit::raw_window_handle::RawDisplayHandle,
+            winit::raw_window_handle::RawWindowHandle,
+        ),
+    ) -> Result<wgpu::Surface<'static>, String> {
+        // SAFETY: The host retains the child and display until after this WGPU surface drops.
+        let surface = unsafe {
+            self.instance
+                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle: Some(display),
+                    raw_window_handle: window,
+                })
+        }
+        .map_err(|error| error.to_string())?;
+        let caps = surface.get_capabilities(&self.adapter);
+        if !caps.formats.contains(&self.config.format) {
+            return Err("Linux overlay does not support the presentation format".to_owned());
+        }
+        let alpha_mode = [
+            wgpu::CompositeAlphaMode::PreMultiplied,
+            wgpu::CompositeAlphaMode::Inherit,
+        ]
+        .into_iter()
+        .find(|mode| caps.alpha_modes.contains(mode))
+        .ok_or("Linux overlay surface requires alpha composition")?;
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: self.config.format,
+            color_space: wgpu::SurfaceColorSpace::Auto,
+            width: self.config.width,
+            height: self.config.height,
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode,
+            view_formats: Vec::new(),
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&self.device, &config);
+        Ok(surface)
     }
 
     #[cfg(target_os = "android")]

@@ -54,11 +54,22 @@ memmap2.workspace = true
 [target.'cfg(target_family = "unix")'.dependencies]
 libc.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+x11-dl.workspace = true
+wayland-client = { workspace = true, features = ["system", "dlopen"] }
+wayland-protocols = { workspace = true, features = ["client"] }
+
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { workspace = true, features = ["Win32_System_Threading", "Win32_UI_Shell"] }
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_DirectComposition",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2.workspace = true
+objc2-core-foundation.workspace = true
 objc2-app-kit = { workspace = true, features = [
     "NSApplication",
     "NSEvent",
@@ -70,6 +81,8 @@ objc2-app-kit = { workspace = true, features = [
 objc2-foundation = { workspace = true, features = ["NSString", "NSUserDefaults"] }
 objc2-quartz-core = { workspace = true, features = [
     "CALayer",
+    "CAMetalLayer",
+    "CATransaction",
     "objc2-core-foundation",
 ] }
 
@@ -83,7 +96,7 @@ parking_lot.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt", "tracing-log"] }
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
-web-sys = { workspace = true, features = ["console", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "Window", "Response", "Url", "HtmlElement", "Event", "EventTarget", "DomRect", "VisualViewport"] }
+web-sys = { workspace = true, features = ["console", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "Window", "Response", "Url", "HtmlElement", "Event", "EventTarget", "DomRect", "VisualViewport", "Node"] }
 web-time.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
