@@ -29,6 +29,7 @@ pub mod presentations;
 pub mod progress;
 mod radio_button;
 pub mod scroll_view;
+pub mod searchable;
 mod segmented_control;
 pub mod slider;
 pub mod split_view;

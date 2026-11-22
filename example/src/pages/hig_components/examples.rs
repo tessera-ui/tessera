@@ -30,6 +30,7 @@ use tessera_components::{
         },
         progress::{ProgressViewStyle, progress_view},
         scroll_view::scroll_view,
+        searchable::searchable,
         slider::slider,
         split_view::{h_split_view, v_split_view},
         stepper::stepper,
@@ -526,6 +527,12 @@ pub(super) const COMPONENTS: &[Component] = &[
         description: "ui-hig-inspectors-description",
         category: 6,
         sections: &[example(220.0)],
+    },
+    Component {
+        title: "ui-hig-searchable",
+        description: "ui-hig-searchable-description",
+        category: 3,
+        sections: &[example(200.0)],
     },
     Component {
         title: "ui-hig-labels",
@@ -1148,6 +1155,9 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
                             .child(move || caption(I18N.text("ui-hig-help-content"), appearance));
                     });
             }
+            "ui-hig-searchable" => {
+                search_example(appearance);
+            }
             "ui-hig-labels" => {
                 hig_label(I18N.text("ui-hig-favorites")).icon(|| {
                     text("★");
@@ -1155,6 +1165,34 @@ fn interactive(index: usize, state: ExampleState, appearance: Appearance) {
             }
             _ => unreachable!(),
         });
+}
+
+#[tessera]
+fn search_example(appearance: Appearance) {
+    let query = remember(String::new);
+    let tokens = remember(|| vec![I18N.text("ui-hig-search-token")]);
+    let scope = remember(|| 0usize);
+    let scopes = vec![
+        I18N.text("ui-hig-search-all"),
+        I18N.text("ui-hig-search-unread"),
+    ];
+    searchable(query.get())
+        .tokens(tokens.get())
+        .on_tokens_change(move |next| tokens.set(next))
+        .suggestions(vec![
+            I18N.text("ui-hig-search-invoices"),
+            I18N.text("ui-hig-search-receipts"),
+        ])
+        .scopes(scopes.clone())
+        .scope(scope.get())
+        .on_scope_change(move |next| scope.set(next))
+        .on_change(move |text| query.set(text))
+        .modifier(Modifier::new().width(Dp(280.0)));
+    spacer().modifier(Modifier::new().height(Dp(8.0)));
+    caption(
+        format!("{} \u{2014} {}", query.get(), scopes[scope.get().min(1)]),
+        appearance,
+    );
 }
 
 #[tessera]
