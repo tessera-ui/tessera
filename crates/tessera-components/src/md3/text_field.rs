@@ -1820,12 +1820,11 @@ mod tests {
     fn row_weight_on_text_field_leaves_width_for_following_button() {
         use tessera_ui::testing::UiTest;
 
-        let mut renderer = UiTest::new()
+        let mut session = UiTest::new()
             .viewport(400, 120)
-            .rendered(crate::TesseraComponents)
             .content(weighted_field_and_button_fixture);
-        renderer.frames(2);
-        let nodes = renderer.accessibility_snapshot().unwrap().nodes;
+        session.frames(2);
+        let nodes = session.accessibility_snapshot().unwrap().nodes;
         let bounds = |label| {
             nodes
                 .iter()

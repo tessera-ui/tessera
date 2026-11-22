@@ -2484,12 +2484,9 @@ mod tests {
 
         #[test]
         fn row_weight_on_text_input_leaves_width_for_following_button() {
-            let mut renderer = UiTest::new()
-                .viewport(400, 120)
-                .rendered(crate::TesseraComponents)
-                .content(fixture);
-            renderer.frames(2);
-            let nodes = renderer.accessibility_snapshot().unwrap().nodes;
+            let mut session = UiTest::new().viewport(400, 120).content(fixture);
+            session.frames(2);
+            let nodes = session.accessibility_snapshot().unwrap().nodes;
             let bounds = |label| {
                 nodes
                     .iter()
