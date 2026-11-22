@@ -1553,7 +1553,9 @@ pub fn text_field(
     } else {
         args.display_transform
     };
-    let editor_args = build_editor_args(&args, input_transform, display_transform);
+    let mut editor_args = build_editor_args(&args, input_transform, display_transform);
+    let field_modifier = editor_args.modifier.clone();
+    editor_args.modifier = Modifier::new();
     let menu_policy = resolve_text_field_menu_policy(args.context_menu, enabled, read_only);
     let on_change = args.on_change;
     let render_args = args.clone();
@@ -1633,37 +1635,39 @@ pub fn text_field(
         },
     );
 
-    layout(Stack).modifier(modifier).child(move || {
-        if menu_policy.enabled {
-            let render_args = render_args.clone();
-            let editor_args = editor_args.clone();
-            menu_provider()
-                .placement(MenuPlacement::BelowStart)
-                .offset([Dp(0.0), Dp(4.0)])
-                .close_on_focus_loss(true)
-                .controller(menu_controller)
-                .main_content(move || {
-                    text_field_content()
-                        .args(render_args.clone())
-                        .controller(controller)
-                        .editor(editor_args.clone())
-                        .geometry(geometry);
-                })
-                .menu_content(move |menu| {
-                    text_field_menu_content()
-                        .scope(menu)
-                        .controller(controller)
-                        .menu(menu_policy)
-                        .action_state(action_state);
-                });
-        } else {
-            text_field_content()
-                .args(render_args.clone())
-                .controller(controller)
-                .editor(editor_args.clone())
-                .geometry(geometry);
-        }
-    });
+    layout(Stack)
+        .modifier(modifier.then(field_modifier))
+        .child(move || {
+            if menu_policy.enabled {
+                let render_args = render_args.clone();
+                let editor_args = editor_args.clone();
+                menu_provider()
+                    .placement(MenuPlacement::BelowStart)
+                    .offset([Dp(0.0), Dp(4.0)])
+                    .close_on_focus_loss(true)
+                    .controller(menu_controller)
+                    .main_content(move || {
+                        text_field_content()
+                            .args(render_args.clone())
+                            .controller(controller)
+                            .editor(editor_args.clone())
+                            .geometry(geometry);
+                    })
+                    .menu_content(move |menu| {
+                        text_field_menu_content()
+                            .scope(menu)
+                            .controller(controller)
+                            .menu(menu_policy)
+                            .action_state(action_state);
+                    });
+            } else {
+                text_field_content()
+                    .args(render_args.clone())
+                    .controller(controller)
+                    .editor(editor_args.clone())
+                    .geometry(geometry);
+            }
+        });
 }
 
 #[cfg(test)]
@@ -1789,6 +1793,59 @@ mod tests {
                 .get()
                 .unwrap()
                 .with(|c| c.focus_handler().is_focused())
+        );
+    }
+
+    #[tessera_ui::tessera]
+    fn weighted_field_and_button_fixture() {
+        use tessera_foundation::modifier::ModifierExt as _;
+        use tessera_ui::Modifier;
+
+        crate::md3::theme::material_theme().child(|| {
+            crate::row::row()
+                .modifier(Modifier::new().fill_max_width())
+                .children(|| {
+                    crate::md3::text_field::text_field()
+                        .accessibility_label("Search field")
+                        .modifier(Modifier::new().weight(1.0));
+                    crate::md3::button::button()
+                        .accessibility_label("Search")
+                        .on_click(|| {})
+                        .child(|| crate::md3::text::text("Search"));
+                });
+        });
+    }
+
+    #[test]
+    fn row_weight_on_text_field_leaves_width_for_following_button() {
+        use tessera_ui::testing::UiTest;
+
+        let mut renderer = UiTest::new()
+            .viewport(400, 120)
+            .rendered(crate::TesseraComponents)
+            .content(weighted_field_and_button_fixture);
+        renderer.frames(2);
+        let nodes = renderer.accessibility_snapshot().unwrap().nodes;
+        let bounds = |label| {
+            nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some(label))
+                .and_then(|(_, node)| node.bounds())
+                .unwrap_or_else(|| panic!("missing bounds for {label}"))
+        };
+        let field = bounds("Search field");
+        let button = bounds("Search");
+        assert!(
+            field.x1 > field.x0,
+            "weighted text field must remain visible: {field:?}"
+        );
+        assert!(
+            button.x1 > button.x0,
+            "following button must remain visible: {button:?}"
+        );
+        assert!(
+            field.x1 <= button.x0,
+            "row children must not overlap: {field:?} {button:?}"
         );
     }
 
