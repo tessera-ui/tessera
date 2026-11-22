@@ -15,7 +15,7 @@ use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, CursorEventContent,
     Dp, LayoutResult, MeasurementError, Modifier, PointerEventPass, PressKeyEventType, Px,
     PxPosition, PxSize, RenderSlot, ScrollDeltaUnit, State,
-    layout::{MeasureScope, Stack, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _},
     provide_context, remember,
     scroll::normalize_platform_scroll_delta,
@@ -81,6 +81,58 @@ impl TextFieldDefaults {
     pub const PREFIX_SUFFIX_PADDING: Dp = Dp(2.0);
     /// Default obfuscation character for secure fields.
     pub const OBFUSCATION_CHAR: char = '*';
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct TextFieldLayout;
+
+impl tessera_ui::LayoutPolicy for TextFieldLayout {
+    fn place(
+        &self,
+        scope: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        let children = scope.children();
+        let mut result = LayoutResult::new(scope.size());
+        for child in children {
+            result.place_child(child, PxPosition::ZERO);
+        }
+        Some(result.into_placement_result())
+    }
+
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let parent_constraint = *input.parent_constraint().as_ref();
+        let children = input.children();
+        let width = match parent_constraint.width.resolve_max() {
+            Some(max) if max == parent_constraint.width.resolve_min() => max,
+            _ => {
+                let natural_constraint =
+                    Constraint::new(AxisConstraint::NONE, AxisConstraint::NONE);
+                let mut natural_width = Px::ZERO;
+                for child in &children {
+                    natural_width =
+                        natural_width.max(child.probe_intrinsic(input, &natural_constraint)?.width);
+                }
+                parent_constraint.width.clamp(natural_width)
+            }
+        };
+        let child_constraint = Constraint::new(
+            AxisConstraint::exact(width),
+            parent_constraint.height.without_min(),
+        );
+        let mut height = Px::ZERO;
+        let mut result = LayoutResult::default();
+        for child in children {
+            let measured = child.measure(input, &child_constraint)?;
+            height = height.max(measured.height);
+            result.place_child(child, PxPosition::ZERO);
+        }
+        result.size = ComputedData {
+            width,
+            height: parent_constraint.height.clamp(height),
+        };
+        Ok(result)
+    }
 }
 
 /// Line limit behavior for a text field.
@@ -1635,7 +1687,7 @@ pub fn text_field(
         },
     );
 
-    layout(Stack)
+    layout(TextFieldLayout)
         .modifier(modifier.then(field_modifier))
         .child(move || {
             if menu_policy.enabled {
@@ -1797,7 +1849,7 @@ mod tests {
     }
 
     #[tessera_ui::tessera]
-    fn weighted_field_and_button_fixture() {
+    fn weighted_row_with_text_field_and_button() {
         use tessera_foundation::modifier::ModifierExt as _;
         use tessera_ui::Modifier;
 
@@ -1816,13 +1868,37 @@ mod tests {
         });
     }
 
+    #[tessera_ui::tessera]
+    fn unweighted_row_with_text_field_and_button() {
+        use tessera_foundation::modifier::ModifierExt as _;
+        use tessera_ui::{Dp, Modifier};
+
+        crate::md3::theme::material_theme().child(|| {
+            crate::column::column()
+                .modifier(Modifier::new().padding_all(Dp(16.0)))
+                .children(|| {
+                    crate::row::row()
+                        .modifier(Modifier::new().fill_max_width())
+                        .children(|| {
+                            crate::md3::text_field::text_field()
+                                .placeholder("输入文件名或路径关键词...")
+                                .accessibility_label("Search field");
+                            crate::md3::button::button()
+                                .accessibility_label("Search")
+                                .on_click(|| {})
+                                .child(|| crate::md3::text::text("查询"));
+                        });
+                });
+        });
+    }
+
     #[test]
     fn row_weight_on_text_field_leaves_width_for_following_button() {
         use tessera_ui::testing::UiTest;
 
         let mut session = UiTest::new()
             .viewport(400, 120)
-            .content(weighted_field_and_button_fixture);
+            .content(weighted_row_with_text_field_and_button);
         session.frames(2);
         let nodes = session.accessibility_snapshot().unwrap().nodes;
         let bounds = |label| {
@@ -1845,6 +1921,32 @@ mod tests {
         assert!(
             field.x1 <= button.x0,
             "row children must not overlap: {field:?} {button:?}"
+        );
+    }
+
+    #[test]
+    fn row_without_weight_keeps_button_visible_after_text_field() {
+        use tessera_ui::testing::UiTest;
+
+        let mut session = UiTest::new()
+            .viewport(400, 120)
+            .content(unweighted_row_with_text_field_and_button);
+        session.frames(2);
+        let nodes = session.accessibility_snapshot().unwrap().nodes;
+        let bounds = |label| {
+            nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some(label))
+                .and_then(|(_, node)| node.bounds())
+                .unwrap_or_else(|| panic!("missing bounds for {label}"))
+        };
+        let field = bounds("Search field");
+        let button = bounds("Search");
+        assert!(field.x1 > field.x0, "text field is not visible: {field:?}");
+        assert!(button.x1 > button.x0, "button is not visible: {button:?}");
+        assert!(
+            field.x1 <= button.x0,
+            "row children overlap: {field:?} {button:?}"
         );
     }
 
