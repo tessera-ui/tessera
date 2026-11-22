@@ -468,6 +468,8 @@ pub fn text_input(
         })
     };
     let mut editor_args = args.clone();
+    let input_modifier = editor_args.modifier.clone();
+    editor_args.modifier = Modifier::new();
     editor_args.controller = Some(controller);
 
     if !editor_args.enabled {
@@ -493,20 +495,22 @@ pub fn text_input(
     if editor_args.with(|args| args != &current) {
         editor_args.set(current);
     }
-    layout(Stack).modifier(modifier).child(move || {
-        let args = editor_args.get();
-        let text_input_surface = create_surface_args(&args, &controller, &scheme);
-        surface()
-            .style(text_input_surface.style)
-            .shape(text_input_surface.shape)
-            .block_input(text_input_surface.block_input)
-            .modifier(text_input_surface.modifier)
-            .child(move || {
-                text_input_padded_content()
-                    .props(editor_args)
-                    .controller(controller);
-            });
-    });
+    layout(Stack)
+        .modifier(modifier.then(input_modifier))
+        .child(move || {
+            let args = editor_args.get();
+            let text_input_surface = create_surface_args(&args, &controller, &scheme);
+            surface()
+                .style(text_input_surface.style)
+                .shape(text_input_surface.shape)
+                .block_input(text_input_surface.block_input)
+                .modifier(text_input_surface.modifier)
+                .child(move || {
+                    text_input_padded_content()
+                        .props(editor_args)
+                        .controller(controller);
+                });
+        });
 }
 
 #[tessera]
@@ -2449,6 +2453,62 @@ mod tests {
             resolve_border_width(Dp(1.0), Some(Dp(2.0)), false, true),
             Dp(1.0)
         );
+    }
+
+    mod weighted_layout {
+        use tessera_foundation::modifier::ModifierExt as _;
+        use tessera_ui::{Modifier, tessera, testing::UiTest};
+
+        use crate::{
+            md3::{text::text, text_input::text_input, theme::material_theme},
+            row::row,
+        };
+
+        #[tessera]
+        fn fixture() {
+            material_theme().child(|| {
+                row()
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(|| {
+                        text_input()
+                            .single_line(true)
+                            .accessibility_label("Search field")
+                            .modifier(Modifier::new().weight(1.0));
+                        crate::md3::button::button()
+                            .accessibility_label("Search")
+                            .on_click(|| {})
+                            .child(|| text("Search"));
+                    });
+            });
+        }
+
+        #[test]
+        fn row_weight_on_text_input_leaves_width_for_following_button() {
+            let mut session = UiTest::new().viewport(400, 120).content(fixture);
+            session.frames(2);
+            let nodes = session.accessibility_snapshot().unwrap().nodes;
+            let bounds = |label| {
+                nodes
+                    .iter()
+                    .find(|(_, node)| node.label() == Some(label))
+                    .and_then(|(_, node)| node.bounds())
+                    .unwrap_or_else(|| panic!("missing bounds for {label}"))
+            };
+            let input = bounds("Search field");
+            let button = bounds("Search");
+            assert!(
+                input.x1 > input.x0,
+                "weighted input must remain visible: {input:?}"
+            );
+            assert!(
+                button.x1 > button.x0,
+                "following button must remain visible: {button:?}"
+            );
+            assert!(
+                input.x1 <= button.x0,
+                "row children must not overlap: {input:?} {button:?}"
+            );
+        }
     }
 
     mod scroll_propagation {
