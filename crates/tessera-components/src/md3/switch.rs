@@ -23,7 +23,7 @@ use crate::{
     md3::{
         icon::IconSize,
         ripple_state::{RippleSpec, RippleState},
-        surface::{SurfaceStyle, surface},
+        surface::{SurfaceStyle, resolve_visual_interaction, surface},
         theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
     },
     shape_def::Shape,
@@ -440,9 +440,14 @@ fn switch_content(
     let track_checked_color = track_checked_color.unwrap_or(scheme.primary);
     let track_outline_color = track_outline_color.unwrap_or(scheme.outline);
     let track_outline_width = track_outline_width.unwrap_or(SwitchDefaults::TRACK_OUTLINE_WIDTH);
-    let visual = interaction_state
-        .map(|state| state.with(|state| state.with_presentation(presentation_state, enabled)))
-        .unwrap_or_else(|| InteractionState::new().with_presentation(presentation_state, enabled));
+    let visual = resolve_visual_interaction(
+        interaction_state
+            .map(|state| state.get())
+            .unwrap_or_default(),
+        presentation_state,
+        enabled,
+        focus_requester.map(|focus| focus.is_focus_visible()),
+    );
     let interacting = visual.is_hovered() || visual.is_focused() || visual.is_pressed();
     let thumb_color = thumb_color.unwrap_or(if interacting {
         scheme.on_surface_variant
@@ -615,6 +620,7 @@ fn switch_content(
             } else {
                 scheme.on_surface
             })
+            .focus_requester_optional(focus_requester)
             .interaction_state_optional(interaction_state)
             .presentation_state_optional(presentation_state)
             .enabled(enabled)

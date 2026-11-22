@@ -7,8 +7,8 @@ use tessera_foundation::modifier::{
     InteractionState, InteractionVisualState, ModifierExt as _, Padding,
 };
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot, State,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusRequester, LayoutResult,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::{Role, Toggled},
     context::provide_context,
     launch,
@@ -24,7 +24,7 @@ use crate::{
     boxed::boxed,
     md3::{
         icon::IconSize,
-        surface::{RipplePresentation, SurfaceStyle, surface},
+        surface::{RipplePresentation, SurfaceStyle, resolve_visual_interaction, surface},
         theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle, content_color_for},
     },
     shape_def::{RoundedCorner, Shape},
@@ -462,8 +462,13 @@ pub fn button(
     {
         interaction_state.with_mut(|state| *state = InteractionState::new());
     }
-    let visual =
-        interaction_state.with(|state| state.with_presentation(presentation_state, enabled));
+    let focus = remember(FocusRequester::new).get();
+    let visual = resolve_visual_interaction(
+        interaction_state.get(),
+        presentation_state,
+        enabled,
+        Some(focus.is_focus_visible()),
+    );
     let pressed = visual.is_pressed();
     let hovered = visual.is_hovered();
     let focused = visual.is_focused();
@@ -720,6 +725,7 @@ pub fn button(
         .enabled(button_args.enabled)
         .tonal_elevation(button_args.tonal_elevation)
         .interaction_state(interaction_state)
+        .focus_requester(focus)
         .presentation_state_optional(presentation_state)
         .presentation_ripple_optional(presentation_ripple)
         .show_focus_indicator(true)
@@ -1773,10 +1779,16 @@ mod tests {
                         );
                     }
                 }
-                renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
                 renderer.pointer_move(MOUSE_POINTER_ID, outside);
                 renderer.frames(20);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
+                assert!(
+                    crop(&renderer.read_pixels()) == rest,
+                    "dragging outside ends the pressed appearance without clearing focus"
+                );
+                renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
+                renderer.frames(20);
+                assert_eq!(probe.clicks.get().unwrap().get(), 0);
                 assert!(renderer.accessibility_action(id, Action::Focus));
                 renderer.frames(20);
                 assert_eq!(

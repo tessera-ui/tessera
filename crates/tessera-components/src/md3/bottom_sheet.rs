@@ -12,9 +12,9 @@ use tessera_foundation::{
     scroll_physics::ScrollVelocityTracker,
 };
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusProperties, FocusScopeNode,
-    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    State, launch,
+    AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusProperties, FocusRequester,
+    FocusScopeNode, FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    RenderSlot, State, launch,
     layout::{MeasureScope, PlacementResult, PlacementScope, Stack, layout},
     modifier::FocusModifierExt as _,
     remember, remember_with_key,
@@ -480,10 +480,12 @@ fn bottom_sheet_drag_handle(
     let controller = controller.expect("bottom_sheet_drag_handle requires controller");
     let velocity_tracker = remember(|| None::<ScrollVelocityTracker>);
     let interaction = remember(InteractionState::new);
+    let focus = remember(FocusRequester::new).get();
     let modifier = Modifier::new()
         .clickable(ClickableArgs {
             enabled: controller.with(|controller| controller.can_resize),
             label: Some(I18N.text("md3-drag-handle")),
+            focus_requester: Some(focus),
             interaction_state: Some(interaction),
             on_click: Callback::new(move || {
                 controller.with_mut(BottomSheetController::toggle_expansion)
@@ -505,7 +507,7 @@ fn bottom_sheet_drag_handle(
                     .get()
                     .color_scheme;
                 surface()
-                    .style(if interaction.with(InteractionState::is_focused) {
+                    .style(if focus.is_focus_visible() {
                         SurfaceStyle::Outlined {
                             color: scheme.secondary,
                             width: Dp(2.0),

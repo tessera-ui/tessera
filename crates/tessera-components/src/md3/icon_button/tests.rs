@@ -800,10 +800,15 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
                     );
                 }
             }
-            renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
             renderer.pointer_move(MOUSE_POINTER_ID, outside);
             renderer.frames(20);
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
+            assert!(
+                crop(&renderer.read_pixels()) == rest,
+                "dragging outside ends the pressed appearance without clearing focus"
+            );
+            renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
+            renderer.frames(20);
             assert!(renderer.accessibility_action(id, Action::Focus));
             renderer.frames(20);
             assert_eq!(

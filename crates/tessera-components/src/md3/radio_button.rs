@@ -417,11 +417,14 @@ fn radio_button_inner(
     let on_select = on_select.unwrap_or_else(CallbackWith::default_value);
 
     let target_size = Dp(touch_target_size.0.max(size.0));
+    let internal_focus = remember(FocusRequester::new).get();
+    let focus_requester = focus_requester.unwrap_or(internal_focus);
 
     let unselected_color = if enabled
-        && interaction_state.is_some_and(|state| {
-            state.with(|state| state.is_hovered() || state.is_focused() || state.is_pressed())
-        }) {
+        && (focus_requester.is_focus_visible()
+            || interaction_state
+                .is_some_and(|state| state.with(|state| state.is_hovered() || state.is_pressed())))
+    {
         unselected_interaction_color
     } else {
         unselected_color
@@ -471,7 +474,7 @@ fn radio_button_inner(
         let release_handler = ripple_state
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
         let selectable_args = SelectableArgs {
-            focus_requester,
+            focus_requester: Some(focus_requester),
             selected: is_selected,
             on_click,
             enabled: true,
@@ -532,6 +535,7 @@ fn radio_button_inner(
                 .ripple_bounded(false)
                 .ripple_radius(state_layer_radius)
                 .ripple_color(ripple_color)
+                .focus_requester(focus_requester)
                 .interaction_state_optional(interaction_state)
                 .ripple_state_optional(ripple_state)
                 .child({

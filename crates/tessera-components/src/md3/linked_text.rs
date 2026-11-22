@@ -419,7 +419,7 @@ fn linked_run(
     let policy = RunLayout {
         index,
         cache: Arc::clone(&cache),
-        focus,
+        focus_visible: run.on_activate.is_some() && focus.is_focus_visible(),
         link_color,
         focus_color,
         linked: run.on_activate.is_some(),
@@ -565,7 +565,7 @@ impl SemanticsModifierNode for LinkSemantics {
 struct RunLayout {
     index: usize,
     cache: ParagraphCache,
-    focus: FocusRequester,
+    focus_visible: bool,
     link_color: Color,
     focus_color: Color,
     linked: bool,
@@ -574,7 +574,7 @@ struct RunLayout {
 impl PartialEq for RunLayout {
     fn eq(&self, other: &Self) -> bool {
         self.index == other.index
-            && self.focus == other.focus
+            && self.focus_visible == other.focus_visible
             && self.link_color == other.link_color
             && self.focus_color == other.focus_color
             && self.linked == other.linked
@@ -612,7 +612,6 @@ impl tessera_ui::DrawModifierNode for RunLayout {
         if !self.linked {
             return;
         }
-        let focused = self.focus.has_focus();
         let cache = self.cache.lock();
         let Some(cache) = cache.as_ref() else {
             return;
@@ -637,7 +636,7 @@ impl tessera_ui::DrawModifierNode for RunLayout {
                 tessera_ui::Px(rect.w.ceil() as i32),
                 Dp(1.0).to_px(),
             ));
-            if focused {
+            if self.focus_visible {
                 let padding = Dp(2.0).to_pixels_f32();
                 let index = fragment.push_draw_command(ShapeCommand::OutlinedRect {
                     color: self.focus_color,

@@ -5,8 +5,8 @@
 //! Preserve selection strokes and state colors across display densities.
 
 use tessera_ui::{
-    Color, Dp, FocusDirection, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State, focus,
-    remember, tessera, testing::UiTest,
+    Color, Dp, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State, focus, remember, tessera,
+    testing::UiTest, winit::keyboard::NamedKey,
 };
 
 use crate::{
@@ -75,16 +75,14 @@ fn check_appearance() {
         let settings = probe.get().unwrap();
         settings.with_mut(|value| value.mixed = true);
         renderer.frames(30);
-        let bounds = renderer
+        let (id, node) = renderer
             .accessibility_snapshot()
             .unwrap()
             .nodes
             .into_iter()
             .find(|(_, node)| node.label() == Some("Selection"))
-            .unwrap()
-            .1
-            .bounds()
             .unwrap();
+        let bounds = node.bounds().unwrap();
         assert_eq!(bounds.x1 - bounds.x0, 48.0 * density);
         assert_eq!(bounds.y1 - bounds.y0, 48.0 * density);
         let size = (18.0 * density) as u32;
@@ -170,8 +168,7 @@ fn check_appearance() {
             PressKeyEventType::Left,
         );
         renderer.frames(30);
-        focus::clear_focus(true);
-        renderer.frames(30);
+        assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
         let pixels = renderer.read_pixels();
         assert!(
             is_color(&pixels, 0),
@@ -179,7 +176,7 @@ fn check_appearance() {
             &pixels[edge_offset..edge_offset + 4],
             renderer.accessibility_snapshot().unwrap().focus,
         );
-        focus::request_move_focus(FocusDirection::Next);
+        renderer.press_key(NamedKey::Shift);
         renderer.frames(30);
         assert!(is_color(&renderer.read_pixels(), 2), "focused outline");
         settings.with_mut(|value| value.custom = true);

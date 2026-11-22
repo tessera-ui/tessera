@@ -559,9 +559,8 @@ pub fn tab(
     });
     let enabled = composition.enabled && enabled.unwrap_or(true);
     let interaction = remember(InteractionState::new);
-    let interacting = interaction.with(|interaction| {
-        interaction.is_hovered() || interaction.is_focused() || interaction.is_pressed()
-    });
+    let interacting = focus_requester.is_focus_visible()
+        || interaction.with(|interaction| interaction.is_hovered() || interaction.is_pressed());
     let activate = Callback::new(move || {
         let index = controller.with(|controller| {
             controller

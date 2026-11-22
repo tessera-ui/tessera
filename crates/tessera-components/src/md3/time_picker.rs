@@ -651,6 +651,7 @@ fn period_visual_layer(
     state: State<TimePickerController>,
     input: bool,
     interactions: [State<InteractionState>; 2],
+    requesters: [FocusRequester; 2],
 ) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -679,6 +680,7 @@ fn period_visual_layer(
                         .into(),
                     )
                     .shape(Shape::RECTANGLE)
+                    .focus_requester(requesters[index])
                     .interaction_state(interactions[index])
                     .show_ripple(false)
                     .block_input(false)
@@ -724,7 +726,7 @@ fn time_period_selector(state: State<TimePickerController>, input: bool) {
             ..Default::default()
         }))
         .child(move || {
-            period_visual_layer(state, input, interactions);
+            period_visual_layer(state, input, interactions, requesters);
             for (index, (label, value)) in [("md3-am", DayPeriod::Am), ("md3-pm", DayPeriod::Pm)]
                 .into_iter()
                 .enumerate()
