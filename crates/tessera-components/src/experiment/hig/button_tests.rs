@@ -292,8 +292,8 @@ fn check_accessibility_and_pixels() {
     ui.frames(2);
     assert_eq!(controls.ordinary.get(), 1);
     assert_eq!(initial, ui.read_pixels());
-    assert!(ui.accessibility_action(id, Action::Focus));
-    ui.frames(2);
+    assert!(ui.accessibility_action(id, tessera_ui::accesskit::Action::Focus));
+    ui.frames(15);
     assert_eq!(controls.ordinary.get(), 1);
     assert_ne!(initial, ui.read_pixels());
     let focused = ui.read_pixels();
@@ -564,5 +564,55 @@ fn destructive_prominent_buttons_are_red_and_accessory_bar_buttons_fill_on_hover
     crate::test_utils::run_isolated_test(
         "experiment::hig::button::tests::destructive_prominent_buttons_are_red_and_accessory_bar_buttons_fill_on_hover",
         check_role_and_hover_pixels,
+    );
+}
+
+#[tessera]
+fn ring_fixture(probe: TestProbe<Option<FocusRequester>>) {
+    let focus = remember(FocusRequester::new).get();
+    probe.set(Some(focus));
+    column().children(move || {
+        button("Save").focus_requester(focus);
+    });
+}
+
+fn check_focus_ring_fade() {
+    let probe = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(120, 40)
+        .scale_factor(1.0)
+        .rendered(crate::TesseraComponents)
+        .content(|| ring_fixture(probe.clone()));
+    ui.frames(2);
+    let focus = probe.get().expect("fixture state");
+    let resting = ui.read_pixels();
+    let (id, _) = ui.accessibility_node("Save");
+    assert!(ui.accessibility_action(id, tessera_ui::accesskit::Action::Focus));
+    ui.frames(4);
+    let fading = ui.read_pixels();
+    ui.frames(15);
+    let full = ui.read_pixels();
+    assert_ne!(fading, resting, "the ring starts to appear");
+    assert_ne!(fading, full, "the ring fades in");
+    ui.frames(2);
+    assert_eq!(full, ui.read_pixels(), "the ring settles");
+    ui.run(|| focus.clear_focus());
+    ui.frame();
+    assert_eq!(resting, ui.read_pixels(), "the ring disappears at once");
+    assert!(ui.accessibility_action(id, tessera_ui::accesskit::Action::Focus));
+    ui.frames(4);
+    assert_eq!(
+        fading,
+        ui.read_pixels(),
+        "refocusing fades the ring in again"
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for focus ring pixels"]
+fn focus_rings_fade_in_and_disappear_at_once() {
+    crate::test_utils::run_isolated_test(
+        "experiment::hig::button::tests::focus_rings_fade_in_and_disappear_at_once",
+        check_focus_ring_fade,
     );
 }

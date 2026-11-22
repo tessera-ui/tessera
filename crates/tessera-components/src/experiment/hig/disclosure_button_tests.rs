@@ -266,7 +266,7 @@ fn check_keyboard_pixels_and_semantics() {
     assert!(node.supports_action(Action::Expand));
     assert!(!node.supports_action(Action::Collapse));
     assert!(ui.accessibility_action(id, Action::Focus));
-    ui.frames(2);
+    ui.frames(15);
     assert!(controls.changes.get().is_empty());
     let focused = ui.read_pixels();
     assert_ne!(initial, focused);

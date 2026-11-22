@@ -245,7 +245,7 @@ fn check_pixels() {
     ui.frame();
     assert!(ui.pixel(300, 140)[0].abs_diff(32) <= 1);
     assert!(ui.accessibility_action(id, Action::Click));
-    ui.frame();
+    ui.frames(15);
     assert_eq!(controls.count.get(), 1);
     assert_eq!(ui.frame_clock_diagnostics().waiting_tasks, 0);
 }

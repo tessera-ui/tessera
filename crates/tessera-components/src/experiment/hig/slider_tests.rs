@@ -246,7 +246,7 @@ fn check_keyboard() {
     let (id, _) = ui.accessibility_node("Volume");
     let resting = ui.read_pixels();
     assert!(ui.accessibility_action(id, Action::Focus));
-    ui.frames(1);
+    ui.frames(15);
     assert!(ui.run(|| controls.focus.is_focused()));
     assert!(controls.requests.get().is_empty());
     assert_ne!(resting, ui.read_pixels());

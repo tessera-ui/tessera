@@ -8,7 +8,7 @@ use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Callback, CallbackWith, Color, CursorEventContent, Dp, DrawModifierContent,
     DrawModifierContext, DrawModifierNode, Modifier, PointerInput, PointerInputModifierNode, Px,
-    PxPosition, PxSize, State,
+    PxPosition, PxSize, State, launch,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
 };
@@ -17,6 +17,7 @@ use crate::{
     alignment::Alignment,
     boxed::boxed,
     experiment::hig::{
+        motion::{Eased, FOCUS_RING, focus_ring},
         text::text,
         theme::{Appearance, HigTheme, TextStyle},
     },
@@ -579,12 +580,20 @@ fn field(
             .clear_focus();
     }
     let focus = controller.with(|editor| *editor.focus_handler());
-    let focus_ring = (kind.bezel() && enabled && window_active && focus.is_focused()).then(|| {
+    let focused = kind.bezel() && enabled && window_active && focus.is_focused();
+    let ring = remember(|| Eased::new(0.0, FOCUS_RING));
+    launch(focused, focus_ring(ring, focused));
+    let ring = if focused {
+        ring.with(Eased::value)
+    } else {
+        0.0
+    };
+    let focus_ring = (ring > 0.0).then(|| {
         match appearance {
             Appearance::Light => srgb(1, 103, 245),
             Appearance::Dark => srgb(26, 170, 254),
         }
-        .with_alpha(0.5)
+        .with_alpha(0.5 * ring)
     });
     let on_change = on_change.unwrap_or_else(CallbackWith::identity);
     // A secure field edits bullets and keeps the real text beside them. The editor is being

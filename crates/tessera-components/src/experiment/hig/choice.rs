@@ -24,11 +24,10 @@ use crate::{
     modifier::ModifierExt as _,
     pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualStroke},
     row::row,
-    shape_def::{RoundedCorner, Shape},
 };
 
 use super::{
-    motion::{Eased, SELECTION, mix},
+    motion::{Eased, FOCUS_RING, SELECTION, focus_ring, focus_ring_color, mix, ring_shape},
     text::text,
     theme::{Appearance, HigTheme, TextStyle},
 };
@@ -120,19 +119,13 @@ impl DrawModifierNode for Glyph {
 }
 
 #[tessera]
-fn choice_glyph(command: PerceptualFillCommand, focused: bool) {
+fn choice_glyph(command: PerceptualFillCommand, ring: f32) {
     let mut modifier = Modifier::new().size(Dp(16.0), Dp(16.0));
-    if focused {
-        let corner = RoundedCorner::manual(command.radii[0], 2.0);
+    if ring > 0.0 {
         modifier = modifier.border_with_shape(
             Dp(2.0),
-            Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(0.6),
-            Shape::RoundedRectangle {
-                top_left: corner,
-                top_right: corner,
-                bottom_right: corner,
-                bottom_left: corner,
-            },
+            focus_ring_color(ring),
+            ring_shape(command.radii[0]),
         );
     }
     layout(Stack).modifier(modifier.push_draw(Glyph(command)));
@@ -246,6 +239,13 @@ pub(super) fn choice_control(
         .push_semantics(ChoiceSemantics(style.mark))
         .hover_cursor_icon(CursorIcon::Default);
     let focused = enabled && active && requester.is_focus_visible();
+    let ring = remember(|| Eased::new(0.0, FOCUS_RING));
+    launch(focused, focus_ring(ring, focused));
+    let ring = if focused {
+        ring.with(Eased::value)
+    } else {
+        0.0
+    };
     row()
         .modifier(modifier)
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -267,7 +267,7 @@ pub(super) fn choice_control(
                     line: None,
                     edge_smoothness: 1.0,
                 },
-                focused,
+                ring,
             );
             if !label.is_empty() {
                 text(label.clone())

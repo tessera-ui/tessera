@@ -393,6 +393,7 @@ fn check_keyboard_and_pixels() {
         ui.accessibility_node("Day").0
     );
     assert!(controls.requests.get().is_empty());
+    ui.frames(15);
     assert_ne!(initial, ui.read_pixels());
     ui.press_key(NamedKey::ArrowRight);
     ui.frames(1);
@@ -400,6 +401,7 @@ fn check_keyboard_and_pixels() {
     assert_eq!(ui.accessibility_snapshot().unwrap().focus, month_id);
     assert_eq!(controls.selected.get(), Some(0));
     assert!(controls.requests.get().is_empty());
+    ui.frames(15);
     assert_ne!(initial, ui.read_pixels());
     ui.press_key(NamedKey::ArrowRight);
     key_up(&mut ui, NamedKey::ArrowRight);
@@ -414,7 +416,7 @@ fn check_keyboard_and_pixels() {
     ui.frames(1);
     let count = controls.requests.get().len();
     assert!(ui.accessibility_action(month_id, Action::Focus));
-    ui.frames(1);
+    ui.frames(15);
     assert_eq!(controls.requests.get().len(), count);
     assert_eq!(controls.selected.get(), Some(0));
     let focused = ui.read_pixels();
@@ -550,7 +552,7 @@ fn check_momentary_exterior_focus() {
     let offset = (640 * (y - 5) + x) * 4;
     let idle = ui.read_pixels();
     assert!(ui.accessibility_action(day, Action::Focus));
-    ui.frames(2);
+    ui.frames(15);
     let focused = ui.read_pixels();
     assert_ne!(&focused[offset..offset + 4], &idle[offset..offset + 4]);
     assert_eq!(ui.accessibility_node("Day").1.bounds(), Some(bounds));

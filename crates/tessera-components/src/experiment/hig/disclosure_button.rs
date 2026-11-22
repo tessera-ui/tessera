@@ -26,12 +26,11 @@ use crate::{
     boxed::boxed,
     modifier::ModifierExt as _,
     pipelines::perceptual_fill::{PerceptualFillCommand, PerceptualStroke},
-    shape_def::{RoundedCorner, Shape},
 };
 
 use super::{
     choice::ChoiceKeyboard,
-    motion::{DISCLOSURE, Eased},
+    motion::{DISCLOSURE, Eased, FOCUS_RING, focus_ring, focus_ring_color, ring_shape},
     theme::{Appearance, HigTheme},
 };
 
@@ -155,20 +154,10 @@ impl DrawModifierNode for Chevron {
 }
 
 #[tessera]
-fn disclosure_glyph(turn: f32, color: Color, focused: bool) {
+fn disclosure_glyph(turn: f32, color: Color, ring: f32) {
     let mut modifier = Modifier::new().size(Dp(13.0), Dp(13.0));
-    if focused {
-        let corner = RoundedCorner::manual(Dp(3.0), 2.0);
-        modifier = modifier.border_with_shape(
-            Dp(2.0),
-            Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(0.6),
-            Shape::RoundedRectangle {
-                top_left: corner,
-                top_right: corner,
-                bottom_left: corner,
-                bottom_right: corner,
-            },
-        );
+    if ring > 0.0 {
+        modifier = modifier.border_with_shape(Dp(2.0), focus_ring_color(ring), ring_shape(Dp(3.0)));
     }
     layout(Stack).modifier(modifier.push_draw(Chevron { turn, color }));
 }
@@ -298,14 +287,18 @@ pub fn disclosure_button(
     let turn = remember(|| Eased::new(target, DISCLOSURE));
     launch(expanded, animate_to(turn, target));
     let turn = turn.with(Eased::value);
+    let focused = enabled && active && requester.is_focus_visible();
+    let ring = remember(|| Eased::new(0.0, FOCUS_RING));
+    launch(focused, focus_ring(ring, focused));
+    let ring = if focused {
+        ring.with(Eased::value)
+    } else {
+        0.0
+    };
     boxed()
         .alignment(Alignment::Center)
         .modifier(modifier)
         .children(move || {
-            disclosure_glyph(
-                turn,
-                color,
-                enabled && active && requester.is_focus_visible(),
-            );
+            disclosure_glyph(turn, color, ring);
         });
 }

@@ -204,7 +204,7 @@ fn check_keyboard_and_semantics() {
     assert_eq!(node.toggled(), Some(Toggled::False));
     assert!(node.supports_action(Action::Click));
     assert!(ui.accessibility_action(id, Action::Focus));
-    ui.frames(2);
+    ui.frames(15);
     assert!(controls.changes.get().is_empty());
     assert!(ui.run(|| controls.focus.is_focused()));
     assert_ne!(initial, ui.read_pixels());

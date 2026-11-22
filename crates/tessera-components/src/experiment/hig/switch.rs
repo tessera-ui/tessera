@@ -28,12 +28,12 @@ use crate::{
         perceptual_fill::PerceptualFillCommand,
         shape::command::ShapeCommand,
     },
-    shape_def::{ResolvedShape, RoundedCorner, Shape},
+    shape_def::ResolvedShape,
 };
 
 use super::{
     choice::ChoiceKeyboard,
-    motion::mix,
+    motion::{Eased, FOCUS_RING, focus_ring, focus_ring_color, mix, ring_shape},
     theme::{Appearance, HigTheme},
 };
 
@@ -325,23 +325,14 @@ fn switch_dash() {
 }
 
 #[tessera]
-fn switch_graphic(mixed: bool, track: Color, x: f32, lift: f32, focused: bool) {
+fn switch_graphic(mixed: bool, track: Color, x: f32, lift: f32, ring: f32) {
     let mut modifier = Modifier::new().size(Dp(54.0), Dp(24.0)).push_draw(Fill {
         color: track,
         radius: Dp(12.0),
     });
-    if focused {
-        let corner = RoundedCorner::manual(Dp(12.0), 2.0);
-        modifier = modifier.border_with_shape(
-            Dp(2.0),
-            Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(0.6),
-            Shape::RoundedRectangle {
-                top_left: corner,
-                top_right: corner,
-                bottom_right: corner,
-                bottom_left: corner,
-            },
-        );
+    if ring > 0.0 {
+        modifier =
+            modifier.border_with_shape(Dp(2.0), focus_ring_color(ring), ring_shape(Dp(12.0)));
     }
     boxed()
         .alignment(Alignment::TopStart)
@@ -437,6 +428,13 @@ pub(super) fn switch(
         ((x - 2.0) / 18.0).clamp(0.0, 1.0),
     );
     let focused = enabled && active && requester.is_focus_visible();
+    let ring = remember(|| Eased::new(0.0, FOCUS_RING));
+    launch(focused, focus_ring(ring, focused));
+    let ring = if focused {
+        ring.with(Eased::value)
+    } else {
+        0.0
+    };
     let modifier = modifier
         .unwrap_or_default()
         .clickable(ClickableArgs {
@@ -464,7 +462,7 @@ pub(super) fn switch(
         .hover_cursor_icon(CursorIcon::Default);
     boxed()
         .modifier(modifier)
-        .children(move || switch_graphic(mixed, track, x, lift, focused));
+        .children(move || switch_graphic(mixed, track, x, lift, ring));
 }
 
 fn track_color(value: bool, pressed: bool, enabled: bool, active: bool, dark: bool) -> Color {

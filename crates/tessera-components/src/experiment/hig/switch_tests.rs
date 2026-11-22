@@ -149,7 +149,7 @@ fn check_keyboard_and_pixels() {
     let off = ui.read_pixels();
     let (id, _) = ui.accessibility_node("Notifications");
     assert!(ui.accessibility_action(id, Action::Focus));
-    ui.frames(2);
+    ui.frames(15);
     assert!(controls.requests.get().is_empty());
     assert!(ui.run(|| controls.focus.is_focused()));
     assert_ne!(off, ui.read_pixels());

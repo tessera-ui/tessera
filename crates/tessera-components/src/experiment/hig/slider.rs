@@ -13,6 +13,7 @@ use tessera_ui::{
     LayoutResult, MeasurementError, Modifier, PointerEventPass, PointerId, PointerInput,
     PointerInputModifierNode, PressKeyEventType, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
+    launch,
     layout::{MeasureScope, Stack, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
@@ -26,10 +27,13 @@ use tessera_ui::{
 use crate::{
     modifier::ModifierExt as _,
     pipelines::{perceptual_fill::PerceptualFillCommand, shape::command::ShapeCommand},
-    shape_def::{ResolvedShape, RoundedCorner, Shape},
+    shape_def::ResolvedShape,
 };
 
-use super::theme::{Appearance, HigTheme};
+use super::{
+    motion::{Eased, FOCUS_RING, focus_ring, focus_ring_color, ring_shape},
+    theme::{Appearance, HigTheme},
+};
 
 #[cfg(test)]
 #[path = "slider_tests.rs"]
@@ -399,7 +403,7 @@ fn slider_shadow() {
 }
 
 #[tessera]
-fn slider_thumb(pressed: bool, focused: bool) {
+fn slider_thumb(pressed: bool, ring: f32) {
     let mut modifier = Modifier::new().push_draw(Fill(
         if pressed {
             Color::from_rgb(0.90, 0.90, 0.90)
@@ -409,18 +413,8 @@ fn slider_thumb(pressed: bool, focused: bool) {
         Dp(8.0),
         1.3,
     ));
-    if focused {
-        let corner = RoundedCorner::manual(Dp(8.0), 2.0);
-        modifier = modifier.border_with_shape(
-            Dp(2.0),
-            Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(0.6),
-            Shape::RoundedRectangle {
-                top_left: corner,
-                top_right: corner,
-                bottom_right: corner,
-                bottom_left: corner,
-            },
-        );
+    if ring > 0.0 {
+        modifier = modifier.border_with_shape(Dp(2.0), focus_ring_color(ring), ring_shape(Dp(8.0)));
     }
     layout(Stack).modifier(modifier);
 }
@@ -544,6 +538,13 @@ pub fn slider(
         });
     }
     let focused = enabled && active && requester.is_focus_visible();
+    let ring = remember(|| Eased::new(0.0, FOCUS_RING));
+    launch(focused, focus_ring(ring, focused));
+    let ring = if focused {
+        ring.with(Eased::value)
+    } else {
+        0.0
+    };
     let pressed = enabled && active && drag.get().is_some();
     layout(SliderLayout(next.fraction(), ticks.is_some()))
         .modifier(modifier)
@@ -551,6 +552,6 @@ pub fn slider(
             slider_fill(tint.with_alpha(0.10));
             slider_fill(fill);
             slider_shadow();
-            slider_thumb(pressed, focused);
+            slider_thumb(pressed, ring);
         });
 }

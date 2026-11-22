@@ -14,7 +14,7 @@ use tessera_ui::{
     DrawModifierContext, DrawModifierNode, FocusRequester, KeyboardInput,
     KeyboardInputModifierNode, Modifier, RenderSlotWith, SemanticsModifierNode, State,
     accesskit::{Role, Toggled},
-    launch_once,
+    launch, launch_once,
     layout::{Stack, layout},
     modifier::{CursorModifierExt as _, ModifierCapabilityExt as _},
     remember, remember_with_key, tessera,
@@ -44,7 +44,7 @@ use super::{
     glass::{GlassAppearance, GlassMaterial, glass},
     link::link_color,
     menu::{MenuContext, menu_item},
-    motion::mix,
+    motion::{Eased, FOCUS_RING, focus_ring, focus_ring_color, mix},
     text::text,
     theme::{Appearance, ControlSize, HigTheme, TextStyle},
 };
@@ -652,6 +652,13 @@ pub(super) fn push_button(
     let pressed = enabled
         && (pulsing || keyboard_pressed.get() || interaction.with(InteractionState::is_pressed));
     let focused = enabled && active && requester.is_focus_visible();
+    let ring = remember(|| Eased::new(0.0, FOCUS_RING));
+    launch(focused, focus_ring(ring, focused));
+    let ring = if focused {
+        ring.with(Eased::value)
+    } else {
+        0.0
+    };
     let style = style.unwrap_or_default();
     let metrics = size_metrics(control_size.unwrap_or_default());
     let destructive = role == Some(ButtonRole::Destructive);
@@ -776,12 +783,8 @@ pub(super) fn push_button(
     if !bare {
         modifier = modifier.default_min_size(Dp(metrics.height + 4.0), Dp(metrics.height));
     }
-    if focused {
-        modifier = modifier.border_with_shape(
-            Dp(2.0),
-            Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(0.6),
-            shape,
-        );
+    if ring > 0.0 {
+        modifier = modifier.border_with_shape(Dp(2.0), focus_ring_color(ring), shape);
     }
     modifier = modifier.push_semantics(ButtonToggleSemantics(toggled));
     if let Some(expanded) = expanded {

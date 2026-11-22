@@ -1,8 +1,11 @@
 use std::time::Duration;
 
-use tessera_ui::{Color, time::Instant};
+use tessera_ui::{Color, Dp, State, time::Instant};
 
-use crate::animation::{Motion, cubic_bezier_easing};
+use crate::{
+    animation::{Motion, animate_to, cubic_bezier_easing},
+    shape_def::{RoundedCorner, Shape},
+};
 
 #[cfg(test)]
 #[path = "motion_tests.rs"]
@@ -12,6 +15,8 @@ mod tests;
 pub(super) const SELECTION: Duration = Duration::from_millis(150);
 /// Duration of a disclosure triangle turning a quarter.
 pub(super) const DISCLOSURE: Duration = Duration::from_millis(200);
+/// Duration of a keyboard focus ring fading in.
+pub(super) const FOCUS_RING: Duration = Duration::from_millis(200);
 
 /// A value eased between targets; an interrupted change continues from the current value and
 /// takes time in proportion to the remaining distance.
@@ -84,4 +89,30 @@ pub(super) fn mix(from: Color, to: Color, fraction: f32) -> Color {
         lerp(from.b, to.b),
         lerp(from.a, to.a),
     )
+}
+
+/// Fades a focus ring in when focus arrives, and resets it once focus leaves. Callers hide
+/// the ring at once when unfocused.
+pub(super) async fn focus_ring(ring: State<Eased>, focused: bool) {
+    if focused {
+        animate_to(ring, 1.0).await;
+    } else if ring.is_alive() && ring.with(Eased::value) > 0.0 {
+        ring.set(Eased::new(0.0, FOCUS_RING));
+    }
+}
+
+/// Color of a focus ring at `fade` of its full opacity.
+pub(super) fn focus_ring_color(fade: f32) -> Color {
+    Color::from_rgb(0.0, 0.19461783, 1.0).with_alpha(0.6 * fade)
+}
+
+/// A rounded rectangle with continuous corners of `radius`.
+pub(super) fn ring_shape(radius: Dp) -> Shape {
+    let corner = RoundedCorner::manual(radius, 2.0);
+    Shape::RoundedRectangle {
+        top_left: corner,
+        top_right: corner,
+        bottom_right: corner,
+        bottom_left: corner,
+    }
 }

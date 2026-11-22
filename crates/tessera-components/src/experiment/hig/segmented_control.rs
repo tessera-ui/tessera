@@ -23,7 +23,7 @@ use crate::{
 
 use super::{
     choice::ChoiceKeyboard,
-    motion::{Eased, SELECTION, mix},
+    motion::{Eased, FOCUS_RING, SELECTION, focus_ring, mix},
     text::text,
     theme::{Appearance, HigTheme, TextStyle},
 };
@@ -210,6 +210,7 @@ impl PointerInputModifierNode for SelectionPointer {
 struct SegmentFocusRing {
     appearance: Appearance,
     radius: Dp,
+    fade: f32,
 }
 
 impl DrawModifierNode for SegmentFocusRing {
@@ -228,8 +229,8 @@ impl DrawModifierNode for SegmentFocusRing {
         }
         let outset = Dp(3.0).to_px();
         let color = match self.appearance {
-            Appearance::Light => Color::new(0.0, 0.133, 0.92, 0.5),
-            Appearance::Dark => Color::new(0.009, 0.41, 1.0, 0.5),
+            Appearance::Light => Color::new(0.0, 0.133, 0.92, 0.5 * self.fade),
+            Appearance::Dark => Color::new(0.009, 0.41, 1.0, 0.5 * self.fade),
         };
         let fragment = metadata.fragment_mut();
         let index = fragment.push_draw_command(PerceptualFillCommand {
@@ -623,10 +624,19 @@ fn segment_item(
             accent: selection && selected,
             trailing_divider: choosing,
         });
-    if item.enabled && active && requester.is_focus_visible() {
+    let focused = item.enabled && active && requester.is_focus_visible();
+    let ring = remember(|| Eased::new(0.0, FOCUS_RING));
+    launch(focused, focus_ring(ring, focused));
+    let ring = if focused {
+        ring.with(Eased::value)
+    } else {
+        0.0
+    };
+    if ring > 0.0 {
         modifier = modifier.push_draw(SegmentFocusRing {
             appearance: theme.appearance,
             radius: Dp(if selection { 9.75 } else { 9.0 }),
+            fade: ring,
         });
     }
     layout(SegmentLayout).modifier(modifier).child(move || {
