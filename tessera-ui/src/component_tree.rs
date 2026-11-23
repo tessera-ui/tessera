@@ -3848,8 +3848,10 @@ fn dispatch_focus_beyond_bounds_request(
     direction: FocusDirection,
     focus_owner: &FocusOwner,
 ) -> bool {
-    let mut current = focus_owner.active_component_node_id();
-    while let Some(node_id) = current {
+    let Some(active) = focus_owner.active_component_node_id() else {
+        return false;
+    };
+    for node_id in layer_ancestors(tree, active) {
         let Some(node_ref) = tree.get(node_id) else {
             break;
         };
@@ -3859,7 +3861,6 @@ fn dispatch_focus_beyond_bounds_request(
         {
             return true;
         }
-        current = node_ref.parent();
     }
     false
 }
@@ -3898,13 +3899,11 @@ fn dispatch_focus_reveal_request(
         return false;
     };
 
-    let mut current = Some(target_node_id);
-    while let Some(node_id) = current {
+    for node_id in layer_ancestors(tree, target_node_id) {
         let Some(node_ref) = tree.get(node_id) else {
             break;
         };
         let Some(viewport_rect) = component_node_viewport_rect(metadatas, node_id) else {
-            current = node_ref.parent();
             continue;
         };
         let node = node_ref.get();
@@ -3932,7 +3931,6 @@ fn dispatch_focus_reveal_request(
                 return true;
             }
         }
-        current = node_ref.parent();
     }
     false
 }

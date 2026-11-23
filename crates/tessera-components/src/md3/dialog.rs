@@ -12,7 +12,7 @@ use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
-    focus::{self, FocusRevealRequest},
+    focus,
     launch,
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
@@ -334,8 +334,6 @@ pub fn dialog(
     popup(WindowOrigin)
         .modal(true)
         .on_dismiss_request(dismiss)
-        // Scrolling the anchor's ancestors cannot reveal content in the popup's window layer.
-        .modifier(Modifier::new().focus_reveal_handler(|_: FocusRevealRequest| true))
         .child(move || {
             let accessibility_label = accessibility_label.clone();
             let accessibility_description = accessibility_description.clone();
