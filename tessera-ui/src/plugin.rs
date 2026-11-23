@@ -156,6 +156,15 @@ pub struct PluginContext {
     android_platform_views: Option<crate::android::platform_views::PlatformViewHost>,
     #[cfg(target_os = "ios")]
     ios_platform_views: Rc<RefCell<crate::ios::platform_views::IosPlatformViews>>,
+    #[cfg(target_os = "macos")]
+    macos_platform_views: Rc<RefCell<crate::macos_platform_views::MacosPlatformViews>>,
+    #[cfg(target_os = "windows")]
+    windows_platform_views:
+        Option<Rc<RefCell<crate::windows_platform_views::WindowsPlatformViews>>>,
+    #[cfg(target_os = "linux")]
+    linux_platform_views: Option<Rc<RefCell<crate::linux_platform_views::LinuxPlatformViews>>>,
+    #[cfg(target_family = "wasm")]
+    web_platform_views: Option<Rc<RefCell<crate::web_platform_views::WebPlatformViews>>>,
 }
 
 impl PluginContext {
@@ -166,6 +175,8 @@ impl PluginContext {
         }
         #[cfg(target_os = "ios")]
         self.ios_platform_views.borrow_mut().suspend();
+        #[cfg(target_os = "macos")]
+        self.macos_platform_views.borrow_mut().suspend();
     }
 
     pub(crate) fn resume_platform_views(&self) {
@@ -213,6 +224,19 @@ impl PluginContext {
         unsafe { objc2::rc::Retained::retain(handle.ui_view.as_ptr().cast()) }
     }
 
+    /// Returns the active AppKit view when called on the main thread.
+    #[cfg(target_os = "macos")]
+    pub fn ns_view(&self) -> Option<objc2::rc::Retained<objc2_app_kit::NSView>> {
+        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+        objc2::MainThreadMarker::new()?;
+        let RawWindowHandle::AppKit(handle) = self.window().window_handle().ok()?.as_raw() else {
+            return None;
+        };
+        // SAFETY: Winit owns this live view and the main-thread check precedes access.
+        unsafe { objc2::rc::Retained::retain(handle.ns_view.as_ptr().cast()) }
+    }
+
     /// Returns the Android application handle when running on Android.
     #[cfg(target_os = "android")]
     pub fn android_app(&self) -> &AndroidApp {
@@ -250,6 +274,94 @@ impl PluginContext {
             .unregister(&self.android_app, id.as_raw())?;
         self.window().request_redraw();
         Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn register_platform_view(
+        &self,
+        id: crate::PlatformViewId,
+        factory: Rc<dyn crate::macos_platform_views::MacosPlatformViewFactory>,
+    ) {
+        let main_thread = objc2::MainThreadMarker::new()
+            .expect("AppKit platform-view registration must run on the main thread");
+        self.macos_platform_views
+            .borrow_mut()
+            .register(id, factory, main_thread);
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn unregister_platform_view(&self, id: crate::PlatformViewId) {
+        let main_thread = objc2::MainThreadMarker::new()
+            .expect("AppKit platform-view removal must run on the main thread");
+        self.macos_platform_views
+            .borrow_mut()
+            .unregister(id, main_thread);
+        self.window().request_redraw();
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn register_platform_view(
+        &self,
+        id: crate::PlatformViewId,
+        factory: Rc<dyn crate::linux_platform_views::LinuxPlatformViewFactory>,
+    ) -> Result<(), String> {
+        let host = self
+            .linux_platform_views
+            .as_ref()
+            .ok_or_else(|| "X11 platform-view host is unavailable".to_owned())?;
+        host.borrow_mut().register(id, factory)
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn unregister_platform_view(&self, id: crate::PlatformViewId) {
+        if let Some(host) = &self.linux_platform_views {
+            host.borrow_mut().unregister(id);
+            self.window().request_redraw();
+        }
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub(crate) fn register_platform_view(
+        &self,
+        id: crate::PlatformViewId,
+        factory: Rc<dyn crate::web_platform_views::WebPlatformViewFactory>,
+    ) -> Result<(), String> {
+        let host = self
+            .web_platform_views
+            .as_ref()
+            .ok_or_else(|| "Web DOM scene host is unavailable".to_owned())?;
+        host.borrow_mut().register(id.as_raw(), factory)
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub(crate) fn unregister_platform_view(&self, id: crate::PlatformViewId) {
+        if let Some(host) = &self.web_platform_views {
+            host.borrow_mut().unregister(id.as_raw());
+            self.window().request_redraw();
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub(crate) fn register_platform_view(
+        &self,
+        id: crate::PlatformViewId,
+        factory: Rc<dyn crate::windows_platform_views::WindowsPlatformViewFactory>,
+    ) -> Result<(), String> {
+        let host = self
+            .windows_platform_views
+            .as_ref()
+            .ok_or_else(|| "DirectComposition host is unavailable".to_owned())?;
+        host.borrow_mut()
+            .register(id, factory)
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(target_os = "windows")]
+    pub(crate) fn unregister_platform_view(&self, id: crate::PlatformViewId) {
+        if let Some(host) = &self.windows_platform_views {
+            host.borrow_mut().unregister(id);
+            self.window().request_redraw();
+        }
     }
 
     #[cfg(target_os = "ios")]
@@ -303,7 +415,60 @@ impl PluginContext {
         }
     }
 
-    #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
+    #[cfg(target_os = "macos")]
+    pub(crate) fn new_macos(
+        desktop: DesktopPlatformContext,
+        macos_platform_views: Rc<RefCell<crate::macos_platform_views::MacosPlatformViews>>,
+    ) -> Self {
+        Self {
+            desktop,
+            macos_platform_views,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub(crate) fn new_windows(
+        desktop: DesktopPlatformContext,
+        windows_platform_views: Option<
+            Rc<RefCell<crate::windows_platform_views::WindowsPlatformViews>>,
+        >,
+    ) -> Self {
+        Self {
+            desktop,
+            windows_platform_views,
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn new_linux(
+        desktop: DesktopPlatformContext,
+        linux_platform_views: Option<Rc<RefCell<crate::linux_platform_views::LinuxPlatformViews>>>,
+    ) -> Self {
+        Self {
+            desktop,
+            linux_platform_views,
+        }
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub(crate) fn new_web(
+        desktop: DesktopPlatformContext,
+        web_platform_views: Option<Rc<RefCell<crate::web_platform_views::WebPlatformViews>>>,
+    ) -> Self {
+        Self {
+            desktop,
+            web_platform_views,
+        }
+    }
+
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_os = "macos"),
+        not(target_os = "windows"),
+        not(target_os = "linux"),
+        not(target_family = "wasm")
+    ))]
     pub(crate) fn new(desktop: DesktopPlatformContext) -> Self {
         Self { desktop }
     }

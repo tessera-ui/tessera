@@ -861,6 +861,9 @@ dependencies = [
  "ra_ap_vfs",
  "ratatui",
  "rustfix",
+ "salsa",
+ "salsa-macro-rules",
+ "salsa-macros",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -7498,10 +7501,13 @@ dependencies = [
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wayland-client",
+ "wayland-protocols",
  "web-sys",
  "web-time",
  "wgpu",
  "windows",
+ "x11-dl",
 ]
 
 [[package]]
