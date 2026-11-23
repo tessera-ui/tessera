@@ -4,7 +4,7 @@ use tessera_components::{
     column::column,
     image::image,
     md3::{
-        bottom_sheet::{BottomSheetController, BottomSheetExpansion, bottom_sheet_provider},
+        bottom_sheet::{BottomSheetController, BottomSheetExpansion, bottom_sheet},
         button::button,
         checkbox::checkbox,
         icon::icon,
@@ -53,18 +53,14 @@ pub(super) fn sheets_spec(
     let _ = side;
     let action = remember(|| String::from("ui-no-action-selected"));
     let controller = remember(|| BottomSheetController::new(false));
-    let main = RenderSlot::new(move || {
-        sheet_article(action, controller).route_optional(route.clone());
-    });
+    sheet_article(action, controller).route_optional(route);
     let body = RenderSlot::new(move || {
         sheet_content(Callback::new(move || close_sheet(controller)), action);
     });
-    bottom_sheet_provider()
-        .controller(controller)
+    bottom_sheet(controller)
         .accessibility_label(I18N.text("ui-share-this-place"))
         .partial_height(Dp(360.0))
         .on_close_request(move || close_sheet(controller))
-        .main_content_shared(main)
         .bottom_sheet_content_shared(body);
 }
 
@@ -1029,12 +1025,11 @@ fn touch_target() {
                     .clip_to_bounds(),
             )
             .children(move || {
-                bottom_sheet_provider()
-                    .controller(controller)
+                main.render();
+                bottom_sheet(controller)
                     .partial_height(Dp(192.0))
                     .accessibility_label(I18N.text("ui-native-bottom-sheet-controls"))
                     .on_close_request_shared(close)
-                    .main_content_shared(main)
                     .bottom_sheet_content_shared(body);
             });
         gap(Dp(12.0));

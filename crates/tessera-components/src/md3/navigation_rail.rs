@@ -6,16 +6,17 @@
 use std::time::Duration;
 
 use tessera_foundation::modifier::{
-    InteractionState, ModifierExt as _, Padding, PointerEventContext, SelectableArgs, SemanticsArgs,
+    InteractionState, ModifierExt as _, Padding, PointerEventContext, SelectableArgs,
 };
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
-    FocusScopeNode, FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    PxSize, RenderSlot, State,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusRequester,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
+    RenderSlot, State,
     accesskit::Role,
-    launch, launch_once,
+    launch,
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
+    popup::{WindowOrigin, popup},
     provide_context, remember, tessera,
     time::Instant,
     use_context,
@@ -23,22 +24,18 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    animation::{
-        self, Motion, SelectionAnimation, animate_to, run_frames,
-        visibility_motion::{VisibilityMotion, modal_back_handler},
-    },
+    animation::{self, Motion, SelectionAnimation, animate_to},
     column::column,
     md3::{
         badge::BadgeDefaults,
+        modal_scrim::modal_scrim,
         navigation_bar::interpolate_color,
         ripple_state::{RippleSpec, RippleState},
         surface::{SurfaceStyle, surface},
         text::text,
         theme::{ContentColor, MaterialTheme},
     },
-    modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::with_keyboard_input,
-    overlay_semantics::{dialog_semantics, overlay_background},
+    overlay_semantics::dialog_semantics,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -865,10 +862,10 @@ fn navigation_rail_content(
 ///
 /// ## Parameters
 ///
-/// - `is_open` — whether the modal rail is visible; defaults to false.
-/// - `on_close_request` — dismissal callback for the scrim and Escape key.
+/// - `is_open` — whether the modal rail is visible.
+/// - `on_close_request` — dismissal callback for the scrim, unhandled Escape,
+///   and system back.
 /// - `accessibility_label` — accessible name for the modal navigation dialog.
-/// - `main_content` — page content displayed behind the rail.
 /// - `header` — optional menu or action displayed above destinations.
 /// - `content` — expanded destination items; close the rail in their activation
 ///   callbacks.
@@ -886,18 +883,13 @@ fn navigation_rail_content(
 ///
 /// #[tessera]
 /// fn navigation() {
-///     let open = remember(|| false);
+///     let open = remember(|| true);
 ///     let selected = remember(|| 0usize);
 ///     material_theme().child(move || {
-///         modal_navigation_rail()
-///             .is_open(open.get())
+///         assert!(open.get());
+///         modal_navigation_rail(open.get())
 ///             .accessibility_label("Mail navigation")
 ///             .on_close_request(move || open.set(false))
-///             .main_content(move || {
-///                 button().on_click(move || open.set(true)).child(|| {
-///                     text("Open navigation");
-///                 });
-///             })
 ///             .content(move |rail| {
 ///                 navigation_rail_item(rail)
 ///                     .label("Inbox")
@@ -907,169 +899,62 @@ fn navigation_rail_content(
 ///                         open.set(false);
 ///                     });
 ///             });
+///         button().on_click(move || open.set(true)).child(|| {
+///             text("Open navigation");
+///         });
 ///     });
 /// }
 /// # tessera_ui::testing::UiTest::new().content(navigation).frame();
 /// ```
 #[tessera]
 pub fn modal_navigation_rail(
-    is_open: Option<bool>,
+    is_open: bool,
     on_close_request: Option<Callback>,
     #[prop(into)] accessibility_label: Option<String>,
-    main_content: Option<RenderSlot>,
     header: Option<RenderSlot>,
     content: Option<tessera_ui::RenderSlotWith<NavigationRailScope>>,
 ) {
-    let is_open = is_open.unwrap_or(false);
-    let on_close_request = on_close_request.unwrap_or_default();
-    let main_content = main_content.unwrap_or_default();
+    if !is_open {
+        return;
+    }
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let scope = remember(FocusScopeNode::new).get();
-    let focus = remember(ModalFocusState::default);
-    let was_open = remember(|| false);
-    let back_motion = remember(|| VisibilityMotion::new(true, true));
-    let just_opened = is_open && !was_open.get();
-    if was_open.get() != is_open {
-        was_open.set(is_open);
-        back_motion.set(VisibilityMotion::new(true, true));
-    }
-    let back = back_motion.with(VisibilityMotion::sample);
-    if back.active {
-        launch_once(run_frames(back_motion, VisibilityMotion::advance));
-    }
-    let modifier = modal_focus_modifier(Modifier::new(), focus, is_open, scope);
-    tessera_ui::layout::layout(ModalNavigationRailLayout)
-        .modifier(modifier)
+    popup(WindowOrigin)
+        .modal(true)
+        .dismiss_on_outside_press(false)
+        .on_dismiss_request(on_close_request.unwrap_or_default())
         .child(move || {
-            overlay_background(main_content, is_open);
-            modal_back_handler(is_open, on_close_request).on_preview(move |event| {
-                back_motion.with_mut(|motion| motion.preview_back(event));
-            });
-            if is_open {
-                surface()
-                    .style(scheme.scrim.with_alpha(0.32 * back.opacity).into())
-                    .modifier(
-                        Modifier::new()
-                            .fill_max_size()
-                            .semantics(SemanticsArgs {
-                                hidden: true,
-                                ..Default::default()
-                            })
-                            .focusable()
-                            .focus_properties(
-                                FocusProperties::new()
-                                    .can_focus(false)
-                                    .can_request_focus(false)
-                                    .skip_traversal(true),
+            modal_scrim(scheme.scrim.with_alpha(0.32)).on_dismiss_optional(on_close_request);
+            let modifier = dialog_semantics(Modifier::new(), accessibility_label.clone(), true);
+            let header = header.clone();
+            let content = content.clone();
+            surface()
+                .modifier(modifier.width(EXPANDED_MIN_WIDTH).fill_max_height())
+                .style(scheme.surface_container_low.into())
+                .elevation(Dp(1.0))
+                .shape(Shape::RoundedRectangle {
+                    top_left: RoundedCorner::ZERO,
+                    top_right: RoundedCorner::manual(Dp(16.0), 2.0),
+                    bottom_right: RoundedCorner::manual(Dp(16.0), 2.0),
+                    bottom_left: RoundedCorner::ZERO,
+                })
+                .block_input(true)
+                .child(move || {
+                    navigation_rail_content()
+                        .composition(NavigationRailScope {
+                            icon_position: NavigationRailIconPosition::Start,
+                            indicator_start_width: Dp(
+                                EXPANDED_MIN_WIDTH.0 - ITEM_HORIZONTAL_PADDING.0 * 2.0
                             ),
-                    )
-                    .on_click_shared(on_close_request)
-                    .show_ripple(false)
-                    .show_state_layer(false)
-                    .block_input(true)
-                    .child(|| {});
-                let modifier = dialog_semantics(
-                    with_keyboard_input(
-                        Modifier::new()
-                            .focus_scope(Some(scope))
-                            .focus_properties(FocusProperties::new().skip_traversal(true))
-                            .focus_traversal_policy(
-                                FocusTraversalPolicy::linear()
-                                    .wrap(true)
-                                    .tab_navigation(true),
-                            ),
-                        Box::new(move |input: tessera_ui::KeyboardInput<'_>| {
-                            input.keyboard_events.retain(|event| {
-                                !modal_rail_key(event.physical_key, event.state, on_close_request)
-                            });
-                        }),
-                    ),
-                    accessibility_label.clone(),
-                    true,
-                );
-                if just_opened {
-                    scope.request_focus();
-                }
-                surface()
-                    .modifier(
-                        modifier
-                            .fill_max_size()
-                            .offset(Dp(-48.0 * f64::from(1.0 - back.position)), Dp::ZERO)
-                            .alpha(back.opacity),
-                    )
-                    .style(scheme.surface_container_low.into())
-                    .elevation(Dp(1.0))
-                    .shape(Shape::RoundedRectangle {
-                        top_left: RoundedCorner::ZERO,
-                        top_right: RoundedCorner::manual(Dp(16.0), 2.0),
-                        bottom_right: RoundedCorner::manual(Dp(16.0), 2.0),
-                        bottom_left: RoundedCorner::ZERO,
-                    })
-                    .block_input(true)
-                    .child(move || {
-                        navigation_rail_content()
-                            .composition(NavigationRailScope {
-                                icon_position: NavigationRailIconPosition::Start,
-                                indicator_start_width: Dp(
-                                    EXPANDED_MIN_WIDTH.0 - ITEM_HORIZONTAL_PADDING.0 * 2.0
-                                ),
-                                item_min_height: START_ICON_ITEM_MIN_HEIGHT,
-                                item_spacing: ITEM_VERTICAL_SPACING_EXPANDED,
-                            })
-                            .header_optional(header)
-                            .content_optional(content);
-                    });
-            }
+                            item_min_height: START_ICON_ITEM_MIN_HEIGHT,
+                            item_spacing: ITEM_VERTICAL_SPACING_EXPANDED,
+                        })
+                        .header_optional(header)
+                        .content_optional(content);
+                });
         });
-}
-
-fn modal_rail_key(
-    key: tessera_ui::winit::keyboard::PhysicalKey,
-    state: tessera_ui::winit::event::ElementState,
-    on_close: Callback,
-) -> bool {
-    if state == tessera_ui::winit::event::ElementState::Pressed
-        && key
-            == tessera_ui::winit::keyboard::PhysicalKey::Code(
-                tessera_ui::winit::keyboard::KeyCode::Escape,
-            )
-    {
-        on_close.call();
-        true
-    } else {
-        false
-    }
-}
-
-#[derive(Clone, PartialEq)]
-struct ModalNavigationRailLayout;
-
-impl tessera_ui::LayoutPolicy for ModalNavigationRailLayout {
-    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let children = scope.children();
-        let main = children[0];
-        let constraint = scope.parent_constraint().without_min();
-        let main_size = main.measure(scope, &constraint)?;
-        let size = ComputedData {
-            width: scope.parent_constraint().width().clamp(main_size.width),
-            height: scope.parent_constraint().height().clamp(main_size.height),
-        };
-        let mut result = LayoutResult::new(size);
-        result.place_child(main, PxPosition::ZERO);
-        if children.len() > 1 {
-            children[1].measure(scope, &Constraint::exact(size.width, size.height))?;
-            result.place_child(children[1], PxPosition::ZERO);
-            children[2].measure(
-                scope,
-                &Constraint::exact(size.width.min(EXPANDED_MIN_WIDTH.to_px()), size.height),
-            )?;
-            result.place_child(children[2], PxPosition::ZERO);
-        }
-        Ok(result)
-    }
 }
 
 /// Expansion animation state for the navigation rail container.
@@ -1205,10 +1090,6 @@ mod modal_tests {
         MOUSE_POINTER_ID, PressKeyEventType,
         accesskit::{Action, Node, NodeId},
         testing::UiTest,
-        winit::{
-            event::ElementState,
-            keyboard::{KeyCode, PhysicalKey},
-        },
     };
 
     use crate::md3::{button::button, text::text, theme::material_theme};
@@ -1216,30 +1097,24 @@ mod modal_tests {
     use super::*;
 
     #[tessera]
-    fn fixture(
-        output: tessera_ui::testing::TestProbe<Option<(State<bool>, State<usize>, Callback)>>,
-    ) {
+    fn fixture(output: tessera_ui::testing::TestProbe<Option<(State<bool>, State<usize>)>>) {
         let open = remember(|| false);
         let selected = remember(|| 0usize);
-        let close = Callback::new(move || open.set(false));
-        output.set(Some((open, selected, close)));
+        output.set(Some((open, selected)));
         material_theme().child(move || {
-            modal_navigation_rail()
-                .is_open(open.get())
-                .accessibility_label("Mail destinations")
-                .on_close_request_shared(close)
-                .main_content(move || {
-                    column()
-                        .modifier(Modifier::new().size(Dp(600.0), Dp(480.0)))
-                        .children(move || {
-                            button()
-                                .accessibility_label("Open rail")
-                                .on_click(move || open.set(true))
-                                .child(|| {
-                                    text("Open rail");
-                                });
+            column()
+                .modifier(Modifier::new().size(Dp(600.0), Dp(480.0)))
+                .children(move || {
+                    button()
+                        .accessibility_label("Open rail")
+                        .on_click(move || open.set(true))
+                        .child(|| {
+                            text("Open rail");
                         });
-                })
+                });
+            modal_navigation_rail(open.get())
+                .accessibility_label("Mail destinations")
+                .on_close_request(move || open.set(false))
                 .header(move || {
                     button()
                         .accessibility_label("Close rail")
@@ -1280,47 +1155,13 @@ mod modal_tests {
     }
 
     #[test]
-    fn escape_adapter_dismisses_only_pressed_escape() {
-        use tessera_ui::testing::UiTest;
-
-        let output = tessera_ui::testing::TestProbe::default();
-        let mut session = UiTest::new()
-            .content(|| fixture(output.clone()))
-            .viewport(600, 480);
-        session.frame();
-        let open = output.get().expect("mounted modal rail").0;
-        let close = output.get().expect("mounted modal rail").2;
-        open.set(true);
-        assert!(!modal_rail_key(
-            PhysicalKey::Code(KeyCode::Enter),
-            ElementState::Pressed,
-            close
-        ));
-        assert!(open.get());
-        assert!(!modal_rail_key(
-            PhysicalKey::Code(KeyCode::Escape),
-            ElementState::Released,
-            close
-        ));
-        assert!(open.get());
-        assert!(modal_rail_key(
-            PhysicalKey::Code(KeyCode::Escape),
-            ElementState::Pressed,
-            close
-        ));
-        assert!(!open.get());
-    }
-
-    #[test]
-    #[ignore = "Requires a native GPU adapter for modal semantics, input and focus restoration"]
-    fn modal_scrim_destination_and_escape_adapter_restore_origin_without_focus_activation() {
+    fn modal_scrim_destination_and_escape_restore_origin_without_focus_activation() {
         crate::test_utils::run_isolated_test(
-            "md3::navigation_rail::modal_tests::modal_scrim_destination_and_escape_adapter_restore_origin_without_focus_activation",
+            "md3::navigation_rail::modal_tests::modal_scrim_destination_and_escape_restore_origin_without_focus_activation",
             || {
                 let output = tessera_ui::testing::TestProbe::default();
                 let mut renderer = UiTest::new()
                     .viewport(600, 480)
-                    .rendered(crate::TesseraComponents)
                     .content(|| fixture(output.clone()));
                 renderer.frames(4);
                 for dismiss in 0..3 {
@@ -1361,11 +1202,7 @@ mod modal_tests {
                         }
                         1 => action(&mut renderer, saved, Action::Click),
                         _ => {
-                            assert!(modal_rail_key(
-                                PhysicalKey::Code(KeyCode::Escape),
-                                ElementState::Pressed,
-                                output.get().expect("mounted modal rail").2
-                            ));
+                            renderer.press_key(tessera_ui::winit::keyboard::NamedKey::Escape);
                         }
                     }
                     renderer.frames(6);

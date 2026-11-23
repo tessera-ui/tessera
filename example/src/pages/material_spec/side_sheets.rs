@@ -11,8 +11,7 @@ use tessera_components::{
         icon_button::icon_button,
         material_icons::filled,
         side_sheet::{
-            SideSheetController, SideSheetPosition, modal_side_sheet_provider,
-            standard_side_sheet_provider,
+            SideSheetController, SideSheetPosition, modal_side_sheet, standard_side_sheet,
         },
         text::text,
         theme::MaterialTheme,
@@ -99,33 +98,16 @@ pub(crate) fn live_side_sheet_host(
     if !session.route_active() && session.open.with(SideSheetController::is_open) {
         session.open.with_mut(SideSheetController::close);
     }
-    let modal = RenderSlot::new(move || {
-        live_modal(
-            session.open,
-            session.filters,
-            session.notice,
-            RenderSlot::new(move || {
-                main_content.render(session);
-            }),
-        );
-    });
-    modal.render();
+    main_content.render(session);
+    live_modal(session.open, session.filters, session.notice);
 }
 
 #[tessera]
-fn live_modal(
-    open: State<SideSheetController>,
-    filters: State<[bool; 5]>,
-    notice: State<String>,
-    main_content: RenderSlot,
-) {
-    modal_side_sheet_provider()
+fn live_modal(open: State<SideSheetController>, filters: State<[bool; 5]>, notice: State<String>) {
+    modal_side_sheet(open)
         .position(SideSheetPosition::End)
         .content_padding(Dp::ZERO)
         .accessibility_label(I18N.text("ui-filters"))
-        .controller(open)
-        .on_close_request(move || open.with_mut(SideSheetController::close))
-        .main_content_shared(main_content)
         .side_sheet_content(move || {
             sheet_content(open, filters, notice);
         });
@@ -151,10 +133,9 @@ pub(super) fn side_sheets_spec(
             .session_optional(session)
             .route_optional(route.clone());
     });
-    if root.is_some() {
-        content.render();
-    } else {
-        live_modal(open, filters, notice, content);
+    content.render();
+    if root.is_none() {
+        live_modal(open, filters, notice);
     }
 }
 
@@ -983,7 +964,7 @@ fn standard_demo(open: State<SideSheetController>) {
                 .clip_shape(Shape::rounded_rectangle(Dp(20.0))),
         )
         .children(move || {
-            standard_side_sheet_provider()
+            standard_side_sheet()
                 .position(SideSheetPosition::End)
                 .accessibility_label(I18N.text("ui-information"))
                 .controller(open)

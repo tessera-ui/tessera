@@ -17,12 +17,11 @@ use tessera_ui::{
 use crate::{
     column::column,
     md3::{
-        bottom_sheet::{BottomSheetController, bottom_sheet_provider},
+        bottom_sheet::{BottomSheetController, bottom_sheet},
         button::button,
         dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
         side_sheet::{
-            SideSheetController, SideSheetPosition, modal_side_sheet_provider,
-            standard_side_sheet_provider,
+            SideSheetController, SideSheetPosition, modal_side_sheet, standard_side_sheet,
         },
         text::text,
         theme::material_theme,
@@ -329,32 +328,26 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
                 });
         }
         (Kind::BottomSheet, OverlayController::Bottom(controller)) => {
-            bottom_sheet_provider()
+            main_content(settings);
+            bottom_sheet(controller)
                 .accessibility_label(settings.get().label)
-                .controller(controller)
                 .on_close_request(move || settings.with(|s| s.open).set(false))
-                .main_content(move || {
-                    main_content(settings);
-                })
                 .bottom_sheet_content(move || {
                     modal_content(settings);
                 });
         }
         (Kind::SideSheet, OverlayController::Side(controller)) => {
-            modal_side_sheet_provider()
+            main_content(settings);
+            modal_side_sheet(controller)
                 .accessibility_label(settings.get().label)
                 .position(SideSheetPosition::End)
-                .controller(controller)
                 .on_close_request(move || settings.with(|s| s.open).set(false))
-                .main_content(move || {
-                    main_content(settings);
-                })
                 .side_sheet_content(move || {
                     modal_content(settings);
                 });
         }
         (Kind::StandardSheet, OverlayController::Side(controller)) => {
-            standard_side_sheet_provider()
+            standard_side_sheet()
                 .accessibility_label(settings.get().label)
                 .position(SideSheetPosition::End)
                 .controller(controller)

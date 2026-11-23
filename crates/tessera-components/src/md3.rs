@@ -25,6 +25,7 @@ pub mod list_item;
 pub mod loading_indicator;
 pub mod material_icons;
 pub mod menus;
+mod modal_scrim;
 pub mod modifier;
 pub mod navigation_bar;
 pub mod navigation_drawer;

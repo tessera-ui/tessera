@@ -38,15 +38,11 @@ fn fixture(
                             }),
                     )
                     .children(move || {
-                        modal_side_sheet_provider()
+                        modal_side_sheet(open)
                             .position(SideSheetPosition::Start)
                             .max_width(Dp(360.0))
                             .content_padding(Dp::ZERO)
-                            .controller(open)
                             .on_close_request(move || open.with_mut(SideSheetController::close))
-                            .main_content(|| {
-                                boxed().modifier(Modifier::new().fill_max_size());
-                            })
                             .side_sheet_content(move || {
                                 live_drawer(selected, open, scroll);
                             });
@@ -56,15 +52,15 @@ fn fixture(
 }
 
 #[test]
-fn live_drawer_fills_available_height_and_scrolls_to_an_activatable_last_destination() {
+fn live_drawer_fills_the_viewport_and_scrolls_to_an_activatable_last_destination() {
     for (width, height) in [(600, 240), (600, 720), (320, 240), (320, 720)] {
         let output = tessera_ui::testing::TestProbe::default();
         let mut session = UiTest::new()
-            .content(|| fixture((width, height), output.clone()))
-            .viewport(800, 800);
+            .content(|| fixture((width.min(280), 180), output.clone()))
+            .viewport(width as u32, height as u32);
         session.frame();
         let before = session.advance(std::time::Duration::from_millis(1_000));
-        before.node("drawer-host").size(width, height);
+        before.node("drawer-host").size(width.min(280), 180);
         before.node("live-drawer").size(width.min(360), height);
         before.node("drawer-personal").width(width.min(360) - 24);
         let initial = before.node("drawer-personal").bounds();

@@ -15,10 +15,9 @@ use tessera_ui::{
 
 use crate::{
     md3::{
-        bottom_sheet::{BottomSheetController, bottom_sheet_provider},
+        bottom_sheet::{BottomSheetController, bottom_sheet},
         side_sheet::{
-            SideSheetController, SideSheetPosition, modal_side_sheet_provider,
-            standard_side_sheet_provider,
+            SideSheetController, SideSheetPosition, modal_side_sheet, standard_side_sheet,
         },
         surface::surface,
         theme::material_theme,
@@ -94,14 +93,11 @@ fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>)
     observed.with_mut(|handles| handles.edge = Some(edge));
     material_theme().child(move || match open {
         OverlayController::Bottom(controller) => {
-            bottom_sheet_provider()
-                .controller(controller)
+            main_content();
+            bottom_sheet(controller)
                 .on_close_request({
                     let observed = observed.clone();
                     move || request_close(open, accept_close, observed.clone())
-                })
-                .main_content(|| {
-                    main_content();
                 })
                 .bottom_sheet_content({
                     let observed = observed.clone();
@@ -113,7 +109,7 @@ fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>)
         OverlayController::Side(controller) => {
             let position = edge.get();
             if matches!(kind, Kind::StandardStart | Kind::StandardEnd) {
-                standard_side_sheet_provider()
+                standard_side_sheet()
                     .position(position)
                     .controller(controller)
                     .on_close_request({
@@ -130,15 +126,12 @@ fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>)
                         }
                     });
             } else {
-                modal_side_sheet_provider()
+                main_content();
+                modal_side_sheet(controller)
                     .position(position)
-                    .controller(controller)
                     .on_close_request({
                         let observed = observed.clone();
                         move || request_close(open, accept_close, observed.clone())
-                    })
-                    .main_content(|| {
-                        main_content();
                     })
                     .side_sheet_content({
                         let observed = observed.clone();

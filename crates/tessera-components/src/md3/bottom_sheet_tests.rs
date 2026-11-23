@@ -1,20 +1,73 @@
 use std::time::Duration;
 
-use tessera_foundation::modifier::ModifierExt as _;
+use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     CursorEventContent, Dp, FocusDirection, GestureState, MOUSE_POINTER_ID, Modifier,
     PointerChange, PressKeyEventType, PxPosition, State,
     accesskit::{Action, Rect, Role},
     focus, remember, tessera,
-    testing::UiTest,
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
-    md3::{surface::surface, theme::material_theme},
+    boxed::boxed,
+    md3::{button::button, surface::surface, theme::material_theme},
     spacer::spacer,
 };
 
-use super::{BottomSheetController, BottomSheetExpansion, bottom_sheet_provider};
+use super::{BottomSheetController, BottomSheetExpansion, bottom_sheet};
+
+#[tessera]
+fn clipped_anchor_fixture(background_clicks: TestProbe<usize>) {
+    let controller = remember(|| BottomSheetController::new(false));
+    material_theme().child(move || {
+        let background_clicks = background_clicks.clone();
+        boxed()
+            .modifier(Modifier::new().fill_max_size())
+            .children(move || {
+                boxed()
+                    .modifier(Modifier::new().size(Dp(100.0), Dp(60.0)).clip_to_bounds())
+                    .children(move || {
+                        button()
+                            .accessibility_label("Open options")
+                            .on_click(move || controller.with_mut(BottomSheetController::open));
+                        bottom_sheet(controller)
+                            .partial_height(Dp(200.0))
+                            .bottom_sheet_content(|| {
+                                spacer().modifier(Modifier::new().semantics(SemanticsArgs {
+                                    test_tag: Some("sheet-content".into()),
+                                    ..Default::default()
+                                }));
+                            });
+                    });
+                let background_clicks = background_clicks.clone();
+                button()
+                    .accessibility_label("Background action")
+                    .modifier(Modifier::new().offset(Dp(140.0), Dp::ZERO))
+                    .on_click(move || background_clicks.with_mut(|count| *count += 1));
+            });
+    });
+}
+
+#[test]
+fn sheet_escapes_anchor_clip_and_keeps_background_blocked_until_exit() {
+    let background_clicks = TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(400, 600)
+        .content(|| clipped_anchor_fixture(background_clicks.clone()));
+    ui.frame();
+    ui.click_at(PxPosition::from_f32_xy(20.0, 20.0));
+    let shown = ui.frames(64);
+    assert_eq!(shown.node("sheet-content").bounds().y.0, 448);
+    let scrim_point = PxPosition::from_f32_xy(160.0, 20.0);
+    ui.click_at(scrim_point);
+    assert_eq!(background_clicks.get(), 0);
+    ui.click_at(scrim_point);
+    assert_eq!(background_clicks.get(), 0);
+    ui.frames(64);
+    ui.click_at(scrim_point);
+    assert_eq!(background_clicks.get(), 1);
+}
 
 #[derive(Clone, Copy, Default)]
 struct FixtureHandles {
@@ -29,18 +82,15 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     observed.with_mut(|handles| handles.controller = Some(controller));
     material_theme().child(move || {
         let observed = observed.clone();
-        bottom_sheet_provider()
-            .controller(controller)
+        surface()
+            .modifier(Modifier::new().fill_max_size())
+            .child(|| {});
+        bottom_sheet(controller)
             .partial_height_optional(observed.get().partial)
             .accessibility_label("Resizable sheet")
             .on_close_request(move || {
                 observed.with_mut(|handles| handles.closes += 1);
                 controller.with_mut(BottomSheetController::close);
-            })
-            .main_content(|| {
-                surface()
-                    .modifier(Modifier::new().fill_max_size())
-                    .child(|| {});
             })
             .bottom_sheet_content(|| {
                 spacer().modifier(Modifier::new().height(Dp(120.0)));

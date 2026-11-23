@@ -16,11 +16,10 @@ use tessera_ui::{
 
 use crate::{
     md3::{
-        bottom_sheet::{BottomSheetController, bottom_sheet_provider},
+        bottom_sheet::{BottomSheetController, bottom_sheet},
         dialog::{DialogController, dialog_provider},
         side_sheet::{
-            SideSheetController, SideSheetPosition, modal_side_sheet_provider,
-            standard_side_sheet_provider,
+            SideSheetController, SideSheetPosition, modal_side_sheet, standard_side_sheet,
         },
         surface::surface,
         theme::material_theme,
@@ -76,14 +75,10 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<OverlayCont
                 });
         }
         OverlayController::Bottom(controller) => {
-            bottom_sheet_provider()
-                .controller(controller)
-                .main_content(|| {
-                    main_content();
-                })
-                .bottom_sheet_content(|| {
-                    marker_content();
-                });
+            main_content();
+            bottom_sheet(controller).bottom_sheet_content(|| {
+                marker_content();
+            });
         }
         OverlayController::Side(controller) => {
             let position = if matches!(kind, Kind::Start | Kind::StandardStart) {
@@ -92,7 +87,7 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<OverlayCont
                 SideSheetPosition::End
             };
             if matches!(kind, Kind::StandardStart | Kind::StandardEnd) {
-                standard_side_sheet_provider()
+                standard_side_sheet()
                     .controller(controller)
                     .position(position)
                     .main_content(|| {
@@ -103,12 +98,9 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<OverlayCont
                     });
                 return;
             }
-            modal_side_sheet_provider()
-                .controller(controller)
+            main_content();
+            modal_side_sheet(controller)
                 .position(position)
-                .main_content(|| {
-                    main_content();
-                })
                 .side_sheet_content(|| {
                     marker_content();
                 });
