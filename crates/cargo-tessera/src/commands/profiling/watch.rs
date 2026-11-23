@@ -40,7 +40,7 @@ use ratatui::{
 
 use super::{FrameRecord, TraceEvent, parse_json_line};
 
-/// Options for [`watch`].
+/// Options for the profiling trace viewer.
 pub struct WatchOptions {
     /// Refresh interval for reading new records and redrawing.
     pub refresh: Duration,

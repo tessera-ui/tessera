@@ -377,11 +377,11 @@ impl crate::BuildModifierNode for PlatformViewBoundary {
 /// ARGB visual, an active compositing manager, and XFixes input regions; otherwise
 /// native views are hidden when a later Tessera draw needs an overlay. Wayland factories attach
 /// content at the measured local pixel size to the supplied
-/// [`WaylandChildSurface`](crate::WaylandChildSurface). Tessera applies output
+/// `WaylandChildSurface`. Tessera applies output
 /// scale, uniform placement, rectangular cropping, and scene order with
 /// `wp_viewporter` when available; without it, non-integer output scale,
 /// transforms, and clipping hide the view. A newly visible Wayland view must
-/// submit a buffer when [`WaylandViewPlacement::needs_buffer`] is true. Fractional
+/// submit a buffer when `WaylandViewPlacement::needs_buffer` is true. Fractional
 /// opacity and shaped clipping are unsupported. Native pixels cannot be sampled
 /// by Tessera draw effects. Sampling across a native-view boundary warns and
 /// renders that frame without native views.

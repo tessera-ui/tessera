@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PAGES_ARTIFACT_NAME: github-pages-${{ github.run_attempt }}
+      RUSTDOCFLAGS: -D warnings
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,7 +35,7 @@ jobs:
           tools: ""
       - name: Build Documentation
         run: |
-          cargo doc --all --no-deps
+          cargo doc --workspace --exclude tessera-cosmic-text --no-deps
       - name: Build Web Example
         run: |
           cargo +stable tessera web build --release -p example
