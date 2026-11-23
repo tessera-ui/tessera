@@ -9,7 +9,7 @@ use crate::{
     component_tree::NodeRole, layout::Stack, runtime::TesseraRuntime,
 };
 
-/// Window geometry available to a [`PopupPositionPolicy`].
+/// Geometry available to a [`PopupPositionPolicy`], in window coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PopupPositionInput {
     /// The layout node enclosing the popup call, in local units and window
@@ -18,16 +18,18 @@ pub struct PopupPositionInput {
     /// The part of the anchor left visible by its ancestors' clipping, or
     /// `None` when it is fully clipped.
     pub visible_anchor: Option<FloatRect>,
-    /// The window size.
-    pub window_size: PxSize,
+    /// The area the popup may occupy. Keep the popup inside it; it may differ
+    /// from the window.
+    pub bounds: FloatRect,
     /// The measured popup content size.
     pub popup_size: PxSize,
 }
 
 /// Positions a popup in window coordinates.
 ///
-/// Popup content is measured against the window size regardless of the
-/// anchor, so positioning only moves the measured content.
+/// Popup content is measured against the size of
+/// [`PopupPositionInput::bounds`] regardless of the anchor, so positioning
+/// only moves the measured content.
 pub trait PopupPositionPolicy: Clone + PartialEq + 'static {
     /// Returns the window position of the popup's top-left corner.
     fn position(&self, input: &PopupPositionInput) -> PxPosition;
@@ -82,8 +84,8 @@ impl PopupConfig {
 ///
 /// The popup stays logically owned by its call site: contexts, remembered
 /// state, focus restoration, and keyboard bubbling follow the enclosing
-/// component. Its content is measured against the window and positioned by
-/// `position` relative to the enclosing layout node, which is the anchor. The
+/// component. `position` places its content relative to the enclosing layout
+/// node, which is the anchor. The
 /// popup ignores the anchor's ancestors' clipping, scaling, and opacity, draws
 /// above the main content, and receives pointer input first. A popup is hidden
 /// while its anchor is not placed.

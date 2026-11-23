@@ -4539,20 +4539,16 @@ fn popup_position(
         local_size: prepared.size,
         local_to_window: prepared.local_to_window,
     };
-    let bounds = anchor.window_bounds();
+    let bounds = crate::FloatRect::from_position_size(PxPosition::ZERO, window_size);
+    let anchor_bounds = anchor.window_bounds();
     let visible_anchor = anchor_metadata
         .event_clip_bounds
-        .map_or(Some(bounds), |clip| clip.intersection(bounds))
-        .and_then(|bounds| {
-            bounds.intersection(crate::FloatRect::from_position_size(
-                PxPosition::ZERO,
-                window_size,
-            ))
-        });
+        .map_or(Some(anchor_bounds), |clip| clip.intersection(anchor_bounds))
+        .and_then(|visible| visible.intersection(bounds));
     Some(config.position.position(&crate::popup::PopupPositionInput {
         anchor,
         visible_anchor,
-        window_size,
+        bounds,
         popup_size: PxSize::new(size.width, size.height),
     }))
 }
