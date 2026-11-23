@@ -861,6 +861,7 @@ dependencies = [
  "ra_ap_vfs",
  "ratatui",
  "rustfix",
+ "salsa",
  "serde",
  "serde_json",
  "sha2 0.11.1",

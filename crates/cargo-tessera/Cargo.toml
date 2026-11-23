@@ -60,6 +60,7 @@ ra_ap_syntax = "=0.0.358"
 ra_ap_vfs = "=0.0.358"
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "layout-cache", "underline-color"] }
 rustfix = "0.9.4"
+salsa = "=0.28.5" # Keep aligned with rust-analyzer 0.0.358's tracked-query macros.
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["unbounded_depth"] }
 sha2 = "0.11.1"
