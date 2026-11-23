@@ -28,6 +28,7 @@ use crate::{
 };
 
 use axis::{SliderAxis, SliderMeasureScope};
+use indicator::ValueIndicator;
 use interaction::{
     RangeSliderHandleWidths, RangeSliderInteraction, SliderKeyboardModel,
     SliderKeyboardModifierNode, apply_range_slider_semantics, apply_slider_semantics,
@@ -42,7 +43,6 @@ use render::{
 };
 
 pub use indicator::SliderValueIndicatorVisibility;
-use indicator::ValueIndicator;
 
 mod axis;
 mod indicator;
