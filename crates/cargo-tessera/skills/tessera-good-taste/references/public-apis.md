@@ -11,7 +11,7 @@ gates, and platform support. Use `cargo doc --open` in the application workspace
 | Layout and geometry | `tessera_components::{row, column, boxed, flow_row, flow_column, modifier}`; `tessera_ui::{Dp, Px, AxisConstraint, Constraint, geometry}`; `tessera_foundation::{modifier, alignment, shape_def}` |
 | Controls and virtualization | Material control modules and their controller types in `tessera_components::md3`, including `lazy_list`, `lazy_grid`, `lazy_staggered_grid`, and `scrollable`; `tessera_components::pager`; experimental `tessera_components::experiment::hig::glass` |
 | Visuals and assets | `tessera_components::{painter, image, image_vector}`; `tessera_components::md3::{theme, icon, material_icons, shadow}`; `tessera_ui::{color, asset}`; `tessera_build` asset generation |
-| Input, focus, and semantics | `tessera_ui::{PointerInput, KeyboardInput, ImeInput, ClipboardInput, focus, accessibility}`; `tessera_foundation::modifier` input and semantics extensions; `tessera_components::modifier` clickable, toggleable, and selectable extensions |
+| Input, focus, and semantics | `tessera_ui::{PointerInput, KeyboardInput, ImeInput, ClipboardInput, focus, accessibility}`; `tessera_foundation::modifier` interaction, input, and semantics extensions |
 | Text editing | `tessera_components::md3::{text, text_input, text_field}`; editor controllers and documented transforms |
 | Localization | `tessera_i18n::{Catalog, I18n, FluentValue, LanguageIdentifier, langid}`; generated `res::{I18N, i18n}` |
 | Overlays and navigation | `tessera_components::md3::{dialog, menus, tooltip, bottom_sheet, side_sheet, snackbar, navigation_bar, navigation_rail, navigation_drawer}`; `tessera_shard::{shard, router}` |

@@ -17,15 +17,9 @@ use crate::{
 
 use super::*;
 
-/// Scene pixels available to draws that sample the scene.
-enum SceneState {
-    /// Draws sample a copy of the offscreen target.
-    Offscreen,
-    /// A compute pass filtered the scene inside `rect`.
-    Filtered {
-        texture: ScratchTexture,
-        rect: PxRect,
-    },
+struct FilteredScene {
+    texture: ScratchTexture,
+    rect: PxRect,
 }
 
 struct RenderPassParams<'a, 'commands> {
@@ -93,8 +87,6 @@ struct SubmitBatchParams<'a, 'b> {
 }
 
 impl RenderCore {
-    /// Renders the frame and presents it to the window surface, or keeps it in
-    /// the offscreen copy when the core has no surface.
     pub(crate) fn render(
         &mut self,
         graph: RenderGraph,
@@ -828,7 +820,7 @@ impl RenderCore {
             state.graphics,
         );
 
-        let mut scene = SceneState::Offscreen;
+        let mut filtered_scene = None;
         let mut scene_written = !full_redraw;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
         for mut pass in passes {
@@ -836,7 +828,7 @@ impl RenderCore {
             Self::execute_render_pass(
                 &mut state,
                 &mut encoder,
-                &mut scene,
+                &mut filtered_scene,
                 &mut scene_written,
                 &mut pass,
                 &mut clip_stack,
@@ -859,7 +851,7 @@ impl RenderCore {
                 );
             }
         }
-        drop(scene);
+        drop(filtered_scene);
 
         RenderCore::blit_to_view(BlitParams {
             encoder: &mut encoder,
@@ -1027,7 +1019,7 @@ impl RenderCore {
     fn execute_render_pass(
         state: &mut RenderCoreFrameState<'_>,
         encoder: &mut wgpu::CommandEncoder,
-        scene: &mut SceneState,
+        filtered_scene: &mut Option<FilteredScene>,
         scene_written: &mut bool,
         pass: &mut RenderPassPlan<'_>,
         clip_stack: &mut SmallVec<[PxRect; 16]>,
@@ -1036,7 +1028,7 @@ impl RenderCore {
         match pass {
             RenderPassPlan::Compute(items) => {
                 if let Some(filtered) = Self::filter_scene(state, encoder, std::mem::take(items)) {
-                    *scene = filtered;
+                    *filtered_scene = Some(filtered);
                 }
             }
             RenderPassPlan::Draw { draws, reads_scene } => {
@@ -1046,9 +1038,9 @@ impl RenderCore {
                 let target_size = state.target_size();
                 let sample_copy;
                 let sampled = if *reads_scene {
-                    Some(match &*scene {
-                        SceneState::Filtered { texture, rect } => (&**texture, *rect),
-                        SceneState::Offscreen => {
+                    Some(match filtered_scene.as_ref() {
+                        Some(FilteredScene { texture, rect }) => (&**texture, *rect),
+                        None => {
                             let rect =
                                 scene_sampling_rect(draws, target_size).unwrap_or_else(|| {
                                     PxRect::from_position_size(PxPosition::ZERO, target_size)
@@ -1079,7 +1071,7 @@ impl RenderCore {
                     clip_stack,
                 });
                 *scene_written = true;
-                *scene = SceneState::Offscreen;
+                *filtered_scene = None;
             }
         }
     }
@@ -1158,7 +1150,7 @@ impl RenderCore {
         state: &mut RenderCoreFrameState<'_>,
         encoder: &mut wgpu::CommandEncoder,
         items: Vec<ComputePlanItem<'_>>,
-    ) -> Option<SceneState> {
+    ) -> Option<FilteredScene> {
         let target_size = state.target_size();
         let region = items
             .iter()
@@ -1275,7 +1267,7 @@ impl RenderCore {
             index = cursor;
         }
 
-        Some(SceneState::Filtered {
+        Some(FilteredScene {
             texture: front,
             rect: region,
         })

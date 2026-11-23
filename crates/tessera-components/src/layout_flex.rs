@@ -4,11 +4,6 @@ use tessera_ui::{AxisConstraint, Px};
 
 use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 
-/// Returns the cross-axis constraint offered to a child of a flex container.
-///
-/// `Stretch` makes the child fill the container along the cross axis, while
-/// every other alignment measures the child intrinsically so that the
-/// cross-axis offset computed for `Center` or `End` stays meaningful.
 pub(crate) fn cross_axis_child_constraint(
     container_cross: AxisConstraint,
     alignment: CrossAxisAlignment,
@@ -33,7 +28,6 @@ pub(crate) fn classify_children(child_weights: &[f32]) -> (Vec<usize>, Vec<usize
     (weighted_indices, unweighted_indices, total_weight)
 }
 
-/// Returns the main-axis start offset and the gap between children.
 pub(crate) fn main_axis_offsets(
     container: Px,
     children_total: Px,
@@ -44,7 +38,6 @@ pub(crate) fn main_axis_offsets(
     alignment_offsets(available_space, child_count, alignment)
 }
 
-/// Returns the cross-axis offset for one child.
 pub(crate) fn cross_axis_offset(
     child_cross: Px,
     container_cross: Px,

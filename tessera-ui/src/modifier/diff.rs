@@ -155,7 +155,7 @@ fn midpoint(
             forward[index(k)] = x;
             let opposite = delta - k;
             if delta.abs() % 2 == 1
-                && opposite >= -d + 1
+                && opposite > -d
                 && opposite < d
                 && backward[index(opposite)] <= x
             {

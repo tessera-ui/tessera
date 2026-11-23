@@ -34,9 +34,10 @@ const CHOICES: [&str; 5] = [
 
 fn selected_text(selected: &[bool; 5]) -> String {
     CHOICES
-        .iter()
-        .enumerate()
-        .filter_map(|(index, label)| selected[index].then(|| I18N.text(label)))
+        .into_iter()
+        .zip(selected)
+        .filter(|&(_, &selected)| selected)
+        .map(|(label, _)| I18N.text(label))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -104,7 +105,7 @@ fn background() {
 fn selection_column(multiple: bool) {
     let theme = use_context::<MaterialTheme>().unwrap();
     let selected = remember(move || [false, false, true, multiple, false]);
-    let initial_text = selected.with(|selected| selected_text(selected));
+    let initial_text = selected.with(selected_text);
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
         controller.set_text(&initial_text);
@@ -127,7 +128,7 @@ fn selection_column(multiple: bool) {
                     role: Some(Role::Group),
                     label: Some(I18N.format(
                         "ui-value-selection-diet-field",
-                        [("v0", I18N.text(&mode).into())],
+                        [("v0", I18N.text(mode).into())],
                     )),
                     merge_descendants: true,
                     ..Default::default()
@@ -140,7 +141,7 @@ fn selection_column(multiple: bool) {
                         .accessibility_label(
                             I18N.format(
                                 "ui-value-selection-diet",
-                                [("v0", I18N.text(&mode).into())],
+                                [("v0", I18N.text(mode).into())],
                             ),
                         )
                         .read_only(true)
@@ -159,7 +160,7 @@ fn selection_column(multiple: bool) {
                 .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
                     role: Some(Role::Menu),
                     label: Some(
-                        I18N.format("ui-value-selection-menu", [("v0", I18N.text(&mode).into())]),
+                        I18N.format("ui-value-selection-menu", [("v0", I18N.text(mode).into())]),
                     ),
                     merge_descendants: true,
                     ..Default::default()
@@ -196,8 +197,7 @@ fn selection_column(multiple: bool) {
                                                     selected[index] = true;
                                                 }
                                             });
-                                            let text =
-                                                selected.with(|selected| selected_text(selected));
+                                            let text = selected.with(selected_text);
                                             controller
                                                 .with_mut(|controller| controller.set_text(&text));
                                         });

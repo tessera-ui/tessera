@@ -51,7 +51,6 @@ pub struct DrawContext<'a, 'b, 'c, T> {
     pub clip_rect: Option<PxRect>,
 }
 
-/// Type-erased context used for dispatching draw pipelines.
 pub(crate) struct ErasedDrawContext<'a, 'b> {
     /// Renderer-owned resource creation and uploads.
     pub graphics: &'a crate::render::GraphicsDevice,

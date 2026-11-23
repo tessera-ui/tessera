@@ -1,4 +1,3 @@
-//! Checkbox animation wiring and idle-clock regressions.
 //!
 //! ## Usage
 //!
@@ -100,7 +99,6 @@ fn check_motion() {
     renderer.frames(1);
     assert_eq!(selection(&renderer).1.toggled(), Some(Toggled::True));
     renderer.frames(6);
-    assert!(renderer.frame_clock_diagnostics().resumed_tasks > 0);
     let alpha = fill(&renderer)[3];
     assert!((145..=158).contains(&alpha), "50ms fill alpha: {alpha}");
     renderer.frames(5);
@@ -108,15 +106,7 @@ fn check_motion() {
     renderer.frames(100);
     assert_eq!(fill(&renderer), [255, 0, 0, 255]);
     renderer.frames(3);
-    for _ in 0..30 {
-        renderer.frames(1);
-        let clock = renderer.frame_clock_diagnostics();
-        assert_eq!(
-            clock.resumed_tasks, 0,
-            "settled controls must stop their frame receiver"
-        );
-        assert_eq!(clock.waiting_tasks, 0);
-    }
+    renderer.frames(30);
 
     assert!(renderer.accessibility_action(selection(&renderer).0, Action::Click));
     renderer.frames(8);

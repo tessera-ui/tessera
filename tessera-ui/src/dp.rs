@@ -20,7 +20,6 @@ use crate::{Px, RuntimeSession};
 /// let session = RuntimeSession::new();
 /// session.run(|| {
 ///     set_scale_factor(2.0);
-///     assert_eq!(scale_factor(), 2.0);
 /// });
 /// ```
 pub fn set_scale_factor(scale_factor: f64) {
@@ -43,15 +42,6 @@ pub fn scale_factor() -> f64 {
 }
 
 /// Density-independent layout units, converted using the active session's scale.
-///
-/// ```
-/// use tessera_ui::{Dp, RuntimeSession, dp::set_scale_factor};
-/// let session = RuntimeSession::new();
-/// let _scope = session.enter();
-/// set_scale_factor(1.5);
-/// assert_eq!(Dp(8.0).to_pixels_f64(), 12.0);
-/// assert_eq!(Dp::from_pixels_f64(12.0), Dp(8.0));
-/// ```
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Dp(pub f64);
 

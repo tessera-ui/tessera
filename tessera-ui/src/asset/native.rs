@@ -2,7 +2,6 @@ use std::{fs::File, io, path::PathBuf, sync::Arc};
 
 use super::{Bytes, BytesData};
 
-/// Maps a packaged platform asset into memory.
 pub(super) fn map(asset: &str) -> io::Result<Bytes> {
     let file = File::open(path(asset)?)?;
     if file.metadata()?.len() == 0 {

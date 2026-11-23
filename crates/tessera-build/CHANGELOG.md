@@ -56,9 +56,4 @@
 - `prepare_assets` and `resolve_resource_dirs` for tools that package assets
   and watch resource directories.
 
-### Fixed
-
-- Build scripts no longer rerun on every build when no configuration file
-  exists.
-
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-build-v0.1.0...tessera-build-v1.0.0)

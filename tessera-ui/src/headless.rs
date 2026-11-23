@@ -987,10 +987,8 @@ pub fn run_headless(
 
         let is_shutdown = matches!(&request, WorkerRequest::Shutdown { .. });
         let (id, mut response) = handle_request(&mut renderer, request)?;
-        if let Some(map) = response.as_object_mut() {
-            if let Some(id) = id {
-                map.insert("id".to_string(), json!(id));
-            }
+        if let (Some(map), Some(id)) = (response.as_object_mut(), id) {
+            map.insert("id".to_string(), json!(id));
         }
         write_line(&mut out, response)?;
 

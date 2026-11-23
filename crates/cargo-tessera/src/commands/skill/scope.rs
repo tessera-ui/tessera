@@ -27,7 +27,6 @@ pub(super) enum InstallScope {
     Global,
 }
 
-/// Destinations previewed by the interactive selector.
 pub(super) struct Choices {
     pub local: String,
     pub global: String,
@@ -68,9 +67,6 @@ fn with_cleanup<T>(run: impl FnOnce() -> Result<T>, cleanup: impl FnOnce()) -> R
     run()
 }
 
-/// Shows the selector inline below the existing shell output.
-///
-/// The selector rows are erased afterwards, so earlier output stays visible.
 pub(super) fn prompt(choices: &Choices) -> Result<Option<InstallScope>> {
     with_cleanup(
         || {

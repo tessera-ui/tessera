@@ -1,4 +1,3 @@
-//! Intrinsic side-sheet host geometry regressions.
 //!
 //! ## Usage
 //!

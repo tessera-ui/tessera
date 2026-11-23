@@ -87,7 +87,7 @@ for more, or [try the web demo](https://tessera-ui.github.io/tessera/example/).
 
 ## Contributing
 
-Please read the [Contributing Guide](https://github.com/tessera-ui/tessera/blob/main/CONTRIBUTING.md) to learn how to contribute to the project.
+See the [contributing guide](CONTRIBUTING.md) for setup, checks, and pull requests.
 
 ## Acknowledgements
 

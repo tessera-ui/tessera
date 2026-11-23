@@ -334,7 +334,7 @@ fn demo(
             if menu.source.get() == caption_label {
                 text(I18N.format(
                     "ui-menu-choice-value",
-                    [("v0", I18N.text(&menu.result.get()).into())],
+                    [("v0", I18N.text(menu.result.get()).into())],
                 ))
                 .style(type_style(14.0, 20.0));
             }
@@ -561,7 +561,7 @@ fn colors(menu: Menu) {
                         menu,
                         I18N.format(
                             "ui-light-value",
-                            [("v0", I18N.text(&variant_name(variant)).into())],
+                            [("v0", I18N.text(variant_name(variant)).into())],
                         ),
                         variant,
                         SplitButtonSize::Small,
@@ -584,7 +584,7 @@ fn colors(menu: Menu) {
                                 menu,
                                 I18N.format(
                                     "ui-dark-value",
-                                    [("v0", I18N.text(&variant_name(variant)).into())],
+                                    [("v0", I18N.text(variant_name(variant)).into())],
                                 ),
                                 variant,
                                 SplitButtonSize::Small,

@@ -385,7 +385,6 @@ fn resolve_colors(
 /// #[tessera]
 /// fn component() {
 ///     let selected = remember(|| false);
-///     assert!(!selected.get());
 ///     material_theme().child(move || {
 ///         icon_button()
 ///             .icon(filled::STAR_SVG)
@@ -395,7 +394,6 @@ fn resolve_colors(
 ///             .on_click(move || selected.set(!selected.get()));
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn icon_button(

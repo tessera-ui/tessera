@@ -2,7 +2,6 @@ use std::{io, ptr::NonNull, sync::Arc};
 
 use super::{Bytes, BytesData};
 
-/// An open Android asset whose buffer stays valid until it is closed.
 pub(super) struct AssetBuffer {
     asset: NonNull<crate::ndk_sys::AAsset>,
     data: NonNull<u8>,
@@ -28,7 +27,6 @@ impl Drop for AssetBuffer {
     }
 }
 
-/// Opens a packaged asset and borrows the buffer the asset manager provides.
 pub(super) fn read(path: &str) -> io::Result<Bytes> {
     use crate::jni::{JavaVM, objects::JObject};
     use std::ffi::CString;

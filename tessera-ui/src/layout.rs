@@ -218,28 +218,6 @@ pub struct MeasureScope<'a> {
 }
 
 impl<'a> MeasureScope<'a> {
-    pub(crate) fn new(
-        tree: &'a ComponentNodeTree,
-        metadatas: &'a mut ComponentNodeMetaDatas,
-        layout_ctx: Option<&'a LayoutContext<'a>>,
-        measured_children: &'a mut HashMap<crate::NodeId, ChildMeasure>,
-        probes: &'a mut HashMap<crate::NodeId, ChildProbe>,
-        intrinsic_dependencies: &'a mut bool,
-        parent_constraint: ParentConstraint<'a>,
-        children_ids: &'a [crate::NodeId],
-    ) -> Self {
-        Self {
-            tree,
-            metadatas,
-            layout_ctx,
-            measured_children,
-            probes,
-            intrinsic_dependencies,
-            parent_constraint,
-            children_ids,
-        }
-    }
-
     /// Returns the inherited constraint.
     pub const fn parent_constraint(&self) -> ParentConstraint<'a> {
         self.parent_constraint
@@ -322,18 +300,19 @@ impl<'a> MeasureScope<'a> {
         let consumed_insets = self
             .layout_ctx
             .map_or_else(Default::default, |context| context.consumed_insets.get());
-        if let Some(probe) = self.probes.get(&node_id) {
-            if probe.constraint == *constraint && probe.consumed_insets == consumed_insets {
-                let size = probe.size;
-                if record {
-                    self.record_measure(node_id, *constraint, size);
-                }
-                return Ok(MeasuredChild {
-                    instance_key,
-                    width: size.width,
-                    height: size.height,
-                });
+        if let Some(probe) = self.probes.get(&node_id)
+            && probe.constraint == *constraint
+            && probe.consumed_insets == consumed_insets
+        {
+            let size = probe.size;
+            if record {
+                self.record_measure(node_id, *constraint, size);
             }
+            return Ok(MeasuredChild {
+                instance_key,
+                width: size.width,
+                height: size.height,
+            });
         }
 
         let size = measure_node(
@@ -534,16 +513,16 @@ impl<'a> LayoutInput<'a> {
         &'s mut self,
         metadatas: &'s mut ComponentNodeMetaDatas,
     ) -> MeasureScope<'s> {
-        MeasureScope::new(
-            self.tree,
+        MeasureScope {
+            tree: self.tree,
             metadatas,
-            self.layout_ctx,
-            &mut self.measured_children,
-            &mut self.probes,
-            &mut self.intrinsic_dependencies,
-            self.parent_constraint,
-            self.children_ids,
-        )
+            layout_ctx: self.layout_ctx,
+            measured_children: &mut self.measured_children,
+            probes: &mut self.probes,
+            intrinsic_dependencies: &mut self.intrinsic_dependencies,
+            parent_constraint: self.parent_constraint,
+            children_ids: self.children_ids,
+        }
     }
 
     /// Returns the direct child layout nodes of the current node.
@@ -828,28 +807,19 @@ impl RenderMetadataMut<'_> {
     }
 }
 
-/// Type-erased layout node used by the runtime.
 #[doc(hidden)]
 pub(crate) trait LayoutPolicyDyn {
-    /// Returns a typed reference for downcasting.
     fn as_any(&self) -> &dyn Any;
-    /// Measures layout using a type-erased node.
     fn measure_dyn(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
-    /// Recomputes child placements using cached child measurements.
     fn place_dyn(
         &self,
         scope: &PlacementScope<'_>,
         inner: &PlacementResult,
     ) -> Option<PlacementResult>;
-    /// Compares two type-erased nodes for equality.
     fn dyn_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
-    /// Compares two type-erased nodes for measurement-relevant equality.
     fn dyn_measure_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
-    /// Compares two type-erased nodes for placement-relevant equality.
     fn dyn_placement_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
-    /// Reports whether measurement uses an isolated state snapshot.
     fn isolate_measurement_state(&self) -> bool;
-    /// Clones a policy for an explicitly stateful measurement snapshot.
     fn clone_box(&self) -> Box<dyn LayoutPolicyDyn>;
 }
 
@@ -1080,17 +1050,11 @@ where
 /// # Examples
 ///
 /// ```
-/// use tessera_ui::{
-///     Modifier, NoopDrawModifier, RenderSlot,
-///     layout::{Stack, layout},
-/// };
+/// use tessera_ui::{layout::{Stack, layout}, RenderSlot, tessera};
 ///
-/// #[tessera_ui::tessera]
-/// fn primitive_example(modifier: Modifier, child: RenderSlot) {
-///     layout(Stack)
-///         .draw(NoopDrawModifier)
-///         .modifier(modifier)
-///         .child(child);
+/// #[tessera]
+/// fn overlay(content: RenderSlot) {
+///     layout(Stack).child(content);
 /// }
 /// ```
 pub fn layout<P>(policy: P) -> LayoutNode
@@ -1106,17 +1070,6 @@ where
 ///
 /// Children are measured and placed by the nearest enclosing layout node. Like
 /// [`layout`], it emits the current component's single node.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::{Modifier, layout::group};
-///
-/// #[tessera_ui::tessera]
-/// fn grouped_row(modifier: Modifier) {
-///     group().modifier(modifier).child(|| {});
-/// }
-/// ```
 pub fn group() -> GroupNode {
     emit_node(NodeRole::Group, &Stack);
     GroupNode { _private: () }

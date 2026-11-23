@@ -47,7 +47,6 @@ use crate::{
 ///     text("Last item");
 /// });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn column(

@@ -541,8 +541,8 @@ fn measurements() {
                     fab(I18N.format(
                         "ui-value-value-format-2",
                         [
-                            ("v0", I18N.text(&size_name(size)).into()),
-                            ("v1", I18N.text(&size_height(size)).into()),
+                            ("v0", I18N.text(size_name(size)).into()),
+                            ("v1", I18N.text(size_height(size)).into()),
                         ],
                     ))
                     .size(size);

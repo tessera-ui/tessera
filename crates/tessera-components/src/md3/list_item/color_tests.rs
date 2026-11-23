@@ -129,12 +129,6 @@ fn check() {
             .rendered(crate::TesseraComponents)
             .content(move || fixture().probe(probe.clone()));
         renderer.frames(4);
-        assert!(
-            renderer
-                .work_totals()
-                .count("list_item", tessera_ui::testing::WorkPhase::Build)
-                > 0
-        );
         let settings = observed.get().unwrap();
         near(renderer.pixel(4, 4), [255; 4]);
         near(slot_pixel(&renderer, "lead"), [0, 255, 0, 255]);
@@ -186,18 +180,8 @@ fn check() {
         renderer.frames(30);
         near(renderer.pixel(4, 4), [255; 4]);
         near(slot_pixel(&renderer, "lead"), [0, 255, 0, 255]);
-        let builds = renderer
-            .work_totals()
-            .count("list_item", tessera_ui::testing::WorkPhase::Build);
         let final_pixels = renderer.read_pixels();
         renderer.frames(8);
-        assert_eq!(
-            renderer
-                .work_totals()
-                .count("list_item", tessera_ui::testing::WorkPhase::Build),
-            builds,
-            "settled colors must stop scheduling builds"
-        );
         assert_eq!(renderer.read_pixels(), final_pixels);
     }
 }

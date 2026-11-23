@@ -1,8 +1,4 @@
 //! Calendar day and year choices for custom date-selection layouts.
-//!
-//! ## Usage
-//!
-//! Compose selectable calendar cells in scheduling and date-entry controls.
 
 use tessera_foundation::modifier::{
     InteractionState, InteractionVisualState, ModifierExt as _, SelectableArgs, SemanticsArgs,
@@ -60,11 +56,6 @@ impl CalendarRangePosition {
 /// Render an interactive calendar date for custom calendars and scheduling
 /// controls.
 ///
-/// ## Usage
-///
-/// Arrange real date choices in a calendar, booking flow, or compact date
-/// selector.
-///
 /// ## Parameters
 ///
 /// - `date`, `on_select` — date represented by the cell and its activation
@@ -96,10 +87,8 @@ impl CalendarRangePosition {
 ///         date_picker_day(date)
 ///             .selected(selected.get() == date)
 ///             .on_select(move |date| selected.set(date));
-///         assert_eq!(selected.get(), date);
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(schedule).frame();
 /// ```
 #[tessera]
 pub fn date_picker_day(
@@ -119,7 +108,9 @@ pub fn date_picker_day(
     #[prop(into)] accessibility_description: Option<String>,
 ) {
     let on_select = on_select.unwrap_or_else(|| CallbackWith::new(|_| {}));
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     let selected = selected.unwrap_or(false);
     let enabled = enabled.unwrap_or(true);
@@ -208,11 +199,6 @@ pub fn date_picker_day(
 ///
 /// Render an interactive year choice for calendars and year-selection controls.
 ///
-/// ## Usage
-///
-/// Arrange year choices in scheduling, date entry, and historical date
-/// selectors.
-///
 /// ## Parameters
 ///
 /// - `year`, `on_select` — represented year and its activation callback.
@@ -239,10 +225,8 @@ pub fn date_picker_day(
 ///         date_picker_year(2026)
 ///             .selected(selected.get() == 2026)
 ///             .on_select(move |year| selected.set(year));
-///         assert_eq!(selected.get(), 2025);
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(years).frame();
 /// ```
 #[tessera]
 pub fn date_picker_year(
@@ -259,7 +243,9 @@ pub fn date_picker_year(
     #[prop(into)] accessibility_description: Option<String>,
 ) {
     let on_select = on_select.unwrap_or_else(|| CallbackWith::new(|_| {}));
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     let selected = selected.unwrap_or(false);
     let enabled = enabled.unwrap_or(true);

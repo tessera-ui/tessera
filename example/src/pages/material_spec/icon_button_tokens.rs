@@ -57,7 +57,7 @@ pub(super) fn figure() {
                     .selected(selected.get() == index)
                     .accessibility_label(I18N.format(
                         "ui-show-value-tokens",
-                        [("v0", I18N.text(&(SETS[index])).into())],
+                        [("v0", I18N.text(SETS[index]).into())],
                     ))
                     .on_click(move || selected.set(index))
                     .child(move || {
@@ -78,7 +78,7 @@ pub(super) fn figure() {
                     .selected(selected.get() == index + 4)
                     .accessibility_label(I18N.format(
                         "ui-show-value-tokens",
-                        [("v0", I18N.text(&(SETS[index + 4])).into())],
+                        [("v0", I18N.text(SETS[index + 4]).into())],
                     ))
                     .on_click(move || selected.set(index + 4))
                     .child(move || {
@@ -377,16 +377,14 @@ fn preview(set: usize) {
         I18N.format(
             "ui-value-preview-value-activations-value",
             [
-                ("v0", I18N.text(&name(style)).into()),
+                ("v0", I18N.text(name(style)).into()),
                 (
                     "v1",
-                    I18N.text(
-                        &(if selected.get() {
-                            "ui-selected"
-                        } else {
-                            "ui-unselected"
-                        }),
-                    )
+                    I18N.text(if selected.get() {
+                        "ui-selected"
+                    } else {
+                        "ui-unselected"
+                    })
                     .into(),
                 ),
                 ("v2", (actions.get()).into()),

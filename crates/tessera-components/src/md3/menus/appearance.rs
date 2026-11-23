@@ -152,7 +152,9 @@ fn corners(top: f64, bottom: f64) -> Shape {
 ///
 /// ```
 /// use tessera_components::md3::{
+///     button::button,
 ///     menus::{MenuController, menu_group, menu_item, menu_provider},
+///     text::text,
 ///     theme::material_theme,
 /// };
 /// use tessera_ui::{remember, tessera};
@@ -160,22 +162,26 @@ fn corners(top: f64, bottom: f64) -> Shape {
 /// #[tessera]
 /// fn component() {
 ///     let menu = remember(MenuController::new);
-///     menu.with_mut(MenuController::open);
-///     assert!(menu.with(MenuController::is_open));
+///     let status = remember(|| String::from("Document"));
 ///     material_theme().child(move || {
 ///         menu_provider()
 ///             .controller(menu)
 ///             .grouped(true)
+///             .main_content(move || {
+///                 button()
+///                     .on_click(move || menu.with_mut(MenuController::open))
+///                     .child(move || text(status.get()));
+///             })
 ///             .menu_content(move |scope| {
 ///                 menu_group().menu(scope).children(move || {
 ///                     menu_item().menu(scope).label("Save").on_click(move || {
+///                         status.set(String::from("Saved"));
 ///                         menu.with_mut(MenuController::close);
 ///                     });
 ///                 });
 ///             });
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn menu_group(

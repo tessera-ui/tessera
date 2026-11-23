@@ -853,7 +853,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                                 .enabled(available)
                                 .accessibility_label(I18N.format(
                                     "ui-value-3-new-items",
-                                    [("v0", I18N.text(&name).into())],
+                                    [("v0", I18N.text(name).into())],
                                 ))
                                 .on_click(move || count.set(count.get() + 1))
                                 .title(move || {
@@ -863,7 +863,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                             let tab = tab(tab_row)
                                 .label(I18N.text(name))
                                 .enabled(available)
-                                .accessibility_label(I18N.text(&name))
+                                .accessibility_label(I18N.text(name))
                                 .on_click(move || count.set(count.get() + 1));
                             if icons.get() && primary {
                                 tab.icon(destination_asset(index));
@@ -876,7 +876,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                 "ui-value-content-value",
                 [
                     ("v0", I18N.text(&prefix).into()),
-                    ("v1", I18N.text(&(DESTINATIONS[selected.get()])).into()),
+                    ("v1", I18N.text(DESTINATIONS[selected.get()]).into()),
                 ],
             ))
             .style(type_style(22.0, 30.0));
@@ -1156,7 +1156,12 @@ fn state_cell(primary: bool, active: bool, state: usize) {
         });
 }
 
-const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
+type TokenGroup = (
+    &'static str,
+    &'static [(&'static str, &'static str, &'static str)],
+);
+
+const TOKEN_GROUPS: [TokenGroup; 4] = [
     (
         "ui-enabled",
         &[
@@ -1532,7 +1537,7 @@ fn swipe_tabs(selected: State<usize>) {
                         .semantics(SemanticsArgs {
                             role: Some(Role::TabPanel),
                             label: Some(
-                                I18N.format("ui-value-content", [("v0", I18N.text(&title).into())]),
+                                I18N.format("ui-value-content", [("v0", I18N.text(title).into())]),
                             ),
                             ..Default::default()
                         })
@@ -1672,7 +1677,7 @@ fn native_tabs_figure(
                                                         if index == 0 && unread.get() {
                                                             I18N.format(
                                                                 "ui-value-3-new-items",
-                                                                [("v0", I18N.text(&name).into())],
+                                                                [("v0", I18N.text(name).into())],
                                                             )
                                                         } else {
                                                             name.to_owned()
@@ -1716,10 +1721,7 @@ fn native_tabs_figure(
             gap(Dp(16.0));
             text(I18N.format(
                 "ui-figure-content-value",
-                [(
-                    "v0",
-                    I18N.text(&figure_name(primary, selected.get())).into(),
-                )],
+                [("v0", I18N.text(figure_name(primary, selected.get())).into())],
             ))
             .style(type_style(16.0, 24.0));
         });
@@ -1987,24 +1989,20 @@ fn nested_tabs() {
                 [
                     (
                         "v0",
-                        I18N.text(
-                            &(if primary.get() == 0 {
-                                "ui-travel"
-                            } else {
-                                "ui-saved"
-                            }),
-                        )
+                        I18N.text(if primary.get() == 0 {
+                            "ui-travel"
+                        } else {
+                            "ui-saved"
+                        })
                         .into(),
                     ),
                     (
                         "v1",
-                        I18N.text(
-                            &(if secondary.get() == 0 {
-                                "ui-upcoming"
-                            } else {
-                                "ui-past"
-                            }),
-                        )
+                        I18N.text(if secondary.get() == 0 {
+                            "ui-upcoming"
+                        } else {
+                            "ui-past"
+                        })
                         .into(),
                     ),
                 ],
@@ -2163,7 +2161,7 @@ fn mock_icon_tabs(labelled: Vec<bool>) {
                                 } else {
                                     tab(tab_row)
                                         .icon(figure_asset(true, index))
-                                        .accessibility_label(I18N.text(&name));
+                                        .accessibility_label(I18N.text(name));
                                 }
                             }
                         });
@@ -2368,7 +2366,7 @@ fn secondary_measure_figure(inline_icons: bool) {
                                             for index in 0..2 {
                                                 tab(tab_row)
                                                     .accessibility_label(
-                                                        I18N.text(&figure_name(false, index)),
+                                                        I18N.text(figure_name(false, index)),
                                                     )
                                                     .title(move || {
                                                         native_tab_title(
@@ -2394,7 +2392,7 @@ fn secondary_measure_figure(inline_icons: bool) {
             gap(Dp(16.0));
             text(I18N.format(
                 "ui-figure-content-value",
-                [("v0", I18N.text(&figure_name(false, selected.get())).into())],
+                [("v0", I18N.text(figure_name(false, selected.get())).into())],
             ))
             .style(type_style(16.0, 24.0));
         });
@@ -2598,7 +2596,7 @@ fn scrolling_tabs() {
                                                 text(I18N.format(
                                                     "ui-value-item-value",
                                                     [
-                                                        ("v0", I18N.text(&destination).into()),
+                                                        ("v0", I18N.text(destination).into()),
                                                         ("v1", (index).into()),
                                                     ],
                                                 ))

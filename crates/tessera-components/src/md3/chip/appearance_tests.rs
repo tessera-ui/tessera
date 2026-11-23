@@ -1,4 +1,3 @@
-//! Chip interaction colors and elevation rendering regressions.
 //!
 //! ## Usage
 //!

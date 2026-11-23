@@ -146,7 +146,7 @@ fn guidance_item(#[prop(into)] note: String, verdict: Option<bool>, content: Opt
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            panel(content.clone());
+            panel(content);
             if let Some(good) = verdict {
                 gap(Dp(4.0));
                 verdict_band(good);
@@ -178,7 +178,7 @@ fn guidance_pair(
             },
         ))
         .children(move || {
-            let (first, second) = (first.clone(), second.clone());
+            let (first, second) = (first, second);
             let (first_note, second_note) = (first_note.clone(), second_note.clone());
             if width.get().0 < 640.0 {
                 column()
@@ -186,25 +186,25 @@ fn guidance_pair(
                     .children(move || {
                         guidance_item(first_note.clone())
                             .verdict_optional(first_verdict)
-                            .content_shared(first.clone());
+                            .content_shared(first);
                         gap(Dp(32.0));
                         guidance_item(second_note.clone())
                             .verdict_optional(second_verdict)
-                            .content_shared(second.clone());
+                            .content_shared(second);
                     });
             } else {
                 row()
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
-                        let (first, second) = (first.clone(), second.clone());
+                        let (first, second) = (first, second);
                         let (first_note, second_note) = (first_note.clone(), second_note.clone());
                         boxed()
                             .modifier(Modifier::new().weight(1.0))
                             .children(move || {
                                 guidance_item(first_note.clone())
                                     .verdict_optional(first_verdict)
-                                    .content_shared(first.clone());
+                                    .content_shared(first);
                             });
                         spacer().modifier(Modifier::new().width(Dp(24.0)));
                         boxed()
@@ -212,7 +212,7 @@ fn guidance_pair(
                             .children(move || {
                                 guidance_item(second_note.clone())
                                     .verdict_optional(second_verdict)
-                                    .content_shared(second.clone());
+                                    .content_shared(second);
                             });
                     });
             }
@@ -491,7 +491,7 @@ fn specimen(kind: usize) {
     column()
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some(I18N.text(&(figure))),
+            label: Some(I18N.text(figure)),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -543,8 +543,8 @@ fn specimen(kind: usize) {
                 text(I18N.format(
                     "ui-value-value-format-1",
                     [
-                        ("v0", I18N.text(&preset.figure).into()),
-                        ("v1", I18N.text(&status.get()).into()),
+                        ("v0", I18N.text(preset.figure).into()),
+                        ("v1", I18N.text(status.get()).into()),
                     ],
                 ))
                 .style(type_style(14.0, 20.0));
@@ -671,7 +671,7 @@ fn specimen_bar(kind: usize, status: State<String>) {
             for (index, glyph) in preset.actions.iter().copied().enumerate() {
                 let selected = I18N.format(
                     "ui-value-selected",
-                    [("v0", I18N.text(&glyph.label()).into())],
+                    [("v0", I18N.text(glyph.label()).into())],
                 );
                 if preset.floating || preset.tonal && index + preset.filled >= count {
                     icon_button()
@@ -953,7 +953,7 @@ specimen(WRAP);
             (TopAppBarVariant::MediumFlexible, false, "ui-medium-flexible"),
             (TopAppBarVariant::LargeFlexible, true, "ui-large-flexible"),
         ] {
-            sample(I18N.format("ui-headline-value", [("v0", I18N.text(&name).into())]), variant).centered(centered);
+            sample(I18N.format("ui-headline-value", [("v0", I18N.text(name).into())]), variant).centered(centered);
             gap(Dp(16.0));
         }
     });
@@ -968,7 +968,7 @@ specimen(WRAP);
             (TopAppBarVariant::MediumFlexible, "ui-medium-flexible"),
             (TopAppBarVariant::LargeFlexible, "ui-large-flexible"),
         ] {
-            sample(I18N.format("ui-subtitle-style-value", [("v0", I18N.text(&name).into())]), variant).subtitle(true);
+            sample(I18N.format("ui-subtitle-style-value", [("v0", I18N.text(name).into())]), variant).subtitle(true);
             gap(Dp(16.0));
         }
     });
@@ -1061,7 +1061,7 @@ fn mirrored_bar(rtl: bool) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Toolbar),
                     label: Some(
-                        I18N.format("ui-value-app-bar", [("v0", I18N.text(&direction).into())]),
+                        I18N.format("ui-value-app-bar", [("v0", I18N.text(direction).into())]),
                     ),
                     ..Default::default()
                 }),
@@ -1076,14 +1076,14 @@ fn mirrored_bar(rtl: bool) {
                     .standard()
                     .icon(filled::ARROW_FORWARD_SVG)
                     .accessibility_label(
-                        I18N.format("ui-value-back", [("v0", I18N.text(&direction).into())]),
+                        I18N.format("ui-value-back", [("v0", I18N.text(direction).into())]),
                     );
             } else {
                 icon_button()
                     .standard()
                     .icon(filled::ARROW_BACK_SVG)
                     .accessibility_label(
-                        I18N.format("ui-value-back", [("v0", I18N.text(&direction).into())]),
+                        I18N.format("ui-value-back", [("v0", I18N.text(direction).into())]),
                     );
                 boxed().modifier(Modifier::new().weight(1.0)).children(|| {
                     mirrored_title(false);
@@ -1127,7 +1127,7 @@ fn mirrored_actions(#[prop(into)] direction: String) {
                 "ui-value-value-format-2",
                 [
                     ("v0", I18N.text(&direction).into()),
-                    ("v1", I18N.text(&name).into()),
+                    ("v1", I18N.text(name).into()),
                 ],
             ));
     }
@@ -1330,8 +1330,8 @@ fn sample(
                                 .accessibility_label(I18N.format(
                                     "ui-value-value-format-2",
                                     [
-                                        ("v0", I18N.text(&label.get()).into()),
-                                        ("v1", I18N.text(&title).into()),
+                                        ("v0", I18N.text(label.get()).into()),
+                                        ("v1", I18N.text(title).into()),
                                     ],
                                 ))
                                 .on_click(move || {
@@ -1347,7 +1347,7 @@ fn sample(
                             .selected(subtitle.get())
                             .accessibility_label(I18N.format(
                                 "ui-value-subtitle",
-                                [("v0", I18N.text(&label.get()).into())],
+                                [("v0", I18N.text(label.get()).into())],
                             ))
                             .on_click(move || subtitle.set(!subtitle.get()))
                             .child(move || {
@@ -1358,7 +1358,7 @@ fn sample(
                             .selected(centered.get())
                             .accessibility_label(I18N.format(
                                 "ui-value-centered",
-                                [("v0", I18N.text(&label.get()).into())],
+                                [("v0", I18N.text(label.get()).into())],
                             ))
                             .on_click(move || centered.set(!centered.get()))
                             .child(move || {
@@ -1369,7 +1369,7 @@ fn sample(
                             .selected(filled_action.get())
                             .accessibility_label(I18N.format(
                                 "ui-value-filled-action",
-                                [("v0", I18N.text(&label.get()).into())],
+                                [("v0", I18N.text(label.get()).into())],
                             ))
                             .on_click(move || filled_action.set(!filled_action.get()))
                             .child(move || {
@@ -1381,7 +1381,7 @@ fn sample(
                             .accessibility_label(
                                 I18N.format(
                                     "ui-value-logo",
-                                    [("v0", I18N.text(&label.get()).into())],
+                                    [("v0", I18N.text(label.get()).into())],
                                 ),
                             )
                             .on_click(move || logo.set(!logo.get()))
@@ -1392,7 +1392,7 @@ fn sample(
                             .text()
                             .accessibility_label(I18N.format(
                                 "ui-reset-value-scroll",
-                                [("v0", I18N.text(&label.get()).into())],
+                                [("v0", I18N.text(label.get()).into())],
                             ))
                             .on_click(move || {
                                 scroll.with_mut(AppBarScrollController::reset);
@@ -1417,7 +1417,7 @@ fn sample(
                                 role: Some(Role::Group),
                                 label: Some(I18N.format(
                                     "ui-value-bar",
-                                    [("v0", I18N.text(&label.get()).into())],
+                                    [("v0", I18N.text(label.get()).into())],
                                 )),
                                 merge_descendants: true,
                                 ..Default::default()
@@ -1440,7 +1440,7 @@ fn sample(
                                         role: Some(Role::Group),
                                         label: Some(I18N.format(
                                             "ui-value-title",
-                                            [("v0", I18N.text(&label.get()).into())],
+                                            [("v0", I18N.text(label.get()).into())],
                                         )),
                                         merge_descendants: true,
                                         ..Default::default()
@@ -1453,7 +1453,7 @@ fn sample(
                                             .icon(filled::ARROW_BACK_SVG)
                                             .accessibility_label(I18N.format(
                                                 "ui-value-back",
-                                                [("v0", I18N.text(&label.get()).into())],
+                                                [("v0", I18N.text(label.get()).into())],
                                             ))
                                             .on_click(move || {
                                                 status.set("ui-back-selected".to_owned())
@@ -1466,7 +1466,7 @@ fn sample(
                                                 .icon(filled::SEARCH_SVG)
                                                 .accessibility_label(I18N.format(
                                                     "ui-value-search",
-                                                    [("v0", I18N.text(&label.get()).into())],
+                                                    [("v0", I18N.text(label.get()).into())],
                                                 ))
                                                 .on_click(move || {
                                                     status.set("ui-search-selected".to_owned())
@@ -1478,7 +1478,7 @@ fn sample(
                                                 .icon(filled::SEARCH_SVG)
                                                 .accessibility_label(I18N.format(
                                                     "ui-value-search",
-                                                    [("v0", I18N.text(&label.get()).into())],
+                                                    [("v0", I18N.text(label.get()).into())],
                                                 ))
                                                 .on_click(move || {
                                                     status.set("ui-search-selected".to_owned())
@@ -1501,7 +1501,7 @@ fn sample(
                                                 role: Some(Role::Group),
                                                 label: Some(I18N.format(
                                                     "ui-value-scroll-content",
-                                                    [("v0", I18N.text(&label.get()).into())],
+                                                    [("v0", I18N.text(label.get()).into())],
                                                 )),
                                                 merge_descendants: true,
                                                 ..Default::default()
@@ -1531,8 +1531,8 @@ fn sample(
                 text(I18N.format(
                     "ui-value-action-value",
                     [
-                        ("v0", I18N.text(&label.get()).into()),
-                        ("v1", I18N.text(&status.get()).into()),
+                        ("v0", I18N.text(label.get()).into()),
+                        ("v1", I18N.text(status.get()).into()),
                     ],
                 ))
                 .style(type_style(14.0, 20.0));
@@ -1883,7 +1883,7 @@ fn variants_figure(#[prop(into)] prefix: String) {
                     "ui-value-value-format-2",
                     [
                         ("v0", I18N.text(&prefix).into()),
-                        ("v1", I18N.text(&label).into()),
+                        ("v1", I18N.text(label).into()),
                     ],
                 ),
                 variant,
@@ -1955,7 +1955,7 @@ fn baseline_bar(large: bool, #[prop(into)] label: Option<String>) {
                                 "ui-value-value-format-2",
                                 [
                                     ("v0", I18N.text(&label).into()),
-                                    ("v1", I18N.text(&name).into()),
+                                    ("v1", I18N.text(name).into()),
                                 ],
                             ));
                     }
@@ -2018,7 +2018,7 @@ fn configurations() {
             panel(RenderSlot::new(move || {
                 for centered in [false, true] {
                     sample(
-                        I18N.format("ui-value-alignment", [("v0", I18N.text(&(if centered { "ui-centered" } else { "ui-leading" })).into())]),
+                        I18N.format("ui-value-alignment", [("v0", I18N.text(if centered { "ui-centered" } else { "ui-leading" }).into())]),
                         TopAppBarVariant::MediumFlexible,
                     )
                     .centered(centered)
@@ -2259,9 +2259,9 @@ fn anatomy() {
                     (TopAppBarVariant::MediumFlexible, "ui-medium-flexible"),
                     (TopAppBarVariant::LargeFlexible, "ui-large-flexible"),
                 ] {
-                    sample(I18N.format("ui-without-subtitle-value", [("v0", I18N.text(&name).into())]), variant);
+                    sample(I18N.format("ui-without-subtitle-value", [("v0", I18N.text(name).into())]), variant);
                     gap(Dp(24.0));
-                    sample(I18N.format("ui-subtitle-value", [("v0", I18N.text(&name).into())]), variant).subtitle(true);
+                    sample(I18N.format("ui-subtitle-value", [("v0", I18N.text(name).into())]), variant).subtitle(true);
                     gap(Dp(32.0));
                 }
             }));
@@ -2364,24 +2364,20 @@ fn color_figure(search: bool, dark: bool) {
                             [
                                 (
                                     "v0",
-                                    I18N.text(
-                                        &(if search {
-                                            "ui-search-app-bar"
-                                        } else {
-                                            "ui-app-bar"
-                                        }),
-                                    )
+                                    I18N.text(if search {
+                                        "ui-search-app-bar"
+                                    } else {
+                                        "ui-app-bar"
+                                    })
                                     .into(),
                                 ),
                                 (
                                     "v1",
-                                    I18N.text(
-                                        &(if dark {
-                                            "ui-dark-7069"
-                                        } else {
-                                            "ui-light-7070"
-                                        }),
-                                    )
+                                    I18N.text(if dark {
+                                        "ui-dark-7069"
+                                    } else {
+                                        "ui-light-7070"
+                                    })
                                     .into(),
                                 ),
                             ],
@@ -2752,14 +2748,14 @@ fn baseline_app_bars() {
                 .modifier(Modifier::new().width(Dp(360.0)))
                 .children(move || {
                     baseline_bar(large).label(
-                        I18N.format("ui-value-measurement", [("v0", I18N.text(&title).into())]),
+                        I18N.format("ui-value-measurement", [("v0", I18N.text(title).into())]),
                     );
                 });
         }));
         gap(Dp(16.0));
         caption(I18N.format(
             "ui-value-padding-and-size-measurements",
-            [("v0", I18N.text(&title).into())],
+            [("v0", I18N.text(title).into())],
         ));
     }
     gap(Dp(32.0));
@@ -2883,13 +2879,11 @@ fn search_figure(measurements: bool) {
                             "ui-search-app-bar-value-figure",
                             [(
                                 "v0",
-                                I18N.text(
-                                    &(if measurements {
-                                        "ui-measurement-7071"
-                                    } else {
-                                        "ui-anatomy-7072"
-                                    }),
-                                )
+                                I18N.text(if measurements {
+                                    "ui-measurement-7071"
+                                } else {
+                                    "ui-anatomy-7072"
+                                })
                                 .into(),
                             )],
                         ),
@@ -3145,13 +3139,11 @@ fn app_figure(
                             "ui-app-bar-value-figure",
                             [(
                                 "v0",
-                                I18N.text(
-                                    &(if measurements {
-                                        "ui-measurement-7071"
-                                    } else {
-                                        "ui-anatomy-7072"
-                                    }),
-                                )
+                                I18N.text(if measurements {
+                                    "ui-measurement-7071"
+                                } else {
+                                    "ui-anatomy-7072"
+                                })
                                 .into(),
                             )],
                         ),
@@ -3180,7 +3172,7 @@ fn app_figure(
             "ui-value-padding-and-size-measurements",
             [(
                 "v0",
-                I18N.text(&name.as_deref().unwrap_or("ui-app-bar")).into(),
+                I18N.text(name.as_deref().unwrap_or("ui-app-bar")).into(),
             )],
         )
     } else {

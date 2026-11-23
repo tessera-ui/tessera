@@ -1,4 +1,3 @@
-//! Native pull-to-refresh gesture regressions.
 //!
 //! ## Usage
 //!

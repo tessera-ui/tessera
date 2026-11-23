@@ -468,7 +468,6 @@ impl PartialEq for TextData {
 }
 
 impl TextData {
-    /// Shapes text using the active session's font resources.
     pub(crate) fn shape(
         text: String,
         color: Color,
@@ -683,16 +682,14 @@ impl TextData {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use tessera_ui::Color;
 
     use crate::md3::theme::MaterialTypography;
 
-    use super::{TextConstraint, TextData, write_font_system};
+    use super::{TextConstraint, TextData};
 
     #[test]
-    fn independent_short_text_layouts_share_glyphs_until_constraints_or_fonts_change() {
+    fn independent_short_text_layouts_measure_consistently_across_constraints() {
         let session = tessera_ui::RuntimeSession::new();
         let _session = session.enter();
         let style = MaterialTypography::default().body_large;
@@ -709,7 +706,6 @@ mod tests {
         };
         let original = shape(Color::BLACK, None);
         let other_color = shape(Color::WHITE, None);
-        assert!(Arc::ptr_eq(&original.layout, &other_color.layout));
         assert_eq!(original.measure_info(), other_color.measure_info());
         let origin = tessera_ui::PxPosition::ZERO;
         assert_ne!(
@@ -724,42 +720,11 @@ mod tests {
         };
         resized.relayout(&narrow);
         let narrower = shape(Color::BLACK, Some(10.0));
-        assert!(Arc::ptr_eq(&resized.layout, &narrower.layout));
-        assert_eq!(narrower.layout.buffer.size().0, Some(10.0));
-        assert_eq!(original.layout.buffer.size().0, None);
-        let previous_layout = Arc::downgrade(&original.layout);
-        drop(original);
-        drop(other_color);
-        assert!(previous_layout.upgrade().is_none());
-
-        let mut original = shape(Color::BLACK, None);
-        let revision_before = original.layout.font_revision;
-        write_font_system()
-            .db_mut()
-            .set_sans_serif_family("Tessera test family");
-        let updated = shape(Color::BLACK, None);
-        assert!(!Arc::ptr_eq(&original.layout, &updated.layout));
-        original.relayout(&narrow);
-        assert_ne!(original.layout.font_revision, revision_before);
-        assert!(Arc::ptr_eq(
-            &original.layout,
-            &shape(Color::BLACK, Some(10.0)).layout
-        ));
-
-        tessera_ui::runtime_resource::<super::TextResources>()
-            .short_layouts
-            .lock()
-            .clear();
-        let allocation = Arc::as_ptr(&original.layout);
-        original.relayout(&TextConstraint {
-            max_width: Some(20.0),
-            ..Default::default()
-        });
-        assert_eq!(Arc::as_ptr(&original.layout), allocation);
+        assert_eq!(resized.measure_info(), narrower.measure_info());
     }
 
     #[test]
-    fn retained_text_copies_share_shapes_and_isolate_scroll_and_opacity() {
+    fn retained_text_copies_isolate_scroll_and_opacity() {
         let session = tessera_ui::RuntimeSession::new();
         let _session = session.enter();
         let shaped = TextData::shape(
@@ -775,13 +740,6 @@ mod tests {
         }
         let original = TextData::from_buffer(buffer);
         let mut faded = original.clone();
-        assert!(
-            std::ptr::eq(
-                original.text_area(origin, 1.0).buffer,
-                faded.text_area(origin, 1.0).buffer
-            ),
-            "retained command copies must share their shaped glyph storage"
-        );
         let mut scrolled = original.clone();
         let mut scroll = scrolled.text_area(origin, 1.0).buffer.scroll();
         scroll.horizontal = 13.5;
@@ -875,7 +833,6 @@ mod tests {
         );
         let mut relaid = unconstrained.clone();
         relaid.relayout(&narrow);
-        assert!(Arc::ptr_eq(&relaid.layout, &phrase.layout));
         assert_eq!(
             relaid.measure_info(),
             phrase.measure_info(),

@@ -398,25 +398,26 @@ impl SnackbarDefaults {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::snackbar::snackbar;
+/// use tessera_components::md3::{snackbar::snackbar, text::text};
 /// use tessera_components::md3::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::tessera;
+/// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
+///     let action_taken = remember(|| false);
 ///     material_theme()
 ///         .theme(|| MaterialTheme::default())
-///         .child(|| {
+///         .child(move || {
+///             text(if action_taken.get() { "Restored" } else { "Saved" });
 ///             snackbar()
 ///                 .message("Saved")
 ///                 .action_label("Undo")
 ///                 .with_dismiss_action(true)
-///                 .on_action(|| {})
-///                 .on_dismiss(|| {});
+///                 .on_action(move || action_taken.set(true))
+///                 .on_dismiss(move || action_taken.set(false));
 ///         });
 /// }
 ///
-/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn snackbar(
@@ -449,8 +450,7 @@ pub fn snackbar(
     let content_color = content_color.unwrap_or(scheme.inverse_on_surface);
     let action_color = action_color.unwrap_or(scheme.inverse_primary);
     let dismiss_action_color = dismiss_action_color.unwrap_or(scheme.inverse_on_surface);
-    let dismiss_action_label =
-        dismiss_action_label.unwrap_or_else(|| I18N.text("md3-dismiss").into());
+    let dismiss_action_label = dismiss_action_label.unwrap_or_else(|| I18N.text("md3-dismiss"));
     let action_label = action_label.filter(|label| !label.is_empty());
     let has_action = action_label.is_some();
     let action_on_new_line = action_on_new_line && has_action;
@@ -575,7 +575,7 @@ fn dismiss_key(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::snackbar::{SnackbarHostController, snackbar_host};
+/// use tessera_components::md3::{button::button, snackbar::{SnackbarHostController, snackbar_host}, text::text};
 /// use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
@@ -583,17 +583,15 @@ fn dismiss_key(
 /// fn demo() {
 ///     material_theme()
 ///         .theme(|| MaterialTheme::default())
-///         .child(|| {
+///         .child(move || {
 ///             let host_state = remember(SnackbarHostController::new);
-///             host_state.with_mut(|state| {
-///                 state.show_snackbar("Saved");
-///             });
+///             button().on_click(move || {
+///                 host_state.with_mut(|state| state.show_snackbar("Saved"));
+///             }).child(|| text("Save"));
 ///             snackbar_host().controller(host_state);
-///             assert!(host_state.with(|state| state.is_showing()));
 ///         });
 /// }
 ///
-/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn snackbar_host(

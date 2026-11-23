@@ -1,4 +1,3 @@
-//! Checkbox theme, validation, and color precedence regressions.
 //!
 //! ## Usage
 //!

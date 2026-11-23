@@ -15,12 +15,6 @@ struct Schedule {
     running: usize,
 }
 
-/// Resolves names and trait impls of `crates` and their dependencies.
-///
-/// rust-analyzer computes these lazily on the first thread that needs them,
-/// which serializes the dependency graph behind a single analysis. Scheduling
-/// crates after their dependencies computes independent crates concurrently.
-/// Failures are left to the analysis that needs the result.
 pub(super) fn prime(db: &RootDatabase, crates: &[Crate], workers: usize) {
     let scope = crates
         .iter()

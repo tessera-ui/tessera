@@ -20,16 +20,16 @@ pub(crate) struct Geometry {
 
 impl Default for Geometry {
     fn default() -> Self {
-        let bytes = include_bytes!("../../../assets/material_loading_shapes.bin");
-        assert_eq!(&bytes[..4], b"MLI1");
-        let integer = |offset| u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap());
-        assert_eq!(integer(4), 8);
-        let curves: Vec<_> = bytes[104..]
-            .chunks_exact(64)
-            .map(|bytes| {
-                let points: [f32; 16] = std::array::from_fn(|i| {
-                    f32::from_le_bytes(bytes[i * 4..i * 4 + 4].try_into().unwrap())
-                });
+        let (words, _) = include_bytes!("../../../assets/material_loading_shapes.bin").as_chunks();
+        assert_eq!(&words[0], b"MLI1");
+        assert_eq!(u32::from_le_bytes(words[1]), 8);
+        let (sequences, curves) = words[2..].split_at(8 * 3);
+        let curves: Vec<_> = curves
+            .as_chunks::<16>()
+            .0
+            .iter()
+            .map(|words| {
+                let points = words.map(f32::from_le_bytes);
                 CubicPair {
                     start: std::array::from_fn(|i| [points[i * 2], points[i * 2 + 1]]),
                     end: std::array::from_fn(|i| [points[8 + i * 2], points[9 + i * 2]]),
@@ -37,9 +37,7 @@ impl Default for Geometry {
             })
             .collect();
         let sequences = std::array::from_fn(|i| {
-            let offset = integer(8 + i * 12);
-            let count = integer(12 + i * 12);
-            let scale = f32::from_bits(integer(16 + i * 12));
+            let [offset, count, scale] = sequences.as_chunks::<3>().0[i].map(u32::from_le_bytes);
             let mut curvature = 0.0_f32;
             for curve in &curves[offset as usize..(offset + count) as usize] {
                 for points in [curve.start, curve.end] {
@@ -53,7 +51,7 @@ impl Default for Geometry {
             Sequence {
                 offset,
                 count,
-                scale,
+                scale: f32::from_bits(scale),
                 curvature,
             }
         });

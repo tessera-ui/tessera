@@ -164,15 +164,17 @@ impl tessera_ui::DrawModifierNode for LoadingDraw {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::loading_indicator::loading_indicator;
+/// use tessera_components::md3::{loading_indicator::loading_indicator, theme::material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn pending_content() {
 ///     let completion = remember(|| 0.5_f32);
-///     loading_indicator()
-///         .progress(completion.get())
-///         .contained(true);
+///     material_theme().child(move || {
+///         loading_indicator()
+///             .progress(completion.get())
+///             .contained(true);
+///     });
 /// }
 /// ```
 #[tessera]
@@ -221,7 +223,7 @@ pub fn loading_indicator(
     };
     let semantics = SemanticsArgs {
         role: Some(Role::ProgressIndicator),
-        label: Some(accessibility_label.unwrap_or_else(|| I18N.text("md3-loading").into())),
+        label: Some(accessibility_label.unwrap_or_else(|| I18N.text("md3-loading"))),
         numeric_value: progress.map(f64::from),
         numeric_range: progress.map(|_| (0.0, 1.0)),
         ..Default::default()

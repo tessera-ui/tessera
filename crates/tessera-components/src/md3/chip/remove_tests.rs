@@ -1,4 +1,3 @@
-//! Input-chip body and removal interaction regressions.
 //!
 //! ## Usage
 //!

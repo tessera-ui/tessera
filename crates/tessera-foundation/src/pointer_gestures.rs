@@ -1,36 +1,4 @@
-//! Compose-style asynchronous gesture detectors.
-//!
-//! ```
-//! use tessera_foundation::{
-//!     modifier::ModifierExt as _,
-//!     pointer_gestures::{TapGesture, TapGestureConfig, detect_tap_gestures},
-//! };
-//! use tessera_ui::{
-//!     Dp, Modifier, PxPosition, State, tessera,
-//!     layout::{Stack, layout}, testing::UiTest,
-//! };
-//!
-//! #[tessera]
-//! fn tap_target(count: State<usize>) {
-//!     layout(Stack).modifier(
-//!         Modifier::new().size(Dp(80.0), Dp(80.0))
-//!             .pointer_input_once(move |mut scope| async move {
-//!                 detect_tap_gestures(&mut scope, TapGestureConfig::default(), |gesture| {
-//!                     if matches!(gesture, TapGesture::Tapped(_, _)) {
-//!                         count.with_mut(|count| *count += 1);
-//!                     }
-//!                 }).await;
-//!             }),
-//!     );
-//! }
-//!
-//! let test = UiTest::new();
-//! let count = test.state(0);
-//! let mut test = test.content(|| tap_target(count));
-//! test.frame();
-//! test.click_at(PxPosition::from_f32_xy(10.0, 10.0));
-//! assert_eq!(count.get(), 1);
-//! ```
+//! Asynchronous detectors for common pointer gestures.
 
 #[cfg(test)]
 mod tests;

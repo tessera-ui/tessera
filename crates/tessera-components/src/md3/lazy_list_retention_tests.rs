@@ -1,4 +1,3 @@
-//! Native lazy item retention and index navigation regressions.
 //!
 //! ## Usage
 //!

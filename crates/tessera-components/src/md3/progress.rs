@@ -508,7 +508,6 @@ fn stop_indicator_bounds(width: Px, height: Px) -> (PxPosition, Px) {
 /// linear_progress_indicator().progress(0.75);
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn linear_progress_indicator(
@@ -692,7 +691,6 @@ pub(crate) fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// circular_progress_indicator().progress(0.6);
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn circular_progress_indicator(
@@ -787,7 +785,6 @@ pub fn circular_progress_indicator(
 /// progress().value(0.75);
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn progress(

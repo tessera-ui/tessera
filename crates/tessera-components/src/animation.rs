@@ -14,7 +14,6 @@ use std::time::Duration;
 
 use tessera_ui::{State, time::Instant, with_frame_time};
 
-/// State advanced from frame times toward a target.
 pub(crate) trait Motion: 'static {
     type Target;
 
@@ -28,12 +27,10 @@ pub(crate) trait Motion: 'static {
     fn advance(&mut self, now: Instant) -> bool;
 }
 
-/// Measures the time between frames for integrated motion.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct FrameDelta(Option<Instant>);
 
 impl FrameDelta {
-    /// Returns the seconds since the previous step, or zero for the first one.
     pub(crate) fn step(&mut self, now: Instant) -> f32 {
         let previous = self.0.unwrap_or(now);
         let now = now.max(previous);
@@ -42,7 +39,6 @@ impl FrameDelta {
     }
 }
 
-/// A spring integrated over frame time deltas.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct SpringMotion {
     spring: Animatable,
@@ -86,7 +82,6 @@ impl Motion for SpringMotion {
     }
 }
 
-/// Calls `step` with each following frame's time until it returns `false`.
 pub(crate) async fn run_frames<T: 'static>(
     state: State<T>,
     mut step: impl FnMut(&mut T, Instant) -> bool,
@@ -99,10 +94,6 @@ pub(crate) async fn run_frames<T: 'static>(
     }
 }
 
-/// Retargets `motion` on the next frame and advances it until it settles.
-///
-/// Launch it keyed by `target` so that a new target restarts the motion from
-/// its current value and velocity.
 pub(crate) async fn animate_to<M: Motion>(motion: State<M>, target: M::Target) {
     if motion.with(|motion| motion.is_settled_at(&target)) {
         return;
@@ -117,8 +108,6 @@ pub(crate) async fn animate_to<M: Motion>(motion: State<M>, target: M::Target) {
     .await;
 }
 
-/// A delay measured from an input timestamp or, without one, from the first
-/// frame that observes it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Delay {
     start: Option<Instant>,
@@ -142,9 +131,6 @@ pub(crate) fn test_instant(nanos: u64) -> Instant {
     *ORIGIN + Duration::from_nanos(nanos)
 }
 
-/// Cubic ease-in-out mapping (smooth start and end).
-/// Input: linear progress in [0.0, 1.0].
-/// Output: eased progress in [0.0, 1.0].
 pub(crate) fn easing(progress: f32) -> f32 {
     // Cubic ease-in-out
     let t = progress.clamp(0.0, 1.0);
@@ -155,9 +141,6 @@ pub(crate) fn easing(progress: f32) -> f32 {
     }
 }
 
-/// Interruptible scalar animation.
-///
-/// Changing the target preserves spring velocity.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Animatable {
     value: f32,
@@ -168,7 +151,6 @@ pub(crate) struct Animatable {
 }
 
 impl Animatable {
-    /// Spring starting at rest on `value`.
     pub(crate) fn spring(value: f32, stiffness: f32, damping: f32) -> Self {
         Self {
             value,
@@ -179,39 +161,27 @@ impl Animatable {
         }
     }
 
-    /// Override velocity. Used when a spring retarget must keep the carried
-    /// speed.
     pub(crate) fn with_velocity(mut self, velocity: f32) -> Self {
         self.velocity = velocity;
         self
     }
 
-    /// Current integrated value.
     pub(crate) fn value(&self) -> f32 {
         self.value
     }
 
-    /// Current velocity in units per second.
     pub(crate) fn velocity(&self) -> f32 {
         self.velocity
     }
 
-    /// Value the animation is moving toward.
     pub(crate) fn target(&self) -> f32 {
         self.target
     }
 
-    /// Point the animation at a new target.
-    ///
-    /// Spring velocity is left untouched.
     pub(crate) fn set_target(&mut self, target: f32) {
         self.target = target;
     }
 
-    /// Advance by `dt` seconds taken from the caller (a frame-time delta).
-    ///
-    /// Large steps are subdivided so an underdamped spring cannot diverge.
-    /// At rest, `value == target` and velocity is approximately zero.
     pub(crate) fn tick(&mut self, dt: f32) -> f32 {
         if !dt.is_finite() || dt <= 0.0 {
             return self.value;
@@ -221,7 +191,6 @@ impl Animatable {
         self.value
     }
 
-    /// True when the value has settled on the target and velocity is ~0.
     pub(crate) fn is_idle(&self) -> bool {
         (self.value - self.target).abs() <= 1.0e-4 && self.velocity.abs() <= 1.0e-3
     }

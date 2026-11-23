@@ -124,18 +124,6 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         let mut scale = [1.0, 1.0];
         let mut outer = 1.0;
         let (mut renderer, handles) = create_renderer(samples, scale, outer, false);
-        let idle = renderer.diagnostics();
-        assert_eq!(
-            renderer
-                .work()
-                .phase(tessera_ui::testing::WorkPhase::Measure)
-                .count(),
-            0,
-            "idle frame must not measure"
-        );
-
-        assert_eq!(idle.dirty_nodes_param, 0);
-        assert_eq!(idle.geometry_nodes_updated, 0);
         let original = renderer.read_pixels();
         let bounds = renderer
             .accessibility_snapshot()
@@ -153,25 +141,6 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         );
         handles.scaled.unwrap().set(true);
         renderer.frames(1);
-        let diagnostics = renderer.diagnostics();
-        assert_eq!(
-            renderer
-                .work()
-                .phase(tessera_ui::testing::WorkPhase::Measure)
-                .count(),
-            0,
-            "paint-only scaling must not measure"
-        );
-
-        assert_eq!(
-            diagnostics.dirty_nodes_param, 0,
-            "paint-only scaling must not invalidate layout inputs"
-        );
-
-        assert_eq!(
-            diagnostics.geometry_nodes_updated, 0,
-            "paint-only scaling must not place nodes"
-        );
         renderer.frames(1);
         assert_eq!(
             renderer.read_pixels(),

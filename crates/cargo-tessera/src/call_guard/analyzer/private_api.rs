@@ -14,12 +14,6 @@ const PRIVATE_MODULE_NAME: &str = "__private";
 const PRIVATE_MODULE_CRATES: [&str; 1] = ["tessera_ui"];
 
 impl CallAnalyzer<'_> {
-    /// Rejects names that reach a Tessera crate's macro-support module.
-    ///
-    /// Source text is user-written even inside official attribute macro input,
-    /// so it is always checked. Expansions are checked unless the macro is
-    /// defined by a Tessera crate; an expansion whose macro cannot be resolved
-    /// is checked as user code.
     pub(super) fn check_private_api_uses(&mut self, node: &SyntaxNode) {
         if self.is_inactive(node) {
             return;

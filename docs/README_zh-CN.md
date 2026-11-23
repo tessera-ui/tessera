@@ -87,7 +87,7 @@ cd my-app && cargo tessera dev
 
 ## 贡献
 
-请阅读 [贡献指南](https://github.com/tessera-ui/tessera/blob/main/docs/CONTRIBUTING_zh-CN.md) 了解如何为项目做出贡献。
+请参阅[贡献指南](CONTRIBUTING_zh-CN.md)，了解如何准备环境、运行检查和提交改动。
 
 ## 致谢
 

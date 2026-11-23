@@ -339,7 +339,7 @@ pub(super) fn menu_host(provider: Option<MenuProviderConfig>) {
             }
         });
     }
-    modifier = modifier.push_pointer_preview_input(MenuHierarchyPointer(host.clone()));
+    modifier = modifier.push_pointer_preview_input(MenuHierarchyPointer(host));
     let origin = host.origin;
     tessera_ui::layout::layout(MenuHostLayout)
         .modifier(modifier.on_layout_coordinates(move |bounds| {
@@ -367,9 +367,8 @@ fn menu_popup_layer(request: Option<State<MenuPopupRequest>>) {
     let value = request.get();
     let mut modifier = Modifier::new();
     if !value.controller.with(MenuController::is_open) {
-        let host = value.host.clone();
         modifier = modifier.on_globally_positioned(move |_| {
-            host.remove_branch(request);
+            value.host.remove_branch(request);
         });
     }
     let provider = MenuProviderConfig {
@@ -385,7 +384,7 @@ fn menu_popup_layer(request: Option<State<MenuPopupRequest>>) {
         color_style: value.color_style,
         container_color: value.color_style.container(
             &use_context::<crate::md3::theme::MaterialTheme>()
-                .unwrap()
+                .expect("MaterialTheme must be provided")
                 .get()
                 .color_scheme,
         ),

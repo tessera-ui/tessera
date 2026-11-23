@@ -60,7 +60,7 @@ programming contract; the guidelines below also govern framework implementation.
 
 - Truly zero-config components may use `#[tessera] pub fn component()` with no parameters.
 - Configurable components must use a single public entrypoint declared with named owned parameters: `#[tessera] pub fn component(foo: Foo, bar: Bar, ...)`.
-- A component entry registers one use and returns its configuration handle (the generated `*Builder`); configure it by chaining, saving it, or passing it to helpers. Modifying a committed or stale handle panics. See [component calls](docs/COMPONENT_CALLS.md).
+- A component entry registers one use and returns its configuration handle (the generated `*Builder`); configure it by chaining, saving it, or passing it to helpers. Modifying a committed or stale handle panics.
 - Keep child content in `RenderSlot` / `RenderSlotWith`.
 - Pass required values at entry as non-`Option` parameters, such as `text("Title")`; configure optional props with named setters.
 - Do not introduce public wrapper variants (`*_with_controller`, `*_impl`, or extra public forwarding layers).
@@ -95,7 +95,7 @@ programming contract; the guidelines below also govern framework implementation.
   - closures carried directly by `RenderSlot`, `RenderSlotWith`, or generated setters and required constructor arguments for parameters declared as RenderSlot types (including `impl Into<RenderSlot>` / `impl Into<RenderSlotWith<...>>`);
   - root build closures passed to `EntryPoint::new`, `HeadlessRenderer::new`, `testing::UiTest::content`, or `Renderer::run` / `run_with_config` / `run_web_with_config`;
   - the build closures of `key` and `provide_context`, and deferred Pending-property materializers;
-  - content closures in the approved built-in render setters listed in [component calls](docs/COMPONENT_CALLS.md#built-in-render-setters). Their key providers and action callbacks remain uncolored.
+  - content closures in approved built-in render setters. Their key providers and action callbacks remain uncolored.
 - All other executable contexts are uncolored by default: ordinary free functions, impl methods, trait methods/default methods, local functions, callbacks, event handlers, async tasks, iterator closures, `Option`/`Result` combinator closures, and arbitrary higher-order function closures.
 - Detector closures passed directly to `Modifier::pointer_input` or `pointer_input_once` are Tessera-colored; their action callbacks remain uncolored.
 - Color is one-way and does not propagate: colored contexts may call uncolored code, but uncolored code, including helpers called from components and closures written inside them, must not call Tessera-colored functions or Tessera-only APIs.
@@ -122,11 +122,11 @@ programming contract; the guidelines below also govern framework implementation.
 - `place_node` is used to position child nodes.
 - Measuring a layout child does not place it. An unplaced layout node hides its entire subtree from drawing, input geometry, semantics, and keyboard focus.
 - `layout::Stack` places children at (0,0) and sizes the node to their bounding rectangle. `group()` nodes do not lay out their children; the enclosing layout measures them.
-- Track composition, measurement, placement, transforms, paint, and pointer-state reads separately. Frame consumers (focus, pointer input, position observers, the render scene, and accessibility) must update from structural and geometry journals. See [incremental frame maintenance](docs/INCREMENTAL_FRAMES.md).
+- Track composition, measurement, placement, transforms, paint, and pointer-state reads separately. Frame consumers (focus, pointer input, position observers, the render scene, and accessibility) must update when their inputs change.
 - Direct layout-child adjacency and layout metadata persist across frames and change only at build/replay structure changes. Stable frames and cache hits must not rebuild these lists or restore subtrees.
 - Keep Compose, Measure, Place, and Paint dependencies separate. State reads during measurement invalidate measurement; placement-only calculations may use `MeasureScope::placement` or `LayoutModifierInput::placement` and must not determine sizes or constraints. Implement `LayoutPolicy::place` when a policy supports cached placement.
 - Draw-only properties must be excluded from both measurement and placement equality. Placement transforms invalidate window geometry without measuring. Parent-data modifiers should implement `equivalent` when their values can be compared.
-- Keep measured control dimensions in local units and share one inherited `LocalToWindow` transformation across rendering, clipping, pointer input, focus reveal, IME, and accessibility. Use `LayoutCoordinates` for local-size consumers; do not feed window rectangle dimensions back into local layout or drawing. See [local layout coordinates](docs/LOCAL_COORDINATES.md).
+- Keep measured control dimensions in local units and use `LayoutCoordinates` for local-size consumers; do not feed window rectangle dimensions back into local layout or drawing.
 - A `platform_view` is an ordered scene boundary owned by the renderer session's native host. Keep native layout sizes separate from transformed bounds, native hierarchy mutations on the platform UI thread, and Tessera scene slices in authoring order around the view.
 
 ---
@@ -151,8 +151,7 @@ programming contract; the guidelines below also govern framework implementation.
 - `Modifier::clip_shape` clips the node and its descendants without changing
   measurement. Pointer hit testing must honor the same ancestor shapes.
 - Retained scene pixels require conservative draw-command opt-in and must not turn
-  per-command alpha into group opacity; see
-  [incremental frame maintenance](docs/INCREMENTAL_FRAMES.md).
+  per-command alpha into group opacity.
 - Use shared frame-buffer ranges for transient uniforms/storage and pooled scratch
   leases for filter intermediates. Bound idle caches by bytes and age.
 - Shape clipping supports up to 255 nested shape masks. `clip_to_bounds` clips do
@@ -212,7 +211,7 @@ programming contract; the guidelines below also govern framework implementation.
 ## 🛠️ Contribution & Style Guidelines
 
 - **Code Style**:
-  - Keep general cleanup and style refactors within Tessera-owned crates; preserve submodule sources for upstream synchronization.
+  - Keep general cleanup and style refactors within Tessera-owned code. Leave upstream forks, including submodule sources and pinned revisions, unchanged unless the task specifically requires a fork change.
   - Publish forks with distinct package names, upstream library names, and versioned path dependencies.
   - Declare dependencies of Tessera-owned libraries in the root `[workspace.dependencies]` and inherit them with `workspace = true`, adding features locally. `cargo-tessera` declares its dependencies directly with full `x.y.z` caret requirements so CLI fixes can raise dependency floors independently. Submodule crates keep standalone manifests.
   - Write library dependency requirements as short caret versions (`"1.16"`, `"0.8"`) so downstream users are not forced onto the newest patch release. Add a patch component only when a fix or API from that patch is required, and keep `0.0.x` crates fully specified. Do not use open or upper-bounded ranges; crates whose types are exchanged must resolve to one shared version, and exact `=` pins require a comment explaining the lockstep requirement. CI checks direct minimal versions.
@@ -228,6 +227,7 @@ programming contract; the guidelines below also govern framework implementation.
   - Ensure all tests pass, documentation is updated, and formatting checks are clean before committing
 - **Documentation**:
   - Main documentation must be in English. Other language versions, if any, should be placed in the docs/ directory and kept in sync with the English version.
+  - Keep code minimal and semantic. Document observable public behavior and maintenance workflows, not implementation details or progress logs.
   - Documentation format should pass markdown lint if possible
 - **Comment Policy**:
   - Documentation comments (`//!`, `///`) are written for end users. Describe purpose, behavior, and usage. Do **not** include implementation details, internal architecture notes, or references to upstream/source code (e.g., “ported from Compose”, file paths, commit hashes).
@@ -244,6 +244,8 @@ programming contract; the guidelines below also govern framework implementation.
 - Every test must identify a concrete failure in Tessera-owned behavior. Its
   assertions must fail when that behavior breaks, even if the test fixture still
   works. Test names must describe what is actually exercised and observed.
+- Tests define intended behavior; do not add tests whose only purpose is to prove
+  a specific bug fix or patch no longer reproduces a failure.
 - Prioritize layout constraints and placement, density and fractional geometry,
   state lifetime and recomposition, input consumption and focus, text editing and
   IME, accessibility, clipping and sampling, and generated component APIs.
@@ -276,8 +278,8 @@ programming contract; the guidelines below also govern framework implementation.
 - Tests that only verify Rust or dependency behavior, trivial field assignment,
   transparent getters/constructors, or derived traits without a Tessera contract.
 - Duplicate tests that exercise the same behavior and cases already covered by
-  a stronger test or runnable rustdoc example. Keep distinct boundary cases and
-  supported platforms; overlapping coverage alone is not sufficient for removal.
+  a stronger test. Keep distinct boundary cases and supported platforms;
+  overlapping coverage alone is not sufficient for removal.
 - Tests that search repository source text for identifiers, cfg spellings,
   function names, or code fragments as a substitute for compilation or behavior.
   Generated text may be asserted when it is the tool's actual output contract;
@@ -323,9 +325,9 @@ programming contract; the guidelines below also govern framework implementation.
   lacks value or which retained test covers the same cases. Remove unused fixtures
   and imports with it. Do not delete a failing test to conceal a production bug.
 - Run affected crate tests and relevant feature/platform checks after cleanup.
-  Keep `cargo test --workspace --doc` in CI; runnable API examples are part of the
-  supported test suite. Report failures caused by unavailable tooling or existing
-  work separately from regressions introduced by the cleanup.
+  Keep `cargo test --workspace --doc` in CI to verify that examples compile.
+  Report failures caused by unavailable tooling or existing work separately from
+  regressions introduced by the cleanup.
 
 ---
 
@@ -337,74 +339,12 @@ programming contract; the guidelines below also govern framework implementation.
 
 ## Component Documentation Guidelines
 
-This project uses a strict, concise doc style for modules and component functions to
-improve readability and enable testable examples.
-
-### Module docs
-
-- Public component modules use this 5-line template:
-  1. `//! <short description>`
-  2. `//!`
-  3. `//! ## Usage`
-  4. `//!`
-  5. `//! <one-line app-level usage scenario>` (e.g., alerts, confirmations, multi-step forms, or interactive controls).
-- `//! ## Usage` must be on its own line and must be followed by a blank `//!` line (do not inline the usage sentence on the same line).
-- Other public modules use a one-line summary when a usage section would only repeat it or the docs of the items they contain.
-- Crate-private modules and test modules do not need module docs.
-
-Example:
-
-```rust
-//! Modal dialog provider — show modal content above the main app UI.
-//!
-//! ## Usage
-//!
-//! Show alerts, confirmations and multi-step forms that block the main UI while active.
-```
-
-### Component function docs
-
-- Use the following sections in order for each public component function:
-  1. `# <component_name>` — function header (title)
-  2. Single-line summary: What this component does **and** recommended use cases.
-  3. `## Usage` — a short one-line usage scenario (non-placement, app-level).
-  4. `## Parameters` — list each parameter and its role. For large parameter sets, keep each
-     line concise and group related parameters by behavior when helpful.
-  5. `## Examples` — a runnable rustdoc example (no `no_run`, no `ignore`) that demonstrates
-     the key state logic (e.g., open/close a dialog or state toggle) and uses `assert!` to
-     verify expected behavior.
-- `/// ## Usage` must be on its own line and must be followed by a blank `///` line.
-
-Example:
-
-```rust
-/// # dialog_provider
-///
-/// Provide a modal dialog for alerts and confirmations.
-///
-/// ## Usage
-///
-/// Show modals (alerts/confirmations/wizards) that block user interaction.
-///
-/// ## Parameters
-///
-/// - `controller` — optional external controller for visibility
-/// - `on_close_request` — callback invoked when the dialog should close
-///
-/// ## Examples
-/// use tessera_components::md3::dialog::DialogController;
-/// let mut controller = DialogController::new(false);
-/// assert!(!controller.is_open());
-/// controller.open();
-/// assert!(controller.is_open());
-/// controller.close();
-/// assert!(!controller.is_open());
-```
-
-### Notes
-
-- Aim for brevity and clarity. Examples should be minimal but assert meaningful behavior.
-- Keep parameter descriptions concise. Reference helper/controller types when useful.
+- Start with the component's purpose. Explain defaults and constraints only
+  when they affect how callers use it. Do not repeat the signature or add
+  sections just to fill a template.
+- Add an example only when it clarifies common usage. Use real content and
+  callbacks; omit placeholders, test harnesses, and assertions. Put behavioral
+  checks in tests, not in API examples.
 
 ---
 

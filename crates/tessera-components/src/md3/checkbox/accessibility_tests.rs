@@ -1,4 +1,3 @@
-//! Checkbox and switch state and accessibility regressions.
 //!
 //! ## Usage
 //!

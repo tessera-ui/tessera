@@ -1,33 +1,24 @@
-//! # Layout Constraint System
-//!
-//! This module defines Tessera's interval-based layout constraints.
-//!
-//! A parent layout can only bound a child's size. Exact size is represented as
-//! a tight interval where `min == max`.
-
 use std::ops::Sub;
 
 use crate::{Dp, Px};
 
-/// A single-axis layout constraint expressed as an allowed interval.
+/// Minimum and optional maximum size for one layout axis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AxisConstraint {
-    /// The minimum allowed size on this axis.
+    /// Smallest allowed size.
     pub min: Px,
-    /// The maximum allowed size on this axis.
-    ///
-    /// When `None`, the axis is unbounded above.
+    /// Largest allowed size, if bounded.
     pub max: Option<Px>,
 }
 
 impl AxisConstraint {
-    /// An unconstrained axis with minimum `0`.
+    /// A zero minimum with no upper bound.
     pub const NONE: Self = Self {
         min: Px::ZERO,
         max: None,
     };
 
-    /// Creates a new interval constraint.
+    /// Creates a range, raising `max` to `min` when the values conflict.
     pub fn new(min: Px, max: Option<Px>) -> Self {
         let normalized_max = match max {
             Some(value) if value < min => Some(min),
@@ -39,7 +30,7 @@ impl AxisConstraint {
         }
     }
 
-    /// Creates a tight axis constraint.
+    /// Requires exactly `size`.
     pub const fn exact(size: Px) -> Self {
         Self {
             min: size,
@@ -47,12 +38,12 @@ impl AxisConstraint {
         }
     }
 
-    /// Creates an axis with only a lower bound.
+    /// Sets a lower bound without an upper bound.
     pub const fn at_least(min: Px) -> Self {
         Self { min, max: None }
     }
 
-    /// Creates an axis with only an upper bound.
+    /// Sets an upper bound with a zero minimum.
     pub const fn at_most(max: Px) -> Self {
         Self {
             min: Px::ZERO,
@@ -60,17 +51,17 @@ impl AxisConstraint {
         }
     }
 
-    /// Returns the preferred minimum size for this axis.
+    /// Returns the lower bound.
     pub const fn resolve_min(self) -> Px {
         self.min
     }
 
-    /// Returns the upper bound for this axis, if present.
+    /// Returns the upper bound, if present.
     pub const fn resolve_max(self) -> Option<Px> {
         self.max
     }
 
-    /// Returns the intersection of two axis constraints.
+    /// Combines the ranges, raising the maximum to the larger minimum if they do not overlap.
     pub fn intersect(self, parent: Self) -> Self {
         let min = self.min.max(parent.min);
         let max = match (self.max, parent.max) {
@@ -82,7 +73,7 @@ impl AxisConstraint {
         Self::new(min, max)
     }
 
-    /// Returns a version of this axis with the lower bound cleared.
+    /// Resets the minimum to zero while preserving the maximum.
     pub const fn without_min(self) -> Self {
         Self {
             min: Px::ZERO,
@@ -90,7 +81,7 @@ impl AxisConstraint {
         }
     }
 
-    /// Clamps a measured size into this interval.
+    /// Clamps `value` to this range.
     pub fn clamp(self, value: Px) -> Px {
         let mut value = value.max(self.min);
         if let Some(max) = self.max {
@@ -150,7 +141,7 @@ impl std::ops::SubAssign<Px> for AxisConstraint {
     }
 }
 
-/// The constraint inherited from a parent node during measurement.
+/// Borrowed view of the constraints passed by a parent layout.
 #[derive(Clone, Copy, Debug)]
 pub struct ParentConstraint<'a>(&'a Constraint);
 
@@ -159,22 +150,22 @@ impl<'a> ParentConstraint<'a> {
         Self(constraint)
     }
 
-    /// Returns the inherited width constraint.
+    /// Returns the width constraint.
     pub const fn width(self) -> AxisConstraint {
         self.0.width
     }
 
-    /// Returns the inherited height constraint.
+    /// Returns the height constraint.
     pub const fn height(self) -> AxisConstraint {
         self.0.height
     }
 
-    /// Returns a reference to the underlying constraint.
+    /// Returns the underlying constraints.
     pub const fn as_ref(self) -> &'a Constraint {
         self.0
     }
 
-    /// Returns the inherited constraint with both lower bounds cleared.
+    /// Returns constraints with both minimums set to zero.
     pub const fn without_min(self) -> Constraint {
         Constraint {
             width: self.0.width.without_min(),
@@ -183,23 +174,23 @@ impl<'a> ParentConstraint<'a> {
     }
 }
 
-/// A two-dimensional interval constraint.
+/// Width and height constraints supplied to layout measurement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Constraint {
-    /// The width interval.
+    /// Allowed width range.
     pub width: AxisConstraint,
-    /// The height interval.
+    /// Allowed height range.
     pub height: AxisConstraint,
 }
 
 impl Constraint {
-    /// An unconstrained width/height interval.
+    /// Unbounded width and height.
     pub const NONE: Self = Self {
         width: AxisConstraint::NONE,
         height: AxisConstraint::NONE,
     };
 
-    /// Creates a new 2D constraint from width and height intervals.
+    /// Creates constraints from ranges or exact `Dp`/`Px` values.
     pub fn new(width: impl Into<AxisConstraint>, height: impl Into<AxisConstraint>) -> Self {
         Self {
             width: width.into(),
@@ -207,7 +198,7 @@ impl Constraint {
         }
     }
 
-    /// Creates a tight 2D constraint.
+    /// Requires exactly the given width and height.
     pub fn exact(width: Px, height: Px) -> Self {
         Self {
             width: AxisConstraint::exact(width),

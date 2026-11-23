@@ -166,10 +166,10 @@ pub(super) fn token_sets() {
                         I18N.format(
                             "ui-value-token-setvalue",
                             [
-                                ("v0", I18N.text(&name).into()),
+                                ("v0", I18N.text(name).into()),
                                 (
                                     "v1",
-                                    I18N.text(&(if selected { "ui-selected-7004" } else { "" }))
+                                    I18N.text(if selected { "ui-selected-7004" } else { "" })
                                         .into(),
                                 ),
                             ],
@@ -212,16 +212,14 @@ pub(super) fn token_sets() {
                 I18N.format(
                     "ui-value-tokens-value",
                     [
-                        ("v0", I18N.text(&title).into()),
+                        ("v0", I18N.text(title).into()),
                         (
                             "v1",
-                            I18N.text(
-                                &(if open {
-                                    "ui-expanded-7100"
-                                } else {
-                                    "ui-collapsed-7101"
-                                }),
-                            )
+                            I18N.text(if open {
+                                "ui-expanded-7100"
+                            } else {
+                                "ui-collapsed-7101"
+                            })
                             .into(),
                         ),
                     ],

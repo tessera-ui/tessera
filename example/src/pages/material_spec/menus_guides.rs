@@ -368,7 +368,6 @@ fn active_menus() {
     });
 }
 
-/// Light and dark grids of every interaction state.
 #[tessera]
 pub(super) fn states_figure(baseline: bool, selected: bool) {
     let count = if baseline { 5 } else { 6 };
@@ -801,7 +800,6 @@ fn baseline_color_annotations(values: Geometry, dark: bool) {
     annotations::lines(width, height, svg);
 }
 
-/// The baseline menu shown in the Specs variants section.
 #[tessera]
 pub(super) fn baseline_variant() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -969,7 +967,6 @@ fn trigger_tile(kind: usize) {
         });
 }
 
-/// Every baseline menu subsection shown under Specs.
 #[tessera]
 pub(super) fn baseline_section() {
     super::prose(
@@ -1250,7 +1247,6 @@ fn baseline_measure_annotations(values: Geometry) {
     annotations::lines(width, height, svg);
 }
 
-/// A parent menu with an open submenu whose selected item uses vibrant color.
 #[tessera]
 pub(super) fn submenu_pair(#[prop(into)] parent: String, options: Vec<String>, selected: usize) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -1544,7 +1540,6 @@ pub(super) fn focus_examples() {
         });
 }
 
-/// Static placement diagram showing where a menu can appear around its trigger.
 #[tessera]
 pub(super) fn placement_figure() {
     panel(RenderSlot::new(|| {
@@ -1626,7 +1621,6 @@ fn placement_tile(kind: usize) {
         });
 }
 
-/// Static comparison of a compact bottom sheet and an expanded in-context menu.
 #[tessera]
 pub(super) fn adaptive_figure(compact: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -1754,7 +1748,6 @@ pub(super) fn adaptive_figure(compact: bool) {
     }));
 }
 
-/// Static structure diagram of menu item slots and simple slot content.
 #[tessera]
 pub(super) fn slots_figure() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;

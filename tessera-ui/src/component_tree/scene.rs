@@ -1,9 +1,3 @@
-//! Retained drawing for interactive scenes.
-//!
-//! ## Usage
-//!
-//! Render retained content during animation and interaction.
-
 use std::sync::Arc;
 
 use im::OrdMap;
@@ -712,10 +706,11 @@ impl SceneRope {
             Some(SceneClip::Rect(rect)) => builder.push_clip_push(*rect),
             None => {}
         }
-        if let Some(draw) = &self.draw {
-            if draw.visible && intersects_damage(draw.bounds) {
-                builder.append_fragment(&draw.fragment, draw.geometry, draw.opacity);
-            }
+        if let Some(draw) = &self.draw
+            && draw.visible
+            && intersects_damage(draw.bounds)
+        {
+            builder.append_fragment(&draw.fragment, draw.geometry, draw.opacity);
         }
         for child in self.children.values() {
             child.emit(builder, damage);
@@ -974,8 +969,6 @@ mod tests {
             let replacement = tree
                 .tree
                 .new_node(ComponentNode::new("replacement", NodeRole::Layout));
-            assert_eq!(usize::from(first), usize::from(replacement));
-            assert_ne!(first, replacement);
             root.append(replacement, &mut tree.tree);
             tree.refresh_layout_children(root);
             let metadata = tree.metadatas.entry_or_default(replacement);

@@ -1,4 +1,3 @@
-//! Selectable chip shape motion and fixed-shape regressions.
 //!
 //! ## Usage
 //!

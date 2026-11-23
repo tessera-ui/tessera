@@ -79,7 +79,6 @@ fn compute_child_offset(
 ///         .modifier(Modifier::new().align(Alignment::Center));
 /// });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn boxed(

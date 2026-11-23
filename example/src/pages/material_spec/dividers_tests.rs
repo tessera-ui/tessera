@@ -1,4 +1,3 @@
-//! Native divider article list figure regressions.
 //!
 //! ## Usage
 //!

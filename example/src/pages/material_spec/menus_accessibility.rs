@@ -83,7 +83,7 @@ pub(super) fn state_selection() {
                                 .accessibility_role(Role::Button)
                                 .accessibility_label(I18N.format(
                                     "ui-state-value",
-                                    [("v0", I18N.text(&selected.get()).into())],
+                                    [("v0", I18N.text(selected.get()).into())],
                                 ))
                                 .modifier(Modifier::new().size(Dp(232.0), Dp(56.0)).push_semantics(
                                     Disclosure(controller.with(MenuController::is_open)),
@@ -279,7 +279,7 @@ pub(super) fn labeling() {
     gap(Dp(16.0));
     prose(I18N.format(
         "ui-last-file-action-value",
-        [("v0", I18N.text(&notice.get()).into())],
+        [("v0", I18N.text(notice.get()).into())],
     ));
 }
 

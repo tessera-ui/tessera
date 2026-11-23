@@ -56,7 +56,6 @@ impl Setting {
 }
 
 impl CallAnalyzer<'_> {
-    /// Applies lint attributes in `files` to the pending diagnostics.
     pub(super) fn apply_lint_levels(&mut self, options: &LintOptions, files: &[FileId]) {
         let mut settings = Vec::new();
         let files = files

@@ -196,12 +196,6 @@ pub struct RuntimeMeta {
     pub kind: RuntimeEventKind,
 }
 
-/// # Examples
-/// A minimal frame event written to the profiler output:
-///
-/// ```json
-/// {"type":"frame","frame":1,"build_mode":"root_recompose","redraw_reasons":["startup"],"render_time_ns":1000000,"frame_total_ns":2000000,"components":[{"id":"1","fn_name":"root","abs_pos":{"x":0,"y":0},"size":{"w":100,"h":50},"layout_cache_hit":true,"phases":{"build_ns":5000},"children":[]}]}
-/// ```
 #[expect(
     clippy::large_enum_variant,
     reason = "Profiler messages are forwarded to a worker thread, and keeping payloads inline avoids an extra heap allocation per event."

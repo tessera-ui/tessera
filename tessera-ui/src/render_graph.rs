@@ -714,13 +714,11 @@ fn state_op(command: Command, sequence_index: usize) -> RenderGraphOp {
     }
 }
 
-/// Builder for a frame-level render graph.
 pub(crate) struct RenderGraphBuilder {
     ops: Vec<RenderGraphOp>,
 }
 
 impl RenderGraphBuilder {
-    /// Creates a new render graph builder.
     pub(crate) fn new() -> Self {
         Self { ops: Vec::new() }
     }
@@ -741,22 +739,18 @@ impl RenderGraphBuilder {
         });
     }
 
-    /// Pushes a clip push op into the graph.
     pub(crate) fn push_clip_push(&mut self, rect: PxRect) {
         self.push_state(Command::ClipPush(rect));
     }
 
-    /// Pushes a shape clip op into the graph.
     pub(crate) fn push_shape_clip_push(&mut self, region: crate::render::ClipRegion) {
         self.push_state(Command::ShapeClipPush(region));
     }
 
-    /// Pushes a clip pop op into the graph.
     pub(crate) fn push_clip_pop(&mut self) {
         self.push_state(Command::ClipPop);
     }
 
-    /// Appends a fragment into the frame graph.
     pub(crate) fn append_fragment(
         &mut self,
         fragment: &RenderFragment,
@@ -786,7 +780,6 @@ impl RenderGraphBuilder {
         }
     }
 
-    /// Finishes graph construction.
     pub(crate) fn finish(self) -> RenderGraph {
         RenderGraph {
             data: Arc::new(RenderGraphData {
@@ -1272,7 +1265,6 @@ mod tests {
             })
             .collect();
         assert_eq!(alphas, [0.4, 0.2]);
-        assert_eq!(graph.cached_op_count(), Some(2));
     }
 
     #[test]

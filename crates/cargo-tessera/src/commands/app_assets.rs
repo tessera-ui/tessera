@@ -111,7 +111,6 @@ pub(super) fn android(config: &AppConfig, resources: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Writes an asset catalog whose `AppIcon` serves the iOS and macOS targets.
 pub(super) fn apple(config: &AppConfig, catalog: &Path) -> Result<()> {
     let icon = config.load_icon()?;
     if catalog.exists() {

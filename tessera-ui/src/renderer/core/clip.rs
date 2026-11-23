@@ -196,7 +196,6 @@ impl ShapeClipper {
         }
     }
 
-    /// Redraws the active masks into a pass whose stencil starts cleared.
     pub(super) fn restore(&self, pass: &mut wgpu::RenderPass<'_>, size: PxSize) {
         let mut depth = 0;
         for index in self.stack.iter().flatten() {

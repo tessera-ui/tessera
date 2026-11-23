@@ -33,10 +33,6 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|error| error.into_inner())
 }
 
-/// Reads the configured stall limit.
-///
-/// A value of `0` disables the bound explicitly; unparsable values fall back to
-/// the default so a malformed environment variable cannot remove the bound.
 pub(super) fn limit_from_env() -> Option<Duration> {
     let Some(raw) = env::var_os(LIMIT_ENV) else {
         return Some(DEFAULT_LIMIT);
@@ -54,14 +50,10 @@ fn elapsed_ms() -> u64 {
     EPOCH.get_or_init(Instant::now).elapsed().as_millis() as u64
 }
 
-/// Records that call checking made progress.
 pub(super) fn progress() {
     LAST_PROGRESS_MS.store(elapsed_ms(), Ordering::Relaxed);
 }
 
-/// Lets a stall kill `child` while `action` reads its output.
-///
-/// Returns the child for waiting unless a stall already killed it.
 pub(super) fn with_cargo<T>(child: Child, action: impl FnOnce() -> T) -> (T, Option<Child>) {
     let child = Arc::new(Mutex::new(child));
     lock(&CARGO).push(child.clone());
@@ -75,10 +67,6 @@ pub(super) fn with_cargo<T>(child: Child, action: impl FnOnce() -> T) -> (T, Opt
     (result, child)
 }
 
-/// Keeps a bound alive for as long as call checking is running.
-///
-/// Dropping the handle marks the run as finished, which stops the watcher
-/// without terminating the process.
 pub(super) struct Watchdog {
     finished: Sender<()>,
     worker: Option<JoinHandle<()>>,
@@ -93,11 +81,6 @@ impl Drop for Watchdog {
     }
 }
 
-/// Arms the stall bound for the current call checking run.
-///
-/// The watcher terminates the process rather than returning an error because a
-/// blocked rust-analyzer load cannot be cancelled cooperatively: the blocked
-/// call owns the main thread and holds no cancellation handle.
 pub(super) fn arm(limit: Option<Duration>) -> Option<Watchdog> {
     let limit = limit?;
     progress();

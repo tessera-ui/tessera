@@ -51,7 +51,6 @@ impl Drop for OwnerLease {
     }
 }
 
-/// Owner of states that outlive a single composition slot.
 #[derive(Clone)]
 pub(crate) struct ModelScope(Rc<OwnerLease>);
 
@@ -131,38 +130,6 @@ pub trait ModelInit: 'static {
 /// [`State`], the handle works on every thread and is `Send` and `Sync` when
 /// `T: Send`. Asynchronous model operations take the handle, for example
 /// `async fn load(model: Model<Self>)`, and access the value between awaits.
-///
-/// ```
-/// use tessera_ui::{ModelInit, ModelStore, RuntimeSession, State};
-///
-/// struct Counter {
-///     count: State<u32>,
-///     clicks: u32,
-/// }
-///
-/// impl ModelInit for Counter {
-///     fn init() -> Self {
-///         Self {
-///             count: State::new(0),
-///             clicks: 0,
-///         }
-///     }
-/// }
-///
-/// impl Counter {
-///     fn click(&mut self) {
-///         self.clicks += 1;
-///         self.count.set(self.clicks);
-///     }
-/// }
-///
-/// RuntimeSession::new().run(|| {
-///     let store = ModelStore::new();
-///     let model = store.model(Counter::init);
-///     model.with_mut(Counter::click);
-///     assert_eq!(model.with(|counter| counter.count.get()), 1);
-/// });
-/// ```
 pub struct Model<T: 'static>(State<T>);
 
 impl<T> Clone for Model<T> {
@@ -294,10 +261,6 @@ impl Drop for ModelStore {
     }
 }
 
-/// Resolves a `Model<T>` component parameter that the caller did not supply.
-///
-/// The nearest provided [`ModelStoreScope`] owns the model; without one the
-/// component's own slot does.
 pub(crate) fn inject_model<T: ModelInit>(slot: u64) -> Model<T> {
     // A fixed group keeps the fallback slot independent of whether callers
     // override the model on a given frame.

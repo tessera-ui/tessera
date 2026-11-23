@@ -59,8 +59,6 @@ impl FilterLabels {
     }
 }
 
-/// Live modal side sheet state owned by the app root while the article is
-/// mounted or remounted.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct LiveSideSheetSession {
     open: State<SideSheetController>,
@@ -625,7 +623,7 @@ fn tokens() {
                 button()
                     .text()
                     .accessibility_label(
-                        I18N.format("ui-value-tokens", [("v0", I18N.text(&group).into())]),
+                        I18N.format("ui-value-tokens", [("v0", I18N.text(group).into())]),
                     )
                     .modifier(Modifier::new().fill_max_width())
                     .on_click(move || expanded.with_mut(|state| state[index] = !state[index]))
@@ -671,7 +669,7 @@ fn token_group(#[prop(into)] group: String) {
                 "ui-value-value-format-31",
                 [
                     ("v0", I18N.text(&group).into()),
-                    ("v1", I18N.text(&section).into()),
+                    ("v1", I18N.text(section).into()),
                 ],
             ))
             .style(type_style(14.0, 20.0))
@@ -739,7 +737,7 @@ fn variant_specs(modal: bool) {
             gap(Dp(24.0));
             legend(figures::anatomy_legend(modal));
             gap(Dp(56.0));
-            subheading(I18N.format("ui-value-side-sheet-color", [("v0", I18N.text(&name).into())]));
+            subheading(I18N.format("ui-value-side-sheet-color", [("v0", I18N.text(name).into())]));
             gap(Dp(16.0));
             prose(
                 "ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo",
@@ -751,7 +749,7 @@ fn variant_specs(modal: bool) {
             gap(Dp(16.0));
             legend(figures::color_legend(modal));
             gap(Dp(56.0));
-            subheading(I18N.format("ui-value-side-sheet-measurements", [("v0", I18N.text(&name).into())]));
+            subheading(I18N.format("ui-value-side-sheet-measurements", [("v0", I18N.text(name).into())]));
             gap(Dp(24.0));
             figures::measurement_figure(modal);
             gap(Dp(16.0));

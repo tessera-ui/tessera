@@ -252,7 +252,6 @@ impl CheckmarkState {
 /// fn checkbox_demo() {
 ///     let first_choice = remember(|| true);
 ///     let second_choice = remember(|| false);
-///     assert!(first_choice.get() && !second_choice.get());
 ///     let all = first_choice.get() && second_choice.get();
 ///     let some = first_choice.get() || second_choice.get();
 ///     checkbox(all)
@@ -267,7 +266,6 @@ impl CheckmarkState {
 /// # fn demo() {
 /// #     tessera_components::md3::theme::material_theme().child(|| { checkbox_demo(); });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn checkbox(
@@ -594,7 +592,6 @@ fn checkbox_inner(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
-            ..Default::default()
         };
         modifier = modifier.toggleable(toggle_args);
     } else {

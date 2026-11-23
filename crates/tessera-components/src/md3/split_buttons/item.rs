@@ -229,7 +229,10 @@ pub(super) fn split_button_item(
     };
     let padding = args.content_padding;
     let rotation = motion.with(|motion| motion.rotation.value());
-    let text_style = size.text_style(&use_context::<MaterialTheme>().unwrap().get());
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    let text_style = size.text_style(&theme);
     let icon_size = if leading {
         SplitButtonDefaults::leading_icon_size(size)
     } else {
