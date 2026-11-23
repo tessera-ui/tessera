@@ -203,7 +203,13 @@ pub(crate) struct PlatformViewPlacement {
     pub(crate) unsupported_shape_clip: bool,
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux"
+))]
 #[derive(Clone, Copy)]
 pub(crate) struct PlatformViewInputBlocker {
     pub(crate) id: u64,
@@ -435,7 +441,13 @@ pub struct RenderGraph {
     data: Arc<RenderGraphData>,
     damage: Option<PxRect>,
     previous: Option<Weak<RenderGraphData>>,
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
     platform_input_blockers: Vec<PlatformViewInputBlocker>,
 }
 
@@ -494,7 +506,13 @@ impl RenderOrderPlan {
 }
 
 impl RenderGraph {
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
     pub(crate) fn with_platform_input_blockers(
         mut self,
         blockers: Vec<PlatformViewInputBlocker>,
@@ -503,7 +521,13 @@ impl RenderGraph {
         self
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
     pub(crate) fn platform_input_blockers(&self) -> &[PlatformViewInputBlocker] {
         &self.platform_input_blockers
     }
@@ -520,7 +544,13 @@ impl RenderGraph {
             }),
             damage: None,
             previous: None,
-            #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+            #[cfg(any(
+                target_os = "android",
+                target_os = "ios",
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "linux"
+            ))]
             platform_input_blockers: Vec::new(),
         }
     }
@@ -788,7 +818,13 @@ impl RenderGraphBuilder {
             }),
             damage: None,
             previous: None,
-            #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+            #[cfg(any(
+                target_os = "android",
+                target_os = "ios",
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "linux"
+            ))]
             platform_input_blockers: Vec::new(),
         }
     }

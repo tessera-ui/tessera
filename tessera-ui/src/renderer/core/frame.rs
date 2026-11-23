@@ -336,6 +336,7 @@ impl RenderCore {
         #[cfg(target_os = "windows")]
         let graph = if let Some(host) = windows_host.as_ref() {
             let mut placements = Vec::new();
+            let mut blockers = Vec::new();
             let mut overlays_after = Vec::new();
             let graph = if graph.has_platform_views() {
                 let slices = graph.platform_view_slices();
@@ -362,6 +363,7 @@ impl RenderCore {
                         self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
                     }
                     placements = slices.views;
+                    blockers.extend_from_slice(graph.platform_input_blockers());
                     overlays_after = overlays;
                     self.previous_graph = None;
                     slices.draws[0].render_graph()
@@ -369,10 +371,12 @@ impl RenderCore {
             } else {
                 graph
             };
-            if let Err(error) = host
-                .borrow_mut()
-                .apply_composition(&placements, &overlays_after)
-            {
+            if let Err(error) = host.borrow_mut().apply_composition(
+                &placements,
+                &blockers,
+                &overlays_after,
+                [self.config.width, self.config.height],
+            ) {
                 warn!(%error, "Failed to apply DirectComposition view order");
             }
             self.windows_composition_active = !placements.is_empty();
@@ -387,6 +391,7 @@ impl RenderCore {
                 .as_ref()
                 .map_or(1.0, |window| window.scale_factor());
             let mut placements = Vec::new();
+            let mut blockers = Vec::new();
             let mut overlays_after = Vec::new();
             let mut overlay_input_regions = Vec::new();
             let graph = if graph.has_platform_views() {
@@ -414,6 +419,7 @@ impl RenderCore {
                         self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
                     }
                     placements = slices.views;
+                    blockers.extend_from_slice(graph.platform_input_blockers());
                     overlays_after = overlays;
                     overlay_input_regions = overlays_after
                         .iter()
@@ -427,6 +433,7 @@ impl RenderCore {
             };
             host.borrow_mut().apply_composition(
                 &placements,
+                &blockers,
                 &overlays_after,
                 &overlay_input_regions,
                 [self.config.width, self.config.height],

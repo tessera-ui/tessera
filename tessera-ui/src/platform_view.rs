@@ -74,7 +74,9 @@ pub trait PlatformViewFactory:
 }
 
 #[cfg(target_os = "windows")]
-pub use crate::windows_platform_views::{NativeVisual, WindowsPlatformViewFactory};
+pub use crate::windows_platform_views::{
+    NativeVisual, WindowsPlatformViewFactory, WindowsViewInputEvent, WindowsViewPlacement,
+};
 
 #[cfg(target_os = "windows")]
 impl<T: crate::windows_platform_views::WindowsPlatformViewFactory + Clone> PlatformViewFactory
@@ -83,7 +85,7 @@ impl<T: crate::windows_platform_views::WindowsPlatformViewFactory + Clone> Platf
 }
 
 #[cfg(target_os = "linux")]
-/// Factory callbacks for an X11 child window hosted in Tessera.
+/// Factory callbacks for native Linux views hosted in Tessera.
 pub trait PlatformViewFactory:
     crate::linux_platform_views::LinuxPlatformViewFactory + Clone
 {
@@ -91,7 +93,8 @@ pub trait PlatformViewFactory:
 
 #[cfg(target_os = "linux")]
 pub use crate::linux_platform_views::{
-    LinuxPlatformViewFactory, WaylandChildSurface, X11ChildWindow,
+    LinuxPlatformViewFactory, LinuxViewInputEvent, WaylandChildSurface, WaylandViewPlacement,
+    X11ChildWindow,
 };
 
 #[cfg(target_os = "linux")]
