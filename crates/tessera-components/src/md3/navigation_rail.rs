@@ -664,7 +664,6 @@ struct NavigationRailItemDefinition {
 ///   notification count.
 /// - `selected` — whether this item is the active destination.
 /// - `on_click` — callback invoked after the item becomes selected.
-///
 #[tessera]
 pub fn navigation_rail_item(
     rail: NavigationRailScope,

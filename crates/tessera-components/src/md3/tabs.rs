@@ -505,7 +505,6 @@ impl TabBuilder {
 /// - `icon` — built-in Material icon for the tab.
 /// - `accessibility_label` — accessible name override. Authors must provide a
 ///   nonempty name for icon-only tabs and non-text custom titles.
-///
 #[tessera]
 pub fn tab(
     row: TabRow,

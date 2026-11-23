@@ -284,7 +284,6 @@ pub fn radio_group(
 /// - `enabled` — whether the control is interactive.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
-///
 #[tessera]
 pub fn radio_button(
     selected: bool,

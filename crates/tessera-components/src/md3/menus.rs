@@ -1169,7 +1169,6 @@ impl Default for MenuItemConfig {
 /// - `disabled_color` — optional disabled content color override
 /// - `on_click` — optional leaf activation callback; `submenu_content` takes
 ///   precedence when both are provided.
-///
 #[tessera]
 pub fn menu_item(
     menu: Option<MenuScope>,

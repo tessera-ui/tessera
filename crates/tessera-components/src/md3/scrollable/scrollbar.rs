@@ -611,7 +611,6 @@ fn handle_press(
 ///   absent.
 ///
 /// Without a viewport, wheel input passes to ancestors.
-///
 #[tessera]
 pub fn scrollbar_v(
     total: Option<Px>,
@@ -663,7 +662,6 @@ pub fn scrollbar_v(
 ///   absent.
 ///
 /// Without a viewport, wheel input passes to ancestors.
-///
 #[tessera]
 pub fn scrollbar_h(
     total: Option<Px>,

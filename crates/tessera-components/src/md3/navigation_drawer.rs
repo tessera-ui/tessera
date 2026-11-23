@@ -137,7 +137,6 @@ pub fn navigation_drawer(
 /// - `on_click` — destination activation callback.
 /// - `icon` — optional 24dp leading icon.
 /// - `badge` — optional trailing count or status.
-///
 #[tessera]
 pub fn navigation_drawer_item(
     modifier: Option<Modifier>,

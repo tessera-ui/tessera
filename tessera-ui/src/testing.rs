@@ -42,7 +42,6 @@ pub use query::{
 /// Tests start layout-only with an 800 by 600 viewport at the current density.
 /// Configure the viewport, density, frame step, and optional GPU rendering
 /// before [`UiTest::content`], then step frames and assert the results.
-///
 pub struct UiTest<'a> {
     owner: ModelScope,
     #[cfg(all(feature = "headless", not(target_family = "wasm")))]

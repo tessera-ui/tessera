@@ -481,7 +481,6 @@ where
 /// invalidates the descendants that read it.
 ///
 /// This is intended for use inside component build functions only.
-///
 pub fn provide_context<T, R>(value: T, f: impl FnOnce() -> R) -> R
 where
     T: PartialEq + 'static,

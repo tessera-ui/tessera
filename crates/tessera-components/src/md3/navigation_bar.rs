@@ -491,7 +491,6 @@ struct NavigationBarItemDefinition {
 ///   count.
 /// - `label_behavior` — whether the label is always shown or only when
 ///   selected.
-///
 #[tessera]
 pub fn navigation_bar_item(
     #[prop(into)] label: Option<String>,

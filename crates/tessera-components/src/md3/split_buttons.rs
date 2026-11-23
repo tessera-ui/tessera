@@ -389,7 +389,6 @@ impl SplitTrailingButtonBuilder {
 /// - `spacing` — optional spacing between the leading and trailing buttons.
 /// - `leading_button` — optional leading button slot.
 /// - `trailing_button` — optional trailing button slot.
-///
 #[tessera]
 pub fn split_button_layout(
     modifier: Option<Modifier>,
@@ -429,7 +428,6 @@ pub fn split_button_layout(
 /// - `interaction_state` — optional shared pointer and focus state.
 /// - `shape` — fixed shape override that suppresses automatic corner changes.
 /// - `content` — leading icon and label, sized and placed in a row.
-///
 #[tessera]
 pub fn split_leading_button(
     variant: Option<SplitButtonVariant>,
@@ -488,7 +486,6 @@ pub fn split_leading_button(
 /// - `shape` — fixed shape override that suppresses automatic corner changes.
 /// - `expanded` — controlled menu disclosure state with popup semantics.
 /// - `content` — menu icon, sized automatically for the preset.
-///
 #[tessera]
 pub fn split_trailing_button(
     variant: Option<SplitButtonVariant>,

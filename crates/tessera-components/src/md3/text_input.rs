@@ -1456,7 +1456,6 @@ fn determine_border_width(args: &TextInputProps, focused: bool) -> Dp {
 /// Presets for an already declared text input.
 impl TextInputBuilder {
     /// Plain gray-bordered preset.
-    ///
     pub fn simple(&self) -> Self {
         self.min_width(Dp(120.0))
             .background_color(Color::new(0.9, 0.9, 0.9, 1.0))
@@ -1471,7 +1470,6 @@ impl TextInputBuilder {
     }
 
     /// [`Self::simple`] preset with a blue focus border.
-    ///
     pub fn outlined(&self) -> Self {
         self.simple()
             .border_width(Dp(1.0))

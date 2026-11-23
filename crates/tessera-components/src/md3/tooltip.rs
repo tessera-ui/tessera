@@ -908,7 +908,6 @@ pub fn tooltip_provider(
 /// - `controller` — controller received from the tooltip provider content slot
 /// - `modifier` — modifiers for the trigger wrapper
 /// - `child` — the control that receives focus and normal activation
-///
 #[tessera]
 pub fn tooltip_anchor(
     controller: State<TooltipController>,

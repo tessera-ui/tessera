@@ -290,7 +290,6 @@ impl PxRect {
     }
 
     /// Returns the smallest rectangle containing both rectangles.
-    ///
     pub fn union(&self, other: &Self) -> Self {
         let x = self.x.0.min(other.x.0);
         let y = self.y.0.min(other.y.0);
@@ -313,7 +312,6 @@ impl PxRect {
     }
 
     /// Returns the overlapping rectangle, or None when edges only touch.
-    ///
     pub fn intersection(&self, other: &Self) -> Option<Self> {
         let x1 = self.x.0.max(other.x.0);
         let y1 = self.y.0.max(other.y.0);

@@ -205,7 +205,6 @@ impl RippleState {
     /// - `[x, y]` is the normalized origin of the ripple in 0.0..=1.0.
     ///
     /// Returns `None` if the animation is not active or has completed.
-    ///
     pub fn get_animation_progress(&self) -> Option<(f32, [f32; 2])> {
         self.animation()
             .map(|animation| (animation.progress, animation.center))

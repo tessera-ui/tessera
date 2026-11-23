@@ -240,7 +240,6 @@ impl SegmentedButtonDefaults {
 /// - `on_click` — optional click callback.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
-///
 #[tessera]
 pub fn segmented_button(
     selected: bool,
