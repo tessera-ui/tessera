@@ -862,6 +862,8 @@ dependencies = [
  "ratatui",
  "rustfix",
  "salsa",
+ "salsa-macro-rules",
+ "salsa-macros",
  "serde",
  "serde_json",
  "sha2 0.11.1",
