@@ -11,7 +11,7 @@ use tessera_components::{
         dialog::{DialogController, DialogRole, basic_dialog, dialog, full_screen_dialog},
         icon::icon,
         material_icons::filled,
-        menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+        menus::{MenuAnchor, MenuController, menu_anchor, menu_item},
         text::text,
         text_field::text_field,
         text_input::TextInputController,
@@ -2534,14 +2534,14 @@ fn dialog_scene_input(
                     }
                 });
             if dropdown {
-                menu_provider()
+                menu_anchor()
                     .controller(menu)
                     .anchor(MenuAnchor::new(
                         PxPosition::new(Dp::ZERO.into(), Dp::ZERO.into()),
                         PxSize::new(Dp(width * scale).into(), Dp(56.0 * scale).into()),
                     ))
                     .modifier(Modifier::new().size(Dp(width * scale), Dp(56.0 * scale)))
-                    .main_content_shared(content)
+                    .anchor_content_shared(content)
                     .menu_content(move |menu| {
                         for value in ["ui-input", "ui-option-2", "ui-option-3"] {
                             menu_item()

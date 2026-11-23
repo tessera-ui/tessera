@@ -13,7 +13,7 @@ use crate::{
     shape_def::{RoundedCorner, Shape},
 };
 
-use super::{MenuController, MenuHost, MenuPosition};
+use super::{MenuCascade, MenuController, MenuPosition};
 
 pub(super) fn resting_corners(position: MenuPosition) -> [f32; 4] {
     match position {
@@ -116,7 +116,7 @@ impl Motion for MenuShapeMotion {
 
 pub(super) struct MenuShapeHover {
     pub motion: State<MenuShapeMotion>,
-    pub host: Option<MenuHost>,
+    pub host: Option<MenuCascade>,
     pub controller: Option<State<MenuController>>,
 }
 

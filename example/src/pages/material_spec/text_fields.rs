@@ -10,7 +10,7 @@ use tessera_components::{
         icon::icon,
         icon_button::{IconButtonColorStyle, icon_button},
         material_icons::filled,
-        menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+        menus::{MenuAnchor, MenuController, menu_anchor, menu_item},
         surface::surface,
         text::text,
         text_field::{TextFieldContextMenu, TextFieldLineLimit, text_field},
@@ -1606,14 +1606,14 @@ fn field_icon_example(kind: usize, scale: f64) {
                 field_icon_input(kind, scale, controller, menu);
             });
             if kind == 5 {
-                menu_provider()
+                menu_anchor()
                     .controller(menu)
                     .anchor(MenuAnchor::new(
                         PxPosition::new(Dp::ZERO.into(), Dp::ZERO.into()),
                         PxSize::new(Dp(180.0 * scale).into(), Dp(56.0 * scale).into()),
                     ))
                     .modifier(Modifier::new().size(Dp(180.0 * scale), Dp(56.0 * scale)))
-                    .main_content_shared(content)
+                    .anchor_content_shared(content)
                     .menu_content(move |menu| {
                         menu_item()
                             .menu(menu)

@@ -21,7 +21,7 @@ use crate::{
     alignment::Alignment,
     boxed::boxed,
     md3::{
-        menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+        menus::{MenuAnchor, MenuController, menu_anchor, menu_item},
         surface::surface,
         text_field::text_field,
         text_input::TextInputController,
@@ -108,11 +108,11 @@ fn submenu_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     observed.with_mut(|handles| handles.menu = Some(menu));
     observed.with_mut(|handles| handles.actions = Some(actions));
     material_theme().child(move || {
-        menu_provider()
+        menu_anchor()
             .controller(menu)
             .anchor(MenuAnchor::at(PxPosition::from_f32_xy(30.25, 40.5)))
             .offset([Dp::ZERO; 2])
-            .main_content(|| {
+            .anchor_content(|| {
                 spacer().modifier(Modifier::new().fill_max_size());
             })
             .menu_content(move |menu| {

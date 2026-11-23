@@ -1,7 +1,10 @@
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Dp, FocusRequester, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
-    accesskit::Role, remember, tessera, testing::UiTest,
+    accesskit::Role,
+    remember, tessera,
+    testing::UiTest,
+    winit::keyboard::{ModifiersState, NamedKey},
 };
 
 use crate::{
@@ -13,7 +16,7 @@ use crate::{
     },
 };
 
-use super::{MenuController, close_for_traversal, menu_group, menu_item, menu_provider};
+use super::{MenuController, menu_anchor, menu_group, menu_item};
 
 #[derive(Clone, Copy, Default)]
 struct FixtureHandles {
@@ -21,7 +24,6 @@ struct FixtureHandles {
     enabled: Option<State<bool>>,
     explicit: Option<State<bool>>,
     other_focus: Option<FocusRequester>,
-    lazy_menu: Option<State<MenuController>>,
     lazy_targets: Option<State<Vec<FocusRequester>>>,
 }
 
@@ -36,11 +38,11 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     observed.with_mut(|handles| handles.explicit = Some(explicit_fallback));
     observed.with_mut(|handles| handles.other_focus = Some(other));
     material_theme().child(move || {
-        menu_provider()
+        menu_anchor()
             .grouped(true)
             .controller(controller)
             .focus_restorer_fallback_optional(explicit_fallback.get().then_some(other))
-            .main_content(move || {
+            .anchor_content(move || {
                 column().children(move || {
                     surface()
                         .modifier(Modifier::new().width(Dp(180.0)).height(Dp(48.0)))
@@ -119,12 +121,11 @@ fn lazy_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
             .set_scroll_position(PxPosition::from_f32_xy(0.0, -480.0));
         list
     });
-    observed.with_mut(|handles| handles.lazy_menu = Some(menu));
     observed.with_mut(|handles| handles.lazy_targets = Some(targets));
     material_theme().child(move || {
-        menu_provider()
+        menu_anchor()
             .controller(menu)
-            .main_content(move || {
+            .anchor_content(move || {
                 lazy_column()
                     .controller(list)
                     .estimated_item_size(Dp(48.0))
@@ -175,7 +176,9 @@ fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
     );
     click(&mut renderer, "Action 10");
     assert_focus(&renderer, "Choose action", "opened from a virtualized item");
-    close_for_traversal(observed.get().lazy_menu.expect("menu"), &None, true);
+    renderer.set_key_modifiers(ModifiersState::SHIFT);
+    renderer.press_key(NamedKey::Tab);
+    renderer.set_key_modifiers(ModifiersState::empty());
     renderer.frames(12);
     assert_focus(
         &renderer,
@@ -219,12 +222,10 @@ fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
 }
 
 #[test]
-#[ignore = "requires a native GPU adapter"]
-fn gpu_menu_restores_trigger_without_stealing_external_focus() {
+fn menu_restores_trigger_without_stealing_external_focus() {
     let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(400, 320)
-        .rendered(crate::TesseraComponents)
         .content(|| fixture(observed.clone()));
     renderer.frames(3);
     let controller = observed.get().controller.expect("controller");
@@ -253,7 +254,13 @@ fn gpu_menu_restores_trigger_without_stealing_external_focus() {
         if !explicit {
             for (reverse, expected) in [(false, "Next action"), (true, "Unrelated action")] {
                 click(&mut renderer, "Menu trigger");
-                close_for_traversal(controller, &None, reverse);
+                renderer.set_key_modifiers(if reverse {
+                    ModifiersState::SHIFT
+                } else {
+                    ModifiersState::empty()
+                });
+                renderer.press_key(NamedKey::Tab);
+                renderer.set_key_modifiers(ModifiersState::empty());
                 renderer.frames(4);
                 assert!(!controller.with(MenuController::is_open));
                 assert_focus(&renderer, expected, "Tab exit");

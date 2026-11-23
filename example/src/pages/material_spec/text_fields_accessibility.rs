@@ -5,7 +5,7 @@ use tessera_components::{
     md3::{
         icon_button::{IconButtonColorStyle, icon_button},
         material_icons::filled,
-        menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+        menus::{MenuAnchor, MenuController, menu_anchor, menu_item},
         text::text,
         text_field::{TextFieldContextMenu, text_field},
         text_input::TextInputController,
@@ -357,14 +357,14 @@ fn dropdown_field(scale: f64) {
                 .size(Dp(327.0 * scale), Dp(56.0 * scale)),
         )
         .children(move || {
-            menu_provider()
+            menu_anchor()
                 .controller(menu)
                 .anchor(MenuAnchor::new(
                     PxPosition::new(Dp::ZERO.into(), Dp::ZERO.into()),
                     PxSize::new(Dp(327.0 * scale).into(), Dp(56.0 * scale).into()),
                 ))
                 .modifier(Modifier::new().size(Dp(327.0 * scale), Dp(56.0 * scale)))
-                .main_content(move || {
+                .anchor_content(move || {
                     text_field()
                         .outlined()
                         .controller(controller)

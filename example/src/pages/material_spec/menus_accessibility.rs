@@ -6,8 +6,8 @@ use tessera_components::{
         icon::icon,
         material_icons::filled,
         menus::{
-            MenuAnchor, MenuColorStyle, MenuController, MenuItemSelectionMode, menu_item,
-            menu_provider,
+            MenuAnchor, MenuColorStyle, MenuController, MenuItemSelectionMode, menu_anchor,
+            menu_item,
         },
         surface::surface,
         text::text,
@@ -63,7 +63,7 @@ pub(super) fn state_selection() {
                 ),
         )
         .children(move || {
-            menu_provider()
+            menu_anchor()
                 .controller(controller)
                 .modifier(Modifier::new().width(Dp(232.0)))
                 .anchor(MenuAnchor::new(
@@ -73,7 +73,7 @@ pub(super) fn state_selection() {
                 .offset([Dp::ZERO, Dp::ZERO])
                 .max_height(Px::from(Dp(148.0)))
                 .container_color(scheme.surface_container_low)
-                .main_content(move || {
+                .anchor_content(move || {
                     boxed()
                         .modifier(Modifier::new().size(Dp(232.0), Dp(204.0)))
                         .children(move || {

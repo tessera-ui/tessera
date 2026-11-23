@@ -10,8 +10,8 @@ use tessera_components::{
         icon::icon,
         material_icons::filled,
         menus::{
-            MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition, menu_group,
-            menu_item, menu_provider,
+            MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition, menu_anchor,
+            menu_group, menu_item,
         },
         split_buttons::{SplitButtonDefaults, SplitButtonSize},
         text::text,
@@ -914,11 +914,11 @@ fn launch() {
     boxed()
         .modifier(Modifier::new().fill_max_width().height(Dp(280.0)))
         .children(move || {
-            menu_provider()
+            menu_anchor()
                 .controller(menu)
                 .grouped(true)
                 .window_anchor(anchor)
-                .main_content(move || {
+                .anchor_content(move || {
                     column().children(move || {
                         button()
                             .outlined()

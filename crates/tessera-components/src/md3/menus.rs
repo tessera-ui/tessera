@@ -7,15 +7,16 @@ use std::time::Duration;
 
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, CursorEventContent, Dp, DrawModifierContent,
-    DrawModifierContext, DrawModifierNode, FocusDirection, FocusRequester, FocusScopeNode,
-    FocusTraversalPolicy, KeyboardInput, KeyboardInputModifierNode, LayoutResult, MOUSE_POINTER_ID,
-    MeasurementError, Modifier, ParentConstraint, PointerInput, PointerInputModifierNode, Px,
+    AxisConstraint, Callback, Color, CursorEventContent, Dp, DrawModifierContent,
+    DrawModifierContext, DrawModifierNode, FloatRect, FocusDirection, FocusRequester,
+    FocusScopeNode, FocusTraversalPolicy, KeyboardInput, KeyboardInputModifierNode,
+    LayoutCoordinates, MOUSE_POINTER_ID, Modifier, PointerInput, PointerInputModifierNode, Px,
     PxPosition, PxSize, RenderSlot, RenderSlotWith, State,
     accesskit::{HasPopup, Role, Toggled},
     focus, launch, launch_once,
-    layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, Stack, layout},
+    layout::{Stack, group, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
+    popup::{PopupPositionInput, PopupPositionPolicy, WindowOrigin, popup},
     provide_context, remember,
     render::{ClipRegion, ClipShape},
     tessera, use_context, winit, with_frame_time,
@@ -24,6 +25,7 @@ use tessera_ui::{
 use crate::{
     alignment::CrossAxisAlignment,
     animation::{Delay, animate_to},
+    boxed::boxed,
     column::column,
     md3::{
         checkmark::checkmark,
@@ -35,21 +37,20 @@ use crate::{
         text::text,
         theme::{MaterialAlpha, MaterialTheme},
     },
-    modifier::{with_keyboard_input, with_pointer_input},
+    modifier::with_keyboard_input,
     painter::Painter,
-    pos_misc::is_position_in_rect,
     row::row,
     shape_def::Shape,
     spacer::spacer,
 };
 
-use host::{MenuHost, MenuPopupLease, MenuPopupRequest, menu_host};
+use cascade::{MenuBranch, MenuBranchLease, MenuCascade};
 use motion::{MenuShapeHover, MenuShapeMotion};
 
 pub use appearance::{MenuColorStyle, MenuDefaults, MenuPosition, menu_group};
 
 mod appearance;
-mod host;
+mod cascade;
 mod motion;
 mod typeahead;
 
@@ -90,7 +91,7 @@ fn default_scrim_color() -> Color {
 /// Describes the anchor rectangle used to position a menu.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MenuAnchor {
-    /// Top-left corner of the anchor rectangle, relative to the menu container.
+    /// Top-left corner of the anchor rectangle, relative to the anchor content.
     pub origin: PxPosition,
     /// Size of the anchor rectangle.
     pub size: PxSize,
@@ -139,7 +140,7 @@ impl MenuController {
     /// Opens the menu.
     ///
     /// If an anchor was previously set via [`open_at`](Self::open_at), it is
-    /// reused. Otherwise, the menu defaults to anchoring to the provider's
+    /// reused. Otherwise, the menu defaults to anchoring to its trigger
     /// content.
     pub fn open(&mut self) {
         self.is_open = true;
@@ -148,7 +149,7 @@ impl MenuController {
 
     /// Opens the menu at the provided anchor rectangle.
     ///
-    /// An explicit `anchor` prop on the provider takes precedence over this
+    /// An explicit `anchor` prop on the menu takes precedence over this
     /// saved rectangle.
     pub fn open_at(&mut self, anchor: MenuAnchor) {
         self.anchor = Some(anchor);
@@ -171,10 +172,6 @@ impl MenuController {
     /// Returns whether the menu is currently open.
     pub fn is_open(&self) -> bool {
         self.is_open
-    }
-
-    fn snapshot(&self) -> (bool, Option<MenuAnchor>) {
-        (self.is_open, self.anchor)
     }
 }
 
@@ -199,49 +196,36 @@ pub enum MenuPlacement {
 /// The owner of actions declared in one open menu.
 #[derive(Clone, Copy, PartialEq)]
 pub struct MenuScope {
-    host: MenuHost,
+    host: MenuCascade,
     controller: State<MenuController>,
     typeahead: typeahead::MenuTypeahead,
 }
 
 #[derive(Clone, PartialEq)]
-struct MenuProviderConfig {
-    pub host: Option<MenuHost>,
-    pub anchor: Option<MenuAnchor>,
-    pub window_anchor: Option<State<tessera_ui::LayoutCoordinates>>,
-    pub bounds: Option<MenuBoundsHandle>,
-    pub focus_scope: Option<FocusScopeNode>,
-    pub parent_request: Option<State<MenuPopupRequest>>,
-    pub grouped: bool,
-    pub color_style: MenuColorStyle,
-    pub placement: MenuPlacement,
-    pub offset: [Dp; 2],
-    pub modifier: Modifier,
-    pub max_height: Option<Px>,
-    pub shape: Shape,
-    pub animate_shape: bool,
-    pub elevation: Dp,
-    pub container_color: Color,
-    pub scrim_color: Color,
-    pub close_on_background: bool,
-    pub close_on_escape: bool,
-    pub close_on_focus_loss: bool,
-    pub on_dismiss: Option<Callback>,
-    pub controller: Option<State<MenuController>>,
-    pub focus_restorer_fallback: Option<FocusRequester>,
-    pub main_content: Option<RenderSlot>,
-    pub menu_content: Option<RenderSlotWith<MenuScope>>,
+struct MenuConfig {
+    anchor: Option<MenuAnchor>,
+    window_anchor: Option<State<LayoutCoordinates>>,
+    grouped: bool,
+    color_style: MenuColorStyle,
+    placement: MenuPlacement,
+    offset: [Dp; 2],
+    modifier: Modifier,
+    max_height: Option<Px>,
+    shape: Shape,
+    animate_shape: bool,
+    elevation: Dp,
+    container_color: Color,
+    close_on_background: bool,
+    close_on_escape: bool,
+    close_on_focus_loss: bool,
+    on_dismiss: Option<Callback>,
 }
 
-impl Default for MenuProviderConfig {
+impl Default for MenuConfig {
     fn default() -> Self {
         Self {
-            host: None,
             anchor: None,
             window_anchor: None,
-            bounds: None,
-            focus_scope: None,
-            parent_request: None,
             grouped: false,
             color_style: MenuColorStyle::Standard,
             placement: MenuPlacement::default(),
@@ -252,74 +236,44 @@ impl Default for MenuProviderConfig {
             animate_shape: true,
             elevation: Dp(3.0),
             container_color: default_menu_color(),
-            scrim_color: default_scrim_color(),
             close_on_background: true,
             close_on_escape: true,
             close_on_focus_loss: false,
             on_dismiss: None,
-            controller: None,
-            focus_restorer_fallback: None,
-            main_content: None,
-            menu_content: None,
-        }
-    }
-}
-
-#[derive(Clone, PartialEq, Copy)]
-struct MenuBounds {
-    origin: PxPosition,
-    size: ComputedData,
-}
-
-#[derive(Clone, Copy)]
-struct MenuBoundsHandle(State<Option<MenuBounds>>);
-
-impl PartialEq for MenuBoundsHandle {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Default for MenuBounds {
-    fn default() -> Self {
-        Self {
-            origin: PxPosition::new(Px::ZERO, Px::ZERO),
-            size: ComputedData::ZERO,
         }
     }
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum MenuAnchorSource {
-    Local(Option<tessera_ui::FloatRect>),
-    Window {
-        anchor: State<tessera_ui::LayoutCoordinates>,
-        origin: State<tessera_ui::LayoutCoordinates>,
-    },
-}
-
-impl MenuAnchorSource {
-    fn resolve(self, main: ComputedData) -> tessera_ui::FloatRect {
-        match self {
-            Self::Local(anchor) => anchor.unwrap_or_else(|| {
-                tessera_ui::FloatRect::from_position_size(PxPosition::ZERO, main.into())
-            }),
-            Self::Window { anchor, origin } => origin
-                .get()
-                .local_to_window
-                .inverse_rect(anchor.get().window_bounds()),
-        }
-    }
-}
-
-#[derive(Clone)]
-struct MenuLayout {
-    is_open: bool,
-    has_background: bool,
+struct MenuPopupPosition {
     placement: MenuPlacement,
     offset: [Dp; 2],
-    anchor: MenuAnchorSource,
-    bounds: State<Option<MenuBounds>>,
+    anchor: Option<MenuAnchor>,
+    window_anchor: Option<LayoutCoordinates>,
+}
+
+impl PopupPositionPolicy for MenuPopupPosition {
+    fn position(&self, input: &PopupPositionInput) -> PxPosition {
+        let anchor = self
+            .window_anchor
+            .map(|anchor| anchor.window_bounds())
+            .or_else(|| {
+                self.anchor.map(|anchor| {
+                    input
+                        .anchor
+                        .local_to_window
+                        .map_rect(FloatRect::from_position_size(anchor.origin, anchor.size))
+                })
+            })
+            .unwrap_or_else(|| input.anchor.window_bounds());
+        resolve_menu_position_in_bounds(
+            anchor,
+            self.placement,
+            input.popup_size,
+            input.bounds,
+            self.offset,
+        )
+    }
 }
 
 struct MenuScrollClip {
@@ -352,104 +306,11 @@ impl DrawModifierNode for MenuScrollClip {
     }
 }
 
-impl PartialEq for MenuLayout {
-    fn eq(&self, other: &Self) -> bool {
-        self.is_open == other.is_open
-            && self.has_background == other.has_background
-            && self.placement == other.placement
-            && self.offset == other.offset
-            && self.anchor == other.anchor
-            && self.bounds == other.bounds
-    }
-}
-
-impl MenuLayout {
-    fn place<T: LayoutPlacementTarget>(
-        &self,
-        children: &[T],
-        sizes: &[ComputedData],
-        fallback: ComputedData,
-    ) -> LayoutResult {
-        let main = sizes[0];
-        let mut result = LayoutResult::new(main);
-        result.place_child(children[0], PxPosition::ZERO);
-        if !self.is_open {
-            self.bounds.set_if_changed(None);
-            return result;
-        }
-        let (menu_index, available) = if self.has_background {
-            result.place_child(children[1], PxPosition::ZERO);
-            let background = sizes[1];
-            (
-                2,
-                if background.width > Px::ZERO && background.height > Px::ZERO {
-                    background
-                } else {
-                    fallback
-                },
-            )
-        } else {
-            (1, fallback)
-        };
-        let menu_size = sizes[menu_index];
-        let position = resolve_menu_position(
-            self.anchor.resolve(main),
-            self.placement,
-            menu_size,
-            available,
-            self.offset,
-        );
-        result.place_child(children[menu_index], position);
-        self.bounds.set_if_changed(Some(MenuBounds {
-            origin: position,
-            size: menu_size,
-        }));
-        result
-    }
-}
-
-impl tessera_ui::LayoutPolicy for MenuLayout {
-    fn measure_eq(&self, other: &Self) -> bool {
-        self.is_open == other.is_open && self.has_background == other.has_background
-    }
-
-    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let children = input.children();
-        let constraint = input.parent_constraint().without_min();
-        let sizes = children
-            .iter()
-            .map(|child| child.measure(input, &constraint).map(|child| child.size()))
-            .collect::<Result<Vec<_>, _>>()?;
-        let fallback = extract_available_size(input.parent_constraint());
-        Ok(input.placement(|| self.place(&children, &sizes, fallback)))
-    }
-
-    fn place(
-        &self,
-        scope: &PlacementScope<'_>,
-        _inner: &PlacementResult,
-    ) -> Option<PlacementResult> {
-        let children = scope.children();
-        let sizes = children
-            .iter()
-            .map(|child| child.size())
-            .collect::<Vec<_>>();
-        Some(
-            self.place(
-                &children,
-                &sizes,
-                extract_available_size(scope.parent_constraint()),
-            )
-            .into_placement_result(),
-        )
-    }
-}
-
-fn resolve_menu_position(
+fn resolve_menu_position_in_bounds(
     anchor: tessera_ui::FloatRect,
     placement: MenuPlacement,
-    menu_size: ComputedData,
-    available: ComputedData,
+    menu_size: PxSize,
+    bounds: tessera_ui::FloatRect,
     offset: [Dp; 2],
 ) -> PxPosition {
     let anchor_x = anchor.x;
@@ -478,61 +339,49 @@ fn resolve_menu_position(
         MenuPlacement::LeftStart => (left, right, start_y, end_y),
     };
     PxPosition::from_f32_xy(
-        fit_menu_axis(x, alternate_x, width, available.width.to_f32()),
-        fit_menu_axis(y, alternate_y, height, available.height.to_f32()),
+        fit_menu_axis(x, alternate_x, width, bounds.x, bounds.width),
+        fit_menu_axis(y, alternate_y, height, bounds.y, bounds.height),
     )
 }
 
-fn fit_menu_axis(preferred: f32, alternate: f32, extent: f32, available: f32) -> f32 {
-    let max = (available - extent).max(0.0);
-    if preferred >= 0.0 && preferred <= max {
+fn fit_menu_axis(preferred: f32, alternate: f32, extent: f32, origin: f32, available: f32) -> f32 {
+    let max = (origin + available - extent).max(origin);
+    if preferred >= origin && preferred <= max {
         preferred
-    } else if alternate >= 0.0 && alternate <= max {
+    } else if alternate >= origin && alternate <= max {
         alternate
     } else {
-        preferred.clamp(0.0, max)
+        preferred.clamp(origin, max)
     }
 }
 
-fn extract_available_size(constraint: ParentConstraint<'_>) -> ComputedData {
-    let width = constraint.width().resolve_max().unwrap_or(Px::MAX);
-    let height = constraint.height().resolve_max().unwrap_or(Px::MAX);
-
-    ComputedData { width, height }
-}
-
-fn is_click_outside_menu(cursor_position: Option<PxPosition>, bounds: Option<MenuBounds>) -> bool {
-    let Some(bounds) = bounds else {
-        return false;
-    };
-
-    cursor_position
-        .map(|pos| !is_position_in_rect(pos, bounds.origin, bounds.size.width, bounds.size.height))
-        .unwrap_or(false)
-}
-
-fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Callback>) {
+fn apply_close_action(controller: State<MenuController>, on_dismiss: Option<Callback>) {
     if let Some(callback) = on_dismiss {
         callback.call();
     }
-    controller.with_mut(|c| c.close());
+    controller.with_mut(MenuController::close);
 }
 
 fn close_for_traversal(
     controller: State<MenuController>,
-    on_dismiss: &Option<Callback>,
+    on_dismiss: Option<Callback>,
     reverse: bool,
 ) {
-    apply_close_action(controller, on_dismiss);
+    if let Some(callback) = on_dismiss {
+        callback.call();
+    }
     controller.with_mut(|controller| {
+        controller.close();
         controller.exit_direction = Some(if reverse {
             FocusDirection::Previous
         } else {
             FocusDirection::Next
         });
     });
+    focus::defer_keyboard_until_layout();
 }
 
+#[derive(Clone, Copy)]
 struct MenuKeyboardBoundary {
     controller: State<MenuController>,
     rendered_open: bool,
@@ -547,30 +396,28 @@ impl MenuKeyboardBoundary {
 }
 
 impl KeyboardInputModifierNode for MenuKeyboardBoundary {
-    fn on_keyboard_input(&self, _input: KeyboardInput<'_>) {
+    fn on_keyboard_input(&self, _: KeyboardInput<'_>) {
         self.check();
     }
 }
 
 impl PointerInputModifierNode for MenuKeyboardBoundary {
-    fn on_pointer_input(&self, _input: PointerInput<'_>) {
+    fn on_pointer_input(&self, _: PointerInput<'_>) {
         self.check();
     }
 }
 
-/// # menu_provider
+/// # menu_anchor
 ///
-/// Provides a Material Design 3 menu overlay anchored to a rectangle, with
-/// optional dismissal when focus leaves the menu.
+/// Shows a Material Design 3 menu above its anchor content.
 ///
 /// ## Usage
 ///
-/// Wrap page content and show contextual or overflow actions aligned to a
-/// trigger element.
+/// Wrap a trigger and its adjacent content with contextual or overflow actions.
 ///
 /// ## Parameters
 ///
-/// - `anchor` — current anchor relative to the provider; takes precedence over
+/// - `anchor` — current anchor relative to the trigger; takes precedence over
 ///   the controller's saved anchor and can follow layout changes
 /// - `window_anchor` — observed trigger coordinates, including ancestor transforms;
 ///   takes precedence over `anchor`
@@ -586,54 +433,53 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 /// - `elevation` — menu elevation level
 /// - `container_color` — background color of the menu panel
 /// - `scrim_color` — background color behind the menu
-/// - `close_on_background` — whether outside clicks dismiss the menu
+/// - `close_on_background` — whether presses outside the menu chain dismiss it
 /// - `close_on_escape` — whether Escape dismisses the menu
 /// - `close_on_focus_loss` — whether focus leaving the menu dismisses it
 /// - `on_dismiss` — optional callback before dismissal
 /// - `controller` — optional external controller for open state and anchor
 /// - `focus_restorer_fallback` — optional fallback focus target on dismiss
-/// - `main_content` — optional content rendered behind the menu
+/// - `anchor_content` — trigger content that anchors the menu
 /// - `menu_content` — optional menu content slot
 ///
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use tessera_components::md3::{
-///     button::button,
-///     menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
+///     menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_anchor},
 ///     text::text,
-///     theme::material_theme,
 /// };
-/// use tessera_ui::{Dp, remember, tessera};
+/// use tessera_ui::{Dp, remember};
+/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 ///
-/// #[tessera]
-/// fn file_menu() {
-///     let menu = remember(MenuController::new);
-///     let selection = remember(|| String::from("Choose a file action"));
-///     material_theme().child(move || {
-///         menu_provider()
-///             .anchor(MenuAnchor::from_dp((Dp(16.0), Dp(16.0)), (Dp(120.0), Dp(48.0))))
-///             .placement(MenuPlacement::BelowStart)
-///             .controller(menu)
-///             .main_content(move || {
-///                 button()
-///                     .on_click(move || menu.with_mut(MenuController::open))
-///                     .child(move || text(selection.get()));
-///             })
-///             .menu_content(move |scope| {
-///                 menu_item()
-///                     .menu(scope)
-///                     .label("Open")
-///                     .on_click(move || {
-///                         selection.set(String::from("Opened"));
-///                         menu.with_mut(MenuController::close);
-///                     });
-///             });
+/// let controller = remember(MenuController::new);
+/// controller.with_mut(MenuController::open);
+/// assert!(controller.with(MenuController::is_open));
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(move || {
+/// menu_anchor()
+///     .anchor(MenuAnchor::from_dp(
+///         (Dp(16.0), Dp(16.0)),
+///         (Dp(80.0), Dp(40.0)),
+///     ))
+///     .placement(MenuPlacement::BelowStart)
+///     .controller(controller)
+///     .anchor_content(|| {
+///         text("Actions");
+///     })
+///     .menu_content(|menu| {
+///         menu_item().menu(menu).label("Edit").on_click(|| {});
 ///     });
-/// }
+/// # });
+/// # }
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
-pub fn menu_provider(
+pub fn menu_anchor(
     anchor: Option<MenuAnchor>,
     window_anchor: Option<State<tessera_ui::LayoutCoordinates>>,
     grouped: Option<bool>,
@@ -652,7 +498,7 @@ pub fn menu_provider(
     on_dismiss: Option<Callback>,
     controller: Option<State<MenuController>>,
     focus_restorer_fallback: Option<FocusRequester>,
-    main_content: Option<RenderSlot>,
+    anchor_content: Option<RenderSlot>,
     menu_content: Option<RenderSlotWith<MenuScope>>,
 ) {
     let grouped = grouped.unwrap_or(false);
@@ -662,13 +508,9 @@ pub fn menu_provider(
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let mut provider_args = MenuProviderConfig {
-        host: None,
+    let config = MenuConfig {
         anchor,
         window_anchor,
-        bounds: None,
-        focus_scope: None,
-        parent_request: None,
         grouped,
         color_style,
         placement: placement.unwrap_or_default(),
@@ -685,104 +527,66 @@ pub fn menu_provider(
                 color_style.container(&scheme)
             }
         }),
-        scrim_color: scrim_color.unwrap_or_else(default_scrim_color),
         close_on_background: close_on_background.unwrap_or(true),
         close_on_escape: close_on_escape.unwrap_or(true),
         close_on_focus_loss: close_on_focus_loss.unwrap_or(false),
         on_dismiss,
-        controller,
-        focus_restorer_fallback,
-        main_content,
-        menu_content,
     };
-    let controller = if let Some(controller) = provider_args.controller {
+    let controller = if let Some(controller) = controller {
         controller
     } else {
         remember(MenuController::new)
     };
-
-    provider_args.controller = Some(controller);
-    menu_host().provider(provider_args);
-}
-
-#[tessera]
-fn menu_main_slot(focus_scope: FocusScopeNode, content: RenderSlot) {
-    layout(Stack)
-        .modifier(Modifier::new().focus_scope(Some(focus_scope)))
-        .child(content);
-}
-
-#[tessera]
-fn menu_provider_content(provider: Option<MenuProviderConfig>) {
-    let provider_args = provider.unwrap_or_default();
-    let controller = provider_args.controller.expect("menu controller");
-    let host = provider_args.host.expect("menu host");
-
-    let main_content = provider_args.main_content.unwrap_or_else(RenderSlot::empty);
-    let menu_content = if let Some(content) = provider_args.menu_content {
-        content
-    } else {
-        RenderSlotWith::new(|_| {})
+    let host = MenuCascade {
+        root: controller,
+        entries: remember(Vec::new),
+        root_scope: remember(FocusScopeNode::new).get(),
+        restore_parent: remember(|| None),
+        bounds: remember(|| None),
+        on_dismiss,
+        close_on_escape: config.close_on_escape,
     };
-    let menu_open_state = remember(|| false);
-    let main_focus_scope = remember(FocusScopeNode::new).get();
-    let internal_focus_scope = remember(FocusScopeNode::new).get();
-    let menu_focus_scope = provider_args.focus_scope.unwrap_or(internal_focus_scope);
-    let pending_focus_restore = remember(|| None::<Option<FocusRequester>>);
-
-    let (is_open, anchor) = controller.with(|c| c.snapshot());
-    let anchor =
-        if let Some(anchor) = provider_args.window_anchor {
-            MenuAnchorSource::Window {
-                anchor,
-                origin: host.origin,
-            }
-        } else {
-            MenuAnchorSource::Local(provider_args.anchor.or(anchor).map(|anchor| {
-                tessera_ui::FloatRect::from_position_size(anchor.origin, anchor.size)
-            }))
-        };
-    let mut just_opened = false;
-    let mut just_closed = false;
-    menu_open_state.with_mut(|was_open| {
-        just_opened = !*was_open && is_open;
-        just_closed = *was_open && !is_open;
-        *was_open = is_open;
-    });
-    if just_opened || just_closed {
+    let dismiss_requested = remember(|| false);
+    if dismiss_requested.get() {
+        dismiss_requested.set(false);
+        if controller.with(MenuController::is_open) {
+            apply_close_action(controller, on_dismiss);
+        }
+    }
+    let is_open = controller.with(MenuController::is_open);
+    let was_open = remember(|| false);
+    let anchor_scope = remember(FocusScopeNode::new).get();
+    let saved_focus = remember(|| None::<focus::FocusRestorationTarget>);
+    let pending_restore = remember(|| false);
+    if was_open.get() != is_open {
+        was_open.set(is_open);
         focus::defer_keyboard_until_layout();
+        if is_open {
+            saved_focus.set(focus::save_focus());
+        } else {
+            pending_restore.set(host.root_scope.has_focus());
+            host.restore_parent.set_if_changed(None);
+        }
     }
-    let root_restore = just_closed
-        && provider_args.parent_request.is_none()
-        && (host.take_root_restore() || host.popup_has_focus());
-    let can_restore =
-        provider_args.parent_request.is_none() || host.root.with(MenuController::is_open);
-    if just_closed && can_restore && (menu_focus_scope.has_focus() || root_restore) {
-        pending_focus_restore.set(Some(provider_args.focus_restorer_fallback));
-    }
-    let internal_bounds = remember(|| None);
-    let bounds = provider_args
-        .bounds
-        .map(|bounds| bounds.0)
-        .unwrap_or(internal_bounds);
 
-    // Parent pointer handler: block propagation and close on background click.
-    let on_dismiss = provider_args.on_dismiss;
-    let close_on_escape = provider_args.close_on_escape;
-    let close_on_background = provider_args.close_on_background;
-    let parent_request = provider_args.parent_request;
-    let mut modifier = Modifier::new();
-    if pending_focus_restore.get().is_some() {
-        // Restore against the rebuilt tree so a newly disabled trigger cannot
-        // leave a request waiting to steal focus when it is enabled again.
+    let boundary = MenuKeyboardBoundary {
+        controller,
+        rendered_open: is_open,
+    };
+    let mut modifier = Modifier::new()
+        .push_keyboard_input(boundary)
+        .push_pointer_input(boundary);
+    if pending_restore.get() || host.restore_parent.get().is_some() {
         modifier = modifier.on_globally_positioned(move |_| {
-            if let Some(fallback) = pending_focus_restore.with_mut(Option::take)
-                && !controller.with(MenuController::is_open)
-            {
-                if let Some(fallback) = fallback {
+            if controller.with(MenuController::is_open) {
+                if let Some(scope) = host.restore_parent.with_mut(Option::take) {
+                    scope.request_focus();
+                }
+            } else if pending_restore.with_mut(std::mem::take) {
+                if let Some(fallback) = focus_restorer_fallback {
                     fallback.request_focus();
-                } else {
-                    main_focus_scope.restore_focus();
+                } else if !saved_focus.get().is_some_and(|target| target.restore()) {
+                    anchor_scope.restore_focus();
                 }
                 if let Some(direction) = controller.with_mut(|menu| menu.exit_direction.take()) {
                     focus::request_move_focus(direction);
@@ -790,89 +594,101 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
             }
         });
     }
-    if is_open && parent_request.is_none() {
-        modifier = with_pointer_input(modifier, move |mut input| {
-            let cursor_position = input.cursor_position_rel;
-            let menu_bounds = bounds.get();
-            let should_close_click = close_on_background
-                && input.has_unconsumed_release()
-                && is_click_outside_menu(cursor_position, menu_bounds);
-
-            input.block_all();
-
-            if should_close_click {
-                apply_close_action(controller, &on_dismiss);
-            }
-        });
-    }
-
-    if is_open && close_on_escape {
-        let on_dismiss = provider_args.on_dismiss;
-        modifier = with_keyboard_input(modifier, move |mut input| {
-            let should_close_escape = input.keyboard_events.iter().any(|event| {
-                event.state == winit::event::ElementState::Pressed
-                    && matches!(
-                        event.physical_key,
-                        winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape)
-                    )
-            });
-            if should_close_escape {
-                apply_close_action(controller, &on_dismiss);
-                input.block_keyboard();
-            }
-        });
-    }
-
-    if parent_request.is_none() {
-        modifier = modifier.push_pointer_input(MenuKeyboardBoundary {
-            controller,
-            rendered_open: is_open,
-        });
-    }
-    modifier = modifier.push_keyboard_input(MenuKeyboardBoundary {
-        controller,
-        rendered_open: is_open,
-    });
-    tessera_ui::layout::layout(MenuLayout {
-        is_open,
-        has_background: parent_request.is_none(),
-        placement: provider_args.placement,
-        offset: provider_args.offset,
-        anchor,
-        bounds,
-    })
-    .modifier(modifier)
-    .child(move || {
-        menu_main_slot(main_focus_scope, main_content);
+    let anchor_content = anchor_content.unwrap_or_else(RenderSlot::empty);
+    let menu_content = if let Some(menu_content) = menu_content {
+        menu_content
+    } else {
+        RenderSlotWith::new(|_| {})
+    };
+    boxed().modifier(modifier).children(move || {
+        menu_trigger(anchor_scope).content_shared(anchor_content);
         if is_open {
-            if parent_request.is_none() {
-                surface()
-                    .style(SurfaceStyle::Filled {
-                        color: provider_args.scrim_color,
-                    })
-                    .modifier(with_pointer_input(
-                        Modifier::new().fill_max_size(),
-                        move |mut input| {
-                            let should_close = close_on_background
-                                && input.has_unconsumed_release()
-                                && is_click_outside_menu(input.cursor_position_rel, bounds.get());
-                            input.block_all();
-                            if should_close {
-                                apply_close_action(controller, &on_dismiss);
-                            }
-                        },
-                    ))
-                    .child(|| {});
-            }
-
-            menu_panel()
-                .provider(provider_args.clone())
-                .controller(controller)
-                .focus_scope(menu_focus_scope)
-                .menu_content_shared(menu_content)
-                .just_opened(just_opened);
+            menu_backdrop().color_optional(scrim_color);
+            menu_popup_layer(
+                config.clone(),
+                host,
+                controller,
+                host.root_scope,
+                host.bounds,
+                menu_content,
+                dismiss_requested,
+                false,
+            );
         }
     });
+}
+
+#[tessera]
+fn menu_trigger(scope: FocusScopeNode, content: Option<RenderSlot>) {
+    group()
+        .modifier(Modifier::new().focus_scope(Some(scope)))
+        .child(content.unwrap_or_else(RenderSlot::empty));
+}
+
+#[tessera]
+fn menu_backdrop(color: Option<Color>) {
+    popup(WindowOrigin).child(move || {
+        surface()
+            .style(SurfaceStyle::Filled {
+                color: color.unwrap_or_else(default_scrim_color),
+            })
+            .modifier(Modifier::new().fill_max_size())
+            .block_input(true)
+            .child(|| {});
+    });
+}
+
+#[tessera]
+fn menu_popup_layer(
+    config: MenuConfig,
+    host: MenuCascade,
+    controller: State<MenuController>,
+    focus_scope: FocusScopeNode,
+    bounds: State<Option<FloatRect>>,
+    content: RenderSlotWith<MenuScope>,
+    dismiss_requested: State<bool>,
+    is_submenu: bool,
+) {
+    let position = MenuPopupPosition {
+        placement: config.placement,
+        offset: config.offset,
+        anchor: config
+            .anchor
+            .or_else(|| controller.with(|menu| menu.anchor)),
+        window_anchor: config.window_anchor.map(|anchor| anchor.get()),
+    };
+    let initial_focus = remember(|| true);
+    let mut modifier = Modifier::new()
+        .on_layout_coordinates(move |coordinates: LayoutCoordinates| {
+            bounds.set_if_changed(Some(coordinates.window_bounds()));
+        })
+        .push_pointer_preview_input(cascade::MenuHierarchyPointer(host));
+    if initial_focus.get() {
+        modifier = modifier.on_globally_positioned(move |_| {
+            if initial_focus.with_mut(std::mem::take) && controller.with(MenuController::is_open) {
+                focus_scope.request_focus();
+            }
+        });
+    }
+    popup(position)
+        .modifier(modifier)
+        .dismiss_on_outside_press(!is_submenu && config.close_on_background)
+        .dismiss_on_escape(config.close_on_escape)
+        // Dismissal can run while the layout-only runtime is borrowed.
+        .on_dismiss_request(move || {
+            dismiss_requested.set_if_changed(true);
+        })
+        .child(move || {
+            menu_panel(
+                config.clone(),
+                host,
+                controller,
+                focus_scope,
+                content,
+                dismiss_requested,
+                is_submenu,
+            );
+        });
 }
 
 fn closes_submenu(
@@ -895,26 +711,21 @@ fn closes_submenu(
 
 #[tessera]
 fn menu_panel(
-    provider: Option<MenuProviderConfig>,
-    controller: Option<State<MenuController>>,
-    focus_scope: Option<FocusScopeNode>,
-    menu_content: Option<RenderSlotWith<MenuScope>>,
-    just_opened: Option<bool>,
+    provider: MenuConfig,
+    host: MenuCascade,
+    controller: State<MenuController>,
+    focus_scope: FocusScopeNode,
+    menu_content: RenderSlotWith<MenuScope>,
+    dismiss_requested: State<bool>,
+    is_submenu: bool,
 ) {
-    let provider = provider.unwrap_or_default();
-    let just_opened = just_opened.unwrap_or(false);
-    let controller = controller.expect("menu_panel requires controller");
-    let menu_content = menu_content.expect("menu_panel requires menu content");
-    let focus_scope = focus_scope.expect("menu_panel requires focus scope");
     let on_dismiss = provider.on_dismiss;
     let placement = provider.placement;
-    let is_submenu = provider.parent_request.is_some();
     let focus_seen = remember(|| false);
     let typeahead = remember(typeahead::Registry::default);
     let scroll = remember(ScrollableController::new);
     let color_style = provider.color_style;
     let grouped = provider.grouped;
-    let host = provider.host.expect("menu host");
     let motion = remember(|| MenuShapeMotion::new(MenuPosition::Standalone));
     let focused = focus_scope.has_focus();
     if provider.close_on_focus_loss && !is_submenu {
@@ -922,15 +733,12 @@ fn menu_panel(
         if was_focused != focused {
             focus_seen.set(focused);
         }
-        if was_focused
-            && !focused
-            && controller.with(MenuController::is_open)
-            && !host.popup_has_focus()
-        {
-            host.dismiss_all();
+        if was_focused && !focused && controller.with(MenuController::is_open) {
+            apply_close_action(controller, on_dismiss);
         }
     }
     if !grouped && provider.animate_shape {
+        let focused = focused && !host.descendant_has_focus(controller);
         let hovered = motion.with(MenuShapeMotion::hovered);
         launch(
             (focused, hovered),
@@ -964,13 +772,18 @@ fn menu_panel(
 
                 handled = match &event.logical_key {
                     winit::keyboard::Key::Named(winit::keyboard::NamedKey::Tab) => {
-                        host.exit(input.key_modifiers.shift_key());
+                        close_for_traversal(
+                            host.root,
+                            host.on_dismiss,
+                            input.key_modifiers.shift_key(),
+                        );
                         true
                     }
                     winit::keyboard::Key::Named(key)
                         if closes_submenu(is_submenu, placement, *key) =>
                     {
-                        apply_close_action(controller, &on_dismiss);
+                        dismiss_requested.set_if_changed(true);
+                        focus::defer_keyboard_until_layout();
                         true
                     }
                     winit::keyboard::Key::Character(text) => {
@@ -989,13 +802,6 @@ fn menu_panel(
             }
         },
     );
-    if just_opened {
-        modifier = modifier.on_globally_positioned(move |_| {
-            if controller.with(MenuController::is_open) {
-                focus_scope.request_focus();
-            }
-        });
-    }
     if !grouped && provider.animate_shape {
         modifier = modifier.push_pointer_preview_input(hover);
     }
@@ -1127,12 +933,12 @@ impl Default for MenuItemConfig {
 
 /// # menu_item
 ///
-/// Material Design 3 menu item for use inside [`menu_provider`].
+/// Material Design 3 menu item for use inside [`menu_anchor`].
 ///
 /// ## Usage
 ///
 /// Build contextual or overflow menu actions inside
-/// `menu_provider().menu_content(...)`.
+/// `menu_anchor().menu_content(...)`.
 ///
 /// ## Parameters
 ///
@@ -1163,6 +969,38 @@ impl Default for MenuItemConfig {
 /// - `disabled_color` — optional disabled content color override
 /// - `on_click` — optional leaf activation callback; `submenu_content` takes
 ///   precedence when both are provided.
+///
+/// ## Examples
+/// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+/// use tessera_components::md3::{
+///     menus::{MenuController, menu_item, menu_anchor},
+///     text::text,
+/// };
+/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
+/// use tessera_ui::remember;
+///
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// menu_anchor()
+///     .controller(remember(|| {
+///         let mut controller = MenuController::new();
+///         controller.open();
+///         controller
+///     }))
+///     .menu_content(|menu| {
+///         menu_item().menu(menu).label("Open");
+///     })
+///     .anchor_content(|| {
+///         text("Main content");
+///     });
+/// # });
+/// # }
+/// # tessera_ui::testing::UiTest::new().content(component).frame();
+/// ```
 #[tessera]
 pub fn menu_item(
     menu: Option<MenuScope>,
@@ -1260,8 +1098,7 @@ pub fn menu_item(
 #[tessera]
 fn menu_item_surface(
     item: Option<MenuItemConfig>,
-    submenu_controller: Option<State<MenuController>>,
-    submenu_request: Option<State<MenuPopupRequest>>,
+    submenu_request: Option<State<MenuBranch>>,
     focus_requester: Option<FocusRequester>,
 ) {
     let item = item.unwrap_or_default();
@@ -1306,7 +1143,8 @@ fn menu_item_surface(
             }
         });
     }
-    let modifier = if let Some(request) = submenu_request {
+    let modifier = if let Some((host, request)) = host.zip(submenu_request) {
+        let placement = item.submenu_placement;
         with_keyboard_input(Modifier::new(), move |mut input| {
             if input.key_modifiers.control_key()
                 || input.key_modifiers.alt_key()
@@ -1318,7 +1156,7 @@ fn menu_item_surface(
             if !value.enabled {
                 return;
             }
-            let opening = if value.placement == MenuPlacement::LeftStart {
+            let opening = if placement == MenuPlacement::LeftStart {
                 winit::keyboard::NamedKey::ArrowLeft
             } else {
                 winit::keyboard::NamedKey::ArrowRight
@@ -1327,15 +1165,9 @@ fn menu_item_surface(
                 event.state == winit::event::ElementState::Pressed
                     && event.logical_key == winit::keyboard::Key::Named(opening)
             });
-            if should_open {
-                MenuPopupRequest::open(request);
+            if should_open && !value.controller.with(MenuController::is_open) {
+                host.open(request);
                 input.block_keyboard();
-            }
-        })
-        .on_layout_coordinates(move |bounds| {
-            let anchor = request.get().anchor;
-            if anchor.get() != bounds {
-                anchor.set(bounds);
             }
         })
     } else {
@@ -1349,11 +1181,27 @@ fn menu_item_surface(
     } else {
         modifier
     };
+    let submenu = if let Some(request) = submenu_request {
+        let host = host.expect("submenu cascade");
+        let branch = request.get();
+        let dismiss_requested = remember(|| false);
+        if dismiss_requested.get() {
+            dismiss_requested.set(false);
+            host.remove(request, branch.parent, true);
+        }
+        branch
+            .controller
+            .with(MenuController::is_open)
+            .then_some((branch, dismiss_requested))
+    } else {
+        None
+    };
     layout(Stack).modifier(modifier).child(move || {
         let on_click = if has_submenu {
             let request = submenu_request.expect("submenu request");
+            let host = host.expect("submenu cascade");
             Some(Callback::new(move || {
-                MenuPopupRequest::open(request);
+                host.open(request);
             }))
         } else {
             item.on_click
@@ -1372,8 +1220,7 @@ fn menu_item_surface(
             item.disabled_color
         };
         let selection = item.selection;
-        let expanded =
-            submenu_controller.map(|controller| controller.with(MenuController::is_open));
+        let expanded = has_submenu.then_some(submenu.is_some());
         surface()
             .style(SurfaceStyle::Filled {
                 color: item.container_color,
@@ -1487,15 +1334,39 @@ fn menu_item_surface(
                         });
                 }
             });
+        if let Some((branch, dismiss_requested)) = submenu {
+            let host = host.expect("submenu cascade");
+            let color_style = use_context::<MenuColorStyle>()
+                .map(|style| style.get())
+                .unwrap_or_default();
+            let config = MenuConfig {
+                placement: item.submenu_placement,
+                offset: [Dp::ZERO; 2],
+                color_style,
+                container_color: color_style.container(&theme.color_scheme),
+                close_on_escape: host.close_on_escape,
+                ..Default::default()
+            };
+            menu_popup_layer(
+                config,
+                host,
+                branch.controller,
+                branch.scope,
+                branch.bounds,
+                item.submenu_content.expect("submenu content"),
+                dismiss_requested,
+                true,
+            );
+        }
     });
 }
 
 struct MenuItemHoverFocus {
     enabled: bool,
     requester: FocusRequester,
-    host: Option<MenuHost>,
+    host: Option<MenuCascade>,
     controller: Option<State<MenuController>>,
-    request: Option<State<MenuPopupRequest>>,
+    request: Option<State<MenuBranch>>,
     hover: State<MenuHoverIntent>,
 }
 
@@ -1591,44 +1462,31 @@ fn menu_item_inner(args: Option<MenuItemConfig>) {
     let args = args.unwrap_or_default();
     let submenu_content = args.submenu_content;
 
-    if let Some(submenu_content) = submenu_content {
+    if submenu_content.is_some() {
         let submenu_controller = remember(MenuController::new);
         let focus_requester = remember(FocusRequester::new).get();
         let menu = args.menu.expect("submenu items require a menu scope");
         let host = menu.host;
         let parent = menu.controller;
-        let value = MenuPopupRequest {
-            host,
+        let value = MenuBranch {
             parent,
             controller: submenu_controller,
-            anchor: remember(tessera_ui::LayoutCoordinates::default),
             scope: remember(FocusScopeNode::new).get(),
-            fallback: focus_requester,
-            content: submenu_content,
-            placement: args.submenu_placement,
-            color_style: use_context::<MenuColorStyle>()
-                .map(|style| style.get())
-                .unwrap_or_default(),
             enabled: args.enabled,
             bounds: remember(|| None),
         };
-        let request = remember(|| value.clone());
-        if request.get() != value {
-            request.set(value);
-        }
-        let scope = request.get().scope;
-        let _lease = remember(|| MenuPopupLease {
-            host,
-            request,
+        let request = remember(|| value);
+        request.set_if_changed(value);
+        let _lease = remember(|| MenuBranchLease {
+            cascade: host,
+            entry: request,
             parent,
-            scope,
         });
         if !args.enabled {
-            request.get().host.close_disabled_branch(request);
+            host.remove(request, parent, true);
         }
         menu_item_surface()
             .item(args)
-            .submenu_controller(submenu_controller)
             .submenu_request(request)
             .focus_requester(focus_requester);
     } else {
@@ -1652,7 +1510,7 @@ mod tests {
         spacer::spacer,
     };
 
-    use super::{MenuAnchor, MenuController, menu_item, menu_provider};
+    use super::{MenuAnchor, MenuController, menu_anchor, menu_item};
 
     #[derive(Clone, Copy, Default)]
     struct FixtureHandles {
@@ -1675,9 +1533,9 @@ mod tests {
         observed.with_mut(|handles| handles.remove_delete = Some(remove_delete));
         material_theme().child(move || {
             let observed = observed.clone();
-            menu_provider()
+            menu_anchor()
                 .controller(controller)
-                .main_content(|| {
+                .anchor_content(|| {
                     crate::spacer::spacer().modifier(Modifier::new().fill_max_size());
                 })
                 .menu_content(move |menu| {
@@ -1784,9 +1642,9 @@ mod tests {
         let controller = remember(MenuController::new);
         observed.with_mut(|handles| handles.controller = Some(controller));
         material_theme().child(move || {
-            menu_provider()
+            menu_anchor()
                 .controller(controller)
-                .main_content({
+                .anchor_content({
                     let observed = observed.clone();
                     move || {
                         let state = remember(|| 0_u32);
@@ -1817,10 +1675,10 @@ mod tests {
         observed.with_mut(|handles| handles.controller = Some(controller));
         observed.with_mut(|handles| handles.main_state = Some(state));
         material_theme().child(move || {
-            menu_provider()
+            menu_anchor()
                 .controller(controller)
                 .close_on_background(close_on_background)
-                .main_content(move || {
+                .anchor_content(move || {
                     button()
                         .modifier(Modifier::new().fill_max_size())
                         .on_click(move || state.with_mut(|count| *count += 1));
@@ -1871,7 +1729,7 @@ mod tests {
     }
 
     #[test]
-    fn menu_provider_renders_menu_items_after_controller_opens() {
+    fn menu_renders_menu_items_after_controller_opens() {
         let observed = tessera_ui::testing::TestProbe::default();
         let mut session = UiTest::new()
             .content(|| menu_controller_fixture(observed.clone()))
@@ -1897,7 +1755,7 @@ mod tests {
                 .modifier(Modifier::new().offset(Dp(12.0), Dp(18.0)))
                 .child(move || {
                     scaled_box(0.5).child(move || {
-                        menu_provider()
+                        menu_anchor()
                             .window_anchor(anchor)
                             .anchor(MenuAnchor::at(PxPosition::new(Px(999), Px(999))))
                             .controller(remember(|| {
@@ -1911,7 +1769,7 @@ mod tests {
                                 test_tag: Some("anchored-menu".into()),
                                 ..Default::default()
                             }))
-                            .main_content(move || {
+                            .anchor_content(move || {
                                 spacer().modifier(
                                     Modifier::new()
                                         .size(Dp(80.0), Dp(40.0))
@@ -1937,13 +1795,13 @@ mod tests {
                 window_anchor_fixture(observed.clone());
             })
             .viewport(400, 300);
-        session.frame().node("anchored-menu").position(32, 53);
+        session.frames(2).node("anchored-menu").position(32, 53);
         observed.get().expect("trigger position").set(Dp(100.0));
-        session.frames(1).node("anchored-menu").position(62, 53);
+        session.frames(2).node("anchored-menu").position(62, 53);
     }
 
     #[test]
-    fn menu_visibility_preserves_main_content_state() {
+    fn menu_visibility_preserves_anchor_content_state() {
         let observed = tessera_ui::testing::TestProbe::default();
         let mut session = UiTest::new()
             .content(|| menu_controller_fixture(observed.clone()))

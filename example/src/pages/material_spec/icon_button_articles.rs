@@ -11,7 +11,7 @@ use tessera_components::{
     md3::{
         icon_button::{IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button},
         material_icons::filled,
-        menus::{MenuController, MenuPlacement, menu_item, menu_provider},
+        menus::{MenuController, MenuPlacement, menu_anchor, menu_item},
         text::text,
         theme::MaterialTheme,
     },
@@ -260,11 +260,11 @@ fn mail_scene() {
     boxed()
         .modifier(Modifier::new().fill_max_width().height(Dp(320.0)))
         .children(move || {
-            menu_provider()
+            menu_anchor()
                 .controller(menu)
                 .placement(MenuPlacement::BelowEnd)
                 .window_anchor(anchor)
-                .main_content(move || {
+                .anchor_content(move || {
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)).background_with_shape(scheme.surface_container_low, Shape::rounded_rectangle(Dp(24.0))).semantics(SemanticsArgs { role: Some(Role::Group), label: Some(I18N.text("ui-message-actions")), merge_descendants: true, ..Default::default() }))
                         .children(move || {

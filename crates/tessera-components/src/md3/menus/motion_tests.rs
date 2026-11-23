@@ -14,7 +14,7 @@ use crate::{
     shape_def::Shape,
 };
 
-use super::{MenuAnchor, MenuController, MenuPosition, menu_group, menu_item, menu_provider};
+use super::{MenuAnchor, MenuController, MenuPosition, menu_anchor, menu_group, menu_item};
 
 #[derive(Clone, Copy, Default)]
 struct FixtureHandles {
@@ -41,11 +41,11 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
             theme
         })
         .child(move || {
-            menu_provider()
+            menu_anchor()
                 .controller(root)
                 .grouped(true)
                 .modifier(Modifier::new().width(Dp(240.0)))
-                .main_content(|| {
+                .anchor_content(|| {
                     surface()
                         .style(SurfaceStyle::Filled {
                             color: Color::WHITE,
