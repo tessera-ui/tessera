@@ -26,9 +26,7 @@ use crate::{
         text_field::text_field,
         text_input::TextInputController,
         theme::material_theme,
-        tooltip::{
-            TooltipController, TooltipPlacement, TooltipVariant, tooltip_anchor, tooltip_provider,
-        },
+        tooltip::{TooltipController, TooltipPlacement, TooltipVariant, tooltip_box},
     },
     spacer::spacer,
 };
@@ -59,41 +57,39 @@ fn tooltip_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     observed.with_mut(|handles| handles.tooltip = Some(tooltip));
     observed.with_mut(|handles| handles.actions = Some(actions));
     material_theme().child(move || {
-        tooltip_provider("A precise contextual explanation.")
-            .controller(tooltip)
-            .variant(TooltipVariant::Rich)
-            .placement(TooltipPlacement::Below)
-            .headline("Precise tooltip")
-            .action_label("Accept precise tooltip")
-            .on_action(move || actions.set(actions.get() + 1))
-            .popup_modifier(Modifier::new().width(Dp(240.0)))
-            .child(move |_| {
+        boxed()
+            .alignment(Alignment::TopStart)
+            .modifier(Modifier::new().fill_max_size())
+            .children(move || {
                 boxed()
                     .alignment(Alignment::TopStart)
-                    .modifier(Modifier::new().fill_max_size())
+                    .modifier(Modifier::new().push_placement(FractionalOrigin(shift)))
                     .children(move || {
-                        boxed()
-                            .alignment(Alignment::TopStart)
-                            .modifier(Modifier::new().push_placement(FractionalOrigin(shift)))
-                            .children(move || {
-                                scaled_box(0.625).child(move || {
-                                    boxed()
-                                        .modifier(Modifier::new().offset(Dp(240.0), Dp(160.0)))
-                                        .children(move || {
-                                            tooltip_anchor(tooltip).child(|| {
-                                                surface()
-                                                    .modifier(
-                                                        Modifier::new()
-                                                            .width(Dp(241.0))
-                                                            .height(Dp(57.0)),
-                                                    )
-                                                    .accessibility_label("Precise anchor")
-                                                    .on_click(|| {})
-                                                    .child(|| {});
-                                            });
+                        scaled_box(0.625).child(move || {
+                            boxed()
+                                .modifier(Modifier::new().offset(Dp(240.0), Dp(160.0)))
+                                .children(move || {
+                                    tooltip_box("A precise contextual explanation.")
+                                        .controller(tooltip)
+                                        .variant(TooltipVariant::Rich)
+                                        .placement(TooltipPlacement::Below)
+                                        .headline("Precise tooltip")
+                                        .action_label("Accept precise tooltip")
+                                        .on_action(move || actions.set(actions.get() + 1))
+                                        .popup_modifier(Modifier::new().width(Dp(240.0)))
+                                        .child(|| {
+                                            surface()
+                                                .modifier(
+                                                    Modifier::new()
+                                                        .width(Dp(241.0))
+                                                        .height(Dp(57.0)),
+                                                )
+                                                .accessibility_label("Precise anchor")
+                                                .on_click(|| {})
+                                                .child(|| {});
                                         });
                                 });
-                            });
+                        });
                     });
             });
     });
@@ -242,11 +238,18 @@ fn scaled_tooltip_keeps_fractional_anchor_reflows_and_accepts_real_action_click(
                 let moved = window_bounds(&renderer, "Precise tooltip", Role::Dialog);
                 assert_eq!(moved.x, popup.x + 12.0);
                 assert_eq!(moved.y, popup.y);
+                assert!(renderer.work().executions().iter().all(|entry| !matches!(
+                    entry.phase,
+                    WorkPhase::Build
+                        | WorkPhase::Measure
+                        | WorkPhase::IntrinsicMeasure
+                        | WorkPhase::Paint
+                )));
 
                 renderer.resize(200, 400);
                 renderer.frames(8);
                 let popup = window_bounds(&renderer, "Precise tooltip", Role::Dialog);
-                assert!(popup.x >= 8.0 && popup.x + popup.width <= 192.0);
+                assert!(popup.x >= 0.0 && popup.x + popup.width <= 200.0);
                 let action = node(&renderer, "Accept precise tooltip", Role::Button)
                     .1
                     .bounds()

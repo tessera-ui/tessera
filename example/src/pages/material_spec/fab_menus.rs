@@ -1,4 +1,6 @@
 use tessera_components::{
+    alignment::Alignment,
+    boxed::boxed,
     column::column,
     md3::{
         floating_action_button_menu::{
@@ -158,35 +160,51 @@ fn menu_demo(
             ..Default::default()
         }))
         .children(move || {
-            floating_action_button_menu()
-                .controller(state)
-                .color(color)
-                .alignment(if mirrored {
-                    FloatingActionButtonMenuAlignment::Start
-                } else {
-                    FloatingActionButtonMenuAlignment::End
-                })
-                .open_label(I18N.format("ui-open-value-menu", [("v0", I18N.text(&label).into())]))
-                .close_label(I18N.format("ui-close-value-menu", [("v0", I18N.text(&label).into())]))
+            let label = label.clone();
+            boxed()
                 .modifier(Modifier::new().fill_max_width().height(Dp(300.0)))
-                .items(vec![
-                    FloatingActionButtonMenuItem::new(
-                        I18N.text(ITEMS[0].0),
-                        Some(filled::EDIT_SVG.into()),
-                        Callback::new(move || status.set(ITEMS[0].1.into())),
-                    ),
-                    FloatingActionButtonMenuItem::new(
-                        I18N.text(ITEMS[1].0),
-                        Some(filled::FOLDER_SVG.into()),
-                        Callback::new(move || status.set(ITEMS[1].1.into())),
-                    ),
-                    FloatingActionButtonMenuItem::new(
-                        I18N.text(ITEMS[2].0),
-                        Some(filled::UPLOAD_SVG.into()),
-                        Callback::new(move || status.set(ITEMS[2].1.into())),
-                    ),
-                ])
-                .main_content(move || {
+                .children(move || {
+                    floating_action_button_menu()
+                        .controller(state)
+                        .color(color)
+                        .alignment(if mirrored {
+                            FloatingActionButtonMenuAlignment::Start
+                        } else {
+                            FloatingActionButtonMenuAlignment::End
+                        })
+                        .open_label(
+                            I18N.format("ui-open-value-menu", [("v0", I18N.text(&label).into())]),
+                        )
+                        .close_label(
+                            I18N.format("ui-close-value-menu", [("v0", I18N.text(&label).into())]),
+                        )
+                        .modal(!expanded)
+                        .modifier(
+                            Modifier::new()
+                                .align(if mirrored {
+                                    Alignment::BottomStart
+                                } else {
+                                    Alignment::BottomEnd
+                                })
+                                .padding_all(Dp(16.0)),
+                        )
+                        .items(vec![
+                            FloatingActionButtonMenuItem::new(
+                                I18N.text(ITEMS[0].0),
+                                Some(filled::EDIT_SVG.into()),
+                                Callback::new(move || status.set(ITEMS[0].1.into())),
+                            ),
+                            FloatingActionButtonMenuItem::new(
+                                I18N.text(ITEMS[1].0),
+                                Some(filled::FOLDER_SVG.into()),
+                                Callback::new(move || status.set(ITEMS[1].1.into())),
+                            ),
+                            FloatingActionButtonMenuItem::new(
+                                I18N.text(ITEMS[2].0),
+                                Some(filled::UPLOAD_SVG.into()),
+                                Callback::new(move || status.set(ITEMS[2].1.into())),
+                            ),
+                        ]);
                     surface()
                         .style(theme.color_scheme.surface_container_low.into())
                         .modifier(Modifier::new().fill_max_size())
@@ -396,45 +414,52 @@ fn six_items() {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            floating_action_button_menu()
-                .controller(state)
-                .color(FloatingActionButtonMenuColor::Primary)
-                .open_label(I18N.text("ui-open-six-action-menu"))
-                .close_label(I18N.text("ui-close-six-action-menu"))
+            boxed()
                 .modifier(Modifier::new().fill_max_width().height(Dp(480.0)))
-                .items(vec![
-                    FloatingActionButtonMenuItem::new(
-                        I18N.text("ui-first"),
-                        Some(filled::EDIT_SVG.into()),
-                        Callback::new(move || status.set("ui-first".into())),
-                    ),
-                    FloatingActionButtonMenuItem::new(
-                        I18N.text("ui-second"),
-                        Some(filled::FOLDER_SVG.into()),
-                        Callback::new(move || status.set("ui-second".into())),
-                    ),
-                    FloatingActionButtonMenuItem::new(
-                        I18N.text("ui-third"),
-                        Some(filled::UPLOAD_SVG.into()),
-                        Callback::new(move || status.set("ui-third".into())),
-                    ),
-                    FloatingActionButtonMenuItem::new(
-                        I18N.text("ui-fourth"),
-                        Some(filled::IMAGE_SVG.into()),
-                        Callback::new(move || status.set("ui-fourth".into())),
-                    ),
-                    FloatingActionButtonMenuItem::new(
-                        I18N.text("ui-fifth"),
-                        Some(filled::EVENT_SVG.into()),
-                        Callback::new(move || status.set("ui-fifth".into())),
-                    ),
-                    FloatingActionButtonMenuItem::new(
-                        I18N.text("ui-sixth"),
-                        Some(filled::CHECK_SVG.into()),
-                        Callback::new(move || status.set("ui-sixth".into())),
-                    ),
-                ])
-                .main_content(move || {
+                .children(move || {
+                    floating_action_button_menu()
+                        .controller(state)
+                        .color(FloatingActionButtonMenuColor::Primary)
+                        .open_label(I18N.text("ui-open-six-action-menu"))
+                        .close_label(I18N.text("ui-close-six-action-menu"))
+                        .modal(false)
+                        .modifier(
+                            Modifier::new()
+                                .align(Alignment::BottomEnd)
+                                .padding_all(Dp(16.0)),
+                        )
+                        .items(vec![
+                            FloatingActionButtonMenuItem::new(
+                                I18N.text("ui-first"),
+                                Some(filled::EDIT_SVG.into()),
+                                Callback::new(move || status.set("ui-first".into())),
+                            ),
+                            FloatingActionButtonMenuItem::new(
+                                I18N.text("ui-second"),
+                                Some(filled::FOLDER_SVG.into()),
+                                Callback::new(move || status.set("ui-second".into())),
+                            ),
+                            FloatingActionButtonMenuItem::new(
+                                I18N.text("ui-third"),
+                                Some(filled::UPLOAD_SVG.into()),
+                                Callback::new(move || status.set("ui-third".into())),
+                            ),
+                            FloatingActionButtonMenuItem::new(
+                                I18N.text("ui-fourth"),
+                                Some(filled::IMAGE_SVG.into()),
+                                Callback::new(move || status.set("ui-fourth".into())),
+                            ),
+                            FloatingActionButtonMenuItem::new(
+                                I18N.text("ui-fifth"),
+                                Some(filled::EVENT_SVG.into()),
+                                Callback::new(move || status.set("ui-fifth".into())),
+                            ),
+                            FloatingActionButtonMenuItem::new(
+                                I18N.text("ui-sixth"),
+                                Some(filled::CHECK_SVG.into()),
+                                Callback::new(move || status.set("ui-sixth".into())),
+                            ),
+                        ]);
                     surface()
                         .style(theme.color_scheme.surface_container_low.into())
                         .modifier(Modifier::new().fill_max_size())

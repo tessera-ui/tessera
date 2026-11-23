@@ -41,9 +41,8 @@ use render::{
     active_segment, inactive_segment, slider_handle, slider_tick, split_tracks, stop_indicator,
 };
 
-pub use indicator::{
-    SliderValueIndicatorHost, SliderValueIndicatorVisibility, slider_value_indicator_provider,
-};
+pub use indicator::SliderValueIndicatorVisibility;
+use indicator::ValueIndicator;
 
 mod axis;
 mod indicator;
@@ -187,7 +186,7 @@ fn range_slider_thumb(
     colors: Option<SliderColors>,
     focus: Option<FocusRequester>,
     accessibility: Option<RangeThumbAccessibility>,
-    indicator_anchor: Option<State<tessera_ui::LayoutCoordinates>>,
+    indicator: Option<ValueIndicator>,
 ) {
     let thumb_layout = thumb_layout.expect("range_slider_thumb requires thumb layout to be set");
     let handle_width = handle_width.unwrap_or(Px::ZERO);
@@ -206,21 +205,13 @@ fn range_slider_thumb(
         accessibility,
     );
 
-    let modifier = if let Some(anchor) = indicator_anchor {
-        modifier.on_layout_coordinates(move |rect| {
-            if anchor.get() != rect {
-                anchor.set(rect);
-            }
-        })
-    } else {
-        modifier
-    };
     layout(Stack).modifier(modifier).child(move || {
         slider_handle()
             .layout(thumb_layout)
             .width(handle_width)
             .colors(colors)
-            .focused(focus.is_focus_visible());
+            .focused(focus.is_focus_visible())
+            .indicator_optional(indicator.clone());
     });
 }
 
@@ -859,7 +850,6 @@ pub enum SliderSize {
 struct SliderConfig {
     pub presentation_state: Option<InteractionVisualState>,
     pub value_indicator: SliderValueIndicatorVisibility,
-    pub value_indicator_host: Option<SliderValueIndicatorHost>,
     pub value_label: Option<String>,
     axis: SliderAxis,
     /// Modifier chain applied to the slider subtree.
@@ -910,7 +900,6 @@ impl Default for SliderConfig {
         Self {
             presentation_state: None,
             value_indicator: SliderValueIndicatorVisibility::Hidden,
-            value_indicator_host: None,
             value_label: None,
             axis: SliderAxis::default(),
             modifier: Modifier::new(),
@@ -937,7 +926,6 @@ impl Default for SliderConfig {
 #[derive(Clone, PartialEq)]
 struct RangeSliderConfig {
     pub value_indicator: SliderValueIndicatorVisibility,
-    pub value_indicator_host: Option<SliderValueIndicatorHost>,
     pub start_value_label: Option<String>,
     pub end_value_label: Option<String>,
     axis: SliderAxis,
@@ -992,7 +980,6 @@ impl Default for RangeSliderConfig {
     fn default() -> Self {
         Self {
             value_indicator: SliderValueIndicatorVisibility::Hidden,
-            value_indicator_host: None,
             start_value_label: None,
             end_value_label: None,
             axis: SliderAxis::default(),
@@ -1023,7 +1010,6 @@ type RangeSliderArgs = RangeSliderConfig;
 struct SliderParams {
     presentation_state: Option<InteractionVisualState>,
     value_indicator: Option<SliderValueIndicatorVisibility>,
-    value_indicator_host: Option<SliderValueIndicatorHost>,
     value_label: Option<String>,
     axis: SliderAxis,
     modifier: Option<Modifier>,
@@ -1071,7 +1057,6 @@ fn slider_config_from_params(params: SliderParams, theme: SliderThemeColors) -> 
     SliderConfig {
         presentation_state: params.presentation_state,
         value_indicator: params.value_indicator.unwrap_or_default(),
-        value_indicator_host: params.value_indicator_host,
         value_label: params.value_label,
         axis: params.axis,
         modifier: params.modifier.unwrap_or(defaults.modifier),
@@ -1098,7 +1083,6 @@ fn slider_config_from_params(params: SliderParams, theme: SliderThemeColors) -> 
 
 struct RangeSliderParams {
     value_indicator: Option<SliderValueIndicatorVisibility>,
-    value_indicator_host: Option<SliderValueIndicatorHost>,
     start_value_label: Option<String>,
     end_value_label: Option<String>,
     axis: SliderAxis,
@@ -1130,7 +1114,6 @@ fn range_slider_config_from_params(
     let end = snap_fraction(params.value.1, params.steps).max(start);
     RangeSliderConfig {
         value_indicator: params.value_indicator.unwrap_or_default(),
-        value_indicator_host: params.value_indicator_host,
         start_value_label: params.start_value_label,
         end_value_label: params.end_value_label,
         axis: params.axis,
@@ -1423,8 +1406,7 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 /// - `presentation_state` — optional visual interaction without changing focus
 ///   or gestures.
 /// - `value_indicator` — hidden by default; show while focused/dragging or
-///   always. Pass the host received from [`slider_value_indicator_provider`].
-/// - `value_indicator_host` — overlay target received from the provider slot.
+///   always for enabled handles.
 /// - `value_label` — optional formatted value for the floating label and screen
 ///   reader; defaults to a rounded percentage without a percent sign when
 ///   labels are enabled.
@@ -1471,7 +1453,6 @@ pub fn slider(
     show_stop_indicator: Option<bool>,
     steps: Option<usize>,
     value_indicator: Option<SliderValueIndicatorVisibility>,
-    value_indicator_host: Option<SliderValueIndicatorHost>,
     #[prop(into)] value_label: Option<String>,
     #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
@@ -1506,7 +1487,6 @@ pub fn slider(
             show_stop_indicator,
             steps,
             value_indicator,
-            value_indicator_host,
             value_label,
             inset_icon,
             controller,
@@ -1562,32 +1542,21 @@ fn slider_content(args: Option<SliderConfig>) {
         space_held,
     );
 
-    let indicator_anchor = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
-        let anchor = remember(tessera_ui::LayoutCoordinates::default);
-        indicator::register_indicator()
-            .host_optional(args.value_indicator_host)
-            .anchor(anchor)
-            .label(
-                args.value_label
-                    .clone()
-                    .unwrap_or_else(|| default_value_label(clamped_value)),
-            )
-            .visible(args.value_indicator.visible(
-                visual.is_dragged() || visual.is_pressed() || visual.is_focused(),
-                args.disabled,
-            ))
-            .orientation(args.axis.orientation)
-            .interacting(visual.is_dragged() || visual.is_pressed() || visual.is_focused());
-        Some(anchor)
-    } else {
-        None
-    };
+    let indicator = args.value_indicator.indicator(
+        visual.is_dragged() || visual.is_pressed() || visual.is_focused(),
+        args.disabled,
+        || {
+            args.value_label
+                .clone()
+                .unwrap_or_else(|| default_value_label(clamped_value))
+        },
+    );
     let next = (
         args.clone(),
         initial_width,
         clamped_value,
         handle_width,
-        indicator_anchor,
+        indicator,
         visual.is_focused()
             && controller
                 .with(|controller| !controller.is_focused() || controller.focus.is_focus_visible()),
@@ -1604,7 +1573,7 @@ fn slider_content(args: Option<SliderConfig>) {
     })
     .modifier(modifier)
     .child(move || {
-        let (args, initial_width, clamped_value, handle_width, indicator_anchor, focused) =
+        let (args, initial_width, clamped_value, handle_width, indicator, focused) =
             render_data.get();
         let slider_layout = slider_layout_with_handle_width(&args, initial_width, handle_width);
         let scheme = use_context::<MaterialTheme>()
@@ -1669,7 +1638,7 @@ fn slider_content(args: Option<SliderConfig>) {
             .width(handle_width)
             .colors(colors)
             .focused(focused)
-            .indicator_anchor_optional(indicator_anchor);
+            .indicator_optional(indicator);
     });
 }
 
@@ -1888,8 +1857,7 @@ fn measure_centered_slider(
 /// - `presentation_state` — optional visual interaction without changing focus
 ///   or gestures.
 /// - `value_indicator` — hidden by default; show while focused/dragging or
-///   always. Pass the host received from [`slider_value_indicator_provider`].
-/// - `value_indicator_host` — overlay target received from the provider slot.
+///   always for enabled handles.
 /// - `value_label` — optional formatted value for the floating label and screen
 ///   reader; defaults to a rounded percentage without a percent sign when
 ///   labels are enabled.
@@ -1940,7 +1908,6 @@ pub fn centered_slider(
     show_stop_indicator: Option<bool>,
     steps: Option<usize>,
     value_indicator: Option<SliderValueIndicatorVisibility>,
-    value_indicator_host: Option<SliderValueIndicatorHost>,
     #[prop(into)] value_label: Option<String>,
     #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
@@ -1975,7 +1942,6 @@ pub fn centered_slider(
             show_stop_indicator,
             steps,
             value_indicator,
-            value_indicator_host,
             value_label,
             inset_icon,
             controller,
@@ -2031,32 +1997,21 @@ fn centered_slider_content(args: Option<SliderConfig>) {
         space_held,
     );
 
-    let indicator_anchor = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
-        let anchor = remember(tessera_ui::LayoutCoordinates::default);
-        indicator::register_indicator()
-            .host_optional(args.value_indicator_host)
-            .anchor(anchor)
-            .label(
-                args.value_label
-                    .clone()
-                    .unwrap_or_else(|| default_value_label(clamped_value)),
-            )
-            .visible(args.value_indicator.visible(
-                visual.is_dragged() || visual.is_pressed() || visual.is_focused(),
-                args.disabled,
-            ))
-            .orientation(args.axis.orientation)
-            .interacting(visual.is_dragged() || visual.is_pressed() || visual.is_focused());
-        Some(anchor)
-    } else {
-        None
-    };
+    let indicator = args.value_indicator.indicator(
+        visual.is_dragged() || visual.is_pressed() || visual.is_focused(),
+        args.disabled,
+        || {
+            args.value_label
+                .clone()
+                .unwrap_or_else(|| default_value_label(clamped_value))
+        },
+    );
     let next = (
         args.clone(),
         initial_width,
         clamped_value,
         handle_width,
-        indicator_anchor,
+        indicator,
         visual.is_focused()
             && controller
                 .with(|controller| !controller.is_focused() || controller.focus.is_focus_visible()),
@@ -2072,7 +2027,7 @@ fn centered_slider_content(args: Option<SliderConfig>) {
     })
     .modifier(modifier)
     .child(move || {
-        let (args, initial_width, clamped_value, handle_width, indicator_anchor, focused) =
+        let (args, initial_width, clamped_value, handle_width, indicator, focused) =
             render_data.get();
         let centered_layout = CenteredSliderLayout {
             base: slider_layout_with_handle_width(&args, initial_width, handle_width),
@@ -2109,7 +2064,7 @@ fn centered_slider_content(args: Option<SliderConfig>) {
             .width(handle_width)
             .colors(colors)
             .focused(focused)
-            .indicator_anchor_optional(indicator_anchor);
+            .indicator_optional(indicator);
     });
 }
 
@@ -2346,8 +2301,7 @@ fn measure_range_slider(
 ///   for each handle.
 ///
 /// - `value_indicator` — hidden by default; show focused/dragged handles or all
-///   enabled handles. Pass the host received from [`slider_value_indicator_provider`].
-/// - `value_indicator_host` — overlay target received from the provider slot.
+///   enabled handles.
 /// - `start_value_label`, `end_value_label` — optional formatted labels and
 ///   screen-reader values; defaults are rounded percentages without percent
 ///   signs.
@@ -2397,7 +2351,6 @@ pub fn range_slider(
     show_stop_indicator: Option<bool>,
     steps: Option<usize>,
     value_indicator: Option<SliderValueIndicatorVisibility>,
-    value_indicator_host: Option<SliderValueIndicatorHost>,
     #[prop(into)] start_value_label: Option<String>,
     #[prop(into)] end_value_label: Option<String>,
     #[prop(into)] start_accessibility_label: Option<String>,
@@ -2432,7 +2385,6 @@ pub fn range_slider(
             show_stop_indicator,
             steps,
             value_indicator,
-            value_indicator_host,
             start_value_label,
             end_value_label,
             start_accessibility_label,
@@ -2496,38 +2448,6 @@ fn range_slider_content(state: State<RangeSliderInteraction>, args: Option<Range
     let modifier =
         apply_range_slider_pointer_modifier(args.modifier.clone(), state, args.clone(), start, end);
 
-    let indicator_anchors = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
-        let start_anchor = remember(tessera_ui::LayoutCoordinates::default);
-        let end_anchor = remember(tessera_ui::LayoutCoordinates::default);
-        indicator::register_indicator()
-            .host_optional(args.value_indicator_host)
-            .anchor(start_anchor)
-            .label(
-                args.start_value_label
-                    .clone()
-                    .unwrap_or_else(|| default_value_label(start)),
-            )
-            .visible(
-                args.value_indicator
-                    .visible(start_interacting, args.disabled),
-            )
-            .orientation(args.axis.orientation)
-            .interacting(start_interacting);
-        indicator::register_indicator()
-            .host_optional(args.value_indicator_host)
-            .anchor(end_anchor)
-            .label(
-                args.end_value_label
-                    .clone()
-                    .unwrap_or_else(|| default_value_label(end)),
-            )
-            .visible(args.value_indicator.visible(end_interacting, args.disabled))
-            .orientation(args.axis.orientation)
-            .interacting(end_interacting);
-        [Some(start_anchor), Some(end_anchor)]
-    } else {
-        [None, None]
-    };
     let next = (
         args.clone(),
         range_layout,
@@ -2535,7 +2455,8 @@ fn range_slider_content(state: State<RangeSliderInteraction>, args: Option<Range
         end,
         start_handle_width,
         end_handle_width,
-        indicator_anchors,
+        start_interacting,
+        end_interacting,
     );
     let render_data = remember(|| next.clone());
     if render_data.with(|current| current != &next) {
@@ -2558,7 +2479,8 @@ fn range_slider_content(state: State<RangeSliderInteraction>, args: Option<Range
             end,
             start_handle_width,
             end_handle_width,
-            indicator_anchors,
+            start_interacting,
+            end_interacting,
         ) = render_data.get();
         let scheme = use_context::<MaterialTheme>()
             .map(|theme| theme.get().color_scheme)
@@ -2623,7 +2545,15 @@ fn range_slider_content(state: State<RangeSliderInteraction>, args: Option<Range
             .colors(start_thumb_args.colors)
             .focus(start_thumb_args.focus)
             .accessibility(start_thumb_args.accessibility)
-            .indicator_anchor_optional(indicator_anchors[0]);
+            .indicator_optional(args.value_indicator.indicator(
+                start_interacting,
+                args.disabled,
+                || {
+                    args.start_value_label
+                        .clone()
+                        .unwrap_or_else(|| default_value_label(start))
+                },
+            ));
 
         let end_thumb_args = RangeSliderThumbProps {
             thumb_layout: range_layout.base,
@@ -2662,7 +2592,15 @@ fn range_slider_content(state: State<RangeSliderInteraction>, args: Option<Range
             .colors(end_thumb_args.colors)
             .focus(end_thumb_args.focus)
             .accessibility(end_thumb_args.accessibility)
-            .indicator_anchor_optional(indicator_anchors[1]);
+            .indicator_optional(args.value_indicator.indicator(
+                end_interacting,
+                args.disabled,
+                || {
+                    args.end_value_label
+                        .clone()
+                        .unwrap_or_else(|| default_value_label(end))
+                },
+            ));
     });
 }
 

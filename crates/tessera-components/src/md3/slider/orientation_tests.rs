@@ -114,219 +114,200 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     material_theme()
         .theme(move || settings.with(|settings| settings.palette.theme()))
         .child(move || {
-            let _observed = observed.clone();
-            super::slider_value_indicator_provider().child(move |host| {
-                boxed()
-                    .modifier(Modifier::new().fill_max_size().background(
-                        settings.with(|settings| settings.background.unwrap_or(Color::WHITE)),
-                    ))
-                    .children(move || {
-                        let settings = settings.get();
-                        let modifier = if let Some((x, y)) = settings.origin {
-                            Modifier::new().push_placement(FractionalOrigin(
-                                PxPosition::from_f32_xy(
-                                    super::Dp(x).to_pixels_f32(),
-                                    super::Dp(y).to_pixels_f32(),
-                                ),
-                            ))
-                        } else {
-                            Modifier::new().offset(super::Dp(40.0), super::Dp(40.0))
-                        };
-                        let modifier = match settings.orientation {
-                            SliderOrientation::Horizontal => {
-                                modifier.width(super::Dp(settings.length.unwrap_or(280.0)))
-                            }
-                            SliderOrientation::Vertical => {
-                                modifier.height(super::Dp(settings.length.unwrap_or(280.0)))
-                            }
-                        };
-                        let modifier = if settings.clip_slider {
-                            modifier.clip_to_bounds()
-                        } else {
-                            modifier
-                        };
-                        if !settings.removed {
-                            match settings.kind {
-                                Kind::Single => {
-                                    slider(value.get())
-                                        .value_indicator_host(host)
-                                        .controller(controller)
-                                        .presentation_state_optional(settings.presentation_state)
-                                        .modifier(modifier)
-                                        .on_change(move |next| value.set(next))
-                                        .size(settings.size)
-                                        .inset_icon_optional(settings.inset_icon.then(|| {
-                                            crate::md3::material_icons::filled::ARROW_UPWARD_SVG
-                                                .into()
-                                        }))
-                                        .orientation(settings.orientation)
-                                        .reverse_direction(settings.reversed)
-                                        .disabled(settings.disabled)
-                                        .steps(settings.steps)
-                                        .active_track_color_optional(
-                                            settings.overrides.then_some(OVERRIDE_ACTIVE),
-                                        )
-                                        .inactive_track_color_optional(
-                                            settings.overrides.then_some(OVERRIDE_INACTIVE),
-                                        )
-                                        .thumb_color_optional(
-                                            settings.overrides.then_some(OVERRIDE_THUMB),
-                                        )
-                                        .active_tick_color_optional(
-                                            settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
-                                        )
-                                        .inactive_tick_color_optional(
-                                            settings
-                                                .override_ticks
-                                                .then_some(OVERRIDE_INACTIVE_TICK),
-                                        )
-                                        .show_stop_indicator_optional(settings.stops)
-                                        .value_indicator(settings.indicator)
-                                        .value_label_optional(
-                                            settings.value_label.map(str::to_string),
-                                        )
-                                        .accessibility_label("Value");
-                                }
-                                Kind::Centered => {
-                                    centered_slider(value.get())
-                                        .value_indicator_host(host)
-                                        .controller(controller)
-                                        .presentation_state_optional(settings.presentation_state)
-                                        .modifier(modifier)
-                                        .on_change(move |next| value.set(next))
-                                        .size(settings.size)
-                                        .orientation(settings.orientation)
-                                        .reverse_direction(settings.reversed)
-                                        .disabled(settings.disabled)
-                                        .steps(settings.steps)
-                                        .active_track_color_optional(
-                                            settings.overrides.then_some(OVERRIDE_ACTIVE),
-                                        )
-                                        .inactive_track_color_optional(
-                                            settings.overrides.then_some(OVERRIDE_INACTIVE),
-                                        )
-                                        .thumb_color_optional(
-                                            settings.overrides.then_some(OVERRIDE_THUMB),
-                                        )
-                                        .active_tick_color_optional(
-                                            settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
-                                        )
-                                        .inactive_tick_color_optional(
-                                            settings
-                                                .override_ticks
-                                                .then_some(OVERRIDE_INACTIVE_TICK),
-                                        )
-                                        .show_stop_indicator_optional(settings.stops)
-                                        .value_indicator(settings.indicator)
-                                        .value_label_optional(
-                                            settings.value_label.map(str::to_string),
-                                        )
-                                        .accessibility_label("Value");
-                                }
-                                Kind::Range => {
-                                    range_slider(range.get())
-                                        .value_indicator_host(host)
-                                        .modifier(modifier)
-                                        .on_change(move |next| range.set(next))
-                                        .size(settings.size)
-                                        .orientation(settings.orientation)
-                                        .reverse_direction(settings.reversed)
-                                        .disabled(settings.disabled)
-                                        .steps(settings.steps)
-                                        .active_track_color_optional(
-                                            settings.overrides.then_some(OVERRIDE_ACTIVE),
-                                        )
-                                        .inactive_track_color_optional(
-                                            settings.overrides.then_some(OVERRIDE_INACTIVE),
-                                        )
-                                        .thumb_color_optional(
-                                            settings.overrides.then_some(OVERRIDE_THUMB),
-                                        )
-                                        .active_tick_color_optional(
-                                            settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
-                                        )
-                                        .inactive_tick_color_optional(
-                                            settings
-                                                .override_ticks
-                                                .then_some(OVERRIDE_INACTIVE_TICK),
-                                        )
-                                        .show_stop_indicator_optional(settings.stops)
-                                        .value_indicator(settings.indicator)
-                                        .start_value_label_optional(
-                                            settings.start_value_label.map(str::to_string),
-                                        )
-                                        .end_value_label_optional(
-                                            settings.end_value_label.map(str::to_string),
-                                        )
-                                        .accessibility_label("Interval");
-                                }
-                            }
+            boxed()
+                .modifier(Modifier::new().fill_max_size().background(
+                    settings.with(|settings| settings.background.unwrap_or(Color::WHITE)),
+                ))
+                .children(move || {
+                    let settings = settings.get();
+                    let modifier = if let Some((x, y)) = settings.origin {
+                        Modifier::new().push_placement(FractionalOrigin(PxPosition::from_f32_xy(
+                            super::Dp(x).to_pixels_f32(),
+                            super::Dp(y).to_pixels_f32(),
+                        )))
+                    } else {
+                        Modifier::new().offset(super::Dp(40.0), super::Dp(40.0))
+                    };
+                    let modifier = match settings.orientation {
+                        SliderOrientation::Horizontal => {
+                            modifier.width(super::Dp(settings.length.unwrap_or(280.0)))
                         }
-                        if settings.references {
-                            let scheme = settings.palette.theme().color_scheme;
-                            let active = if settings.overrides {
-                                OVERRIDE_ACTIVE
-                            } else {
-                                scheme.primary
-                            };
-                            let inactive = if settings.overrides {
-                                OVERRIDE_INACTIVE
-                            } else {
-                                scheme.secondary_container
-                            };
-                            let thumb = if settings.overrides {
-                                OVERRIDE_THUMB
-                            } else {
-                                scheme.primary
-                            };
-                            for (index, layers) in [
-                                vec![active],
-                                vec![inactive],
-                                vec![thumb],
-                                vec![if settings.override_ticks {
-                                    OVERRIDE_ACTIVE_TICK
-                                } else {
-                                    scheme.on_primary
-                                }],
-                                vec![if settings.override_ticks {
-                                    OVERRIDE_INACTIVE_TICK
-                                } else {
-                                    scheme.on_secondary_container
-                                }],
-                                vec![scheme.on_surface.with_alpha(0.38)],
-                                vec![scheme.on_surface.with_alpha(0.12)],
-                                vec![scheme.surface, scheme.on_surface.with_alpha(0.38)],
-                                vec![scheme.inverse_on_surface],
-                                vec![
-                                    scheme.on_surface.with_alpha(0.12),
-                                    scheme.on_surface.with_alpha(0.38),
-                                ],
-                                vec![scheme.inverse_surface],
-                                vec![scheme.inverse_on_surface],
-                            ]
-                            .into_iter()
-                            .enumerate()
-                            {
-                                boxed()
-                                    .modifier(
-                                        Modifier::new()
-                                            .offset(
-                                                super::Dp(200.0 + (index % 5) as f64 * 20.0),
-                                                super::Dp(200.0 + (index / 5) as f64 * 20.0),
-                                            )
-                                            .size(super::Dp(10.0), super::Dp(10.0)),
+                        SliderOrientation::Vertical => {
+                            modifier.height(super::Dp(settings.length.unwrap_or(280.0)))
+                        }
+                    };
+                    let modifier = if settings.clip_slider {
+                        modifier.clip_to_bounds()
+                    } else {
+                        modifier
+                    };
+                    if !settings.removed {
+                        match settings.kind {
+                            Kind::Single => {
+                                slider(value.get())
+                                    .controller(controller)
+                                    .presentation_state_optional(settings.presentation_state)
+                                    .modifier(modifier)
+                                    .on_change(move |next| value.set(next))
+                                    .size(settings.size)
+                                    .inset_icon_optional(settings.inset_icon.then(|| {
+                                        crate::md3::material_icons::filled::ARROW_UPWARD_SVG.into()
+                                    }))
+                                    .orientation(settings.orientation)
+                                    .reverse_direction(settings.reversed)
+                                    .disabled(settings.disabled)
+                                    .steps(settings.steps)
+                                    .active_track_color_optional(
+                                        settings.overrides.then_some(OVERRIDE_ACTIVE),
                                     )
-                                    .children(move || {
-                                        for color in &layers {
-                                            boxed().modifier(
-                                                Modifier::new().fill_max_size().background(*color),
-                                            );
-                                        }
-                                    });
+                                    .inactive_track_color_optional(
+                                        settings.overrides.then_some(OVERRIDE_INACTIVE),
+                                    )
+                                    .thumb_color_optional(
+                                        settings.overrides.then_some(OVERRIDE_THUMB),
+                                    )
+                                    .active_tick_color_optional(
+                                        settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
+                                    )
+                                    .inactive_tick_color_optional(
+                                        settings.override_ticks.then_some(OVERRIDE_INACTIVE_TICK),
+                                    )
+                                    .show_stop_indicator_optional(settings.stops)
+                                    .value_indicator(settings.indicator)
+                                    .value_label_optional(settings.value_label.map(str::to_string))
+                                    .accessibility_label("Value");
+                            }
+                            Kind::Centered => {
+                                centered_slider(value.get())
+                                    .controller(controller)
+                                    .presentation_state_optional(settings.presentation_state)
+                                    .modifier(modifier)
+                                    .on_change(move |next| value.set(next))
+                                    .size(settings.size)
+                                    .orientation(settings.orientation)
+                                    .reverse_direction(settings.reversed)
+                                    .disabled(settings.disabled)
+                                    .steps(settings.steps)
+                                    .active_track_color_optional(
+                                        settings.overrides.then_some(OVERRIDE_ACTIVE),
+                                    )
+                                    .inactive_track_color_optional(
+                                        settings.overrides.then_some(OVERRIDE_INACTIVE),
+                                    )
+                                    .thumb_color_optional(
+                                        settings.overrides.then_some(OVERRIDE_THUMB),
+                                    )
+                                    .active_tick_color_optional(
+                                        settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
+                                    )
+                                    .inactive_tick_color_optional(
+                                        settings.override_ticks.then_some(OVERRIDE_INACTIVE_TICK),
+                                    )
+                                    .show_stop_indicator_optional(settings.stops)
+                                    .value_indicator(settings.indicator)
+                                    .value_label_optional(settings.value_label.map(str::to_string))
+                                    .accessibility_label("Value");
+                            }
+                            Kind::Range => {
+                                range_slider(range.get())
+                                    .modifier(modifier)
+                                    .on_change(move |next| range.set(next))
+                                    .size(settings.size)
+                                    .orientation(settings.orientation)
+                                    .reverse_direction(settings.reversed)
+                                    .disabled(settings.disabled)
+                                    .steps(settings.steps)
+                                    .active_track_color_optional(
+                                        settings.overrides.then_some(OVERRIDE_ACTIVE),
+                                    )
+                                    .inactive_track_color_optional(
+                                        settings.overrides.then_some(OVERRIDE_INACTIVE),
+                                    )
+                                    .thumb_color_optional(
+                                        settings.overrides.then_some(OVERRIDE_THUMB),
+                                    )
+                                    .active_tick_color_optional(
+                                        settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
+                                    )
+                                    .inactive_tick_color_optional(
+                                        settings.override_ticks.then_some(OVERRIDE_INACTIVE_TICK),
+                                    )
+                                    .show_stop_indicator_optional(settings.stops)
+                                    .value_indicator(settings.indicator)
+                                    .start_value_label_optional(
+                                        settings.start_value_label.map(str::to_string),
+                                    )
+                                    .end_value_label_optional(
+                                        settings.end_value_label.map(str::to_string),
+                                    )
+                                    .accessibility_label("Interval");
                             }
                         }
-                    });
-            });
+                    }
+                    if settings.references {
+                        let scheme = settings.palette.theme().color_scheme;
+                        let active = if settings.overrides {
+                            OVERRIDE_ACTIVE
+                        } else {
+                            scheme.primary
+                        };
+                        let inactive = if settings.overrides {
+                            OVERRIDE_INACTIVE
+                        } else {
+                            scheme.secondary_container
+                        };
+                        let thumb = if settings.overrides {
+                            OVERRIDE_THUMB
+                        } else {
+                            scheme.primary
+                        };
+                        for (index, layers) in [
+                            vec![active],
+                            vec![inactive],
+                            vec![thumb],
+                            vec![if settings.override_ticks {
+                                OVERRIDE_ACTIVE_TICK
+                            } else {
+                                scheme.on_primary
+                            }],
+                            vec![if settings.override_ticks {
+                                OVERRIDE_INACTIVE_TICK
+                            } else {
+                                scheme.on_secondary_container
+                            }],
+                            vec![scheme.on_surface.with_alpha(0.38)],
+                            vec![scheme.on_surface.with_alpha(0.12)],
+                            vec![scheme.surface, scheme.on_surface.with_alpha(0.38)],
+                            vec![scheme.inverse_on_surface],
+                            vec![
+                                scheme.on_surface.with_alpha(0.12),
+                                scheme.on_surface.with_alpha(0.38),
+                            ],
+                            vec![scheme.inverse_surface],
+                            vec![scheme.inverse_on_surface],
+                        ]
+                        .into_iter()
+                        .enumerate()
+                        {
+                            boxed()
+                                .modifier(
+                                    Modifier::new()
+                                        .offset(
+                                            super::Dp(200.0 + (index % 5) as f64 * 20.0),
+                                            super::Dp(200.0 + (index / 5) as f64 * 20.0),
+                                        )
+                                        .size(super::Dp(10.0), super::Dp(10.0)),
+                                )
+                                .children(move || {
+                                    for color in &layers {
+                                        boxed().modifier(
+                                            Modifier::new().fill_max_size().background(*color),
+                                        );
+                                    }
+                                });
+                        }
+                    }
+                });
         });
 }
 
@@ -1019,7 +1000,16 @@ fn check_value_indicators() {
         1,
         "pressing the real slider focuses its handle and reveals the label"
     );
-    renderer.frames(6);
+    for _ in 0..6 {
+        renderer.frames(1);
+        assert_eq!(
+            renderer
+                .work()
+                .count("value_indicator", tessera_ui::testing::WorkPhase::Build),
+            0,
+            "settled value labels do not keep rebuilding at rest"
+        );
+    }
     let bounds = labels[0].1;
     assert!(bounds.width.0 >= 72, "48dp minimum label width: {bounds:?}");
     assert_eq!(bounds.height.0, 66, "44dp label height");
@@ -1213,7 +1203,7 @@ fn check_value_indicators() {
     renderer.frames(3);
     assert!(
         observed_labels(&renderer).is_empty(),
-        "removing the owner unregisters its labels"
+        "removing the slider removes its popups"
     );
     settings.with_mut(|s| {
         s.removed = false;
@@ -1224,13 +1214,13 @@ fn check_value_indicators() {
     assert_eq!(
         observed_labels(&renderer)[0].0,
         "Back",
-        "a newly mounted slider registers without stale resources"
+        "a newly mounted slider shows only its own label"
     );
     settings.with_mut(|s| s.indicator = Visibility::Hidden);
     renderer.frames(3);
     assert!(
         observed_labels(&renderer).is_empty(),
-        "switching the feature off releases the overlay request"
+        "switching the feature off removes the popup"
     );
     settings.set(Settings {
         origin: Some((80.0, 80.0)),
@@ -1373,6 +1363,38 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
             }
         },
     );
+}
+
+#[test]
+fn local_indicator_tracks_thumb_outside_slider_clip_and_hides_when_offscreen() {
+    let observed = tessera_ui::testing::TestProbe::default();
+    let mut ui = UiTest::new()
+        .viewport(500, 400)
+        .content(|| fixture(observed.clone()));
+    ui.frame();
+    let handles = observed.get();
+    let settings = handles.settings.unwrap();
+    settings.with_mut(|settings| {
+        settings.origin = Some((80.0, 80.0));
+        settings.clip_slider = true;
+        settings.indicator = super::SliderValueIndicatorVisibility::Always;
+    });
+    ui.frames(35);
+    let labels = observed_labels(&ui);
+    let [(label, rect)] = labels.as_slice() else {
+        panic!("expected one label: {labels:?}")
+    };
+    assert_eq!(label, "25");
+    assert!(rect.y + rect.height < tessera_ui::Px(80));
+    handles.value.unwrap().set(0.75);
+    settings.with_mut(|settings| settings.origin = Some((96.0, 80.0)));
+    ui.frames(3);
+    let labels = observed_labels(&ui);
+    assert_eq!(labels[0].0, "75");
+    assert!(labels[0].1.x > rect.x + tessera_ui::Px(16));
+    settings.with_mut(|settings| settings.origin = Some((800.0, 800.0)));
+    ui.frames(3);
+    assert!(observed_labels(&ui).is_empty());
 }
 
 fn observed_labels(renderer: &UiTest) -> Vec<(String, tessera_ui::PxRect)> {

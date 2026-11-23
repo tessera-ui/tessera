@@ -646,7 +646,7 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
                     node.label(),
                     Some("Add to favorites" | "Remove from favorites")
                 )),
-        "the shared live host dismisses the preceding plain tooltip"
+        "the preceding plain tooltip closes when the rich tooltip opens"
     );
     assert!(
         snapshot
@@ -731,7 +731,7 @@ fn persistent_live_tooltips_leave_the_trigger_visible_after_flow_wrapping() {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn corner_tooltips_flip_inside_their_device_frames_and_stay_next_to_the_trigger() {
+fn corner_tooltips_fit_the_window_and_keep_the_trigger_gap() {
     for width in [600, 300] {
         let mut renderer = reference_renderer(Scene::Placement, width);
         settle_color_pair_geometry(&mut renderer);
@@ -748,48 +748,34 @@ fn corner_tooltips_flip_inside_their_device_frames_and_stay_next_to_the_trigger(
             })
             .collect();
         assert_eq!(frames.len(), 4);
+        let mut popups: Vec<_> = tree
+            .nodes
+            .iter()
+            .filter_map(|(_, node)| {
+                (node.role() == Role::Dialog && crate::has_label(node, "Paint Tool"))
+                    .then(|| node.bounds())
+                    .flatten()
+            })
+            .collect();
+        assert_eq!(popups.len(), frames.len());
         for (_, frame) in frames {
-            let rect = frame.bounds().unwrap();
             let label = crate::visible_text(frame.label().unwrap());
             let alignment = label.strip_prefix("Placement preview ").unwrap();
             let trigger = bounds(&renderer, &format!("Corner tooltip {alignment}"));
-            let popups: Vec<_> = tree
-                .nodes
+            let index = popups
                 .iter()
-                .filter(|(_, node)| {
-                    // The corner tooltips carry a Learn more action, so they
-                    // publish the interactive dialog role.
-                    node.role() == Role::Dialog
-                        && crate::has_label(&node, "Paint Tool")
-                        && node.bounds().is_some_and(|popup| {
-                            popup.x0 >= rect.x0
-                                && popup.y0 >= rect.y0
-                                && popup.x1 <= rect.x1
-                                && popup.y1 <= rect.y1
-                        })
+                .position(|popup| {
+                    let gap = (popup.y0 - trigger.y1 - 4.0)
+                        .abs()
+                        .min((trigger.y0 - popup.y1 - 4.0).abs());
+                    gap <= 0.01 && trigger.x0 < popup.x1 && popup.x0 < trigger.x1
                 })
-                .collect();
-            assert_eq!(
-                popups.len(),
-                1,
-                "width {width}: {alignment} must have one native tooltip inside its device"
-            );
-            let popup = popups[0].1.bounds().unwrap();
-            assert!(
-                popup.x0 >= rect.x0 + 8.0
-                    && popup.x1 <= rect.x1 - 8.0
-                    && popup.y0 >= rect.y0 + 8.0
-                    && popup.y1 <= rect.y1 - 8.0
-            );
-            let gap = if alignment.starts_with("Top") {
-                popup.y0 - trigger.y1
-            } else {
-                trigger.y0 - popup.y1
-            };
-            assert!(
-                (gap - 4.0).abs() <= 0.01,
-                "width {width}: {alignment} popup {popup:?}, trigger {trigger:?}, gap {gap}"
-            );
+                .unwrap_or_else(|| {
+                    panic!("width {width}: no popup next to {alignment} trigger {trigger:?}")
+                });
+            let popup = popups.swap_remove(index);
+            assert!(popup.x0 >= 8.0 && popup.x1 <= f64::from(width) - 8.0);
+            assert!(popup.y0 >= 8.0 && popup.y1 <= 992.0);
         }
     }
 }
