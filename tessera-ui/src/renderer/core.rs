@@ -399,6 +399,13 @@ impl RenderCore {
         self.linux_platform_views = platform_views;
     }
 
+    #[cfg(target_os = "linux")]
+    pub(super) fn linux_platform_views(
+        &self,
+    ) -> Option<&RefCell<crate::linux_platform_views::LinuxPlatformViews>> {
+        self.linux_platform_views.as_deref()
+    }
+
     #[cfg(target_os = "ios")]
     pub(crate) fn ensure_ios_slice_surfaces(&mut self, count: usize) -> Result<(), String> {
         let root_layer = self

@@ -2590,7 +2590,13 @@ impl ComponentTree {
             &mut cursor_position,
             modifiers,
         );
-        #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+        #[cfg(any(
+            target_os = "android",
+            target_os = "ios",
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "linux"
+        ))]
         let graph = graph.with_platform_input_blockers(
             self.pointer_index
                 .platform_view_input_blockers(&self.platform_view_order_paths(root_node)),
@@ -2636,7 +2642,13 @@ impl ComponentTree {
         )
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
     fn platform_view_order_paths(&self, root_node: indextree::NodeId) -> Vec<(u64, Vec<usize>)> {
         let mut views = Vec::new();
         for node_id in root_node.descendants(&self.tree) {
