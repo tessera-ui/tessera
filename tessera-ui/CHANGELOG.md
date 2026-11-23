@@ -1,13 +1,8 @@
 ## [v3.0.0] - 2026-11-16
 
-Tessera 3 replaces the 2.x immediate-mode model with a retained, reactive
-runtime: components declare typed props, only invalidated calls rebuild, and
-layout, input, and drawing attach to nodes through modifiers. Most application
-and component code needs to be rewritten; the
-[component calls](https://github.com/tessera-ui/tessera/blob/main/docs/COMPONENT_CALLS.md),
-[state and async](https://github.com/tessera-ui/tessera/blob/main/docs/STATE_AND_ASYNC.md),
-and [layout policy](https://github.com/tessera-ui/tessera/blob/main/docs/LAYOUT_POLICIES.md)
-guides describe the new model.
+Tessera 3 introduces typed component props, reactive state, and modifiers for
+layout, input, and drawing. The breaking changes below explain how to migrate
+application and component code from 2.x.
 
 ### Breaking changes
 
@@ -17,8 +12,8 @@ guides describe the new model.
   become setters, with defaults resolved in the body (`#[default(...)]` and
   `derive(Prop)` are gone). Child content is a `RenderSlot` /
   `RenderSlotWith<T>` and actions are `Callback` / `CallbackWith<T, R>`; each
-  gets a closure setter and a `*_shared` setter. A call registers one use and
-  returns its builder; setters panic once that use has been built.
+  gets a closure setter and a `*_shared` setter. Configure a call through its
+  returned builder; setters panic after that call has been built.
   `#[tessera]` no longer accepts arguments.
 
   ```rust
@@ -57,9 +52,9 @@ guides describe the new model.
   data lives in models: implement `ModelInit`, take a `Model<T>` parameter, and
   access it with `with` / `with_mut`. `State::new` is only valid in model
   initializers.
-- **Context.** `provide_context(value, || ..)` takes a value (`T: PartialEq`)
-  and invalidates readers when it changes; `use_context::<T>()` returns
-  `Option<Context<T>>`.
+- **Context.** `provide_context(value, || ..)` takes a value (`T: PartialEq`).
+  `use_context::<T>()` returns `Option<Context<T>>` and consumers see updates
+  when the provided value changes.
 - **Async and time.** Use `Task` handles (cancelled on drop) with
   `spawn(Dispatcher::{Ui, Io, Default}, future)`, `on(dispatcher, future)`,
   `spawn_local`, and composition-scoped `launch(key, future)` /
@@ -84,23 +79,16 @@ guides describe the new model.
   `Focus` is replaced by `FocusRequester`, focus groups and scopes, and the
   free functions in `tessera_ui::focus`; `FocusModifierExt` and
   `CursorModifierExt` are imported from `tessera_ui::modifier`.
-- **Rendering extensions moved to `tessera_ui::render`.** Draw and compute
-  commands receive `DrawGeometry` (local size plus local-to-window transform)
-  and declare separate `SampleRegion` and `DrawRegion`s (`BarrierRequirement`
-  is gone). UI draw pipelines must set
-  `depth_stencil: tessera_ui::render::ui_stencil_state()`. Composite pipelines,
-  render middleware, render-graph local/external textures, and the compute
-  resource manager were removed; pipelines own their buffers and use
-  `GraphicsDevice` scratch textures. Register pipelines through a
-  `RenderModule` or `TesseraPackage`.
+- **Custom rendering uses `tessera_ui::render`.** Draw and compute commands
+  describe geometry and sampling regions. Register them through a
+  `RenderModule` or `TesseraPackage`; UI draw pipelines use
+  `tessera_ui::render::ui_stencil_state()` for clipping.
 - **Assets.** Generated assets are `tessera_ui::Asset` values loaded
   asynchronously with `Resource::load(source, decode)`; `Source` is `Asset` or
   `Memory` bytes, and decoders receive `tessera_ui::asset::Bytes`.
 - **Moved out of `tessera-ui`.** The router is in `tessera-shard`; the
   `Clipboard` service is `tessera_platform::Clipboard`; the `shard` macro and
-  `tessera_ui_shard` are no longer re-exported. `Arena`, `NodeId`,
-  `ComponentTree`, `TesseraRuntime`, and the `dyn_eq` modules are no longer
-  public.
+  `tessera_ui_shard` are no longer re-exported.
 - **Dependencies.** wgpu 30, AccessKit 0.25 types in the accessibility API,
   and Tessera's maintained `winit` fork (re-exported as `tessera_ui::winit`).
   Android uses `GameActivity` instead of `NativeActivity`.
@@ -110,8 +98,6 @@ guides describe the new model.
 
 ### Added
 
-- Partial replay: state reads are tracked, and only invalidated component
-  calls rebuild; calls with unchanged props are skipped.
 - `key` for stable identity in dynamic lists, and `retain` /
   `retain_with_key` for state that survives navigation.
 - Shape clipping for rounded and elliptical masks (exposed as the
@@ -147,11 +133,8 @@ guides describe the new model.
 
 ### Fixed
 
-- The renderer falls back when `PIPELINE_CACHE` is unsupported instead of
-  panicking.
-- The renderer thread name is valid on Linux.
+- Improved app startup across Linux systems and graphics adapters.
 - Nested clip rectangles intersect correctly.
-- Shader variable limits are capped to what the adapter supports.
 - Child taps do not activate ancestor click handlers, while drag and scroll
   observers still receive the press. Ordinary focus changes preserve held
   pointer presses.
@@ -160,34 +143,18 @@ guides describe the new model.
 
 ### Performance
 
-- Retained rendering redraws only damaged scene regions and skips frames when
-  nothing changed.
-- Background sampling copies only the declared sampling regions, and compute
-  effects filter only their regions using pooled scratch textures.
-- Lower memory use: GPU memory is suballocated in 8 MiB blocks, render targets
-  are created on first use, idle caches are bounded, and packaged assets are
-  memory-mapped or borrowed instead of copied.
-- Uses DX12 with DirectComposition on Windows, and reuses window resize
-  capacity to keep resizing smooth.
-- Declaring and retaining component calls avoids per-frame allocations.
+- Less rendering work for idle interfaces, small updates, and effects that
+  sample a limited area.
+- Lower GPU memory use and less memory overhead when loading packaged assets.
+- Smoother window resizing on Windows.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.5.0...tessera-ui-v3.0.0)
 
 ## [v2.5.0] - 2025-11-18 +08:00
 
-### Changes
-
-- feat: Refactor pipeline traits to use context structs
-- perf(app): change memory hints from Performance to MemoryUsage
-- feat(pipeline): add pipeline cache support
-- docs(lib): Update link for `tessera-ui-basic-components` in documentation
-
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.4.1...tessera-ui-v2.5.0)
 
 ## [v2.4.1] - 2025-11-17 +08:00
-
-### Changes
-
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.4.0...tessera-ui-v2.4.1)
 
@@ -195,13 +162,7 @@ guides describe the new model.
 
 ### Changes
 
-- perf(core): use smallvec for hot buffers
-- fix: remove wrong test
-- fix(compute): fix scheduling bug in compute pipeline
-- perf(renderer): add separate sampling/collision padding for barrier batching
-- refactor: clean up incomplete documentation comments
-- fix(accessibility): keep AccessKit tree in sync
-- feat(accessibility): integrate AccessKit for screen reader support
+- Screen readers can navigate Tessera interfaces through AccessKit.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.3.0...tessera-ui-v2.4.0)
 
@@ -209,7 +170,7 @@ guides describe the new model.
 
 ### Changes
 
-- feat: add speed limit for inertial scrolling
+- Inertial scrolling now has a speed limit.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.2.0...tessera-ui-v2.3.0)
 
@@ -217,35 +178,9 @@ guides describe the new model.
 
 ### Changes
 
-- feat: Refine touch inertia sampling
-- build(deps): update deps
-- perf(blur): restructure pipeline around dual pass
-- feat(dp): support mul/div float values
-- feat(compute): copy scene before blur dispatch
-- feat(renderer/compute): batch compute dispatch support
-- feat: Optimize mobile touch
-- fix(android): App freezes when returning from background
-- perf(renderer): disable MSAA by default
-- perf(renderer/reorder): bias scheduling toward contiguous batches
-- test(reorder): enhance test cases
-- fix(fluid_glass): Fix abnormal black edge refraction
-- perf(renderer/reorder): Prioritize processing instruction batches with larger quantities
-- perf: Replace full-screen SDF and GPU vertex generation in shape pipeline with local SDF and draw_indexed instanced rendering
-- chore(deps): bump libc from 0.2.176 to 0.2.177
-- build(deps): update dependencies
-- refactor(renderer): Refactor ping-pong rendering
-- fix(renderer): allow merging into batch when no previous command type is present
-- refactor(renderer): remove insignificant PassTarget wrapper
-- perf(renderer): avoid full texture copy during ping-pong rendering by using blit shader to sample specified range to target texture, reducing overhead
-- style: make formater happy
-- fix(ime): avoid redundant ime state toggles
-- perf(renderer): avoid useless texture copy
-- Merge pull request #63 from tessera-ui/dependabot/cargo/bytemuck-1.24.0
-- chore(deps): bump parking_lot from 0.12.4 to 0.12.5
-- chore(deps): bump bytemuck from 1.23.2 to 1.24.0
-- chore(deps): bump petgraph from 0.8.2 to 0.8.3
-- chore(deps): bump windows from 0.62.0 to 0.62.2
-- chore(deps): bump libc from 0.2.175 to 0.2.176
+- `Dp` supports multiplication and division by floating-point values.
+- Improved touch responsiveness and blur rendering.
+- Fixed Android apps freezing after returning from the background.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.1.0...tessera-ui-v2.2.0)
 
@@ -253,17 +188,8 @@ guides describe the new model.
 
 ### Changes
 
-- fix(renderer): correctly handle lost/outdated surface errors
-- feat(renderer): add register_draw_pipeline/register_compute_pipeline and update call sites
-- docs(tessera-ui): update DrawablePipeline.draw docs to describe batch rendering and scene_texture_view
-- docs(component_tree): update doc examples in constraint.rs to use explicit DimensionValue:: variants
-- refactor(constraint): use `Self::` for `Wrap` variant in default implementation and change `get_max` to a const function
-- refactor(clipboard): add #[must_use] attribute to Clipboard::new() method
-- refactor(app): simplify return logic in apply_clip_to_batch_rect function
-- refactor(cursor): rename scroll variables for clarity in inertia handling
-- refactor(color): replace `Color::` with `Self::` for color constants and add #[must_use] to relevant methods
-- refactor(component_tree): replace [`DimensionValue::`](tessera-ui/src/component_tree/constraint.rs:1) with [`Self::`](tessera-ui/src/component_tree/constraint.rs:1) and update doc examples
-- refactor(command): simplify enum variant usage and remove examples
+- Draw and compute pipelines can be registered directly with the renderer.
+- Rendering recovers when a window surface is lost or outdated.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v2.0.0...tessera-ui-v2.1.0)
 
@@ -271,25 +197,16 @@ guides describe the new model.
 
 ### Changes
 
-- feat(shape_def): change RoundedRectangle corner radii to Dp
-- feat(tessera-ui): add event clipping and clip propagation for input handling and draw commands
+- Rounded rectangle corner radii use `Dp`.
+- Clipping applies consistently to drawing and input.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.13.2...tessera-ui-v2.0.0)
 
 ## [v1.13.2] - 2025-09-15 +08:00
 
-### Changes
-
-- fix(renderer): improve error handling during rendering process
-- fix(renderer): ensure full redraw on surface resize
-
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.13.1...tessera-ui-v1.13.2)
 
 ## [v1.13.1] - 2025-09-13 +08:00
-
-### Changes
-
-- refactor(input-handler): rename state_handler → input_handler across code and docs
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.13.0...tessera-ui-v1.13.1)
 
@@ -297,18 +214,12 @@ guides describe the new model.
 
 ### Changes
 
-- feat(color): add TEAL and ORANGE color constants with descriptions
-- feat(renderer, basic-components, example)!: propagate clip-aware drawing and clamp Fluid Glass sampling
-- fix(test): update examples to new Router API and clean up docs
-- refactor(example): rework(ing) demos to better showcase components and updated APIs
+- Added `TEAL` and `ORANGE` color constants.
+- Clipping now applies to custom drawing and fluid-glass effects.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.12.1...tessera-ui-v1.13.0)
 
 ## [v1.12.1] - 2025-09-07 +08:00
-
-### Changes
-
-- docs(basic-components): refine rustdoc, unify intra-doc links, add module docs, tidy examples
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.12.0...tessera-ui-v1.12.1)
 
@@ -316,24 +227,11 @@ guides describe the new model.
 
 ### Changes
 
-- refactor(color): make methods to const for better optimization
-- fix(renderer): suppress unwrap on dummy render to avoid panic
-- feat(bottom-nav-bar): implement bottom navigation bar component and simplify routing API
-- chore(deps): bump windows from 0.61.3 to 0.62.0
-- refactor(renderer): remove debug println from render loop
+- Added a bottom navigation component and simplified the routing API.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.11.2...tessera-ui-v1.12.0)
 
 ## [v1.11.2] - 2025-09-05 +08:00
-
-### Changes
-
-- perf(renderer): add dummy render on clean frames to drive immediate-mode updates with lower cost
-- Revert "perf(renderer): throttle frames based on dynamic monitor refresh rate"
-- perf(renderer): throttle frames based on dynamic monitor refresh rate
-- refactor(renderer): set alpha mode to Auto for improved compatibility
-- Revert "refactor(renderer): simplify surface configuration using AutoVsync and automatic composite alpha"
-- Revert "fix(renderer): change present mode from AutoVsync to Fifo for improved frame synchronization"
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.11.1...tessera-ui-v1.11.2)
 
@@ -341,8 +239,7 @@ guides describe the new model.
 
 ### Changes
 
-- fix(renderer): change present mode from AutoVsync to Fifo for improved frame synchronization
-- fix(renderer): take position and size into account for dirty frame detection
+- Improved frame synchronization and window resizing behavior.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.11.0...tessera-ui-v1.11.1)
 
@@ -350,39 +247,15 @@ guides describe the new model.
 
 ### Changes
 
-- refactor(renderer): simplify surface configuration using AutoVsync and automatic composite alpha
-- docs(command): add example struct for implementing DrawCommand trait
-- refactor(renderer.compute): replace Uuid-based resource IDs with sequential usize indices
-- perf(renderer): add dirty frame detection and dynamic command equality
-- perf(renderer): Optimize pipeline dispatch to O(1)
-- chore(deps): bump uuid from 1.18.0 to 1.18.1
-- refactor(renderer): use imported tracing::instrument attribute
-- refactor(logging): replace log/flexi_logger/android_logger with tracing
-- feat(renderer): add entry point wrapper to ensure proper tessera macro usage
+- Added a shared entry-point API for starting Tessera apps.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.10.2...tessera-ui-v1.11.0)
 
 ## [v1.10.2] - 2025-08-26 +08:00
 
-### Changes
-
-- refactor(lib, renderer): clean up example code and improve formatting in documentation
-- refactor(image, constraint): replace to_max_px with get_max for constraint handling
-- refactor(tessera-ui): reorganize DimensionValue implementation structure
-- fix(cursor): improve cursor position cleanup to prevent premature clearing
-- chore(deps): bump arboard from 3.6.0 to 3.6.1
-- chore: add new line in changelog sections for better readability
-- fix(text-editor/renderer): improve text selection rendering and clipping system
-
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.10.1...tessera-ui-v1.10.2)
 
 ## [v1.10.1] - 2025-08-25 +08:00
-
-### Changes
-
-- refactor: optimize loop logic and condition checks
-- refactor(renderer, components): extract helpers and simplify rendering/compute flow
-- fix(render): change current_batch_draw_rect to Option type for better handling of draw rectangles
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.10.0...tessera-ui-v1.10.1)
 
@@ -390,36 +263,12 @@ guides describe the new model.
 
 ### Changes
 
-- fix(renderer): correct clip command handling logic
-- Merge pull request #33 from tessera-ui/dependabot/cargo/rayon-1.11.0
-- feat(clip): implement component clipping to prevent content overflow
-- chore(deps): bump rayon from 1.10.0 to 1.11.0
-- refactor(renderer/app): streamline main render loop with pass-based architecture
-- feat(renderer/reorder): optimize instruction batching with batch_potential heuristic and improve stable sorting
-- test(tests): update instruction reordering tests to account for non-deterministic order
-- feat(renderer): optimize barrier batch draw logic and add PxRect::ZERO constant
-- feat(renderer/app): implement conditional clear pass for initial rendering
-- feat(renderer/reorder): optimize PriorityNode stable sorting and batch grouping, extend tests for instruction reordering
-- feat(tests): add unit tests for instruction reordering logic
-- Merge pull request #30 from tessera-ui/dependabot/cargo/uuid-1.18.0
-- chore(deps): bump uuid from 1.17.0 to 1.18.0
-- chore(deps): bump libc from 0.2.174 to 0.2.175
-- feat(example-calculator): add CalStyle enum and CLI option for style switching, refactor keyboard and background to support glass and material styles, introduce Color::GRAY constant, update dependencies for clap support
-- perf(renderer/reorder): improve PriorityNode sorting by adding type_id for finer-grained priority control
-- refactor(renderer,pipelines,logo): unify import order, optimize pipeline interfaces for batched command processing, simplify logo component structure
-- refactor(renderer): remove debug print statements from command processing for cleaner output
-- perf(renderer): refactor rendering pipeline interfaces for batched command processing and optimize dependency graph rules
-- perf(renderer): batch draw commands and optimize fluid_glass pipeline
-- feat(renderer): add scene_texture_view parameter to render pass methods for improved pipeline flexibility and future glass morphism support
-- chore(deps): bump bytemuck from 1.23.1 to 1.23.2
+- Components gained clipping to prevent content from drawing outside their bounds.
+- The calculator example gained switchable visual styles.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.9.1...tessera-ui-v1.10.0)
 
 ## [v1.9.1] - 2025-08-08 +08:00
-
-### Changes
-
-- fix(tessera-ui): use positive() instead of abs() for rect clamping
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.9.0...tessera-ui-v1.9.1)
 
@@ -427,22 +276,12 @@ guides describe the new model.
 
 ### Changes
 
-- refactor(renderer, deps): replace tokio with pollster and remove custom runtime
-- perf(renderer): implement instruction reordering and scoped compute
-- perf(renderer): implement scissor and batching for barrier commands
-- feat(macros, shard): introduce declarative client-side routing
-- feat(shard, macros): introduce shard state management and re-export macros
-- feat(renderer): add window_title to TesseraConfig and support custom window title
-- docs(runtime): include winit import in example and adjust formatting
-- refactor(runtime): replace TesseraRuntime::read()/write() calls with with()/with_mut() closures and deprecate old methods
+- Added declarative routing with route-scoped state.
+- `TesseraConfig` supports a custom window title.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.8.1...tessera-ui-v1.9.0)
 
 ## [v1.8.1] - 2025-08-03 +08:00
-
-### Changes
-
-- refactor(runtime)!: privatize window_size and add window_size() method
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.8.0...tessera-ui-v1.8.1)
 
@@ -450,8 +289,7 @@ guides describe the new model.
 
 ### Changes
 
-- feat(glass-components): enhance border rendering with 3D bevel highlight
-- chore(deps): bump tokio from 1.47.0 to 1.47.1
+- Glass component borders gained a beveled highlight.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.7.0...tessera-ui-v1.8.0)
 
@@ -459,7 +297,7 @@ guides describe the new model.
 
 ### Changes
 
-- feat(basic-components,component_tree): unify cursor position API and add event blocking methods
+- Unified cursor position APIs and added event-blocking modifiers.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.6.0...tessera-ui-v1.7.0)
 
@@ -467,28 +305,15 @@ guides describe the new model.
 
 ### Changes
 
-- docs(renderer): correct comment for TesseraConfig's default
-- feat(scrollable): support Overlay/Alongside scrollbar layouts, always-visible by default, improve API
-- build(deps): remove unused dependencies
-- Merge pull request #20 from tessera-ui/dependabot/cargo/tokio-1.47.0
-- chore(deps): bump tokio from 1.46.1 to 1.47.0
-- chore(deps): bump winit from 0.30.11 to 0.30.12
+- Scrollbars support overlay and alongside layouts, with an always-visible default.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v1.5.2...tessera-ui-v1.6.0)
 
 ## [v1.5.2] - 2025-07-28 +08:00
 
-### Changes
-
-- fix(tessera-ui): ensure abs_position is calculated for all nodes
-
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.5.1...tessera-ui-v1.5.2)
 
 ## [v1.5.1] - 2025-07-25 +08:00
-
-### Changes
-
-- chore: update Cargo.toml to include homepage.workspace for all packages
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.5.0...tessera-ui-v1.5.1)
 
@@ -496,14 +321,7 @@ guides describe the new model.
 
 ### Changes
 
-- feat(tessera-ui): add Color::lerp and refine Px methods
-- feat(px): correct Px::abs behavior and add positive()/negative()
-- feat(px): add mul_f32 and div_f32 methods
-- feat(cursor): impl PartialEq for cursor event types
-- refactor(component_tree): remove unused node_id from InputHandlerInput
-- feat(dp): add ZERO constant
-- feat(constraint): impl From<Px> and From<Dp> for DimensionValue
-- feat(px): add Mul and Div implementations
+- Added color interpolation, `Dp::ZERO`, and arithmetic operations for `Dp` and `Px`.
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.4.0...tessera-ui-v1.5.0)
 
@@ -511,8 +329,7 @@ guides describe the new model.
 
 ### Changes
 
-- feat(clipboard): add clear method to clipboard
-- feat(clipboard): add actual support of clipboard for android.
+- Added clipboard clearing and Android clipboard support.
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.3.0...tessera-ui-v1.4.0)
 
@@ -520,10 +337,7 @@ guides describe the new model.
 
 ### Changes
 
-- fix(clipboard): Add no_run attribute to clipboard documentation code examples
-- fix(node): ensure metadata is reset and initialized for each node during measurement
-- fix(node): ensure metadata exists for nodes during measurement
-- feat(tessera-ui): add convenient constants to DimensionValue
+- Added convenient `DimensionValue` constants.
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.2.0...tessera-ui-v1.3.0)
 
@@ -531,9 +345,7 @@ guides describe the new model.
 
 ### Changes
 
-- docs(tessera-ui): add comprehensive documentation for clipboard module
-- feat(clipboard): introduce core clipboard abstraction
-- Fix non-posix pthread_setname_np call for apple platform
+- Added a cross-platform clipboard API.
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.1.0...tessera-ui-v1.2.0)
 
@@ -541,14 +353,11 @@ guides describe the new model.
 
 ### Changes
 
-- chore: transfer repo to https://github.com/tessera-ui/tessera
-- refactor(core): provide ergonomic helpers on `MeasureInput`
+- Added helpers for implementing custom measurement behavior.
 
 [Compare with previous release](https://github.com/shadow3aaa/tessera/compare/tessera-ui-v1.0.0...tessera-ui-v1.1.0)
 
 ## [v1.0.0] - 2025-07-21 +08:00
-
-### Changes
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v0.5.0...tessera-ui-v1.0.0)
 
@@ -556,7 +365,7 @@ guides describe the new model.
 
 ### Changes
 
-- feat(tessera-ui): expose keyboard modifier state for shortcuts
+- Keyboard modifier state is available for shortcut handling.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v0.4.0...tessera-ui-v0.5.0)
 
@@ -564,7 +373,7 @@ guides describe the new model.
 
 ### Changes
 
-- feat(tessera-ui): add on_close callback for window close events
+- Added a callback for window close requests.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v0.3.0...tessera-ui-v0.4.0)
 
@@ -572,14 +381,11 @@ guides describe the new model.
 
 ### Changes
 
-- perf(tessera-ui): implement viewport culling and disable MSAA by default
-- fix(renderer): allow window manager to handle resize cursors at edges
-- feat(runtime): add minimize state handling and callback system
+- Added window minimize notifications and close callbacks.
+- Window managers handle resize cursors at window edges.
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v0.2.1...tessera-ui-v0.3.0)
 
 ## [v0.2.1] - 2025-07-19 +08:00
-
-### Changes
 
 [Compare with previous release](https://github.com/tessera-ui/tessera/compare/tessera-ui-v0.2.0...tessera-ui-v0.2.1)

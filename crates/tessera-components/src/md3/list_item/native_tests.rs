@@ -1,4 +1,3 @@
-//! List row typography, selection, and input regressions.
 //!
 //! ## Usage
 //!

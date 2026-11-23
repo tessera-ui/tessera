@@ -46,7 +46,7 @@ mod token_sets;
 
 #[cfg(all(test, not(target_family = "wasm")))]
 #[path = "dialogs_tests.rs"]
-mod regression_tests;
+mod tests;
 
 #[cfg(all(test, not(target_family = "wasm")))]
 #[path = "dialogs_scaled_tests.rs"]

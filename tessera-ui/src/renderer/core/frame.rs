@@ -93,8 +93,6 @@ struct SubmitBatchParams<'a, 'b> {
 }
 
 impl RenderCore {
-    /// Renders the frame and presents it to the window surface, or keeps it in
-    /// the offscreen copy when the core has no surface.
     pub(crate) fn render(
         &mut self,
         graph: RenderGraph,

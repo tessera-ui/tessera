@@ -490,7 +490,7 @@ struct DatePickerConfig {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::date_picker::{CalendarDate, DatePickerController, date_picker};
+/// use tessera_components::md3::date_picker::{CalendarDate, date_picker};
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
@@ -498,11 +498,8 @@ struct DatePickerConfig {
 /// #     .child(|| {
 /// date_picker().today(CalendarDate::new(2026, 7, 16).unwrap());
 ///
-/// let mut state = DatePickerController::default();
-/// assert!(state.selected_date().is_none());
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn date_picker(
@@ -695,7 +692,6 @@ fn date_picker_content(args: DatePickerConfig) {
 ///     .picker_today(CalendarDate::new(2026, 7, 16).unwrap());
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn date_picker_dialog(

@@ -202,7 +202,6 @@ impl SlotEntry {
     }
 }
 
-/// Slot order of one component instance, compared positionally on replay.
 #[derive(Default)]
 pub(crate) struct InstanceSlotCursor {
     order: crate::gap_buffer::GapBuffer<SlotHandle>,
@@ -399,8 +398,6 @@ impl SlotTable {
     }
 }
 
-/// Runs `access` with the slot table and the slot order of the executing call
-/// that owns `key`, when that call is available.
 fn with_slot_order<R>(
     key: &SlotKey,
     access: impl FnOnce(&mut SlotTable, Option<&mut InstanceSlotCursor>) -> R,
@@ -570,8 +567,6 @@ impl FunctorHandle {
     }
 }
 
-/// The latest closure of one remembered callback or render slot, tagged with
-/// its concrete type. `K` keeps handle kinds with the same signature distinct.
 struct FunctorCell<D: ?Sized, K> {
     current: RefCell<(Rc<D>, TypeId)>,
     kind: PhantomData<fn() -> K>,
@@ -676,7 +671,6 @@ pub(crate) struct StructureReconcileResult {
     pub removed_nodes: HashSet<u64>,
 }
 
-/// Persisted replay snapshot for one component instance.
 #[derive(Clone)]
 pub(crate) struct ReplayNodeSnapshot {
     pub instance_logic_id: u64,
@@ -686,12 +680,10 @@ pub(crate) struct ReplayNodeSnapshot {
     pub replay: Rc<dyn ErasedComponent>,
 }
 
-/// Starts recording replay snapshots for a build pass.
 pub(crate) fn begin_frame_component_replay_tracking() {
     TesseraRuntime::with_mut(|runtime| runtime.component_tree.begin_call_epoch());
 }
 
-/// Drops replay snapshots of removed calls once no runtime state is borrowed.
 pub(crate) fn release_retired_replay_snapshots() {
     let retired =
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.take_retired_snapshots());
@@ -940,14 +932,6 @@ fn take_next_node_instance_logic_id_override() -> Option<u64> {
     with_execution_context_mut(|context| context.next_node_instance_logic_id_override.take())
 }
 
-/// Runs `f` inside a replay scope restored from a previously recorded component
-/// snapshot.
-///
-/// The replay scope restores:
-/// - the control-flow group path active at the original call site
-/// - the keyed-instance override active at the original call site
-/// - a one-shot instance-logic-id override for the replayed component root
-/// - the inherited context bindings captured at the original call site
 pub(crate) fn with_replay_scope<R>(
     instance_logic_id: u64,
     group_path: GroupPath,
@@ -1044,7 +1028,6 @@ pub(crate) fn record_replay_boundary_invalidation_for_instance_key(instance_key:
     }
 }
 
-/// Re-queues invalidations that could not be processed in the current frame.
 pub(crate) fn defer_build_invalidations(instance_keys: &HashSet<u64>) {
     if instance_keys.is_empty() {
         return;
@@ -1389,13 +1372,10 @@ pub(crate) fn tick_frame_clock() {
     });
 }
 
-/// Returns the time of the current frame, or the current time before the
-/// first frame.
 pub(crate) fn frame_time() -> Instant {
     with_frame_clock_tracker(|tracker| tracker.current_frame_time).unwrap_or_else(Instant::now)
 }
 
-/// Nanoseconds since the first frame, for diagnostics.
 pub(crate) fn frame_nanos_since_origin() -> u64 {
     with_frame_clock_tracker(|tracker| {
         tracker
@@ -1407,7 +1387,6 @@ pub(crate) fn frame_nanos_since_origin() -> u64 {
     })
 }
 
-/// Returns the elapsed time since the previous frame.
 #[cfg(feature = "profiling")]
 pub(crate) fn frame_delta() -> Duration {
     with_frame_clock_tracker(|tracker| tracker.frame_delta)
@@ -1610,28 +1589,14 @@ pub(crate) fn take_layout_structure_changes() -> StructureReconcileResult {
 /// same type together.
 ///
 /// Component factories such as [`remember`] run only during a Tessera build.
-/// Remembered state survives recomposition while its slot is used; [`retain`]
-/// also keeps unused slots until the component unmounts. [`Model`] provides
-/// an owner scope for states created while initializing its value.
+/// Remembered state survives recomposition while used. [`retain`] keeps state
+/// even if a branch skips it, until its owning component unmounts. [`Model`]
+/// owns states created while initializing its value.
 ///
 /// The same methods work on every thread. When `T: Send` the handle is `Send`
 /// and `Sync`; another thread's access waits for the owning UI session's next
 /// frame boundary, so a frame never observes a write midway. Access rejects
 /// stale handles and handles of a closed session.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn counter() {
-///     let count = remember(|| 0usize);
-///     count.with_mut(|c| *c += 1);
-///     let current = count.get();
-///     assert!(current >= 1);
-/// }
-/// ```
 pub struct State<T> {
     session: u128,
     slot: SlotHandle,
@@ -2084,11 +2049,9 @@ impl Default for RuntimeGlobals {
 pub struct TesseraRuntime {
     /// Hierarchical structure of all UI components in the application.
     pub component_tree: ComponentTree,
-    /// Current window dimensions in physical pixels.
     pub(crate) window_size: [u32; 2],
     /// Cursor icon change request from UI components.
     pub cursor_icon_request: Option<winit::window::CursorIcon>,
-    /// Whether the window is currently minimized.
     pub(crate) window_minimized: bool,
 }
 
@@ -2125,7 +2088,6 @@ impl TesseraRuntime {
             .children_scale = scale;
     }
 
-    /// Appends a modifier chain to the current component node.
     pub(crate) fn append_current_modifier(&mut self, modifier: Modifier) {
         if let Some(node) = self.component_tree.current_node_mut() {
             node.modifier = std::mem::take(&mut node.modifier).then(modifier);
@@ -2416,8 +2378,6 @@ pub struct CurrentComponentInstanceGuard {
     popped: bool,
 }
 
-/// Guard that keeps the instance key of the layout node currently being
-/// measured on the execution stack.
 pub(crate) struct MeasuredNodeInstanceGuard {
     popped: bool,
 }
@@ -2505,7 +2465,6 @@ impl Drop for CurrentComponentInstanceGuard {
     }
 }
 
-/// Push the instance key of the layout node currently being measured.
 pub(crate) fn push_measured_node_instance_key(instance_key: u64) -> MeasuredNodeInstanceGuard {
     with_execution_context_mut(|context| {
         context.measured_node_instance_key_stack.push(instance_key);
@@ -2532,7 +2491,6 @@ impl Drop for MeasuredNodeInstanceGuard {
     }
 }
 
-/// Instance key of the layout node currently being measured, if any.
 pub(crate) fn current_measured_node_instance_key() -> Option<u64> {
     with_execution_context(|context| context.measured_node_instance_key_stack.last().copied())
 }
@@ -2581,7 +2539,7 @@ pub(crate) fn reserve_component_identity_in(
     }
 }
 
-/// Push the given node id as the current executing component for this thread.
+/// Sets the active node context while processing component work.
 pub fn push_current_node(
     node_id: NodeId,
     component_type_id: u64,
@@ -2592,11 +2550,6 @@ pub fn push_current_node(
     })
 }
 
-/// Push the given node id with an already resolved instance logic id.
-///
-/// This is used outside build (for example input/measure), where component
-/// identity must be restored from the recorded tree node rather than derived
-/// from call order.
 pub fn push_current_node_with_instance_logic_id(
     node_id: NodeId,
     instance_logic_id: u64,
@@ -2762,7 +2715,6 @@ pub fn begin_component_node<P: Prop>(
     (scope, props.expect("component props"))
 }
 
-/// Props of the call being entered, shared with its replay snapshot on demand.
 trait ScopeProps {
     fn erased(&self) -> &dyn ErasedComponent;
     fn share(&mut self) -> Rc<dyn ErasedComponent>;
@@ -2849,7 +2801,6 @@ fn begin_erased_component_node(
         _context: context,
     }
 }
-/// Emits the tree node owned by the executing call.
 pub(crate) fn emit_node<P>(role: NodeRole, policy: &P)
 where
     P: crate::modifier::LayoutPolicy + Clone + PartialEq,
@@ -2890,7 +2841,6 @@ where
     });
 }
 
-/// Replaces the drawing of the node emitted by the executing call.
 pub(crate) fn set_emitted_node_draw<N>(draw: N)
 where
     N: crate::modifier::DrawModifierNode + PartialEq,
@@ -2940,13 +2890,11 @@ fn current_instance_logic_id_opt() -> Option<u64> {
     with_execution_context(|context| context.instance_logic_id_stack.last().copied())
 }
 
-/// Returns the current component instance logic id.
 pub(crate) fn current_instance_logic_id() -> u64 {
     current_instance_logic_id_opt()
         .expect("current_instance_logic_id must be called inside a component")
 }
 
-/// Returns the instance key for the current component call site.
 pub(crate) fn current_instance_key() -> u64 {
     with_execution_context(|context| {
         let instance_logic_id = context
@@ -3611,7 +3559,6 @@ where
     callback(value)
 }
 
-/// Start a new state-slot epoch for the current recomposition pass.
 pub fn begin_recompose_slot_epoch() {
     with_slot_table_mut(SlotTable::begin_epoch);
 }
@@ -3682,10 +3629,10 @@ pub(crate) fn live_slot_instance_logic_ids() -> HashSet<u64> {
     with_slot_table(|table| table.slots_by_owner.keys().copied().collect())
 }
 
-/// Initializes state by an explicit key within the current component build.
+/// Initializes state with a stable key during a component build.
 ///
-/// Use stable business keys for reordered collections. The initializer runs only
-/// when the slot is first used; see [`State`] for access and lifetime rules.
+/// Use this for items whose order can change. The initializer runs the first
+/// time the key is used; see [`State`] for access and lifetime rules.
 pub fn remember_with_key<K, F, T>(key: K, init: F) -> State<T>
 where
     K: Hash,
@@ -3695,10 +3642,10 @@ where
     resolve_state_slot(key, init, false, "remember_with_key")
 }
 
-/// Initializes state by call order and control-flow position during a component build.
+/// Initializes state during a component build.
 ///
-/// Use [`remember_with_key`] for reordered collections; see [`State`] for access
-/// and lifetime rules.
+/// Use [`remember_with_key`] for reorderable collections; see [`State`] for
+/// access and lifetime rules.
 pub fn remember<F, T>(init: F) -> State<T>
 where
     F: FnOnce() -> T,
@@ -3767,21 +3714,6 @@ where
 ///
 /// This is useful for maintaining state identity in dynamic lists or loops
 /// where the order of items might change.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::{key, remember, tessera};
-///
-/// #[tessera]
-/// fn my_list(items: Vec<String>) {
-///     for item in items.iter() {
-///         key(item.clone(), || {
-///             let state = remember(|| 0);
-///         });
-///     }
-/// }
-/// ```
 pub fn key<K, F, R>(key: K, block: F) -> R
 where
     K: Hash,

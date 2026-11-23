@@ -237,17 +237,16 @@ enum SearchBarLayoutKind {
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::search::{SearchBarController, search_bar};
+/// use tessera_components::md3::{search::{SearchBarController, search_bar}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         search_bar()
 ///             .controller(remember(|| SearchBarController::new(true)))
-///             .content(|| {});
+///             .content(|| text("Recent searches"));
 ///     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn search_bar(
@@ -384,17 +383,16 @@ fn resolve_search_bar(
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::search::{SearchBarController, docked_search_bar};
+/// use tessera_components::md3::{search::{SearchBarController, docked_search_bar}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         docked_search_bar()
 ///             .controller(remember(|| SearchBarController::new(true)))
-///             .content(|| {});
+///             .content(|| text("Search results"));
 ///     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn docked_search_bar(

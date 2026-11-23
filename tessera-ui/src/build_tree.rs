@@ -1,9 +1,3 @@
-//! Component tree build helpers for recomposition and replay.
-//!
-//! ## Usage
-//!
-//! Rebuild or partially replay the component tree before layout and rendering.
-
 use std::{fmt::Write as _, sync::Arc, time::Duration};
 
 use rustc_hash::FxHashSet as HashSet;

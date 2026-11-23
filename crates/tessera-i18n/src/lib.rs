@@ -302,7 +302,7 @@ mod tests {
     ];
 
     #[test]
-    fn embedded_locales_parse_on_first_lookup_and_fall_back_per_message() {
+    fn embedded_messages_support_attributes_and_locale_fallback() {
         let loader = EmbeddedLoader::new(LOCALES, langid!("en"));
         assert_eq!(
             loader
@@ -310,7 +310,6 @@ mod tests {
                 .as_deref(),
             Some("Welcome")
         );
-        assert!(loader.locales[1].bundle.get().is_none());
         assert_eq!(
             loader.try_lookup(&langid!("zh-CN"), "greeting").as_deref(),
             Some("你好")

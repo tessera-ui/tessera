@@ -291,7 +291,6 @@ fn compute_bottom_sheet_y(
     y + drag_offset
 }
 
-/// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(on_close: Callback) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>)> {
     Box::new(move |mut input: tessera_ui::KeyboardInput<'_>| {
         let mut handled = false;
@@ -703,7 +702,7 @@ fn bottom_sheet_content_wrapper(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::bottom_sheet::{BottomSheetController, bottom_sheet_provider};
+/// use tessera_components::md3::{bottom_sheet::{BottomSheetController, bottom_sheet_provider}, text::text};
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::remember;
 ///
@@ -712,14 +711,12 @@ fn bottom_sheet_content_wrapper(
 /// #     .child(|| {
 /// bottom_sheet_provider()
 ///     .accessibility_label("Additional options")
-///     .on_close_request(|| {})
 ///     .controller(remember(|| BottomSheetController::new(true)))
 ///     .partial_height(tessera_ui::Dp(240.0))
-///     .main_content(|| { /* main content */ })
-///     .bottom_sheet_content(|| { /* bottom sheet content */ });
+///     .main_content(|| text("Page content"))
+///     .bottom_sheet_content(|| text("More options"));
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn bottom_sheet_provider(

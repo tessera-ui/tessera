@@ -38,10 +38,6 @@ impl AccessibilityId {
         Self(id.0)
     }
 
-    /// Converts an arena node index into a frame-local identifier.
-    ///
-    /// This conversion does not preserve identity across tree rebuilds. Use
-    /// identifiers from the published accessibility tree for action requests.
     #[cfg(test)]
     pub(crate) fn from_component_node_id(node_id: indextree::NodeId) -> Self {
         // NodeId implements Into<usize>, giving us the 1-based index

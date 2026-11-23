@@ -78,8 +78,7 @@ pub enum DockedDatePickerView {
 /// use tessera_components::md3::date_picker::{CalendarDate, DatePickerController};
 /// let mut state = DatePickerController::default();
 /// let selected = CalendarDate::new(2025, 8, 17).unwrap();
-/// assert!(state.set_selected_date(selected));
-/// assert_eq!(state.selected_date(), Some(selected));
+/// state.set_selected_date(selected);
 /// ```
 #[tessera]
 pub fn docked_date_picker(

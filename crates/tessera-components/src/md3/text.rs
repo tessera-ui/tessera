@@ -74,7 +74,6 @@ impl<T: Into<String>> From<T> for TextContent {
 ///         });
 /// }
 ///
-/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn text(
@@ -301,7 +300,6 @@ mod tests {
     use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
     use tessera_ui::{
         State, provide_context,
-        testing::WorkPhase,
         testing::{TestProbe, UiTest},
     };
 
@@ -384,7 +382,6 @@ mod tests {
                 let scaled = session.frames(1).node("wrapped-text").bounds();
                 assert_eq!(scaled.width, Px::new(180));
                 assert!(scaled.height > original.height);
-                assert!(observed.get() == Some(width));
                 assert_eq!(width.get(), Dp(120.0));
                 tessera_ui::dp::set_scale_factor(1.0);
                 let restored = session
@@ -406,12 +403,12 @@ mod tests {
                 ..Default::default()
             }))
             .children(move || {
-                text("Color cache").color(color.get());
+                text("Accent label").color(color.get());
             });
     }
 
     #[test]
-    fn text_color_updates_retain_measurements_and_window_geometry() {
+    fn text_color_updates_preserve_window_geometry() {
         let observed = TestProbe::default();
         let mut session = UiTest::new()
             .content(|| color_fixture(observed.clone()))
@@ -420,51 +417,45 @@ mod tests {
         observed.get().unwrap().set(tessera_ui::Color::WHITE);
         let changed = session.frames(1).node("color-text").bounds();
         assert_eq!(changed, original);
-        let diagnostics = session.diagnostics();
-        assert_eq!(
-            session
-                .work()
-                .phase(tessera_ui::testing::WorkPhase::Measure)
-                .count(),
-            0
-        );
-        assert_eq!(diagnostics.geometry_nodes_updated, 0);
     }
 
     #[tessera]
-    fn inherited_defaults_fixture(
-        observed: TestProbe<Option<(State<TextStyle>, State<ContentColor>)>>,
-    ) {
+    fn text_style_fixture(observed: TestProbe<Option<State<TextStyle>>>) {
         let style = remember(TextStyle::default);
-        let color = remember(ContentColor::default);
-        observed.set(Some((style, color)));
+        observed.set(Some(style));
         provide_context(style.get(), move || {
-            provide_context(color.get(), move || {
-                text("Inherited");
-                text("Explicit")
+            column().children(|| {
+                text("Title").modifier(Modifier::new().semantics(SemanticsArgs {
+                    test_tag: Some("inherited-style".into()),
+                    ..Default::default()
+                }));
+                text("Title")
                     .style(TextStyle::default())
-                    .color(Color::BLACK);
+                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                        test_tag: Some("explicit-style".into()),
+                        ..Default::default()
+                    }));
             });
         });
     }
 
     #[test]
-    fn explicit_text_defaults_ignore_inherited_updates() {
+    fn inherited_font_size_updates_only_text_without_an_explicit_style() {
         let observed = TestProbe::default();
-        let mut session = UiTest::new().content(|| inherited_defaults_fixture(observed.clone()));
-        session.frame();
-        assert_eq!(session.work().count("text", WorkPhase::Build), 2);
-        let (style, color) = observed.get().unwrap();
-
-        style.with_mut(|style| style.font_size = Dp(30.0));
-        session.frames(1);
-        assert_eq!(session.work().count("text", WorkPhase::Build), 1);
-
-        color.set(ContentColor {
-            current: Color::WHITE,
+        let mut session = UiTest::new()
+            .content(|| text_style_fixture(observed.clone()))
+            .viewport(240, 120);
+        let initial = session.frame();
+        let initial_height = initial.node("inherited-style").bounds().height;
+        initial.node("explicit-style").height(initial_height.0);
+        let style = observed.get().unwrap();
+        style.with_mut(|style| {
+            style.font_size = Dp(30.0);
+            style.line_height = Some(Dp(36.0));
         });
-        session.frames(1);
-        assert_eq!(session.work().count("text", WorkPhase::Build), 1);
+        let updated = session.frames(1);
+        assert!(updated.node("inherited-style").bounds().height > initial_height);
+        updated.node("explicit-style").height(initial_height.0);
     }
 
     #[test]

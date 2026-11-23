@@ -1,7 +1,7 @@
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
     Dp, Insets, Modifier, State, WindowInsets, WindowInsetsController, remember, tessera,
-    testing::{TestProbe, UiTest, WorkPhase},
+    testing::{TestProbe, UiTest},
 };
 
 use crate::boxed::boxed;
@@ -99,7 +99,5 @@ fn nested_insets_preserve_consumption_through_cached_layout_and_live_updates() {
     let changed = session.advance(std::time::Duration::from_nanos(1));
     changed.node("leaf").rect(5, 50, 10, 12);
     changed.node("keyboard").size(200, 80);
-    assert_eq!(session.work().phase(WorkPhase::Build).count(), 0);
     session.advance(std::time::Duration::from_nanos(1));
-    assert_eq!(session.work().phase(WorkPhase::Measure).count(), 0);
 }

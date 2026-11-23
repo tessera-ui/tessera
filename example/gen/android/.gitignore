@@ -23,6 +23,3 @@ local.properties
 /tessera-plugins/
 /app/src/main/assets/tessera/
 /app/src/main/tessera-res/
-
-# Staged by the opt-in platform-view probe before building the debug APK.
-/app/src/debug/java/com/tessera/example/PlatformViewProbeFactory.java

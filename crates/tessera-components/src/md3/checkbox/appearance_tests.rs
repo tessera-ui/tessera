@@ -1,4 +1,3 @@
-//! Checkbox geometry and interactive outline regressions.
 //!
 //! ## Usage
 //!

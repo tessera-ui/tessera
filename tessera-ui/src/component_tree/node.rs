@@ -44,17 +44,13 @@ use super::{
 #[cfg(feature = "profiling")]
 use crate::profiler::{Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
 
-/// Whether a node measures its children or groups them for its nearest
-/// layout ancestor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum NodeRole {
     Group,
     Layout,
 }
 
-/// A node emitted by a layout or group primitive call.
 pub(crate) struct ComponentNode {
-    /// Name of the component that emitted this node, for diagnostics.
     pub(crate) fn_name: &'static str,
     pub(crate) role: NodeRole,
     pub(super) layout_children: Option<LayoutChildren>,
@@ -63,19 +59,14 @@ pub(crate) struct ComponentNode {
     #[cfg(feature = "profiling")]
     pub(crate) subtree_len: usize,
     pub(crate) children_scale: f32,
-    /// Stable logic identifier of this concrete component instance.
     pub(crate) instance_logic_id: u64,
-    /// Stable instance identifier for this node in the current frame.
     pub(crate) instance_key: u64,
     pub(crate) interaction: Option<Box<NodeInteraction>>,
     pub(crate) layout_coordinate_space: bool,
-    /// Node-local modifier chain attached during build.
     pub(crate) modifier: Modifier,
     pub(crate) attached_modifiers: crate::modifier::AttachedModifierChain,
-    /// Optional isolated state for policies that explicitly request it.
     pub(crate) layout_node: Option<Box<dyn crate::layout::LayoutPolicyDyn>>,
     pub(crate) layout_policy_input: LayoutPolicyHandle,
-    /// Draw modifier node used to record draw and compute commands.
     pub(crate) draw_node: crate::layout::DrawModifierHandle,
 }
 
@@ -123,39 +114,21 @@ impl ComponentNode {
 }
 
 pub(crate) struct NodeInteraction {
-    /// Pointer input handlers for capture stage (root to leaf).
     pub(crate) pointer_preview_handlers: Vec<Box<PointerInputHandlerFn>>,
-    /// Pointer input handlers for bubble stage (leaf to root).
     pub(crate) pointer_handlers: Vec<Box<PointerInputHandlerFn>>,
-    /// Pointer input handlers for final stage (root to leaf).
     pub(crate) pointer_final_handlers: Vec<Box<PointerInputHandlerFn>>,
-    /// Keyboard input handlers for preview stage (root to leaf).
     pub(crate) keyboard_preview_handlers: Vec<Box<KeyboardInputHandlerFn>>,
-    /// Keyboard input handlers for bubble stage (leaf to root).
     pub(crate) keyboard_handlers: Vec<Box<KeyboardInputHandlerFn>>,
-    /// IME input handlers for preview stage (root to leaf).
     pub(crate) ime_preview_handlers: Vec<Box<ImeInputHandlerFn>>,
-    /// IME input handlers for bubble stage (leaf to root).
     pub(crate) ime_handlers: Vec<Box<ImeInputHandlerFn>>,
-    /// Optional focus requester bound to this component node.
     pub(crate) focus_requester_binding: Option<FocusRequester>,
-    /// Optional focus registration attached to this component node.
     pub(crate) focus_registration: Option<FocusRegistration>,
-    /// Optional fallback target used when a focus scope restores focus.
     pub(crate) focus_restorer_fallback: Option<FocusRequester>,
-    /// Optional traversal policy used when directional navigation starts inside
-    /// this focus group or scope.
     pub(crate) focus_traversal_policy: Option<FocusTraversalPolicy>,
-    /// Optional callback invoked when the node's focus state changes.
     pub(crate) focus_changed_handler: Option<FocusChangedHandler>,
-    /// Optional callback invoked when the node participates in a focus event.
     pub(crate) focus_event_handler: Option<FocusEventHandler>,
-    /// Optional callback used to expand virtualized content for focus search.
     pub(crate) focus_beyond_bounds_handler: Option<FocusBeyondBoundsHandler>,
-    /// Optional callback used to reveal the focused rectangle inside a
-    /// container.
     pub(crate) focus_reveal_handler: Option<FocusRevealHandler>,
-    /// Callbacks notified when this node's window rectangle changes.
     pub(crate) globally_positioned_handlers: Vec<GloballyPositionedHandler>,
 }
 
@@ -209,7 +182,6 @@ impl InputTransforms {
     }
 }
 
-/// Contains metadata of the component node.
 pub(crate) struct ComponentNodeMetaData {
     pub(super) prepared_layout: Option<super::PreparedLayoutMetadata>,
     pub(super) clip_regions: Option<Box<ClipRegions>>,
@@ -218,41 +190,21 @@ pub(crate) struct ComponentNodeMetaData {
     pub(super) observes_size: bool,
     pub(super) paint_dirty: bool,
     accessibility_written: bool,
-    /// The computed data (size) of the node.
-    /// None if the node is not computed yet.
     pub computed_data: Option<ComputedData>,
     pub draw_layout: NodeDrawLayout,
-    /// Whether the most recent visit reused this node's measured layout.
     pub layout_cache_hit: bool,
-    /// Placement order among siblings within the parent layout result.
     pub placement_order: Option<u64>,
-    /// The node's start position, relative to its parent.
-    /// None if the node is not placed yet.
     pub rel_position: Option<PxPosition>,
-    /// The node's start position, relative to the root window.
-    /// Before placement modifiers are applied.
-    /// None if the node is not drawn yet.
     pub base_abs_position: Option<PxPosition>,
     pub local_to_window: Option<crate::LocalToWindow>,
     pub(super) input_transforms: Option<Box<InputTransforms>>,
     pub event_clip_bounds: Option<crate::FloatRect>,
-    /// The node's start position, relative to the root window.
-    /// After placement modifiers are applied.
-    /// None if the node is not drawn yet.
     pub abs_position: Option<PxPosition>,
-    /// Render fragment associated with this node.
-    ///
-    /// Commands are collected during the record phase and merged into the frame
-    /// graph during rendering.
     pub(crate) fragment: RenderFragment,
-    /// Whether this node clips its children.
     pub clips_children: bool,
     pub(crate) has_shape_clipping: bool,
-    /// Opacity multiplier applied to this node and its descendants.
     pub opacity: f32,
-    /// Accessibility information for this node.
     pub accessibility: Option<StoredSemantics>,
-    /// Handler for accessibility actions on this node.
     pub accessibility_action_handler: Option<AccessibilityActionHandler>,
 }
 
@@ -263,7 +215,6 @@ pub(super) struct ClipRegions {
 }
 
 impl ComponentNodeMetaData {
-    /// Creates a new `ComponentNodeMetaData` with default values.
     pub fn none() -> Self {
         Self {
             prepared_layout: None,
@@ -317,7 +268,6 @@ impl ComponentNodeMetaData {
         }
     }
 
-    /// Returns a mutable render fragment for this node.
     pub fn fragment_mut(&mut self) -> &mut RenderFragment {
         &mut self.fragment
     }
@@ -462,10 +412,8 @@ fn reset_frame_metadata(
     metadata.computed_data.take()
 }
 
-/// A tree of component nodes, using `indextree::Arena` for storage.
 pub(crate) type ComponentNodeTree = indextree::Arena<ComponentNode>;
 
-/// Stores component metadata for a single UI tree.
 #[derive(Default)]
 pub(crate) struct ComponentNodeMetaDatas {
     nodes: DenseNodeMap<ComponentNodeMetaData>,
@@ -544,61 +492,45 @@ impl ComponentNodeMetaDatas {
     }
 }
 
-/// Represents errors that can occur during node measurement.
+/// Errors returned when a layout node cannot be measured.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MeasurementError {
-    /// Indicates that the specified node was not found in the component tree.
+    /// The requested node is absent from the component tree.
     NodeNotFoundInTree,
-    /// Indicates that metadata for the specified node was not found (currently
-    /// not a primary error source in measure_node).
+    /// The node has no associated layout metadata.
     NodeNotFoundInMeta,
-    /// Indicates that the layout policy for a node failed. Contains a string
-    /// detailing the failure.
+    /// The node's measurement policy returned an error.
     MeasureFnFailed(String),
-    /// Indicates that the measurement of a child node failed during a
-    /// parent's layout calculation. Contains the `NodeId` of the child
-    /// that failed.
+    /// Measuring a child node failed.
     ChildMeasurementFailed(NodeId),
 }
 
-/// Pointer input dispatch pass.
+/// Pass in which a pointer handler receives an event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PointerEventPass {
-    /// Dispatch from root to leaf before the main pointer pass.
+    /// Runs from ancestors toward descendants.
     Initial,
-    /// Main pointer dispatch from leaf to root.
+    /// Runs from descendants toward ancestors.
     Main,
-    /// Final pointer dispatch from root to leaf.
+    /// Runs from ancestors toward descendants after the main pass.
     Final,
 }
 
-/// Pointer-specific input handler.
 pub type PointerInputHandlerFn = dyn Fn(PointerInput);
-/// Keyboard-specific input handler.
 pub type KeyboardInputHandlerFn = dyn Fn(KeyboardInput);
-/// IME-specific input handler.
 pub type ImeInputHandlerFn = dyn Fn(ImeInput);
-/// Focus-changed callback attached to a component node.
 pub type FocusChangedHandler = CallbackWith<FocusState>;
-/// Focus-event callback attached to a component node.
 pub type FocusEventHandler = CallbackWith<FocusState>;
-/// Beyond-bounds focus callback attached to a virtualized container node.
 pub type FocusBeyondBoundsHandler = CallbackWith<FocusDirection, bool>;
-/// Reveal callback attached to a scrollable container node.
 pub type FocusRevealHandler = CallbackWith<FocusRevealRequest, bool>;
-/// Callback invoked after a layout's observed geometry changes.
 #[derive(Clone, Copy, PartialEq)]
 pub enum GloballyPositionedHandler {
     Pixels(CallbackWith<PxRect>),
     Precise(CallbackWith<crate::FloatRect>),
     Transform(CallbackWith<crate::LocalToWindow>),
     Coordinates(CallbackWith<crate::LayoutCoordinates>),
-    /// Observes the window-space rectangle remaining after rectangular
-    /// clipping.
     Visible(CallbackWith<Option<crate::FloatRect>>),
-    /// Observes bounds in the closest declared layout coordinate space.
     InSpace(CallbackWith<crate::FloatRect>),
-    /// Observes measured dimensions in local layout units.
     Size(CallbackWith<PxSize>),
 }
 
@@ -638,34 +570,28 @@ impl GloballyPositionedHandler {
     }
 }
 
-/// Input for pointer handlers.
-///
-/// This type carries pointer event payload, local geometry, and event
-/// consumption helpers.
+/// Pointer events and geometry provided to a node's input handler.
 pub struct PointerInput<'a> {
     pub(crate) node_id: indextree::NodeId,
-    /// Maps this handler's local geometry and displacement units into the
-    /// window.
+    /// Transform from local coordinates to window coordinates.
     pub local_to_window: crate::LocalToWindow,
-    /// Current pointer dispatch pass.
+    /// Current dispatch pass.
     pub pass: PointerEventPass,
-    /// The size of the component node, computed during the measure stage.
+    /// Measured size of the node.
     pub computed_data: ComputedData,
-    /// The position of the cursor, if available.
-    /// Relative to the root position of the component.
+    /// Pointer position in local coordinates, when available.
     pub cursor_position_rel: Option<PxPosition>,
-    /// Absolute cursor position in window coordinates.
     pub(crate) cursor_position_abs: &'a mut Option<PxPosition>,
-    /// The current pointer sample, or an empty list during hover updates.
+    /// Pointer changes offered to this handler; may be empty during hover updates.
     pub pointer_changes: &'a mut Vec<PointerChange>,
-    /// The current state of the keyboard modifiers at the time of the event.
+    /// Keyboard modifiers held with the pointer event.
     pub key_modifiers: winit::keyboard::ModifiersState,
     pub(crate) ime_request: &'a mut Option<ImeRequest>,
     pub(crate) request_window_drag: &'a mut Option<WindowDragRequest>,
 }
 
 impl PointerInput<'_> {
-    /// Converts a displacement observed in window coordinates into local units.
+    /// Converts a window-space vector to local coordinates.
     pub fn local_delta(&self, dx: f32, dy: f32) -> (f32, f32) {
         let delta = self
             .local_to_window
@@ -673,7 +599,7 @@ impl PointerInput<'_> {
         (delta.x, delta.y)
     }
 
-    /// Consumes all current non-scroll pointer changes.
+    /// Consumes all pointer changes except scroll events.
     pub fn consume_pointer_changes(&mut self) {
         for change in self.pointer_changes.iter_mut() {
             if matches!(change.content, CursorEventContent::Scroll(_)) {
@@ -683,22 +609,20 @@ impl PointerInput<'_> {
         }
     }
 
-    /// Returns whether any current pointer change is an unconsumed release.
+    /// Returns whether a pointer release remains unconsumed.
     pub fn has_unconsumed_release(&self) -> bool {
         self.pointer_changes.iter().any(|change| {
             !change.is_consumed() && matches!(change.content, CursorEventContent::Released(_))
         })
     }
 
-    /// Returns the absolute cursor position in window coordinates.
+    /// Returns the current pointer position in window coordinates.
     pub fn cursor_position_abs(&self) -> Option<PxPosition> {
         *self.cursor_position_abs
     }
 
-    /// Blocks non-scroll input from propagating beyond this node without
-    /// consuming it. Descendant Final observers can still arbitrate gestures.
-    ///
-    /// Scroll events still reach ancestors.
+    /// Stops non-scroll changes from propagating without consuming them.
+    /// Descendant handlers can still observe changes blocked in the main pass during the final pass.
     pub fn block_cursor(&mut self) {
         for change in self.pointer_changes.iter() {
             if !matches!(change.content, CursorEventContent::Scroll(_)) {
@@ -707,12 +631,12 @@ impl PointerInput<'_> {
         }
     }
 
-    /// Blocks pointer changes to other components.
+    /// Equivalent to [`Self::block_cursor`].
     pub fn block_all(&mut self) {
         self.block_cursor();
     }
 
-    /// Begins a system drag move for the current window.
+    /// Requests a window drag for the current pointer interaction.
     pub fn drag_window(&mut self) {
         *self.request_window_drag = Some(WindowDragRequest {
             #[cfg(target_os = "macos")]
@@ -727,7 +651,7 @@ impl PointerInput<'_> {
         });
     }
 
-    /// Returns the IME session bridge for the current frame.
+    /// Opens a session for updating the active IME request.
     pub fn ime_session(&mut self) -> ImeSession<'_> {
         ImeSession {
             request: self.ime_request,
@@ -735,28 +659,26 @@ impl PointerInput<'_> {
     }
 }
 
-/// Input for keyboard handlers.
-///
-/// This type carries keyboard event payload and event consumption helpers.
+/// Keyboard events and measured node data provided to a node handler.
 pub struct KeyboardInput<'a> {
-    /// The size of the component node, computed during the measure stage.
+    /// Measured size of the node.
     pub computed_data: ComputedData,
-    /// Keyboard events from the event loop, if any.
+    /// Keyboard events offered to this handler.
     pub keyboard_events: &'a mut Vec<crate::KeyboardEvent>,
-    /// The current state of the keyboard modifiers at the time of the event.
+    /// Keyboard modifiers held with the events.
     pub key_modifiers: winit::keyboard::ModifiersState,
-    /// When the window or synthetic input source delivered the keyboard event.
+    /// Timestamp of the input event.
     pub timestamp: crate::time::Instant,
     pub(crate) ime_request: &'a mut Option<ImeRequest>,
 }
 
 impl KeyboardInput<'_> {
-    /// Blocks keyboard events to other components.
+    /// Consumes all keyboard events in this input.
     pub fn block_keyboard(&mut self) {
         self.keyboard_events.clear();
     }
 
-    /// Returns the IME session bridge for the current frame.
+    /// Opens a session for updating the active IME request.
     pub fn ime_session(&mut self) -> ImeSession<'_> {
         ImeSession {
             request: self.ime_request,
@@ -764,24 +686,22 @@ impl KeyboardInput<'_> {
     }
 }
 
-/// Input for IME handlers.
-///
-/// Publish IME state through [`ImeSession`].
+/// IME events and measured node data provided to a node handler.
 pub struct ImeInput<'a> {
-    /// The size of the component node, computed during the measure stage.
+    /// Measured size of the node.
     pub computed_data: ComputedData,
-    /// IME events from the event loop, if any.
+    /// IME events offered to this handler.
     pub ime_events: &'a mut Vec<winit::event::Ime>,
     pub(crate) ime_request: &'a mut Option<ImeRequest>,
 }
 
 impl ImeInput<'_> {
-    /// Blocks IME events to other components.
+    /// Consumes all IME events in this input.
     pub fn block_ime(&mut self) {
         self.ime_events.clear();
     }
 
-    /// Returns the IME session bridge for the current frame.
+    /// Opens a session for updating the active IME request.
     pub fn ime_session(&mut self) -> ImeSession<'_> {
         ImeSession {
             request: self.ime_request,
@@ -789,19 +709,9 @@ impl ImeInput<'_> {
     }
 }
 
-/// A collection of requests that components can make to the windowing system
-/// for the current frame. This struct's lifecycle is confined to a single
-/// `compute` pass.
 #[derive(Default, Debug)]
 pub(crate) struct WindowRequests {
-    /// The cursor icon requested by a component. If multiple components request
-    /// a cursor, the last one to make a request in a frame "wins", since
-    /// it's executed later.
     pub cursor_icon: CursorIcon,
-    /// An Input Method Editor (IME) request.
-    /// If multiple components request IME, the one from the "newer" component
-    /// (which is processed later in the state handling pass) will overwrite
-    /// previous requests.
     pub ime_request: Option<ImeRequest>,
     pub request_window_drag: Option<WindowDragRequest>,
 }
@@ -827,13 +737,13 @@ impl WindowRequests {
     }
 }
 
-/// Publishes the focused editor's text, selection and input configuration.
+/// Updates or clears the IME request for the current frame.
 pub struct ImeSession<'a> {
     request: &'a mut Option<ImeRequest>,
 }
 
 impl ImeSession<'_> {
-    /// Publishes the IME snapshot for the current frame.
+    /// Replaces the current IME request.
     pub fn update(&mut self, mut request: ImeRequest) {
         request.show_keyboard |= self
             .request
@@ -842,28 +752,28 @@ impl ImeSession<'_> {
         *self.request = Some(request);
     }
 
-    /// Opens the software keyboard and publishes the current editor snapshot.
+    /// Replaces the IME request and asks the platform to show the keyboard.
     pub fn show(&mut self, mut request: ImeRequest) {
         request.show_keyboard = true;
         self.update(request);
     }
 
-    /// Clears the IME snapshot for the current frame.
+    /// Clears the current IME request.
     pub fn clear(&mut self) {
         *self.request = None;
     }
 }
 
-/// A request to the windowing system to open an Input Method Editor (IME).
+/// Text input area, selection, and options requested from the platform IME.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImeRequest {
-    /// The size of the area where the IME is requested.
+    /// Size of the input area in local pixels.
     pub size: PxSize,
-    /// The position of the IME anchor relative to the requesting node.
+    /// Position of the input area in local pixels.
     pub local_position: PxPosition,
-    /// The complete text snapshot, including directional selection and composition.
+    /// Current text, selection, and composition state.
     pub text_state: winit::event::ImeTextState,
-    /// The input purpose and return-key action.
+    /// Platform keyboard and input options.
     pub options: winit::window::ImeOptions,
     pub(crate) change_cause: winit::event::ImeChangeCause,
     pub(crate) show_keyboard: bool,
@@ -872,7 +782,7 @@ pub struct ImeRequest {
 }
 
 impl ImeRequest {
-    /// Creates a new IME request with the target input area size.
+    /// Creates a request for an input area of the given size.
     pub fn new(size: PxSize) -> Self {
         Self {
             size,
@@ -886,19 +796,19 @@ impl ImeRequest {
         }
     }
 
-    /// Sets the position of the IME anchor relative to the requesting node.
+    /// Sets the input area's local position.
     pub fn with_local_position(mut self, local_position: PxPosition) -> Self {
         self.local_position = local_position;
         self
     }
 
-    /// Sets the complete editable text snapshot using UTF-8 byte offsets.
+    /// Sets the text state. Use UTF-8 byte offsets for selection and composition.
     pub fn with_text_state(mut self, text_state: winit::event::ImeTextState) -> Self {
         self.text_state = text_state;
         self
     }
 
-    /// Sets the input purpose and return-key action.
+    /// Sets platform input options.
     pub fn with_options(mut self, options: winit::window::ImeOptions) -> Self {
         self.options = options;
         self
@@ -1260,7 +1170,6 @@ fn save_measured_snapshot(
     }
 }
 
-/// Measures a single node recursively, returning its size or an error.
 pub(crate) fn measure_node(
     node_id: NodeId,
     parent_constraint: &Constraint,
@@ -1594,7 +1503,6 @@ pub(crate) fn measure_node(
     Ok(size)
 }
 
-/// Places a node at the specified relative position within its parent.
 pub(crate) fn place_node(
     node: indextree::NodeId,
     rel_position: PxPosition,
@@ -1615,13 +1523,12 @@ pub(crate) fn place_node(
     }
 }
 
-/// Layout information computed at the measure stage, representing the size of a
-/// node.
+/// Measured width and height of a layout node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ComputedData {
-    /// The resolved width of the node in physical pixels.
+    /// Measured width.
     pub width: Px,
-    /// The resolved height of the node in physical pixels.
+    /// Measured height.
     pub height: Px,
 }
 
@@ -1642,20 +1549,20 @@ impl AddAssign for ComputedData {
 }
 
 impl ComputedData {
-    /// Zero-sized layout data.
+    /// Zero width and height.
     pub const ZERO: Self = Self {
         width: Px(0),
         height: Px(0),
     };
 
-    /// Calculates the minimum size guaranteed by a constraint interval.
+    /// Returns the minimum dimensions allowed by `constraint`.
     pub fn min_from_constraint(constraint: &Constraint) -> Self {
         let width = constraint.width.min;
         let height = constraint.height.min;
         Self { width, height }
     }
 
-    /// Returns the component-wise minimum of two computed sizes.
+    /// Returns the per-axis minimum of two sizes.
     pub fn min(self, rhs: Self) -> Self {
         Self {
             width: self.width.min(rhs.width),
@@ -1663,7 +1570,7 @@ impl ComputedData {
         }
     }
 
-    /// Returns the component-wise maximum of two computed sizes.
+    /// Returns the per-axis maximum of two sizes.
     pub fn max(self, rhs: Self) -> Self {
         Self {
             width: self.width.max(rhs.width),

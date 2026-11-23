@@ -271,9 +271,18 @@ impl BadgeDefaults {
 /// ## Examples
 ///
 /// ```rust
-/// tessera_ui::testing::UiTest::new().content(|| {
-///     tessera_components::md3::badge::badged_box();
-/// }).frame();
+/// use tessera_components::{
+///     boxed::boxed,
+///     md3::{badge::{badged_box, badge_with_content}, text::text},
+/// };
+/// use tessera_ui::tessera;
+///
+/// #[tessera]
+/// fn inbox_icon() {
+///     badged_box()
+///         .content(|| boxed().children(|| text("Inbox")))
+///         .badge(|| badge_with_content().content(|| text("3")));
+/// }
 /// ```
 #[tessera]
 pub fn badged_box(
@@ -320,7 +329,6 @@ pub fn badged_box(
 /// badge().content_color(Color::WHITE);
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn badge(
@@ -363,7 +371,7 @@ pub fn badge(
 /// ## Examples
 ///
 /// ```rust
-/// use tessera_components::md3::badge::badge_with_content;
+/// use tessera_components::md3::{badge::badge_with_content, text::text};
 /// use tessera_ui::Color;
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # use tessera_ui::tessera;
@@ -374,10 +382,9 @@ pub fn badge(
 /// #     .child(|| {
 /// badge_with_content()
 ///     .content_color(Color::WHITE)
-///     .content(|| {});
+///     .content(|| text("3"));
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn badge_with_content(

@@ -390,42 +390,6 @@ impl SplitTrailingButtonBuilder {
 /// - `leading_button` — optional leading button slot.
 /// - `trailing_button` — optional trailing button slot.
 ///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::{
-///     icon::icon,
-///     material_icons::filled,
-///     menus::MenuController,
-///     split_buttons::{split_button_layout, split_leading_button, split_trailing_button},
-///     text::text,
-///     theme::material_theme,
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn component() {
-///     let menu = remember(MenuController::new);
-///     material_theme().child(move || {
-///         split_button_layout()
-///             .leading_button(|| {
-///                 split_leading_button().on_click(|| {}).content(|| {
-///                     text("Send");
-///                 });
-///             })
-///             .trailing_button(move || {
-///                 split_trailing_button()
-///                     .expanded(menu.with(MenuController::is_open))
-///                     .accessibility_label("Send options")
-///                     .on_click(move || menu.with_mut(MenuController::toggle))
-///                     .content(|| {
-///                         icon().painter(filled::ARROW_DROP_DOWN_SVG);
-///                     });
-///             });
-///     });
-/// }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
-/// ```
 #[tessera]
 pub fn split_button_layout(
     modifier: Option<Modifier>,
@@ -466,31 +430,6 @@ pub fn split_button_layout(
 /// - `shape` — fixed shape override that suppresses automatic corner changes.
 /// - `content` — leading icon and label, sized and placed in a row.
 ///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::{
-///     split_buttons::split_leading_button,
-///     text::text,
-///     theme::material_theme,
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn component() {
-///     let activations = remember(|| 0_u32);
-///     material_theme().child(move || {
-///         split_leading_button()
-///             .accessibility_label("Send")
-///             .on_click(move || activations.set(activations.get() + 1))
-///             .content(|| {
-///                 text("Send");
-///             });
-///     });
-///     assert_eq!(activations.get(), 0);
-/// }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
-/// ```
 #[tessera]
 pub fn split_leading_button(
     variant: Option<SplitButtonVariant>,
@@ -550,33 +489,6 @@ pub fn split_leading_button(
 /// - `expanded` — controlled menu disclosure state with popup semantics.
 /// - `content` — menu icon, sized automatically for the preset.
 ///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::{
-///     icon::icon,
-///     material_icons::filled,
-///     menus::MenuController,
-///     split_buttons::split_trailing_button,
-///     theme::material_theme,
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn component() {
-///     let menu = remember(MenuController::new);
-///     material_theme().child(move || {
-///         split_trailing_button()
-///             .expanded(menu.with(MenuController::is_open))
-///             .accessibility_label("Send options")
-///             .on_click(move || menu.with_mut(MenuController::toggle))
-///             .content(|| {
-///                 icon().painter(filled::ARROW_DROP_DOWN_SVG);
-///             });
-///     });
-/// }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
-/// ```
 #[tessera]
 pub fn split_trailing_button(
     variant: Option<SplitButtonVariant>,

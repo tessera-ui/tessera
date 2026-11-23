@@ -330,7 +330,7 @@ impl CardDefaults {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::card::card;
+/// use tessera_components::md3::{card::card, text::text};
 /// use tessera_ui::tessera;
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 ///
@@ -339,11 +339,10 @@ impl CardDefaults {
 /// #     material_theme()
 /// #         .theme(|| MaterialTheme::default())
 /// #         .child(|| {
-///     card().filled().content(|| {});
+///     card().filled().content(|| text("A card with supporting content"));
 /// #         });
 /// }
 ///
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn card(

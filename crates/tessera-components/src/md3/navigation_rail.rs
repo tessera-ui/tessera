@@ -665,23 +665,6 @@ struct NavigationRailItemDefinition {
 /// - `selected` — whether this item is the active destination.
 /// - `on_click` — callback invoked after the item becomes selected.
 ///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::navigation_rail::{navigation_rail, navigation_rail_item};
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let selected = remember(|| 0usize);
-///     navigation_rail().content(move |rail| {
-///         navigation_rail_item(rail)
-///             .label("Home")
-///             .selected(selected.get() == 0)
-///             .on_click(move || selected.set(0));
-///     });
-/// }
-/// ```
 #[tessera]
 pub fn navigation_rail_item(
     rail: NavigationRailScope,
@@ -742,18 +725,22 @@ pub fn navigation_rail_item(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::navigation_rail::{navigation_rail, navigation_rail_item};
+/// use tessera_components::md3::{navigation_rail::{navigation_rail, navigation_rail_item}, theme::material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
 ///     let selected = remember(|| 0usize);
-///     navigation_rail().expanded(true).content(move |rail| {
+///     material_theme().child(move || navigation_rail().expanded(true).content(move |rail| {
 ///         navigation_rail_item(rail)
 ///             .label("Home")
 ///             .selected(selected.get() == 0)
 ///             .on_click(move || selected.set(0));
-///     });
+///         navigation_rail_item(rail)
+///             .label("Settings")
+///             .selected(selected.get() == 1)
+///             .on_click(move || selected.set(1));
+///     }));
 /// }
 /// ```
 #[tessera]
@@ -909,7 +896,6 @@ fn navigation_rail_content(
 ///             });
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(navigation).frame();
 /// ```
 #[tessera]
 pub fn modal_navigation_rail(

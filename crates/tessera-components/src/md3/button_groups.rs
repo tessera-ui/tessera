@@ -322,27 +322,17 @@ impl ButtonGroupsController {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::{
-///     button_groups::{ButtonGroupsController, button_groups},
-///     text::text,
-/// };
+/// use tessera_components::md3::{button_groups::button_groups, text::text, theme::material_theme};
+/// use tessera_ui::{remember, tessera};
 ///
-/// let mut selection = ButtonGroupsController::new();
-/// selection.set_selected(0, true);
-/// assert!(selection.is_selected(0));
-/// selection.clear();
-/// assert!(!selection.is_selected(0));
-///
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn demo() {
-/// button_groups().child(
-///     || {
-///         text("Button 1");
-///     },
-///     |_| {},
-/// );
-/// # }
+/// #[tessera]
+/// fn display_mode() {
+///     let selected = remember(|| false);
+///     material_theme().child(move || {
+///         button_groups().child(|| text("Compact"), move |active| selected.set(active));
+///         text(if selected.get() { "Compact mode" } else { "Full mode" });
+///     });
+/// }
 /// ```
 #[tessera]
 pub fn button_groups(

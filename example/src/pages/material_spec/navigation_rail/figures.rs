@@ -32,8 +32,6 @@ use super::super::{
     gap, srgb, type_style,
 };
 
-/// Callout marker: number, geometry key and whether it sits on the trailing
-/// lane.
 pub(super) type Callout = (usize, &'static str, bool);
 
 fn tagged(sink: Option<State<Geometry>>, name: &'static str) -> Modifier {
@@ -126,7 +124,6 @@ fn dot_grid_content(values: Geometry, dark: bool) {
     annotations::lines(width, height, format!("<path d='{path}' fill='{tone}'/>"));
 }
 
-/// Reference canvas with optional dark Material 2025 theme, fill and dot grid.
 #[tessera]
 pub(super) fn canvas(
     #[prop(into)] label: String,
@@ -184,7 +181,6 @@ fn canvas_body(
         });
 }
 
-/// Dark numbered badge used in figure captions and legends.
 #[tessera]
 pub(super) fn number(value: usize) {
     boxed()
@@ -201,8 +197,6 @@ pub(super) fn number(value: usize) {
         });
 }
 
-/// Native navigation rail inside a measured frame with optional numbered
-/// callouts.
 #[tessera]
 pub(super) fn specimen(
     #[prop(into)] label: String,
@@ -497,11 +491,6 @@ fn specimen_header(
     });
 }
 
-/// Static collapsed rail illustration with callouts or baseline measurement
-/// marks.
-///
-/// `marks` selects no marks (0), baseline size marks (2) or baseline padding
-/// marks (3).
 #[tessera]
 pub(super) fn annotated_mock(
     width: Dp,
@@ -995,7 +984,6 @@ fn baseline_marks(
     ));
 }
 
-/// Static navigation rail illustration for guidance figures.
 #[tessera]
 pub(super) fn mock_rail(
     expanded: Option<bool>,
@@ -1564,7 +1552,6 @@ fn mock_item(
     }
 }
 
-/// Device-like window combining a rail illustration with simple app content.
 #[tessera]
 pub(super) fn screen(
     #[prop(into)] label: String,
@@ -1657,7 +1644,6 @@ pub(super) fn screen(
         });
 }
 
-/// Scrim and expanded rail drawn over a screen.
 #[tessera]
 pub(super) fn modal_overlay(
     offset: Option<Dp>,
@@ -1829,7 +1815,6 @@ fn app_content(kind: usize) {
     }
 }
 
-/// Tinted guidance scene holding one or more screens.
 #[tessera]
 pub(super) fn scene(#[prop(into)] label: String, height: Dp, content: RenderSlot) {
     boxed()
@@ -1856,8 +1841,6 @@ pub(super) fn scene(#[prop(into)] label: String, height: Dp, content: RenderSlot
         });
 }
 
-/// Guidance card with a scene, an optional Do/Caution/Don't strip and a
-/// caption.
 #[tessera]
 pub(super) fn example(
     #[prop(into)] label: String,
@@ -1931,7 +1914,6 @@ pub(super) fn example(
         });
 }
 
-/// Two guidance cards in equal columns, stacking them on narrow windows.
 #[tessera]
 pub(super) fn pair(first: RenderSlot, second: RenderSlot) {
     let width = remember(|| Dp(760.0));
@@ -1975,7 +1957,6 @@ pub(super) fn pair(first: RenderSlot, second: RenderSlot) {
         });
 }
 
-/// Keyboard key chip shown above focus illustrations.
 #[tessera]
 pub(super) fn key_chip(#[prop(into)] key: String) {
     let (r, g, b) = INTERACTION;
@@ -1994,7 +1975,6 @@ pub(super) fn key_chip(#[prop(into)] key: String) {
         });
 }
 
-/// Accessibility label call-out beside a rail destination.
 #[tessera]
 pub(super) fn label_callout() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;

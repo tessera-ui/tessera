@@ -10,7 +10,6 @@ use crate::{PxRect, PxSize, SendSync, render_graph::DrawGeometry};
 
 use super::command::ComputeCommand;
 
-/// Type-erased metadata describing a compute command within a batch.
 pub(crate) struct ErasedComputeBatchItem<'a> {
     /// The compute command to execute.
     pub command: &'a dyn ComputeCommand,
@@ -55,7 +54,6 @@ pub struct ComputeContext<'a, 'b, 'c, C: ComputeCommand> {
     pub output_view: &'a wgpu::TextureView,
 }
 
-/// Type-erased context used when dispatching compute pipelines.
 pub(crate) struct ErasedDispatchContext<'a, 'b> {
     pub graphics: &'a crate::render::GraphicsDevice,
     pub device: &'a wgpu::Device,
@@ -158,8 +156,6 @@ impl ComputePipelineRegistry {
         self.pipelines.insert(TypeId::of::<C>(), erased_pipeline);
     }
 
-    /// Dispatches one or more commands to their corresponding registered
-    /// pipeline.
     pub(crate) fn dispatch_erased(
         &mut self,
         context: ErasedDispatchContext<'_, '_>,

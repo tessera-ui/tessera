@@ -60,8 +60,6 @@ impl tessera_ui::DrawModifierNode for CheckmarkLayout {
     }
 }
 
-/// Draw a selection stroke, blending a checkmark into a centered
-/// partial-selection dash.
 #[tessera]
 pub(crate) fn checkmark(
     color: Option<Color>,

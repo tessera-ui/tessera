@@ -1175,7 +1175,6 @@ fn legend(items: Vec<&'static str>) {
         });
 }
 
-/// A figure row with a leading numbered marker.
 #[tessera]
 pub(super) fn marked(number: usize, content: RenderSlot) {
     row()

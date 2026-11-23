@@ -1,5 +1,3 @@
-//! Indexed storage for live component node values.
-
 use std::num::NonZeroUsize;
 
 use crate::NodeId;

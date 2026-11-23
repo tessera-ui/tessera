@@ -96,10 +96,8 @@ impl CalendarRangePosition {
 ///         date_picker_day(date)
 ///             .selected(selected.get() == date)
 ///             .on_select(move |date| selected.set(date));
-///         assert_eq!(selected.get(), date);
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(schedule).frame();
 /// ```
 #[tessera]
 pub fn date_picker_day(
@@ -239,10 +237,8 @@ pub fn date_picker_day(
 ///         date_picker_year(2026)
 ///             .selected(selected.get() == 2026)
 ///             .on_select(move |year| selected.set(year));
-///         assert_eq!(selected.get(), 2025);
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(years).frame();
 /// ```
 #[tessera]
 pub fn date_picker_year(

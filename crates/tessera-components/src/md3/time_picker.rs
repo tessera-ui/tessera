@@ -292,7 +292,6 @@ struct TimePickerSnapshot {
 /// time_picker().layout(TimePickerLayout::Horizontal);
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn time_picker(
@@ -1434,7 +1433,6 @@ fn clock_value(
 ///     .picker_layout(TimePickerLayout::Horizontal);
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn time_picker_dialog(

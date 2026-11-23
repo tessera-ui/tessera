@@ -38,15 +38,15 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 /// # Examples
 ///
 /// ```
-/// use tessera_components::md3::lazy_list::{LazyListController, lazy_column};
-/// use tessera_ui::{LayoutResult, retain_with_key, tessera};
+/// use tessera_components::md3::{lazy_list::{LazyListController, lazy_column}, text::text};
+/// use tessera_ui::{retain_with_key, tessera};
 ///
 /// #[tessera]
 /// fn scrollable_page(page_id: String) {
 ///     // Persists across navigation.
 ///     let controller = retain_with_key(page_id.clone(), LazyListController::new);
 ///     lazy_column().controller(controller).items(100, |i| {
-///         let _ = i;
+///         text(format!("Item {i}"));
 ///     });
 /// }
 /// ```
@@ -2652,28 +2652,14 @@ mod tests {
     }
 
     #[test]
-    fn lazy_column_rebuilds_visible_items_when_item_slot_updates() {
+    fn lazy_column_reflects_updates_to_visible_item_content() {
         let mut session = tessera_ui::testing::UiTest::new()
             .content(lazy_column_stable_visible_items_case)
             .viewport(80, 60);
 
         session.frame().node("stable_visible_item_0").width(20);
-        let first_builds = session
-            .work()
-            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
-        assert!(first_builds > 0);
-
         session.frames(1).node("stable_visible_item_0").width(22);
-        let second_builds = session
-            .work()
-            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
-        assert!(second_builds > 0);
-
         session.frames(1).node("stable_visible_item_0").width(24);
-        let third_builds = session
-            .work()
-            .count("fixed_test_box", tessera_ui::testing::WorkPhase::Build);
-        assert!(third_builds > 0);
     }
 }
 

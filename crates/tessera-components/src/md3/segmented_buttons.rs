@@ -241,44 +241,6 @@ impl SegmentedButtonDefaults {
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
 ///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::segmented_buttons::{
-///     SegmentedButtonDefaults, segmented_button, single_choice_segmented_button_row,
-/// };
-/// use tessera_components::md3::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     material_theme()
-///         .theme(|| MaterialTheme::default())
-///         .child(|| {
-///             let selected = remember(|| 0usize);
-///             single_choice_segmented_button_row().content(move |mode| {
-///                 segmented_button(selected.get() == 0).selection_mode(mode)
-///                     .label("List")
-///                     .shape(SegmentedButtonDefaults::item_shape(
-///                         0,
-///                         2,
-///                         SegmentedButtonDefaults::shape(),
-///                     ))
-///                     .on_click(|| {});
-///                 segmented_button(selected.get() == 1).selection_mode(mode)
-///                     .label("Grid")
-///                     .shape(SegmentedButtonDefaults::item_shape(
-///                         1,
-///                         2,
-///                         SegmentedButtonDefaults::shape(),
-///                     ))
-///                     .on_click(|| {});
-///             });
-///         });
-/// }
-///
-/// # tessera_ui::testing::UiTest::new().content(demo).frame();
-/// ```
 #[tessera]
 pub fn segmented_button(
     selected: bool,
@@ -480,7 +442,7 @@ pub fn segmented_button(
 ///                         2,
 ///                         SegmentedButtonDefaults::shape(),
 ///                     ))
-///                     .on_click(|| {});
+///                     .on_click(move || selected.set(0));
 ///                 segmented_button(selected.get() == 1).selection_mode(mode)
 ///                     .label("Week")
 ///                     .shape(SegmentedButtonDefaults::item_shape(
@@ -488,12 +450,11 @@ pub fn segmented_button(
 ///                         2,
 ///                         SegmentedButtonDefaults::shape(),
 ///                     ))
-///                     .on_click(|| {});
+///                     .on_click(move || selected.set(1));
 ///             });
 ///         });
 /// }
 ///
-/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn single_choice_segmented_button_row(
@@ -570,7 +531,7 @@ pub fn single_choice_segmented_button_row(
 ///                         2,
 ///                         SegmentedButtonDefaults::shape(),
 ///                     ))
-///                     .on_click(|| {});
+///                     .on_click(move || selected.with_mut(|values| values[0] = !values[0]));
 ///                 segmented_button(selected.get()[1]).selection_mode(mode)
 ///                     .label("Push")
 ///                     .shape(SegmentedButtonDefaults::item_shape(
@@ -578,12 +539,11 @@ pub fn single_choice_segmented_button_row(
 ///                         2,
 ///                         SegmentedButtonDefaults::shape(),
 ///                     ))
-///                     .on_click(|| {});
+///                     .on_click(move || selected.with_mut(|values| values[1] = !values[1]));
 ///             });
 ///         });
 /// }
 ///
-/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn multi_choice_segmented_button_row(

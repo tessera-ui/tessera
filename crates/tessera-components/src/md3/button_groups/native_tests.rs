@@ -1,4 +1,3 @@
-//! Button group sizing, selection geometry, and content context regressions.
 //!
 //! ## Usage
 //!

@@ -160,10 +160,6 @@ fn registry() -> Rc<RefCell<FontRegistry>> {
     tessera_ui::runtime_resource::<RefCell<FontRegistry>>()
 }
 
-/// Requests the fonts `text` needs and installs those that have loaded.
-///
-/// Returns `None` while any of them is loading; otherwise a value that changes
-/// only when a font relevant to `text` is installed.
 pub(crate) fn prepare(text: &str, family: Option<&'static str>) -> Option<u64> {
     let registry = registry();
     let mut registry = registry.borrow_mut();

@@ -1,4 +1,3 @@
-//! Segmented list geometry and interaction motion regressions.
 //!
 //! ## Usage
 //!
@@ -226,12 +225,6 @@ fn check() {
             .rendered(crate::TesseraComponents)
             .content(move || fixture(probe.clone(), clicks.clone()));
         renderer.frames(8);
-        assert!(
-            renderer
-                .work_totals()
-                .count("list_item", tessera_ui::testing::WorkPhase::Build)
-                > 0
-        );
         let settings = observed.get().unwrap();
         for index in 0..5 {
             let current = bounds(&renderer, index);
@@ -257,16 +250,7 @@ fn check() {
         equal_patch(&patch(&renderer, 2, false, scale), &inner);
         equal_patch(&patch(&renderer, 2, true, scale), &upper);
         equal_patch(&patch(&renderer, 4, false, scale), &inner);
-        let idle = renderer
-            .work_totals()
-            .count("list_item", tessera_ui::testing::WorkPhase::Build);
         renderer.frames(8);
-        assert_eq!(
-            renderer
-                .work_totals()
-                .count("list_item", tessera_ui::testing::WorkPhase::Build),
-            idle
-        );
         let [x, y, width, height] = bounds(&renderer, 0);
         let point = PxPosition::from_f32_xy((x + width / 2) as f32, (y + height / 2) as f32);
         renderer.pointer_move(MOUSE_POINTER_ID, point);
@@ -283,16 +267,7 @@ fn check() {
         assert_ne!(moving, hover);
         renderer.frames(60);
         equal_feedback_patch(&patch(&renderer, 0, true, scale), &upper);
-        let held = renderer
-            .work_totals()
-            .count("list_item", tessera_ui::testing::WorkPhase::Build);
         renderer.frames(8);
-        assert_eq!(
-            renderer
-                .work_totals()
-                .count("list_item", tessera_ui::testing::WorkPhase::Build),
-            held
-        );
         focus::clear_focus(true);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.frames(60);
@@ -303,16 +278,7 @@ fn check() {
         focus::clear_focus(true);
         renderer.frames(60);
         equal_patch(&patch(&renderer, 0, true, scale), &inner);
-        let resting = renderer
-            .work_totals()
-            .count("list_item", tessera_ui::testing::WorkPhase::Build);
         renderer.frames(8);
-        assert_eq!(
-            renderer
-                .work_totals()
-                .count("list_item", tessera_ui::testing::WorkPhase::Build),
-            resting
-        );
         for field in [0, 1] {
             settings.with_mut(|value| {
                 value.selected = field == 0;

@@ -38,13 +38,10 @@ pub use crate::md3::text_edit_core::{
     TransformedText as DisplayTransformText,
 };
 
-/// Material 3 opacity applied to disabled field text and labels.
 pub(crate) const DISABLED_CONTENT_ALPHA: f32 = 0.38;
 
-/// Material 3 opacity applied to the outline of a disabled field.
 pub(crate) const DISABLED_OUTLINE_ALPHA: f32 = 0.12;
 
-/// Material 3 opacity applied to the container of a disabled filled field.
 pub(crate) const DISABLED_FILL_ALPHA: f32 = 0.04;
 
 struct TextInputKeyboardModifierNode {
@@ -304,7 +301,8 @@ impl TextInputBuilder {
 /// - `read_only` — whether the editor is read-only.
 /// - `is_error` — whether the field is displaying an error state.
 /// - `modifier` — optional modifier chain applied to the editor container.
-/// - `on_change` — called when text changes.
+/// - `on_change` — returns the text to keep after an edit. Return the proposed
+///   text unchanged to accept it. Without a callback, edits produce empty text.
 /// - `on_submit` — called when the user submits a single-line field.
 /// - `min_width` — optional minimum width.
 /// - `min_height` — optional minimum height.
@@ -336,20 +334,15 @@ impl TextInputBuilder {
 ///
 /// ## Examples
 /// ```rust
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::md3::text_input::text_input;
-/// use tessera_ui::Dp;
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
+/// use tessera_components::md3::{text_input::text_input, theme::material_theme};
+/// use tessera_ui::tessera;
 ///
-/// # material_theme()
-/// #     .theme(|| MaterialTheme::default())
-/// #     .child(|| {
-/// text_input().padding(Dp(8.0)).initial_text("Hello World");
-/// # });
-/// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
+/// #[tessera]
+/// fn note_title() {
+///     material_theme().child(|| {
+///         text_input().initial_text("Trip notes").on_change(|title| title);
+///     });
+/// }
 /// ```
 #[tessera]
 pub fn text_input(
@@ -1323,7 +1316,6 @@ pub(crate) struct TextInputSurfaceArgs {
     pub(crate) modifier: Modifier,
 }
 
-/// Create surface arguments based on editor configuration and state
 pub(crate) fn create_surface_args(
     args: &TextInputProps,
     state: &State<TextInputController>,
@@ -1465,22 +1457,6 @@ fn determine_border_width(args: &TextInputProps, focused: bool) -> Dp {
 impl TextInputBuilder {
     /// Plain gray-bordered preset.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// # use tessera_ui::tessera;
-    /// # #[tessera]
-    /// # fn component() {
-    /// use tessera_components::md3::text_input::text_input;
-    /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-    /// # material_theme()
-    /// #     .theme(|| MaterialTheme::default())
-    /// #     .child(|| {
-    /// let args = text_input().simple();
-    /// # });
-    /// # }
-    /// # tessera_ui::testing::UiTest::new().content(component).frame();
-    /// ```
     pub fn simple(&self) -> Self {
         self.min_width(Dp(120.0))
             .background_color(Color::new(0.9, 0.9, 0.9, 1.0))
@@ -1496,21 +1472,6 @@ impl TextInputBuilder {
 
     /// [`Self::simple`] preset with a blue focus border.
     ///
-    /// # Example
-    /// ```
-    /// # use tessera_ui::tessera;
-    /// # #[tessera]
-    /// # fn component() {
-    /// use tessera_components::md3::text_input::text_input;
-    /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-    /// # material_theme()
-    /// #     .theme(|| MaterialTheme::default())
-    /// #     .child(|| {
-    /// let args = text_input().outlined();
-    /// # });
-    /// # }
-    /// # tessera_ui::testing::UiTest::new().content(component).frame();
-    /// ```
     pub fn outlined(&self) -> Self {
         self.simple()
             .border_width(Dp(1.0))
@@ -1519,23 +1480,7 @@ impl TextInputBuilder {
 
     /// Creates a text input with no border (minimal style).
     ///
-    /// - Border: 0px, square corners
-    ///
-    /// # Example
-    /// ```
-    /// # use tessera_ui::tessera;
-    /// # #[tessera]
-    /// # fn component() {
-    /// use tessera_components::md3::text_input::text_input;
-    /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-    /// # material_theme()
-    /// #     .theme(|| MaterialTheme::default())
-    /// #     .child(|| {
-    /// let args = text_input().minimal();
-    /// # });
-    /// # }
-    /// # tessera_ui::testing::UiTest::new().content(component).frame();
-    /// ```
+    /// Borderless text input with square corners.
     pub fn minimal(&self) -> Self {
         self.min_width(Dp(120.0))
             .background_color(Color::WHITE)

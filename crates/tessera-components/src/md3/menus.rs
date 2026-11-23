@@ -598,38 +598,39 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
 /// use tessera_components::md3::{
+///     button::button,
 ///     menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
 ///     text::text,
+///     theme::material_theme,
 /// };
-/// use tessera_ui::{Dp, remember};
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
+/// use tessera_ui::{Dp, remember, tessera};
 ///
-/// let menu = remember(MenuController::new);
-/// menu.with_mut(MenuController::open);
-/// assert!(menu.with(MenuController::is_open));
-/// # material_theme()
-/// #     .theme(|| MaterialTheme::default())
-/// #     .child(move || {
-/// menu_provider()
-///     .anchor(MenuAnchor::from_dp(
-///         (Dp(16.0), Dp(16.0)),
-///         (Dp(80.0), Dp(40.0)),
-///     ))
-///     .placement(MenuPlacement::BelowStart)
-///     .controller(menu)
-///     .main_content(|| {
-///         text("Main content");
-///     })
-///     .menu_content(|menu| {
-///         menu_item().menu(menu).label("Edit").on_click(|| {});
+/// #[tessera]
+/// fn file_menu() {
+///     let menu = remember(MenuController::new);
+///     let selection = remember(|| String::from("Choose a file action"));
+///     material_theme().child(move || {
+///         menu_provider()
+///             .anchor(MenuAnchor::from_dp((Dp(16.0), Dp(16.0)), (Dp(120.0), Dp(48.0))))
+///             .placement(MenuPlacement::BelowStart)
+///             .controller(menu)
+///             .main_content(move || {
+///                 button()
+///                     .on_click(move || menu.with_mut(MenuController::open))
+///                     .child(move || text(selection.get()));
+///             })
+///             .menu_content(move |scope| {
+///                 menu_item()
+///                     .menu(scope)
+///                     .label("Open")
+///                     .on_click(move || {
+///                         selection.set(String::from("Opened"));
+///                         menu.with_mut(MenuController::close);
+///                     });
+///             });
 ///     });
-/// # });
-/// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
+/// }
 /// ```
 #[tessera]
 pub fn menu_provider(
@@ -1169,37 +1170,6 @@ impl Default for MenuItemConfig {
 /// - `on_click` — optional leaf activation callback; `submenu_content` takes
 ///   precedence when both are provided.
 ///
-/// ## Examples
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::md3::{
-///     menus::{MenuController, menu_item, menu_provider},
-///     text::text,
-/// };
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::remember;
-///
-/// # material_theme()
-/// #     .theme(|| MaterialTheme::default())
-/// #     .child(|| {
-/// menu_provider()
-///     .controller(remember(|| {
-///         let mut controller = MenuController::new();
-///         controller.open();
-///         controller
-///     }))
-///     .menu_content(|menu| {
-///         menu_item().menu(menu).label("Open");
-///     })
-///     .main_content(|| {
-///         text("Main content");
-///     });
-/// # });
-/// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
-/// ```
 #[tessera]
 pub fn menu_item(
     menu: Option<MenuScope>,

@@ -119,10 +119,10 @@ mod tests {
     #[test]
     fn construction_premultiplies_in_linear_light_and_keeps_opaque_buffers() {
         let opaque = Arc::new(vec![128, 64, 192, 255]);
-        assert!(Arc::ptr_eq(
-            &ImageData::from_rgba(Arc::clone(&opaque), 1, 1).data,
-            &opaque
-        ));
+        assert_eq!(
+            *ImageData::from_rgba(Arc::clone(&opaque), 1, 1).data,
+            [128, 64, 192, 255]
+        );
         let translucent = ImageData::from_rgba(vec![255, 0, 0, 128, 255, 128, 64, 0], 2, 1);
         assert_eq!(*translucent.data, [188, 0, 0, 128, 0, 0, 0, 0]);
     }

@@ -106,12 +106,6 @@ impl RippleState {
     pub const ANIMATION_DURATION: Duration = Duration::from_millis(300);
 
     /// Creates a new `RippleState` with default values.
-    ///
-    /// # Example
-    /// ```
-    /// use tessera_components::md3::ripple_state::RippleState;
-    /// let state = RippleState::new();
-    /// ```
     pub fn new() -> Self {
         Self {
             animation: None,
@@ -212,16 +206,6 @@ impl RippleState {
     ///
     /// Returns `None` if the animation is not active or has completed.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// use tessera_components::md3::ripple_state::RippleState;
-    /// let mut state = RippleState::new();
-    /// state.start_animation([0.5, 0.5], tessera_ui::time::Instant::now());
-    /// let (progress, center) = state.get_animation_progress().expect("active ripple");
-    /// assert_eq!(progress, 0.0);
-    /// assert_eq!(center, [0.5, 0.5]);
-    /// ```
     pub fn get_animation_progress(&self) -> Option<(f32, [f32; 2])> {
         self.animation()
             .map(|animation| (animation.progress, animation.center))

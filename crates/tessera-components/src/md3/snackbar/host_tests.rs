@@ -1,4 +1,3 @@
-//! Snackbar host focus restoration and queued action regressions.
 //!
 //! ## Usage
 //!

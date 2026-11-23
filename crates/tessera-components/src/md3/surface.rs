@@ -136,10 +136,8 @@ impl From<Color> for SurfaceStyle {
 ///                 radius: 0.7,
 ///                 opacity: 0.1,
 ///             });
-///         assert_eq!(live.get(), InteractionState::new());
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(sample).frame();
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RipplePresentation {
@@ -1100,7 +1098,6 @@ fn surface_content(
 ///     });
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 /// Renders a styled surface container.
 #[tessera]

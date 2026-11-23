@@ -82,21 +82,21 @@ impl LinkedTextRun {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::linked_text::{LinkedTextRun, linked_text};
+/// use tessera_components::md3::{linked_text::{LinkedTextRun, linked_text}, text::text, theme::material_theme};
 /// use tessera_ui::{Callback, remember, tessera};
 /// #[tessera]
 /// fn explanation() {
 ///     let opened = remember(|| false);
 ///     let navigate = Callback::new(move || opened.set(true));
-///     linked_text(vec![
-///         LinkedTextRun::plain("Visit "),
-///         LinkedTextRun::link("permission settings", navigate),
-///         LinkedTextRun::plain(" for details."),
-///     ]);
-///     navigate.call();
-///     assert!(opened.get());
+///     material_theme().child(move || {
+///         linked_text(vec![
+///             LinkedTextRun::plain("Visit "),
+///             LinkedTextRun::link("permission settings", navigate),
+///             LinkedTextRun::plain(" for details."),
+///         ]);
+///         text(if opened.get() { "Settings opened" } else { "" });
+///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(explanation).frame();
 /// ```
 #[tessera]
 pub fn linked_text(

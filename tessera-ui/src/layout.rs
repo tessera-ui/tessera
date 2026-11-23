@@ -828,28 +828,19 @@ impl RenderMetadataMut<'_> {
     }
 }
 
-/// Type-erased layout node used by the runtime.
 #[doc(hidden)]
 pub(crate) trait LayoutPolicyDyn {
-    /// Returns a typed reference for downcasting.
     fn as_any(&self) -> &dyn Any;
-    /// Measures layout using a type-erased node.
     fn measure_dyn(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
-    /// Recomputes child placements using cached child measurements.
     fn place_dyn(
         &self,
         scope: &PlacementScope<'_>,
         inner: &PlacementResult,
     ) -> Option<PlacementResult>;
-    /// Compares two type-erased nodes for equality.
     fn dyn_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
-    /// Compares two type-erased nodes for measurement-relevant equality.
     fn dyn_measure_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
-    /// Compares two type-erased nodes for placement-relevant equality.
     fn dyn_placement_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
-    /// Reports whether measurement uses an isolated state snapshot.
     fn isolate_measurement_state(&self) -> bool;
-    /// Clones a policy for an explicitly stateful measurement snapshot.
     fn clone_box(&self) -> Box<dyn LayoutPolicyDyn>;
 }
 
@@ -1080,17 +1071,11 @@ where
 /// # Examples
 ///
 /// ```
-/// use tessera_ui::{
-///     Modifier, NoopDrawModifier, RenderSlot,
-///     layout::{Stack, layout},
-/// };
+/// use tessera_ui::{layout::{Stack, layout}, RenderSlot, tessera};
 ///
-/// #[tessera_ui::tessera]
-/// fn primitive_example(modifier: Modifier, child: RenderSlot) {
-///     layout(Stack)
-///         .draw(NoopDrawModifier)
-///         .modifier(modifier)
-///         .child(child);
+/// #[tessera]
+/// fn overlay(content: RenderSlot) {
+///     layout(Stack).child(content);
 /// }
 /// ```
 pub fn layout<P>(policy: P) -> LayoutNode
@@ -1106,17 +1091,6 @@ where
 ///
 /// Children are measured and placed by the nearest enclosing layout node. Like
 /// [`layout`], it emits the current component's single node.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::{Modifier, layout::group};
-///
-/// #[tessera_ui::tessera]
-/// fn grouped_row(modifier: Modifier) {
-///     group().modifier(modifier).child(|| {});
-/// }
-/// ```
 pub fn group() -> GroupNode {
     emit_node(NodeRole::Group, &Stack);
     GroupNode { _private: () }

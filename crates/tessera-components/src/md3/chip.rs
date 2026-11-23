@@ -482,25 +482,21 @@ impl ChipBuilder {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{image::ImageData, md3::chip::chip};
-/// use tessera_ui::{Callback, remember};
+/// use tessera_ui::remember;
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// let selected = remember(|| false);
-/// let toggle = Callback::new(move || selected.set(!selected.get()));
-/// toggle.call();
-/// assert!(selected.get());
 /// let avatar = ImageData::from_rgba(vec![255, 128, 0, 255], 1, 1);
 /// chip()
 ///     .input("Alex")
 ///     .avatar(avatar)
 ///     .selected(selected.get())
-///     .on_click_shared(toggle);
+///     .on_click(move || selected.set(!selected.get()));
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn chip(

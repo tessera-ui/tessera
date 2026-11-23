@@ -59,8 +59,6 @@ impl FilterLabels {
     }
 }
 
-/// Live modal side sheet state owned by the app root while the article is
-/// mounted or remounted.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct LiveSideSheetSession {
     open: State<SideSheetController>,

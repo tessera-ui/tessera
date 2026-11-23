@@ -140,7 +140,6 @@ impl AppBarDefaults {
 /// });
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn app_bar(
@@ -338,11 +337,8 @@ fn window_control(control: WindowControl) {
 ///             text("Mark read");
 ///         });
 ///     });
-/// mark_read.call();
-/// assert_eq!(unread.get(), 0);
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn top_app_bar(

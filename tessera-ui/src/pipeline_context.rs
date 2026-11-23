@@ -14,7 +14,6 @@ impl<'a> PipelineContext<'a> {
     pub fn graphics(&self) -> &crate::render::GraphicsDevice {
         self.core.resources().graphics
     }
-    /// Creates a new pipeline context for the given renderer app.
     pub(crate) fn new(core: &'a mut RenderCore) -> Self {
         Self { core }
     }

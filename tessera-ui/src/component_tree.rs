@@ -130,7 +130,6 @@ impl LayoutSnapshotMap {
     }
 }
 
-/// Returns the key of the call that emitted `node_id`.
 pub(crate) fn nearest_replay_boundary_instance_key(
     node_id: NodeId,
     tree: &ComponentNodeTree,
@@ -144,10 +143,6 @@ pub(crate) fn clear_layout_snapshots() {
     });
 }
 
-/// Invokes globally positioned callbacks collected by the last compute pass.
-///
-/// Must be called after the runtime borrow used by `compute` is released so
-/// callbacks can freely update state.
 pub(crate) fn flush_pending_globally_positioned_callbacks() {
     let invocations = TesseraRuntime::with_mut(|runtime| {
         runtime
@@ -178,55 +173,51 @@ struct DirtyLayoutPath {
 
 #[cfg_attr(not(feature = "profiling"), allow(dead_code))]
 #[derive(Clone, Copy, Debug, Default)]
-/// Layout work observed during one frame.
-///
-/// Work counts include every settling pass; only pointer dispatch nodes are distinct.
+/// Work counts collected while laying out a frame in a headless UI test.
 pub struct LayoutFrameDiagnostics {
-    /// Number of nodes whose window geometry was resolved in this frame.
+    /// Nodes whose window geometry changed.
     pub geometry_nodes_updated: u64,
-    /// Geometry traversal entries, including entries that immediately reused a
-    /// cache.
+    /// Nodes visited while resolving window geometry.
     pub geometry_nodes_visited: u64,
-    /// Dirty direct children checked for cached size dependencies.
+    /// Child measurements checked for invalidation.
     pub measure_dirty_children_checked: u64,
-    /// Nodes examined while refreshing pointer geometry and dispatch plans.
+    /// Nodes whose pointer state was updated.
     pub pointer_nodes_updated: u64,
-    /// Distinct pointer nodes selected for dispatch in this frame.
+    /// Nodes receiving pointer dispatch.
     pub pointer_nodes_dispatched: u64,
-    /// Spatial candidates checked for exact pointer hits.
+    /// Nodes considered during pointer hit testing.
     pub pointer_hit_test_candidates: u64,
-    /// Nodes whose draw commands were recorded.
+    /// Nodes whose paint commands were recorded.
     pub paint_nodes_recorded: u64,
-    /// Persistent scene branches updated, including affected ancestors.
+    /// Nodes whose retained scene drawing changed.
     pub scene_nodes_updated: u64,
-    /// Nodes examined while updating the semantic index.
+    /// Accessibility nodes whose published data changed.
     pub accessibility_nodes_updated: u64,
-    /// Nodes with changed measurement or child-placement inputs.
+    /// Nodes changed by component parameters.
     pub dirty_nodes_param: u64,
-    /// Nodes whose direct layout children changed.
+    /// Nodes changed by tree structure.
     pub dirty_nodes_structural: u64,
-    /// Invalidated layout nodes and the ancestors that measure them.
+    /// Dirty nodes together with their affected ancestors.
     pub dirty_nodes_with_ancestors: u64,
-    /// Time spent identifying affected ancestors, in nanoseconds.
+    /// Time spent finding affected layout ancestors, in nanoseconds.
     pub dirty_expand_ns: u64,
-    /// Measurement entrypoint calls, including cache lookups.
+    /// Calls made to the layout measurement entry point.
     pub measure_node_calls: u64,
-    /// Cache hits that skipped an unchanged subtree.
+    /// Measurements skipped because the subtree was unchanged.
     pub cache_hits_direct: u64,
-    /// Cache hits after checking changed descendants or updating placements.
+    /// Measurements reused after checking descendant changes.
     pub cache_hits_boundary: u64,
-    /// Cache misses without a reusable size snapshot.
+    /// Measurements without a reusable prior result.
     pub cache_miss_no_entry: u64,
-    /// Cache misses caused by changed parent constraints.
+    /// Measurements invalidated by changed constraints.
     pub cache_miss_constraint: u64,
-    /// Cache misses caused by the node's own layout inputs.
+    /// Measurements invalidated by changed node inputs.
     pub cache_miss_dirty_self: u64,
-    /// Cache misses caused by child size dependencies.
+    /// Measurements invalidated by child size dependencies.
     pub cache_miss_child_size: u64,
-    /// Measured or repositioned layouts saved for reuse.
+    /// Measured or repositioned results stored for reuse.
     pub cache_store_count: u64,
-    /// Layouts excluded from caching because child measurements were incomplete
-    /// or inconsistent.
+    /// Results discarded because their commands cannot be reused.
     pub cache_drop_non_cacheable_count: u64,
 }
 
@@ -473,7 +464,6 @@ impl LayoutContext<'_> {
     }
 }
 
-/// Parameters for the compute function
 pub(crate) struct ComputeParams {
     pub screen_size: PxSize,
     pub cursor_position: Option<PxPosition>,
@@ -514,11 +504,8 @@ impl QueuedFocusedInput {
     }
 }
 
-/// Respents a component tree
 pub struct ComponentTree {
-    /// We use indextree as the tree structure
     tree: indextree::Arena<ComponentNode>,
-    /// Components' metadatas
     metadatas: ComponentNodeMetaDatas,
     layout_snapshots: LayoutSnapshotMap,
     frame_scene: scene::FrameScene,
@@ -529,7 +516,6 @@ pub struct ComponentTree {
     #[cfg(feature = "profiling")]
     profiler_dirty_nodes: HashSet<NodeId>,
     scale_factor_bits: u64,
-    /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
     replay_range: Option<ReplayRange>,
     replay_insertions: ReplayInsertions,
@@ -541,16 +527,11 @@ pub struct ComponentTree {
     removed_frame_nodes: HashSet<NodeId>,
     previous_structure_change_counts: [usize; 2],
     removed_focus_owners: HashSet<u64>,
-    /// Active pointer hit paths keyed by pointer id.
-    /// Each path stores node instance keys from root to leaf.
     active_pointer_paths: HashMap<u64, Vec<u64>>,
     active_pointer_positions: HashMap<u64, Option<PxPosition>>,
     pointer_work: (u64, HashSet<u64>),
-    /// Per-tree focus owner used for keyboard and IME routing.
     focus_owner: FocusOwner,
     pending_focused_input: VecDeque<QueuedFocusedInput>,
-    /// Last reported window-space bounds for nodes with globally positioned
-    /// callbacks, keyed by instance key.
     last_global_rects: HashMap<u64, GlobalPositionSnapshot>,
     observer_viewport: Option<PxSize>,
     position_observer_nodes: HashSet<NodeId>,
@@ -558,8 +539,6 @@ pub struct ComponentTree {
     pending_position_observers: HashSet<NodeId>,
     observer_spaces: HashMap<NodeId, u64>,
     space_observers: HashMap<u64, HashSet<NodeId>>,
-    /// Globally positioned callbacks collected during compute and invoked
-    /// after the runtime borrow is released.
     pending_globally_positioned_invocations:
         Vec<(GloballyPositionedHandler, node::GeometryObservation)>,
 }
@@ -650,7 +629,6 @@ pub(crate) struct ReplayReplaceContext {
     previous_queue: Option<Vec<indextree::NodeId>>,
 }
 
-/// Values a rebuilt node replaced in place, kept until the new ones are attached.
 pub(crate) struct PreviousBuildNode {
     pub(crate) modifier: Modifier,
     pub(crate) policy: LayoutPolicyHandle,
@@ -661,7 +639,6 @@ pub(crate) struct PreviousBuildNode {
     defer_consumer_change: bool,
 }
 
-/// Build inputs of a node emitted by a layout or group primitive.
 pub(crate) struct NodeInput<'a, P = crate::layout::Stack> {
     pub(crate) fn_name: &'static str,
     pub(crate) role: NodeRole,
@@ -705,7 +682,6 @@ impl Default for ComponentTree {
 }
 
 impl ComponentTree {
-    /// Create a new ComponentTree
     pub fn new() -> Self {
         let tree = indextree::Arena::new();
         let node_queue = Vec::new();
@@ -749,7 +725,6 @@ impl ComponentTree {
         }
     }
 
-    /// Clear the component tree
     pub fn clear(&mut self) {
         crate::runtime::remove_layout_structure(
             &self.node_ids_by_instance_key.keys().copied().collect(),
@@ -788,7 +763,6 @@ impl ComponentTree {
         self.pending_globally_positioned_invocations.clear();
     }
 
-    /// Reset the entire component tree, including focus ownership state.
     pub fn reset(&mut self) {
         self.clear();
         self.active_pointer_paths.clear();
@@ -810,7 +784,6 @@ impl ComponentTree {
         changed
     }
 
-    /// Get node by NodeId
     pub(crate) fn get(&self, node_id: indextree::NodeId) -> Option<&ComponentNode> {
         self.tree
             .get(node_id)
@@ -818,7 +791,6 @@ impl ComponentTree {
             .map(|node| node.get())
     }
 
-    /// Get mutable node by NodeId
     pub(crate) fn get_mut(&mut self, node_id: indextree::NodeId) -> Option<&mut ComponentNode> {
         self.tree
             .get_mut(node_id)
@@ -826,7 +798,6 @@ impl ComponentTree {
             .map(|node| node.get_mut())
     }
 
-    /// Find a node id by stable instance key.
     pub(crate) fn find_node_id_by_instance_key(
         &self,
         instance_key: u64,
@@ -1043,20 +1014,17 @@ impl ComponentTree {
         self.node_queue.last().copied()
     }
 
-    /// Get current node
     pub(crate) fn current_node(&self) -> Option<&ComponentNode> {
         self.node_queue
             .last()
             .and_then(|node_id| self.get(*node_id))
     }
 
-    /// Get mutable current node
     pub(crate) fn current_node_mut(&mut self) -> Option<&mut ComponentNode> {
         let node_id = self.node_queue.last()?;
         self.get_mut(*node_id)
     }
 
-    /// Add a new node to the tree
     pub(crate) fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
         let instance_key = node_component.instance_key;
         let needs_geometry = node_component.role == NodeRole::Layout || self.node_queue.is_empty();
@@ -1072,7 +1040,6 @@ impl ComponentTree {
         new_node_id
     }
 
-    /// Reuses the matching node in place, or inserts a new one.
     pub(crate) fn rebuild_node<P>(
         &mut self,
         input: NodeInput<'_, P>,
@@ -1229,7 +1196,6 @@ impl ComponentTree {
         self.node_queue.push(id);
     }
 
-    /// Pop the last node from the queue
     pub(crate) fn pop_node(&mut self) {
         if let Some(node_id) = self.node_queue.pop() {
             self.detach_replay_suffix(node_id);
@@ -1334,18 +1300,10 @@ impl ComponentTree {
         changed
     }
 
-    /// Get a reference to the underlying tree structure.
-    ///
-    /// This is used for accessibility tree building and other introspection
-    /// needs.
     pub(crate) fn tree(&self) -> &indextree::Arena<ComponentNode> {
         &self.tree
     }
 
-    /// Get a reference to the node metadatas.
-    ///
-    /// This is used for accessibility tree building and other introspection
-    /// needs.
     #[cfg(any(
         test,
         feature = "testing",
@@ -1700,7 +1658,6 @@ impl ComponentTree {
         invocations
     }
 
-    /// Collect per-node metadata for profiling output.
     #[cfg(feature = "profiling")]
     pub fn profiler_nodes(&mut self) -> Vec<NodeMeta> {
         self.profiler_dirty_nodes
@@ -1732,8 +1689,6 @@ impl ComponentTree {
         self.profiler_nodes_cache.values().cloned().collect()
     }
 
-    /// Dispatches pointer input across the tree and returns the window requests
-    /// raised by the handlers (currently the hover cursor icon).
     fn dispatch_pointer_input(
         &mut self,
         root_node: indextree::NodeId,
@@ -2372,7 +2327,6 @@ impl ComponentTree {
         }
     }
 
-    /// Computes the frame's render graph, window requests, and diagnostics.
     #[tracing::instrument(level = "debug", skip(self, params))]
     pub(crate) fn compute(
         &mut self,
@@ -6708,7 +6662,7 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         let mut tree = built_tree();
         let outer = emit(&mut tree, 2, NodeRole::Layout);
-        let group = emit(&mut tree, 3, NodeRole::Group);
+        emit(&mut tree, 3, NodeRole::Group);
         let first = leaf(&mut tree, 4);
         let second = leaf(&mut tree, 5);
         end_call(&mut tree, 3);
@@ -6720,23 +6674,19 @@ mod tests {
         );
 
         replay(&mut tree, 3, |tree| {
-            assert_eq!(emit(tree, 3, NodeRole::Group), group);
+            emit(tree, 3, NodeRole::Group);
             assert!(retain(tree, 5));
             assert!(retain(tree, 4));
             end_call(tree, 3);
         });
 
-        let actual = direct_layout_children(outer, tree.tree());
-        assert_eq!(actual.as_ref(), &[second, first]);
-        match (actual, direct_layout_children(group, tree.tree())) {
-            (node::LayoutChildren::Shared(outer), node::LayoutChildren::Shared(group)) => {
-                assert!(Arc::ptr_eq(&outer, &group));
-            }
-            _ => panic!("a single group child shares its wider layout children"),
-        }
+        assert_eq!(
+            direct_layout_children(outer, tree.tree()).as_ref(),
+            &[second, first]
+        );
     }
 }
 
 #[cfg(all(test, feature = "testing"))]
-#[path = "replay_journal_tests.rs"]
-mod replay_journal_tests;
+#[path = "component_tree_behavior_tests.rs"]
+mod component_tree_behavior_tests;

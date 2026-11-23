@@ -1,4 +1,3 @@
-//! Input avatar geometry, clipping, and source-color regressions.
 //!
 //! ## Usage
 //!

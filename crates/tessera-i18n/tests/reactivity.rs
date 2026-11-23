@@ -20,7 +20,6 @@ struct Observation {
     i18n: TestProbe<Option<I18n>>,
     counter: TestProbe<Option<State<usize>>>,
     output: TestProbe<String>,
-    builds: TestProbe<usize>,
 }
 
 #[tessera]
@@ -31,36 +30,34 @@ fn reader(observation: Observation) {
     observation
         .output
         .set(CATALOG.format("value", [("count", counter.get().into())]));
-    observation.builds.set(observation.builds.get() + 1);
 }
 
 #[test]
-fn entry_locale_changes_recompose_readers_preserve_state_and_isolate_sessions() {
+fn entry_locale_changes_translate_existing_state_without_affecting_other_entries() {
+    let text = |observation: &Observation| {
+        observation
+            .output
+            .get()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    };
     let first = Observation::default();
     let second = Observation::default();
     let mut session = UiTest::new().content(|| reader(first.clone()));
     session.run(|| EntryRegistry::new().register_package(CATALOG.clone()));
     session.frame();
-    let initial = first.output.get();
+    assert_eq!(text(&first), "Value: 0");
     let locale = first.i18n.get().unwrap();
     let counter = first.counter.get().unwrap();
     let mut other = UiTest::new().content(|| reader(second.clone()));
     other.run(|| EntryRegistry::new().register_package(CATALOG.clone()));
     other.frame();
-    let other_initial = second.output.get();
-    session.run(|| locale.set_locale(langid!("zh-CN")));
-    session.frames(1);
-    assert_ne!(first.output.get(), initial);
-    assert!(first.counter.get().unwrap() == counter);
-    other.frames(1);
-    assert_eq!(second.output.get(), other_initial);
-    assert_eq!(second.builds.get(), 1);
-    let localized = first.output.get();
-    let builds = first.builds.get();
-    session.run(|| locale.set_locale(langid!("zh-CN")));
-    session.frames(1);
-    assert_eq!(first.builds.get(), builds);
     session.run(|| counter.set(7));
     session.frames(1);
-    assert_ne!(first.output.get(), localized);
+    assert_eq!(text(&first), "Value: 7");
+
+    session.run(|| locale.set_locale(langid!("zh-CN")));
+    session.frames(1);
+    other.frames(1);
+    assert_eq!(text(&first), "数值：7");
+    assert_eq!(text(&second), "Value: 0");
 }

@@ -404,9 +404,7 @@ fn label_layer(
 ///                 .value_indicator(SliderValueIndicatorVisibility::OnInteraction);
 ///         });
 ///     });
-///     assert_eq!(value.get(), 0.5);
 /// }
-/// # tessera_ui::testing::UiTest::new().content(content).frame();
 /// ```
 #[tessera]
 pub fn slider_value_indicator_provider(

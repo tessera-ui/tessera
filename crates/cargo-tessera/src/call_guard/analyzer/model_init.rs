@@ -14,7 +14,6 @@ const MODEL_INIT_PATHS: &[&str] = &[
 ];
 
 impl CallAnalyzer<'_> {
-    /// Rejects `State::new` outside a model initializer.
     pub(super) fn check_model_state(&mut self, call: &ast::CallExpr) {
         if !self
             .call_function(call)

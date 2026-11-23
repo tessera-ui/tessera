@@ -604,10 +604,6 @@ impl Default for FocusRequester {
     }
 }
 
-/// Persistent focus target handle.
-///
-/// This is the low-level target identity used by focus modifiers. Most code
-/// should prefer [`FocusRequester`] and [`crate::modifier::FocusModifierExt`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct FocusNode {
     id: FocusHandleId,
@@ -1003,7 +999,6 @@ enum KeyboardLayoutBarrier {
 type FocusOrderPath = Vec<(u64, usize)>;
 type FocusChildren = BTreeMap<(FocusOrderPath, FocusHandleId), FocusHandleId>;
 
-/// Per-component-tree focus owner.
 #[derive(Default)]
 pub(crate) struct FocusOwner {
     nodes: HashMap<FocusHandleId, FocusTreeNode>,

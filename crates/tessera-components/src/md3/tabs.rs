@@ -166,7 +166,6 @@ fn clamp_px(value: Px, min: Px, max: Option<Px>) -> Px {
     Px(value.0.max(min.0).min(clamped_max.0))
 }
 
-/// Internal runtime state for the tab row.
 #[derive(Clone, PartialEq)]
 struct TabsController {
     density: f64,
@@ -507,27 +506,6 @@ impl TabBuilder {
 /// - `accessibility_label` — accessible name override. Authors must provide a
 ///   nonempty name for icon-only tabs and non-text custom titles.
 ///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::tabs::{tab, tabs};
-/// use tessera_components::md3::text::text;
-/// use tessera_ui::{remember, tessera};
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-///
-/// #[tessera]
-/// fn demo() {
-/// #     material_theme()
-/// #         .theme(|| MaterialTheme::default())
-/// #         .child(|| {
-///     let selected = remember(|| 0usize);
-///     tabs(selected.get()).on_select(move |index| selected.set(index)).content(move |row| {
-///         tab(row)
-///             .label("Home");
-///     });
-/// #         });
-/// }
-/// ```
 #[tessera]
 pub fn tab(
     row: TabRow,
@@ -1227,15 +1205,13 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 /// use tessera_components::md3::{
 ///     tabs::{tab, tabs},
 ///     text::text,
+///     theme::material_theme,
 /// };
 /// use tessera_ui::{remember, tessera};
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
-/// #     material_theme()
-/// #         .theme(|| MaterialTheme::default())
-/// #         .child(|| {
+///     material_theme().child(|| {
 ///     let selected = remember(|| 1usize);
 ///     let active_tab = selected.get();
 ///
@@ -1251,7 +1227,7 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 ///     } else {
 ///         text("Content for Hotel");
 ///     }
-/// #         });
+///     });
 /// }
 /// ```
 #[tessera]
@@ -1750,14 +1726,9 @@ mod tests {
         // Three equal tabs span the 300px viewport, so the middle tab covers
         // x in [100, 200] and its center is at x = 150.
         let position = PxPosition::new(Px::new(150), Px::new(24));
-        // Move the pointer over the middle tab first. This rebuilds that tab
-        // in isolation inside `lazy_column`; a per-instance self-assigned index
-        // must still resolve to the middle tab after the click.
         session.pointer_move(tessera_ui::MOUSE_POINTER_ID, position);
         session.frames(1);
         session.click_at(position);
-        // With the regression the shared counter keeps growing, so the click
-        // selects the last tab and this probe never appears.
         session.frames(37).node("hotels-active").exists();
     }
 }

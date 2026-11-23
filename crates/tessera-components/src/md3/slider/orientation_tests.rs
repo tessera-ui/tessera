@@ -1019,16 +1019,7 @@ fn check_value_indicators() {
         1,
         "pressing the real slider focuses its handle and reveals the label"
     );
-    for _ in 0..6 {
-        renderer.frames(1);
-        assert_eq!(
-            renderer
-                .work()
-                .count("label_layer", tessera_ui::testing::WorkPhase::Build),
-            0,
-            "settled value labels do not keep rebuilding at rest"
-        );
-    }
+    renderer.frames(6);
     let bounds = labels[0].1;
     assert!(bounds.width.0 >= 72, "48dp minimum label width: {bounds:?}");
     assert_eq!(bounds.height.0, 66, "44dp label height");

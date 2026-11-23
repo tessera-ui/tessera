@@ -1,4 +1,3 @@
-//! List row height, wrapping, and alignment regressions.
 //!
 //! ## Usage
 //!

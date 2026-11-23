@@ -58,7 +58,6 @@ fn hex(color: Color) -> String {
     )
 }
 
-/// One numbered callout: marker position and the point its leader targets.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct Callout {
     pub number: usize,
@@ -74,7 +73,6 @@ const fn callout(number: usize, marker: (f64, f64), target: (f64, f64)) -> Callo
     }
 }
 
-/// Content shown inside a mock side sheet.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) enum Body {
     #[default]
@@ -87,7 +85,6 @@ pub(super) enum Body {
     Lines,
 }
 
-/// Primary content shown beside or beneath a mock side sheet.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) enum Backdrop {
     #[default]
@@ -97,7 +94,6 @@ pub(super) enum Backdrop {
     Files,
 }
 
-/// Static description of one mock device and its side sheet.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct Mock {
     pub modal: bool,
@@ -161,14 +157,11 @@ impl Mock {
     }
 }
 
-/// Header and actions geometry shared by figures and their callouts.
 pub(super) const HEADER_HEIGHT: f64 = 72.0;
 pub(super) const ACTIONS_HEIGHT: f64 = 72.0;
 const DEVICE_BORDER: f64 = 8.0;
 const DEVICE_RADIUS: f64 = 24.0;
 
-/// Stage-space frame of the sheet in a device placed at `x`, `y` with size
-/// `width` × `height`.
 pub(super) fn sheet_frame(
     mock: Mock,
     x: f64,
@@ -304,10 +297,6 @@ pub(super) fn marker(number: usize, x: f64, y: f64, tag: Option<String>) {
         });
 }
 
-/// Draw numbered markers with leader lines on a stage of the given size.
-///
-/// When `figure` is set, each marker gets the layout tag
-/// `side-marker-{figure}-{number}`.
 #[tessera]
 pub(super) fn callouts(
     width: f64,
@@ -366,7 +355,6 @@ pub(super) fn legend(entries: Vec<(usize, String)>) {
     });
 }
 
-/// Lay out two slots side by side on wide articles and stacked on narrow ones.
 #[tessera]
 pub(super) fn split(start: Option<RenderSlot>, end: Option<RenderSlot>, start_weight: Option<f32>) {
     let start = start.unwrap_or_else(RenderSlot::empty);
@@ -403,7 +391,6 @@ pub(super) fn split(start: Option<RenderSlot>, end: Option<RenderSlot>, start_we
         });
 }
 
-/// Do or Don't card with a figure, a colored status bar and a note.
 #[tessera]
 pub(super) fn guidance_card(good: bool, #[prop(into)] note: String, figure: Option<RenderSlot>) {
     let figure = figure.unwrap_or_else(RenderSlot::empty);
@@ -446,7 +433,6 @@ pub(super) fn guidance_card(good: bool, #[prop(into)] note: String, figure: Opti
         });
 }
 
-/// A device frame containing primary content and one side sheet.
 #[tessera]
 pub(super) fn device(mock: Mock, x: f64, y: f64, width: f64, height: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -609,7 +595,6 @@ fn mirror(start: bool, width: f64, x: f64, element: f64) -> f64 {
     if start { width - x - element } else { x }
 }
 
-/// A static side sheet with the official header, body and action geometry.
 #[tessera]
 pub(super) fn sheet_panel(mock: Mock, x: f64, y: f64, width: f64, height: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -936,7 +921,6 @@ fn radio(x: f64, y: f64, selected: bool, #[prop(into)] name: String) {
     label(name, x + 36.0, y, 16.0, scheme.on_surface);
 }
 
-/// Standard (1) and modal (2) side sheets, each cropped from a device.
 #[tessera]
 pub(super) fn hero() {
     stage(
@@ -963,7 +947,6 @@ pub(super) fn hero() {
     });
 }
 
-/// Usage examples: a photo with an Info sheet, or files with a Filters sheet.
 #[tessera]
 pub(super) fn usage_figure(modal: bool) {
     stage(
@@ -1031,7 +1014,6 @@ fn anatomy_callouts(modal: bool) -> Vec<Callout> {
 const STANDARD_ANATOMY: Mock = Mock::standard(296.0);
 const MODAL_ANATOMY: Mock = Mock::modal(296.0);
 
-/// Numbered anatomy of a standard (4 elements) or modal (7 elements) sheet.
 #[tessera]
 pub(super) fn anatomy(modal: bool, #[prop(into)] figure: String) {
     let height = if modal { 640.0 } else { 600.0 };
@@ -1080,7 +1062,6 @@ pub(super) fn anatomy_legend(modal: bool) -> Vec<(usize, String)> {
         .collect()
 }
 
-/// Color roles in light and dark themes.
 #[tessera]
 pub(super) fn color_roles(modal: bool) {
     for dark in [false, true] {
@@ -1136,7 +1117,6 @@ pub(super) fn color_legend(modal: bool) -> Vec<(usize, String)> {
         .collect()
 }
 
-/// Layout tag for one measured element of the measurement figure.
 pub(super) fn measurement_tag(modal: bool, name: &str) -> String {
     format!(
         "side-measurement-{}-{name}",
@@ -1152,7 +1132,6 @@ fn part(geometry: State<SpaceGeometry>, modal: bool, name: &'static str) -> Modi
     })
 }
 
-/// Live padding and size measurements over a real sheet header.
 #[tessera]
 pub(super) fn measurement_figure(modal: bool) {
     let scheme = MaterialTheme::from_seed(figure_seed(), false).color_scheme;
@@ -1318,7 +1297,6 @@ fn measurement_sheet(modal: bool, geometry: State<SpaceGeometry>) {
         });
 }
 
-/// Glyph rectangle centered in a measured icon button.
 pub(super) fn glyph_rect(button: &annotations::Rect) -> annotations::Rect {
     annotations::Rect {
         x: button.x + button.w * 0.5 - 12.0,
@@ -1402,7 +1380,6 @@ fn measurement_rulers(geometry: State<SpaceGeometry>) {
     );
 }
 
-/// Inset Do/Don't figure for sheet placement.
 #[tessera]
 pub(super) fn inset_figure(inset: f64) {
     stage(
@@ -1429,7 +1406,6 @@ pub(super) fn inset_figure(inset: f64) {
 
 const ELEMENT_MOCK: Mock = Mock::modal(296.0);
 
-/// Cropped modal sheet with a single marker on one element.
 #[tessera]
 pub(super) fn element_figure(#[prop(into)] element: String) {
     let (sx, sy, sw, sh) = sheet_frame(ELEMENT_MOCK, 80.0, 72.0, 640.0, 528.0);
@@ -1465,7 +1441,6 @@ pub(super) fn element_figure(#[prop(into)] element: String) {
     });
 }
 
-/// Two side sheets showing different content and layouts.
 #[tessera]
 pub(super) fn content_figure() {
     stage(
@@ -1499,7 +1474,6 @@ pub(super) fn content_figure() {
     });
 }
 
-/// A modal sheet on a phone becoming a standard sheet on a tablet.
 #[tessera]
 pub(super) fn transition_figure() {
     stage(1000.0, 520.0, "ui-modal-side-sheets-on-smaller-screens-can-transition-to-standard-side-sheets-at-larger-scre").child(|| {
@@ -1520,7 +1494,6 @@ pub(super) fn transition_figure() {
     });
 }
 
-/// A side sheet on the left edge with mirrored elements.
 #[tessera]
 pub(super) fn rtl_figure() {
     stage(
@@ -1541,7 +1514,6 @@ pub(super) fn rtl_figure() {
     });
 }
 
-/// Vertical scrolling Do and horizontal scrolling Don't figures.
 #[tessera]
 pub(super) fn scroll_figure(good: bool) {
     stage(
@@ -1562,7 +1534,6 @@ pub(super) fn scroll_figure(good: bool) {
     });
 }
 
-/// A detached sheet scaling with the predictive back gesture.
 #[tessera]
 pub(super) fn predictive_back_figure() {
     stage(800.0, 480.0, "ui-preview-of-the-predictive-back-gesture-on-a-side-sheet").child(|| {
@@ -1584,7 +1555,6 @@ pub(super) fn predictive_back_figure() {
     });
 }
 
-/// Close-affordance Do and Don't figures.
 #[tessera]
 pub(super) fn close_figure(good: bool) {
     stage(
@@ -1615,7 +1585,6 @@ const FOCUS_MOCK: Mock = Mock {
     ..Mock::modal(296.0).body(Body::Filters, "ui-filters")
 };
 
-/// Visible focus on the headline, close and action buttons.
 #[tessera]
 pub(super) fn focus_figure() {
     let (sx, sy, sw, sh) = sheet_frame(FOCUS_MOCK, 100.0, 48.0, 800.0, 528.0);
@@ -1640,7 +1609,6 @@ pub(super) fn focus_figure() {
     });
 }
 
-/// The accessibility role of a side sheet.
 #[tessera]
 pub(super) fn role_figure() {
     let mock = Mock {

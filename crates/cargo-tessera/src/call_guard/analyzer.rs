@@ -174,7 +174,6 @@ impl<'db> CallAnalyzer<'db> {
         Ok(())
     }
 
-    /// Checks one selected file and returns its diagnostics.
     pub(crate) fn check_file(
         &mut self,
         file_id: FileId,
@@ -2201,7 +2200,6 @@ fn test_functions_are_plain() { child(); }
         assert_contains(&diagnostics, "EntryPoint::new");
         assert_eq!(count_containing(&diagnostics, "RenderSlot::render"), 4);
         assert_eq!(count_containing(&diagnostics, "RenderSlotWith::render"), 4);
-        assert_contains(&diagnostics, "remember");
         assert!(
             count_containing(&diagnostics, "remember") >= 2,
             "initializer factories stay plain: {diagnostics:?}"

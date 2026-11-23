@@ -320,13 +320,11 @@ impl AppBarScrollController {
 ///                         });
 ///                 });
 ///         });
-///     assert_eq!(state.with(AppBarScrollController::collapsed_fraction), 0.0);
 /// }
 /// # #[tessera]
 /// # fn app() {
 /// #     tessera_components::md3::theme::material_theme().child(|| screen());
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(app).frame();
 /// ```
 #[tessera]
 pub fn app_bar_scroll_provider(

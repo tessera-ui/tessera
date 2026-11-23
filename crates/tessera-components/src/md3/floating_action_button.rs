@@ -230,29 +230,23 @@ impl FloatingActionButtonDefaults {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::floating_action_button::floating_action_button;
-/// use tessera_ui::{Callback, remember, tessera};
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-///
+/// use tessera_components::md3::{
+///     floating_action_button::floating_action_button,
+///     text::text,
+///     theme::material_theme,
+/// };
+/// use tessera_ui::{remember, tessera};
 /// #[tessera]
 /// fn component() {
-/// #     material_theme()
-/// #         .theme(|| MaterialTheme::default())
-/// #         .child(|| {
 ///     let clicked = remember(|| false);
-///     let on_click = Callback::new({ move || clicked.with_mut(|value| *value = true) });
-///     let on_click_shared = on_click.clone();
-///     on_click.call();
-///
-///     assert!(clicked.with(|value| *value));
-///
-///     floating_action_button()
-///         .on_click_shared(on_click_shared)
-///         .content(|| {});
-/// #         });
+///     material_theme().child(move || {
+///         floating_action_button()
+///             .on_click(move || clicked.set(true))
+///             .content(|| text("Add"));
+///         text(if clicked.get() { "Item added" } else { "" });
+///     });
 /// }
 ///
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn floating_action_button(

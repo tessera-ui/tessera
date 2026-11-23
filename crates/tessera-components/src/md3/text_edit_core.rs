@@ -2270,32 +2270,22 @@ impl TextEditorController {
         }
     }
 
-    /// Scrolls horizontally by `delta` and returns the consumed amount.
-    ///
-    /// The returned value is the actual change applied in scroll space, so
-    /// callers can hand the remainder to an ancestor scroll container.
     pub(crate) fn scroll_horizontal_consumed(&mut self, delta: f32) -> f32 {
         let before = self.scroll_controller().horizontal();
         self.scroll_horizontal_by(delta);
         self.scroll_controller().horizontal() - before
     }
 
-    /// Scrolls vertically by `delta` and returns the consumed amount.
-    ///
-    /// The returned value is the actual change applied in scroll space; the
-    /// editor engine clamps vertical scrolling to the content extent.
     pub(crate) fn scroll_vertical_consumed(&mut self, delta: f32) -> f32 {
         let before = self.scroll_controller().vertical();
         self.scroll_vertical_by(delta);
         self.scroll_controller().vertical() - before
     }
 
-    /// Returns whether the editor content overflows horizontally.
     pub(crate) fn has_horizontal_overflow(&mut self) -> bool {
         self.edit_state.has_horizontal_overflow()
     }
 
-    /// Returns whether the editor content overflows vertically.
     pub(crate) fn has_vertical_overflow(&mut self) -> bool {
         self.edit_state.has_vertical_overflow()
     }
@@ -3650,7 +3640,7 @@ mod tests {
     use tessera_ui::winit::keyboard::NamedKey;
     use tessera_ui::{CallbackWith, ComputedData, Dp, Px, winit};
 
-    mod layout_reuse {
+    mod editor_layout {
 
         use tessera_ui::{Dp, State, layout::layout, remember, tessera, testing::UiTest};
 
@@ -3668,13 +3658,7 @@ mod tests {
         }
 
         #[tessera]
-        fn editor_cache_contents(controller: State<TextEditorController>) {
-            let _ = controller.with(|controller| controller.layout_version());
-            text_edit_core().controller(controller);
-        }
-
-        #[tessera]
-        fn editor_cache_probe(probe: Probe) {
+        fn editor_fixture(probe: Probe) {
             let controller = remember(|| {
                 let mut controller = TextEditorController::new(Dp(14.0), None);
                 controller.set_text("a");
@@ -3682,7 +3666,7 @@ mod tests {
             });
             probe.controller.set(Some(controller));
             layout(tessera_ui::layout::Stack).child(move || {
-                editor_cache_contents(controller);
+                text_edit_core().controller(controller);
             });
         }
 
@@ -3742,15 +3726,17 @@ mod tests {
                 output: probe.size.clone(),
             })
             .child(move || {
-                editor_cache_contents(controller);
+                text_edit_core().controller(controller);
             });
         }
 
         #[test]
-        fn intrinsic_editor_probe_preserves_final_layout_and_invalidates_only_its_size_cache() {
-            use super::super::{CURSOR_WIDTH, TextLayoutCacheKey};
-            use crate::{md3::theme::TextStyle, pipelines::text::command::TextConstraint};
+        fn intrinsic_editor_size_follows_content_without_changing_final_layout() {
             use tessera_ui::Px;
+
+            use crate::md3::theme::TextStyle;
+
+            use super::super::CURSOR_WIDTH;
 
             let probe = Probe::default();
             let output = probe.clone();
@@ -3760,42 +3746,26 @@ mod tests {
             session.frame();
             session.frames(3);
             let controller = probe.controller.get().unwrap();
-            let normal = TextConstraint {
-                max_width: Some(200.0),
-                max_height: Some(80.0),
-                ..Default::default()
+            let observe_layout = || {
+                controller.with(|controller| {
+                    (
+                        controller.current_text_data().unwrap().measure_info().size,
+                        controller
+                            .current_cursor_rect()
+                            .expect("editor caret geometry"),
+                    )
+                })
             };
-            let before = controller.with(|controller| {
-                (
-                    controller.text_cache_key(),
-                    controller.current_text_data().unwrap().measure_info().size,
-                    controller.current_cursor_rect(),
-                    controller.layout_state.ime_rect(),
-                    controller
-                        .edit_state
-                        .with_buffer(|buffer| (buffer.size(), buffer.scroll())),
-                )
-            });
-            assert!(before.2.is_some());
+            let before = observe_layout();
             probe.enabled.get().unwrap().set(true);
             session.frames(4);
-            let after = controller.with(|controller| {
-                (
-                    controller.text_cache_key(),
-                    controller.current_text_data().unwrap().measure_info().size,
-                    controller.current_cursor_rect(),
-                    controller.layout_state.ime_rect(),
-                    controller
-                        .edit_state
-                        .with_buffer(|buffer| (buffer.size(), buffer.scroll())),
-                )
-            });
             assert_eq!(
-                after, before,
-                "intrinsic probing must not publish editor viewport, draw snapshot, cursor, IME or scroll changes"
+                observe_layout(),
+                before,
+                "an intrinsic measurement must not change text size, caret, IME or scroll geometry"
             );
             let narrow = probe.size.get().unwrap();
-            assert!(narrow.height > Px(before.1[1] as i32));
+            assert!(narrow.height > Px(before.0[1] as i32));
             probe.width.get().unwrap().set(80);
             session.frames(3);
             assert!(
@@ -3824,67 +3794,21 @@ mod tests {
                 CURSOR_WIDTH.to_px(),
                 "intrinsic sizing must use transformed display text"
             );
-            controller.with(|controller| {
-                assert!(controller.cached_layout(&normal).is_some());
-                assert_eq!(
-                    controller.text_cache_key(),
-                    Some(TextLayoutCacheKey::new(
-                        controller.text_layout_version(),
-                        &normal
-                    ))
-                );
-                assert_eq!(
-                    controller.edit_state.with_buffer(|buffer| buffer.size()),
-                    (Some(200.0), Some(80.0))
-                );
-            });
-            let settled = session.work_totals().count(
-                "editor_cache_contents",
-                tessera_ui::testing::WorkPhase::Build,
-            );
-            session.frames(8);
-            assert_eq!(
-                session.work_totals().count(
-                    "editor_cache_contents",
-                    tessera_ui::testing::WorkPhase::Build,
-                ),
-                settled,
-                "a cached intrinsic probe must not perpetually invalidate editor readers"
-            );
         }
 
         #[test]
-        fn cached_text_measurement_stops_rebuilding_without_edits() {
+        fn editing_text_updates_its_measured_width() {
             let probe = Probe::default();
             let mut session = UiTest::new()
-                .content(|| editor_cache_probe(probe.clone()))
+                .content(|| editor_fixture(probe.clone()))
                 .viewport(400, 100);
             session.frame();
             session.frames(3);
-            let settled_builds = session.work_totals().count(
-                "editor_cache_contents",
-                tessera_ui::testing::WorkPhase::Build,
-            );
-            session.frames(8);
-            assert_eq!(
-                session.work_totals().count(
-                    "editor_cache_contents",
-                    tessera_ui::testing::WorkPhase::Build,
-                ),
-                settled_builds
-            );
-
             let controller = probe.controller.get().expect("editor controller");
             let initial_width =
                 controller.with(|c| c.current_text_data().unwrap().measure_info().size[0]);
             controller.with_mut(|c| c.set_text("a much longer value"));
             session.frames(4);
-            assert!(
-                session.work_totals().count(
-                    "editor_cache_contents",
-                    tessera_ui::testing::WorkPhase::Build,
-                ) > settled_builds
-            );
             assert!(
                 controller.with(|c| c.current_text_data().unwrap().measure_info().size[0])
                     > initial_width

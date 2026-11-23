@@ -24,7 +24,6 @@ pub(super) struct CrateJob {
 pub(super) struct Plan {
     pub(super) jobs: Vec<CrateJob>,
     pub(super) target_directory: PathBuf,
-    /// Resolved Cargo metadata, serialized.
     pub(super) metadata: String,
 }
 

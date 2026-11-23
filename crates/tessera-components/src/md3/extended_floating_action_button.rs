@@ -247,17 +247,20 @@ impl tessera_ui::LayoutPolicy for ExtendedFabLayout {
 /// use tessera_components::md3::{
 ///     extended_floating_action_button::extended_floating_action_button,
 ///     material_icons::filled,
+///     text::text,
+///     theme::material_theme,
 /// };
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn compose_action() {
-///     let expanded = remember(|| true);
-///     assert!(expanded.get());
-///     extended_floating_action_button("Compose")
-///         .icon(filled::EDIT_SVG)
-///         .expanded(expanded.get())
-///         .on_click(move || expanded.set(!expanded.get()));
+///     let composed = remember(|| false);
+///     material_theme().child(move || {
+///         extended_floating_action_button("Compose")
+///             .icon(filled::EDIT_SVG)
+///             .on_click(move || composed.set(true));
+///         text(if composed.get() { "Composer opened" } else { "" });
+///     });
 /// }
 /// ```
 #[tessera]

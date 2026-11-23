@@ -184,8 +184,6 @@ impl<'db> CallAnalyzer<'db> {
         })
     }
 
-    /// Reports `remember` or `retain` states captured by a `ModelStore::model`
-    /// initializer: storing them in the model does not transfer ownership.
     pub(super) fn remembered_state_in_model(
         &self,
         call: &ast::MethodCallExpr,
@@ -270,9 +268,6 @@ impl<'db> CallAnalyzer<'db> {
             .collect()
     }
 
-    /// Reports private imports that bind a Tessera modifier extension trait to
-    /// a name that nothing else can mention. Only the trait's methods are
-    /// needed, so `as _` keeps the module namespace free.
     pub(super) fn named_modifier_ext_imports(&self, file: &SyntaxNode) -> Vec<Diagnostic> {
         file.descendants()
             .filter_map(ast::Use::cast)

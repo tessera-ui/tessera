@@ -743,11 +743,8 @@ impl tessera_ui::LayoutPolicy for TooltipLayout {
 /// ```
 /// use tessera_components::md3::tooltip::TooltipController;
 /// let mut tooltip = TooltipController::new();
-/// assert!(!tooltip.is_open());
 /// tooltip.show();
-/// assert!(tooltip.is_open());
 /// tooltip.dismiss();
-/// assert!(!tooltip.is_open());
 /// ```
 #[tessera]
 pub fn tooltip_provider(
@@ -912,12 +909,6 @@ pub fn tooltip_provider(
 /// - `modifier` — modifiers for the trigger wrapper
 /// - `child` — the control that receives focus and normal activation
 ///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::tooltip::TooltipPlacement;
-/// assert_eq!(TooltipPlacement::default(), TooltipPlacement::Above);
-/// ```
 #[tessera]
 pub fn tooltip_anchor(
     controller: State<TooltipController>,

@@ -1,9 +1,3 @@
-//! Pointer targeting and ordered input delivery.
-//!
-//! ## Usage
-//!
-//! Route mouse, touch, and hover interactions to placed controls.
-
 use std::{
     cell::{Cell, RefCell},
     sync::Arc,

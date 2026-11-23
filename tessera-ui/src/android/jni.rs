@@ -9,7 +9,6 @@ use std::{borrow::Cow, fmt, marker::PhantomData};
 use jni::sys::{JNI_FALSE, JNI_TRUE, jboolean, jobject};
 use winit::platform::android::activity::AndroidApp;
 
-/// Hidden JNI re-exports for macro expansion.
 #[doc(hidden)]
 #[allow(missing_docs)]
 pub mod internal {
@@ -47,7 +46,6 @@ impl From<internal::JniError> for AndroidJniError {
     }
 }
 
-/// Hidden JNI error mapper used by generated bindings.
 #[doc(hidden)]
 pub fn map_jni_error(env: &mut internal::JNIEnv<'_>, err: internal::JniError) -> AndroidJniError {
     if matches!(err, internal::JniError::JavaException) {

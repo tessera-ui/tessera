@@ -138,14 +138,18 @@ impl tessera_ui::LayoutPolicy for FloatingToolbarLayout {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::{text::text, toolbar::floating_toolbar};
+/// use tessera_components::md3::{button::button, text::text, theme::material_theme, toolbar::floating_toolbar};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn editor_actions() {
-///     let expanded = remember(|| true);
-///     floating_toolbar().expanded(expanded.get()).content(|| {
-///         text("Editing actions");
+///     let bold = remember(|| false);
+///     material_theme().child(move || {
+///         floating_toolbar().content(move || {
+///             button().on_click(move || bold.set(!bold.get())).child(move || {
+///                 text(if bold.get() { "Bold" } else { "Regular" });
+///             });
+///         });
 ///     });
 /// }
 /// ```
@@ -275,15 +279,17 @@ impl tessera_ui::LayoutPolicy for DockedToolbarLayout {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::{text::text, toolbar::docked_toolbar};
+/// use tessera_components::md3::{button::button, text::text, theme::material_theme, toolbar::docked_toolbar};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn editing_actions() {
 ///     let saved = remember(|| false);
-///     docked_toolbar().content(move || {
-///         text(if saved.get() { "Saved" } else { "Editing" });
-///     });
+///     material_theme().child(move || docked_toolbar().content(move || {
+///         button().on_click(move || saved.set(true)).child(move || {
+///             text(if saved.get() { "Saved" } else { "Save" });
+///         });
+///     }));
 /// }
 /// ```
 #[tessera]

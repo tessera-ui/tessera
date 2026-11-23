@@ -468,22 +468,25 @@ fn focus_properties(data: &MenuData, index: usize) -> FocusProperties {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::floating_action_button_menu::{
-///     FloatingActionButtonMenuController, floating_action_button_menu,
+/// use tessera_components::md3::{
+///     floating_action_button_menu::{FloatingActionButtonMenuItem, floating_action_button_menu},
+///     text::text,
+///     theme::material_theme,
 /// };
-/// use tessera_ui::{remember, tessera};
-///
-/// let mut visibility = FloatingActionButtonMenuController::new();
-/// assert!(!visibility.is_expanded());
-/// visibility.open();
-/// assert!(visibility.is_expanded());
-/// visibility.close();
-/// assert!(!visibility.is_expanded());
+/// use tessera_ui::{Callback, remember, tessera};
 ///
 /// #[tessera]
 /// fn creation_actions() {
-///     let state = remember(FloatingActionButtonMenuController::new);
-///     floating_action_button_menu().controller(state);
+///     let created = remember(|| false);
+///     material_theme().child(move || {
+///         floating_action_button_menu()
+///             .items(vec![FloatingActionButtonMenuItem::new(
+///                 "New note",
+///                 None,
+///                 Callback::new(move || created.set(true)),
+///             )])
+///             .main_content(move || text(if created.get() { "Note created" } else { "Notes" }));
+///     });
 /// }
 /// ```
 #[tessera]

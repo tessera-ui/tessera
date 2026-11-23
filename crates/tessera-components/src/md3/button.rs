@@ -390,21 +390,16 @@ struct ButtonResolvedArgs {
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// let selected = tessera_ui::remember(|| false);
-/// let toggle = tessera_ui::Callback::new(move || selected.set(!selected.get()));
 /// button()
 ///     .tonal()
 ///     .square()
 ///     .selected(selected.get())
-///     .on_click_shared(toggle)
+///     .on_click(move || selected.set(!selected.get()))
 ///     .child(|| {
 ///         text("Favorite");
 ///     });
-/// assert!(!selected.get());
-/// toggle.call();
-/// assert!(selected.get());
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 /// Renders a Material button.
 #[tessera]

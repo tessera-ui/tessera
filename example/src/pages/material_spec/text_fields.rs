@@ -2245,7 +2245,7 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 #[path = "text_fields_tests.rs"]
-mod regression_tests;
+mod tests;
 
 #[tessera]
 fn field_color_scheme(outlined: bool, dark: bool) {

@@ -1,6 +1,6 @@
 #[cfg(all(test, not(target_arch = "wasm32")))]
 #[path = "snackbars_tests.rs"]
-mod regression_tests;
+mod tests;
 
 use std::fmt::Write as _;
 

@@ -164,15 +164,17 @@ impl tessera_ui::DrawModifierNode for LoadingDraw {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::loading_indicator::loading_indicator;
+/// use tessera_components::md3::{loading_indicator::loading_indicator, theme::material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn pending_content() {
 ///     let completion = remember(|| 0.5_f32);
-///     loading_indicator()
-///         .progress(completion.get())
-///         .contained(true);
+///     material_theme().child(move || {
+///         loading_indicator()
+///             .progress(completion.get())
+///             .contained(true);
+///     });
 /// }
 /// ```
 #[tessera]

@@ -492,23 +492,6 @@ struct NavigationBarItemDefinition {
 /// - `label_behavior` — whether the label is always shown or only when
 ///   selected.
 ///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::navigation_bar::{navigation_bar, navigation_bar_item};
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let selected = remember(|| 0usize);
-///     navigation_bar().content(move |position| {
-///         navigation_bar_item().icon_position(position)
-///             .label("Home")
-///             .selected(selected.get() == 0)
-///             .on_click(move || selected.set(0));
-///     });
-/// }
-/// ```
 #[tessera]
 pub fn navigation_bar_item(
     #[prop(into)] label: Option<String>,
@@ -567,13 +550,13 @@ pub fn navigation_bar_item(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::navigation_bar::{navigation_bar, navigation_bar_item};
+/// use tessera_components::md3::{navigation_bar::{navigation_bar, navigation_bar_item}, theme::material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
 ///     let selected = remember(|| 0usize);
-///     navigation_bar().content(move |position| {
+///     material_theme().child(move || navigation_bar().content(move |position| {
 ///         navigation_bar_item().icon_position(position)
 ///             .label("Home")
 ///             .selected(selected.get() == 0)
@@ -582,7 +565,7 @@ pub fn navigation_bar_item(
 ///             .label("Search")
 ///             .selected(selected.get() == 1)
 ///             .on_click(move || selected.set(1));
-///     });
+///     }));
 /// }
 /// ```
 #[tessera]

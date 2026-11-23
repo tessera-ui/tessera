@@ -153,7 +153,6 @@ fn form(outlined: bool, mixed: bool) {
         });
 }
 
-/// Separate filled and outlined regions instead of mixing them in one form.
 #[tessera]
 pub(super) fn variant_regions() {
     pair(
@@ -180,8 +179,6 @@ pub(super) fn variant_regions() {
     );
 }
 
-/// Show labels that are truncated or wrapped instead of short and fully
-/// visible.
 #[tessera]
 pub(super) fn label_misuse() {
     pair(
@@ -219,7 +216,6 @@ pub(super) fn label_misuse() {
     );
 }
 
-/// Replace supporting text with error text instead of stacking both.
 #[tessera]
 pub(super) fn error_swap() {
     pair(
@@ -275,7 +271,6 @@ pub(super) fn error_swap() {
     );
 }
 
-/// Compare an outline that meets 3:1 contrast with one that does not.
 #[tessera]
 pub(super) fn outline_contrast() {
     pair(
@@ -300,7 +295,6 @@ pub(super) fn outline_contrast() {
     );
 }
 
-/// Editable single-line, multi-line and fixed-height text area inputs.
 #[tessera]
 pub(super) fn input_modes() {
     input_mode(0);

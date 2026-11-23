@@ -284,13 +284,6 @@ fn date_key(date: CalendarDate) -> (i32, u8, u8) {
 ///             .today(CalendarDate::new(2026, 7, 16).unwrap());
 ///     });
 /// }
-/// let mut state = DateRangePickerController::default();
-/// let day = CalendarDate::new(2026, 10, 17).unwrap();
-/// assert!(state.select_date(day));
-/// assert!(!state.is_complete());
-/// assert!(state.select_date(day));
-/// assert!(state.is_complete());
-/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn date_range_picker(

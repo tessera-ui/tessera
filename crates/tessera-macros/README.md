@@ -4,43 +4,33 @@ The `tessera_macros` crate provides procedural macros for the [Tessera UI framew
 
 ## Usage
 
-### Basic Component Definition
+In an application depending on `tessera-ui` and `tessera-components`, define a
+component and compose it under a theme:
 
 ```rust
+use tessera_components::md3::{text::text, theme::material_theme};
 use tessera_macros::tessera;
 
 #[tessera]
-fn my_component() {
+fn greeting(name: String) {
+    text(format!("Hello, {name}"));
 }
-```
-
-### Component with Parameters
-
-```rust
-use tessera_macros::tessera;
-use tessera_ui::Callback;
 
 #[tessera]
-fn button_component(label: Option<String>, on_click: Option<Callback>) {
-    let _ = (label, on_click);
+fn app() {
+    material_theme().child(|| greeting("Ada".into()));
 }
 ```
 
-Call a component to register a use, then configure its returned handle:
+Required values are passed at the component call. Optional properties use named
+setters on the returned configuration handle.
 
-```rust
-button_component()
-    .label("Confirm".into())
-    .on_click(|| {});
-```
+## Child content
 
-## Configuration Handles
+Save generated builder handles or pass them to helpers to configure components
+from reusable functions.
 
-Generated `*Builder` handles can be saved and passed to helpers until the
-component commits.
-
-Slots remain deferred content that their parent controls. See
-[component calls](../../docs/COMPONENT_CALLS.md) for execution and lifetime details.
+Slots let a parent control where and when child content is shown.
 
 ## License
 
