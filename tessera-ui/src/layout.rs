@@ -1039,7 +1039,8 @@ where
 /// children with `policy`.
 ///
 /// Each component, slot, or build closure emits at most one node, by calling
-/// either `layout` or [`group`] once; `cargo tessera check` rejects code that
+/// `layout`, [`group`], or [`popup`](crate::popup::popup) once;
+/// `cargo tessera check` rejects code that
 /// could emit more (T0007). Configure the returned node immediately. Content
 /// declared after this call, including [`LayoutNode::child`], is laid out by
 /// this node. Use [`Stack`] to stack children at the origin.

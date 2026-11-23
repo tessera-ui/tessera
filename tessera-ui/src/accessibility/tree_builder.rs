@@ -13,7 +13,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use crate::{
     accessibility::{AccessibilityId, StoredSemantics},
     component_tree::{
-        ComponentNodeMetaDatas, ComponentNodeTree, ComputedData, NodeRole, sibling_index,
+        ComponentNodeMetaDatas, ComponentNodeTree, ComputedData, NodeRole, blocked_by_modal,
+        layer_ancestors, layer_order_prefix, sibling_index,
     },
     focus::{FocusOwner, bind_focus_owner},
     px::PxPosition,
@@ -43,11 +44,32 @@ pub(crate) struct AccessibilityIndex {
     changed: HashSet<ComponentNodeId>,
     geometry_changed: HashSet<ComponentNodeId>,
     removed: HashSet<ComponentNodeId>,
+    /// The modal popup outside of which semantics are hidden.
+    modal: Option<ComponentNodeId>,
     #[cfg(test)]
     ancestor_visits: usize,
 }
 
 impl AccessibilityIndex {
+    pub(crate) fn set_modal(
+        &mut self,
+        tree: &ComponentNodeTree,
+        root: ComponentNodeId,
+        modal: Option<ComponentNodeId>,
+    ) {
+        if self.modal == modal {
+            return;
+        }
+        self.modal = modal;
+        if self.root.is_some() {
+            let removed = &self.removed;
+            self.changed.extend(
+                root.descendants(tree)
+                    .filter(|id| !removed.contains(id) && !tree[*id].is_removed()),
+            );
+        }
+    }
+
     pub(crate) fn invalidate_geometry(&mut self, changed: &HashSet<ComponentNodeId>) {
         if self.root.is_some() {
             self.geometry_changed.extend(changed);
@@ -205,7 +227,10 @@ impl AccessibilityIndex {
             let mut visible = true;
             let mut path = Vec::new();
             let mut skip_composition_order = false;
-            for ancestor in id.ancestors(tree) {
+            if id != root && blocked_by_modal(tree, self.modal, id) {
+                visible = false;
+            }
+            for ancestor in layer_ancestors(tree, id) {
                 #[cfg(test)]
                 {
                     self.ancestor_visits += 1;
@@ -245,6 +270,9 @@ impl AccessibilityIndex {
                 }
             }
             path.reverse();
+            let mut layered = layer_order_prefix(tree, id).to_vec();
+            layered.append(&mut path);
+            let path = layered;
             if id != root && parent.is_none() {
                 parent = Some(AccessKitNodeId(tree[root].get().instance_key));
             }
@@ -703,7 +731,7 @@ fn clipped_shape_bounds(
             },
         );
     }
-    for ancestor in node_id.ancestors(tree) {
+    for ancestor in layer_ancestors(tree, node_id) {
         let Some(metadata) = metadatas.get(&ancestor) else {
             continue;
         };
@@ -771,7 +799,10 @@ pub fn dispatch_action(
     else {
         return false;
     };
-    for ancestor in target.ancestors(tree) {
+    if blocked_by_modal(tree, focus_owner.modal_root(), target) {
+        return false;
+    }
+    for ancestor in layer_ancestors(tree, target) {
         let metadata = metadatas.get(&ancestor);
         if tree[ancestor].get().role == NodeRole::Layout
             && metadata.is_none_or(|metadata| metadata.abs_position.is_none())

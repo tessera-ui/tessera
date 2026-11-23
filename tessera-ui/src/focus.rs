@@ -862,13 +862,15 @@ struct FocusAttachment {
     traversal_order: Option<u64>,
     parent: FocusHandleId,
     scope_parent: FocusHandleId,
+    /// Set while a modal popup that does not contain this handle is shown.
+    blocked: bool,
 }
 
 impl FocusAttachment {
     fn permits_focus(self) -> bool {
         // Requests before layout remain valid. Clipped but placed targets keep
         // a rectangle so keyboard navigation can reveal them.
-        self.traversal_order.is_none() || self.focus_rect.is_some()
+        !self.blocked && (self.traversal_order.is_none() || self.focus_rect.is_some())
     }
 
     fn root_scope() -> Self {
@@ -879,6 +881,7 @@ impl FocusAttachment {
             traversal_order: None,
             parent: ROOT_SCOPE_ID,
             scope_parent: ROOT_SCOPE_ID,
+            blocked: false,
         }
     }
 }
@@ -1019,6 +1022,7 @@ pub(crate) struct FocusOwner {
     pending_reveal: Option<FocusHandleId>,
     pending_navigation: Option<FocusDirection>,
     keyboard_barrier: KeyboardLayoutBarrier,
+    modal_root: Option<NodeId>,
     #[cfg(any(target_os = "android", target_os = "ios", test))]
     native_focusable: HashSet<u64>,
     #[cfg(any(target_os = "android", target_os = "ios", test))]
@@ -1048,6 +1052,7 @@ impl FocusOwner {
             pending_reveal: None,
             pending_navigation: None,
             keyboard_barrier: KeyboardLayoutBarrier::None,
+            modal_root: None,
             #[cfg(any(target_os = "android", target_os = "ios", test))]
             native_focusable: HashSet::default(),
             #[cfg(any(target_os = "android", target_os = "ios", test))]
@@ -1398,16 +1403,17 @@ impl FocusOwner {
                 traversal_order: None,
                 parent,
                 scope_parent: scope,
+                blocked: crate::component_tree::blocked_by_modal(tree, self.modal_root, node_id),
             });
             self.handles_by_component.insert(node_id, registration.id);
-            let order: Vec<_> = node_id
-                .ancestors(tree)
-                .filter(|id| tree[*id].parent().is_some())
-                .map(|id| (u64::MAX, sibling_index(id, tree)))
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect();
+            let mut order = layer_order(tree, node_id);
+            let start = order.len();
+            order.extend(
+                crate::component_tree::layer_ancestors(tree, node_id)
+                    .filter(|id| tree[*id].parent().is_some())
+                    .map(|id| (u64::MAX, sibling_index(id, tree))),
+            );
+            order[start..].reverse();
             self.order_paths.insert(registration.id, order.clone());
             self.children_by_parent
                 .entry(parent)
@@ -1482,8 +1488,7 @@ impl FocusOwner {
                     continue;
                 }
             }
-            let mut order = node_id
-                .ancestors(tree)
+            let mut order = crate::component_tree::layer_ancestors(tree, *node_id)
                 .filter_map(|id| {
                     let node = tree.get(id)?;
                     node.parent()?;
@@ -1502,6 +1507,9 @@ impl FocusOwner {
                 })
                 .collect::<Vec<_>>();
             order.reverse();
+            let mut layered = layer_order(tree, *node_id);
+            layered.append(&mut order);
+            let order = layered;
             let order_changed = self.order_paths.get(&handle) != Some(&order);
             if let Some(attachment) = self
                 .nodes
@@ -2569,6 +2577,61 @@ impl FocusOwner {
         }
     }
 
+    /// Blocks focus outside `modal`, keeping the previous target for
+    /// restoration.
+    pub(crate) fn set_modal_root(&mut self, tree: &ComponentNodeTree, modal: Option<NodeId>) {
+        if self.modal_root == modal {
+            return;
+        }
+        self.modal_root = modal;
+        let previous_states = self.snapshot_live_states();
+        for (&node_id, handle) in &self.handles_by_component {
+            if let Some(attachment) = self
+                .nodes
+                .get_mut(handle)
+                .and_then(|node| node.attachment.as_mut())
+            {
+                attachment.blocked = crate::component_tree::blocked_by_modal(tree, modal, node_id);
+            }
+        }
+        self.repair_after_sync();
+        self.recompute_states();
+        self.notify_state_changes(previous_states);
+        self.keyboard_barrier = KeyboardLayoutBarrier::Requested;
+    }
+
+    /// Focuses the first traversable target when nothing is focused.
+    pub(crate) fn focus_first_available(&mut self) {
+        if self.active.is_some_and(|id| self.can_request_focus(id)) {
+            return;
+        }
+        if let Some(target) = self
+            .traversable_focus_handles()
+            .into_iter()
+            .find(|id| self.can_request_focus(*id))
+        {
+            self.request_focus(target);
+        }
+    }
+
+    pub(crate) fn modal_root(&self) -> Option<NodeId> {
+        self.modal_root
+    }
+
+    pub(crate) fn active_requestable(&self) -> Option<FocusHandleId> {
+        self.active.filter(|id| self.can_request_focus(*id))
+    }
+
+    /// Restores `target` unless another available target holds focus.
+    pub(crate) fn restore_unless_focused(&mut self, target: FocusHandleId) {
+        if self.active_requestable().is_none()
+            && self.owner_focused
+            && self.can_request_focus(target)
+        {
+            self.request_focus(target);
+        }
+    }
+
     fn can_focus(&self, id: FocusHandleId) -> bool {
         self.nodes.get(&id).is_some_and(|node| {
             #[cfg(any(target_os = "android", target_os = "ios", test))]
@@ -2606,6 +2669,13 @@ impl FocusOwner {
         }
         false
     }
+}
+
+fn layer_order(tree: &ComponentNodeTree, node_id: NodeId) -> FocusOrderPath {
+    crate::component_tree::layer_order_prefix(tree, node_id)
+        .into_iter()
+        .map(|value| (u64::try_from(value).unwrap_or(u64::MAX), 0))
+        .collect()
 }
 
 fn is_eligible_focus_rect(rect: PxRect) -> bool {

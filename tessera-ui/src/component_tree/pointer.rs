@@ -18,7 +18,7 @@ use crate::{PxRect, render_graph::PlatformViewInputBlocker};
 
 use super::{
     ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, PointerDispatchPlan, PointerNodePlan,
-    bounds_hit_path, record_frame_stage, resolve_node_input_context,
+    blocked_by_modal, bounds_hit_path, record_frame_stage, resolve_node_input_context,
 };
 
 const CELL_SIZE: f32 = 256.0;
@@ -86,6 +86,8 @@ pub(super) struct PointerIndex {
     changed: HashSet<NodeId>,
     removed: HashSet<NodeId>,
     hit_cache: RefCell<HashMap<(u32, u32), HashSet<NodeId>>>,
+    modal: Option<NodeId>,
+    popups: Vec<NodeId>,
     pub(super) hit_candidates: Cell<u64>,
     grid_additions: usize,
     grid_removals: usize,
@@ -99,10 +101,65 @@ fn cell(position: PxPosition) -> (i32, i32) {
 }
 
 impl PointerIndex {
-    pub(super) fn begin_dispatch(&self) {
+    pub(super) fn begin_dispatch(&mut self, modal: Option<NodeId>, popups: &[NodeId]) {
+        self.modal = modal;
+        self.popups.clear();
+        self.popups.extend_from_slice(popups);
         self.hit_cache.borrow_mut().clear();
         self.hit_candidates.set(0);
     }
+
+    /// Whether `position` lies outside `popup` and every popup it declares.
+    pub(super) fn is_outside_popup(
+        tree: &ComponentNodeTree,
+        metadatas: &ComponentNodeMetaDatas,
+        popups: &[NodeId],
+        popup: NodeId,
+        position: PxPosition,
+    ) -> bool {
+        !popups.iter().any(|&candidate| {
+            candidate.ancestors(tree).any(|id| id == popup)
+                && popup_contains(metadatas, candidate, position)
+        })
+    }
+}
+
+fn popup_contains(metadatas: &ComponentNodeMetaDatas, popup: NodeId, position: PxPosition) -> bool {
+    metadatas.get(&popup).is_some_and(|metadata| {
+        metadata.abs_position.is_some()
+            && metadata
+                .local_to_window
+                .zip(metadata.computed_data)
+                .is_some_and(|(transform, size)| {
+                    transform
+                        .map_rect(crate::FloatRect::from_position_size(
+                            PxPosition::ZERO,
+                            PxSize::new(size.width, size.height),
+                        ))
+                        .contains(position)
+                })
+    })
+}
+
+/// Whether a modal popup, or the topmost popup under `position`, hides
+/// `node_id` from pointer input at that position.
+pub(super) fn pointer_occluded(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    modal: Option<NodeId>,
+    popups: &[NodeId],
+    node_id: NodeId,
+    position: PxPosition,
+) -> bool {
+    blocked_by_modal(tree, modal, node_id)
+        || popups
+            .iter()
+            .rev()
+            .find(|&&popup| popup_contains(metadatas, popup, position))
+            .is_some_and(|&popup| !node_id.ancestors(tree).any(|id| id == popup))
+}
+
+impl PointerIndex {
     pub(super) fn invalidate(
         &mut self,
         tree: &ComponentNodeTree,
@@ -319,14 +376,7 @@ impl PointerIndex {
                 Coverage::Grid(CellRange { min, max })
             };
             self.update_coverage(id, previous_coverage, coverage);
-            let path = retained_order.unwrap_or_else(|| {
-                let mut path: Vec<_> = id
-                    .ancestors(tree)
-                    .map(|id| super::sibling_index(id, tree))
-                    .collect();
-                path.reverse();
-                path
-            });
+            let path = retained_order.unwrap_or_else(|| super::layer_order_path(tree, id));
             self.entries.insert(
                 id,
                 Entry {
@@ -423,6 +473,7 @@ impl PointerIndex {
             .filter(|&id| {
                 self.hit_candidates.set(self.hit_candidates.get() + 1);
                 bounds_hit_path(id, tree, metadatas, position).is_some()
+                    && !pointer_occluded(tree, metadatas, self.modal, &self.popups, id, position)
             })
             .collect();
         self.hit_cache.borrow_mut().insert(key, hits.clone());
@@ -451,8 +502,7 @@ impl PointerIndex {
         else {
             return Vec::new();
         };
-        let mut path: Vec<_> = leaf
-            .ancestors(tree)
+        let mut path: Vec<_> = super::layer_ancestors(tree, leaf)
             .filter(|id| {
                 tree.get(*id)
                     .is_some_and(|node| node.get().role == NodeRole::Layout)

@@ -67,6 +67,7 @@ const PUBLIC_USE_ROUTER_PATH: &str = "tessera_shard::use_router";
 const KEY_PATH: &str = "tessera_ui::runtime::key";
 const LAYOUT_PATH: &str = "tessera_ui::layout::layout";
 const GROUP_PATH: &str = "tessera_ui::layout::group";
+const POPUP_PATH: &str = "tessera_ui::popup::popup";
 const PUBLIC_KEY_PATH: &str = "tessera_ui::key";
 const RUNTIME_MODULE_PATH_PREFIX: &str = "tessera_ui::runtime::";
 const RENDER_SLOT_NEW_PATH: &str = "tessera_ui::prop::RenderSlot::new";
@@ -1017,6 +1018,7 @@ impl<'db> CallAnalyzer<'db> {
             KEY_PATH | PUBLIC_KEY_PATH => Some(TesseraRuntimeApi::Key),
             LAYOUT_PATH => Some(TesseraRuntimeApi::Layout),
             GROUP_PATH => Some(TesseraRuntimeApi::Group),
+            POPUP_PATH => Some(TesseraRuntimeApi::Popup),
             path => {
                 let name = path.rsplit("::").next().unwrap_or(path);
                 if path.starts_with(RUNTIME_MODULE_PATH_PREFIX) && is_internal_runtime_name(name) {

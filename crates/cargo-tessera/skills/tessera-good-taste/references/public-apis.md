@@ -14,7 +14,7 @@ gates, and platform support. Use `cargo doc --open` in the application workspace
 | Input, focus, and semantics | `tessera_ui::{PointerInput, KeyboardInput, ImeInput, ClipboardInput, focus, accessibility}`; `tessera_foundation::modifier` interaction, input, and semantics extensions |
 | Text editing | `tessera_components::md3::{text, text_input, text_field}`; editor controllers and documented transforms |
 | Localization | `tessera_i18n::{Catalog, I18n, FluentValue, LanguageIdentifier, langid}`; generated `res::{I18N, i18n}` |
-| Overlays and navigation | `tessera_components::md3::{dialog, menus, tooltip, bottom_sheet, side_sheet, snackbar, navigation_bar, navigation_rail, navigation_drawer}`; `tessera_shard::{shard, router}` |
+| Overlays and navigation | `tessera_ui::popup::{popup, PopupPositionPolicy}`; `tessera_components::md3::{dialog, menus, tooltip, bottom_sheet, side_sheet, snackbar, navigation_bar, navigation_rail, navigation_drawer}`; `tessera_shard::{shard, router}` |
 | Tasks and animation | `tessera_ui::{launch, launch_once, spawn, spawn_local, on, Task, Dispatcher, with_frame_time}` |
 | Platform integration | `tessera_platform::{PlatformPackage, clipboard, window}`; `tessera_ui::{Plugin, PluginContext, with_plugin}`; native views via `tessera_ui::platform_view::{platform_view, PlatformViewFactory}` |
 | Public extensions | `tessera_ui::{modifier, Plugin}`; `tessera_ui::render::{RenderModule, PipelineContext, DrawCommand, DrawablePipeline, ComputeCommand, ComputablePipeline}`; documented sampling, clipping, and resource contracts |

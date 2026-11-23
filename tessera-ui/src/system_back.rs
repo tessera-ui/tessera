@@ -36,7 +36,30 @@ pub enum SystemBackEvent {
     Committed,
 }
 
-type BackCallback = CallbackWith<SystemBackEvent>;
+#[derive(Clone, Copy)]
+#[cfg_attr(
+    not(any(target_os = "android", test, feature = "testing")),
+    allow(dead_code, reason = "back events are dispatched only on Android")
+)]
+enum BackCallback {
+    Handler(CallbackWith<SystemBackEvent>),
+    /// Popup dismissal only reacts to committed navigation.
+    Dismiss(crate::Callback),
+}
+
+impl BackCallback {
+    #[cfg(any(target_os = "android", test, feature = "testing"))]
+    fn call(self, event: SystemBackEvent) {
+        match self {
+            Self::Handler(callback) => callback.call(event),
+            Self::Dismiss(callback) => {
+                if event == SystemBackEvent::Committed {
+                    callback.call();
+                }
+            }
+        }
+    }
+}
 
 /// Marks an off-screen destination preview that must not handle system back.
 #[doc(hidden)]
@@ -99,22 +122,47 @@ pub fn system_back_handler(enabled: bool, on_back: Option<CallbackWith<SystemBac
     if crate::use_context::<BackPreviewScope>().is_some_and(|scope| scope.get().0) {
         return;
     }
-    let handlers = crate::shared_runtime_resource::<Handlers>();
-    let registration = remember(|| {
+    let registration = remember(Registration::new);
+    registration.with(|registration| {
+        registration.set(on_back.filter(|_| enabled).map(BackCallback::Handler));
+    });
+}
+
+impl Registration {
+    fn new() -> Self {
+        let handlers = crate::shared_runtime_resource::<Handlers>();
         let mut registry = handlers.lock();
         let id = registry.next_id;
         registry.next_id += 1;
-        Registration {
+        Self {
             handlers: Arc::downgrade(&handlers),
             id,
         }
-    });
-    let id = registration.with(|registration| registration.id);
-    let mut registry = handlers.lock();
-    if let Some(callback) = on_back.filter(|_| enabled) {
-        registry.callbacks.insert(id, callback);
-    } else {
-        registry.callbacks.remove(&id);
+    }
+
+    fn set(&self, callback: Option<BackCallback>) {
+        let Some(handlers) = self.handlers.upgrade() else {
+            return;
+        };
+        let mut registry = handlers.lock();
+        if let Some(callback) = callback {
+            registry.callbacks.insert(self.id, callback);
+        } else {
+            registry.callbacks.remove(&self.id);
+        }
+    }
+}
+
+/// A popup's place in system back handling, ordered by when it opened.
+pub(crate) struct DismissRegistration(Registration);
+
+impl DismissRegistration {
+    pub(crate) fn new() -> Self {
+        Self(Registration::new())
+    }
+
+    pub(crate) fn set(&self, callback: Option<crate::Callback>) {
+        self.0.set(callback.map(BackCallback::Dismiss));
     }
 }
 

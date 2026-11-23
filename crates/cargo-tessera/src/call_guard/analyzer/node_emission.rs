@@ -137,7 +137,9 @@ impl CallAnalyzer<'_> {
             return Some(emitted);
         };
         match kind {
-            CallKind::RuntimeApi(TesseraRuntimeApi::Layout | TesseraRuntimeApi::Group) => {
+            CallKind::RuntimeApi(
+                TesseraRuntimeApi::Layout | TesseraRuntimeApi::Group | TesseraRuntimeApi::Popup,
+            ) => {
                 if scope.limit == 0 {
                     self.push_emission_diagnostic(
                         node,

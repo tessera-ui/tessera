@@ -216,11 +216,28 @@ pub(super) struct FrameScene {
     root: Option<Arc<SceneRope>>,
     graph: Option<RenderGraph>,
     viewport: Option<PxSize>,
+    popups: Vec<NodeId>,
+    popups_restacked: bool,
 }
 
 impl FrameScene {
     pub(super) fn invalidate_structure(&mut self, id: NodeId) {
         self.structure_changed.insert(id);
+    }
+
+    /// Sets the popup roots drawn above the main scene, in stacking order.
+    pub(super) fn set_popups(&mut self, popups: &[NodeId]) {
+        let kept = |list: &[NodeId], other: &[NodeId]| -> Vec<NodeId> {
+            list.iter()
+                .copied()
+                .filter(|id| other.contains(id))
+                .collect()
+        };
+        // Opening or closing a popup damages only its bounds; reordering
+        // retained popups changes pixels without changing any branch.
+        self.popups_restacked |= kept(&self.popups, popups) != kept(popups, &self.popups);
+        self.popups.clear();
+        self.popups.extend_from_slice(popups);
     }
 
     #[cfg(any(test, feature = "testing"))]
@@ -241,6 +258,59 @@ impl FrameScene {
                 return branch.output.clone();
             }
         }
+    }
+
+    /// Stacks popup layers above the main scene, reusing the previous rope
+    /// while every layer output is unchanged.
+    fn layered_output(&self, root: NodeId) -> Option<Arc<SceneRope>> {
+        let main = self.output(root);
+        if self.popups.is_empty() {
+            return main;
+        }
+        let layers: OrdMap<usize, Arc<SceneRope>> = main
+            .into_iter()
+            .chain(self.popups.iter().filter_map(|&popup| self.output(popup)))
+            .enumerate()
+            .collect();
+        let children = match layers.len() {
+            0 => return None,
+            1 => return layers.values().next().cloned(),
+            _ => SceneChildren::Many(layers),
+        };
+        if let Some(previous) = &self.root
+            && previous.draw.is_none()
+            && previous.clip.is_none()
+            && previous.children.values().count() == children.values().count()
+            && previous
+                .children
+                .values()
+                .zip(children.values())
+                .all(|(previous, next)| Arc::ptr_eq(previous, next))
+        {
+            return Some(Arc::clone(previous));
+        }
+        let (bounds, partial_redraw) =
+            children
+                .values()
+                .fold((None, true), |(bounds, partial_redraw), child| {
+                    (
+                        child.bounds.map_or(bounds, |child_bounds| {
+                            Some(
+                                bounds.map_or(child_bounds, |bounds: PxRect| {
+                                    bounds.union(&child_bounds)
+                                }),
+                            )
+                        }),
+                        partial_redraw && child.partial_redraw,
+                    )
+                });
+        Some(Arc::new(SceneRope {
+            draw: None,
+            clip: None,
+            children,
+            bounds,
+            partial_redraw,
+        }))
     }
 
     pub(super) fn update(
@@ -580,14 +650,16 @@ impl FrameScene {
             self.branches.trim_spare_capacity();
         }
         record_frame_stage(&mut stage_timer, "scene_branches");
-        let next_root = self.output(root);
+        let next_root = self.layered_output(root);
         let same = match (&self.root, &next_root) {
             (Some(previous), Some(next)) => Arc::ptr_eq(previous, next),
             (None, None) => true,
             _ => false,
         };
         let previous_graph = self.graph.clone();
-        let full = self.viewport != Some(viewport) || self.graph.is_none();
+        let full = self.viewport != Some(viewport)
+            || self.graph.is_none()
+            || std::mem::take(&mut self.popups_restacked);
         if !same || full {
             let local_damage = damage.is_some_and(|rect| {
                 i64::from(rect.width.0) * i64::from(rect.height.0)
@@ -877,6 +949,111 @@ mod tests {
             Command::ShapeClipPush(clip) if *clip == new_clip
         ));
         assert_eq!(drawing(&graph), [(3, zero), (2, far)]);
+    }
+
+    #[test]
+    fn popup_layers_draw_after_later_siblings_outside_anchor_clips_and_restack() {
+        let session = RuntimeSession::new();
+        let _runtime_scope = session.enter();
+        let mut tree = ComponentTree::new();
+        let popup_node = |name, sequence| {
+            let mut node = ComponentNode::new(name, NodeRole::Layout);
+            node.popup = Some(Box::new(crate::popup::PopupConfig {
+                position: Box::new(crate::popup::WindowOrigin),
+                modal: false,
+                dismiss_on_outside_press: true,
+                dismiss_on_escape: true,
+                dismiss_on_back: true,
+                on_dismiss_request: None,
+                sequence,
+            }));
+            node
+        };
+        let root = tree.add_node(ComponentNode::new("root", NodeRole::Layout));
+        let anchor = tree.add_node(ComponentNode::new("anchor", NodeRole::Layout));
+        let first = tree.add_node(popup_node("first", 1));
+        tree.pop_node();
+        let second = tree.add_node(popup_node("second", 2));
+        tree.pop_node();
+        tree.pop_node();
+        let sibling = tree.add_node(ComponentNode::new("sibling", NodeRole::Layout));
+        tree.pop_node();
+        tree.pop_node();
+
+        let zero = PxPosition::ZERO;
+        let below = PxPosition::new(Px(0), Px(4));
+        for (id, marker, position) in [
+            (root, None, Some(zero)),
+            (anchor, Some(0), Some(zero)),
+            (first, Some(1), None),
+            (second, Some(3), None),
+            (sibling, Some(2), Some(below)),
+        ] {
+            let metadata = tree.metadatas.entry_or_default(id);
+            metadata.computed_data = Some(ComputedData {
+                width: Px(16),
+                height: Px(16),
+            });
+            metadata.rel_position = position;
+            if let Some(marker) = marker {
+                metadata.fragment.push_draw_command(Marker(marker));
+            }
+        }
+        tree.metadatas.entry_or_default(anchor).clips_children = true;
+        tree.metadatas.entry_or_default(anchor).computed_data = Some(ComputedData {
+            width: Px(4),
+            height: Px(4),
+        });
+        let viewport = PxSize::new(Px(100), Px(100));
+        let frame = |tree: &mut ComponentTree, popups: &[NodeId]| {
+            crate::component_tree::populate_layers(
+                root,
+                popups,
+                viewport,
+                &tree.tree,
+                &mut tree.metadatas,
+            );
+            let changed = root.descendants(&tree.tree).collect();
+            tree.frame_scene.set_popups(popups);
+            let (graph, _) = tree.frame_scene.update(
+                root,
+                &tree.tree,
+                &tree.metadatas,
+                &changed,
+                &HashSet::default(),
+                viewport,
+            );
+            tree.metadatas.geometry_changed.clear();
+            graph
+        };
+
+        let graph = frame(&mut tree, &[first, second]);
+        assert_eq!(
+            drawing(&graph),
+            [(0, zero), (2, below), (1, zero), (3, zero)]
+        );
+        let clip_pop = graph
+            .ops()
+            .iter()
+            .position(|op| matches!(op.command, Command::ClipPop))
+            .expect("anchor clip");
+        let popup_draw = graph
+            .ops()
+            .iter()
+            .position(|op| {
+                op.command
+                    .downcast_draw_ref::<Marker>()
+                    .is_some_and(|m| m.0 == 1)
+            })
+            .expect("popup draw");
+        assert!(clip_pop < popup_draw);
+
+        let restacked = frame(&mut tree, &[second, first]);
+        assert_eq!(restacked.damage_since(Some(&graph)), None);
+        assert_eq!(
+            drawing(&restacked),
+            [(0, zero), (2, below), (3, zero), (1, zero)]
+        );
     }
 
     #[test]

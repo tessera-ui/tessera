@@ -38,6 +38,7 @@ programming contract; the guidelines below also govern framework implementation.
 - `tessera-components` places a component at the crate root only when it reads no design-system theme and implies no design-system visual, interaction, motion, or scrolling defaults. When in doubt, place it in a design-system module; promoting an API to the root later is additive.
 - Each design system owns its public text, icon, scrolling, lazy container, text editing, and interaction feedback components and their style types. Rendering pipelines and crate-private mechanisms, such as text shaping, editing, virtualization, and scroll control, may be shared.
 - Non-test code in root modules and other design systems must not depend on `md3`; `scripts/check-imports.rs` rejects such imports. Experimental design systems live under `experiment`.
+- Render overlays (menus, tooltips, dialogs, sheets, indicators) with `tessera_ui::popup::popup` from the component that owns them. Do not add components that wrap `main_content` only so an overlay can be declared after it; wrapping containers must change the content itself (layout space, gestures, or context).
 
 ---
 
@@ -51,7 +52,7 @@ programming contract; the guidelines below also govern framework implementation.
   - Compose child components to build the complete component tree
   - Use `Modifier` chains for node-local behavior such as layout modifiers, input, semantics, drawing, and focus
   - Use `layout(policy)` with a `LayoutPolicy` to arrange children and `LayoutModifier` for wrapping layout modifiers.
-  - A component call does not occupy a tree node: its identity, state, and replay snapshot live on a call record. Only the `layout(policy)` and `group()` primitives emit nodes, so a component that wraps one `layout` call costs one node. `#[tessera]` takes no arguments; Tessera crates alias themselves with `extern crate self as ...;`
+  - A component call does not occupy a tree node: its identity, state, and replay snapshot live on a call record. Only the `layout(policy)`, `group()`, and `popup(position)` primitives emit nodes, so a component that wraps one `layout` call costs one node. `#[tessera]` takes no arguments; Tessera crates alias themselves with `extern crate self as ...;`
   - Modifiers attach only to the node emitted by the executing primitive. Use `group()` to attach semantics, focus, or input to content laid out by an enclosing layout.
   - The `__private` module of `tessera_ui` serves official macro expansions only. `cargo tessera check` rejects other uses outside the defining crate (T0005); expose a public API instead.
   - Expand selected child content through `RenderSlot` / `RenderSlotWith` during build. A parent decides whether, when, and where its slots expand.
