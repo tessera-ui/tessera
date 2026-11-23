@@ -833,14 +833,8 @@ pub fn tooltip_provider(
     }
     let mut modifier = modifier.unwrap_or_default();
     modifier = modifier
-        .push_keyboard_preview_input(TooltipDismissInput {
-            controller,
-            popup: popup,
-        })
-        .push_pointer_preview_input(TooltipDismissInput {
-            controller,
-            popup: popup,
-        })
+        .push_keyboard_preview_input(TooltipDismissInput { controller, popup })
+        .push_pointer_preview_input(TooltipDismissInput { controller, popup })
         .push_keyboard_input(TooltipRestoreInput { controller })
         .push_pointer_final_input(TooltipRestoreInput { controller });
     let visible = remember(|| None::<tessera_ui::FloatRect>);

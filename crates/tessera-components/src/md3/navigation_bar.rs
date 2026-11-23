@@ -446,7 +446,6 @@ fn navigation_bar_item_view(
         focus_requester: Some(focus),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
-        ..Default::default()
     };
 
     let modifier = Modifier::new().selectable(selectable_args);

@@ -218,28 +218,6 @@ pub struct MeasureScope<'a> {
 }
 
 impl<'a> MeasureScope<'a> {
-    pub(crate) fn new(
-        tree: &'a ComponentNodeTree,
-        metadatas: &'a mut ComponentNodeMetaDatas,
-        layout_ctx: Option<&'a LayoutContext<'a>>,
-        measured_children: &'a mut HashMap<crate::NodeId, ChildMeasure>,
-        probes: &'a mut HashMap<crate::NodeId, ChildProbe>,
-        intrinsic_dependencies: &'a mut bool,
-        parent_constraint: ParentConstraint<'a>,
-        children_ids: &'a [crate::NodeId],
-    ) -> Self {
-        Self {
-            tree,
-            metadatas,
-            layout_ctx,
-            measured_children,
-            probes,
-            intrinsic_dependencies,
-            parent_constraint,
-            children_ids,
-        }
-    }
-
     /// Returns the inherited constraint.
     pub const fn parent_constraint(&self) -> ParentConstraint<'a> {
         self.parent_constraint
@@ -322,18 +300,19 @@ impl<'a> MeasureScope<'a> {
         let consumed_insets = self
             .layout_ctx
             .map_or_else(Default::default, |context| context.consumed_insets.get());
-        if let Some(probe) = self.probes.get(&node_id) {
-            if probe.constraint == *constraint && probe.consumed_insets == consumed_insets {
-                let size = probe.size;
-                if record {
-                    self.record_measure(node_id, *constraint, size);
-                }
-                return Ok(MeasuredChild {
-                    instance_key,
-                    width: size.width,
-                    height: size.height,
-                });
+        if let Some(probe) = self.probes.get(&node_id)
+            && probe.constraint == *constraint
+            && probe.consumed_insets == consumed_insets
+        {
+            let size = probe.size;
+            if record {
+                self.record_measure(node_id, *constraint, size);
             }
+            return Ok(MeasuredChild {
+                instance_key,
+                width: size.width,
+                height: size.height,
+            });
         }
 
         let size = measure_node(
@@ -534,16 +513,16 @@ impl<'a> LayoutInput<'a> {
         &'s mut self,
         metadatas: &'s mut ComponentNodeMetaDatas,
     ) -> MeasureScope<'s> {
-        MeasureScope::new(
-            self.tree,
+        MeasureScope {
+            tree: self.tree,
             metadatas,
-            self.layout_ctx,
-            &mut self.measured_children,
-            &mut self.probes,
-            &mut self.intrinsic_dependencies,
-            self.parent_constraint,
-            self.children_ids,
-        )
+            layout_ctx: self.layout_ctx,
+            measured_children: &mut self.measured_children,
+            probes: &mut self.probes,
+            intrinsic_dependencies: &mut self.intrinsic_dependencies,
+            parent_constraint: self.parent_constraint,
+            children_ids: self.children_ids,
+        }
     }
 
     /// Returns the direct child layout nodes of the current node.

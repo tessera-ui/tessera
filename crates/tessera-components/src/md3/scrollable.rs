@@ -1417,10 +1417,10 @@ impl ScrollableViewportPointerModifierNode {
                 self.controller.with_mut(|c| {
                     c.start_inertia(release_timestamp, available_velocity - consumed_velocity)
                 });
-                if self.controller.with(|c| c.active_inertia.is_none()) {
-                    if let Some(connection) = &connection {
-                        connection.post_fling(ScrollVelocity::ZERO);
-                    }
+                if self.controller.with(|c| c.active_inertia.is_none())
+                    && let Some(connection) = &connection
+                {
+                    connection.post_fling(ScrollVelocity::ZERO);
                 }
             }
         }

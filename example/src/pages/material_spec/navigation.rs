@@ -204,7 +204,7 @@ fn sample(
                 "ui-value-destination-value",
                 [
                     ("v0", I18N.text(&caption).into()),
-                    ("v1", I18N.text(&(NAMES[selected.get()])).into()),
+                    ("v1", I18N.text(NAMES[selected.get()]).into()),
                 ],
             ))
             .style(type_style(14.0, 20.0));
@@ -423,8 +423,8 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                             label: Some(I18N.format(
                                 "ui-value-value-color-roles",
                                 [
-                                    ("v0", I18N.text(&mode).into()),
-                                    ("v1", I18N.text(&context).into()),
+                                    ("v0", I18N.text(mode).into()),
+                                    ("v1", I18N.text(context).into()),
                                 ],
                             )),
                             ..Default::default()
@@ -456,8 +456,8 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                 .accessibility_label(I18N.format(
                                                     "ui-value-value-menu",
                                                     [
-                                                        ("v0", I18N.text(&mode).into()),
-                                                        ("v1", I18N.text(&context).into()),
+                                                        ("v0", I18N.text(mode).into()),
+                                                        ("v1", I18N.text(context).into()),
                                                     ],
                                                 ))
                                                 .on_click(move || expanded.set(!expanded.get()));
@@ -474,8 +474,8 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                 .accessibility_label(I18N.format(
                                                     "ui-value-value-compose",
                                                     [
-                                                        ("v0", I18N.text(&mode).into()),
-                                                        ("v1", I18N.text(&context).into()),
+                                                        ("v0", I18N.text(mode).into()),
+                                                        ("v1", I18N.text(context).into()),
                                                     ],
                                                 ))
                                                 .on_click(move || actions.set(actions.get() + 1));
@@ -489,8 +489,8 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                 .accessibility_description(I18N.format(
                                                     "ui-value-value-destination-value",
                                                     [
-                                                        ("v0", I18N.text(&mode).into()),
-                                                        ("v1", I18N.text(&context).into()),
+                                                        ("v0", I18N.text(mode).into()),
+                                                        ("v1", I18N.text(context).into()),
                                                         ("v2", (index + 1).into()),
                                                     ],
                                                 ))
@@ -524,7 +524,7 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                 .accessibility_description(I18N.format(
                                                     "ui-value-bar-destination-value",
                                                     [
-                                                        ("v0", I18N.text(&mode).into()),
+                                                        ("v0", I18N.text(mode).into()),
                                                         ("v1", (index + 1).into()),
                                                     ],
                                                 ))
@@ -558,8 +558,8 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                 text(I18N.format(
                     "ui-value-value-compositions-value",
                     [
-                        ("v0", I18N.text(&mode).into()),
-                        ("v1", I18N.text(&context).into()),
+                        ("v0", I18N.text(mode).into()),
+                        ("v1", I18N.text(context).into()),
                         ("v2", (actions.get()).into()),
                     ],
                 ))
@@ -1044,7 +1044,7 @@ fn baseline_destination(
                             [
                                 (
                                     "v0",
-                                    I18N.text(&(if rail { "ui-rail-7098" } else { "ui-bar" }))
+                                    I18N.text(if rail { "ui-rail-7098" } else { "ui-bar" })
                                         .into(),
                                 ),
                                 ("v1", (index + 1).into()),

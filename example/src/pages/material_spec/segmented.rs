@@ -89,7 +89,7 @@ pub(super) fn segmented_spec(
             sections: vec![SpecSection {
                 title: "ui-m3-expressive-update",
                 content: RenderSlot::new(move || {
-                    expressive_update(on_recommended.clone());
+                    expressive_update(on_recommended);
                 }),
             }],
         },
@@ -195,7 +195,7 @@ fn segments(
                 "ui-value-value-format-2",
                 [
                     ("v0", I18N.text(&label).into()),
-                    ("v1", I18N.text(&name).into()),
+                    ("v1", I18N.text(name).into()),
                 ],
             ))
             .on_click(move || {
@@ -272,7 +272,7 @@ fn segmented_row(
                 "ui-value-selection-value",
                 [
                     ("v0", I18N.text(&label).into()),
-                    ("v1", I18N.text(&selection_summary(selected.get())).into()),
+                    ("v1", I18N.text(selection_summary(selected.get())).into()),
                 ],
             ))
             .style(type_style(14.0, 20.0));

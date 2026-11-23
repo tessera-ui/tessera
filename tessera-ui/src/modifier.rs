@@ -1122,10 +1122,10 @@ impl Modifier {
         }
         let mut connection = None;
         self.element.for_each_action_outer_first(&mut |action| {
-            if let ModifierAction::Build(node) = action {
-                if let Some(attached) = node.nested_scroll_connection() {
-                    connection = Some(attached);
-                }
+            if let ModifierAction::Build(node) = action
+                && let Some(attached) = node.nested_scroll_connection()
+            {
+                connection = Some(attached);
             }
         });
         connection
@@ -1135,7 +1135,7 @@ impl Modifier {
         self.element.kinds().intersects(kinds)
     }
 
-    fn materialize(self, instance: u64, owner: u64, path: &[u64]) -> Self {
+    fn materialize(self, instance: u64, path: &[u64]) -> Self {
         if !self.contains(ActionKinds::BUILD) {
             return self;
         }
@@ -1165,7 +1165,7 @@ impl Modifier {
                 result = result.push_action(ModifierAction::BuildOwner(Modifier {
                     element: self.element.slice(index, 1),
                 }));
-                result = result.then(modifier.materialize(instance, owner, &path));
+                result = result.then(modifier.materialize(instance, &path));
                 keep_start = index + 1;
                 changed = true;
             }
@@ -1183,7 +1183,7 @@ impl Modifier {
     pub fn attach(self) {
         ensure_build_phase();
 
-        let (instance, owner) = TesseraRuntime::with(|runtime| {
+        let instance = TesseraRuntime::with(|runtime| {
             let tree = &runtime.component_tree;
             let node = tree
                 .executing_call_node()
@@ -1193,10 +1193,9 @@ impl Modifier {
                     "modifiers attach to a node emitted by the current component; \
                      emit one with `layout(Stack)` or `group()`",
                 );
-            (node.instance_logic_id, node.instance_key)
+            node.instance_logic_id
         });
-        let materialized =
-            self.materialize(instance, owner, &crate::runtime::modifier_attachment_path());
+        let materialized = self.materialize(instance, &crate::runtime::modifier_attachment_path());
         let effects = materialized.clone();
 
         TesseraRuntime::with_mut(|runtime| {
@@ -1223,7 +1222,7 @@ impl Modifier {
                 }
                 ModifierAction::GloballyPositioned(handler) => {
                     TesseraRuntime::with_mut(|runtime| {
-                        runtime.push_current_globally_positioned_handler(handler.clone());
+                        runtime.push_current_globally_positioned_handler(*handler);
                     });
                 }
                 _ => {}
@@ -2190,8 +2189,8 @@ mod tests {
         let color = Modifier::new().push_draw(crate::layout::NoopDrawModifier);
         let before = Modifier::new().push_build(ExpandWidth).then(color.clone());
         let after = color.then(Modifier::new().push_build(ExpandWidth));
-        let before = before.materialize(1, 1, &[]);
-        let after = after.materialize(1, 1, &[]);
+        let before = before.materialize(1, &[]);
+        let after = after.materialize(1, &[]);
         let before = before.ordered_actions();
         let after = after.ordered_actions();
         assert!(matches!(

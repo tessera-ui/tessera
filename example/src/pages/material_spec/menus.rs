@@ -1328,8 +1328,8 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                     label: Some(I18N.format(
                         "ui-value-value-menu-color-roles",
                         [
-                            ("v0", I18N.text(&mode).into()),
-                            ("v1", I18N.text(&emphasis).into()),
+                            ("v0", I18N.text(mode).into()),
+                            ("v1", I18N.text(emphasis).into()),
                         ],
                     )),
                     merge_descendants: true,

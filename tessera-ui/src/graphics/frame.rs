@@ -85,7 +85,7 @@ impl super::GraphicsDevice {
         };
         let size = bytes.len() as u64;
         assert!(
-            size > 0 && size <= u64::from(maximum),
+            size > 0 && size <= maximum,
             "invalid frame buffer binding size"
         );
         let alignment = u64::from(alignment).max(4);

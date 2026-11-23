@@ -472,7 +472,6 @@ fn radio_button_inner(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
-            ..Default::default()
         };
         modifier = modifier.selectable(selectable_args);
         if radio_group.is_some() {

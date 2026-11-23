@@ -551,8 +551,8 @@ pub fn floating_action_button_menu(
         enabled,
         alignment,
         colors,
-        open_label: open_label.unwrap_or_else(|| I18N.text("md3-open-actions").into()),
-        close_label: close_label.unwrap_or_else(|| I18N.text("md3-close-actions").into()),
+        open_label: open_label.unwrap_or_else(|| I18N.text("md3-open-actions")),
+        close_label: close_label.unwrap_or_else(|| I18N.text("md3-close-actions")),
         scrim_color: scrim_color.unwrap_or(Color::TRANSPARENT),
     };
     let data = remember(|| current.clone());
@@ -569,22 +569,19 @@ pub fn floating_action_button_menu(
         previous.set(expanded);
         pending_focus.set(true);
     }
-    tessera_ui::layout::layout(MenuLayout {
-        alignment,
-        bounds: bounds.clone(),
-    })
-    .modifier(modifier.unwrap_or_default())
-    .child(move || {
-        boxed()
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                hidden: data.with(|data| data.expanded),
-                merge_descendants: true,
-                ..Default::default()
-            }))
-            .children_optional(main_content.clone());
-        fab_menu_scrim(data, state, motion).bounds(bounds.clone());
-        fab_menu_panel(data, state, motion, pending_focus);
-    });
+    tessera_ui::layout::layout(MenuLayout { alignment, bounds })
+        .modifier(modifier.unwrap_or_default())
+        .child(move || {
+            boxed()
+                .modifier(Modifier::new().semantics(SemanticsArgs {
+                    hidden: data.with(|data| data.expanded),
+                    merge_descendants: true,
+                    ..Default::default()
+                }))
+                .children_optional(main_content);
+            fab_menu_scrim(data, state, motion).bounds(bounds);
+            fab_menu_panel(data, state, motion, pending_focus);
+        });
 }
 
 #[tessera]
@@ -833,7 +830,7 @@ fn fab_menu_action(
                 .child(move || {
                     let item = data.with(|data| data.items[index].clone());
                     let style = use_context::<MaterialTheme>()
-                        .unwrap()
+                        .expect("MaterialTheme must be provided")
                         .get()
                         .typography
                         .title_medium;

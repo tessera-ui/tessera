@@ -505,7 +505,7 @@ fn configurations() {
                             .selected(vec![1])
                             .label(I18N.format(
                                 "ui-value-group",
-                                [("v0", I18N.text(&size_name(size)).into())],
+                                [("v0", I18N.text(size_name(size)).into())],
                             ));
                         }),
                     );
@@ -604,7 +604,7 @@ fn playground() {
                             .child(move || {
                                 text(I18N.format(
                                     "ui-size-value",
-                                    [("v0", I18N.text(&size_name(size.get())).into())],
+                                    [("v0", I18N.text(size_name(size.get())).into())],
                                 ));
                             });
                         button()
@@ -716,17 +716,15 @@ fn playground() {
                     I18N.format(
                         "ui-value-value-value-selection-value",
                         [
-                            ("v0", I18N.text(&style_name(style.get())).into()),
-                            ("v1", I18N.text(&size_name(size.get())).into()),
+                            ("v0", I18N.text(style_name(style.get())).into()),
+                            ("v1", I18N.text(size_name(size.get())).into()),
                             (
                                 "v2",
-                                I18N.text(
-                                    &(if multiple.get() {
-                                        "ui-multiple-7083"
-                                    } else {
-                                        "ui-single-7084"
-                                    }),
-                                )
+                                I18N.text(if multiple.get() {
+                                    "ui-multiple-7083"
+                                } else {
+                                    "ui-single-7084"
+                                })
                                 .into(),
                             ),
                             (
@@ -773,7 +771,7 @@ fn tokens() {
                 .child(move || {
                     text(I18N.format(
                         "ui-size-value",
-                        [("v0", I18N.text(&size_name(size.get())).into())],
+                        [("v0", I18N.text(size_name(size.get())).into())],
                     ));
                 });
         });
@@ -808,42 +806,42 @@ fn tokens() {
                 vec![
                     I18N.format(
                         "ui-button-group-connected-value-container-height",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     height.into(),
                 ],
                 vec![
                     I18N.format(
                         "ui-button-group-connected-value-space-between-buttons",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     "2dp".into(),
                 ],
                 vec![
                     I18N.format(
                         "ui-button-group-connected-value-container-shape",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     "ui-full".into(),
                 ],
                 vec![
                     I18N.format(
                         "ui-button-group-connected-value-inner-corner-size",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     ["8dp", "8dp", "8dp", "16dp", "20dp"][index].into(),
                 ],
                 vec![
                     I18N.format(
                         "ui-button-group-connected-value-pressed-inner-corner-size",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     ["4dp", "4dp", "4dp", "12dp", "16dp"][index].into(),
                 ],
                 vec![
                     I18N.format(
                         "ui-button-group-connected-value-selected-inner-corner-size",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     "50%".into(),
                 ],
@@ -873,35 +871,35 @@ fn tokens() {
                 vec![
                     I18N.format(
                         "ui-button-group-value-container-height",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     height.into(),
                 ],
                 vec![
                     I18N.format(
                         "ui-button-group-value-between-space",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     ["18dp", "12dp", "8dp", "8dp", "8dp"][index].into(),
                 ],
                 vec![
                     I18N.format(
                         "ui-button-group-value-pressed-motion-spring-dampening",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     "0.9".into(),
                 ],
                 vec![
                     I18N.format(
                         "ui-button-group-value-pressed-motion-spring-stiffness",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     "1400".into(),
                 ],
                 vec![
                     I18N.format(
                         "ui-button-group-value-pressed-width-multiplier",
-                        [("v0", I18N.text(&token).into())],
+                        [("v0", I18N.text(token).into())],
                     ),
                     "15%".into(),
                 ],
@@ -1202,10 +1200,7 @@ fn state_row(style: ButtonGroupsStyle, state: usize, number: usize, selected: bo
             .enabled(state != 1)
             .presentation(presentation)
             .selected(if selected { vec![1] } else { Vec::new() })
-            .label(I18N.format(
-                "ui-value-state",
-                [("v0", I18N.text(&(STATES[state])).into())],
-            ));
+            .label(I18N.format("ui-value-state", [("v0", I18N.text(STATES[state]).into())]));
         }),
     );
     gap(Dp(12.0));
@@ -1284,7 +1279,7 @@ fn measurements() {
                         .variant(ButtonVariant::Tonal)
                         .label(I18N.format(
                             "ui-value-padding",
-                            [("v0", I18N.text(&size_name(size)).into())],
+                            [("v0", I18N.text(size_name(size)).into())],
                         ));
                     gap(Dp(16.0));
                 }
@@ -1316,7 +1311,7 @@ fn measurements() {
                         .variant(ButtonVariant::Tonal)
                         .label(I18N.format(
                             "ui-value-round-connected",
-                            [("v0", I18N.text(&size_name(size)).into())],
+                            [("v0", I18N.text(size_name(size)).into())],
                         ));
                     gap(Dp(16.0));
                 }
@@ -1345,7 +1340,7 @@ fn measurements() {
                         .variant(ButtonVariant::Tonal)
                         .label(I18N.format(
                             "ui-value-square-connected",
-                            [("v0", I18N.text(&size_name(size)).into())],
+                            [("v0", I18N.text(size_name(size)).into())],
                         ));
                     gap(Dp(16.0));
                 }
@@ -1389,7 +1384,7 @@ fn measurements() {
                             .variant(ButtonVariant::Tonal)
                             .label(I18N.format(
                                 "ui-value-minimum-width",
-                                [("v0", I18N.text(&size_name(size)).into())],
+                                [("v0", I18N.text(size_name(size)).into())],
                             ));
                             gap(Dp(12.0));
                             text(I18N.text(size_name(size)))
@@ -1652,7 +1647,7 @@ fn adaptive() {
                         .selected(vec![1])
                         .label(I18N.format(
                             "ui-value-breakpoint",
-                            [("v0", I18N.text(&size_name(size)).into())],
+                            [("v0", I18N.text(size_name(size)).into())],
                         ));
                     gap(Dp(16.0));
                 }

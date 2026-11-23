@@ -144,7 +144,7 @@ fn sample(
                             .selected(active.get())
                             .accessibility_label(I18N.format(
                                 "ui-value-enabled",
-                                [("v0", I18N.text(&label.get()).into())],
+                                [("v0", I18N.text(label.get()).into())],
                             ))
                             .on_click(move || active.set(!active.get()))
                             .child(move || {
@@ -155,7 +155,7 @@ fn sample(
                             .selected(read_only.get())
                             .accessibility_label(I18N.format(
                                 "ui-value-read-only",
-                                [("v0", I18N.text(&label.get()).into())],
+                                [("v0", I18N.text(label.get()).into())],
                             ))
                             .on_click(move || read_only.set(!read_only.get()))
                             .child(move || {
@@ -167,7 +167,7 @@ fn sample(
                             .accessibility_label(
                                 I18N.format(
                                     "ui-value-error",
-                                    [("v0", I18N.text(&label.get()).into())],
+                                    [("v0", I18N.text(label.get()).into())],
                                 ),
                             )
                             .on_click(move || invalid.set(!invalid.get()))
@@ -180,7 +180,7 @@ fn sample(
                             .accessibility_label(
                                 I18N.format(
                                     "ui-value-icons",
-                                    [("v0", I18N.text(&label.get()).into())],
+                                    [("v0", I18N.text(label.get()).into())],
                                 ),
                             )
                             .on_click(move || icons.set(!icons.get()))
@@ -192,7 +192,7 @@ fn sample(
                             .selected(affixes.get())
                             .accessibility_label(I18N.format(
                                 "ui-value-affixes",
-                                [("v0", I18N.text(&label.get()).into())],
+                                [("v0", I18N.text(label.get()).into())],
                             ))
                             .on_click(move || affixes.set(!affixes.get()))
                             .child(move || {
@@ -203,7 +203,7 @@ fn sample(
                             .selected(multiline.get())
                             .accessibility_label(I18N.format(
                                 "ui-value-multiline",
-                                [("v0", I18N.text(&label.get()).into())],
+                                [("v0", I18N.text(label.get()).into())],
                             ))
                             .on_click(move || multiline.set(!multiline.get()))
                             .child(move || {
@@ -212,10 +212,12 @@ fn sample(
                         button()
                             .tonal()
                             .selected(secure.get())
-                            .accessibility_label(I18N.format(
-                                "ui-value-secure",
-                                [("v0", I18N.text(&label.get()).into())],
-                            ))
+                            .accessibility_label(
+                                I18N.format(
+                                    "ui-value-secure",
+                                    [("v0", I18N.text(label.get()).into())],
+                                ),
+                            )
                             .on_click(move || secure.set(!secure.get()))
                             .child(move || {
                                 text(I18N.text("ui-secure"));
@@ -225,7 +227,7 @@ fn sample(
                             .accessibility_label(
                                 I18N.format(
                                     "ui-clear-value",
-                                    [("v0", I18N.text(&label.get()).into())],
+                                    [("v0", I18N.text(label.get()).into())],
                                 ),
                             )
                             .enabled(active.get() && !read_only.get())
@@ -244,7 +246,7 @@ fn sample(
                     role: Some(Role::Group),
                     label: Some(I18N.format(
                         "ui-value-container",
-                        [("v0", I18N.text(&label.get()).into())],
+                        [("v0", I18N.text(label.get()).into())],
                     )),
                     merge_descendants: true,
                     ..Default::default()
@@ -299,7 +301,7 @@ fn sample(
                                     role: Some(Role::Group),
                                     label: Some(I18N.format(
                                         "ui-value-leading-icon",
-                                        [("v0", I18N.text(&label.get()).into())],
+                                        [("v0", I18N.text(label.get()).into())],
                                     )),
                                     merge_descendants: true,
                                     ..Default::default()
@@ -316,7 +318,7 @@ fn sample(
                                     .icon(filled::CANCEL_SVG)
                                     .accessibility_label(I18N.format(
                                         "ui-clear-value-icon",
-                                        [("v0", I18N.text(&label.get()).into())],
+                                        [("v0", I18N.text(label.get()).into())],
                                     ))
                                     .enabled(active.get() && !read_only.get())
                                     .on_click(move || {
@@ -392,7 +394,7 @@ fn sample(
                     I18N.format(
                         "ui-value-value-value",
                         [
-                            ("v0", I18N.text(&label.get()).into()),
+                            ("v0", I18N.text(label.get()).into()),
                             (
                                 "v1",
                                 ((if secure.get() {
@@ -414,7 +416,7 @@ fn sample(
                 text(I18N.format(
                     "ui-value-submissions-value",
                     [
-                        ("v0", I18N.text(&label.get()).into()),
+                        ("v0", I18N.text(label.get()).into()),
                         ("v1", (submitted.get()).into()),
                     ],
                 ))
@@ -462,7 +464,7 @@ fn detail(outlined: bool) {
                 ]
             });
             gap(Dp(112.0));
-            subheading(I18N.format("ui-value-color", [("v0", I18N.text(&title).into())]));
+            subheading(I18N.format("ui-value-color", [("v0", I18N.text(title).into())]));
             prose("ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo");
             gap(Dp(24.0));
             for dark in [false, true] {
@@ -496,7 +498,7 @@ fn detail(outlined: bool) {
                 ]
             });
             gap(Dp(88.0));
-            subheading(I18N.format("ui-value-states", [("v0", I18N.text(&title).into())]));
+            subheading(I18N.format("ui-value-states", [("v0", I18N.text(title).into())]));
             prose("ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-interac");
             gap(Dp(24.0));
             for dark in [false, true] {
@@ -514,7 +516,7 @@ fn detail(outlined: bool) {
                 "ui-disabled-populated",
             ]);
             gap(Dp(112.0));
-            subheading(I18N.format("ui-value-error-states", [("v0", I18N.text(&title).into())]));
+            subheading(I18N.format("ui-value-error-states", [("v0", I18N.text(title).into())]));
             prose("ui-error-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-i");
             gap(Dp(24.0));
             for dark in [false, true] {
@@ -530,7 +532,7 @@ fn detail(outlined: bool) {
                 "ui-hovered-populated",
             ]);
             gap(Dp(112.0));
-            subheading(I18N.format("ui-value-measurements", [("v0", I18N.text(&title).into())]));
+            subheading(I18N.format("ui-value-measurements", [("v0", I18N.text(title).into())]));
             gap(Dp(24.0));
             for variant in 0..3 {
                 field_measurements(outlined, variant);
@@ -592,7 +594,7 @@ fn detail(outlined: bool) {
                 },
             );
             gap(Dp(112.0));
-            subheading(I18N.format("ui-value-configurations", [("v0", I18N.text(&title).into())]));
+            subheading(I18N.format("ui-value-configurations", [("v0", I18N.text(title).into())]));
             gap(Dp(24.0));
             field_configurations(outlined);
             gap(Dp(24.0));
@@ -609,7 +611,7 @@ fn detail(outlined: bool) {
             subheading("ui-try-the-configuration-options".into());
             panel(RenderSlot::new(move || {
                 sample(
-                    I18N.format("ui-configured-value", [("v0", I18N.text(&(if outlined { "ui-outlined" } else { "ui-filled" })).into())]),
+                    I18N.format("ui-configured-value", [("v0", I18N.text(if outlined { "ui-outlined" } else { "ui-filled" }).into())]),
                     outlined,
                 )
                 .controls(true);
@@ -945,7 +947,7 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
                 .initial_text(I18N.text(title))
                 .accessibility_label(I18N.format(
                     "ui-overview-value-text-field",
-                    [("v0", I18N.text(&title).into())],
+                    [("v0", I18N.text(title).into())],
                 ))
                 .accessibility_description(I18N.text("ui-supporting-text"))
                 .min_width(Dp::ZERO)
@@ -986,7 +988,7 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
                             "ui-value-value-text-field",
                             [
                                 ("v0", (if outlined { 2 } else { 1 }).into()),
-                                ("v1", I18N.text(&title).into()),
+                                ("v1", I18N.text(title).into()),
                             ],
                         )),
                         ..Default::default()
@@ -2155,18 +2157,16 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
                                     [
                                         (
                                             "v0",
-                                            I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                            I18N.text(if dark { "ui-dark" } else { "ui-light" })
                                                 .into(),
                                         ),
                                         (
                                             "v1",
-                                            I18N.text(
-                                                &(if outlined {
-                                                    "ui-outlined-7110"
-                                                } else {
-                                                    "ui-filled-7111"
-                                                }),
-                                            )
+                                            I18N.text(if outlined {
+                                                "ui-outlined-7110"
+                                            } else {
+                                                "ui-filled-7111"
+                                            })
                                             .into(),
                                         ),
                                     ],
@@ -2201,31 +2201,25 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
                                         [
                                             (
                                                 "v0",
-                                                I18N.text(
-                                                    &(if dark { "ui-dark-prefix" } else { "" }),
-                                                )
-                                                .into(),
+                                                I18N.text(if dark { "ui-dark-prefix" } else { "" })
+                                                    .into(),
                                             ),
                                             (
                                                 "v1",
-                                                I18N.text(
-                                                    &(if outlined {
-                                                        "ui-outlined"
-                                                    } else {
-                                                        "ui-filled"
-                                                    }),
-                                                )
+                                                I18N.text(if outlined {
+                                                    "ui-outlined"
+                                                } else {
+                                                    "ui-filled"
+                                                })
                                                 .into(),
                                             ),
                                             (
                                                 "v2",
-                                                I18N.text(
-                                                    &(if populated {
-                                                        "ui-populated"
-                                                    } else {
-                                                        "ui-empty"
-                                                    }),
-                                                )
+                                                I18N.text(if populated {
+                                                    "ui-populated"
+                                                } else {
+                                                    "ui-empty"
+                                                })
                                                 .into(),
                                             ),
                                         ],
@@ -2273,24 +2267,20 @@ fn field_color_scheme(outlined: bool, dark: bool) {
                                             [
                                                 (
                                                     "v0",
-                                                    I18N.text(
-                                                        &(if dark {
-                                                            "ui-dark"
-                                                        } else {
-                                                            "ui-light"
-                                                        }),
-                                                    )
+                                                    I18N.text(if dark {
+                                                        "ui-dark"
+                                                    } else {
+                                                        "ui-light"
+                                                    })
                                                     .into(),
                                                 ),
                                                 (
                                                     "v1",
-                                                    I18N.text(
-                                                        &(if outlined {
-                                                            "ui-outlined-7110"
-                                                        } else {
-                                                            "ui-filled-7111"
-                                                        }),
-                                                    )
+                                                    I18N.text(if outlined {
+                                                        "ui-outlined-7110"
+                                                    } else {
+                                                        "ui-filled-7111"
+                                                    })
                                                     .into(),
                                                 ),
                                             ],
@@ -2328,35 +2318,29 @@ fn field_color_scheme(outlined: bool, dark: bool) {
                                                         [
                                                             (
                                                                 "v0",
-                                                                I18N.text(
-                                                                    &(if dark {
-                                                                        "ui-dark"
-                                                                    } else {
-                                                                        "ui-light"
-                                                                    }),
-                                                                )
+                                                                I18N.text(if dark {
+                                                                    "ui-dark"
+                                                                } else {
+                                                                    "ui-light"
+                                                                })
                                                                 .into(),
                                                             ),
                                                             (
                                                                 "v1",
-                                                                I18N.text(
-                                                                    &(if outlined {
-                                                                        "ui-outlined-7110"
-                                                                    } else {
-                                                                        "ui-filled-7111"
-                                                                    }),
-                                                                )
+                                                                I18N.text(if outlined {
+                                                                    "ui-outlined-7110"
+                                                                } else {
+                                                                    "ui-filled-7111"
+                                                                })
                                                                 .into(),
                                                             ),
                                                             (
                                                                 "v2",
-                                                                I18N.text(
-                                                                    &(if populated {
-                                                                        "ui-populated"
-                                                                    } else {
-                                                                        "ui-empty"
-                                                                    }),
-                                                                )
+                                                                I18N.text(if populated {
+                                                                    "ui-populated"
+                                                                } else {
+                                                                    "ui-empty"
+                                                                })
                                                                 .into(),
                                                             ),
                                                         ],
@@ -2454,7 +2438,7 @@ fn field_color_callouts(outlined: bool, scale: f64) {
                         role: Some(Role::Note),
                         label: Some(I18N.format(
                             "ui-color-role-value-value",
-                            [("v0", (index + 1).into()), ("v1", I18N.text(&role).into())],
+                            [("v0", (index + 1).into()), ("v1", I18N.text(role).into())],
                         )),
                         ..Default::default()
                     }),
@@ -2565,35 +2549,29 @@ fn field_state_matrix(outlined: bool, error: bool, dark: bool) {
                                                             [
                                                                 (
                                                                     "v0",
-                                                                    I18N.text(
-                                                                        &(if dark {
-                                                                            "ui-dark"
-                                                                        } else {
-                                                                            "ui-light"
-                                                                        }),
-                                                                    )
+                                                                    I18N.text(if dark {
+                                                                        "ui-dark"
+                                                                    } else {
+                                                                        "ui-light"
+                                                                    })
                                                                     .into(),
                                                                 ),
                                                                 (
                                                                     "v1",
-                                                                    I18N.text(
-                                                                        &(if outlined {
-                                                                            "ui-outlined-7110"
-                                                                        } else {
-                                                                            "ui-filled-7111"
-                                                                        }),
-                                                                    )
+                                                                    I18N.text(if outlined {
+                                                                        "ui-outlined-7110"
+                                                                    } else {
+                                                                        "ui-filled-7111"
+                                                                    })
                                                                     .into(),
                                                                 ),
                                                                 (
                                                                     "v2",
-                                                                    I18N.text(
-                                                                        &(if error {
-                                                                            "ui-error-7114"
-                                                                        } else {
-                                                                            "ui-normal"
-                                                                        }),
-                                                                    )
+                                                                    I18N.text(if error {
+                                                                        "ui-error-7114"
+                                                                    } else {
+                                                                        "ui-normal"
+                                                                    })
                                                                     .into(),
                                                                 ),
                                                                 ("v3", (number).into()),
@@ -2680,7 +2658,7 @@ fn field_state_item(
                             .accessibility_label(
                                 I18N.format(
                                     "ui-clear-value",
-                                    [("v0", I18N.text(&name.get()).into())],
+                                    [("v0", I18N.text(name.get()).into())],
                                 ),
                             )
                             .on_click(move || {
@@ -2798,19 +2776,17 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
         [
             (
                 "v0",
-                I18N.text(&(if outlined { "ui-outlined" } else { "ui-filled" }))
+                I18N.text(if outlined { "ui-outlined" } else { "ui-filled" })
                     .into(),
             ),
             ("v1", (row + 1).into()),
             (
                 "v2",
-                I18N.text(
-                    &(if populated {
-                        "ui-populated"
-                    } else {
-                        "ui-empty"
-                    }),
-                )
+                I18N.text(if populated {
+                    "ui-populated"
+                } else {
+                    "ui-empty"
+                })
                 .into(),
             ),
         ],
@@ -2864,7 +2840,7 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
                         .color_style(IconButtonColorStyle::Inherited)
                         .icon(filled::CANCEL_SVG)
                         .accessibility_label(
-                            I18N.format("ui-clear-value", [("v0", I18N.text(&name.get()).into())]),
+                            I18N.format("ui-clear-value", [("v0", I18N.text(name.get()).into())]),
                         )
                         .on_click(move || {
                             controller.with(|controller| controller.request_focus());
@@ -2898,29 +2874,27 @@ fn measurement_name(outlined: bool, variant: usize, populated: bool) -> String {
         [
             (
                 "v0",
-                I18N.text(&(if outlined { "ui-outlined" } else { "ui-filled" }))
+                I18N.text(if outlined { "ui-outlined" } else { "ui-filled" })
                     .into(),
             ),
             (
                 "v1",
                 I18N.text(
-                    &([
+                    [
                         "ui-without-icons-7001",
                         "ui-with-icons",
                         "ui-support-and-counter",
-                    ][variant]),
+                    ][variant],
                 )
                 .into(),
             ),
             (
                 "v2",
-                I18N.text(
-                    &(if populated {
-                        "ui-populated"
-                    } else {
-                        "ui-empty"
-                    }),
-                )
+                I18N.text(if populated {
+                    "ui-populated"
+                } else {
+                    "ui-empty"
+                })
                 .into(),
             ),
         ],
@@ -3028,7 +3002,7 @@ fn field_measurement_item(
                                 "ui-value-container",
                                 [(
                                     "v0",
-                                    I18N.text(&measurement_name(outlined, variant, populated))
+                                    I18N.text(measurement_name(outlined, variant, populated))
                                         .into(),
                                 )],
                             ),
@@ -3097,7 +3071,7 @@ fn field_measurement_item(
                                                 "ui-value-leading-icon",
                                                 [(
                                                     "v0",
-                                                    I18N.text(&measurement_name(
+                                                    I18N.text(measurement_name(
                                                         outlined, variant, populated,
                                                     ))
                                                     .into(),
@@ -3121,7 +3095,7 @@ fn field_measurement_item(
                                             "ui-clear-value",
                                             [(
                                                 "v0",
-                                                I18N.text(&measurement_name(
+                                                I18N.text(measurement_name(
                                                     outlined, variant, populated,
                                                 ))
                                                 .into(),
@@ -3165,7 +3139,7 @@ fn field_measurement_item(
                                             "ui-value-supporting-text",
                                             [(
                                                 "v0",
-                                                I18N.text(&measurement_name(
+                                                I18N.text(measurement_name(
                                                     outlined, variant, populated,
                                                 ))
                                                 .into(),
@@ -3544,7 +3518,7 @@ fn field_measurement_native_annotations(
             "ui-value-trailing-icon-annotation",
             [(
                 "v0",
-                I18N.text(&measurement_name(outlined, variant, populated))
+                I18N.text(measurement_name(outlined, variant, populated))
                     .into(),
             )],
         ),
@@ -3559,7 +3533,7 @@ fn field_measurement_native_annotations(
             "ui-value-floating-inset-annotation",
             [(
                 "v0",
-                I18N.text(&measurement_name(outlined, variant, populated))
+                I18N.text(measurement_name(outlined, variant, populated))
                     .into(),
             )],
         ),
@@ -3706,10 +3680,8 @@ fn field_anatomy_marker(number: usize, x: Dp, y: Dp) {
                             [
                                 (
                                     "v0",
-                                    I18N.text(
-                                        &(if scheme.is_dark { "ui-dark-prefix" } else { "" }),
-                                    )
-                                    .into(),
+                                    I18N.text(if scheme.is_dark { "ui-dark-prefix" } else { "" })
+                                        .into(),
                                 ),
                                 ("v1", (number).into()),
                             ],

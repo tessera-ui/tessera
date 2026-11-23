@@ -885,7 +885,7 @@ fn scrollbar(
     )
     .push_semantics(ScrollbarSemanticsModifierNode {
         args: args.clone(),
-        state: state,
+        state,
         orientation,
     });
 

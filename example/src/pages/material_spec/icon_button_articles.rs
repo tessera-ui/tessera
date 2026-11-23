@@ -81,7 +81,7 @@ pub(in crate::pages::material_spec) fn guidance(title: String) {
                                 true,
                                 I18N.format(
                                     "ui-size-value-format-174",
-                                    [("v0", I18N.text(&label).into())],
+                                    [("v0", I18N.text(label).into())],
                                 ),
                             );
                             gap(Dp(12.0));
@@ -109,7 +109,7 @@ pub(in crate::pages::material_spec) fn guidance(title: String) {
                                 IconButtonSize::Medium,
                                 width,
                                 false,
-                                I18N.format("ui-width-value", [("v0", I18N.text(&label).into())]),
+                                I18N.format("ui-width-value", [("v0", I18N.text(label).into())]),
                             );
                             gap(Dp(12.0));
                             paragraph(label.into());
@@ -291,7 +291,7 @@ fn mail_scene() {
                                     .on_click(move || menu.with_mut(MenuController::toggle));
                             });
                             gap(Dp(16.0));
-                            paragraph(I18N.format("ui-folder-value-value-value", [("v0", I18N.text(&(if deleted.get() { "ui-trash" } else if archived.get() { "ui-archive" } else { "ui-inbox" })).into()), ("v1", I18N.text(&(if read.get() { "ui-read" } else { "ui-unread" })).into()), ("v2", I18N.text(&(if favorite.get() { "ui-favorite" } else { "ui-not-favorited" })).into())]));
+                            paragraph(I18N.format("ui-folder-value-value-value", [("v0", I18N.text(if deleted.get() { "ui-trash" } else if archived.get() { "ui-archive" } else { "ui-inbox" }).into()), ("v1", I18N.text(if read.get() { "ui-read" } else { "ui-unread" }).into()), ("v2", I18N.text(if favorite.get() { "ui-favorite" } else { "ui-not-favorited" }).into())]));
                         });
                 })
                 .menu_content(move |menu| {

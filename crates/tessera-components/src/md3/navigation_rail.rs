@@ -604,7 +604,6 @@ fn navigation_rail_item_view(
         focus_requester: Some(focus),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
-        ..Default::default()
     };
 
     let modifier = Modifier::new()
@@ -784,21 +783,17 @@ pub fn navigation_rail(
     let modifier = Modifier::new()
         .focus_group(None)
         .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true));
-    layout(Stack).modifier(modifier).child({
-        let composition = composition;
-        move || {
-            let composition = composition;
-            surface()
-                .modifier(Modifier::new().fill_max_height().width(container_width))
-                .style(scheme.surface.into())
-                .block_input(true)
-                .child(move || {
-                    navigation_rail_content()
-                        .composition(composition)
-                        .header_optional(header)
-                        .content_optional(content);
-                });
-        }
+    layout(Stack).modifier(modifier).child(move || {
+        surface()
+            .modifier(Modifier::new().fill_max_height().width(container_width))
+            .style(scheme.surface.into())
+            .block_input(true)
+            .child(move || {
+                navigation_rail_content()
+                    .composition(composition)
+                    .header_optional(header)
+                    .content_optional(content);
+            });
     });
 }
 

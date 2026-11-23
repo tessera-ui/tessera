@@ -375,7 +375,6 @@ fn guidance_card(
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            let scene = scene.clone();
             boxed()
                 .modifier(
                     Modifier::new()
@@ -383,7 +382,7 @@ fn guidance_card(
                         .clip_shape(Shape::rounded_rectangle(Dp(24.0))),
                 )
                 .children(move || {
-                    dialog_canvas(canonical_width, 320.0, scene.clone());
+                    dialog_canvas(canonical_width, 320.0, scene);
                 });
             if verdict != Verdict::Note {
                 gap(Dp(4.0));
@@ -414,33 +413,33 @@ fn guidance_pair(
             },
         ))
         .children(move || {
-            let (first, second) = (first.clone(), second.clone());
+            let (first, second) = (first, second);
             let (first_note, second_note) = (first_note.clone(), second_note.clone());
             if width.get().0 < 640.0 {
                 column()
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
-                        guidance_card(first_verdict, first_note.clone(), first.clone());
+                        guidance_card(first_verdict, first_note.clone(), first);
                         gap(Dp(32.0));
-                        guidance_card(second_verdict, second_note.clone(), second.clone());
+                        guidance_card(second_verdict, second_note.clone(), second);
                     });
             } else {
                 row()
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
-                        let (first, second) = (first.clone(), second.clone());
+                        let (first, second) = (first, second);
                         let (first_note, second_note) = (first_note.clone(), second_note.clone());
                         boxed()
                             .modifier(Modifier::new().weight(1.0))
                             .children(move || {
-                                guidance_card(first_verdict, first_note.clone(), first.clone());
+                                guidance_card(first_verdict, first_note.clone(), first);
                             });
                         spacer().modifier(Modifier::new().width(Dp(24.0)));
                         boxed()
                             .modifier(Modifier::new().weight(1.0))
                             .children(move || {
-                                guidance_card(second_verdict, second_note.clone(), second.clone());
+                                guidance_card(second_verdict, second_note.clone(), second);
                             });
                     });
             }
@@ -535,7 +534,7 @@ fn mock_dialog(
                 }),
         )
         .children(move || {
-            let (actions, content) = (actions.clone(), content.clone());
+            let (actions, content) = (actions.clone(), content);
             text(I18N.text(&(headline)))
                 .style(type_style(24.0, 32.0))
                 .color(scheme.on_surface);
@@ -633,7 +632,6 @@ fn backdrop_scene(backdrop: Backdrop, dialog: Option<RenderSlot>) {
                 .background(scheme.surface_container_high),
         )
         .children(move || {
-            let dialog = dialog.clone();
             if backdrop == Backdrop::Product {
                 image()
                     .painter(assets::DIALOG_GUIDELINE_PRODUCT_PNG)
@@ -798,7 +796,7 @@ fn full_screen_scene(
                             }
                         });
                 });
-            if let Some(overlay) = overlay.clone() {
+            if let Some(overlay) = overlay {
                 scrimmed(overlay);
             }
         });
@@ -2334,7 +2332,7 @@ dialog_canvas(1024.0, 622.0, RenderSlot::new(move || {
                                     .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(y * scale)));
                                 for (column, kind) in ["date", "time"].into_iter().enumerate() {
                                     dialog_scene_input(24.0 + column as f64 * 185.0, y + 25.0, 177.0,
-                                        "ui-label".into(), "ui-input".into(), I18N.format("ui-overview-value-value", [("v0", I18N.text(&caption).into()), ("v1", I18N.text(&kind).into())]), true, scale);
+                                        "ui-label".into(), "ui-input".into(), I18N.format("ui-overview-value-value", [("v0", I18N.text(caption).into()), ("v1", I18N.text(kind).into())]), true, scale);
                                 }
                             }
                         }));
@@ -2524,7 +2522,7 @@ fn dialog_scene_input(
                                 .text()
                                 .accessibility_label(I18N.format(
                                     "ui-choose-value",
-                                    [("v0", I18N.text(&name.get()).into())],
+                                    [("v0", I18N.text(name.get()).into())],
                                 ))
                                 .modifier(Modifier::new().size(Dp(32.0 * scale), Dp(40.0 * scale)))
                                 .content_padding(Padding::all(Dp::ZERO))
@@ -2613,7 +2611,7 @@ dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
         if !notice.with(String::is_empty) {gap(Dp(12.0)); prose(notice.get());}
         gap(Dp(24.0));
         for (index, role) in ["Surface container high", "Secondary", "On surface", "On surface variant", "Primary", "Scrim"].into_iter().enumerate() {
-            prose(I18N.format("ui-value-value", [("v0", (index + 1).into()), ("v1", I18N.text(&role).into())]));
+            prose(I18N.format("ui-value-value", [("v0", (index + 1).into()), ("v1", I18N.text(role).into())]));
             gap(Dp(12.0));
         }
     });
@@ -2808,7 +2806,7 @@ fn full_spec_figure(mode: usize) {
                                                 if mode == 0 {343.0} else if row == 0 {344.0} else {447.0},
                                                 177.0, "ui-label".into(),
                                                 if row == 0 && column == 0 {"ui-input"} else {"ui-all-day"}.into(),
-                                                I18N.format("ui-full-spec-value-value-value", [("v0", (mode).into()), ("v1", I18N.text(&caption).into()), ("v2", I18N.text(&(if column == 0 {"ui-date-7089"} else {"ui-time"})).into())]), true, scale);
+                                                I18N.format("ui-full-spec-value-value-value", [("v0", (mode).into()), ("v1", I18N.text(caption).into()), ("v2", I18N.text(if column == 0 {"ui-date-7089"} else {"ui-time"}).into())]), true, scale);
                                         }
                                     }
                                     if mode == 2 {

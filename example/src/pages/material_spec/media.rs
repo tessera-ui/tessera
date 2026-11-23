@@ -433,7 +433,7 @@ pub(super) fn picture(#[prop(into)] title: String, width: Dp, height: Dp, thumbn
                         role: Some(Role::Image),
                         label: Some(I18N.format(
                             "ui-value-illustration",
-                            [("v0", I18N.text(&media.title).into())],
+                            [("v0", I18N.text(media.title).into())],
                         )),
                         test_tag: Some(format!("spec-{image_role}-{}", media.slug)),
                         ..Default::default()

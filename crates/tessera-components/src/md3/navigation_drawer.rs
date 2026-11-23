@@ -116,7 +116,7 @@ pub fn navigation_drawer(
                         .fill_max_width()
                         .padding_symmetric(Dp(12.0), Dp(12.0)),
                 )
-                .children_shared(content.clone().unwrap_or_else(RenderSlot::empty));
+                .children_shared(content.unwrap_or_else(RenderSlot::empty));
         });
 }
 

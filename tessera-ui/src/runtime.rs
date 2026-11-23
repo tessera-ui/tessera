@@ -269,7 +269,7 @@ impl SlotTable {
         let key = &self.entries[slot].key;
         self.slots_by_key
             .insert_unique(FxBuildHasher.hash_one(key), slot, |&slot| {
-                FxBuildHasher.hash_one(&self.entries[slot].key)
+                FxBuildHasher.hash_one(self.entries[slot].key)
             });
         if let Some(owner) = key.owned_owner {
             self.owned_slots.entry(owner).or_default().insert(slot);
@@ -301,7 +301,7 @@ impl SlotTable {
     ) -> Option<SlotEntry> {
         if let Ok(indexed) = self
             .slots_by_key
-            .find_entry(FxBuildHasher.hash_one(&key), |&candidate| candidate == slot)
+            .find_entry(FxBuildHasher.hash_one(key), |&candidate| candidate == slot)
         {
             indexed.remove();
         }
@@ -1328,8 +1328,7 @@ pub(crate) fn begin_frame_clock(now: Instant) {
 }
 
 pub(crate) fn reset_frame_clock() {
-    let removed = with_frame_clock_tracker_mut(std::mem::take);
-    drop(removed);
+    with_frame_clock_tracker_mut(|tracker| *tracker = FrameClockTracker::default());
 }
 
 pub(crate) fn has_pending_frame_waiters() -> bool {
@@ -1985,7 +1984,7 @@ fn publish_state_writes(keys: &[StateReadDependencyKey]) {
                 .is_some_and(|readers| tracker.invalidate(readers, writer_instance_key))
         })
     });
-    let layout_dirty = mark_layout_state_readers_dirty(&keys);
+    let layout_dirty = mark_layout_state_readers_dirty(keys);
     if build_dirty || layout_dirty {
         schedule_runtime_redraw();
     }
@@ -3014,7 +3013,8 @@ fn borrow_state<T: 'static>(state: &State<T>, mutable: bool) -> (NonNull<T>, Sta
                 .checked_add(1)
                 .expect("state read borrow count exhausted")
         });
-        let pointer = if mutable {
+
+        if mutable {
             let value = entry
                 .state_value
                 .as_deref_mut()
@@ -3032,8 +3032,7 @@ fn borrow_state<T: 'static>(state: &State<T>, mutable: bool) -> (NonNull<T>, Sta
                 .unwrap_or_else(|| panic!("State slot {:?} downcast failed", state.slot));
             entry.active_reads = next_readers.expect("shared borrow count was computed");
             NonNull::from(value)
-        };
-        pointer
+        }
     });
     (
         pointer,

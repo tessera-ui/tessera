@@ -130,6 +130,7 @@ struct FontRequest {
     installed: Option<u64>,
 }
 
+#[cfg_attr(not(target_family = "wasm"), derive(Default))]
 struct FontRegistry {
     sources: Vec<FontSource>,
     stylesheets: Vec<Stylesheet>,
@@ -137,19 +138,17 @@ struct FontRegistry {
     revision: u64,
 }
 
+#[cfg(target_family = "wasm")]
 impl Default for FontRegistry {
     fn default() -> Self {
         Self {
             sources: Vec::new(),
-            #[cfg(target_family = "wasm")]
             stylesheets: [
                 "https://cdn.jsdelivr.net/npm/@fontsource-variable/roboto/index.css",
                 "https://cdn.jsdelivr.net/npm/@fontsource-variable/noto-sans-sc/index.css",
             ]
             .map(Stylesheet::new)
             .into(),
-            #[cfg(not(target_family = "wasm"))]
-            stylesheets: Vec::new(),
             requests: Vec::new(),
             revision: 0,
         }

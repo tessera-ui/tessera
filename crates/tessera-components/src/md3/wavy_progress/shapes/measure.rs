@@ -94,10 +94,11 @@ impl MeasuredPolygon {
             curves.extend_from_slice(&feature.curves);
         }
         let mut outline = vec![0.0];
+        let mut total = 0.0;
         for curve in &curves {
-            outline.push(outline.last().unwrap() + measure(*curve, f32::INFINITY).1);
+            total += measure(*curve, f32::INFINITY).1;
+            outline.push(total);
         }
-        let total = *outline.last().unwrap();
         for progress in &mut outline {
             *progress /= total;
         }

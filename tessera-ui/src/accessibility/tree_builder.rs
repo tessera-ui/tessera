@@ -317,10 +317,10 @@ impl AccessibilityIndex {
                 continue;
             };
             let (parent, path) = (entry.parent, entry.order.clone());
-            if let Some(parent) = parent.filter(|parent| child_changes.contains(parent)) {
-                if let Some(entry) = self.nodes.get_mut(&parent) {
-                    entry.children.insert(path, *key);
-                }
+            if let Some(parent) = parent.filter(|parent| child_changes.contains(parent))
+                && let Some(entry) = self.nodes.get_mut(&parent)
+            {
+                entry.children.insert(path, *key);
             }
         }
         for parent in child_changes {

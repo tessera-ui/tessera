@@ -499,7 +499,6 @@ fn switch_content(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
-            ..Default::default()
         };
         modifier = modifier.toggleable(toggle_args);
     } else {

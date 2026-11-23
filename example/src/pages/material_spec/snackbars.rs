@@ -1779,7 +1779,7 @@ fn sample(
                 button()
                     .text()
                     .accessibility_label(
-                        I18N.format("ui-restore-value", [("v0", I18N.text(&label.get()).into())]),
+                        I18N.format("ui-restore-value", [("v0", I18N.text(label.get()).into())]),
                     )
                     .on_click(move || visible.set(true))
                     .child(move || {
@@ -2010,7 +2010,7 @@ fn queued() {
             gap(Dp(16.0));
             text(I18N.format(
                 "ui-snackbar-result-value",
-                [("v0", I18N.text(&result.get()).into())],
+                [("v0", I18N.text(result.get()).into())],
             ))
             .style(type_style(14.0, 20.0));
             text(
@@ -2729,7 +2729,7 @@ fn actionable_demo() {
                         .snackbar(move |data: SnackbarData| {
                             let dismiss = data.clone();
                             snackbar()
-                                .message(I18N.text(&(data.message())))
+                                .message(I18N.text(data.message()))
                                 .action_label(I18N.text("ui-undo"))
                                 .with_dismiss_action(true)
                                 .on_dismiss(move || dismiss.dismiss())

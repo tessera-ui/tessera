@@ -81,7 +81,7 @@ impl CursorState {
                 .pointer_positions
                 .get(&event.pointer_id)
                 .copied()
-                .unwrap_or_else(|| {
+                .unwrap_or({
                     if event.pointer_id == MOUSE_POINTER_ID {
                         None
                     } else {

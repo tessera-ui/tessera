@@ -10,7 +10,7 @@ use tessera_ui::{
 
 use crate::pipelines::{
     SharedQuad,
-    instanced::{QUAD_VERTICES, quad_pipeline},
+    instanced::{QUAD_VERTICES, QuadPipeline},
 };
 
 use super::command::SimpleRectCommand;
@@ -44,8 +44,6 @@ impl SimpleRectPipeline {
         pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
     ) -> Self {
-        let shader = gpu.create_shader_module(include_wgsl!("simple_rect.wgsl"));
-
         let bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -60,20 +58,17 @@ impl SimpleRectPipeline {
             label: Some("simple_rect_bind_group_layout"),
         });
 
-        let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Simple Rect Pipeline Layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-
-        let pipeline = quad_pipeline(
-            gpu,
-            &pipeline_layout,
-            &shader,
-            config.format,
+        let pipeline = QuadPipeline {
+            label: "Simple Rect Pipeline",
+            layout_label: "Simple Rect Pipeline Layout",
+            format: config.format,
             sample_count,
-            pipeline_cache,
-            "Simple Rect Pipeline",
+            cache: pipeline_cache,
+        }
+        .create(
+            gpu,
+            &[Some(&bind_group_layout)],
+            include_wgsl!("simple_rect.wgsl"),
             Some(wgpu::Face::Back),
             QUAD_VERTICES,
         );

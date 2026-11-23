@@ -313,9 +313,7 @@ impl<'db> CallAnalyzer<'db> {
         let mut pending = module.children(self.db).collect::<Vec<_>>();
         while let Some(child) = pending.pop() {
             pending.extend(child.children(self.db));
-            let Some(child_file) = child.definition_source_file_id(self.db).file_id() else {
-                return None;
-            };
+            let child_file = child.definition_source_file_id(self.db).file_id()?;
             let child_file = child_file.file_id(self.db);
             if child_file != file_id
                 && mentions_name(
@@ -395,7 +393,7 @@ impl<'db> CallAnalyzer<'db> {
         let snapshot = self.db.file_text(file_id);
         let text = snapshot.text(self.db);
         if text[u32::from(inner.range.start()) as usize..u32::from(inner.range.end()) as usize]
-            != content.text().to_string()
+            != content.text()
         {
             return None;
         }

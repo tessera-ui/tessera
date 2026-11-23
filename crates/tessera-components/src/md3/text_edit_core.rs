@@ -3515,7 +3515,7 @@ impl tessera_ui::DrawModifierNode for TextEditDraw {
         let input = &mut *ctx.render_input;
         let mut metadata = input.metadata_mut();
         metadata.set_clips_children(true);
-        let focus = self.controller.with(|c| c.focus_handler().clone());
+        let focus = self.controller.with(|c| *c.focus_handler());
         let focused = focus.is_focused();
         let (
             selection_rects,

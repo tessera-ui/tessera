@@ -749,10 +749,10 @@ impl RenderCore {
             let configure = force || self.config.width != width || self.config.height != height;
             self.config.width = width;
             self.config.height = height;
-            if let Some(surface) = &self.surface {
-                if configure {
-                    surface.configure(&self.device, &self.config);
-                }
+            if let Some(surface) = &self.surface
+                && configure
+            {
+                surface.configure(&self.device, &self.config);
             }
             self.rebuild_pass_targets(force);
         }

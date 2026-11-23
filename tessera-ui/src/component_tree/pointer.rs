@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    sync::Arc,
+    rc::Rc,
 };
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -19,7 +19,7 @@ const CELL_SIZE: f32 = 256.0;
 const MAX_CELLS: usize = 256;
 
 struct Entry {
-    plan: Arc<PointerNodePlan>,
+    plan: Rc<PointerNodePlan>,
     order: Vec<usize>,
     #[cfg(any(target_os = "android", target_os = "ios"))]
     bounds: PxRect,
@@ -212,10 +212,10 @@ impl PointerIndex {
                 continue;
             };
             let plan = if let Some(mut plan) = retained_plan {
-                Arc::make_mut(&mut plan).context = context;
+                Rc::make_mut(&mut plan).context = context;
                 plan
             } else {
-                Arc::new(PointerNodePlan {
+                Rc::new(PointerNodePlan {
                     context,
                     modifier: node.modifier.clone(),
                 })

@@ -196,10 +196,10 @@ impl Catalog {
     fn lookup(&self, id: &str, args: Option<&Arguments<'_>>) -> Option<String> {
         if let Some(i18n) = I18n::try_current() {
             let (application, locale) = i18n.snapshot();
-            if !Arc::ptr_eq(&application, &self.loader) {
-                if let Some(value) = application.try_lookup_complete(&locale, id, args) {
-                    return Some(value);
-                }
+            if !Arc::ptr_eq(&application, &self.loader)
+                && let Some(value) = application.try_lookup_complete(&locale, id, args)
+            {
+                return Some(value);
             }
             self.loader.try_lookup_complete(&locale, id, args)
         } else {

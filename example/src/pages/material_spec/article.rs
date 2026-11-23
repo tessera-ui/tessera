@@ -240,8 +240,8 @@ fn footer_links(
         title: I18N.format(
             "ui-value-value-format-1",
             [
-                ("v0", I18N.text(&title).into()),
-                ("v1", I18N.text(&page).into()),
+                ("v0", I18N.text(title).into()),
+                ("v1", I18N.text(page).into()),
             ],
         ),
         action: FooterAction::Page(page),
@@ -249,7 +249,7 @@ fn footer_links(
     let external = move |destination: &ArticleDestination| FooterLink {
         title: I18N.format(
             "ui-value-overview",
-            [("v0", I18N.text(&destination.title).into())],
+            [("v0", I18N.text(destination.title).into())],
         ),
         action: FooterAction::Component(destination.on_open),
     };
@@ -355,7 +355,7 @@ fn article_footer_link(
                     label: Some(I18N.format(
                         "ui-value-value-format-2",
                         [
-                            ("v0", I18N.text(&label).into()),
+                            ("v0", I18N.text(label).into()),
                             ("v1", I18N.text(&link.title).into()),
                         ],
                     )),

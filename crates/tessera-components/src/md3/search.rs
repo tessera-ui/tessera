@@ -781,7 +781,10 @@ struct SearchFieldArgs {
 fn search_field(args: Option<SearchFieldArgs>) {
     let args = args.expect("search_field requires args");
     let has_icons = args.leading_icon.is_some() || args.trailing_icon.is_some();
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let color = if args.enabled {
         scheme.on_surface_variant
     } else {

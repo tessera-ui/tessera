@@ -243,24 +243,20 @@ fn configuration_layout(full_screen: bool, divided: bool) {
                     [
                         (
                             "v0",
-                            I18N.text(
-                                &(if full_screen {
-                                    "ui-full-screen-layout"
-                                } else {
-                                    "ui-docked-layout"
-                                }),
-                            )
+                            I18N.text(if full_screen {
+                                "ui-full-screen-layout"
+                            } else {
+                                "ui-docked-layout"
+                            })
                             .into(),
                         ),
                         (
                             "v1",
-                            I18N.text(
-                                &(if divided {
-                                    "ui-divided-baseline"
-                                } else {
-                                    "ui-contained"
-                                }),
-                            )
+                            I18N.text(if divided {
+                                "ui-divided-baseline"
+                            } else {
+                                "ui-contained"
+                            })
                             .into(),
                         ),
                     ],
@@ -270,7 +266,7 @@ fn configuration_layout(full_screen: bool, divided: bool) {
                 gap(Dp(8.0));
                 prose(I18N.format(
                     "ui-opened-message-value",
-                    [("v0", I18N.text(&opened.get()).into())],
+                    [("v0", I18N.text(opened.get()).into())],
                 ));
             }
         });
@@ -333,9 +329,9 @@ fn email_results(
                         .format(
                             "ui-value-value-value-to-eli",
                             [
-                                ("v0", I18N.text(&sender).into()),
-                                ("v1", I18N.text(&subject).into()),
-                                ("v2", I18N.text(&preview).into()),
+                                ("v0", I18N.text(sender).into()),
+                                ("v1", I18N.text(subject).into()),
+                                ("v2", I18N.text(preview).into()),
                             ],
                         )
                         .to_lowercase()
@@ -687,7 +683,7 @@ fn bar_example(kind: usize) {
                         boxed()
                             .alignment(Alignment::Center)
                             .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
-                            .children(|| avatar());
+                            .children(avatar);
                     }
                 });
         });
@@ -881,7 +877,7 @@ fn anatomy_bar(geometry: State<Geometry>, active: bool) {
                                 boxed()
                                     .alignment(Alignment::Center)
                                     .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
-                                    .children(|| avatar());
+                                    .children(avatar);
                             }
                         });
                 });

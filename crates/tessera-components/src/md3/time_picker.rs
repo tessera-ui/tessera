@@ -348,7 +348,9 @@ fn time_picker_content(
     .modifier(modifier)
     .child(move || {
         time_number(state, TimePickerSelection::Hour, input);
-        let theme = use_context::<MaterialTheme>().unwrap().get();
+        let theme = use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get();
         surface()
             .modifier(Modifier::new().size(Dp(24.0), Dp(if input { 72.0 } else { 80.0 })))
             .style(Color::TRANSPARENT.into())
@@ -506,7 +508,9 @@ impl tessera_ui::LayoutPolicy for TimePickerMeasure {
 #[tessera]
 fn time_number(state: State<TimePickerController>, field: TimePickerSelection, input: bool) {
     let snapshot = state.with(TimePickerController::snapshot);
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     let selected = snapshot.selection == field;
     let value = if field == TimePickerSelection::Hour {
@@ -1217,7 +1221,9 @@ impl KeyboardInputModifierNode for ClockNavigation {
 #[tessera]
 fn time_clock(state: State<TimePickerController>, hour_step: u8, minute_step: u8) {
     let snapshot = state.with(TimePickerController::snapshot);
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     let dragging = remember(|| false);
     let focus = remember(|| ClockFocus::new(&snapshot));
@@ -1296,7 +1302,8 @@ fn time_clock(state: State<TimePickerController>, hour_step: u8, minute_step: u8
                 .shape(Shape::Ellipse)
                 .content_alignment(Alignment::Center)
                 .child(move || {
-                    if snapshot.selection == TimePickerSelection::Minute && snapshot.minute % 5 != 0
+                    if snapshot.selection == TimePickerSelection::Minute
+                        && !snapshot.minute.is_multiple_of(5)
                     {
                         surface()
                             .modifier(Modifier::new().size(Dp(4.0), Dp(4.0)))
@@ -1478,7 +1485,9 @@ pub fn time_picker_dialog(
             )
         })
     };
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let modifier = Modifier::new();
     #[cfg(test)]
     let modifier = modifier.push_semantics(TimePickerTag("time-picker-dialog"));

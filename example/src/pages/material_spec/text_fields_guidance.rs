@@ -67,7 +67,7 @@ fn example(tone: u8, #[prop(into)] note: String, content: RenderSlot) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            panel(content.clone());
+            panel(content);
             gap(Dp(12.0));
             verdict(tone, note.clone());
         });
@@ -78,8 +78,6 @@ fn pair(left: RenderSlot, right: RenderSlot) {
     row()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            let left = left.clone();
-            let right = right.clone();
             column()
                 .modifier(Modifier::new().weight(1.0))
                 .children(move || {

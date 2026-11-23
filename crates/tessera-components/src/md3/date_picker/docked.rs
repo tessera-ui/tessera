@@ -1,8 +1,4 @@
 //! Compact calendars for date fields and anchored date selection.
-//!
-//! ## Usage
-//!
-//! Place a calendar below a date field in an anchored popup or form.
 
 use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
 use tessera_ui::{
@@ -35,7 +31,7 @@ use crate::{
 use super::{
     CalendarDate, CalendarFocus, CalendarKeyboard, CalendarOwner, DATE_CELL_SIZE, DATE_COLUMNS,
     DATE_PICKER_MAX_WIDTH, DateGridLayout, DatePickerController, Weekday, YearMonth, calendar_day,
-    civil_from_days, days_from_civil, format_month_name, format_month_short_name,
+    civil_from_days, days_from_civil, days_in_month, format_month_name, format_month_short_name,
     is_date_selectable, weekday_for_date, weekday_narrow_label, weekday_sequence,
 };
 
@@ -54,10 +50,6 @@ pub enum DockedDatePickerView {
 /// # docked_date_picker
 ///
 /// Select a date with separate month and year menus beside a date-entry field.
-///
-/// ## Usage
-///
-/// Show an anchored calendar for dates in the near or distant past or future.
 ///
 /// ## Parameters
 ///
@@ -102,7 +94,10 @@ pub fn docked_date_picker(
     let menu = view.unwrap_or(internal_view);
     let first_day = first_day_of_week.unwrap_or_default();
     let today = today.unwrap_or_else(CalendarDate::today);
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let change = on_date_change.unwrap_or_else(|| CallbackWith::new(|_| {}));
     let corner = RoundedCorner::manual(Dp(16.0), 2.0);
     surface()
@@ -142,8 +137,10 @@ pub fn docked_date_picker(
                     today,
                     change,
                     show_actions.unwrap_or(true),
-                    on_cancel.unwrap_or_default(),
-                    on_confirm.unwrap_or_default(),
+                    (
+                        on_cancel.unwrap_or_default(),
+                        on_confirm.unwrap_or_default(),
+                    ),
                 )
                 .focus_requester_optional(focus_requester);
             }
@@ -158,10 +155,10 @@ fn calendar_content(
     today: CalendarDate,
     change: CallbackWith<CalendarDate>,
     show_actions: bool,
-    on_cancel: Callback,
-    on_confirm: Callback,
+    actions: (Callback, Callback),
     focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
+    let (on_cancel, on_confirm) = actions;
     column()
         .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
         .children(move || {
@@ -201,7 +198,9 @@ fn calendar_content(
 #[tessera]
 fn menu_header(state: State<DatePickerController>, menu: State<DockedDatePickerView>) {
     let current = state.with(DatePickerController::displayed_month);
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     boxed()
         .modifier(Modifier::new().fill_max_width().height(Dp(64.0)))
         .children(move || {
@@ -274,14 +273,14 @@ fn header(state: State<DatePickerController>, menu: State<DockedDatePickerView>)
         .main_axis_alignment(MainAxisAlignment::SpaceBetween)
         .children(move || {
             arrow(
-                I18N.text("md3-previous-month").into(),
+                I18N.text("md3-previous-month"),
                 false,
                 month.month() > 1 || month.year() > *years.start(),
                 Callback::new(move || state.with_mut(DatePickerController::previous_month)),
             );
             menu_button(
                 format_month_short_name(month.month()),
-                I18N.text("md3-choose-month").into(),
+                I18N.text("md3-choose-month"),
                 Dp(64.0),
                 menu.get() == DockedDatePickerView::Month,
                 Callback::new(move || {
@@ -293,28 +292,24 @@ fn header(state: State<DatePickerController>, menu: State<DockedDatePickerView>)
                 }),
             );
             arrow(
-                I18N.text("md3-next-month").into(),
+                I18N.text("md3-next-month"),
                 true,
                 month.month() < 12 || month.year() < *years.end(),
                 Callback::new(move || state.with_mut(DatePickerController::next_month)),
             );
             arrow(
-                I18N.text("md3-previous-year").into(),
+                I18N.text("md3-previous-year"),
                 false,
                 menu.get() != DockedDatePickerView::Month && month.year() > *years.start(),
                 Callback::new(move || {
                     state.with_mut(|state| {
-                        let current = state.displayed_month();
-                        state.set_displayed_month(
-                            YearMonth::new(current.year().saturating_sub(1), current.month())
-                                .unwrap(),
-                        );
+                        state.set_displayed_year(state.displayed_month().year().saturating_sub(1));
                     })
                 }),
             );
             menu_button(
                 month.year().to_string(),
-                I18N.text("md3-choose-year").into(),
+                I18N.text("md3-choose-year"),
                 Dp(72.0),
                 menu.get() == DockedDatePickerView::Year,
                 Callback::new(move || {
@@ -326,16 +321,12 @@ fn header(state: State<DatePickerController>, menu: State<DockedDatePickerView>)
                 }),
             );
             arrow(
-                I18N.text("md3-next-year").into(),
+                I18N.text("md3-next-year"),
                 true,
                 menu.get() != DockedDatePickerView::Month && month.year() < *years.end(),
                 Callback::new(move || {
                     state.with_mut(|state| {
-                        let current = state.displayed_month();
-                        state.set_displayed_month(
-                            YearMonth::new(current.year().saturating_add(1), current.month())
-                                .unwrap(),
-                        );
+                        state.set_displayed_year(state.displayed_month().year().saturating_add(1));
                     })
                 }),
             );
@@ -363,7 +354,9 @@ fn arrow(label: String, next: bool, enabled: bool, action: Callback) {
 
 #[tessera]
 fn menu_button(label: String, description: String, width: Dp, expanded: bool, action: Callback) {
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     surface()
         .modifier(
             Modifier::new()
@@ -398,13 +391,13 @@ fn menu_button(label: String, description: String, width: Dp, expanded: bool, ac
 }
 
 fn cells(month: YearMonth, first: Weekday) -> [CalendarDate; 42] {
-    let date = month.to_date(1).unwrap();
-    let offset =
-        (weekday_for_date(date).index_from_monday() - first.index_from_monday()).rem_euclid(7);
+    let offset = (weekday_for_date(month.first_date()).index_from_monday()
+        - first.index_from_monday())
+    .rem_euclid(7);
     let origin = days_from_civil(month.year(), month.month(), 1) - i64::from(offset);
     std::array::from_fn(|index| {
         let (year, month, day) = civil_from_days(origin + index as i64);
-        CalendarDate::new(year, month, day).unwrap()
+        CalendarDate::new(year, month, day).expect("civil day conversion must yield a valid date")
     })
 }
 
@@ -466,7 +459,9 @@ fn calendar(
     change: CallbackWith<CalendarDate>,
     focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let owner = CalendarOwner::Single(state);
     let initial_date = owner.initial_date(today);
     let focus = remember(move || CalendarFocus::new(initial_date, focus_requester));
@@ -540,7 +535,7 @@ fn month_menu(state: State<DatePickerController>, menu: State<DockedDatePickerVi
                 .vertical_scroll(scroll)
                 .semantics(SemanticsArgs {
                     role: Some(Role::ListBox),
-                    label: Some(I18N.text("md3-choose-month").into()),
+                    label: Some(I18N.text("md3-choose-month")),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -556,10 +551,10 @@ fn month_menu(state: State<DatePickerController>, menu: State<DockedDatePickerVi
 fn month_item(state: State<DatePickerController>, menu: State<DockedDatePickerView>, month: u8) {
     let current = state.with(DatePickerController::displayed_month);
     let year = current.year();
-    let enabled = (1..=super::days_in_month(year, month)).any(|day| {
+    let enabled = (1..=days_in_month(year, month)).any(|day| {
         state.with(|state| {
             is_date_selectable(
-                CalendarDate::new(year, month, day).unwrap(),
+                CalendarDate::new_unchecked(year, month, day),
                 state.year_range(),
                 state.is_selectable_date().as_ref(),
                 state.is_selectable_year().as_ref(),
@@ -567,14 +562,15 @@ fn month_item(state: State<DatePickerController>, menu: State<DockedDatePickerVi
         })
     });
     choice(
-        format_month_name(month).into(),
+        format_month_name(month),
         current.month() == month,
         enabled,
         Callback::new(move || {
             state.with_mut(|state| {
-                state.set_displayed_month(
-                    YearMonth::new(state.displayed_month().year(), month).unwrap(),
-                )
+                state.set_displayed_month(YearMonth {
+                    month,
+                    ..state.displayed_month()
+                });
             });
             menu.set(DockedDatePickerView::Calendar);
         }),
@@ -605,7 +601,7 @@ fn year_menu(state: State<DatePickerController>, menu: State<DockedDatePickerVie
                 .vertical_scroll(scroll)
                 .semantics(SemanticsArgs {
                     role: Some(Role::ListBox),
-                    label: Some(I18N.text("md3-choose-year").into()),
+                    label: Some(I18N.text("md3-choose-year")),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -632,11 +628,7 @@ fn year_item(state: State<DatePickerController>, menu: State<DockedDatePickerVie
         current.year() == year,
         enabled,
         Callback::new(move || {
-            state.with_mut(|state| {
-                state.set_displayed_month(
-                    YearMonth::new(year, state.displayed_month().month()).unwrap(),
-                )
-            });
+            state.with_mut(|state| state.set_displayed_year(year));
             menu.set(DockedDatePickerView::Calendar);
         }),
     );
@@ -644,7 +636,9 @@ fn year_item(state: State<DatePickerController>, menu: State<DockedDatePickerVie
 
 #[tessera]
 fn choice(label: String, selected: bool, enabled: bool, action: Callback) {
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     surface()
         .modifier(
             Modifier::new()

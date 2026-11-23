@@ -1,7 +1,4 @@
-use std::{
-    f32::consts::TAU,
-    sync::{Arc, Mutex},
-};
+use std::{cell::RefCell, f32::consts::TAU, rc::Rc, sync::Arc};
 
 use glam::Vec2;
 use tessera_ui::{Color, Dp};
@@ -11,18 +8,17 @@ use crate::{md3::progress::ProgressStrokeCap, pipelines::path_stroke::command::P
 use super::shapes::{CircularMorph, Cubic, bounds, circular_morph};
 
 #[derive(Clone, Default)]
-pub(super) struct Cache(Arc<Mutex<Geometry>>);
+pub(super) struct Cache(Rc<RefCell<Geometry>>);
 
 impl PartialEq for Cache {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
 #[derive(Default)]
 struct Geometry {
-    vertices: usize,
-    morph: Option<CircularMorph>,
+    morph: Option<(usize, CircularMorph)>,
     requires_morph: bool,
     key: Option<[f32; 4]>,
     active: Vec<Vec2>,
@@ -64,8 +60,7 @@ fn path(mut curves: Vec<Cubic>, pivot: Vec2, size: Vec2, stroke: f32) -> Vec<Vec
             points.push(curve.point(i as f32 / count as f32) + offset);
         }
     }
-    let first = points[0];
-    *points.last_mut().unwrap() = first;
+    *points.last_mut().expect("path contains its starting point") = points[0];
     points
 }
 
@@ -129,11 +124,10 @@ impl CircularWaveDraw {
         }
         let stroke = self.stroke_width.to_pixels_f32();
         let track_stroke = self.track_stroke_width.to_pixels_f32();
-        let mut geometry = self.cache.0.lock().unwrap();
+        let geometry = &mut *self.cache.0.borrow_mut();
         let count = vertices(width, height, stroke, self.wavelength.to_pixels_f32());
-        if geometry.vertices != count {
-            geometry.vertices = count;
-            geometry.morph = Some(circular_morph(count));
+        if geometry.morph.as_ref().map(|(vertices, _)| *vertices) != Some(count) {
+            geometry.morph = None;
             geometry.key = None;
         }
         let requires_morph =
@@ -141,7 +135,9 @@ impl CircularWaveDraw {
         let key = [width, height, stroke, self.amplitude];
         if geometry.key != Some(key) || requires_morph != geometry.requires_morph {
             geometry.requires_morph = requires_morph;
-            let morph = geometry.morph.as_ref().unwrap();
+            let (_, morph) = geometry
+                .morph
+                .get_or_insert_with(|| (count, circular_morph(count)));
             let size = Vec2::new(width, height);
             let track = path(morph.track.clone(), morph.track_center, size, stroke);
             let active = if requires_morph {
@@ -154,8 +150,7 @@ impl CircularWaveDraw {
                         }))
                     })
                     .collect();
-                let first = curves[0].0[0];
-                curves.last_mut().unwrap().0[3] = first;
+                curves.last_mut().expect("morph contains paired curves").0[3] = curves[0].0[0];
                 path(curves, Vec2::splat(0.5), size, stroke)
             } else if self.amplitude == 1.0 {
                 path(morph.active.clone(), morph.active_center, size, stroke)

@@ -217,25 +217,19 @@ fn morph_grid(selection: bool) {
                             [
                                 (
                                     "v0",
-                                    I18N.text(
-                                        &(if selection {
-                                            "ui-selected-shapes"
-                                        } else {
-                                            "ui-pressed-shapes"
-                                        }),
-                                    )
+                                    I18N.text(if selection {
+                                        "ui-selected-shapes"
+                                    } else {
+                                        "ui-pressed-shapes"
+                                    })
                                     .into(),
                                 ),
                                 ("v1", format!("{:?}", shape).into()),
                                 (
                                     "v2",
                                     I18N.text(
-                                        &([
-                                            "ui-enabled",
-                                            "ui-hovered",
-                                            "ui-pressed",
-                                            "ui-selected",
-                                        ][column]),
+                                        ["ui-enabled", "ui-hovered", "ui-pressed", "ui-selected"]
+                                            [column],
                                     )
                                     .into(),
                                 ),

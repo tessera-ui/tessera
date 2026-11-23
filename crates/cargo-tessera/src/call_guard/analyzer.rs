@@ -1175,8 +1175,8 @@ impl<'db> CallAnalyzer<'db> {
             if ast::ClosureExpr::can_cast(node.kind()) {
                 return None;
             }
-            if let Some(block) = ast::BlockExpr::cast(node.clone()) {
-                if block.async_token().is_some()
+            if let Some(block) = ast::BlockExpr::cast(node.clone())
+                && (block.async_token().is_some()
                     || block.gen_token().is_some()
                     || block.const_token().is_some()
                     || block
@@ -1184,19 +1184,16 @@ impl<'db> CallAnalyzer<'db> {
                         .and_then(|list| list.tail_expr())
                         .is_none_or(|tail| {
                             !tail.syntax().text_range().contains_range(closure_range)
-                        })
-                {
-                    return None;
-                }
+                        }))
+            {
+                return None;
             }
             if let Some(call) = ast::CallExpr::cast(node.clone()) {
-                let Some(index) = call.arg_list().and_then(|arg_list| {
+                let index = call.arg_list().and_then(|arg_list| {
                     arg_list
                         .args()
                         .position(|arg| arg.syntax().text_range().contains_range(closure_range))
-                }) else {
-                    return None;
-                };
+                })?;
                 if index == 0 && self.call_is_box_constructor(&call) {
                     current = node.parent();
                     continue;
@@ -1209,13 +1206,11 @@ impl<'db> CallAnalyzer<'db> {
                     .then_some(Carrier::Content);
             }
             if let Some(call) = ast::MethodCallExpr::cast(node.clone()) {
-                let Some(index) = call.arg_list().and_then(|arg_list| {
+                let index = call.arg_list().and_then(|arg_list| {
                     arg_list
                         .args()
                         .position(|arg| arg.syntax().text_range().contains_range(closure_range))
-                }) else {
-                    return None;
-                };
+                })?;
                 if self.method_call_is_build_entry_at(&call, index) {
                     return Some(Carrier::Root);
                 }
@@ -1238,7 +1233,7 @@ impl<'db> CallAnalyzer<'db> {
         }) {
             return true;
         }
-        if index == 0 && self.call_is_build_entry(&call) {
+        if index == 0 && self.call_is_build_entry(call) {
             return true;
         }
         match self.resolve_call_target(call) {

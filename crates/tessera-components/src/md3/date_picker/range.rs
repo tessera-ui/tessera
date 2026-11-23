@@ -1,8 +1,4 @@
 //! Calendar and manual input for inclusive date ranges.
-//!
-//! ## Usage
-//!
-//! Select a booking period, reporting interval, or multi-day event.
 
 use std::ops::RangeInclusive;
 
@@ -250,11 +246,7 @@ fn date_key(date: CalendarDate) -> (i32, u8, u8) {
 
 /// # date_range_picker
 ///
-/// Select an inclusive date range for bookings, reports, and multi-day events.
-///
-/// ## Usage
-///
-/// Collect a start and end date with a scrolling calendar or two date inputs.
+/// Select an inclusive date range with a scrolling calendar or two date inputs.
 ///
 /// ## Parameters
 ///
@@ -569,7 +561,7 @@ fn range_calendar(
                         .focus_properties(FocusProperties::new().skip_traversal(true))
                         .semantics(SemanticsArgs {
                             role: Some(tessera_ui::accesskit::Role::Group),
-                            label: Some(I18N.text("md3-date-range-calendar").into()),
+                            label: Some(I18N.text("md3-date-range-calendar")),
                             merge_descendants: true,
                             ..Default::default()
                         }),

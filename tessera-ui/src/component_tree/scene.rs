@@ -706,10 +706,11 @@ impl SceneRope {
             Some(SceneClip::Rect(rect)) => builder.push_clip_push(*rect),
             None => {}
         }
-        if let Some(draw) = &self.draw {
-            if draw.visible && intersects_damage(draw.bounds) {
-                builder.append_fragment(&draw.fragment, draw.geometry, draw.opacity);
-            }
+        if let Some(draw) = &self.draw
+            && draw.visible
+            && intersects_damage(draw.bounds)
+        {
+            builder.append_fragment(&draw.fragment, draw.geometry, draw.opacity);
         }
         for child in self.children.values() {
             child.emit(builder, damage);

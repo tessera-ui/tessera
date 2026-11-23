@@ -93,13 +93,15 @@ pub fn spawn(dispatcher: Dispatcher, future: impl Future<Output = ()> + Send + '
             // Each IO task owns a blocking-capable thread, so it may block
             // while still driving Tokio IO resources.
             let runtime = executor(dispatcher).handle().clone();
-            let _ = runtime
-                .clone()
-                .spawn_blocking(move || runtime.block_on(future));
+            drop(
+                runtime
+                    .clone()
+                    .spawn_blocking(move || runtime.block_on(future)),
+            );
         }
         #[cfg(not(target_family = "wasm"))]
         Dispatcher::Default => {
-            let _ = executor(dispatcher).spawn(future);
+            drop(executor(dispatcher).spawn(future));
         }
         #[cfg(target_family = "wasm")]
         Dispatcher::Io | Dispatcher::Default => wasm_bindgen_futures::spawn_local(future),

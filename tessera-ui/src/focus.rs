@@ -1335,14 +1335,12 @@ impl FocusOwner {
             let Some(handle) = self.handles_by_component.remove(&node_id) else {
                 continue;
             };
-            if let Some(node) = self.nodes.get_mut(&handle) {
-                if let Some(attachment) = node.attachment.take() {
-                    if let Some(children) = self.children_by_parent.get_mut(&attachment.parent) {
-                        if let Some(order) = self.order_paths.get(&handle) {
-                            children.remove(&(order.clone(), handle));
-                        }
-                    }
-                }
+            if let Some(node) = self.nodes.get_mut(&handle)
+                && let Some(attachment) = node.attachment.take()
+                && let Some(children) = self.children_by_parent.get_mut(&attachment.parent)
+                && let Some(order) = self.order_paths.get(&handle)
+            {
+                children.remove(&(order.clone(), handle));
             }
             if let Some(bindings) = self.requesters_by_handle.remove(&handle) {
                 for requester in bindings {
@@ -1805,12 +1803,11 @@ impl FocusOwner {
         }
 
         for handle_id in removed_handles {
-            if let Some(node) = self.nodes.remove(handle_id) {
-                if let Some(children) = self.children_by_parent.get_mut(&node.last_parent) {
-                    if let Some(order) = self.order_paths.get(handle_id) {
-                        children.remove(&(order.clone(), *handle_id));
-                    }
-                }
+            if let Some(node) = self.nodes.remove(handle_id)
+                && let Some(children) = self.children_by_parent.get_mut(&node.last_parent)
+                && let Some(order) = self.order_paths.get(handle_id)
+            {
+                children.remove(&(order.clone(), *handle_id));
             }
             self.children_by_parent.remove(handle_id);
             self.stateful_handles.remove(handle_id);

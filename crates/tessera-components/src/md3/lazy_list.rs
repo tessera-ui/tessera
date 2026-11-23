@@ -1288,15 +1288,7 @@ fn retained_lazy_item(
     retain_focus: bool,
 ) {
     let scope = remember(FocusScopeNode::new).get();
-    let binding = remember(|| {
-        (
-            index,
-            local_index,
-            builder.clone(),
-            controller,
-            retain_focus,
-        )
-    });
+    let binding = remember(|| (index, local_index, builder, controller, retain_focus));
     let binding_changed = binding.with(|binding| {
         binding.0 != index
             || binding.1 != local_index

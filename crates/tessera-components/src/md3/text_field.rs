@@ -789,7 +789,10 @@ fn outlined_floating_label(
     label_offset_y: Option<Dp>,
     outline: Option<State<OutlineGeometry>>,
 ) {
-    let typography = use_context::<MaterialTheme>().unwrap().get().typography;
+    let typography = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .typography;
     let label_text = label_text.unwrap_or_default();
     let label_color = label_color.unwrap_or(Color::TRANSPARENT);
     let label_font_size = label_font_size.unwrap_or(Dp(0.0));
