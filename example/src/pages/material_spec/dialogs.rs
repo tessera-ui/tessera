@@ -8,7 +8,7 @@ use tessera_components::{
     md3::{
         button::button,
         checkbox::checkbox,
-        dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
+        dialog::{DialogController, DialogRole, basic_dialog, dialog, full_screen_dialog},
         icon::icon,
         material_icons::filled,
         menus::{MenuAnchor, MenuController, menu_item, menu_provider},
@@ -107,7 +107,97 @@ pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::A
     let draft = remember(EventDraft::default);
     let discard = remember(|| DialogController::new(false));
     let close = Callback::new(move || request_dialog_close(open, full, discard, draft));
-    dialog_provider()
+    {
+        article(
+            "ui-dialogs",
+            "ui-dialogs-provide-important-prompts-in-a-user-flow",
+            vec![
+                SpecSection {
+                    title: "ui-tokens-specs",
+                    content: RenderSlot::new(token_sets::tokens),
+                },
+                SpecSection {
+                    title: "ui-basic-dialogs",
+                    content: RenderSlot::new(basic_specs),
+                },
+                SpecSection {
+                    title: "ui-full-screen-dialogs",
+                    content: RenderSlot::new(full_specs),
+                },
+            ],
+        )
+        .route_optional(route)
+        .pages(vec![
+            ArticlePage {
+                title: "ui-overview",
+                intro: Some(RenderSlot::new(move || {
+                    overview_intro(open, full, saved);
+                })),
+                sections: vec![],
+            },
+            ArticlePage {
+                title: "ui-guidelines",
+                intro: Some(RenderSlot::new(guideline_hero)),
+                sections: vec![
+                    SpecSection {
+                        title: "ui-usage",
+                        content: RenderSlot::new(usage_section),
+                    },
+                    SpecSection {
+                        title: "ui-anatomy",
+                        content: RenderSlot::new(anatomy_section),
+                    },
+                    SpecSection {
+                        title: "ui-basic-dialog",
+                        content: RenderSlot::new(basic_guidance),
+                    },
+                    SpecSection {
+                        title: "ui-full-screen-dialog",
+                        content: RenderSlot::new(full_guidance),
+                    },
+                    SpecSection {
+                        title: "ui-adaptive-design",
+                        content: RenderSlot::new(adaptive_section),
+                    },
+                    SpecSection {
+                        title: "ui-behavior",
+                        content: RenderSlot::new(move || {
+                            behavior_section(open, full, saved);
+                        }),
+                    },
+                ],
+            },
+            ArticlePage {
+                title: "ui-accessibility",
+                intro: None,
+                sections: vec![
+                    SpecSection {
+                        title: "ui-use-cases",
+                        content: RenderSlot::new(move || {
+                            use_cases(open, full, saved);
+                        }),
+                    },
+                    SpecSection {
+                        title: "ui-interaction-style",
+                        content: RenderSlot::new(interaction_style_section),
+                    },
+                    SpecSection {
+                        title: "ui-initial-focus",
+                        content: RenderSlot::new(initial_focus_section),
+                    },
+                    SpecSection {
+                        title: "ui-keyboard-navigation",
+                        content: RenderSlot::new(keyboard_section),
+                    },
+                    SpecSection {
+                        title: "ui-labeling-elements",
+                        content: RenderSlot::new(labeling_section),
+                    },
+                ],
+            },
+        ]);
+    }
+    dialog(close)
         .role(if full.get() {
             DialogRole::Dialog
         } else {
@@ -120,101 +210,14 @@ pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::A
         } else {
             "ui-reset-settings"
         }))
-        .on_close_request_shared(close)
-        .main_content(move || {
-            article(
-                "ui-dialogs",
-                "ui-dialogs-provide-important-prompts-in-a-user-flow",
-                vec![
-                    SpecSection {
-                        title: "ui-tokens-specs",
-                        content: RenderSlot::new(token_sets::tokens),
-                    },
-                    SpecSection {
-                        title: "ui-basic-dialogs",
-                        content: RenderSlot::new(basic_specs),
-                    },
-                    SpecSection {
-                        title: "ui-full-screen-dialogs",
-                        content: RenderSlot::new(full_specs),
-                    },
-                ],
-            ).route_optional(route.clone())
-            .pages(vec![
-                ArticlePage {
-                    title: "ui-overview",
-                    intro: Some(RenderSlot::new(move || {
-                        overview_intro(open, full, saved);
-                    })),
-                    sections: vec![],
-                },
-                ArticlePage {
-                    title: "ui-guidelines",
-                    intro: Some(RenderSlot::new(guideline_hero)),
-                    sections: vec![
-                        SpecSection {
-                            title: "ui-usage",
-                            content: RenderSlot::new(usage_section),
-                        },
-                        SpecSection {
-                            title: "ui-anatomy",
-                            content: RenderSlot::new(anatomy_section),
-                        },
-                        SpecSection {
-                            title: "ui-basic-dialog",
-                            content: RenderSlot::new(basic_guidance),
-                        },
-                        SpecSection {
-                            title: "ui-full-screen-dialog",
-                            content: RenderSlot::new(full_guidance),
-                        },
-                        SpecSection {
-                            title: "ui-adaptive-design",
-                            content: RenderSlot::new(adaptive_section),
-                        },
-                        SpecSection {
-                            title: "ui-behavior",
-                            content: RenderSlot::new(move || {
-                                behavior_section(open, full, saved);
-                            }),
-                        },
-                    ],
-                },
-                ArticlePage {
-                    title: "ui-accessibility",
-                    intro: None,
-                    sections: vec![
-                        SpecSection {
-                            title: "ui-use-cases",
-                            content: RenderSlot::new(move || {
-                                use_cases(open, full, saved);
-                            }),
-                        },
-                        SpecSection {
-                            title: "ui-interaction-style",
-                            content: RenderSlot::new(interaction_style_section),
-                        },
-                        SpecSection {
-                            title: "ui-initial-focus",
-                            content: RenderSlot::new(initial_focus_section),
-                        },
-                        SpecSection {
-                            title: "ui-keyboard-navigation",
-                            content: RenderSlot::new(keyboard_section),
-                        },
-                        SpecSection {
-                            title: "ui-labeling-elements",
-                            content: RenderSlot::new(labeling_section),
-                        },
-                    ],
-                },
-            ]);
-        })
-        .dialog_content(move |dialog_scope| {
+        .accessibility_description_optional((!full.get()).then(|| {
+            I18N.text("ui-this-will-reset-your-app-preferences-back-to-their-default-settings-the-following-accounts")
+        }))
+        .content(move || {
             if full.get() {
-                event_dialog(draft, open, saved, discard, close).dialog(dialog_scope);
+                event_dialog(draft, open, saved, discard, close);
             } else {
-                basic_dialog().dialog(dialog_scope)
+                basic_dialog()
                     .headline(I18N.text("ui-reset-settings"))
                     .supporting_text(
                         I18N.text("ui-this-will-reset-your-app-preferences-back-to-their-default-settings-the-following-accounts"),
@@ -1565,30 +1568,25 @@ fn event_dialog(
     saved: State<bool>,
     discard: State<DialogController>,
     close: Callback,
-    dialog: Option<tessera_components::md3::dialog::DialogScope>,
 ) {
-    dialog_provider()
+    full_screen_dialog(close)
+        .title(I18N.text("ui-new-event"))
+        .on_confirm(move || {
+            draft.set(EventDraft::default());
+            saved.set(true);
+            discard.with_mut(DialogController::close);
+            open.with_mut(DialogController::close);
+        })
+        .content(move || {
+            event_form(draft);
+        });
+    dialog(move || discard.with_mut(DialogController::close))
         .role(DialogRole::AlertDialog)
         .controller(discard)
         .accessibility_label(I18N.text("ui-discard-changes"))
-        .on_close_request(move || discard.with_mut(DialogController::close))
-        .main_content(move || {
-            full_screen_dialog(close)
-                .dialog_optional(dialog)
-                .title(I18N.text("ui-new-event"))
-                .on_confirm(move || {
-                    draft.set(EventDraft::default());
-                    saved.set(true);
-                    discard.with_mut(DialogController::close);
-                    open.with_mut(DialogController::close);
-                })
-                .content(move || {
-                    event_form(draft);
-                });
-        })
-        .dialog_content(move |dialog_scope| {
+        .accessibility_description(I18N.text("ui-discard-the-changes-you-ve-made-to-this-event"))
+        .content(move || {
             basic_dialog()
-                .dialog(dialog_scope)
                 .headline(I18N.text("ui-discard-changes"))
                 .supporting_text(I18N.text("ui-discard-the-changes-you-ve-made-to-this-event"))
                 .dismiss_button(move || {

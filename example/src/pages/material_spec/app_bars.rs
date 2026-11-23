@@ -9,7 +9,7 @@ use tessera_components::{
             app_bar, app_bar_scroll_provider, top_app_bar,
         },
         button::button,
-        dialog::{DialogController, dialog_provider},
+        dialog::{DialogController, dialog},
         icon::icon,
         icon_button::{IconButtonColorStyle, icon_button},
         material_icons::{Asset, filled},
@@ -1638,183 +1638,179 @@ fn search_sample(
         (Some(_), None) => "Body Large".to_owned(),
         (None, None) => "ui-search-library".to_owned(),
     };
-    dialog_provider()
+    {
+        let centered = centered.unwrap_or(false);
+        boxed()
+            .alignment(if centered {
+                Alignment::Center
+            } else {
+                Alignment::TopStart
+            })
+            .modifier(if centered {
+                Modifier::new().fill_max_width().height(Dp(320.0))
+            } else {
+                Modifier::new().fill_max_width()
+            })
+            .children(move || {
+                let hint = hint.clone();
+                let modifier = geometry
+                    .map(|geometry| watch(geometry, "container"))
+                    .unwrap_or_default()
+                    .semantics(SemanticsArgs {
+                        role: Some(Role::Toolbar),
+                        label: Some(I18N.text("ui-search-app-bar")),
+                        merge_descendants: true,
+                        ..Default::default()
+                    })
+                    .on_layout_coordinates(move |coordinates: LayoutCoordinates| {
+                        let next = Dp::from_pixels_f32(coordinates.local_size.width.to_f32());
+                        if width.get() != next {
+                            width.set(next);
+                        }
+                    });
+                app_bar()
+                    .modifier(modifier)
+                    .container_color(bar_color)
+                    .content_color(content_color)
+                    .content_padding(Padding::symmetric(Dp(4.0), Dp(0.0)))
+                    .content(move || {
+                        let hint = hint.clone();
+                        if logo {
+                            boxed()
+                                .alignment(Alignment::Center)
+                                .modifier(
+                                    geometry
+                                        .map(|geometry| watch(geometry, "leading"))
+                                        .unwrap_or_default()
+                                        .size(Dp(48.0), Dp(48.0)),
+                                )
+                                .children(|| {
+                                    brand();
+                                });
+                        } else {
+                            icon_button()
+                                .modifier(
+                                    geometry
+                                        .map(|geometry| watch(geometry, "leading"))
+                                        .unwrap_or_default(),
+                                )
+                                .standard()
+                                .color_style(IconButtonColorStyle::Inherited)
+                                .icon(if specimen == Some(0) {
+                                    filled::MORE_VERT_SVG
+                                } else {
+                                    filled::MENU_SVG
+                                })
+                                .accessibility_label(I18N.text("ui-search-app-bar-menu"))
+                                .on_click(move || status.set("ui-menu-selected".into()));
+                        }
+                        spacer().modifier(Modifier::new().width(Dp(8.0)));
+                        boxed()
+                            .alignment(Alignment::Center)
+                            .modifier(Modifier::new().weight(1.0))
+                            .children(move || {
+                                let available =
+                                    (width.get().0 - 120.0 - 52.0 * outside as f64).max(0.0);
+                                let field_width = if specimen.is_some() || available <= 312.0 {
+                                    available
+                                } else {
+                                    312.0 + (available - 312.0) * 0.5
+                                };
+                                let leading_icon = RenderSlot::new(|| {
+                                    icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
+                                });
+                                let trailing_icon = RenderSlot::new(|| {
+                                    icon().painter(filled::MIC_SVG).size(Dp(24.0));
+                                });
+                                search_bar()
+                                    .modifier(
+                                        geometry
+                                            .map(|geometry| watch(geometry, "search"))
+                                            .unwrap_or_default()
+                                            .width(Dp(field_width)),
+                                    )
+                                    .controller(controller)
+                                    .read_only(true)
+                                    .colors(SearchBarColors {
+                                        container_color: field_color,
+                                        divider_color: divider,
+                                    })
+                                    .placeholder(I18N.text(&(hint)))
+                                    .on_active_change(move |active| {
+                                        if active {
+                                            opened.with_mut(DialogController::open);
+                                        }
+                                    })
+                                    .leading_icon_optional(
+                                        specimen.is_none().then_some(leading_icon),
+                                    )
+                                    .trailing_icon_optional(mic.then_some(trailing_icon));
+                                if specimen == Some(0) {
+                                    boxed()
+                                        .alignment(Alignment::Center)
+                                        .modifier(Modifier::new().size(Dp(field_width), Dp(56.0)))
+                                        .children(move || {
+                                            text("Body Large").style(type_style(16.0, 24.0));
+                                        });
+                                }
+                            });
+                        spacer().modifier(Modifier::new().width(Dp(8.0)));
+                        for (glyph, label, selected) in [
+                            (
+                                filled::AUTO_AWESOME_SVG,
+                                "ui-search-app-bar-suggestions",
+                                "ui-suggestions-selected",
+                            ),
+                            (
+                                filled::NOTIFICATIONS_SVG,
+                                "ui-search-app-bar-notifications",
+                                "ui-notifications-selected",
+                            ),
+                            (
+                                filled::SETTINGS_SVG,
+                                "ui-search-app-bar-settings",
+                                "ui-settings-selected",
+                            ),
+                            (
+                                filled::HELP_OUTLINE_SVG,
+                                "ui-search-app-bar-help",
+                                "ui-help-selected",
+                            ),
+                        ]
+                        .into_iter()
+                        .take(outside)
+                        {
+                            icon_button()
+                                .standard()
+                                .color_style(IconButtonColorStyle::Inherited)
+                                .icon(glyph)
+                                .accessibility_label(I18N.text(label))
+                                .on_click(move || status.set(selected.to_owned()));
+                            spacer().modifier(Modifier::new().width(Dp(4.0)));
+                        }
+                        if specimen.is_some() {
+                            search_avatar(status).geometry_optional(geometry);
+                        } else {
+                            icon_button()
+                                .modifier(
+                                    geometry
+                                        .map(|geometry| watch(geometry, "trailing"))
+                                        .unwrap_or_default(),
+                                )
+                                .standard()
+                                .color_style(IconButtonColorStyle::Inherited)
+                                .icon(filled::ACCOUNT_CIRCLE_SVG)
+                                .accessibility_label(I18N.text("ui-search-app-bar-account"))
+                                .on_click(move || status.set("ui-account-selected".into()));
+                        }
+                    });
+            });
+    }
+    dialog(move || opened.with_mut(DialogController::close))
         .accessibility_label(I18N.text("ui-search-library-view"))
         .full_screen(true)
         .controller(opened)
-        .on_close_request(move || opened.with_mut(DialogController::close))
-        .main_content(move || {
-            let hint = hint.clone();
-            let centered = centered.unwrap_or(false);
-            boxed()
-                .alignment(if centered {
-                    Alignment::Center
-                } else {
-                    Alignment::TopStart
-                })
-                .modifier(if centered {
-                    Modifier::new().fill_max_width().height(Dp(320.0))
-                } else {
-                    Modifier::new().fill_max_width()
-                })
-                .children(move || {
-                    let hint = hint.clone();
-                    let modifier = geometry
-                        .map(|geometry| watch(geometry, "container"))
-                        .unwrap_or_default()
-                        .semantics(SemanticsArgs {
-                            role: Some(Role::Toolbar),
-                            label: Some(I18N.text("ui-search-app-bar")),
-                            merge_descendants: true,
-                            ..Default::default()
-                        })
-                        .on_layout_coordinates(move |coordinates: LayoutCoordinates| {
-                            let next = Dp::from_pixels_f32(coordinates.local_size.width.to_f32());
-                            if width.get() != next {
-                                width.set(next);
-                            }
-                        });
-                    app_bar()
-                        .modifier(modifier)
-                        .container_color(bar_color)
-                        .content_color(content_color)
-                        .content_padding(Padding::symmetric(Dp(4.0), Dp(0.0)))
-                        .content(move || {
-                            let hint = hint.clone();
-                            if logo {
-                                boxed()
-                                    .alignment(Alignment::Center)
-                                    .modifier(
-                                        geometry
-                                            .map(|geometry| watch(geometry, "leading"))
-                                            .unwrap_or_default()
-                                            .size(Dp(48.0), Dp(48.0)),
-                                    )
-                                    .children(|| {
-                                        brand();
-                                    });
-                            } else {
-                                icon_button()
-                                    .modifier(
-                                        geometry
-                                            .map(|geometry| watch(geometry, "leading"))
-                                            .unwrap_or_default(),
-                                    )
-                                    .standard()
-                                    .color_style(IconButtonColorStyle::Inherited)
-                                    .icon(if specimen == Some(0) {
-                                        filled::MORE_VERT_SVG
-                                    } else {
-                                        filled::MENU_SVG
-                                    })
-                                    .accessibility_label(I18N.text("ui-search-app-bar-menu"))
-                                    .on_click(move || status.set("ui-menu-selected".into()));
-                            }
-                            spacer().modifier(Modifier::new().width(Dp(8.0)));
-                            boxed()
-                                .alignment(Alignment::Center)
-                                .modifier(Modifier::new().weight(1.0))
-                                .children(move || {
-                                    let available =
-                                        (width.get().0 - 120.0 - 52.0 * outside as f64).max(0.0);
-                                    let field_width = if specimen.is_some() || available <= 312.0 {
-                                        available
-                                    } else {
-                                        312.0 + (available - 312.0) * 0.5
-                                    };
-                                    let leading_icon = RenderSlot::new(|| {
-                                        icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
-                                    });
-                                    let trailing_icon = RenderSlot::new(|| {
-                                        icon().painter(filled::MIC_SVG).size(Dp(24.0));
-                                    });
-                                    search_bar()
-                                        .modifier(
-                                            geometry
-                                                .map(|geometry| watch(geometry, "search"))
-                                                .unwrap_or_default()
-                                                .width(Dp(field_width)),
-                                        )
-                                        .controller(controller)
-                                        .read_only(true)
-                                        .colors(SearchBarColors {
-                                            container_color: field_color,
-                                            divider_color: divider,
-                                        })
-                                        .placeholder(I18N.text(&(hint)))
-                                        .on_active_change(move |active| {
-                                            if active {
-                                                opened.with_mut(DialogController::open);
-                                            }
-                                        })
-                                        .leading_icon_optional(
-                                            specimen.is_none().then_some(leading_icon),
-                                        )
-                                        .trailing_icon_optional(mic.then_some(trailing_icon));
-                                    if specimen == Some(0) {
-                                        boxed()
-                                            .alignment(Alignment::Center)
-                                            .modifier(
-                                                Modifier::new().size(Dp(field_width), Dp(56.0)),
-                                            )
-                                            .children(move || {
-                                                text("Body Large").style(type_style(16.0, 24.0));
-                                            });
-                                    }
-                                });
-                            spacer().modifier(Modifier::new().width(Dp(8.0)));
-                            for (glyph, label, selected) in [
-                                (
-                                    filled::AUTO_AWESOME_SVG,
-                                    "ui-search-app-bar-suggestions",
-                                    "ui-suggestions-selected",
-                                ),
-                                (
-                                    filled::NOTIFICATIONS_SVG,
-                                    "ui-search-app-bar-notifications",
-                                    "ui-notifications-selected",
-                                ),
-                                (
-                                    filled::SETTINGS_SVG,
-                                    "ui-search-app-bar-settings",
-                                    "ui-settings-selected",
-                                ),
-                                (
-                                    filled::HELP_OUTLINE_SVG,
-                                    "ui-search-app-bar-help",
-                                    "ui-help-selected",
-                                ),
-                            ]
-                            .into_iter()
-                            .take(outside)
-                            {
-                                icon_button()
-                                    .standard()
-                                    .color_style(IconButtonColorStyle::Inherited)
-                                    .icon(glyph)
-                                    .accessibility_label(I18N.text(label))
-                                    .on_click(move || status.set(selected.to_owned()));
-                                spacer().modifier(Modifier::new().width(Dp(4.0)));
-                            }
-                            if specimen.is_some() {
-                                search_avatar(status).geometry_optional(geometry);
-                            } else {
-                                icon_button()
-                                    .modifier(
-                                        geometry
-                                            .map(|geometry| watch(geometry, "trailing"))
-                                            .unwrap_or_default(),
-                                    )
-                                    .standard()
-                                    .color_style(IconButtonColorStyle::Inherited)
-                                    .icon(filled::ACCOUNT_CIRCLE_SVG)
-                                    .accessibility_label(I18N.text("ui-search-app-bar-account"))
-                                    .on_click(move || status.set("ui-account-selected".into()));
-                            }
-                        });
-                });
-        })
-        .dialog_content(move |_| {
+        .content(move || {
             let initial_query = query.get();
             let view = remember(move || {
                 let mut view = SearchBarController::new(true);

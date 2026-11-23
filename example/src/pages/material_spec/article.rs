@@ -5,7 +5,6 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     md3::{
-        dialog::DialogController,
         icon::icon,
         icon_button::icon_button,
         material_icons::filled,
@@ -40,9 +39,6 @@ use super::{
     },
     article_tab_visual, gap, heading, srgb, type_style,
 };
-
-#[path = "article_modal.rs"]
-pub(super) mod modal_host;
 
 #[path = "article_lazy.rs"]
 mod lazy_sections;
@@ -96,7 +92,6 @@ pub(super) fn article(
     pages: Option<Vec<ArticlePage>>,
     page_heading_levels: Option<BTreeMap<&'static str, u8>>,
     route: Option<ArticleRoute>,
-    modal_controller: Option<modal_host::ArticleModalController>,
 ) {
     let initial_page = route
         .as_ref()
@@ -142,24 +137,14 @@ pub(super) fn article(
         }
         data.set(current);
     }
-    let content = RenderSlot::new(move || {
-        let pages = pages.clone();
-        let route = route.clone();
-        surface()
-            .style(BACKGROUND.into())
-            .modifier(Modifier::new().fill_max_size())
-            .child(move || {
-                lazy_sections::viewport(data, selected, scroll, width)
-                    .pages_optional(pages.clone())
-                    .route_optional(route.clone());
-            });
-    });
-    if let Some(controller) = modal_controller {
-        let idle = remember(DialogController::default);
-        modal_host::article_modal_host(controller, idle, content);
-    } else {
-        content.render();
-    }
+    surface()
+        .style(BACKGROUND.into())
+        .modifier(Modifier::new().fill_max_size())
+        .child(move || {
+            lazy_sections::viewport(data, selected, scroll, width)
+                .pages_optional(pages.clone())
+                .route_optional(route.clone());
+        });
 }
 
 #[tessera]

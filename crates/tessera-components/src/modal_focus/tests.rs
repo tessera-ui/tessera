@@ -18,7 +18,7 @@ use crate::{
     md3::{
         bottom_sheet::{BottomSheetController, bottom_sheet},
         button::button,
-        dialog::{DialogController, DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
+        dialog::{DialogController, DialogRole, basic_dialog, dialog, full_screen_dialog},
         side_sheet::{
             SideSheetController, SideSheetPosition, modal_side_sheet, standard_side_sheet,
         },
@@ -55,17 +55,15 @@ struct Settings {
 fn long_dialog_fixture(
     output: tessera_ui::testing::TestProbe<Option<(State<DialogController>, State<usize>)>>,
 ) {
-    let dialog = remember(|| DialogController::new(true));
+    let controller = remember(|| DialogController::new(true));
     let confirmed = remember(|| 0_usize);
-    output.set(Some((dialog, confirmed)));
+    output.set(Some((controller, confirmed)));
     material_theme().child(move || {
-        dialog_provider()
+        dialog(move || controller.with_mut(DialogController::close))
             .accessibility_label("Long message")
-            .controller(dialog)
-            .on_close_request(move || dialog.with_mut(DialogController::close))
-            .dialog_content(move |scope| {
+            .controller(controller)
+            .content(move || {
                 basic_dialog()
-                    .dialog(scope)
                     .headline("Long message")
                     .content(|| {
                         column().children(|| {
@@ -78,7 +76,7 @@ fn long_dialog_fixture(
                         button()
                             .text()
                             .accessibility_label("Keep editing")
-                            .on_click(move || dialog.with_mut(DialogController::close))
+                            .on_click(move || controller.with_mut(DialogController::close))
                             .child(|| {
                                 text("Keep editing");
                             });
@@ -88,7 +86,7 @@ fn long_dialog_fixture(
                             .text()
                             .accessibility_label("Confirm message")
                             .on_click(move || {
-                                dialog.with_mut(DialogController::close);
+                                controller.with_mut(DialogController::close);
                                 confirmed.with_mut(|confirmed| *confirmed += 1);
                             })
                             .child(|| {
@@ -269,51 +267,41 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Setti
     output.set(Some(settings));
     material_theme().child(move || match (kind, open) {
         (Kind::Dialog, OverlayController::Dialog(controller)) => {
-            dialog_provider()
+            main_content(settings);
+            dialog(move || settings.with(|s| s.open).set(false))
                 .accessibility_label(settings.get().label)
                 .role(settings.get().role)
                 .controller(controller)
-                .on_close_request(move || settings.with(|s| s.open).set(false))
-                .main_content(move || {
-                    main_content(settings);
-                })
-                .dialog_content(move |_| {
+                .content(move || {
                     modal_content(settings);
                 });
         }
         (Kind::BasicDialog, OverlayController::Dialog(controller)) => {
-            dialog_provider()
+            main_content(settings);
+            dialog(move || settings.with(|s| s.open).set(false))
                 .accessibility_label("Basic dialog")
                 .controller(controller)
-                .main_content(move || {
-                    main_content(settings);
-                })
-                .dialog_content(move |scope| {
-                    basic_dialog()
-                        .dialog(scope)
-                        .headline("Title")
-                        .supporting_text(if settings.get().long_content {
+                .content(move || {
+                    basic_dialog().headline("Title").supporting_text(
+                        if settings.get().long_content {
                             "A detailed explanation that wraps within the dialog container. "
                                 .repeat(8)
                         } else {
                             "Details".to_owned()
-                        });
+                        },
+                    );
                 });
         }
         (Kind::FullScreenDialog, OverlayController::Dialog(controller)) => {
-            dialog_provider()
+            main_content(settings);
+            dialog(move || settings.with(|s| s.open).set(false))
                 .full_screen(true)
                 .accessibility_label(settings.get().label)
                 .controller(controller)
-                .on_close_request(move || settings.with(|s| s.open).set(false))
-                .main_content(move || {
-                    main_content(settings);
-                })
-                .dialog_content(move |scope| {
+                .content(move || {
                     let dialog = full_screen_dialog(tessera_ui::Callback::new(move || {
                         settings.with(|s| s.open).set(false)
                     }))
-                    .dialog(scope)
                     .title("New event")
                     .content(move || {
                         modal_content(settings);

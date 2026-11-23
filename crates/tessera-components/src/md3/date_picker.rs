@@ -657,12 +657,10 @@ fn date_picker_content(args: DatePickerConfig) {
 ///
 /// ## Usage
 ///
-/// Use inside `dialog_provider` with `.padding(Dp(0.0))` for modal date
-/// selection.
+/// Use as the content of [`dialog`](crate::md3::dialog::dialog) for modal date selection.
 ///
 /// ## Parameters
 ///
-/// - `dialog` — registration scope received from the provider content slot.
 /// - `controller` — state handle used by the embedded date picker.
 /// - `title` — optional override for the dialog title.
 /// - `confirm_button` — optional confirm button content.
@@ -700,7 +698,6 @@ fn date_picker_content(args: DatePickerConfig) {
 /// ```
 #[tessera]
 pub fn date_picker_dialog(
-    dialog: Option<crate::md3::dialog::DialogScope>,
     controller: Option<State<DatePickerController>>,
     #[prop(into)] title: Option<String>,
     confirm_button: Option<RenderSlot>,
@@ -734,13 +731,6 @@ pub fn date_picker_dialog(
         })
     };
     let title = picker_title.or(title);
-    crate::md3::dialog::register_dialog_accessibility()
-        .dialog_optional(dialog)
-        .label(
-            title
-                .clone()
-                .unwrap_or_else(|| I18N.text("md3-select-date")),
-        );
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();

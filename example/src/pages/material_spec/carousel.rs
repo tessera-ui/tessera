@@ -8,7 +8,7 @@ use tessera_components::{
         app_bar::top_app_bar,
         button::button,
         carousel::{CarouselController, CarouselFlingBehavior, CarouselVariant, carousel},
-        dialog::DialogController,
+        dialog::{DialogController, dialog},
         icon::icon,
         icon_button::icon_button,
         material_icons::filled,
@@ -33,7 +33,7 @@ use crate::res::I18N;
 use super::{
     ACCENT,
     annotations::{self, Geometry, dotted, relative, watch},
-    article::{ArticlePage, SpecSection, article, modal_host::hosted_dialog},
+    article::{ArticlePage, SpecSection, article},
     article_helpers::bullets,
     gap, panel, spec_table, subheading, type_style,
 };
@@ -65,9 +65,6 @@ fn name(variant: CarouselVariant) -> &'static str {
 
 #[tessera]
 pub(super) fn carousel_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
-    let modal_controller = Some(remember(
-        crate::pages::material_spec::article::modal_host::ArticleModalState::default,
-    ));
     let mut sections = vec![
         SpecSection {
             title: "ui-tokens-specs",
@@ -79,9 +76,7 @@ pub(super) fn carousel_spec(route: Option<crate::pages::material_spec::article::
         },
         SpecSection {
             title: "ui-states",
-            content: RenderSlot::new(move || {
-                states().modal_controller_optional(modal_controller);
-            }),
+            content: RenderSlot::new(states),
         },
         SpecSection {
             title: "ui-carousel-item-dynamic-widths",
@@ -101,7 +96,6 @@ pub(super) fn carousel_spec(route: Option<crate::pages::material_spec::article::
         "ui-carousels-show-a-collection-of-items-that-can-be-scrolled-on-and-off-the-screen",
         sections,
     )
-    .modal_controller_optional(modal_controller)
     .route_optional(route)
     .intro(|| {
         layout_figure(CarouselVariant::MultiBrowse, false);
@@ -109,22 +103,16 @@ pub(super) fn carousel_spec(route: Option<crate::pages::material_spec::article::
     .pages(vec![
         ArticlePage {
             title: "ui-overview",
-            intro: Some(RenderSlot::new(move || {
-                overview_intro().modal_controller_optional(modal_controller);
-            })),
+            intro: Some(RenderSlot::new(overview_intro)),
             sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
-            intro: Some(RenderSlot::new(move || {
-                guidelines_intro().modal_controller_optional(modal_controller);
-            })),
+            intro: Some(RenderSlot::new(guidelines_intro)),
             sections: vec![
                 SpecSection {
                     title: "ui-usage",
-                    content: RenderSlot::new(move || {
-                        usage().modal_controller_optional(modal_controller);
-                    }),
+                    content: RenderSlot::new(usage),
                 },
                 SpecSection {
                     title: "ui-anatomy",
@@ -132,15 +120,11 @@ pub(super) fn carousel_spec(route: Option<crate::pages::material_spec::article::
                 },
                 SpecSection {
                     title: "ui-adaptive-design",
-                    content: RenderSlot::new(move || {
-                        adaptive_design().modal_controller_optional(modal_controller);
-                    }),
+                    content: RenderSlot::new(adaptive_design),
                 },
                 SpecSection {
                     title: "ui-behavior",
-                    content: RenderSlot::new(move || {
-                        behavior().modal_controller_optional(modal_controller);
-                    }),
+                    content: RenderSlot::new(behavior),
                 },
             ],
         },
@@ -154,15 +138,11 @@ pub(super) fn carousel_spec(route: Option<crate::pages::material_spec::article::
                 },
                 SpecSection {
                     title: "ui-requirements-on-scrolling-pages",
-                    content: RenderSlot::new(move || {
-                        scrolling_requirements().modal_controller_optional(modal_controller);
-                    }),
+                    content: RenderSlot::new(scrolling_requirements),
                 },
                 SpecSection {
                     title: "ui-interaction-style",
-                    content: RenderSlot::new(move || {
-                        interaction_style().modal_controller_optional(modal_controller);
-                    }),
+                    content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
                     title: "ui-keyboard-navigation",
@@ -383,72 +363,63 @@ fn initial_item(variant: CarouselVariant) -> usize {
 }
 
 #[tessera]
-fn collection(
-    variant: CarouselVariant,
-    allow_all: bool,
-    #[prop(into)] header: Option<String>,
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn collection(variant: CarouselVariant, allow_all: bool, #[prop(into)] header: Option<String>) {
     let controller = remember(|| CarouselController::new(initial_item(variant)));
     let all = remember(DialogController::default);
     let selected = remember(|| 0_usize);
     let title = header
         .clone()
         .unwrap_or_else(|| "ui-all-collections".into());
-    hosted_dialog(all)
-        .modal_controller_optional(modal_controller)
+    {
+        column()
+            .modifier(Modifier::new().fill_max_width())
+            .children(move || {
+                if let Some(header) = header.clone() {
+                    row()
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .modifier(
+                            Modifier::new()
+                                .fill_max_width()
+                                .padding_symmetric(Dp(16.0), Dp(0.0)),
+                        )
+                        .children(move || {
+                            text(I18N.text(&(header))).style(type_style(22.0, 28.0));
+                            spacer().modifier(Modifier::new().weight(1.0));
+                            icon_button()
+                                .icon(filled::ARROW_FORWARD_SVG)
+                                .accessibility_label(I18N.format(
+                                    "ui-show-all-value",
+                                    [("v0", I18N.text(&header).into())],
+                                ))
+                                .on_click(move || all.with_mut(DialogController::open));
+                        });
+                }
+                carousel_content(variant, controller, selected);
+                if allow_all && header.is_none() {
+                    gap(Dp(4.0));
+                    button()
+                        .text()
+                        .accessibility_label(I18N.text("ui-show-all-carousel-items"))
+                        .on_click(move || all.with_mut(DialogController::open))
+                        .child(move || {
+                            text(I18N.text("ui-show-all"));
+                        });
+                }
+                if selected.get() != 0 {
+                    gap(Dp(8.0));
+                    text(I18N.format(
+                        "ui-collection-value-opened",
+                        [("v0", (selected.get()).into())],
+                    ))
+                    .style(type_style(14.0, 20.0));
+                }
+            });
+    }
+    dialog(move || all.with_mut(DialogController::close))
+        .controller(all)
         .full_screen(true)
         .accessibility_label(I18N.text("ui-all-carousel-collections"))
-        .on_close_request(move || all.with_mut(DialogController::close))
-        .main_content(move || {
-            let header = header.clone();
-            column()
-                .modifier(Modifier::new().fill_max_width())
-                .children(move || {
-                    if let Some(header) = header.clone() {
-                        row()
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .modifier(
-                                Modifier::new()
-                                    .fill_max_width()
-                                    .padding_symmetric(Dp(16.0), Dp(0.0)),
-                            )
-                            .children(move || {
-                                text(I18N.text(&(header))).style(type_style(22.0, 28.0));
-                                spacer().modifier(Modifier::new().weight(1.0));
-                                icon_button()
-                                    .icon(filled::ARROW_FORWARD_SVG)
-                                    .accessibility_label(I18N.format(
-                                        "ui-show-all-value",
-                                        [("v0", I18N.text(&header).into())],
-                                    ))
-                                    .on_click(move || all.with_mut(DialogController::open));
-                            });
-                    }
-                    carousel_content(variant, controller, selected);
-                    if allow_all && header.is_none() {
-                        gap(Dp(4.0));
-                        button()
-                            .text()
-                            .accessibility_label(I18N.text("ui-show-all-carousel-items"))
-                            .on_click(move || all.with_mut(DialogController::open))
-                            .child(move || {
-                                text(I18N.text("ui-show-all"));
-                            });
-                    }
-                    if selected.get() != 0 {
-                        gap(Dp(8.0));
-                        text(I18N.format(
-                            "ui-collection-value-opened",
-                            [("v0", (selected.get()).into())],
-                        ))
-                        .style(type_style(14.0, 20.0));
-                    }
-                });
-        })
-        .dialog_content(move |_| {
+        .content(move || {
             all_items_page(all, selected, title.clone());
         });
 }
@@ -1048,11 +1019,7 @@ fn measurement_table(variant: CarouselVariant) {
 }
 
 #[tessera]
-fn overview_intro(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn overview_intro() {
     bullets(vec![
         "ui-contain-visual-items-like-images-or-video-along-with-optional-label-text".into(),
         "ui-six-layouts-multi-browse-uncontained-uncontained-multi-aspect-ratio-hero-center-aligned-he".into(),
@@ -1061,7 +1028,7 @@ fn overview_intro(
         "ui-items-change-size-as-they-move-through-the-carousel".into(),
     ]);
     gap(Dp(32.0));
-    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
+    collection(CarouselVariant::MultiBrowse, true);
     gap(Dp(16.0));
     caption("ui-carousels-can-show-items-of-various-sizes");
 }
@@ -1268,11 +1235,7 @@ const STATES: [&str; 5] = [
 ];
 
 #[tessera]
-fn states(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn states() {
     paragraph("ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-interac".into());
     gap(Dp(32.0));
     column()
@@ -1303,7 +1266,7 @@ fn states(
     gap(Dp(32.0));
     paragraph("ui-the-live-collection-below-uses-the-real-state-treatment-of-its-interactive-items-hover-foc".into());
     gap(Dp(16.0));
-    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
+    collection(CarouselVariant::MultiBrowse, true);
     gap(Dp(24.0));
     caption("ui-a-disabled-collection-blocks-activation-and-scrolling");
     gap(Dp(16.0));
@@ -1457,22 +1420,14 @@ fn dynamic_widths() {
 }
 
 #[tessera]
-fn guidelines_intro(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
-    collection(CarouselVariant::MultiBrowse, false).modal_controller_optional(modal_controller);
+fn guidelines_intro() {
+    collection(CarouselVariant::MultiBrowse, false);
     gap(Dp(16.0));
     caption("ui-carousel-items-adapt-dynamically-based-on-breakpoint");
 }
 
 #[tessera]
-fn usage(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn usage() {
     paragraph("ui-carousels-display-a-scrollable-list-of-items-carousel-items-emphasize-visuals-but-can-also".into());
     gap(Dp(16.0));
     paragraph("ui-there-are-four-carousel-layouts".into());
@@ -1490,7 +1445,7 @@ fn usage(
         "ui-snap-scrolling-scrolled-items-snap-to-the-carousel-s-layout-recommended-for-multi-browse-h".into(),
     ]);
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, false).modal_controller_optional(modal_controller);
+    collection(CarouselVariant::MultiBrowse, false);
     gap(Dp(16.0));
     caption("ui-a-carousel-can-contain-different-sized-items");
     gap(Dp(32.0));
@@ -1543,21 +1498,16 @@ fn usage(
     gap(Dp(16.0));
     paragraph("ui-view-the-accessibility-tab-for-more-details-and-alternate-solutions".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
+    collection(CarouselVariant::MultiBrowse, true);
     gap(Dp(16.0));
     caption("ui-make-sure-users-can-scroll-vertically-through-all-carousel-items");
     for variant in VARIANTS {
-        layout_usage(variant).modal_controller_optional(modal_controller);
+        layout_usage(variant);
     }
 }
 
 #[tessera]
-fn layout_usage(
-    variant: CarouselVariant,
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn layout_usage(variant: CarouselVariant) {
     gap(Dp(48.0));
     subheading(name(variant).into());
     gap(Dp(16.0));
@@ -1566,7 +1516,7 @@ fn layout_usage(
         gap(Dp(16.0));
     }
     gap(Dp(8.0));
-    collection(variant, false).modal_controller_optional(modal_controller);
+    collection(variant, false);
     gap(Dp(16.0));
     caption(usage_caption(variant));
     if variant == CarouselVariant::MultiBrowse {
@@ -1634,11 +1584,7 @@ fn anatomy() {
 }
 
 #[tessera]
-fn adaptive_design(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn adaptive_design() {
     paragraph("ui-as-the-carousel-container-size-increases-so-do-the-number-of-carousel-items-visible-at-a-t".into());
     gap(Dp(16.0));
     bullets(vec![
@@ -1647,7 +1593,7 @@ fn adaptive_design(
         "ui-full-screen-carousels-only-ever-show-one-item-at-once".into(),
     ]);
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, false).modal_controller_optional(modal_controller);
+    collection(CarouselVariant::MultiBrowse, false);
     gap(Dp(16.0));
     caption(
         "ui-carousels-can-show-more-items-at-once-on-larger-screens-resize-the-window-to-change-how-ma",
@@ -1655,11 +1601,7 @@ fn adaptive_design(
 }
 
 #[tessera]
-fn behavior(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn behavior() {
     subheading("ui-scrolling".into());
     gap(Dp(16.0));
     paragraph("ui-carousel-items-have-a-parallax-effect-when-they-re-scrolled".into());
@@ -1668,7 +1610,7 @@ fn behavior(
     gap(Dp(16.0));
     paragraph("ui-the-snap-scrolling-behavior-aligns-carousel-items-to-the-layout-grid-after-they-re-scrolle".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::Hero, false).modal_controller_optional(modal_controller);
+    collection(CarouselVariant::Hero, false);
     gap(Dp(16.0));
     caption("ui-carousel-items-with-snap-scrolling-maintain-the-same-layout-when-released");
     gap(Dp(32.0));
@@ -1676,7 +1618,7 @@ fn behavior(
     gap(Dp(16.0));
     paragraph("ui-full-screen-layouts-must-use-snap-scrolling".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::FullScreen, false).modal_controller_optional(modal_controller);
+    collection(CarouselVariant::FullScreen, false);
     gap(Dp(16.0));
     advice(
         "Don't",
@@ -1697,16 +1639,12 @@ fn use_cases() {
 }
 
 #[tessera]
-fn scrolling_requirements(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn scrolling_requirements() {
     paragraph("ui-on-vertically-scrolling-pages-carousels-require-an-accessible-way-to-view-all-the-items-wi".into());
     gap(Dp(16.0));
     paragraph("ui-material-recommends-adding-a-show-all-button-below-the-carousel-which-opens-a-dedicated-ve".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
+    collection(CarouselVariant::MultiBrowse, true);
     gap(Dp(16.0));
     caption(
         "ui-carousels-without-headers-should-use-a-show-all-button-to-view-all-carousel-items-the-show",
@@ -1716,9 +1654,7 @@ fn scrolling_requirements(
     gap(Dp(16.0));
     paragraph("ui-make-sure-the-header-is-also-displayed-on-the-page-of-all-carousel-items".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, true)
-        .modal_controller_optional(modal_controller)
-        .header(I18N.text("ui-recent-collections"));
+    collection(CarouselVariant::MultiBrowse, true).header(I18N.text("ui-recent-collections"));
     gap(Dp(16.0));
     caption(
         "ui-carousels-with-headers-should-use-an-arrow-to-view-all-carousel-items-headers-should-align",
@@ -1745,11 +1681,7 @@ fn scrolling_requirements(
 }
 
 #[tessera]
-fn interaction_style(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
+fn interaction_style() {
     subheading("ui-touch".into());
     gap(Dp(16.0));
     paragraph("ui-tapping-on-a-carousel-item-changes-the-shape-slightly-and-creates-a-touch-ripple-for-inter".into());
@@ -1772,7 +1704,7 @@ fn interaction_style(
     gap(Dp(16.0));
     paragraph("ui-use-the-up-and-down-arrow-keys-to-leave-the-carousel-and-focus-on-the-next-element-on-the".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
+    collection(CarouselVariant::MultiBrowse, true);
     gap(Dp(16.0));
     advice(
         "Do",

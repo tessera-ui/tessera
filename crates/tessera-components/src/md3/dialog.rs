@@ -1,30 +1,32 @@
-//! Modal dialog provider — show modal content above the main app UI.
+//! Material 3 dialogs for alerts, confirmations, and focused tasks.
 //!
 //! ## Usage
 //!
 //! Show blocking alerts, confirmations, wizards and forms.
 
-use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
+use tessera_foundation::{
+    modifier::{ModifierExt as _, SemanticsArgs},
+    pointer_gestures::{TapGesture, TapGestureConfig, detect_tap_gestures},
+};
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
-    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    RenderSlotWith, State,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
+    focus::{self, FocusRevealRequest},
     launch,
     layout::{MeasureScope, Stack, layout},
     modifier::FocusModifierExt as _,
-    provide_context, remember, remember_with_key,
-    system_back::SystemBackEvent,
-    tessera,
+    popup::{WindowOrigin, popup},
+    provide_context, remember, tessera,
     time::Instant,
-    use_context, winit,
+    use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation::{
         Motion, run_frames,
-        visibility_motion::{VisibilityMotion, VisibilitySample, modal_back_handler},
+        visibility_motion::{VisibilityMotion, VisibilitySample},
     },
     boxed::boxed,
     column::column,
@@ -40,9 +42,6 @@ use crate::{
         text::text,
         theme::{ContentColor, MaterialTheme},
     },
-    modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::with_keyboard_input,
-    overlay_semantics::overlay_background,
     res::I18N,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -67,55 +66,7 @@ impl DialogRole {
     }
 }
 
-#[derive(Clone, Default, PartialEq)]
-struct DialogContentAccessibility {
-    label: Option<String>,
-    description: Option<String>,
-}
-
-/// The registration target supplied to a dialog provider's content.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DialogScope {
-    content: State<Option<State<DialogContentAccessibility>>>,
-}
-
-struct DialogAccessibilityRegistration {
-    context: DialogScope,
-    content: State<DialogContentAccessibility>,
-}
-
-impl Drop for DialogAccessibilityRegistration {
-    fn drop(&mut self) {
-        if self.context.content.is_alive() && self.context.content.get() == Some(self.content) {
-            self.context.content.set(None);
-        }
-    }
-}
-
-#[tessera]
-pub(crate) fn register_dialog_accessibility(
-    dialog: Option<DialogScope>,
-    label: Option<String>,
-    description: Option<String>,
-) {
-    let Some(context) = dialog else {
-        return;
-    };
-    let content = remember(DialogContentAccessibility::default);
-    let next = DialogContentAccessibility { label, description };
-    if content.get() != next {
-        content.set(next);
-    }
-    remember_with_key(context, move || DialogAccessibilityRegistration {
-        context,
-        content,
-    });
-    if context.content.get() != Some(content) {
-        context.content.set(Some(content));
-    }
-}
-
-/// Controller for [`dialog_provider`], controlling visibility and animation.
+/// Controller for [`dialog`], controlling visibility and animation.
 pub struct DialogController {
     is_open: bool,
     motion: VisibilityMotion,
@@ -159,11 +110,6 @@ impl DialogController {
         self.motion.advance(now)
     }
 
-    fn preview_back(&mut self, event: SystemBackEvent) {
-        self.motion.preview_back(event);
-        self.requests = self.requests.wrapping_add(1);
-    }
-
     fn is_animating(&self) -> bool {
         self.motion.sample().active
     }
@@ -179,32 +125,6 @@ impl Default for DialogController {
     }
 }
 
-fn make_keyboard_handler(
-    on_close: Callback,
-) -> Box<dyn for<'a> Fn(tessera_ui::KeyboardInput<'a>) + 'static> {
-    Box::new(move |mut input| {
-        let mut handled = false;
-        input.keyboard_events.retain(|event| {
-            if event.state != winit::event::ElementState::Pressed {
-                return true;
-            }
-
-            if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
-                event.physical_key
-            {
-                on_close.call();
-                handled = true;
-                return false;
-            }
-
-            true
-        });
-        if handled {
-            input.block_keyboard();
-        }
-    })
-}
-
 #[tessera]
 fn dialog_content_wrapper(
     accessibility_label: Option<String>,
@@ -212,50 +132,28 @@ fn dialog_content_wrapper(
     role: Option<DialogRole>,
     alpha: Option<f32>,
     padding: Option<Dp>,
-    just_opened: Option<bool>,
-    on_close_request: Option<Callback>,
-    content: Option<RenderSlotWith<DialogScope>>,
-    focus_scope: Option<FocusScopeNode>,
+    content: Option<RenderSlot>,
     full_screen: Option<bool>,
 ) {
     let full_screen = full_screen.unwrap_or(false);
     let alpha = alpha.unwrap_or(1.0);
     let padding = padding.unwrap_or(Dp(24.0));
-    let just_opened = just_opened.unwrap_or(false);
-    let on_close_request = on_close_request.unwrap_or_default();
-    let focus_scope = focus_scope.expect("modal content requires its focus scope");
-    let context = DialogScope {
-        content: remember(|| None),
-    };
-    let inferred = context
-        .content
-        .get()
-        .filter(|content| content.is_alive())
-        .map(|content| content.get())
-        .unwrap_or_default();
-    let modifier = with_keyboard_input(
-        Modifier::new()
-            .focus_scope(Some(focus_scope))
-            .focus_properties(FocusProperties::new().skip_traversal(true))
-            .focus_traversal_policy(
-                FocusTraversalPolicy::linear()
-                    .wrap(true)
-                    .tab_navigation(true),
-            ),
-        make_keyboard_handler(on_close_request),
-    )
-    .semantics(SemanticsArgs {
-        role: Some(role.unwrap_or_default().accessibility_role()),
-        label: accessibility_label.or(inferred.label),
-        description: accessibility_description.or(inferred.description),
-        modal: true,
-        focusable: true,
-        merge_descendants: true,
-        ..Default::default()
-    });
-    if just_opened {
-        focus_scope.request_focus();
-    }
+    let modifier = Modifier::new()
+        .focus_group(None)
+        .focus_traversal_policy(
+            FocusTraversalPolicy::linear()
+                .wrap(true)
+                .tab_navigation(true),
+        )
+        .semantics(SemanticsArgs {
+            role: Some(role.unwrap_or_default().accessibility_role()),
+            label: accessibility_label,
+            description: accessibility_description,
+            modal: true,
+            focusable: true,
+            merge_descendants: true,
+            ..Default::default()
+        });
     let policy = DialogContentLayout { alpha };
     tessera_ui::layout::layout(policy.clone())
         .draw(policy)
@@ -309,7 +207,7 @@ fn dialog_content_wrapper(
                                         .modifier(Modifier::new().padding_all(padding))
                                         .child(move || {
                                             if let Some(content) = content {
-                                                content.render(context);
+                                                content.render();
                                             }
                                         });
                                 });
@@ -359,177 +257,118 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
     }
 }
 
-/// # dialog_provider
+/// # dialog
 ///
-/// Provide a modal dialog at the top level of an application.
+/// Show modal content above the current screen with Material 3 dialog styling.
+/// Use for alerts, confirmations, forms, and full-screen tasks.
 ///
 /// ## Usage
 ///
-/// Show modal content for alerts, confirmation dialogs, multi-step forms, or
-/// onboarding steps that require blocking user interaction with the main UI.
+/// Present a decision or focused task without navigating away from the current screen.
 ///
 /// ## Parameters
 ///
-/// - `accessibility_label` — accessible name overriding the standard content
-///   title.
-/// - `accessibility_description` — description overriding basic supporting
-///   text; provide this for custom content that needs a concise accessible
-///   summary.
-/// - `role` — dialog purpose; use [`DialogRole::AlertDialog`] for an urgent
-///   message that requires a response. Defaults to [`DialogRole::Dialog`].
-/// - `on_close_request` — optional close-request callback.
-/// - `padding` — padding applied inside the dialog surface.
-/// - `full_screen` — fill the available height without outer margins or rounded
-///   corners; width remains limited to 560dp.
-/// - `controller` — optional external controller.
-/// - `main_content` — optional main content rendered behind the dialog.
-/// - `dialog_content` — modal content receiving its explicit dialog scope.
+/// - `on_dismiss_request` — callback for Escape, back, outside presses, and the scrim.
+/// - `accessibility_label` — optional accessible name; typically the title shown in the body.
+/// - `accessibility_description` — optional concise description for custom content.
+/// - `role` — dialog purpose; defaults to `DialogRole::Dialog`.
+/// - `padding` — padding inside the dialog surface.
+/// - `full_screen` — fill the window height, with a maximum width of 560dp.
+/// - `controller` — optional visibility and motion controller. Without one, the dialog is
+///   visible whenever it is declared; stop declaring it to dismiss it.
+/// - `content` — dialog body.
 ///
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::md3::{dialog::{DialogController, basic_dialog, dialog_provider}, text::text};
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::remember;
-///
-/// # material_theme()
-/// #     .theme(|| MaterialTheme::default())
-/// #     .child(|| {
-/// dialog_provider()
-///     .accessibility_label("Dialog Title")
-///     .controller(remember(|| DialogController::new(true)))
-///     .main_content(|| text("Main content"))
-///     .dialog_content(|dialog| {
-///         basic_dialog().dialog(dialog)
-///             .supporting_text("This is the dialog body text.")
-///             .headline("Dialog Title");
+/// use tessera_components::md3::{
+///     dialog::{DialogController, basic_dialog, dialog},
+///     theme::material_theme,
+/// };
+/// use tessera_ui::{remember, tessera};
+/// #[tessera]
+/// fn example() {
+///     material_theme().child(|| {
+///         let open = remember(|| DialogController::new(true));
+///         dialog(move || open.with_mut(DialogController::close))
+///             .controller(open)
+///             .accessibility_label("Reset settings?")
+///             .content(|| {
+///                 basic_dialog().headline("Reset settings?");
+///             });
 ///     });
-/// #     });
-/// # }
+/// }
 /// ```
 #[tessera]
-pub fn dialog_provider(
+pub fn dialog(
+    on_dismiss_request: Callback,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     role: Option<DialogRole>,
-    on_close_request: Option<Callback>,
     padding: Option<Dp>,
     full_screen: Option<bool>,
     controller: Option<State<DialogController>>,
-    main_content: Option<RenderSlot>,
-    dialog_content: Option<RenderSlotWith<DialogScope>>,
+    content: Option<RenderSlot>,
 ) {
-    let on_close_request = on_close_request.unwrap_or_default();
+    let controller = controller.unwrap_or_else(|| remember(|| DialogController::new(true)));
     let full_screen = full_screen.unwrap_or(false);
     let padding = padding.unwrap_or(if full_screen { Dp::ZERO } else { Dp(24.0) });
-    let main_content = main_content.unwrap_or_else(RenderSlot::empty);
-    let controller = match controller {
-        Some(value) => value,
-        None => remember(|| DialogController::new(false)),
-    };
-    dialog_provider_render()
-        .accessibility_label_optional(accessibility_label)
-        .accessibility_description_optional(accessibility_description)
-        .role(role.unwrap_or_default())
-        .on_close_request_shared(on_close_request)
-        .padding(padding)
-        .full_screen(full_screen)
-        .controller(controller)
-        .main_content_shared(main_content)
-        .dialog_content_optional(dialog_content);
-}
-
-#[tessera]
-fn dialog_provider_render(
-    accessibility_label: Option<String>,
-    accessibility_description: Option<String>,
-    role: Option<DialogRole>,
-    on_close_request: Option<Callback>,
-    padding: Option<Dp>,
-    full_screen: Option<bool>,
-    controller: Option<State<DialogController>>,
-    main_content: Option<RenderSlot>,
-    dialog_content: Option<RenderSlotWith<DialogScope>>,
-) {
-    let on_close_request = on_close_request.unwrap_or_default();
-    let padding = padding.unwrap_or(Dp(24.0));
-    let controller = controller.expect("dialog_provider_render requires controller");
-    let main_content = main_content.unwrap_or_else(RenderSlot::empty);
-    let dialog_open_state = remember(|| false);
-
-    let (is_open, visibility) = controller.with(|c| c.snapshot());
-    let mut just_opened = false;
-    dialog_open_state.with_mut(|was_open| {
-        just_opened = !*was_open && is_open;
-        *was_open = is_open;
-    });
-
-    let is_animating = controller.with(|c| c.is_animating());
-    if is_animating {
+    let (is_open, visibility) = controller.with(DialogController::snapshot);
+    let animating = controller.with(DialogController::is_animating);
+    if animating {
         launch(
-            controller.with(|c| c.requests),
+            controller.with(|controller| controller.requests),
             run_frames(controller, DialogController::advance),
         );
     }
-
-    let focus_scope = remember(FocusScopeNode::new).get();
-    let focus_state = remember(ModalFocusState::default);
-    let visible = is_open || is_animating;
-    let modifier = modal_focus_modifier(Modifier::new(), focus_state, visible, focus_scope);
-    layout(Stack).modifier(modifier).child(move || {
-        overlay_background(main_content, visible);
-        modal_back_handler(is_open, on_close_request).on_preview(move |event| {
-            controller.with_mut(|controller| controller.preview_back(event));
-        });
-        if is_open || is_animating {
-            let content_alpha = visibility.opacity;
-            let alpha = visibility.opacity * 0.32;
-            let scrim_color = use_context::<MaterialTheme>()
+    if !is_open && !animating {
+        return;
+    }
+    let alpha = visibility.opacity;
+    let scrim_alpha = alpha * 0.32;
+    let dismiss = Callback::new(move || {
+        if controller.with(DialogController::is_open) {
+            on_dismiss_request.call();
+        }
+    });
+    popup(WindowOrigin)
+        .modal(true)
+        .on_dismiss_request(dismiss)
+        // Scrolling the anchor's ancestors cannot reveal content in the popup's window layer.
+        .modifier(Modifier::new().focus_reveal_handler(|_: FocusRevealRequest| true))
+        .child(move || {
+            let accessibility_label = accessibility_label.clone();
+            let accessibility_description = accessibility_description.clone();
+            let scrim = use_context::<MaterialTheme>()
                 .expect("MaterialTheme must be provided")
                 .get()
                 .color_scheme
                 .scrim;
             surface()
-                .style(scrim_color.with_alpha(alpha).into())
-                .on_click_shared(on_close_request)
-                .show_ripple(false)
-                .show_state_layer(false)
-                .modifier(
-                    Modifier::new()
-                        .fill_max_size()
-                        .semantics(SemanticsArgs {
-                            hidden: true,
-                            ..Default::default()
+                .style(scrim.with_alpha(scrim_alpha).into())
+                .modifier(Modifier::new().fill_max_size().pointer_input(
+                    dismiss,
+                    move |mut scope| async move {
+                        detect_tap_gestures(&mut scope, TapGestureConfig::default(), |gesture| {
+                            if matches!(gesture, TapGesture::Tapped(_, _)) {
+                                dismiss.call();
+                                focus::defer_keyboard_until_layout();
+                            }
                         })
-                        .focusable()
-                        .focus_properties(
-                            FocusProperties::new()
-                                .can_focus(false)
-                                .can_request_focus(false)
-                                .skip_traversal(true),
-                        ),
-                )
-                .block_input(true)
+                        .await;
+                    },
+                ))
                 .child(|| {});
-
             dialog_content_wrapper()
-                .accessibility_label_optional(accessibility_label.clone())
-                .accessibility_description_optional(accessibility_description.clone())
+                .accessibility_label_optional(accessibility_label)
+                .accessibility_description_optional(accessibility_description)
                 .role(role.unwrap_or_default())
-                .focus_scope(focus_scope)
-                .alpha(content_alpha)
+                .alpha(alpha)
                 .padding(padding)
-                .full_screen(full_screen.unwrap_or(false))
-                .just_opened(just_opened)
-                .on_close_request_shared(on_close_request)
-                .content_optional(dialog_content);
-        }
-    });
+                .full_screen(full_screen)
+                .content_optional(content);
+        });
 }
-
 /// # full_screen_dialog
 ///
 /// Present a scrollable form with a close action and optional save action.
@@ -552,7 +391,7 @@ fn dialog_provider_render(
 ///
 /// ```
 /// use tessera_components::md3::{
-///     dialog::{DialogController, dialog_provider, full_screen_dialog},
+///     dialog::{DialogController, dialog, full_screen_dialog},
 ///     text::text,
 ///     theme::material_theme,
 /// };
@@ -562,15 +401,12 @@ fn dialog_provider_render(
 ///     material_theme().child(|| {
 ///         let open = remember(|| DialogController::new(true));
 ///         let close = Callback::new(move || open.with_mut(DialogController::close));
-///         dialog_provider()
+///         dialog(close)
 ///             .controller(open)
 ///             .full_screen(true)
-///             .on_close_request_shared(close)
-///             .main_content(|| {
-///                 text("Calendar");
-///             })
-///             .dialog_content(move |dialog| {
-///                 full_screen_dialog(close).dialog(dialog).title("New event").content(|| {
+///             .accessibility_label("New event")
+///             .content(move || {
+///                 full_screen_dialog(close).title("New event").content(|| {
 ///                     text("Event details");
 ///                 });
 ///             });
@@ -580,16 +416,12 @@ fn dialog_provider_render(
 #[tessera]
 pub fn full_screen_dialog(
     on_close: Callback,
-    dialog: Option<DialogScope>,
     modifier: Option<Modifier>,
     #[prop(into)] title: Option<String>,
     #[prop(into)] confirm_label: Option<String>,
     on_confirm: Option<Callback>,
     content: Option<RenderSlot>,
 ) {
-    register_dialog_accessibility()
-        .dialog_optional(dialog)
-        .label_optional(title.clone());
     let title = title.unwrap_or_default();
     let confirm_label = confirm_label.unwrap_or_else(|| I18N.text("md3-save"));
     let content = content.unwrap_or_else(RenderSlot::empty);
@@ -654,11 +486,10 @@ pub fn full_screen_dialog(
 ///
 /// ## Usage
 ///
-/// Use inside the `dialog_content` closure of [`dialog_provider`].
+/// Use as the content of [`dialog`].
 ///
 /// ## Parameters
 ///
-/// - `dialog` — registration scope received from the provider content slot.
 /// - `icon` — optional icon slot shown above the headline.
 /// - `headline` — optional headline text.
 /// - `supporting_text` — body text shown in the dialog.
@@ -667,10 +498,9 @@ pub fn full_screen_dialog(
 /// - `confirm_button` — optional confirm button slot.
 /// - `dismiss_button` — optional dismiss button slot.
 ///
-/// See [`dialog_provider`] for usage.
+/// Use inside [`dialog`].
 #[tessera]
 pub fn basic_dialog(
-    dialog: Option<DialogScope>,
     icon: Option<RenderSlot>,
     #[prop(into)] headline: Option<String>,
     #[prop(into)] supporting_text: Option<String>,
@@ -678,14 +508,6 @@ pub fn basic_dialog(
     confirm_button: Option<RenderSlot>,
     dismiss_button: Option<RenderSlot>,
 ) {
-    register_dialog_accessibility()
-        .dialog_optional(dialog)
-        .label_optional(headline.clone())
-        .description_optional(if content.is_none() {
-            supporting_text.clone()
-        } else {
-            None
-        });
     let supporting_text = supporting_text.unwrap_or_default();
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")

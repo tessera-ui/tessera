@@ -700,7 +700,7 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
                 .expect("collection page return control");
             let bounds = after.1.bounds().unwrap();
             assert!(
-                bounds.y0 >= 64.0 && bounds.y1 <= 145.0,
+                bounds.y0 >= 0.0 && bounds.y1 <= 64.0,
                 "return action must stay in the collection page header at frame {frame}: {bounds:?}"
             );
             let page = find(&renderer, "All carousel collections", Some(Role::Dialog))
@@ -709,8 +709,8 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
                 .bounds()
                 .unwrap();
             assert!(
-                (page.y0 - 64.0).abs() <= 1.0 && (page.y1 - 800.0).abs() <= 1.0,
-                "collection page must use the full content viewport height: {page:?}"
+                page.y0.abs() <= 1.0 && (page.y1 - 800.0).abs() <= 1.0,
+                "the full-screen collection popup must cover the window height: {page:?}"
             );
             if width == 390 {
                 assert_eq!(
@@ -720,16 +720,23 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
                 );
             }
         }
-        click(
-            &mut renderer,
-            "Back to carousel",
-            Some(Role::Button),
-            500.0,
-            None,
+        let back = find(&renderer, "Back to carousel", Some(Role::Button)).unwrap();
+        let bounds = back.1.bounds().unwrap();
+        let point = PxPosition::from_f32_xy(
+            ((bounds.x0 + bounds.x1) * 0.5) as f32,
+            ((bounds.y0 + bounds.y1) * 0.5) as f32,
         );
+        renderer.pointer_move(MOUSE_POINTER_ID, point);
+        renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+        renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+        renderer.frames(24);
         let restored = find(&renderer, "Show all carousel items", Some(Role::Button)).unwrap();
         assert_eq!(restored.0, target.0);
-        assert!((restored.1.bounds().unwrap().y0 - before.y0).abs() <= 1.0);
+        let after = restored.1.bounds().unwrap();
+        assert!(
+            (after.y0 - before.y0).abs() <= 1.0,
+            "closing the collection at width {width} changed article position: {before:?} -> {after:?}"
+        );
     }
 }
 

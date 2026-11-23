@@ -16,7 +16,7 @@ use tessera_ui::{
 use crate::{
     md3::{
         bottom_sheet::{BottomSheetController, bottom_sheet},
-        dialog::{DialogController, dialog_provider},
+        dialog::{DialogController, dialog},
         side_sheet::{
             SideSheetController, SideSheetPosition, modal_side_sheet, standard_side_sheet,
         },
@@ -64,12 +64,10 @@ fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<OverlayCont
     output.set(Some(open));
     material_theme().child(move || match open {
         OverlayController::Dialog(controller) => {
-            dialog_provider()
+            main_content();
+            dialog(move || controller.with_mut(DialogController::close))
                 .controller(controller)
-                .main_content(|| {
-                    main_content();
-                })
-                .dialog_content(|_| {
+                .content(|| {
                     marker_content();
                 });
         }
