@@ -700,7 +700,7 @@ fn generate_builder_methods(
                 pub fn #ident(&self, value: #parameter) -> Self {
                     let value = #value;
                     self.props.configure_value(stringify!(#ident), move |props| {
-                        ::core::mem::replace(&mut props.#ident, Some(value))
+                        props.#ident.replace(value)
                     });
                     Self { props: self.props }
                 }
@@ -1011,10 +1011,14 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let ident = &field.ident;
                 quote!(#ident: Some(#ident),)
             });
-            quote!(#props_ident {
-                #(#initializers)*
-                ..<#props_ident #ty_generics>::default()
-            })
+            if initial_fields.len() == fields.len() && !has_generic_marker {
+                quote!(#props_ident { #(#initializers)* })
+            } else {
+                quote!(#props_ident {
+                    #(#initializers)*
+                    ..<#props_ident #ty_generics>::default()
+                })
+            }
         };
         let field_defs: Vec<_> = fields
             .iter()
