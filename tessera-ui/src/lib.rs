@@ -29,6 +29,14 @@ mod dispatcher;
 mod graphics;
 #[cfg(target_os = "ios")]
 pub mod ios;
+#[cfg(target_os = "linux")]
+pub mod linux_platform_views;
+#[cfg(target_os = "macos")]
+pub mod macos_platform_views;
+#[cfg(target_family = "wasm")]
+pub mod web_platform_views;
+#[cfg(target_os = "windows")]
+pub mod windows_platform_views;
 mod work;
 
 pub use async_dispatch::{Dispatcher, Task, on, spawn, spawn_local, with_frame_time};
@@ -91,7 +99,15 @@ pub use wgpu;
 pub use winit;
 
 pub(crate) use indextree::NodeId;
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 pub(crate) use platform_view::PlatformViewId;
 
 pub use crate::{
@@ -141,6 +157,16 @@ pub use crate::{
         remember_with_key, retain, retain_with_key,
     },
 };
+
+#[cfg(target_family = "wasm")]
+pub use platform_view::WebPlatformViewFactory;
+
+#[cfg(target_os = "linux")]
+pub use linux_platform_views::{LinuxPlatformViewFactory, WaylandChildSurface, X11ChildWindow};
+#[cfg(target_os = "macos")]
+pub use macos_platform_views::MacosPlatformViewFactory;
+#[cfg(target_os = "windows")]
+pub use windows_platform_views::WindowsPlatformViewFactory;
 
 pub(crate) use crate::thread_utils::SendSync;
 

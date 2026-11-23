@@ -71,6 +71,9 @@ impl RenderCore {
         descriptor: wgpu::InstanceDescriptor,
         window: Option<&Arc<Window>>,
         max_bindings: u32,
+        #[cfg(target_os = "windows")] windows_platform_views: Option<
+            &std::rc::Rc<std::cell::RefCell<crate::windows_platform_views::WindowsPlatformViews>>,
+        >,
     ) -> RenderContext {
         #[cfg(target_os = "android")]
         let mut descriptor = descriptor;
@@ -114,6 +117,26 @@ impl RenderCore {
         }
 
         let instance = wgpu::Instance::new(descriptor);
+        #[cfg(target_os = "windows")]
+        let surface = if let Some(host) = windows_platform_views {
+            let visual = host.borrow().base_visual_ptr();
+            Some(
+                unsafe {
+                    instance
+                        .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CompositionVisual(visual))
+                }
+                .unwrap_or_else(|error| {
+                    panic!("Failed to create DirectComposition surface: {error:?}")
+                }),
+            )
+        } else {
+            window.map(|window| {
+                instance
+                    .create_surface(window.clone())
+                    .unwrap_or_else(|error| panic!("Failed to create surface: {error:?}"))
+            })
+        };
+        #[cfg(not(target_os = "windows"))]
         let surface = window.map(|window| {
             instance
                 .create_surface(window.clone())
@@ -260,6 +283,9 @@ impl RenderCore {
         sample_count: u32,
         window_transparent: bool,
         max_bindings: u32,
+        #[cfg(target_os = "windows")] windows_platform_views: Option<
+            std::rc::Rc<std::cell::RefCell<crate::windows_platform_views::WindowsPlatformViews>>,
+        >,
     ) -> Self {
         let size = window_drawable_size(&window);
         let scale_factor = window.scale_factor();
@@ -271,6 +297,8 @@ impl RenderCore {
             sample_count,
             window_transparent,
             max_bindings,
+            #[cfg(target_os = "windows")]
+            windows_platform_views,
         )
         .await
     }
@@ -290,6 +318,8 @@ impl RenderCore {
             sample_count,
             false,
             max_bindings,
+            #[cfg(target_os = "windows")]
+            None,
         )
         .await
     }
@@ -302,7 +332,23 @@ impl RenderCore {
         sample_count: u32,
         window_transparent: bool,
         max_bindings: u32,
+        #[cfg(target_os = "windows")] windows_platform_views: Option<
+            std::rc::Rc<std::cell::RefCell<crate::windows_platform_views::WindowsPlatformViews>>,
+        >,
     ) -> Self {
+        #[cfg(target_family = "wasm")]
+        let web_platform_views = window.as_ref().and_then(|window| {
+            use winit::platform::web::WindowExtWebSys;
+
+            let canvas = window.canvas()?;
+            match crate::web_platform_views::WebPlatformViews::new(canvas) {
+                Ok(host) => Some(host),
+                Err(error) => {
+                    tracing::warn!(%error, "Failed to initialize the Web DOM scene host");
+                    None
+                }
+            }
+        });
         let mut instance_desc = wgpu::InstanceDescriptor::new_without_display_handle();
         instance_desc.flags = wgpu::InstanceFlags::from_env_or_default();
         #[cfg(not(target_os = "windows"))]
@@ -325,7 +371,14 @@ impl RenderCore {
             adapter,
             device,
             queue,
-        } = Self::create_render_context(instance_desc, window.as_ref(), max_bindings).await;
+        } = Self::create_render_context(
+            instance_desc,
+            window.as_ref(),
+            max_bindings,
+            #[cfg(target_os = "windows")]
+            windows_platform_views.as_ref(),
+        )
+        .await;
         let adapter_info = adapter.get_info();
         info!("Using WGPU adapter: {adapter_info:#?}");
         #[cfg(target_os = "android")]
@@ -637,7 +690,14 @@ impl RenderCore {
             pipeline_factories: Default::default(),
             pipeline_cache,
             adapter_info,
-            #[cfg(any(target_os = "android", target_os = "ios"))]
+            #[cfg(any(
+                target_os = "android",
+                target_os = "ios",
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "linux",
+                target_family = "wasm"
+            ))]
             adapter,
             #[cfg(target_os = "android")]
             android_slice_surfaces: Vec::new(),
@@ -647,6 +707,20 @@ impl RenderCore {
             ios_slice_surfaces: Vec::new(),
             #[cfg(target_os = "ios")]
             ios_composition_active: false,
+            #[cfg(target_os = "macos")]
+            macos_slice_surfaces: Vec::new(),
+            #[cfg(target_os = "macos")]
+            macos_composition_active: false,
+            #[cfg(target_os = "windows")]
+            windows_slice_surfaces: Vec::new(),
+            #[cfg(target_os = "windows")]
+            windows_composition_active: false,
+            #[cfg(target_os = "linux")]
+            linux_slice_surfaces: Vec::new(),
+            #[cfg(target_os = "linux")]
+            linux_composition_active: false,
+            #[cfg(target_family = "wasm")]
+            web_slice_surfaces: Vec::new(),
             targets,
             blit,
             frame_index: 0,
@@ -655,6 +729,14 @@ impl RenderCore {
             android_platform_view_host: None,
             #[cfg(target_os = "ios")]
             ios_platform_views: None,
+            #[cfg(target_os = "macos")]
+            macos_platform_views: None,
+            #[cfg(target_os = "windows")]
+            windows_platform_views: None,
+            #[cfg(target_os = "linux")]
+            linux_platform_views: None,
+            #[cfg(target_family = "wasm")]
+            web_platform_views,
             last_render_breakdown: None,
             #[cfg(all(feature = "profiling", not(target_arch = "wasm32")))]
             gpu_timing,

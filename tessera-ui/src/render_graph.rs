@@ -122,7 +122,15 @@ impl RenderFragment {
         self.push_op(Command::Compute(Box::new(command)), TypeId::of::<C>())
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux",
+        target_family = "wasm",
+        test
+    ))]
     pub(crate) fn push_platform_view(&mut self, id: u64) -> u32 {
         self.push_op(Command::PlatformView(id), TypeId::of::<Command>())
     }
@@ -176,7 +184,16 @@ pub struct RenderGraphOp {
     pub sequence_index: usize,
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+/// A native view's placement in the ordered scene.
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PlatformViewPlacement {
     pub(crate) id: u64,
@@ -186,20 +203,37 @@ pub(crate) struct PlatformViewPlacement {
     pub(crate) unsupported_shape_clip: bool,
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
 #[derive(Clone, Copy)]
 pub(crate) struct PlatformViewInputBlocker {
     pub(crate) id: u64,
     pub(crate) bounds: PxRect,
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+/// Tessera draw slices separated by native views in paint order.
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 pub(crate) struct PlatformViewSlices {
     pub(crate) views: Vec<PlatformViewPlacement>,
     pub(crate) draws: Vec<PlatformViewDrawSlice>,
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 impl PlatformViewSlices {
     fn compact(&mut self) {
         if self.draws.iter().any(|slice| slice.samples_native_scene) {
@@ -253,7 +287,15 @@ impl PlatformViewSlices {
     }
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 impl PlatformViewPlacement {
     fn visible_bounds(&self) -> Option<PxRect> {
         if self.opacity <= 0.0 || self.unsupported_shape_clip {
@@ -269,7 +311,15 @@ impl PlatformViewPlacement {
     }
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 #[derive(Clone, Copy, PartialEq)]
 enum SliceCoverage {
     Empty,
@@ -277,7 +327,15 @@ enum SliceCoverage {
     Unknown,
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 impl SliceCoverage {
     fn is_disjoint(self, bounds: PxRect) -> bool {
         match self {
@@ -288,13 +346,29 @@ impl SliceCoverage {
     }
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 pub(crate) struct PlatformViewDrawSlice {
     pub(crate) ops: Vec<RenderGraphOp>,
     pub(crate) samples_native_scene: bool,
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 impl PlatformViewDrawSlice {
     fn coverage(&self) -> SliceCoverage {
         let mut coverage: Option<PxRect> = None;
@@ -338,6 +412,15 @@ impl PlatformViewDrawSlice {
         coverage.map_or(SliceCoverage::Empty, SliceCoverage::Bounded)
     }
 
+    #[cfg(target_os = "linux")]
+    pub(crate) fn coverage_bounds(&self) -> Option<PxRect> {
+        match self.coverage() {
+            SliceCoverage::Bounded(bounds) => Some(bounds),
+            SliceCoverage::Empty => Some(PxRect::ZERO),
+            SliceCoverage::Unknown => None,
+        }
+    }
+
     pub(crate) fn render_graph(&self) -> RenderGraph {
         RenderGraphBuilder {
             ops: self.ops.clone(),
@@ -352,7 +435,7 @@ pub struct RenderGraph {
     data: Arc<RenderGraphData>,
     damage: Option<PxRect>,
     previous: Option<Weak<RenderGraphData>>,
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     platform_input_blockers: Vec<PlatformViewInputBlocker>,
 }
 
@@ -411,7 +494,7 @@ impl RenderOrderPlan {
 }
 
 impl RenderGraph {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     pub(crate) fn with_platform_input_blockers(
         mut self,
         blockers: Vec<PlatformViewInputBlocker>,
@@ -420,7 +503,7 @@ impl RenderGraph {
         self
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     pub(crate) fn platform_input_blockers(&self) -> &[PlatformViewInputBlocker] {
         &self.platform_input_blockers
     }
@@ -437,7 +520,7 @@ impl RenderGraph {
             }),
             damage: None,
             previous: None,
-            #[cfg(any(target_os = "android", target_os = "ios"))]
+            #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
             platform_input_blockers: Vec::new(),
         }
     }
@@ -508,14 +591,30 @@ impl RenderGraph {
             .map(|&index| &ops[index])
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux",
+        target_family = "wasm",
+        test
+    ))]
     pub(crate) fn has_platform_views(&self) -> bool {
         self.ops()
             .iter()
             .any(|op| matches!(op.command, Command::PlatformView(_)))
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios", test))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux",
+        target_family = "wasm",
+        test
+    ))]
     pub(crate) fn platform_view_slices(&self) -> PlatformViewSlices {
         let mut views = Vec::new();
         let mut draws = vec![PlatformViewDrawSlice {
@@ -596,7 +695,15 @@ impl RenderGraph {
     }
 }
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm",
+    test
+))]
 fn state_op(command: Command, sequence_index: usize) -> RenderGraphOp {
     RenderGraphOp {
         command,
@@ -681,7 +788,7 @@ impl RenderGraphBuilder {
             }),
             damage: None,
             previous: None,
-            #[cfg(any(target_os = "android", target_os = "ios"))]
+            #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
             platform_input_blockers: Vec::new(),
         }
     }

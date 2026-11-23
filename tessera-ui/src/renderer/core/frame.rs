@@ -140,6 +140,23 @@ impl RenderCore {
             .ios_platform_views
             .clone()
             .filter(|_| graph.has_platform_views() || self.ios_composition_active);
+        #[cfg(target_os = "macos")]
+        let macos_host = self
+            .macos_platform_views
+            .clone()
+            .filter(|_| graph.has_platform_views() || self.macos_composition_active);
+        #[cfg(target_os = "windows")]
+        let windows_host = self
+            .windows_platform_views
+            .clone()
+            .filter(|_| graph.has_platform_views() || self.windows_composition_active);
+        #[cfg(target_os = "linux")]
+        let linux_host = self
+            .linux_platform_views
+            .clone()
+            .filter(|_| graph.has_platform_views() || self.linux_composition_active);
+        #[cfg(target_family = "wasm")]
+        let web_host = self.web_platform_views.clone();
         let (output_frame, reconfigure_after_present) = {
             let surface = self
                 .surface
@@ -154,6 +171,16 @@ impl RenderCore {
                     .expect("UIKit platform views require a Metal surface");
                 let layer = metal.render_layer().lock();
                 let transactional = ios_host.is_some();
+                if layer.presentsWithTransaction() != transactional {
+                    layer.setPresentsWithTransaction(transactional);
+                }
+            }
+            #[cfg(target_os = "macos")]
+            if self.macos_platform_views.is_some() {
+                let metal = unsafe { surface.as_hal::<wgpu::hal::api::Metal>() }
+                    .expect("AppKit platform views require a Metal surface");
+                let layer = metal.render_layer().lock();
+                let transactional = macos_host.is_some();
                 if layer.presentsWithTransaction() != transactional {
                     layer.setPresentsWithTransaction(transactional);
                 }
@@ -252,6 +279,213 @@ impl RenderCore {
         } else {
             (graph, None)
         };
+        #[cfg(target_os = "macos")]
+        let (graph, macos_transaction) = if let Some(host) = macos_host {
+            let transaction = crate::macos_platform_views::MacosCompositionTransaction::begin();
+            let mut placements = Vec::new();
+            let mut blockers = Vec::new();
+            let mut overlays_after = Vec::new();
+            let graph = if graph.has_platform_views() {
+                let slices = graph.platform_view_slices();
+                let overlays = slices.overlays_after();
+                if slices.draws.iter().any(|slice| slice.samples_native_scene) {
+                    warn!("Tessera cannot sample across a native platform-view boundary");
+                    graph
+                } else if let Err(error) = self.ensure_macos_slice_surfaces(overlays.len()) {
+                    warn!(%error, "Failed to initialize Core Animation scene slices");
+                    graph
+                } else {
+                    let frames: Option<Vec<_>> = self.macos_slice_surfaces[..overlays.len()]
+                        .iter()
+                        .map(|target| acquire_scene_slice(&target.surface))
+                        .collect();
+                    let Some(frames) = frames else {
+                        warn!("Dropping incomplete AppKit platform-view frame");
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    };
+                    for (frame, &index) in frames.into_iter().zip(&overlays) {
+                        self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
+                    }
+                    placements = slices.views;
+                    blockers.extend_from_slice(graph.platform_input_blockers());
+                    overlays_after = overlays;
+                    self.previous_graph = None;
+                    slices.draws[0].render_graph()
+                }
+            } else {
+                graph
+            };
+            let main_thread = objc2::MainThreadMarker::new()
+                .expect("macOS rendering must run on the main thread");
+            host.borrow_mut().apply_composition(
+                &placements,
+                &blockers,
+                &overlays_after,
+                &self.macos_compositor_layers(),
+                [self.config.width as f32, self.config.height as f32],
+                main_thread,
+            );
+            self.macos_composition_active = !placements.is_empty();
+            (graph, Some(transaction))
+        } else {
+            (graph, None)
+        };
+        #[cfg(target_os = "windows")]
+        let graph = if let Some(host) = windows_host.as_ref() {
+            let mut placements = Vec::new();
+            let mut overlays_after = Vec::new();
+            let graph = if graph.has_platform_views() {
+                let slices = graph.platform_view_slices();
+                let overlays = slices.overlays_after();
+                if slices.draws.iter().any(|slice| slice.samples_native_scene) {
+                    warn!("Tessera cannot sample across a native platform-view boundary");
+                    graph
+                } else if let Err(error) = self.ensure_windows_slice_surfaces(overlays.len()) {
+                    warn!(%error, "Failed to initialize DirectComposition scene slices");
+                    graph
+                } else {
+                    let frames: Option<Vec<_>> = self.windows_slice_surfaces[..overlays.len()]
+                        .iter()
+                        .map(|target| acquire_scene_slice(&target.surface))
+                        .collect();
+                    let Some(frames) = frames else {
+                        warn!("Dropping incomplete DirectComposition platform-view frame");
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    };
+                    for (frame, &index) in frames.into_iter().zip(&overlays) {
+                        self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
+                    }
+                    placements = slices.views;
+                    overlays_after = overlays;
+                    self.previous_graph = None;
+                    slices.draws[0].render_graph()
+                }
+            } else {
+                graph
+            };
+            if let Err(error) = host
+                .borrow_mut()
+                .apply_composition(&placements, &overlays_after)
+            {
+                warn!(%error, "Failed to apply DirectComposition view order");
+            }
+            self.windows_composition_active = !placements.is_empty();
+            graph
+        } else {
+            graph
+        };
+        #[cfg(target_os = "linux")]
+        let graph = if let Some(host) = linux_host.as_ref() {
+            let scale = self
+                .window
+                .as_ref()
+                .map_or(1.0, |window| window.scale_factor());
+            let mut placements = Vec::new();
+            let mut overlays_after = Vec::new();
+            let mut overlay_input_regions = Vec::new();
+            let graph = if graph.has_platform_views() {
+                let slices = graph.platform_view_slices();
+                let overlays = slices.overlays_after();
+                if slices.draws.iter().any(|slice| slice.samples_native_scene) {
+                    warn!("Tessera cannot sample across a native platform-view boundary");
+                    graph
+                } else if let Err(error) = self.ensure_linux_slice_surfaces(overlays.len(), scale) {
+                    warn!(%error, "Failed to prepare Linux scene slices");
+                    graph
+                } else {
+                    let frames: Option<Vec<_>> = self.linux_slice_surfaces[..overlays.len()]
+                        .iter()
+                        .map(|surface| acquire_scene_slice(surface))
+                        .collect();
+                    let Some(frames) = frames else {
+                        warn!("Dropping incomplete Linux platform-view frame");
+                        if let Some(window) = &self.window {
+                            window.request_redraw();
+                        }
+                        return;
+                    };
+                    for (frame, &index) in frames.into_iter().zip(&overlays) {
+                        self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
+                    }
+                    placements = slices.views;
+                    overlays_after = overlays;
+                    overlay_input_regions = overlays_after
+                        .iter()
+                        .map(|&index| slices.draws[index + 1].coverage_bounds())
+                        .collect();
+                    self.previous_graph = None;
+                    slices.draws[0].render_graph()
+                }
+            } else {
+                graph
+            };
+            host.borrow_mut().apply_composition(
+                &placements,
+                &overlays_after,
+                &overlay_input_regions,
+                [self.config.width, self.config.height],
+                scale,
+            );
+            self.linux_composition_active = !placements.is_empty();
+            graph
+        } else {
+            graph
+        };
+        #[cfg(target_family = "wasm")]
+        let graph = if let Some(host) = web_host.as_ref() {
+            let scale = self
+                .window
+                .as_ref()
+                .map_or(1.0, |window| window.scale_factor());
+            let mut placements = Vec::new();
+            let mut overlays_after = Vec::new();
+            let graph = if graph.has_platform_views() {
+                let slices = graph.platform_view_slices();
+                let overlays = slices.overlays_after();
+                if slices.draws.iter().any(|slice| slice.samples_native_scene) {
+                    warn!("Tessera cannot sample across a DOM platform-view boundary");
+                    graph
+                } else if let Err(error) = self.ensure_web_slice_surfaces(overlays.len()) {
+                    warn!(%error, "Failed to prepare Web scene slices");
+                    graph
+                } else {
+                    let frames: Option<Vec<_>> = self.web_slice_surfaces[..overlays.len()]
+                        .iter()
+                        .map(|surface| acquire_scene_slice(surface))
+                        .collect();
+                    let Some(frames) = frames else {
+                        warn!("Dropping incomplete Web platform-view frame");
+                        return;
+                    };
+                    for (frame, &index) in frames.into_iter().zip(&overlays) {
+                        self.present_scene_slice(frame, slices.draws[index + 1].render_graph());
+                    }
+                    placements = slices.views;
+                    overlays_after = overlays;
+                    self.previous_graph = None;
+                    slices.draws[0].render_graph()
+                }
+            } else {
+                graph
+            };
+            if let Err(error) = host.borrow_mut().apply_composition(
+                &placements,
+                &overlays_after,
+                [self.config.width, self.config.height],
+                scale,
+            ) {
+                warn!(%error, "Failed to apply Web DOM scene order");
+            }
+            graph
+        } else {
+            graph
+        };
         let output_view = output_frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -269,6 +503,14 @@ impl RenderCore {
         self.queue.present(output_frame);
         #[cfg(target_os = "ios")]
         drop(ios_transaction);
+        #[cfg(target_os = "macos")]
+        drop(macos_transaction);
+        #[cfg(target_os = "windows")]
+        if let Some(host) = &self.windows_platform_views {
+            if let Err(error) = host.borrow().commit() {
+                warn!(%error, "Failed to commit DirectComposition frame");
+            }
+        }
         if reconfigure_after_present {
             self.resize_surface();
         }
@@ -425,7 +667,14 @@ impl RenderCore {
             .present(&surfaces)
     }
 
-    #[cfg(any(target_os = "ios", target_os = "android"))]
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux",
+        target_family = "wasm"
+    ))]
     fn present_scene_slice(&mut self, output_frame: wgpu::SurfaceTexture, graph: RenderGraph) {
         let output_view = output_frame
             .texture
@@ -1122,7 +1371,14 @@ impl RenderCore {
     }
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux",
+    target_family = "wasm"
+))]
 fn acquire_scene_slice(surface: &wgpu::Surface<'_>) -> Option<wgpu::SurfaceTexture> {
     match surface.get_current_texture() {
         wgpu::CurrentSurfaceTexture::Success(frame)
