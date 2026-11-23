@@ -144,7 +144,6 @@ pub(super) fn snap_fraction(value: f32, steps: usize) -> f32 {
     (value * denom).round() / denom
 }
 
-/// Helper: check if a cursor position is within the bounds of a component.
 pub(super) fn cursor_within_bounds(
     cursor_pos: Option<PxPosition>,
     computed: &ComputedData,
@@ -158,8 +157,6 @@ pub(super) fn cursor_within_bounds(
     }
 }
 
-/// Helper: compute normalized progress (0.0..1.0) from cursor X and overall
-/// width. Returns None when cursor is not available.
 pub(super) fn cursor_progress(
     cursor_pos: Option<PxPosition>,
     layout: &SliderLayout,

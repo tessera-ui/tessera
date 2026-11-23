@@ -319,13 +319,11 @@ pub(super) fn checkout(initial: Option<usize>, clear: bool) {
                                     "ui-shipping-destination-value",
                                     [(
                                         "v0",
-                                        I18N.text(
-                                            &(match selected.get() {
-                                                Some(0) => "ui-home",
-                                                Some(_) => "ui-office",
-                                                None => "ui-not-selected",
-                                            }),
-                                        )
+                                        I18N.text(match selected.get() {
+                                            Some(0) => "ui-home",
+                                            Some(_) => "ui-office",
+                                            None => "ui-not-selected",
+                                        })
                                         .into(),
                                     )],
                                 ),
@@ -467,13 +465,11 @@ pub(super) fn language() {
                                         "ui-current-language-value",
                                         [(
                                             "v0",
-                                            I18N.text(
-                                                &(match draft.get() {
-                                                    Some(0) => "ui-english",
-                                                    Some(1) => "ui-chinese-mandarin",
-                                                    _ => "ui-spanish",
-                                                }),
-                                            )
+                                            I18N.text(match draft.get() {
+                                                Some(0) => "ui-english",
+                                                Some(1) => "ui-chinese-mandarin",
+                                                _ => "ui-spanish",
+                                            })
                                             .into(),
                                         )],
                                     ),
@@ -674,24 +670,20 @@ pub(super) fn colors() {
                                             [
                                                 (
                                                     "v0",
-                                                    I18N.text(
-                                                        &(if dark {
-                                                            "ui-dark"
-                                                        } else {
-                                                            "ui-light"
-                                                        }),
-                                                    )
+                                                    I18N.text(if dark {
+                                                        "ui-dark"
+                                                    } else {
+                                                        "ui-light"
+                                                    })
                                                     .into(),
                                                 ),
                                                 (
                                                     "v1",
-                                                    I18N.text(
-                                                        &(if selected {
-                                                            "ui-selected"
-                                                        } else {
-                                                            "ui-unselected"
-                                                        }),
-                                                    )
+                                                    I18N.text(if selected {
+                                                        "ui-selected"
+                                                    } else {
+                                                        "ui-unselected"
+                                                    })
                                                     .into(),
                                                 ),
                                             ],
@@ -809,30 +801,27 @@ fn state_item(initial: bool, state: usize, dark: bool, x: f64, y: f64) {
                         [
                             (
                                 "v0",
-                                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                                    .into(),
+                                I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
                             ),
                             (
                                 "v1",
-                                I18N.text(
-                                    &(if initial {
-                                        "ui-selected"
-                                    } else {
-                                        "ui-unselected"
-                                    }),
-                                )
+                                I18N.text(if initial {
+                                    "ui-selected"
+                                } else {
+                                    "ui-unselected"
+                                })
                                 .into(),
                             ),
                             (
                                 "v2",
                                 I18N.text(
-                                    &([
+                                    [
                                         "ui-enabled-7077",
                                         "ui-hover-preview",
                                         "ui-focus-preview",
                                         "ui-pressed-preview",
                                         "ui-disabled-7078",
-                                    ][state]),
+                                    ][state],
                                 )
                                 .into(),
                             ),
@@ -874,13 +863,11 @@ pub(super) fn measurements() {
                                 "ui-value-radio-dimensions",
                                 [(
                                     "v0",
-                                    I18N.text(
-                                        &(if selected {
-                                            "ui-selected"
-                                        } else {
-                                            "ui-unselected"
-                                        }),
-                                    )
+                                    I18N.text(if selected {
+                                        "ui-selected"
+                                    } else {
+                                        "ui-unselected"
+                                    })
                                     .into(),
                                 )],
                             ),

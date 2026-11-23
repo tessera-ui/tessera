@@ -99,7 +99,7 @@ pub struct AppIcon {
 }
 
 enum IconSource {
-    Svg(usvg::Tree),
+    Svg(Box<usvg::Tree>),
     Png(RgbaImage),
 }
 
@@ -167,7 +167,7 @@ impl AppIcon {
                     tree.size().width() == tree.size().height(),
                     "Application icon must be square"
                 );
-                IconSource::Svg(tree)
+                IconSource::Svg(Box::new(tree))
             }
             Some("png") => {
                 let image =

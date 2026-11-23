@@ -336,12 +336,9 @@ fn example(
                         ("v0", I18N.text(&caption).into()),
                         (
                             "v1",
-                            I18N.text(&formatted(state.selected_start_date())).into(),
+                            I18N.text(formatted(state.selected_start_date())).into(),
                         ),
-                        (
-                            "v2",
-                            I18N.text(&formatted(state.selected_end_date())).into(),
-                        ),
+                        ("v2", I18N.text(formatted(state.selected_end_date())).into()),
                     ],
                 )
             })
@@ -351,7 +348,7 @@ fn example(
                     "ui-value-date-value",
                     [
                         ("v0", I18N.text(&caption).into()),
-                        ("v1", I18N.text(&formatted(state.selected_date())).into()),
+                        ("v1", I18N.text(formatted(state.selected_date())).into()),
                     ],
                 )
             })
@@ -501,12 +498,9 @@ fn confirm(
                         [
                             (
                                 "v0",
-                                I18N.text(&formatted(state.selected_start_date())).into(),
+                                I18N.text(formatted(state.selected_start_date())).into(),
                             ),
-                            (
-                                "v1",
-                                I18N.text(&formatted(state.selected_end_date())).into(),
-                            ),
+                            ("v1", I18N.text(formatted(state.selected_end_date())).into()),
                         ],
                     )
                 })
@@ -514,7 +508,7 @@ fn confirm(
                 sample.single.with(|state| {
                     I18N.format(
                         "ui-confirmed-date-value",
-                        [("v0", I18N.text(&formatted(state.selected_date())).into())],
+                        [("v0", I18N.text(formatted(state.selected_date())).into())],
                     )
                 })
             });
@@ -929,7 +923,7 @@ fn date_canvas(width: f64, height: f64, content: RenderSlot) {
             scaled_box(scale as f32).child(move || {
                 boxed()
                     .modifier(Modifier::new().required_size(Dp(width), Dp(height)))
-                    .children_shared(content.clone());
+                    .children_shared(content);
             });
         });
 }
@@ -1019,11 +1013,11 @@ fn date_overview_variant(index: usize, scale: f64) {
                                         (
                                             "v1",
                                             I18N.text(
-                                                &([
+                                                [
                                                     "ui-docked-date-picker",
                                                     "ui-modal-date-picker",
                                                     "ui-modal-date-input",
-                                                ][index]),
+                                                ][index],
                                             )
                                             .into(),
                                         ),
@@ -1354,10 +1348,7 @@ fn date_color_pair(figure: Figure, menu: bool, year: bool) {
     gap(Dp(24.0));
     text(I18N.format(
         "ui-value-used-for-light-and-dark-themes",
-        [(
-            "v0",
-            I18N.text(&date_color_title(figure, menu, year)).into(),
-        )],
+        [("v0", I18N.text(date_color_title(figure, menu, year)).into())],
     ))
     .style(type_style(16.0, 24.0));
     gap(Dp(16.0));
@@ -1489,7 +1480,7 @@ fn date_figure(
         )
     });
     let open = remember(|| DialogController::new(true));
-    let status = remember(|| String::new());
+    let status = remember(String::new);
 
     let committed = remember(|| illustration_date(2025, 17));
 
@@ -2867,7 +2858,7 @@ fn configuration_canvas(width: f64, height: f64, content: RenderSlot) {
                         .item_spacing(Dp(68.0))
                         .line_spacing(Dp(48.0))
                         .cross_axis_alignment(CrossAxisAlignment::Start)
-                        .children_shared(content.clone());
+                        .children_shared(content);
                 });
         }),
     );

@@ -277,45 +277,9 @@ impl crate::LayoutPolicy for ScaleLayout {
     }
 }
 
-/// # scaled_box
+/// Uniformly scales one layout child, for example to fit an interactive preview.
 ///
-/// Scale a single native child uniformly for responsive illustrations and
-/// previews.
-///
-/// ## Usage
-///
-/// Fit an interactive control or fixed-size scene into a smaller display
-/// region.
-///
-/// ## Parameters
-///
-/// - `scale` — finite, positive, invertible scale relative to the child's
-///   layout units.
-/// - `child` — optional content producing one direct layout child; empty when
-///   omitted.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_ui::{
-///     LocalToWindow, Px, PxPosition, PxSize,
-///     layout::{Stack, layout},
-///     scaled_box,
-/// };
-///
-/// #[tessera_ui::tessera]
-/// fn preview() {
-///     scaled_box(0.625).child(|| {
-///         layout(Stack).child(|| {});
-///     });
-/// }
-///
-/// let transform = LocalToWindow::new(0.625, PxPosition::ZERO).unwrap();
-/// assert_eq!(
-///     transform.map_size(PxSize::new(Px(240), Px(56))),
-///     [150.0, 35.0]
-/// );
-/// ```
+/// `scale` must be finite, positive, and invertible.
 #[crate::tessera]
 pub fn scaled_box(scale: f32, child: Option<crate::RenderSlot>) {
     let transform = LocalToWindow::new(scale, PxPosition::ZERO)

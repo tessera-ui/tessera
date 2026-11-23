@@ -247,7 +247,7 @@ impl PullRefreshController {
 /// fn demo() {
 ///     material_theme()
 ///         .theme(|| MaterialTheme::default())
-///         .child(|| {
+///         .child(move || {
 ///             let controller = remember(PullRefreshController::new);
 ///             pull_refresh_indicator().controller(controller);
 ///         });
@@ -383,23 +383,23 @@ pub fn pull_refresh_indicator(
 ///         .theme(|| MaterialTheme::default())
 ///         .child(|| {
 ///             let refresh_controller = remember(PullRefreshController::new);
+///             let refreshed = remember(|| false);
 ///             let scroll = remember(ScrollableController::new);
 ///             pull_refresh()
-///                 .on_refresh(|| {})
+///                 .on_refresh(move || refreshed.set(true))
 ///                 .controller(refresh_controller)
 ///                 .child(move || {
 ///                     layout(Stack)
 ///                         .modifier(Modifier::new().vertical_scroll(scroll))
 ///                         .child(move || {
-///                             column().children(|| {
-///                                 text("Pull down to refresh");
+///                             column().children(move || {
+///                                 text(if refreshed.get() { "Updated" } else { "Pull down to refresh" });
 ///                             });
 ///                         });
 ///                 });
 ///         });
 /// }
 ///
-/// # tessera_ui::testing::UiTest::new().content(demo).frame();
 /// ```
 #[tessera]
 pub fn pull_refresh(

@@ -598,38 +598,39 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
 /// use tessera_components::md3::{
+///     button::button,
 ///     menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
 ///     text::text,
+///     theme::material_theme,
 /// };
-/// use tessera_ui::{Dp, remember};
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
+/// use tessera_ui::{Dp, remember, tessera};
 ///
-/// let menu = remember(MenuController::new);
-/// menu.with_mut(MenuController::open);
-/// assert!(menu.with(MenuController::is_open));
-/// # material_theme()
-/// #     .theme(|| MaterialTheme::default())
-/// #     .child(move || {
-/// menu_provider()
-///     .anchor(MenuAnchor::from_dp(
-///         (Dp(16.0), Dp(16.0)),
-///         (Dp(80.0), Dp(40.0)),
-///     ))
-///     .placement(MenuPlacement::BelowStart)
-///     .controller(menu)
-///     .main_content(|| {
-///         text("Main content");
-///     })
-///     .menu_content(|menu| {
-///         menu_item().menu(menu).label("Edit").on_click(|| {});
+/// #[tessera]
+/// fn file_menu() {
+///     let menu = remember(MenuController::new);
+///     let selection = remember(|| String::from("Choose a file action"));
+///     material_theme().child(move || {
+///         menu_provider()
+///             .anchor(MenuAnchor::from_dp((Dp(16.0), Dp(16.0)), (Dp(120.0), Dp(48.0))))
+///             .placement(MenuPlacement::BelowStart)
+///             .controller(menu)
+///             .main_content(move || {
+///                 button()
+///                     .on_click(move || menu.with_mut(MenuController::open))
+///                     .child(move || text(selection.get()));
+///             })
+///             .menu_content(move |scope| {
+///                 menu_item()
+///                     .menu(scope)
+///                     .label("Open")
+///                     .on_click(move || {
+///                         selection.set(String::from("Opened"));
+///                         menu.with_mut(MenuController::close);
+///                     });
+///             });
 ///     });
-/// # });
-/// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
+/// }
 /// ```
 #[tessera]
 pub fn menu_provider(
@@ -762,12 +763,10 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
     let internal_bounds = remember(|| None);
     let bounds = provider_args
         .bounds
-        .clone()
         .map(|bounds| bounds.0)
         .unwrap_or(internal_bounds);
 
     // Parent pointer handler: block propagation and close on background click.
-    let bounds = bounds;
     let on_dismiss = provider_args.on_dismiss;
     let close_on_escape = provider_args.close_on_escape;
     let close_on_background = provider_args.close_on_background;
@@ -792,20 +791,17 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
         });
     }
     if is_open && parent_request.is_none() {
-        modifier = with_pointer_input(modifier, {
-            let bounds = bounds;
-            move |mut input| {
-                let cursor_position = input.cursor_position_rel;
-                let menu_bounds = bounds.get();
-                let should_close_click = close_on_background
-                    && input.has_unconsumed_release()
-                    && is_click_outside_menu(cursor_position, menu_bounds);
+        modifier = with_pointer_input(modifier, move |mut input| {
+            let cursor_position = input.cursor_position_rel;
+            let menu_bounds = bounds.get();
+            let should_close_click = close_on_background
+                && input.has_unconsumed_release()
+                && is_click_outside_menu(cursor_position, menu_bounds);
 
-                input.block_all();
+            input.block_all();
 
-                if should_close_click {
-                    apply_close_action(controller, &on_dismiss);
-                }
+            if should_close_click {
+                apply_close_action(controller, &on_dismiss);
             }
         });
     }
@@ -843,13 +839,12 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
         placement: provider_args.placement,
         offset: provider_args.offset,
         anchor,
-        bounds: bounds,
+        bounds,
     })
     .modifier(modifier)
     .child(move || {
         menu_main_slot(main_focus_scope, main_content);
         if is_open {
-            let bounds = bounds;
             if parent_request.is_none() {
                 surface()
                     .style(SurfaceStyle::Filled {
@@ -944,7 +939,7 @@ fn menu_panel(
     }
     let hover = MenuShapeHover {
         motion,
-        host: Some(host.clone()),
+        host: Some(host),
         controller: Some(controller),
     };
 
@@ -1168,38 +1163,6 @@ impl Default for MenuItemConfig {
 /// - `disabled_color` — optional disabled content color override
 /// - `on_click` — optional leaf activation callback; `submenu_content` takes
 ///   precedence when both are provided.
-///
-/// ## Examples
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::md3::{
-///     menus::{MenuController, menu_item, menu_provider},
-///     text::text,
-/// };
-/// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::remember;
-///
-/// # material_theme()
-/// #     .theme(|| MaterialTheme::default())
-/// #     .child(|| {
-/// menu_provider()
-///     .controller(remember(|| {
-///         let mut controller = MenuController::new();
-///         controller.open();
-///         controller
-///     }))
-///     .menu_content(|menu| {
-///         menu_item().menu(menu).label("Open");
-///     })
-///     .main_content(|| {
-///         text("Main content");
-///     });
-/// # });
-/// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
-/// ```
 #[tessera]
 pub fn menu_item(
     menu: Option<MenuScope>,
@@ -1319,7 +1282,6 @@ fn menu_item_surface(
     let host = item.menu.map(|menu| menu.host);
     let parent = item.menu.map(|menu| menu.controller);
     if enabled && hover.with(|hover| hover.deadline.is_some()) {
-        let host = host.clone();
         launch_once(async move {
             loop {
                 let now = with_frame_time(|now| now).await;
@@ -1426,7 +1388,7 @@ fn menu_item_surface(
                     .push_pointer_preview_input(MenuItemHoverFocus {
                         enabled,
                         requester: focus_requester,
-                        host: host.clone(),
+                        host,
                         controller: parent,
                         request: submenu_request,
                         hover,
@@ -1636,7 +1598,7 @@ fn menu_item_inner(args: Option<MenuItemConfig>) {
         let host = menu.host;
         let parent = menu.controller;
         let value = MenuPopupRequest {
-            host: host.clone(),
+            host,
             parent,
             controller: submenu_controller,
             anchor: remember(tessera_ui::LayoutCoordinates::default),

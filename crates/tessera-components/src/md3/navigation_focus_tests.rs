@@ -1,4 +1,3 @@
-//! Focus indicator regressions for selectable navigation destinations.
 //!
 //! ## Usage
 //!

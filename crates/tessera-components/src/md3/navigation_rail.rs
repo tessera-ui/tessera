@@ -601,7 +601,6 @@ fn navigation_rail_item_view(
         focus_requester: Some(focus),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
-        ..Default::default()
     };
 
     let modifier = Modifier::new()
@@ -661,24 +660,6 @@ struct NavigationRailItemDefinition {
 ///   notification count.
 /// - `selected` — whether this item is the active destination.
 /// - `on_click` — callback invoked after the item becomes selected.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::md3::navigation_rail::{navigation_rail, navigation_rail_item};
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let selected = remember(|| 0usize);
-///     navigation_rail().content(move |rail| {
-///         navigation_rail_item(rail)
-///             .label("Home")
-///             .selected(selected.get() == 0)
-///             .on_click(move || selected.set(0));
-///     });
-/// }
-/// ```
 #[tessera]
 pub fn navigation_rail_item(
     rail: NavigationRailScope,
@@ -739,18 +720,22 @@ pub fn navigation_rail_item(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::navigation_rail::{navigation_rail, navigation_rail_item};
+/// use tessera_components::md3::{navigation_rail::{navigation_rail, navigation_rail_item}, theme::material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
 ///     let selected = remember(|| 0usize);
-///     navigation_rail().expanded(true).content(move |rail| {
+///     material_theme().child(move || navigation_rail().expanded(true).content(move |rail| {
 ///         navigation_rail_item(rail)
 ///             .label("Home")
 ///             .selected(selected.get() == 0)
 ///             .on_click(move || selected.set(0));
-///     });
+///         navigation_rail_item(rail)
+///             .label("Settings")
+///             .selected(selected.get() == 1)
+///             .on_click(move || selected.set(1));
+///     }));
 /// }
 /// ```
 #[tessera]
@@ -795,21 +780,17 @@ pub fn navigation_rail(
     let modifier = Modifier::new()
         .focus_group(None)
         .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true));
-    layout(Stack).modifier(modifier).child({
-        let composition = composition;
-        move || {
-            let composition = composition;
-            surface()
-                .modifier(Modifier::new().fill_max_height().width(container_width))
-                .style(scheme.surface.into())
-                .block_input(true)
-                .child(move || {
-                    navigation_rail_content()
-                        .composition(composition)
-                        .header_optional(header)
-                        .content_optional(content);
-                });
-        }
+    layout(Stack).modifier(modifier).child(move || {
+        surface()
+            .modifier(Modifier::new().fill_max_height().width(container_width))
+            .style(scheme.surface.into())
+            .block_input(true)
+            .child(move || {
+                navigation_rail_content()
+                    .composition(composition)
+                    .header_optional(header)
+                    .content_optional(content);
+            });
     });
 }
 
@@ -904,7 +885,6 @@ fn navigation_rail_content(
 ///         });
 ///     });
 /// }
-/// # tessera_ui::testing::UiTest::new().content(navigation).frame();
 /// ```
 #[tessera]
 pub fn modal_navigation_rail(

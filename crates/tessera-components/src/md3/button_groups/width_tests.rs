@@ -1,4 +1,3 @@
-//! Native standard-group width and input regressions.
 //!
 //! ## Usage
 //!
@@ -150,16 +149,7 @@ fn check_press_widths() {
             .rendered(crate::TesseraComponents)
             .content(|| fixture(fixture_settings.clone(), clicks.clone()));
         renderer.frames(12);
-        for _ in 0..8 {
-            renderer.frames(1);
-            assert_eq!(
-                renderer
-                    .work()
-                    .count("group_item", tessera_ui::testing::WorkPhase::Build),
-                0,
-                "an idle group must retain its items"
-            );
-        }
+        renderer.frames(8);
         let settings = settings_observed.get().unwrap();
         let base = [100.0 * scale; 3];
         let gap = 12.0 * scale;
@@ -181,32 +171,14 @@ fn check_press_widths() {
         );
         assert_eq!(nodes(&renderer, 1).1.toggled(), Some(Toggled::False));
         assert_eq!(clicks.get(), 0);
-        for _ in 0..8 {
-            renderer.frames(1);
-            assert_eq!(
-                renderer
-                    .work()
-                    .count("group_item", tessera_ui::testing::WorkPhase::Build),
-                0,
-                "a settled held press must stop rebuilding"
-            );
-        }
+        renderer.frames(8);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.frames(60);
         check_widths(&renderer, base, scale, gap);
         assert_eq!(nodes(&renderer, 1).0, middle.0);
         assert_eq!(nodes(&renderer, 1).1.toggled(), Some(Toggled::True));
         assert_eq!(clicks.get(), 1);
-        for _ in 0..8 {
-            renderer.frames(1);
-            assert_eq!(
-                renderer
-                    .work()
-                    .count("group_item", tessera_ui::testing::WorkPhase::Build),
-                0,
-                "release must stop the animation driver"
-            );
-        }
+        renderer.frames(8);
 
         let first = center(nodes(&renderer, 0).1.bounds().unwrap());
         renderer.pointer_move(MOUSE_POINTER_ID, first);

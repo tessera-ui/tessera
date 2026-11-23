@@ -468,22 +468,25 @@ fn focus_properties(data: &MenuData, index: usize) -> FocusProperties {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::floating_action_button_menu::{
-///     FloatingActionButtonMenuController, floating_action_button_menu,
+/// use tessera_components::md3::{
+///     floating_action_button_menu::{FloatingActionButtonMenuItem, floating_action_button_menu},
+///     text::text,
+///     theme::material_theme,
 /// };
-/// use tessera_ui::{remember, tessera};
-///
-/// let mut visibility = FloatingActionButtonMenuController::new();
-/// assert!(!visibility.is_expanded());
-/// visibility.open();
-/// assert!(visibility.is_expanded());
-/// visibility.close();
-/// assert!(!visibility.is_expanded());
+/// use tessera_ui::{Callback, remember, tessera};
 ///
 /// #[tessera]
 /// fn creation_actions() {
-///     let state = remember(FloatingActionButtonMenuController::new);
-///     floating_action_button_menu().controller(state);
+///     let created = remember(|| false);
+///     material_theme().child(move || {
+///         floating_action_button_menu()
+///             .items(vec![FloatingActionButtonMenuItem::new(
+///                 "New note",
+///                 None,
+///                 Callback::new(move || created.set(true)),
+///             )])
+///             .main_content(move || text(if created.get() { "Note created" } else { "Notes" }));
+///     });
 /// }
 /// ```
 #[tessera]
@@ -548,8 +551,8 @@ pub fn floating_action_button_menu(
         enabled,
         alignment,
         colors,
-        open_label: open_label.unwrap_or_else(|| I18N.text("md3-open-actions").into()),
-        close_label: close_label.unwrap_or_else(|| I18N.text("md3-close-actions").into()),
+        open_label: open_label.unwrap_or_else(|| I18N.text("md3-open-actions")),
+        close_label: close_label.unwrap_or_else(|| I18N.text("md3-close-actions")),
         scrim_color: scrim_color.unwrap_or(Color::TRANSPARENT),
     };
     let data = remember(|| current.clone());
@@ -566,22 +569,19 @@ pub fn floating_action_button_menu(
         previous.set(expanded);
         pending_focus.set(true);
     }
-    tessera_ui::layout::layout(MenuLayout {
-        alignment,
-        bounds: bounds.clone(),
-    })
-    .modifier(modifier.unwrap_or_default())
-    .child(move || {
-        boxed()
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                hidden: data.with(|data| data.expanded),
-                merge_descendants: true,
-                ..Default::default()
-            }))
-            .children_optional(main_content.clone());
-        fab_menu_scrim(data, state, motion).bounds(bounds.clone());
-        fab_menu_panel(data, state, motion, pending_focus);
-    });
+    tessera_ui::layout::layout(MenuLayout { alignment, bounds })
+        .modifier(modifier.unwrap_or_default())
+        .child(move || {
+            boxed()
+                .modifier(Modifier::new().semantics(SemanticsArgs {
+                    hidden: data.with(|data| data.expanded),
+                    merge_descendants: true,
+                    ..Default::default()
+                }))
+                .children_optional(main_content);
+            fab_menu_scrim(data, state, motion).bounds(bounds);
+            fab_menu_panel(data, state, motion, pending_focus);
+        });
 }
 
 #[tessera]
@@ -830,7 +830,7 @@ fn fab_menu_action(
                 .child(move || {
                     let item = data.with(|data| data.items[index].clone());
                     let style = use_context::<MaterialTheme>()
-                        .unwrap()
+                        .expect("MaterialTheme must be provided")
                         .get()
                         .typography
                         .title_medium;

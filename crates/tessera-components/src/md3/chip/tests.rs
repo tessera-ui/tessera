@@ -1,4 +1,3 @@
-//! Chip layout, selection semantics, and live typography regressions.
 //!
 //! ## Usage
 //!

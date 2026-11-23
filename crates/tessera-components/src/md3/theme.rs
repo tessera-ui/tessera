@@ -383,8 +383,9 @@ impl MaterialTheme {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::md3::theme::{
-///     MaterialColorScheme, MaterialTheme, MaterialTypography, material_theme,
+/// use tessera_components::md3::{
+///     text::text,
+///     theme::{MaterialColorScheme, MaterialTheme, MaterialTypography, material_theme},
 /// };
 /// use tessera_ui::{Color, tessera};
 ///
@@ -399,9 +400,7 @@ impl MaterialTheme {
 ///             typography,
 ///             ..MaterialTheme::default()
 ///         })
-///         .child(|| {
-///             // Your UI here.
-///         });
+///         .child(|| text("Welcome"));
 /// }
 /// ```
 #[tessera]

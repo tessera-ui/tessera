@@ -1,19 +1,19 @@
-//! Pointer targeting and ordered input delivery.
-//!
-//! ## Usage
-//!
-//! Route mouse, touch, and hover interactions to placed controls.
-
 use std::{
     cell::{Cell, RefCell},
-    sync::Arc,
+    rc::Rc,
 };
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{NodeId, PxPosition, PxSize, modifier::OrderedModifierAction, time::Instant};
 
-#[cfg(any(target_os = "android", target_os = "ios", target_os = "macos",))]
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux"
+))]
 use crate::{PxRect, render_graph::PlatformViewInputBlocker};
 
 use super::{
@@ -25,11 +25,23 @@ const CELL_SIZE: f32 = 256.0;
 const MAX_CELLS: usize = 256;
 
 struct Entry {
-    plan: Arc<PointerNodePlan>,
+    plan: Rc<PointerNodePlan>,
     order: Vec<usize>,
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos",))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
     bounds: PxRect,
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos",))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
     blocks_native_input: bool,
     coverage: Coverage,
 }
@@ -244,7 +256,13 @@ impl PointerIndex {
                 continue;
             }
             let raw_input = node.interaction().has_pointer_handlers();
-            #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos",))]
+            #[cfg(any(
+                target_os = "android",
+                target_os = "ios",
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "linux"
+            ))]
             let blocks_native_input = raw_input || node.modifier.has_pointer_input();
             let Some(metadata) = metadatas.get(&id) else {
                 self.remove(id);
@@ -275,10 +293,10 @@ impl PointerIndex {
                 continue;
             };
             let plan = if let Some(mut plan) = retained_plan {
-                Arc::make_mut(&mut plan).context = context;
+                Rc::make_mut(&mut plan).context = context;
                 plan
             } else {
-                Arc::new(PointerNodePlan {
+                Rc::new(PointerNodePlan {
                     context,
                     modifier: node.modifier.clone(),
                 })
@@ -364,9 +382,21 @@ impl PointerIndex {
                 Entry {
                     plan,
                     order: path,
-                    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos",))]
+                    #[cfg(any(
+                        target_os = "android",
+                        target_os = "ios",
+                        target_os = "macos",
+                        target_os = "windows",
+                        target_os = "linux"
+                    ))]
                     bounds,
-                    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos",))]
+                    #[cfg(any(
+                        target_os = "android",
+                        target_os = "ios",
+                        target_os = "macos",
+                        target_os = "windows",
+                        target_os = "linux"
+                    ))]
                     blocks_native_input,
                     coverage,
                 },
@@ -485,7 +515,13 @@ impl PointerIndex {
         path
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos",))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
     pub(super) fn platform_view_input_blockers(
         &self,
         views: &[(u64, Vec<usize>)],

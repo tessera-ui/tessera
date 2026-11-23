@@ -197,7 +197,7 @@ fn item(
                     "ui-value-value-more-actions",
                     [
                         ("v0", I18N.text(&label).into()),
-                        ("v1", I18N.text(&(ITEMS[index])).into()),
+                        ("v1", I18N.text(ITEMS[index]).into()),
                     ],
                 ))
                 .on_click(move || state.secondary.set(state.secondary.get() + 1));
@@ -216,7 +216,7 @@ fn item(
             "ui-value-value-format-1",
             [
                 ("v0", I18N.text(&label).into()),
-                ("v1", I18N.text(&(ITEMS[index])).into()),
+                ("v1", I18N.text(ITEMS[index]).into()),
             ],
         ))
         .enabled(enabled)

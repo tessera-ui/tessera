@@ -58,7 +58,6 @@ struct FrameTargets {
     sample_count: u32,
 }
 
-/// Timing breakdown for the most recent render call.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct RenderTimingBreakdown {
     /// Time spent acquiring the swapchain texture.
@@ -356,7 +355,6 @@ impl RenderCore {
         self.targets.sample_count
     }
 
-    /// Returns the timing breakdown for the most recent render call.
     pub(crate) fn last_render_breakdown(&self) -> Option<RenderTimingBreakdown> {
         self.last_render_breakdown
     }
@@ -399,6 +397,13 @@ impl RenderCore {
         platform_views: Option<Rc<RefCell<crate::linux_platform_views::LinuxPlatformViews>>>,
     ) {
         self.linux_platform_views = platform_views;
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(super) fn linux_platform_views(
+        &self,
+    ) -> Option<&RefCell<crate::linux_platform_views::LinuxPlatformViews>> {
+        self.linux_platform_views.as_deref()
     }
 
     #[cfg(target_os = "ios")]

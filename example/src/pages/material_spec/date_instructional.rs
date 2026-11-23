@@ -142,11 +142,10 @@ fn canvas(
                         }),
                 )
                 .children(move || {
-                    let content = content.clone();
                     scaled_box(2.0).child(move || {
                         boxed()
                             .modifier(Modifier::new().size(Dp(width / 2.0), Dp(300.0)))
-                            .children_shared(content.clone());
+                            .children_shared(content);
                     });
                 });
         }),
@@ -587,7 +586,7 @@ fn optional_clear() {
                                     )
                                     .accessibility_label(I18N.format(
                                         "ui-optional-clear-value",
-                                        [("v0", I18N.text(&caption).into())],
+                                        [("v0", I18N.text(caption).into())],
                                     ))
                                     .on_click(move || match caption {
                                         "ui-clear" => state

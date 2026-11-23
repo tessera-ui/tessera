@@ -1,8 +1,8 @@
 # Headless sessions
 
-Enable the `headless` feature on the application's `tessera-ui` dependency. Use
-the shared `EntryPoint::run_desktop()` startup path; headless workers select its
-offscreen mode. Rendering requires a native GPU adapter.
+Enable the `headless` feature on the application's `tessera-ui` dependency and
+start the app through `EntryPoint::run_desktop()`. Offscreen rendering requires
+a native GPU adapter.
 
 Start the session supervisor from the application workspace:
 

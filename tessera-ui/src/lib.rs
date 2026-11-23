@@ -165,11 +165,16 @@ pub use crate::{
 pub use platform_view::WebPlatformViewFactory;
 
 #[cfg(target_os = "linux")]
-pub use linux_platform_views::{LinuxPlatformViewFactory, WaylandChildSurface, X11ChildWindow};
+pub use linux_platform_views::{
+    LinuxPlatformViewFactory, LinuxViewInputEvent, WaylandChildSurface, WaylandViewPlacement,
+    X11ChildWindow,
+};
 #[cfg(target_os = "macos")]
 pub use macos_platform_views::MacosPlatformViewFactory;
 #[cfg(target_os = "windows")]
-pub use windows_platform_views::WindowsPlatformViewFactory;
+pub use windows_platform_views::{
+    WindowsPlatformViewFactory, WindowsViewInputEvent, WindowsViewPlacement,
+};
 
 pub(crate) use crate::thread_utils::SendSync;
 

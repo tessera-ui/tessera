@@ -117,23 +117,21 @@ fn control(configuration: bool, row: usize, selected: bool) {
                     (
                         "v0",
                         I18N.text(
-                            &([
+                            [
                                 "ui-without-icons",
                                 "ui-icon-when-selected",
                                 "ui-icons-in-both-states",
-                            ][row]),
+                            ][row],
                         )
                         .into(),
                     ),
                     (
                         "v1",
-                        I18N.text(
-                            &(if selected {
-                                "ui-selected-7075"
-                            } else {
-                                "ui-unselected-7076"
-                            }),
-                        )
+                        I18N.text(if selected {
+                            "ui-selected-7075"
+                        } else {
+                            "ui-unselected-7076"
+                        })
                         .into(),
                     ),
                 ],
@@ -148,13 +146,11 @@ fn control(configuration: bool, row: usize, selected: bool) {
                 "ui-anatomy-value-switch",
                 [(
                     "v0",
-                    I18N.text(
-                        &(if selected {
-                            "ui-selected-7075"
-                        } else {
-                            "ui-unselected-7076"
-                        }),
-                    )
+                    I18N.text(if selected {
+                        "ui-selected-7075"
+                    } else {
+                        "ui-unselected-7076"
+                    })
                     .into(),
                 )],
             ),
@@ -228,13 +224,11 @@ fn marker(number: usize, x: Dp, y: Dp, circular: bool) {
                             [
                                 (
                                     "v0",
-                                    I18N.text(
-                                        &(if circular {
-                                            "ui-configuration-7109"
-                                        } else {
-                                            "ui-anatomy-7072"
-                                        }),
-                                    )
+                                    I18N.text(if circular {
+                                        "ui-configuration-7109"
+                                    } else {
+                                        "ui-anatomy-7072"
+                                    })
                                     .into(),
                                 ),
                                 ("v1", (number).into()),
@@ -274,7 +268,7 @@ fn legend(configuration: bool) {
         {
             text(I18N.format(
                 "ui-value-value",
-                [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
+                [("v0", (index + 1).into()), ("v1", I18N.text(label).into())],
             ))
             .style(type_style(16.0, 28.0));
         }

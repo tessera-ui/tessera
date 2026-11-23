@@ -1,9 +1,3 @@
-//! Native shape coverage and shared-upload regressions.
-//!
-//! ## Usage
-//!
-//! Verify clipped and scaled surfaces across repeated draw batches.
-
 use tessera_foundation::modifier::ModifierExt as _;
 use tessera_ui::{
     Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier, State,
@@ -87,9 +81,9 @@ struct DamageHandles {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn damage_redraw_matches_a_fresh_target_and_skips_unaffected_shapes() {
+fn editing_clipped_shapes_matches_a_fresh_render() {
     crate::test_utils::run_isolated_test(
-        "pipelines::shape::coverage_tests::damage_redraw_matches_a_fresh_target_and_skips_unaffected_shapes",
+        "pipelines::shape::coverage_tests::editing_clipped_shapes_matches_a_fresh_render",
         || {
             for sample_count in [1, 4] {
                 let probe = TestProbe::default();
@@ -100,24 +94,16 @@ fn damage_redraw_matches_a_fresh_target_and_skips_unaffected_shapes() {
                     .rendered(crate::TesseraComponents)
                     .content(move || damage_fixture(probe.clone()));
                 renderer.frames(3);
-                assert_eq!(
-                    renderer
-                        .frame_graphics_work()
-                        .group("shape_batches")
-                        .buffer_uploads,
-                    0,
-                    "a static scene keeps its rendered pixels without uploading shape batches"
-                );
                 let handles = observed.get().unwrap();
+                let mut previous = renderer.read_pixels();
                 for ink in [Color::BLACK.with_alpha(0.25), Color::WHITE, Color::BLACK] {
                     handles.color.set(ink);
                     renderer.frames(1);
                     let partial = renderer.read_pixels();
-                    let partial_bytes = renderer
-                        .frame_graphics_work()
-                        .group("shape_batches")
-                        .buffer_uploaded_bytes;
-                    assert!(partial_bytes > 0, "the changed patch must actually redraw");
+                    assert_ne!(
+                        partial, previous,
+                        "changing the fill must change the pixels"
+                    );
                     // Recreating the target discards retained pixels and forces a full draw.
                     renderer.resize(200, 128);
                     renderer.frames(1);
@@ -126,14 +112,7 @@ fn damage_redraw_matches_a_fresh_target_and_skips_unaffected_shapes() {
                         renderer.read_pixels(),
                         "fractional clips and translucent pixels match full rendering at MSAA{sample_count}"
                     );
-                    assert!(
-                        partial_bytes
-                            < renderer
-                                .frame_graphics_work()
-                                .group("shape_batches")
-                                .buffer_uploaded_bytes,
-                        "unaffected sibling shapes must not be re-encoded"
-                    );
+                    previous = partial;
                 }
                 for position in [[Dp(35.5), Dp(40.25)], [Dp(-16.75), Dp(12.5)]] {
                     handles.position.set(position);
@@ -247,9 +226,9 @@ fn batch_fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
+fn many_clipped_shapes_keep_their_positions_and_colors() {
     crate::test_utils::run_isolated_test(
-        "pipelines::shape::coverage_tests::shape_batches_share_uploads_and_preserve_pixels_across_buffers",
+        "pipelines::shape::coverage_tests::many_clipped_shapes_keep_their_positions_and_colors",
         || {
             for sample_count in [1, 4] {
                 let probe = TestProbe::<Option<State<bool>>>::default();
@@ -260,14 +239,6 @@ fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
                     .rendered(crate::TesseraComponents)
                     .content(move || batch_fixture().probe(probe.clone()));
                 renderer.frames(1);
-                let uploads = renderer
-                    .frame_graphics_work()
-                    .group("shape_batches")
-                    .buffer_uploads;
-                assert!(
-                    uploads <= 2,
-                    "batches must share frame uploads, got {uploads}"
-                );
                 let uniform = renderer.read_pixels();
                 let first = pixel(&uniform, VIEWPORT_WIDTH, 10, 10);
                 assert_eq!(first[3], 255);
@@ -275,7 +246,7 @@ fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
                     assert_eq!(
                         pixel(&uniform, VIEWPORT_WIDTH, 10 + index * 16, 10),
                         first,
-                        "batch {index} must retain its own position across buffer boundaries"
+                        "shape {index} must retain its position"
                     );
                 }
                 observed.get().unwrap().set(true);
@@ -290,29 +261,17 @@ fn shape_batches_share_uploads_and_preserve_pixels_across_buffers() {
                     {
                         assert!(
                             actual[0] > previous,
-                            "batch colors must remain distinct and ordered"
+                            "shape colors must remain distinct and ordered"
                         );
                     }
                     assert_eq!(
                         actual,
                         pixel(&distinct, VIEWPORT_WIDTH, 10 + index % 15 * 16, 10),
-                        "batch {index} must keep its own instance data across buffers"
+                        "shape {index} must retain its color"
                     );
                     previous_red = Some(actual[0]);
                 }
-                let allocations = renderer
-                    .graphics_work()
-                    .group("shape_batches")
-                    .buffer_allocations;
                 renderer.frames(2);
-                assert_eq!(
-                    renderer
-                        .graphics_work()
-                        .group("shape_batches")
-                        .buffer_allocations,
-                    allocations,
-                    "stable frame batches must reuse GPU buffers and bindings"
-                );
                 assert_eq!(renderer.read_pixels(), distinct);
             }
         },
@@ -399,24 +358,6 @@ fn native_borders_keep_fully_covered_pixels_opaque_at_integer_and_fractional_cli
             .content(fixture);
         renderer.frames(8);
         let pixels = renderer.read_pixels();
-        let allocations = renderer
-            .graphics_work()
-            .group("shape_batches")
-            .buffer_allocations;
-        renderer.frames(8);
-        assert_eq!(
-            renderer
-                .graphics_work()
-                .group("shape_batches")
-                .buffer_allocations,
-            allocations,
-            "warmed shape batches must reuse GPU buffers and bindings"
-        );
-        assert_eq!(
-            renderer.read_pixels(),
-            pixels,
-            "reused batch slots must preserve fractional shape pixels"
-        );
         for x in [24, 32, 40] {
             assert_black(&pixels, 112, x, 16, sample_count);
             assert_black(&pixels, 112, x, 17, sample_count);

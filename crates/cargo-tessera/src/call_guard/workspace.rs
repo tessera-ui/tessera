@@ -35,7 +35,6 @@ pub(crate) fn load_workspace_from(
     load(options, root, &plan, None)
 }
 
-/// Loads the selected packages, reusing `previous` when only source files changed.
 pub(crate) fn load(
     options: &CheckOptions<'_>,
     root: &Path,
@@ -529,7 +528,6 @@ pub(crate) fn relevant_crates(
     Ok(relevant_dependencies(db, allowed_crates))
 }
 
-/// Returns `allowed_crates` and their dependencies that can contain Tessera calls.
 pub(crate) fn relevant_dependencies(
     db: &RootDatabase,
     allowed_crates: HashSet<ra_ap_base_db::Crate>,

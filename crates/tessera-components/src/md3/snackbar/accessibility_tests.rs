@@ -1,4 +1,3 @@
-//! Snackbar notification and action accessibility regressions.
 //!
 //! ## Usage
 //!

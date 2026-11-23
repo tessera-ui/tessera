@@ -201,7 +201,7 @@ fn navigation_examples(
                         ("v0", I18N.text(&caption).into()),
                         (
                             "v1",
-                            I18N.text(&(["ui-home", "ui-inbox", "ui-updates"][selected.get()]))
+                            I18N.text(["ui-home", "ui-inbox", "ui-updates"][selected.get()])
                                 .into(),
                         ),
                     ],
@@ -811,7 +811,7 @@ fn readable_badge_navigation() {
             "ui-value-selected-unread-badge-cleared",
             [(
                 "v0",
-                I18N.text(&(["ui-home", "ui-inbox", "ui-updates"][selected.get()]))
+                I18N.text(["ui-home", "ui-inbox", "ui-updates"][selected.get()])
                     .into(),
             )],
         ),

@@ -45,13 +45,6 @@ const SCROLL_INERTIA_MAX_VELOCITY_DP: f32 = 6000.0;
 const SCROLL_VELOCITY_SAMPLE_WINDOW: Duration = Duration::from_millis(90);
 const SCROLL_VELOCITY_IDLE_CUTOFF: Duration = Duration::from_millis(65);
 
-/// Fraction of the remaining distance an animated scroll keeps after one 60Hz
-/// frame.
-///
-/// `1 - DEFAULT_SCROLL_SMOOTHING` of the remaining distance is covered per
-/// frame, so `0.75` reaches 95% of a step in roughly 175ms and 99% in roughly
-/// 270ms. That reads as an eased movement instead of a jump while staying
-/// responsive to rapid wheel input.
 pub(crate) const DEFAULT_SCROLL_SMOOTHING: f32 = 0.75;
 
 fn clamp_scroll_coordinate(value: f32, boundary: f32, enabled: bool) -> f32 {
@@ -346,8 +339,6 @@ impl ScrollableController {
         }
     }
 
-    /// Updates the scroll position based on time-based interpolation
-    /// Returns true if the position changed (needs redraw)
     pub(crate) fn update_scroll_position(&mut self, now: Instant, smoothing: f32) -> bool {
         let delta_time = self
             .last_frame
@@ -645,11 +636,6 @@ impl LayoutModifier for ScrollLayoutModifierNode {
     }
 }
 
-/// Makes `base` behave as a scroll viewport driven by `controller`.
-///
-/// Composes the layout (viewport measure + content offset), clipping, wheel and
-/// drag input, smoothing frame ticking, focus reveal, and nested-scroll
-/// participation.
 pub(crate) fn apply_scroll_modifier(
     base: Modifier,
     controller: State<ScrollableController>,
@@ -729,10 +715,6 @@ impl BuildModifierNode for ScrollBuild {
     }
 }
 
-/// Internal scroll container: a sized viewport with scrollbars around the
-/// scroll modifier. Public scrolling is expressed through
-/// `Modifier::vertical_scroll` / `Modifier::horizontal_scroll` from
-/// [`crate::md3::modifier::ModifierExt`].
 #[tessera]
 pub(crate) fn scrollable(
     modifier: Option<Modifier>,
@@ -1435,10 +1417,10 @@ impl ScrollableViewportPointerModifierNode {
                 self.controller.with_mut(|c| {
                     c.start_inertia(release_timestamp, available_velocity - consumed_velocity)
                 });
-                if self.controller.with(|c| c.active_inertia.is_none()) {
-                    if let Some(connection) = &connection {
-                        connection.post_fling(ScrollVelocity::ZERO);
-                    }
+                if self.controller.with(|c| c.active_inertia.is_none())
+                    && let Some(connection) = &connection
+                {
+                    connection.post_fling(ScrollVelocity::ZERO);
                 }
             }
         }

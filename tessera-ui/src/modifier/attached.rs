@@ -698,7 +698,7 @@ mod tests {
                 records: records.clone(),
                 drops: drops.clone(),
             }));
-            let materialized = source.materialize(1, 1, &[]);
+            let materialized = source.materialize(1, &[]);
             assert_eq!(materialized.ordered_actions().len(), 1);
             let mut chain = AttachedModifierChain::default();
             update(&mut chain, materialized);

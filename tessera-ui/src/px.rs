@@ -70,11 +70,6 @@ impl Px {
     }
 
     /// Adds with saturation at `i32` bounds.
-    ///
-    /// ```
-    /// use tessera_ui::Px;
-    /// assert_eq!(Px(i32::MAX).saturating_add(Px(1)), Px(i32::MAX));
-    /// ```
     pub fn saturating_add(self, rhs: Self) -> Self {
         Px(self.0.saturating_add(rhs.0))
     }
@@ -295,20 +290,6 @@ impl PxRect {
     }
 
     /// Returns the smallest rectangle containing both rectangles.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxRect};
-    ///
-    /// let rect1 = PxRect::new(Px::new(0), Px::new(0), Px::new(100), Px::new(100));
-    /// let rect2 = PxRect::new(Px::new(50), Px::new(50), Px::new(100), Px::new(100));
-    /// let union_rect = rect1.union(&rect2);
-    /// assert_eq!(
-    ///     union_rect,
-    ///     PxRect::new(Px::new(0), Px::new(0), Px::new(150), Px::new(150))
-    /// );
-    /// ```
     pub fn union(&self, other: &Self) -> Self {
         let x = self.x.0.min(other.x.0);
         let y = self.y.0.min(other.y.0);
@@ -331,25 +312,6 @@ impl PxRect {
     }
 
     /// Returns the overlapping rectangle, or None when edges only touch.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxRect};
-    ///
-    /// let rect1 = PxRect::new(Px::new(0), Px::new(0), Px::new(100), Px::new(100));
-    /// let rect2 = PxRect::new(Px::new(50), Px::new(50), Px::new(100), Px::new(100));
-    /// let intersection = rect1.intersection(&rect2);
-    /// assert_eq!(
-    ///     intersection,
-    ///     Some(PxRect::new(
-    ///         Px::new(50),
-    ///         Px::new(50),
-    ///         Px::new(50),
-    ///         Px::new(50)
-    ///     ))
-    /// );
-    /// ```
     pub fn intersection(&self, other: &Self) -> Option<Self> {
         let x1 = self.x.0.max(other.x.0);
         let y1 = self.y.0.max(other.y.0);

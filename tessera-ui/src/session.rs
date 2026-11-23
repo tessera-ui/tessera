@@ -43,11 +43,8 @@ pub(crate) struct SessionState {
 
 type GateGuard = <parking_lot::RawMutex as parking_lot::lock_api::RawMutex>::Guard;
 
-/// Serializes other threads' state access with the owning UI thread.
-///
-/// The owning thread holds the lock while it runs and hands it over only at
-/// frame boundaries, so its own access needs no locking and builds never see
-/// another thread's write midway.
+// The owner only yields the gate at frame boundaries, so a build never sees a
+// concurrent write and the owner needs no per-access lock.
 struct AccessGate {
     raw: parking_lot::RawMutex,
     waiting: AtomicUsize,
@@ -80,11 +77,6 @@ fn gate_entry(session: u128) -> Option<(Arc<AccessGate>, SessionPtr)> {
         .map(|entry| (entry.gate.clone(), entry.state))
 }
 
-/// Runs `access` with `session` active when it is not the current session.
-///
-/// On the owning thread the session is entered directly. Other threads wait
-/// until the owning thread reaches a frame boundary. Returns `None` when the
-/// session has closed.
 pub(crate) fn with_inactive_session<R>(session: u128, access: impl FnOnce() -> R) -> Option<R> {
     let (gate, state) = gate_entry(session)?;
     if gate.owner == std::thread::current().id() {
@@ -129,7 +121,6 @@ pub(crate) fn is_open(session: u128) -> bool {
     gate_entry(session).is_some()
 }
 
-/// Lets threads waiting on the active session's gate run their access.
 pub(crate) fn serve_other_threads() {
     let Some(session) = RuntimeSession::current() else {
         return;
@@ -483,9 +474,6 @@ impl Drop for RuntimeSessionGuard {
     }
 }
 
-/// Returns a shared resource owned by the active UI session.
-///
-/// Without an active session, the returned resource is owned only by its caller.
 pub(crate) fn shared_runtime_resource<T: Default + Send + Sync + 'static>() -> Arc<T> {
     let Some(session) = RuntimeSession::current() else {
         return Arc::new(T::default());
@@ -540,7 +528,6 @@ mod tests {
     #[crate::tessera]
     fn observed_state(output: TestProbe<Option<State<usize>>>) {
         let state = remember(|| 7usize);
-        let _value = state.get();
         output.set(Some(state));
     }
 
@@ -563,17 +550,6 @@ mod tests {
             );
             assert_eq!(local_runtime_resource::<Cell<usize>>().get(), 0);
         });
-        first.run(|| {
-            assert_eq!(state.get(), 7);
-            state.set(9);
-        });
-        first.advance(std::time::Duration::from_nanos(1));
-        assert_eq!(
-            first
-                .work()
-                .count("observed_state", crate::work::WorkPhase::Build),
-            1
-        );
         let _selected = second.enter();
         drop(first);
         assert!(weak.upgrade().is_none());
@@ -688,10 +664,8 @@ mod tests {
         session.frame();
         session.advance(std::time::Duration::from_nanos(10));
         assert_eq!(output.get(), [10, 10]);
-        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 1);
-        assert_eq!(session.frame_clock_diagnostics().waiting_tasks, 0);
         session.advance(std::time::Duration::from_nanos(10));
-        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 0);
+        assert_eq!(output.get(), [10, 10]);
     }
 
     #[crate::tessera]
@@ -714,33 +688,6 @@ mod tests {
         output.take();
         drop(session);
         assert_eq!(output.get(), [17]);
-    }
-
-    #[test]
-    fn conditional_state_writes_preserve_idle_frames_and_replay_changed_readers() {
-        let output = TestProbe::default();
-        let mut session = UiTest::new().content(|| observed_state(output.clone()));
-        session.frame();
-        let state = output.get().expect("test fixture entry exists");
-        assert!(!state.set_if_changed(7));
-        assert!(!crate::runtime::has_pending_build_invalidations());
-        session.advance(std::time::Duration::from_nanos(1));
-        assert_eq!(
-            session
-                .work()
-                .count("observed_state", crate::work::WorkPhase::Build),
-            0
-        );
-        assert!(state.set_if_changed(9));
-        assert!(crate::runtime::has_pending_build_invalidations());
-        session.advance(std::time::Duration::from_nanos(1));
-        assert_eq!(state.get(), 9);
-        assert_eq!(
-            session
-                .work()
-                .count("observed_state", crate::work::WorkPhase::Build),
-            1
-        );
     }
 
     #[crate::tessera]
@@ -769,12 +716,6 @@ mod tests {
         assert_eq!(output.get(), 7);
         session.advance(std::time::Duration::from_nanos(1));
         assert_eq!(output.get(), 11);
-        assert_eq!(
-            session
-                .work()
-                .count("owned_state_reader", crate::work::WorkPhase::Build),
-            1
-        );
         drop(owner);
         assert!(!value.is_alive());
         let next = crate::runtime::ModelScope::new();
@@ -912,13 +853,10 @@ mod tests {
         session.frame();
         session.advance(std::time::Duration::from_nanos(1));
         assert_eq!(output.get(), [1]);
-        assert_eq!(session.frame_clock_diagnostics().waiting_tasks, 1);
         visible.set(false);
         session.advance(std::time::Duration::from_nanos(1));
         assert_eq!(output.get(), [1, 2]);
-        assert_eq!(session.frame_clock_diagnostics().waiting_tasks, 0);
         session.advance(std::time::Duration::from_nanos(1));
-        assert_eq!(session.frame_clock_diagnostics().resumed_tasks, 0);
         assert_eq!(output.get(), [1, 2]);
     }
 

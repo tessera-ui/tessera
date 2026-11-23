@@ -49,9 +49,10 @@ impl LayoutModifier for InsetSize {
             .exclude(input.layout_input.consumed_window_insets());
         let edge = [insets.left, insets.top, insets.right, insets.bottom][self.edge].to_px();
         let axis = Some(AxisConstraint::exact(edge));
+        let horizontal = self.edge.is_multiple_of(2);
         ConstraintModifierNode {
-            width_override: if self.edge % 2 == 0 { axis } else { None },
-            height_override: if self.edge % 2 == 1 { axis } else { None },
+            width_override: axis.filter(|_| horizontal),
+            height_override: axis.filter(|_| !horizontal),
             fill_width: false,
             fill_height: false,
             enforce_incoming: true,

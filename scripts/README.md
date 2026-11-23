@@ -1,19 +1,13 @@
-# Scripts
+# Maintenance scripts
 
-Run Rust tools with `rust-script`:
+Run Rust scripts from the repository root with `rust-script scripts/<name>.rs --help`. Run their tests with `rust-script --test scripts/<name>.rs`.
 
-```sh
-cargo install rust-script
-rust-script scripts/check-imports.rs --help
-```
-
-- `check-imports.rs`: format Rust sources and imports.
-- `analyze-profiler.rs`: summarize frame profiles.
-- `release-package.rs`: preview release versions; use `--check` for packaged-source and scaffold acceptance, `--prepare` to write the plan for a release pull request and `--execute` to verify, publish and tag it from `main`.
-- `check-package.rs`: verify packaged metadata, icons, and WebAssembly headers.
-- `check-mobile.rs`: verify Android and iOS first-frame rendering and resume.
-- `test-apple-ime.rs`: verify native IME on macOS and iOS Simulator.
-
-Run script regression tests with `rust-script --test scripts/<name>.rs`.
-Package inspection uses native tools (`dpkg-deb`, `7z`, Android SDK tools, or Xcode)
-for the selected platform.
+| Script | Task |
+| --- | --- |
+| `check-imports.rs` | Check or format Rust sources and imports. |
+| `analyze-profiler.rs` | Summarize recorded frame profiles. |
+| `check-package.rs` | Validate application packages. |
+| `check-web-wasm.mjs` | Validate the web build with Node.js. |
+| `check-mobile.rs` | Verify first-frame rendering and foreground resume on Android or iOS. |
+| `test-apple-ime.rs` | Verify native text input on macOS or iOS Simulator. |
+| `release-package.rs` | Follow the [release guide](../docs/RELEASE_RULE.md). |

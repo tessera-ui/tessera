@@ -145,7 +145,6 @@ impl tessera_ui::LayoutPolicy for RowLayout {
 ///     text("Last");
 /// });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn row(

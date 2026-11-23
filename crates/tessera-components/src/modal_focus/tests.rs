@@ -1,4 +1,3 @@
-//! Modal focus lifecycle and background input regressions.
 //!
 //! ## Usage
 //!

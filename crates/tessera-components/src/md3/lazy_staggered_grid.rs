@@ -110,27 +110,14 @@ impl LazyStaggeredGridContent {
 ///     text::text,
 ///     theme::material_theme,
 /// };
-/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-/// use tessera_ui::{Modifier, tessera};
+/// use tessera_ui::tessera;
 /// #[tessera]
 /// fn demo() {
 ///     material_theme().child(|| {
 ///         lazy_vertical_staggered_grid()
 ///             .columns(StaggeredGridCells::fixed(2))
-///             .overscan(0)
-///             .items(4, move |i| {
-///                 text(format!("Tile {i}")).modifier(
-///                     Modifier::new().semantics(SemanticsArgs {
-///                         test_tag: Some(format!("tile-{i}")), ..Default::default()
-///                     })
-///                 );
-///             });
+///             .items(4, |i| text(format!("Tile {i}")));
 ///     });
-/// }
-///
-/// let snapshot = tessera_ui::testing::UiTest::new().content(demo).frame();
-/// for index in 0..4 {
-///     snapshot.node(&format!("tile-{index}")).exists();
 /// }
 /// ```
 #[tessera]
@@ -304,27 +291,14 @@ fn lazy_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs, axis: LazyAxis) {
 ///     text::text,
 ///     theme::material_theme,
 /// };
-/// use tessera_foundation::modifier::{ModifierExt as _, SemanticsArgs};
-/// use tessera_ui::{Modifier, tessera};
+/// use tessera_ui::tessera;
 /// #[tessera]
 /// fn demo() {
 ///     material_theme().child(|| {
 ///         lazy_horizontal_staggered_grid()
 ///             .rows(StaggeredGridCells::fixed(2))
-///             .overscan(0)
-///             .items(3, move |i| {
-///                 text(format!("Tile {i}")).modifier(
-///                     Modifier::new().semantics(SemanticsArgs {
-///                         test_tag: Some(format!("tile-{i}")), ..Default::default()
-///                     })
-///                 );
-///             });
+///             .items(3, |i| text(format!("Tile {i}")));
 ///     });
-/// }
-///
-/// let snapshot = tessera_ui::testing::UiTest::new().content(demo).frame();
-/// for index in 0..3 {
-///     snapshot.node(&format!("tile-{index}")).exists();
 /// }
 /// ```
 #[tessera]

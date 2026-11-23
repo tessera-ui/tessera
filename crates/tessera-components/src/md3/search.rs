@@ -237,17 +237,16 @@ enum SearchBarLayoutKind {
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::search::{SearchBarController, search_bar};
+/// use tessera_components::md3::{search::{SearchBarController, search_bar}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         search_bar()
 ///             .controller(remember(|| SearchBarController::new(true)))
-///             .content(|| {});
+///             .content(|| text("Recent searches"));
 ///     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn search_bar(
@@ -384,17 +383,16 @@ fn resolve_search_bar(
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::search::{SearchBarController, docked_search_bar};
+/// use tessera_components::md3::{search::{SearchBarController, docked_search_bar}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         docked_search_bar()
 ///             .controller(remember(|| SearchBarController::new(true)))
-///             .content(|| {});
+///             .content(|| text("Search results"));
 ///     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn docked_search_bar(
@@ -783,7 +781,10 @@ struct SearchFieldArgs {
 fn search_field(args: Option<SearchFieldArgs>) {
     let args = args.expect("search_field requires args");
     let has_icons = args.leading_icon.is_some() || args.trailing_icon.is_some();
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let color = if args.enabled {
         scheme.on_surface_variant
     } else {

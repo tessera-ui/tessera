@@ -32,8 +32,6 @@ use super::super::{
     gap, srgb, type_style,
 };
 
-/// Callout marker: number, geometry key and whether it sits on the trailing
-/// lane.
 pub(super) type Callout = (usize, &'static str, bool);
 
 fn tagged(sink: Option<State<Geometry>>, name: &'static str) -> Modifier {
@@ -126,7 +124,6 @@ fn dot_grid_content(values: Geometry, dark: bool) {
     annotations::lines(width, height, format!("<path d='{path}' fill='{tone}'/>"));
 }
 
-/// Reference canvas with optional dark Material 2025 theme, fill and dot grid.
 #[tessera]
 pub(super) fn canvas(
     #[prop(into)] label: String,
@@ -141,7 +138,7 @@ pub(super) fn canvas(
         material_theme()
             .theme(|| MaterialTheme::from_seed(ACCENT, true))
             .child(move || {
-                canvas_body(label.clone(), height, true, content.clone(), dots)
+                canvas_body(label.clone(), height, true, content, dots)
                     .background_optional(background);
             });
     } else {
@@ -184,7 +181,6 @@ fn canvas_body(
         });
 }
 
-/// Dark numbered badge used in figure captions and legends.
 #[tessera]
 pub(super) fn number(value: usize) {
     boxed()
@@ -201,8 +197,6 @@ pub(super) fn number(value: usize) {
         });
 }
 
-/// Native navigation rail inside a measured frame with optional numbered
-/// callouts.
 #[tessera]
 pub(super) fn specimen(
     #[prop(into)] label: String,
@@ -497,11 +491,6 @@ fn specimen_header(
     });
 }
 
-/// Static collapsed rail illustration with callouts or baseline measurement
-/// marks.
-///
-/// `marks` selects no marks (0), baseline size marks (2) or baseline padding
-/// marks (3).
 #[tessera]
 pub(super) fn annotated_mock(
     width: Dp,
@@ -526,7 +515,6 @@ pub(super) fn annotated_mock(
         .alignment(Alignment::Center)
         .modifier(watch(geometry, "figure").size(width, height))
         .children(move || {
-            let content = content.clone();
             content.render(geometry);
             let callouts = callouts.clone();
             boxed()
@@ -995,7 +983,6 @@ fn baseline_marks(
     ));
 }
 
-/// Static navigation rail illustration for guidance figures.
 #[tessera]
 pub(super) fn mock_rail(
     expanded: Option<bool>,
@@ -1177,7 +1164,6 @@ pub(super) fn mock_rail(
         .modifier(Modifier::new().fill_max_height())
         .children(move || {
             if elevated {
-                let rail = rail.clone();
                 surface()
                     .style(container.into())
                     .elevation(Dp(1.0))
@@ -1287,7 +1273,7 @@ fn mock_fab(expanded: bool, set: usize, tertiary: bool, geometry: Option<State<G
             icon().painter(symbol).size(Dp(24.0)).tint(ink);
             if expanded {
                 spacer().modifier(Modifier::new().width(Dp(12.0)));
-                text(I18N.text(word)).style(style.clone()).color(ink);
+                text(I18N.text(word)).style(style).color(ink);
             }
         });
 }
@@ -1459,8 +1445,6 @@ fn mock_item(
                     annotations::lines(Dp(180.0), Dp(56.0), svg);
                 }
                 let label = label.clone();
-                let label_style = label_style.clone();
-                let badge_slot = badge_slot.clone();
                 row()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .modifier(
@@ -1472,7 +1456,6 @@ fn mock_item(
                         .padding_symmetric(Dp(16.0), Dp::ZERO),
                     )
                     .children(move || {
-                        let badge_slot = badge_slot.clone();
                         boxed().children(move || {
                             icon().painter(glyph).size(Dp(24.0)).tint(icon_color);
                             badge_slot.render();
@@ -1480,7 +1463,7 @@ fn mock_item(
                         if show_label {
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
                             text(I18N.text(&(label)))
-                                .style(label_style.clone())
+                                .style(label_style)
                                 .color(label_color);
                         }
                     });
@@ -1490,10 +1473,7 @@ fn mock_item(
         let (r, g, b) = INTERACTION;
         let focus_color = srgb(r, g, b);
         let item = RenderSlot::new(move || {
-            let badge_slot = badge_slot.clone();
-            let marks = marks.clone();
             let label = label.clone();
-            let label_style = label_style.clone();
             let base = tagged(sink, ITEM_KEYS[index.min(5)]);
             column()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -1513,10 +1493,7 @@ fn mock_item(
                 })
                 .main_axis_alignment(MainAxisAlignment::Center)
                 .children(move || {
-                    let badge_slot = badge_slot.clone();
-                    let marks = marks.clone();
                     boxed().children(move || {
-                        let badge_slot = badge_slot.clone();
                         boxed()
                             .alignment(Alignment::Center)
                             .modifier(pill(
@@ -1535,7 +1512,7 @@ fn mock_item(
                     if show_label {
                         gap(Dp(4.0));
                         text(I18N.text(&(label)))
-                            .style(label_style.clone())
+                            .style(label_style)
                             .color(label_color);
                     }
                 });
@@ -1564,7 +1541,6 @@ fn mock_item(
     }
 }
 
-/// Device-like window combining a rail illustration with simple app content.
 #[tessera]
 pub(super) fn screen(
     #[prop(into)] label: String,
@@ -1597,8 +1573,6 @@ pub(super) fn screen(
                 }),
         )
         .children(move || {
-            let rail = rail.clone();
-            let overlay = overlay.clone();
             boxed()
                 .alignment(Alignment::TopStart)
                 .modifier(
@@ -1608,11 +1582,9 @@ pub(super) fn screen(
                         .background(scheme.surface),
                 )
                 .children(move || {
-                    let rail = rail.clone();
                     column()
                         .modifier(Modifier::new().fill_max_size())
                         .children(move || {
-                            let rail = rail.clone();
                             if bar == 2 {
                                 mock_bar();
                             }
@@ -1657,7 +1629,6 @@ pub(super) fn screen(
         });
 }
 
-/// Scrim and expanded rail drawn over a screen.
 #[tessera]
 pub(super) fn modal_overlay(
     offset: Option<Dp>,
@@ -1713,7 +1684,6 @@ fn mock_bar() {
         )
         .children(move || {
             for index in 0..4 {
-                let style = style.clone();
                 column()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .modifier(Modifier::new().padding_symmetric(Dp::ZERO, Dp(8.0)))
@@ -1744,7 +1714,7 @@ fn mock_bar() {
                             });
                         gap(Dp(4.0));
                         text(I18N.text(label_for(1, index)))
-                            .style(style.clone())
+                            .style(style)
                             .color(scheme.on_surface_variant);
                     });
             }
@@ -1821,15 +1791,12 @@ fn app_content(kind: usize) {
                         .background(scheme.primary_container),
                 )
                 .children(move || {
-                    text("8:30")
-                        .style(style.clone())
-                        .color(scheme.on_primary_container);
+                    text("8:30").style(style).color(scheme.on_primary_container);
                 });
         }
     }
 }
 
-/// Tinted guidance scene holding one or more screens.
 #[tessera]
 pub(super) fn scene(#[prop(into)] label: String, height: Dp, content: RenderSlot) {
     boxed()
@@ -1852,12 +1819,10 @@ pub(super) fn scene(#[prop(into)] label: String, height: Dp, content: RenderSlot
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .main_axis_alignment(MainAxisAlignment::Center)
                 .modifier(Modifier::new().fill_max_width())
-                .children_shared(content.clone());
+                .children_shared(content);
         });
 }
 
-/// Guidance card with a scene, an optional Do/Caution/Don't strip and a
-/// caption.
 #[tessera]
 pub(super) fn example(
     #[prop(into)] label: String,
@@ -1886,7 +1851,7 @@ pub(super) fn example(
                             ..Default::default()
                         }),
                 )
-                .children_shared(content.clone());
+                .children_shared(content);
             if tone > 0 {
                 let (background, ink, symbol, word) = match tone {
                     1 => (
@@ -1931,7 +1896,6 @@ pub(super) fn example(
         });
 }
 
-/// Two guidance cards in equal columns, stacking them on narrow windows.
 #[tessera]
 pub(super) fn pair(first: RenderSlot, second: RenderSlot) {
     let width = remember(|| Dp(760.0));
@@ -1946,15 +1910,11 @@ pub(super) fn pair(first: RenderSlot, second: RenderSlot) {
             },
         ))
         .children(move || {
-            let first = first.clone();
-            let second = second.clone();
             if wide {
                 row()
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
-                        let first = first.clone();
-                        let second = second.clone();
                         column()
                             .modifier(Modifier::new().weight(1.0))
                             .children(move || first.render());
@@ -1975,7 +1935,6 @@ pub(super) fn pair(first: RenderSlot, second: RenderSlot) {
         });
 }
 
-/// Keyboard key chip shown above focus illustrations.
 #[tessera]
 pub(super) fn key_chip(#[prop(into)] key: String) {
     let (r, g, b) = INTERACTION;
@@ -1994,7 +1953,6 @@ pub(super) fn key_chip(#[prop(into)] key: String) {
         });
 }
 
-/// Accessibility label call-out beside a rail destination.
 #[tessera]
 pub(super) fn label_callout() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;

@@ -24,7 +24,7 @@ impl ImageData {
     /// Builds image data from straight-alpha sRGB RGBA pixels.
     pub fn from_rgba(data: impl Into<Arc<Vec<u8>>>, width: u32, height: u32) -> Self {
         let mut data: Arc<Vec<u8>> = data.into();
-        if data.chunks_exact(4).any(|pixel| pixel[3] != 255) {
+        if data.as_chunks::<4>().0.iter().any(|pixel| pixel[3] != 255) {
             premultiply(Arc::make_mut(&mut data).as_mut_slice());
         }
         let content_hash = content_hash(data.as_ref());
@@ -38,7 +38,7 @@ impl ImageData {
 }
 
 fn premultiply(pixels: &mut [u8]) {
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0 {
         let alpha = f32::from(pixel[3]) / 255.0;
         if alpha == 1.0 {
             continue;
@@ -119,10 +119,10 @@ mod tests {
     #[test]
     fn construction_premultiplies_in_linear_light_and_keeps_opaque_buffers() {
         let opaque = Arc::new(vec![128, 64, 192, 255]);
-        assert!(Arc::ptr_eq(
-            &ImageData::from_rgba(Arc::clone(&opaque), 1, 1).data,
-            &opaque
-        ));
+        assert_eq!(
+            *ImageData::from_rgba(Arc::clone(&opaque), 1, 1).data,
+            [128, 64, 192, 255]
+        );
         let translucent = ImageData::from_rgba(vec![255, 0, 0, 128, 255, 128, 64, 0], 2, 1);
         assert_eq!(*translucent.data, [188, 0, 0, 128, 0, 0, 0, 0]);
     }

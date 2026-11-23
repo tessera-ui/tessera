@@ -317,7 +317,6 @@ fn badge(
         });
 }
 
-/// Numbered legend whose badges match the figure annotations.
 #[tessera]
 pub(super) fn badge_legend(items: Vec<String>) {
     gap(Dp(12.0));
@@ -372,7 +371,6 @@ fn ruler(svg: &mut String, from: (f64, f64), to: (f64, f64)) {
     }
 }
 
-/// Split two slots side by side on wide articles and stack them on narrow ones.
 #[tessera]
 pub(super) fn split(start: Option<RenderSlot>, end: Option<RenderSlot>, start_weight: Option<f32>) {
     let start = start.unwrap_or_else(RenderSlot::empty);
@@ -409,7 +407,6 @@ pub(super) fn split(start: Option<RenderSlot>, end: Option<RenderSlot>, start_we
         });
 }
 
-/// A figure followed by its caption.
 #[tessera]
 pub(super) fn captioned(figure: RenderSlot, #[prop(into)] note: String) {
     column()
@@ -422,7 +419,6 @@ pub(super) fn captioned(figure: RenderSlot, #[prop(into)] note: String) {
     gap(Dp(32.0));
 }
 
-/// Two captioned figures shown side by side.
 #[tessera]
 pub(super) fn figure_pair(
     first: RenderSlot,
@@ -440,7 +436,6 @@ pub(super) fn figure_pair(
         });
 }
 
-/// Standard and modal bottom sheet variants with numbered badges.
 #[tessera]
 pub(super) fn variants_figure() {
     stage(
@@ -462,7 +457,6 @@ pub(super) fn variants_figure() {
     );
 }
 
-/// Bottom sheet anatomy with dark or outlined numbered markers.
 #[tessera]
 pub(super) fn anatomy_figure(outlined: bool) {
     let geometry = remember(Geometry::new);
@@ -494,7 +488,6 @@ pub(super) fn anatomy_figure(outlined: bool) {
     .geometry(geometry);
 }
 
-/// Bottom sheet margins, maximum width and top spacing.
 #[tessera]
 pub(super) fn measurements_figure() {
     let geometry = remember(Geometry::new);
@@ -633,7 +626,6 @@ fn filter_choices(second_icon: f64) {
     }
 }
 
-/// Modal bottom sheet with file filters above a file list.
 #[tessera]
 pub(super) fn files_figure() {
     stage(
@@ -654,7 +646,6 @@ pub(super) fn files_figure() {
     );
 }
 
-/// Larger-screen bottom sheet capped at its maximum width.
 #[tessera]
 pub(super) fn tablet_figure() {
     stage(
@@ -726,7 +717,6 @@ fn avatar_color(index: usize) -> Color {
     ][index % 5]
 }
 
-/// Photo-sharing bottom sheet with contacts and applications.
 #[tessera]
 pub(super) fn share_figure() {
     stage(
@@ -809,7 +799,6 @@ fn menu_stage() {
     );
 }
 
-/// Bottom sheet listing menu actions, optionally in the dark scheme.
 #[tessera]
 pub(super) fn menu_figure(dark: bool) {
     if dark {
@@ -823,7 +812,6 @@ pub(super) fn menu_figure(dark: bool) {
     }
 }
 
-/// Photo bottom sheet at a chosen initial height over a photo grid.
 #[tessera]
 pub(super) fn photo_actions_figure(sheet_top: f64) {
     stage(
@@ -890,7 +878,6 @@ fn touch_color() -> Color {
     srgb(128, 64, 140)
 }
 
-/// Tapping the scrim dismisses a modal bottom sheet.
 #[tessera]
 pub(super) fn dismiss_scrim_figure() {
     stage(
@@ -938,7 +925,6 @@ pub(super) fn dismiss_scrim_figure() {
     );
 }
 
-/// Swiping the sheet down dismisses a modal bottom sheet.
 #[tessera]
 pub(super) fn dismiss_swipe_figure() {
     stage(
@@ -972,7 +958,6 @@ pub(super) fn dismiss_swipe_figure() {
     );
 }
 
-/// The top 48dp of a bottom sheet reserved for resize interactions.
 #[tessera]
 pub(super) fn touch_area_figure() {
     stage(
@@ -1001,7 +986,6 @@ pub(super) fn touch_area_figure() {
     );
 }
 
-/// Visible focus on the drag handle reached with the Tab key.
 #[tessera]
 pub(super) fn focus_figure() {
     stage(
@@ -1047,7 +1031,6 @@ fn map_background() {
     }
 }
 
-/// Drag handle focus at a lower preset height, or the sheet raised afterwards.
 #[tessera]
 pub(super) fn drag_figure(raised: bool) {
     stage(
@@ -1083,7 +1066,6 @@ pub(super) fn drag_figure(raised: bool) {
     );
 }
 
-/// Accessibility label and role announced for the drag handle.
 #[tessera]
 pub(super) fn label_figure() {
     stage(

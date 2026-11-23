@@ -111,7 +111,7 @@ pub(super) fn chips_spec(route: Option<crate::pages::material_spec::article::Art
                             true,
                             I18N.format(
                                 "ui-value-example",
-                                [("v0", I18N.text(&name(variant)).into())],
+                                [("v0", I18N.text(name(variant)).into())],
                             ),
                         );
                     }
@@ -208,7 +208,7 @@ fn overview() {
                                 true,
                                 I18N.format(
                                     "ui-value-chip",
-                                    [("v0", I18N.text(&name(variant)).into())],
+                                    [("v0", I18N.text(name(variant)).into())],
                                 ),
                             );
                         }
@@ -220,7 +220,7 @@ fn overview() {
         for (index, variant) in VARIANTS.into_iter().enumerate() {
             legend(
                 index + 1,
-                I18N.format("ui-value-chip", [("v0", I18N.text(&name(variant)).into())]),
+                I18N.format("ui-value-chip", [("v0", I18N.text(name(variant)).into())]),
             );
         }
     });
@@ -593,17 +593,15 @@ fn chip_diagram(variant: ChipVariant, measurements: bool) {
                             text(I18N.text("ui-restore-input-chip"));
                         });
                 } else {
-                    let chip =
-                        chip()
-                            .variant(variant)
-                            .label(I18N.format(
-                                "ui-value-chip",
-                                [("v0", I18N.text(&name(variant)).into())],
-                            ))
-                            .modifier(watch(geometry, "chip"))
-                            .shape_style(ChipShapeStyle::Standard)
-                            .selected(selected.get())
-                            .on_click(move || selected.set(!selected.get()));
+                    let chip = chip()
+                        .variant(variant)
+                        .label(
+                            I18N.format("ui-value-chip", [("v0", I18N.text(name(variant)).into())]),
+                        )
+                        .modifier(watch(geometry, "chip"))
+                        .shape_style(ChipShapeStyle::Standard)
+                        .selected(selected.get())
+                        .on_click(move || selected.set(!selected.get()));
                     match variant {
                         ChipVariant::Input => {
                             chip.leading_icon(filled::IMAGE_SVG)
@@ -936,7 +934,7 @@ fn suggestion_example() {
                 });
             if !reply.with(String::is_empty) {
                 gap(Dp(16.0));
-                prose(I18N.format("ui-reply-value", [("v0", I18N.text(&reply.get()).into())]));
+                prose(I18N.format("ui-reply-value", [("v0", I18N.text(reply.get()).into())]));
             }
         });
     }));
@@ -983,7 +981,7 @@ fn tokens() {
                     .text()
                     .accessibility_label(I18N.format(
                         "ui-value-chip-tokens",
-                        [("v0", I18N.text(&name(variant)).into())],
+                        [("v0", I18N.text(name(variant)).into())],
                     ))
                     .on_click(move || selected.set(variant))
                     .child(move || {
@@ -1150,7 +1148,7 @@ fn examples(variant: ChipVariant, enabled: bool) {
                     I18N.format(
                         "ui-value-value-format-2",
                         [
-                            ("v0", I18N.text(&name(variant)).into()),
+                            ("v0", I18N.text(name(variant)).into()),
                             ("v1", format!("{:?}", style).into()),
                         ],
                     ),
@@ -1164,7 +1162,7 @@ fn examples(variant: ChipVariant, enabled: bool) {
                     enabled,
                     I18N.format(
                         "ui-value-selected",
-                        [("v0", I18N.text(&name(variant)).into())],
+                        [("v0", I18N.text(name(variant)).into())],
                     ),
                 );
             }
@@ -1254,10 +1252,10 @@ fn detail(variant: ChipVariant) {
     gap(Dp(32.0));
     subheading(I18N.format(
         "ui-value-chip-color",
-        [("v0", I18N.text(&name(variant)).into())],
+        [("v0", I18N.text(name(variant)).into())],
     ));
     gap(Dp(16.0));
-    prose(I18N.format("ui-value-chip-color-roles-used-for-light-and-dark-themes-value", [("v0", I18N.text(&name(variant)).into()), ("v1", I18N.text(&(match variant {
+    prose(I18N.format("ui-value-chip-color-roles-used-for-light-and-dark-themes-value", [("v0", I18N.text(name(variant)).into()), ("v1", I18N.text(match variant {
             ChipVariant::Assist => "ui-surface-container-low-optional-on-surface-outline-primary",
             ChipVariant::Filter =>
                 "ui-on-surface-variant-on-secondary-container-secondary-container-outline-variant-surface-cont",
@@ -1265,7 +1263,7 @@ fn detail(variant: ChipVariant) {
                 "ui-on-surface-variant-surface-container-low-optional-outline-variant-primary-secondary-contai",
             ChipVariant::Suggestion =>
                 "ui-outline-surface-container-low-optional-on-surface-variant",
-        })).into())]));
+        }).into())]));
     gap(Dp(24.0));
     scheme(variant, false);
     gap(Dp(24.0));
@@ -1273,7 +1271,7 @@ fn detail(variant: ChipVariant) {
     gap(Dp(48.0));
     subheading(I18N.format(
         "ui-value-chip-states",
-        [("v0", I18N.text(&name(variant)).into())],
+        [("v0", I18N.text(name(variant)).into())],
     ));
     gap(Dp(16.0));
     prose(
@@ -1294,7 +1292,7 @@ fn detail(variant: ChipVariant) {
     gap(Dp(48.0));
     subheading(I18N.format(
         "ui-value-chip-measurements",
-        [("v0", I18N.text(&name(variant)).into())],
+        [("v0", I18N.text(name(variant)).into())],
     ));
     gap(Dp(24.0));
     value_table(variant);

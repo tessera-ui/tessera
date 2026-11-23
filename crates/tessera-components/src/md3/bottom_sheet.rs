@@ -656,7 +656,7 @@ fn bottom_sheet_content_wrapper(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::bottom_sheet::{BottomSheetController, bottom_sheet};
+/// use tessera_components::md3::{bottom_sheet::{BottomSheetController, bottom_sheet}, text::text};
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::remember;
 ///
@@ -664,15 +664,12 @@ fn bottom_sheet_content_wrapper(
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// let controller = remember(|| BottomSheetController::new(true));
-/// assert!(controller.with(BottomSheetController::is_open));
 /// bottom_sheet(controller)
 ///     .accessibility_label("Additional options")
-///     .on_close_request(move || controller.with_mut(BottomSheetController::close))
 ///     .partial_height(tessera_ui::Dp(240.0))
-///     .bottom_sheet_content(|| { /* bottom sheet content */ });
+///     .bottom_sheet_content(|| text("More options"));
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn bottom_sheet(

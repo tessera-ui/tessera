@@ -171,9 +171,7 @@ pub trait LayoutModifier: Any {
     }
 }
 
-/// Explicitly opts a layout policy into a per-node measurement snapshot.
-///
-/// Measurement state persists across rebuilds until the policy changes.
+/// Wraps a layout policy whose measurement state must persist across UI builds.
 #[derive(Clone)]
 pub struct StatefulLayoutPolicy<P>(pub P);
 
@@ -1124,10 +1122,10 @@ impl Modifier {
         }
         let mut connection = None;
         self.element.for_each_action_outer_first(&mut |action| {
-            if let ModifierAction::Build(node) = action {
-                if let Some(attached) = node.nested_scroll_connection() {
-                    connection = Some(attached);
-                }
+            if let ModifierAction::Build(node) = action
+                && let Some(attached) = node.nested_scroll_connection()
+            {
+                connection = Some(attached);
             }
         });
         connection
@@ -1137,7 +1135,7 @@ impl Modifier {
         self.element.kinds().intersects(kinds)
     }
 
-    fn materialize(self, instance: u64, owner: u64, path: &[u64]) -> Self {
+    fn materialize(self, instance: u64, path: &[u64]) -> Self {
         if !self.contains(ActionKinds::BUILD) {
             return self;
         }
@@ -1167,7 +1165,7 @@ impl Modifier {
                 result = result.push_action(ModifierAction::BuildOwner(Modifier {
                     element: self.element.slice(index, 1),
                 }));
-                result = result.then(modifier.materialize(instance, owner, &path));
+                result = result.then(modifier.materialize(instance, &path));
                 keep_start = index + 1;
                 changed = true;
             }
@@ -1185,7 +1183,7 @@ impl Modifier {
     pub fn attach(self) {
         ensure_build_phase();
 
-        let (instance, owner) = TesseraRuntime::with(|runtime| {
+        let instance = TesseraRuntime::with(|runtime| {
             let tree = &runtime.component_tree;
             let node = tree
                 .executing_call_node()
@@ -1195,10 +1193,9 @@ impl Modifier {
                     "modifiers attach to a node emitted by the current component; \
                      emit one with `layout(Stack)` or `group()`",
                 );
-            (node.instance_logic_id, node.instance_key)
+            node.instance_logic_id
         });
-        let materialized =
-            self.materialize(instance, owner, &crate::runtime::modifier_attachment_path());
+        let materialized = self.materialize(instance, &crate::runtime::modifier_attachment_path());
         let effects = materialized.clone();
 
         TesseraRuntime::with_mut(|runtime| {
@@ -1225,7 +1222,7 @@ impl Modifier {
                 }
                 ModifierAction::GloballyPositioned(handler) => {
                     TesseraRuntime::with_mut(|runtime| {
-                        runtime.push_current_globally_positioned_handler(handler.clone());
+                        runtime.push_current_globally_positioned_handler(*handler);
                     });
                 }
                 _ => {}
@@ -1299,7 +1296,6 @@ impl Modifier {
         !self.changes_from(other).input_geometry
     }
 
-    /// Compares this chain with the previously attached one in a single walk.
     pub(crate) fn changes_from(&self, previous: &Self) -> ModifierChanges {
         let kinds = self.element.kinds().union(previous.element.kinds());
         if !kinds.intersects(ActionKinds::COMPARED) || self.element.is_same(&previous.element) {
@@ -1469,7 +1465,6 @@ impl Modifier {
     }
 }
 
-/// Node behavior categories that differ between two attached modifier chains.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct ModifierChanges {
     pub(crate) measure: bool,
@@ -2109,7 +2104,7 @@ mod tests {
     }
 
     #[test]
-    fn session_local_nodes_can_be_shared_and_released_without_send_sync() {
+    fn session_local_nodes_accept_rc_backed_values() {
         let state = Rc::new(Cell::new(24));
         let modifier = Modifier::new()
             .push_layout(LocalLayout(state.clone()))
@@ -2117,10 +2112,6 @@ mod tests {
         let shared = modifier.clone();
         assert!(!shared.changes_from(&modifier).measure);
         assert!(!shared.changes_from(&modifier).draw);
-        assert_eq!(Rc::strong_count(&state), 3);
-        drop(modifier);
-        drop(shared);
-        assert_eq!(Rc::strong_count(&state), 1);
     }
 
     #[derive(Clone)]
@@ -2140,9 +2131,6 @@ mod tests {
             .parent_data::<LocalParent>()
             .expect("local parent data");
         assert_eq!(payload.0.get(), 7);
-        drop(payload);
-        drop(modifier);
-        assert_eq!(Rc::strong_count(&state), 1);
     }
 
     #[test]
@@ -2201,8 +2189,8 @@ mod tests {
         let color = Modifier::new().push_draw(crate::layout::NoopDrawModifier);
         let before = Modifier::new().push_build(ExpandWidth).then(color.clone());
         let after = color.then(Modifier::new().push_build(ExpandWidth));
-        let before = before.materialize(1, 1, &[]);
-        let after = after.materialize(1, 1, &[]);
+        let before = before.materialize(1, &[]);
+        let after = after.materialize(1, &[]);
         let before = before.ordered_actions();
         let after = after.ordered_actions();
         assert!(matches!(

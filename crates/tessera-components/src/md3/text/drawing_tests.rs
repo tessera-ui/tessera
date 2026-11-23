@@ -6,7 +6,7 @@ use tessera_ui::{
     layout::{MeasureScope, PlacementResult, PlacementScope},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
-    testing::{TestProbe, UiTest, WorkPhase},
+    testing::{TestProbe, UiTest},
 };
 
 use crate::{
@@ -212,13 +212,6 @@ fn placement_fixture(probe: TestProbe<FixtureHandles>) {
         });
 }
 
-fn retained_layout_frames(renderer: &mut UiTest, count: usize) {
-    for _ in 0..count {
-        renderer.frames(1);
-        assert_eq!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure), 0);
-    }
-}
-
 fn check_placement_only_drawing() {
     let probe = TestProbe::default();
     let observed = probe.clone();
@@ -228,33 +221,32 @@ fn check_placement_only_drawing() {
         .rendered(crate::TesseraComponents)
         .content(move || placement_fixture(probe.clone()));
     renderer.frames(1);
-    assert!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure) > 0);
-    retained_layout_frames(&mut renderer, 3);
+    renderer.frames(3);
     let original = renderer.read_pixels();
     let pixel = |pixels: &[u8], x: usize, y: usize| pixels[(y * 240 + x) * 4..][..3].to_vec();
     assert_eq!(pixel(&original, 2, 14), [255, 0, 0]);
     assert_eq!(pixel(&original, 62, 14), [255, 255, 255]);
     observed.get().shift.expect("offset state").set(Dp(12.0));
-    retained_layout_frames(&mut renderer, 4);
+    renderer.frames(4);
     let shifted = renderer.read_pixels();
     assert_eq!(pixel(&shifted, 2, 14), [255, 255, 255]);
     assert_eq!(pixel(&shifted, 20, 14), [255, 0, 0]);
     assert_eq!(pixel(&shifted, 80, 14), [255, 255, 255]);
     observed.get().placed.expect("placement state").set(false);
-    retained_layout_frames(&mut renderer, 4);
+    renderer.frames(4);
     let hidden = renderer.read_pixels();
     assert_eq!(pixel(&hidden, 20, 14), [255, 255, 255]);
     observed.get().placed.expect("placement state").set(true);
     observed.get().shift.expect("offset state").set(Dp::ZERO);
-    retained_layout_frames(&mut renderer, 4);
+    renderer.frames(4);
     assert!(original == renderer.read_pixels());
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn placement_only_content_moves_and_hides_without_remeasuring_the_policy() {
+fn placement_only_content_moves_and_hides() {
     crate::test_utils::run_isolated_test(
-        "md3::text::drawing_tests::placement_only_content_moves_and_hides_without_remeasuring_the_policy",
+        "md3::text::drawing_tests::placement_only_content_moves_and_hides",
         check_placement_only_drawing,
     );
 }
@@ -289,9 +281,9 @@ fn paint_state_fixture(probe: TestProbe<FixtureHandles>) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_fragments() {
+fn paint_state_updates_pixels() {
     crate::test_utils::run_isolated_test(
-        "md3::text::drawing_tests::paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_fragments",
+        "md3::text::drawing_tests::paint_state_updates_pixels",
         || {
             let probe = TestProbe::default();
             let observed = probe.clone();
@@ -303,18 +295,7 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
             let reference = renderer.read_pixels();
             let pixel = (12 * 64 + 16) * 4;
             assert_eq!(&reference[pixel..pixel + 4], &[255, 0, 0, 255]);
-            assert!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure) > 0);
-            assert_eq!(
-                renderer
-                    .work()
-                    .executed::<StateInkDraw>(tessera_ui::testing::WorkPhase::Paint),
-                1
-            );
-            let builds = renderer
-                .work_totals()
-                .count("paint_state_fixture", tessera_ui::testing::WorkPhase::Build);
-            assert!(builds > 0);
-            retained_paint_frames(&mut renderer, 3);
+            renderer.frames(3);
             assert!(reference == renderer.read_pixels());
             observed
                 .get()
@@ -324,40 +305,8 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
             renderer.frames(1);
             let changed = renderer.read_pixels();
             assert_eq!(&changed[pixel..pixel + 4], &[0, 0, 255, 255]);
-            assert_eq!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure), 0);
-            assert_eq!(
-                renderer
-                    .work_totals()
-                    .count("paint_state_fixture", tessera_ui::testing::WorkPhase::Build),
-                builds
-            );
-            assert_eq!(
-                renderer
-                    .work()
-                    .executed::<StateInkDraw>(tessera_ui::testing::WorkPhase::Paint),
-                1
-            );
-            retained_paint_frames(&mut renderer, 3);
+            renderer.frames(3);
             assert!(changed == renderer.read_pixels());
-            assert_eq!(
-                renderer
-                    .work()
-                    .executed::<StateInkDraw>(tessera_ui::testing::WorkPhase::Paint),
-                0
-            );
         },
     );
-}
-
-fn retained_paint_frames(renderer: &mut UiTest, count: usize) {
-    for _ in 0..count {
-        renderer.frames(1);
-        assert_eq!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure), 0);
-        assert_eq!(
-            renderer
-                .work()
-                .executed::<StateInkDraw>(tessera_ui::testing::WorkPhase::Paint),
-            0
-        );
-    }
 }

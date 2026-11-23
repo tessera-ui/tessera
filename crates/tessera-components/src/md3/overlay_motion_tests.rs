@@ -1,4 +1,3 @@
-//! Interrupted transient-surface animation regressions.
 //!
 //! ## Usage
 //!

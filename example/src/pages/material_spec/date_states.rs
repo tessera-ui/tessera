@@ -83,16 +83,13 @@ fn panel(dark: bool) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     merge_descendants: true,
-                    label: Some(
-                        I18N.format(
-                            "ui-value-calendar-states",
-                            [(
-                                "v0",
-                                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                                    .into(),
-                            )],
-                        ),
-                    ),
+                    label: Some(I18N.format(
+                        "ui-value-calendar-states",
+                        [(
+                            "v0",
+                            I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
+                        )],
+                    )),
                     ..Default::default()
                 }),
         )
@@ -115,13 +112,15 @@ fn panel(dark: bool) {
                                         [
                                             (
                                                 "v0",
-                                                I18N.text(
-                                                    &(if dark { "ui-dark" } else { "ui-light" }),
-                                                )
+                                                I18N.text(if dark {
+                                                    "ui-dark"
+                                                } else {
+                                                    "ui-light"
+                                                })
                                                 .into(),
                                             ),
                                             ("v1", (column + 1).into()),
-                                            ("v2", I18N.text(&(COLUMNS[column])).into()),
+                                            ("v2", I18N.text(COLUMNS[column]).into()),
                                         ],
                                     ),
                                 ),
@@ -276,11 +275,10 @@ fn cell_name(dark: bool, column: usize, row: usize) -> String {
         [
             (
                 "v0",
-                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                    .into(),
+                I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
             ),
-            ("v1", I18N.text(&(COLUMNS[column])).into()),
-            ("v2", I18N.text(&(KINDS[row])).into()),
+            ("v1", I18N.text(COLUMNS[column]).into()),
+            ("v2", I18N.text(KINDS[row]).into()),
         ],
     )
 }

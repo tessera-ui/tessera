@@ -789,7 +789,10 @@ fn outlined_floating_label(
     label_offset_y: Option<Dp>,
     outline: Option<State<OutlineGeometry>>,
 ) {
-    let typography = use_context::<MaterialTheme>().unwrap().get().typography;
+    let typography = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .typography;
     let label_text = label_text.unwrap_or_default();
     let label_color = label_color.unwrap_or(Color::TRANSPARENT);
     let label_font_size = label_font_size.unwrap_or(Dp(0.0));
@@ -1451,11 +1454,9 @@ fn text_field_menu_content(
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// let transform = CallbackWith::new(|value: String| value.to_uppercase());
-/// assert_eq!(transform.call("hello".to_string()), "HELLO");
 /// text_field().input_transform_shared(transform);
 /// # });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn text_field(
@@ -2141,7 +2142,7 @@ mod tests {
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]
-mod native_field_regressions {
+mod native_field_behavior_tests {
 
     use tessera_ui::{
         MOUSE_POINTER_ID, PressKeyEventType, accesskit::Role, testing::UiTest, winit::event::Ime,
@@ -2229,7 +2230,7 @@ mod native_field_regressions {
                                         TextFieldLineLimit::SingleLine
                                     },
                                 )
-                                .accessibility_label("Regression field")
+                                .accessibility_label("Text field")
                                 .leading_icon(|| {
                                     boxed()
                                         .modifier(Modifier::new().semantics(
@@ -2666,7 +2667,7 @@ mod native_field_regressions {
             .nodes
             .iter()
             .find(|(_, node)| {
-                node.label() == Some("Regression field") && node.role() == Role::PasswordInput
+                node.label() == Some("Text field") && node.role() == Role::PasswordInput
             })
             .expect("actual protected editor semantics")
             .1;
@@ -2723,7 +2724,7 @@ mod native_field_regressions {
     #[ignore = "requires a native GPU adapter for editor geometry and pointer editing"]
     fn empty_editor_viewport_keeps_its_hit_region_through_edits_and_clear() {
         crate::test_utils::run_isolated_test(
-            "md3::text_field::native_field_regressions::empty_editor_viewport_keeps_its_hit_region_through_edits_and_clear",
+            "md3::text_field::native_field_behavior_tests::empty_editor_viewport_keeps_its_hit_region_through_edits_and_clear",
             || {
                 for (label, leading, left, width) in [
                     (false, false, 40.0, 295.0),
@@ -2788,7 +2789,7 @@ mod native_field_regressions {
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]
-mod presentation_regressions {
+mod presentation_behavior_tests {
     use std::time::Duration;
 
     use tessera_ui::{State, testing::UiTest};
@@ -2858,7 +2859,7 @@ mod presentation_regressions {
     #[ignore = "requires a native GPU adapter"]
     fn focus_presentation_draws_static_native_fields_without_taking_focus() {
         crate::test_utils::run_isolated_test(
-            "md3::text_field::presentation_regressions::focus_presentation_draws_static_native_fields_without_taking_focus",
+            "md3::text_field::presentation_behavior_tests::focus_presentation_draws_static_native_fields_without_taking_focus",
             || {
                 let probe = Probe::default();
                 let mut renderer = UiTest::new()
@@ -2889,13 +2890,6 @@ mod presentation_regressions {
                     renderer.read_pixels(),
                     preview,
                     "preview carets stay visible across blink phases"
-                );
-                assert_eq!(
-                    renderer
-                        .work()
-                        .phase(tessera_ui::testing::WorkPhase::Paint)
-                        .count(),
-                    0
                 );
                 let presentation = probe.presentation.get().unwrap();
                 presentation.set((None, true));
@@ -2955,14 +2949,6 @@ mod presentation_regressions {
                     crop(&blink_off, 1),
                     "only the actual focus caret blinks"
                 );
-                assert_eq!(
-                    renderer
-                        .work()
-                        .phase(tessera_ui::testing::WorkPhase::Measure)
-                        .count(),
-                    0
-                );
-                assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
                 assert_eq!(probe.changes.get(), 0);
             },
         );

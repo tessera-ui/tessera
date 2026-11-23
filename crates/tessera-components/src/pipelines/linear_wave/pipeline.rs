@@ -3,7 +3,7 @@ use tessera_ui::{
     wgpu,
 };
 
-use crate::pipelines::instanced::{DrawBuffers, quad_pipeline, storage_layout};
+use crate::pipelines::instanced::{DrawBuffers, QuadPipeline, storage_layout};
 
 use super::command::LinearWaveCommand;
 
@@ -30,20 +30,17 @@ impl LinearWavePipeline {
         sample_count: u32,
     ) -> Self {
         let layout = storage_layout(device, "Linear Wave Instances");
-        let shader = device.create_shader_module(wgpu::include_wgsl!("linear_wave.wgsl"));
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Linear Wave Pipeline Layout"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-        let pipeline = quad_pipeline(
-            device,
-            &pipeline_layout,
-            &shader,
-            config.format,
+        let pipeline = QuadPipeline {
+            label: "Linear Wave Pipeline",
+            layout_label: "Linear Wave Pipeline Layout",
+            format: config.format,
             sample_count,
             cache,
-            "Linear Wave Pipeline",
+        }
+        .create(
+            device,
+            &[Some(&layout)],
+            wgpu::include_wgsl!("linear_wave.wgsl"),
             None,
             &[],
         );

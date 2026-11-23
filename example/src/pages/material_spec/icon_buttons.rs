@@ -262,7 +262,7 @@ fn overview_icon(index: usize) {
         })
         .accessibility_label(I18N.format(
             "ui-overview-value-value",
-            [("v0", I18N.text(&label).into()), ("v1", (index + 1).into())],
+            [("v0", I18N.text(label).into()), ("v1", (index + 1).into())],
         ))
         .accessibility_description(
             I18N.format("ui-activations-value", [("v0", (actions.get()).into())]),
@@ -455,8 +455,8 @@ fn style_examples(enabled: bool) {
                                 I18N.format(
                                     "ui-value-value-format-2",
                                     [
-                                        ("v0", I18N.text(&name(style)).into()),
-                                        ("v1", I18N.text(&label).into()),
+                                        ("v0", I18N.text(name(style)).into()),
+                                        ("v1", I18N.text(label).into()),
                                     ],
                                 ),
                             );
@@ -492,7 +492,7 @@ fn states() {
     for style in STYLES {
         subheading(I18N.format(
             "ui-value-button-states",
-            [("v0", I18N.text(&name(style)).into())],
+            [("v0", I18N.text(name(style)).into())],
         ));
         for toggle in [false, true] {
             gap(Dp(24.0));
@@ -586,48 +586,42 @@ fn icon_state_matrix(style: IconButtonVariant, toggle: bool) {
                                                         [
                                                             (
                                                                 "v0",
-                                                                I18N.text(
-                                                                    &(if dark {
-                                                                        "ui-dark"
-                                                                    } else {
-                                                                        "ui-light"
-                                                                    }),
-                                                                )
+                                                                I18N.text(if dark {
+                                                                    "ui-dark"
+                                                                } else {
+                                                                    "ui-light"
+                                                                })
                                                                 .into(),
                                                             ),
-                                                            ("v1", I18N.text(&name(style)).into()),
+                                                            ("v1", I18N.text(name(style)).into()),
                                                             (
                                                                 "v2",
-                                                                I18N.text(
-                                                                    &(if toggle {
-                                                                        "ui-toggle-7073"
-                                                                    } else {
-                                                                        "ui-default-7074"
-                                                                    }),
-                                                                )
+                                                                I18N.text(if toggle {
+                                                                    "ui-toggle-7073"
+                                                                } else {
+                                                                    "ui-default-7074"
+                                                                })
                                                                 .into(),
                                                             ),
                                                             (
                                                                 "v3",
-                                                                I18N.text(
-                                                                    &(if selected {
-                                                                        "ui-selected-7075"
-                                                                    } else {
-                                                                        "ui-unselected-7076"
-                                                                    }),
-                                                                )
+                                                                I18N.text(if selected {
+                                                                    "ui-selected-7075"
+                                                                } else {
+                                                                    "ui-unselected-7076"
+                                                                })
                                                                 .into(),
                                                             ),
                                                             (
                                                                 "v4",
                                                                 I18N.text(
-                                                                    &([
+                                                                    [
                                                                         "ui-enabled-7077",
                                                                         "ui-disabled-7078",
                                                                         "ui-hovered-7079",
                                                                         "ui-focused-7080",
                                                                         "ui-pressed-7081",
-                                                                    ][state]),
+                                                                    ][state],
                                                                 )
                                                                 .into(),
                                                             ),
@@ -671,7 +665,7 @@ fn icon_state_matrix(style: IconButtonVariant, toggle: bool) {
     {
         text(I18N.format(
             "ui-value-value",
-            [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
+            [("v0", (index + 1).into()), ("v1", I18N.text(label).into())],
         ))
         .style(type_style(16.0, 24.0));
     }

@@ -202,20 +202,20 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 /// ## Examples
 ///
 /// ```rust
-/// use tessera_components::md3::radio_button::{radio_button, radio_group};
+/// use tessera_components::md3::{radio_button::{radio_button, radio_group}, theme::material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn radio_group_demo() {
 ///     let selected = remember(|| 0usize);
-///     radio_group().content(move |group| {
+///     material_theme().child(move || radio_group().content(move |group| {
 ///         radio_button(selected.get() == 0)
 ///             .group(group)
 ///             .on_select(move |_| selected.set(0));
 ///         radio_button(selected.get() == 1)
 ///             .group(group)
 ///             .on_select(move |_| selected.set(1));
-///     });
+///     }));
 /// }
 /// ```
 #[tessera]
@@ -284,18 +284,6 @@ pub fn radio_group(
 /// - `enabled` — whether the control is interactive.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
-///
-/// ## Examples
-///
-/// ```rust
-/// use tessera_components::md3::radio_button::radio_button;
-/// use tessera_ui::tessera;
-///
-/// #[tessera]
-/// fn radio_demo() {
-///     radio_button(true);
-/// }
-/// ```
 #[tessera]
 pub fn radio_button(
     selected: bool,
@@ -484,7 +472,6 @@ fn radio_button_inner(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
-            ..Default::default()
         };
         modifier = modifier.selectable(selectable_args);
         if radio_group.is_some() {

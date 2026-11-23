@@ -143,7 +143,7 @@ fn keyboard_content(reverse: bool, scale: f64) {
                     (0, "ui-cancel", 127.0, 78.0, cancel),
                     (1, "ui-delete", 213.0, 75.0, delete),
                 ] {
-                    button().text().accessibility_label(I18N.format("ui-value-example-value", [("v0", I18N.text(&(if reverse { "ui-reverse" } else { "ui-forward" })).into()), ("v1", I18N.text(&label).into())]))
+                    button().text().accessibility_label(I18N.format("ui-value-example-value", [("v0", I18N.text(if reverse { "ui-reverse" } else { "ui-forward" }).into()), ("v1", I18N.text(label).into())]))
                         .presentation_state(if selected.get() == index { InteractionVisualState::Focus } else { InteractionVisualState::Rest })
                         .shape(Shape::rounded_rectangle(Dp(12.0 * scale)))
                         .content_padding(Padding::all(Dp::ZERO))

@@ -1,4 +1,3 @@
-//! Radio semantics and directional navigation regressions.
 //!
 //! ## Usage
 //!

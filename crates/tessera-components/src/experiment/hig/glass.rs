@@ -307,7 +307,6 @@ fn start_glass_feedback(state: State<GlassPress>, center: [f32; 2], timestamp: I
 ///     text("Content on glass");
 /// });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn glass(

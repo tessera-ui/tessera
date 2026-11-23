@@ -1,4 +1,3 @@
-//! Dialog action layout regressions.
 //!
 //! ## Usage
 //!

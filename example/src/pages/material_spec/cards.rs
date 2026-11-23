@@ -146,7 +146,7 @@ fn tokens() {
                 .selected(variant.get() == style)
                 .accessibility_label(I18N.format(
                     "ui-value-card-tokens",
-                    [("v0", I18N.text(&name(style)).into())],
+                    [("v0", I18N.text(name(style)).into())],
                 ))
                 .on_click(move || variant.set(style))
                 .child(move || {
@@ -232,7 +232,7 @@ fn tokens() {
                 "ui-enabled".into(),
                 I18N.format(
                     "ui-value-resting-elevation-with-the-element-tokens-above",
-                    [("v0", I18N.text(&resting).into())],
+                    [("v0", I18N.text(resting).into())],
                 ),
             ],
             vec![
@@ -243,14 +243,14 @@ fn tokens() {
                 "ui-hovered".into(),
                 I18N.format(
                     "ui-value-elevation-and-an-8-state-layer",
-                    [("v0", I18N.text(&hover).into())],
+                    [("v0", I18N.text(hover).into())],
                 ),
             ],
             vec![
                 "ui-focused".into(),
                 I18N.format(
                     "ui-3dp-focus-indicator-at-value-elevation",
-                    [("v0", I18N.text(&resting).into())],
+                    [("v0", I18N.text(resting).into())],
                 ),
             ],
             vec![
@@ -261,7 +261,7 @@ fn tokens() {
                 "ui-dragged".into(),
                 I18N.format(
                     "ui-value-elevation-without-a-state-layer",
-                    [("v0", I18N.text(&dragged).into())],
+                    [("v0", I18N.text(dragged).into())],
                 ),
             ],
         ],
@@ -279,16 +279,14 @@ fn scheme(variant: CardVariant, dark: bool) {
                 I18N.format(
                     "ui-value-value-format-25",
                     [
-                        ("v0", I18N.text(&name(variant)).into()),
+                        ("v0", I18N.text(name(variant)).into()),
                         (
                             "v1",
-                            I18N.text(
-                                &(if dark {
-                                    "ui-dark-7069"
-                                } else {
-                                    "ui-light-7070"
-                                }),
-                            )
+                            I18N.text(if dark {
+                                "ui-dark-7069"
+                            } else {
+                                "ui-light-7070"
+                            })
                             .into(),
                         ),
                     ],
@@ -308,7 +306,7 @@ fn detail(variant: CardVariant) {
                 sample(
                     variant,
                     true,
-                    I18N.format("ui-value-card", [("v0", I18N.text(&name(variant)).into())]),
+                    I18N.format("ui-value-card", [("v0", I18N.text(name(variant)).into())]),
                 )
                 .modifier(watch_in_space(geometry, "container"));
             }));
@@ -328,7 +326,7 @@ fn detail(variant: CardVariant) {
     gap(Dp(48.0));
     subheading(I18N.format(
         "ui-value-card-color",
-        [("v0", I18N.text(&name(variant)).into())],
+        [("v0", I18N.text(name(variant)).into())],
     ));
     gap(Dp(24.0));
     scheme(variant, false);
@@ -337,7 +335,7 @@ fn detail(variant: CardVariant) {
     gap(Dp(48.0));
     subheading(I18N.format(
         "ui-value-card-states",
-        [("v0", I18N.text(&name(variant)).into())],
+        [("v0", I18N.text(name(variant)).into())],
     ));
     gap(Dp(24.0));
     text(I18N.text("ui-hover-focus-with-tab-or-hold-a-card-to-inspect-actual-feedback-disabled-cards-do-not-activ"))
@@ -353,7 +351,7 @@ fn detail(variant: CardVariant) {
                     true,
                     I18N.format(
                         "ui-value-enabled",
-                        [("v0", I18N.text(&name(variant)).into())],
+                        [("v0", I18N.text(name(variant)).into())],
                     ),
                 );
                 sample(
@@ -361,7 +359,7 @@ fn detail(variant: CardVariant) {
                     false,
                     I18N.format(
                         "ui-value-disabled",
-                        [("v0", I18N.text(&name(variant)).into())],
+                        [("v0", I18N.text(name(variant)).into())],
                     ),
                 );
             });
@@ -430,7 +428,7 @@ fn card_variants() {
                         true,
                         I18N.format(
                             "ui-value-overview-card",
-                            [("v0", I18N.text(&name(variant)).into())],
+                            [("v0", I18N.text(name(variant)).into())],
                         ),
                     );
                 }
@@ -589,7 +587,7 @@ fn collection_card(index: usize) {
                     Modifier::new()
                         .fill_max_width()
                         .height(Dp(96.0))
-                        .background(if index % 2 == 0 {
+                        .background(if index.is_multiple_of(2) {
                             scheme.secondary_container
                         } else {
                             scheme.tertiary_container

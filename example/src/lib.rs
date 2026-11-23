@@ -2,8 +2,6 @@ mod app;
 #[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
 mod md3_diagnostics;
 mod pages;
-#[cfg(all(any(target_os = "android", target_os = "ios"), debug_assertions))]
-mod platform_view_probe;
 #[cfg(all(test, not(target_family = "wasm")))]
 mod render_precision_tests;
 pub mod res;
@@ -12,10 +10,7 @@ use tessera_ui::EntryPoint;
 
 use pages::custom_shader::CustomShaderPackage;
 
-#[cfg(not(any(
-    all(target_family = "wasm", feature = "md3-diagnostics"),
-    all(any(target_os = "android", target_os = "ios"), debug_assertions)
-)))]
+#[cfg(not(all(target_family = "wasm", feature = "md3-diagnostics")))]
 use app::app;
 
 #[cfg(target_family = "wasm")]
@@ -27,13 +22,8 @@ use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 pub fn run() -> EntryPoint {
     #[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
     let entry = md3_diagnostics::entry();
-    #[cfg(not(any(
-        all(target_family = "wasm", feature = "md3-diagnostics"),
-        all(any(target_os = "android", target_os = "ios"), debug_assertions)
-    )))]
+    #[cfg(not(all(target_family = "wasm", feature = "md3-diagnostics")))]
     let entry = EntryPoint::new(app);
-    #[cfg(all(any(target_os = "android", target_os = "ios"), debug_assertions))]
-    let entry = platform_view_probe::entry();
     let mut config = res::application();
     config.sample_count = 4;
     config.window = config.window.with_app_titlebar();

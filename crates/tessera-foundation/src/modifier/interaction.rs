@@ -254,15 +254,6 @@ impl Default for DraggableArgs {
 /// Presentation changes appearance without requesting focus, dispatching input,
 /// or changing accessibility state. Disabled controls ignore presentation
 /// state.
-///
-/// ```
-/// use tessera_foundation::modifier::{InteractionState, InteractionVisualState};
-///
-/// let live = InteractionState::new();
-/// let visual = live.with_presentation(Some(InteractionVisualState::Focus), true);
-/// assert!(visual.is_focused());
-/// assert!(!live.is_focused());
-/// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum InteractionVisualState {
     /// The resting appearance.

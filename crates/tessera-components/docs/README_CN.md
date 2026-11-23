@@ -10,7 +10,7 @@
 
 ## 使用
 
-在应用入口注册组件渲染管线：
+在应用入口添加组件包以使用官方组件：
 
 ```rust
 EntryPoint::new(app).package(tessera_components::ComponentsPackage)

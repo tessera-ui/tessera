@@ -39,7 +39,7 @@ pub(super) fn figure() {
                     .text()
                     .accessibility_label(I18N.format(
                         "ui-value-baseline-tokens",
-                        [("v0", I18N.text(&label).into())],
+                        [("v0", I18N.text(label).into())],
                     ))
                     .on_click(move || variant.set(value))
                     .child(move || {
@@ -77,11 +77,8 @@ pub(super) fn figure() {
         )
         .on_click(move || actions.set(actions.get() + 1));
     gap(Dp(16.0));
-    text(I18N.format(
-        "ui-value-default-state",
-        [("v0", I18N.text(&prefix).into())],
-    ))
-    .style(type_style(16.0, 24.0));
+    text(I18N.format("ui-value-default-state", [("v0", I18N.text(prefix).into())]))
+        .style(type_style(16.0, 24.0));
     gap(Dp(16.0));
     spec_table(
         vec!["ui-token".into(), "ui-baseline-value".into()],

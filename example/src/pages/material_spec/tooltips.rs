@@ -1583,10 +1583,10 @@ fn tooltip_role_box(entries: Vec<(String, String)>, x: f64, y: f64, width: f64) 
                 if index > 0 {
                     gap(Dp(8.0));
                 }
-                text(I18N.text(&(name)))
+                text(I18N.text(name))
                     .style(type_style(14.0, 20.0))
                     .color(srgb(230, 224, 233));
-                text(I18N.text(&(value)))
+                text(I18N.text(value))
                     .style(emphasis_style(14.0, 20.0))
                     .color(pink);
             }
@@ -1762,7 +1762,7 @@ fn tokens() {
                     .tonal()
                     .selected(rich.get() == value)
                     .accessibility_label(
-                        I18N.format("ui-show-value-tokens", [("v0", I18N.text(&label).into())]),
+                        I18N.format("ui-show-value-tokens", [("v0", I18N.text(label).into())]),
                     )
                     .on_click(move || rich.set(value))
                     .child(move || {
@@ -1820,7 +1820,7 @@ fn detail(rich: bool) {
             let title = if rich { "ui-rich-tooltip" } else { "ui-plain-tooltip" };
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             gap(Dp(112.0));
-            subheading(I18N.format("ui-value-colors", [("v0", I18N.text(&title).into())]));
+            subheading(I18N.format("ui-value-colors", [("v0", I18N.text(title).into())]));
             gap(Dp(24.0));
             prose("ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo".into());
             gap(Dp(16.0));
@@ -1830,7 +1830,7 @@ fn detail(rich: bool) {
             gap(Dp(24.0));
             tooltip_color_pair(rich);
             gap(Dp(88.0));
-            subheading(I18N.format("ui-value-measurements", [("v0", I18N.text(&title).into())]));
+            subheading(I18N.format("ui-value-measurements", [("v0", I18N.text(title).into())]));
             gap(Dp(24.0));
             tooltip_figure(rich, true);
             gap(Dp(24.0));
@@ -1881,16 +1881,13 @@ fn tooltip_color_pair(rich: bool) {
                 .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(
-                        I18N.format(
-                            "ui-value-tooltip-color-roles",
-                            [(
-                                "v0",
-                                I18N.text(&(if rich { "ui-rich" } else { "ui-plain" }))
-                                    .into(),
-                            )],
-                        ),
-                    ),
+                    label: Some(I18N.format(
+                        "ui-value-tooltip-color-roles",
+                        [(
+                            "v0",
+                            I18N.text(if rich { "ui-rich" } else { "ui-plain" }).into(),
+                        )],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -1910,24 +1907,20 @@ fn tooltip_color_pair(rich: bool) {
                                             [
                                                 (
                                                     "v0",
-                                                    I18N.text(
-                                                        &(if dark {
-                                                            "ui-dark"
-                                                        } else {
-                                                            "ui-light"
-                                                        }),
-                                                    )
+                                                    I18N.text(if dark {
+                                                        "ui-dark"
+                                                    } else {
+                                                        "ui-light"
+                                                    })
                                                     .into(),
                                                 ),
                                                 (
                                                     "v1",
-                                                    I18N.text(
-                                                        &(if rich {
-                                                            "ui-rich-7121"
-                                                        } else {
-                                                            "ui-plain-7122"
-                                                        }),
-                                                    )
+                                                    I18N.text(if rich {
+                                                        "ui-rich-7121"
+                                                    } else {
+                                                        "ui-plain-7122"
+                                                    })
                                                     .into(),
                                                 ),
                                             ],
@@ -1948,16 +1941,13 @@ fn tooltip_color_pair(rich: bool) {
                 });
         });
     gap(Dp(24.0));
-    prose(
-        I18N.format(
-            "ui-value-tooltip-color-roles-used-for-light-and-dark-themes",
-            [(
-                "v0",
-                I18N.text(&(if rich { "ui-rich" } else { "ui-plain" }))
-                    .into(),
-            )],
-        ),
-    );
+    prose(I18N.format(
+        "ui-value-tooltip-color-roles-used-for-light-and-dark-themes",
+        [(
+            "v0",
+            I18N.text(if rich { "ui-rich" } else { "ui-plain" }).into(),
+        )],
+    ));
     gap(Dp(16.0));
     for (index, label) in tooltip_color_labels(rich).into_iter().enumerate() {
         row()
@@ -2334,7 +2324,7 @@ fn tooltip_figure_canvas(rich: bool, measurements: bool, color_roles: bool, guid
     let geometry = remember(SpaceGeometry::new);
     let width = if color_roles { 512.0 } else { 1024.0 };
     let height = if color_roles && rich { 338.0 } else { 300.0 };
-    tooltip_stage(width, height, I18N.format("ui-value-tooltip-value-figure", [("v0", I18N.text(&(if rich { "ui-rich" } else { "ui-plain" })).into()), ("v1", I18N.text(&(if color_roles { "ui-color-7123" } else if measurements { "ui-measurement-7071" } else { "ui-anatomy-7072" })).into())]), geometry).child(move || {
+    tooltip_stage(width, height, I18N.format("ui-value-tooltip-value-figure", [("v0", I18N.text(if rich { "ui-rich" } else { "ui-plain" }).into()), ("v1", I18N.text(if color_roles { "ui-color-7123" } else if measurements { "ui-measurement-7071" } else { "ui-anatomy-7072" }).into())]), geometry).child(move || {
         if guidelines {
             boxed().modifier(Modifier::new().required_size(Dp(width), Dp(height)).background_with_shape(srgb(247, 242, 250), Shape::rounded_rectangle(Dp(24.0))));
         } else {
@@ -2364,16 +2354,13 @@ fn tooltip_figure_canvas(rich: bool, measurements: bool, color_roles: bool, guid
                 vec!["ui-container".into(), "ui-supporting-text".into()]
             });
         } else if measurements {
-            prose(
-                I18N.format(
-                    "ui-value-tooltip-padding-and-size-measurements",
-                    [(
-                        "v0",
-                        I18N.text(&(if rich { "ui-rich" } else { "ui-plain" }))
-                            .into(),
-                    )],
-                ),
-            );
+            prose(I18N.format(
+                "ui-value-tooltip-padding-and-size-measurements",
+                [(
+                    "v0",
+                    I18N.text(if rich { "ui-rich" } else { "ui-plain" }).into(),
+                )],
+            ));
         } else {
             tooltip_legend(if rich {
                 vec![

@@ -72,13 +72,11 @@ fn canvas(is_switch: bool) {
                             "ui-value-adjacent-label-colors",
                             [(
                                 "v0",
-                                I18N.text(
-                                    &(if is_switch {
-                                        "ui-switch"
-                                    } else {
-                                        "ui-checkbox"
-                                    }),
-                                )
+                                I18N.text(if is_switch {
+                                    "ui-switch"
+                                } else {
+                                    "ui-checkbox"
+                                })
                                 .into(),
                             )],
                         ),

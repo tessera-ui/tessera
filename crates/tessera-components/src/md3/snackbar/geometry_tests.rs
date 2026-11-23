@@ -1,4 +1,3 @@
-//! Snackbar layout and responsive rendering regressions.
 //!
 //! ## Usage
 //!

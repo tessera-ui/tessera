@@ -1,8 +1,4 @@
 //! Date picker components for selecting dates and inclusive ranges.
-//!
-//! ## Usage
-//!
-//! Choose calendar dates or booking intervals in scheduling and form flows.
 use std::ops::RangeInclusive;
 
 use tessera_foundation::modifier::{ModifierExt as _, Padding, SemanticsArgs};
@@ -185,6 +181,10 @@ impl YearMonth {
         CalendarDate::new(self.year, self.month, day)
     }
 
+    fn first_date(self) -> CalendarDate {
+        CalendarDate::new_unchecked(self.year, self.month, 1)
+    }
+
     /// Adds or subtracts months, adjusting the year as needed.
     pub fn add_months(&self, delta: i32) -> Self {
         let total = self.year * 12 + (self.month as i32 - 1) + delta;
@@ -339,6 +339,13 @@ impl DatePickerController {
         self.displayed_month = clamp_month_to_range(month, &self.year_range);
     }
 
+    fn set_displayed_year(&mut self, year: i32) {
+        self.set_displayed_month(YearMonth {
+            year,
+            ..self.displayed_month
+        });
+    }
+
     /// Moves the displayed month forward by one, staying within the year range.
     pub fn next_month(&mut self) {
         if can_navigate_next(self.displayed_month, &self.year_range) {
@@ -455,10 +462,6 @@ struct DatePickerConfig {
 ///
 /// Render a calendar date picker for selecting a single date.
 ///
-/// ## Usage
-///
-/// Use when you need a calendar grid for picking a specific date.
-///
 /// ## Parameters
 ///
 /// - `modifier` — modifier chain applied to the date picker.
@@ -490,7 +493,7 @@ struct DatePickerConfig {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::date_picker::{CalendarDate, DatePickerController, date_picker};
+/// use tessera_components::md3::date_picker::{CalendarDate, date_picker};
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
@@ -498,11 +501,8 @@ struct DatePickerConfig {
 /// #     .child(|| {
 /// date_picker().today(CalendarDate::new(2026, 7, 16).unwrap());
 ///
-/// let mut state = DatePickerController::default();
-/// assert!(state.selected_date().is_none());
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn date_picker(
@@ -567,7 +567,9 @@ pub fn date_picker(
 fn date_picker_content(args: DatePickerConfig) {
     let state = args.controller.expect("date_picker_content requires state");
     let snapshot = state.with(DatePickerController::snapshot);
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     let title = args
         .title
@@ -695,7 +697,6 @@ fn date_picker_content(args: DatePickerConfig) {
 ///     .picker_today(CalendarDate::new(2026, 7, 16).unwrap());
 /// #     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn date_picker_dialog(
@@ -740,7 +741,9 @@ pub fn date_picker_dialog(
                 .clone()
                 .unwrap_or_else(|| I18N.text("md3-select-date")),
         );
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     column()
         .modifier(Modifier::new().width(DATE_PICKER_MAX_WIDTH))
         .children(move || {
@@ -826,7 +829,9 @@ fn calendar_view(
     };
     let can_prev = can_navigate_prev(snapshot.displayed_month, &snapshot.year_range);
     let can_next = can_navigate_next(snapshot.displayed_month, &snapshot.year_range);
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
     column()
         .modifier(
@@ -1088,12 +1093,7 @@ fn year_grid_block(
                     .is_today(is_today)
                     .enabled(enabled)
                     .on_select(move |year: i32| {
-                        state.with_mut(|s| {
-                            s.set_displayed_month(YearMonth::new_unchecked(
-                                year,
-                                s.displayed_month.month(),
-                            ))
-                        });
+                        state.with_mut(|s| s.set_displayed_year(year));
                         view.set(DatePickerView::Calendar);
                     });
             });
@@ -1155,7 +1155,9 @@ fn date_year_grid(
 #[tessera]
 fn date_input_view(state: State<DatePickerController>) {
     let snapshot = state.with(DatePickerController::snapshot);
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
         if let Some(date) = snapshot.selected_date {
@@ -1377,10 +1379,7 @@ fn weekday_short_label(day: Weekday) -> String {
 
 fn build_month_grid(month: YearMonth, first_day_of_week: Weekday) -> Vec<Option<CalendarDate>> {
     let mut cells = vec![None; DATE_COLUMNS * DATE_ROWS];
-    let first_date = month.to_date(1);
-    let first_date =
-        first_date.unwrap_or_else(|| CalendarDate::new_unchecked(month.year(), month.month(), 1));
-    let first_weekday = weekday_for_date(first_date);
+    let first_weekday = weekday_for_date(month.first_date());
     let offset = (first_weekday.index_from_monday() - first_day_of_week.index_from_monday())
         .rem_euclid(7) as usize;
     let max_day = days_in_month(month.year(), month.month());

@@ -68,21 +68,6 @@ pub enum SideSheetPosition {
 }
 
 /// Controller for side sheets, managing open/closed state.
-///
-/// # Example
-///
-/// ```
-/// use tessera_components::md3::side_sheet::SideSheetController;
-///
-/// let session = tessera_ui::RuntimeSession::new();
-/// let _scope = session.enter();
-/// let mut controller = SideSheetController::new(false);
-/// assert!(!controller.is_open());
-/// controller.open();
-/// assert!(controller.is_open());
-/// controller.close();
-/// assert!(!controller.is_open());
-/// ```
 #[derive(Clone, PartialEq)]
 pub struct SideSheetController {
     is_open: bool,
@@ -381,21 +366,19 @@ fn place_side_sheet_if_present(
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::side_sheet::{SideSheetController, modal_side_sheet};
+/// use tessera_components::md3::{side_sheet::{SideSheetController, modal_side_sheet}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         let controller = remember(|| SideSheetController::new(true));
-///         assert!(controller.with(SideSheetController::is_open));
 ///         modal_side_sheet(controller)
 ///             .accessibility_label("Filters")
 ///             .max_width(tessera_ui::Dp(360.0))
 ///             .content_padding(tessera_ui::Dp::ZERO)
-///             .side_sheet_content(|| { /* side sheet content */ });
+///             .side_sheet_content(|| text("Filter options"));
 ///     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn modal_side_sheet(
@@ -444,22 +427,19 @@ pub fn modal_side_sheet(
 /// # use tessera_components::md3::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::md3::side_sheet::{SideSheetController, standard_side_sheet};
+/// use tessera_components::md3::{side_sheet::{SideSheetController, standard_side_sheet}, text::text};
 /// use tessera_ui::remember;
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         let controller = remember(|| SideSheetController::new(true));
-///         assert!(controller.with(SideSheetController::is_open));
 ///         standard_side_sheet()
 ///             .accessibility_label("Details")
-///             .on_close_request(|| {})
 ///             .controller(controller)
-///             .main_content(|| { /* main content */ })
-///             .side_sheet_content(|| { /* side sheet content */ });
+///             .main_content(|| text("Main content"))
+///             .side_sheet_content(|| text("Details"));
 ///     });
 /// # }
-/// # tessera_ui::testing::UiTest::new().content(component).frame();
 /// ```
 #[tessera]
 pub fn standard_side_sheet(

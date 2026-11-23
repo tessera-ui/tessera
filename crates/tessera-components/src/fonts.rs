@@ -130,6 +130,7 @@ struct FontRequest {
     installed: Option<u64>,
 }
 
+#[cfg_attr(not(target_family = "wasm"), derive(Default))]
 struct FontRegistry {
     sources: Vec<FontSource>,
     stylesheets: Vec<Stylesheet>,
@@ -137,19 +138,17 @@ struct FontRegistry {
     revision: u64,
 }
 
+#[cfg(target_family = "wasm")]
 impl Default for FontRegistry {
     fn default() -> Self {
         Self {
             sources: Vec::new(),
-            #[cfg(target_family = "wasm")]
             stylesheets: [
                 "https://cdn.jsdelivr.net/npm/@fontsource-variable/roboto/index.css",
                 "https://cdn.jsdelivr.net/npm/@fontsource-variable/noto-sans-sc/index.css",
             ]
             .map(Stylesheet::new)
             .into(),
-            #[cfg(not(target_family = "wasm"))]
-            stylesheets: Vec::new(),
             requests: Vec::new(),
             revision: 0,
         }
@@ -160,10 +159,6 @@ fn registry() -> Rc<RefCell<FontRegistry>> {
     tessera_ui::runtime_resource::<RefCell<FontRegistry>>()
 }
 
-/// Requests the fonts `text` needs and installs those that have loaded.
-///
-/// Returns `None` while any of them is loading; otherwise a value that changes
-/// only when a font relevant to `text` is installed.
 pub(crate) fn prepare(text: &str, family: Option<&'static str>) -> Option<u64> {
     let registry = registry();
     let mut registry = registry.borrow_mut();

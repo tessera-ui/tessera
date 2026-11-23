@@ -700,7 +700,7 @@ fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Call
             column()
                 .modifier(Modifier::new().weight(1.0))
                 .children(move || {
-                    text(I18N.format("ui-note-the-navigation-drawer-is-no-longer-recommended-in-the-material-3-expressive-update-fo", [("v0", I18N.text(&ending).into())]))
+                    text(I18N.format("ui-note-the-navigation-drawer-is-no-longer-recommended-in-the-material-3-expressive-update-fo", [("v0", I18N.text(ending).into())]))
                         .style(type_style(14.0, 24.0))
                         .color(ink);
                     if let Some(on_recommended) = on_recommended {
@@ -739,7 +739,7 @@ fn launch(
         gap(Dp(16.0));
         prose(I18N.format(
             "ui-current-destination-value",
-            [("v0", I18N.text(&(DESTINATIONS[selected.get()])).into())],
+            [("v0", I18N.text(DESTINATIONS[selected.get()]).into())],
         ));
     });
 }
@@ -1180,7 +1180,7 @@ fn drawer_label_probes(geometry: State<Geometry>) {
                     .color(tessera_ui::Color::TRANSPARENT)
                     .accessibility_label(I18N.format(
                         "ui-drawer-value-measurement-probe",
-                        [("v0", I18N.text(&name).into())],
+                        [("v0", I18N.text(name).into())],
                     ))
                     .modifier(watch(geometry, name).semantics(SemanticsArgs {
                         hidden: true,
@@ -1273,10 +1273,10 @@ fn drawer_figure(modal: bool, mode: u8, geometry: Option<State<Geometry>>) {
             [
                 (
                     "v0",
-                    I18N.text(&(if modal { "ui-modal" } else { "ui-standard" }))
+                    I18N.text(if modal { "ui-modal" } else { "ui-standard" })
                         .into(),
                 ),
-                ("v1", I18N.text(&label).into()),
+                ("v1", I18N.text(label).into()),
             ],
         ),
         geometry,

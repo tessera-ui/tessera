@@ -130,7 +130,6 @@ impl LayoutSnapshotMap {
     }
 }
 
-/// Returns the key of the call that emitted `node_id`.
 pub(crate) fn nearest_replay_boundary_instance_key(
     node_id: NodeId,
     tree: &ComponentNodeTree,
@@ -144,10 +143,6 @@ pub(crate) fn clear_layout_snapshots() {
     });
 }
 
-/// Invokes globally positioned callbacks collected by the last compute pass.
-///
-/// Must be called after the runtime borrow used by `compute` is released so
-/// callbacks can freely update state.
 pub(crate) fn flush_pending_globally_positioned_callbacks() {
     let invocations = TesseraRuntime::with_mut(|runtime| {
         runtime
@@ -178,55 +173,51 @@ struct DirtyLayoutPath {
 
 #[cfg_attr(not(feature = "profiling"), allow(dead_code))]
 #[derive(Clone, Copy, Debug, Default)]
-/// Layout work observed during one frame.
-///
-/// Work counts include every settling pass; only pointer dispatch nodes are distinct.
+/// Work counts collected while laying out a frame in a headless UI test.
 pub struct LayoutFrameDiagnostics {
-    /// Number of nodes whose window geometry was resolved in this frame.
+    /// Nodes whose window geometry changed.
     pub geometry_nodes_updated: u64,
-    /// Geometry traversal entries, including entries that immediately reused a
-    /// cache.
+    /// Nodes visited while resolving window geometry.
     pub geometry_nodes_visited: u64,
-    /// Dirty direct children checked for cached size dependencies.
+    /// Child measurements checked for invalidation.
     pub measure_dirty_children_checked: u64,
-    /// Nodes examined while refreshing pointer geometry and dispatch plans.
+    /// Nodes whose pointer state was updated.
     pub pointer_nodes_updated: u64,
-    /// Distinct pointer nodes selected for dispatch in this frame.
+    /// Nodes receiving pointer dispatch.
     pub pointer_nodes_dispatched: u64,
-    /// Spatial candidates checked for exact pointer hits.
+    /// Nodes considered during pointer hit testing.
     pub pointer_hit_test_candidates: u64,
-    /// Nodes whose draw commands were recorded.
+    /// Nodes whose paint commands were recorded.
     pub paint_nodes_recorded: u64,
-    /// Persistent scene branches updated, including affected ancestors.
+    /// Nodes whose retained scene drawing changed.
     pub scene_nodes_updated: u64,
-    /// Nodes examined while updating the semantic index.
+    /// Accessibility nodes whose published data changed.
     pub accessibility_nodes_updated: u64,
-    /// Nodes with changed measurement or child-placement inputs.
+    /// Nodes changed by component parameters.
     pub dirty_nodes_param: u64,
-    /// Nodes whose direct layout children changed.
+    /// Nodes changed by tree structure.
     pub dirty_nodes_structural: u64,
-    /// Invalidated layout nodes and the ancestors that measure them.
+    /// Dirty nodes together with their affected ancestors.
     pub dirty_nodes_with_ancestors: u64,
-    /// Time spent identifying affected ancestors, in nanoseconds.
+    /// Time spent finding affected layout ancestors, in nanoseconds.
     pub dirty_expand_ns: u64,
-    /// Measurement entrypoint calls, including cache lookups.
+    /// Calls made to the layout measurement entry point.
     pub measure_node_calls: u64,
-    /// Cache hits that skipped an unchanged subtree.
+    /// Measurements skipped because the subtree was unchanged.
     pub cache_hits_direct: u64,
-    /// Cache hits after checking changed descendants or updating placements.
+    /// Measurements reused after checking descendant changes.
     pub cache_hits_boundary: u64,
-    /// Cache misses without a reusable size snapshot.
+    /// Measurements without a reusable prior result.
     pub cache_miss_no_entry: u64,
-    /// Cache misses caused by changed parent constraints.
+    /// Measurements invalidated by changed constraints.
     pub cache_miss_constraint: u64,
-    /// Cache misses caused by the node's own layout inputs.
+    /// Measurements invalidated by changed node inputs.
     pub cache_miss_dirty_self: u64,
-    /// Cache misses caused by child size dependencies.
+    /// Measurements invalidated by child size dependencies.
     pub cache_miss_child_size: u64,
-    /// Measured or repositioned layouts saved for reuse.
+    /// Measured or repositioned results stored for reuse.
     pub cache_store_count: u64,
-    /// Layouts excluded from caching because child measurements were incomplete
-    /// or inconsistent.
+    /// Results discarded because their commands cannot be reused.
     pub cache_drop_non_cacheable_count: u64,
 }
 
@@ -473,7 +464,6 @@ impl LayoutContext<'_> {
     }
 }
 
-/// Parameters for the compute function
 pub(crate) struct ComputeParams {
     pub screen_size: PxSize,
     pub cursor_position: Option<PxPosition>,
@@ -514,11 +504,8 @@ impl QueuedFocusedInput {
     }
 }
 
-/// Respents a component tree
 pub struct ComponentTree {
-    /// We use indextree as the tree structure
     tree: indextree::Arena<ComponentNode>,
-    /// Components' metadatas
     metadatas: ComponentNodeMetaDatas,
     layout_snapshots: LayoutSnapshotMap,
     frame_scene: scene::FrameScene,
@@ -529,7 +516,6 @@ pub struct ComponentTree {
     #[cfg(feature = "profiling")]
     profiler_dirty_nodes: HashSet<NodeId>,
     scale_factor_bits: u64,
-    /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
     replay_range: Option<ReplayRange>,
     replay_insertions: ReplayInsertions,
@@ -541,16 +527,11 @@ pub struct ComponentTree {
     removed_frame_nodes: HashSet<NodeId>,
     previous_structure_change_counts: [usize; 2],
     removed_focus_owners: HashSet<u64>,
-    /// Active pointer hit paths keyed by pointer id.
-    /// Each path stores node instance keys from root to leaf.
     active_pointer_paths: HashMap<u64, Vec<u64>>,
     active_pointer_positions: HashMap<u64, Option<PxPosition>>,
     pointer_work: (u64, HashSet<u64>),
-    /// Per-tree focus owner used for keyboard and IME routing.
     focus_owner: FocusOwner,
     pending_focused_input: VecDeque<QueuedFocusedInput>,
-    /// Last reported window-space bounds for nodes with globally positioned
-    /// callbacks, keyed by instance key.
     last_global_rects: HashMap<u64, GlobalPositionSnapshot>,
     observer_viewport: Option<PxSize>,
     position_observer_nodes: HashSet<NodeId>,
@@ -558,8 +539,6 @@ pub struct ComponentTree {
     pending_position_observers: HashSet<NodeId>,
     observer_spaces: HashMap<NodeId, u64>,
     space_observers: HashMap<u64, HashSet<NodeId>>,
-    /// Globally positioned callbacks collected during compute and invoked
-    /// after the runtime borrow is released.
     pending_globally_positioned_invocations:
         Vec<(GloballyPositionedHandler, node::GeometryObservation)>,
     /// Nodes configured as popup roots; stale entries are pruned per frame.
@@ -666,7 +645,6 @@ pub(crate) struct ReplayReplaceContext {
     previous_queue: Option<Vec<indextree::NodeId>>,
 }
 
-/// Values a rebuilt node replaced in place, kept until the new ones are attached.
 pub(crate) struct PreviousBuildNode {
     pub(crate) modifier: Modifier,
     pub(crate) policy: LayoutPolicyHandle,
@@ -678,7 +656,6 @@ pub(crate) struct PreviousBuildNode {
     popup_sequence: Option<u64>,
 }
 
-/// Build inputs of a node emitted by a layout or group primitive.
 pub(crate) struct NodeInput<'a, P = crate::layout::Stack> {
     pub(crate) fn_name: &'static str,
     pub(crate) role: NodeRole,
@@ -722,7 +699,6 @@ impl Default for ComponentTree {
 }
 
 impl ComponentTree {
-    /// Create a new ComponentTree
     pub fn new() -> Self {
         let tree = indextree::Arena::new();
         let node_queue = Vec::new();
@@ -769,7 +745,6 @@ impl ComponentTree {
         }
     }
 
-    /// Clear the component tree
     pub fn clear(&mut self) {
         crate::runtime::remove_layout_structure(
             &self.node_ids_by_instance_key.keys().copied().collect(),
@@ -810,7 +785,6 @@ impl ComponentTree {
         self.popup_layers = PopupLayers::default();
     }
 
-    /// Reset the entire component tree, including focus ownership state.
     pub fn reset(&mut self) {
         self.clear();
         self.active_pointer_paths.clear();
@@ -832,7 +806,6 @@ impl ComponentTree {
         changed
     }
 
-    /// Get node by NodeId
     pub(crate) fn get(&self, node_id: indextree::NodeId) -> Option<&ComponentNode> {
         self.tree
             .get(node_id)
@@ -840,7 +813,6 @@ impl ComponentTree {
             .map(|node| node.get())
     }
 
-    /// Get mutable node by NodeId
     pub(crate) fn get_mut(&mut self, node_id: indextree::NodeId) -> Option<&mut ComponentNode> {
         self.tree
             .get_mut(node_id)
@@ -848,7 +820,6 @@ impl ComponentTree {
             .map(|node| node.get_mut())
     }
 
-    /// Find a node id by stable instance key.
     pub(crate) fn find_node_id_by_instance_key(
         &self,
         instance_key: u64,
@@ -1065,20 +1036,17 @@ impl ComponentTree {
         self.node_queue.last().copied()
     }
 
-    /// Get current node
     pub(crate) fn current_node(&self) -> Option<&ComponentNode> {
         self.node_queue
             .last()
             .and_then(|node_id| self.get(*node_id))
     }
 
-    /// Get mutable current node
     pub(crate) fn current_node_mut(&mut self) -> Option<&mut ComponentNode> {
         let node_id = self.node_queue.last()?;
         self.get_mut(*node_id)
     }
 
-    /// Add a new node to the tree
     pub(crate) fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
         let instance_key = node_component.instance_key;
         let needs_geometry = node_component.role == NodeRole::Layout || self.node_queue.is_empty();
@@ -1094,7 +1062,6 @@ impl ComponentTree {
         new_node_id
     }
 
-    /// Reuses the matching node in place, or inserts a new one.
     pub(crate) fn rebuild_node<P>(
         &mut self,
         input: NodeInput<'_, P>,
@@ -1258,7 +1225,6 @@ impl ComponentTree {
         self.node_queue.push(id);
     }
 
-    /// Pop the last node from the queue
     pub(crate) fn pop_node(&mut self) {
         if let Some(node_id) = self.node_queue.pop() {
             self.detach_replay_suffix(node_id);
@@ -1365,18 +1331,10 @@ impl ComponentTree {
         changed
     }
 
-    /// Get a reference to the underlying tree structure.
-    ///
-    /// This is used for accessibility tree building and other introspection
-    /// needs.
     pub(crate) fn tree(&self) -> &indextree::Arena<ComponentNode> {
         &self.tree
     }
 
-    /// Get a reference to the node metadatas.
-    ///
-    /// This is used for accessibility tree building and other introspection
-    /// needs.
     #[cfg(any(
         test,
         feature = "testing",
@@ -1731,7 +1689,6 @@ impl ComponentTree {
         invocations
     }
 
-    /// Collect per-node metadata for profiling output.
     #[cfg(feature = "profiling")]
     pub fn profiler_nodes(&mut self) -> Vec<NodeMeta> {
         self.profiler_dirty_nodes
@@ -1763,8 +1720,6 @@ impl ComponentTree {
         self.profiler_nodes_cache.values().cloned().collect()
     }
 
-    /// Dispatches pointer input across the tree and returns the window requests
-    /// raised by the handlers (currently the hover cursor icon).
     fn dispatch_pointer_input(
         &mut self,
         root_node: indextree::NodeId,
@@ -2199,35 +2154,25 @@ impl ComponentTree {
                     .then_some(event)
             })
             .collect();
+        let mut context = ImeInputDispatchContext {
+            tree: &self.tree,
+            metadatas: &self.metadatas,
+            ime_events: &mut pending,
+            window_requests,
+            focus_owner: &mut self.focus_owner,
+            client,
+        };
         for node_id in path.iter().copied() {
             let Some(node) = self.tree.get(node_id).map(|node| node.get()) else {
                 continue;
             };
             for action in node.modifier.ordered_actions() {
                 if let OrderedModifierAction::ImePreviewInput(modifier) = action {
-                    run_ime_input_for_node(
-                        &self.tree,
-                        &self.metadatas,
-                        node_id,
-                        &mut pending,
-                        window_requests,
-                        &mut self.focus_owner,
-                        client,
-                        |input| modifier.on_ime_input(input),
-                    );
+                    context.run(node_id, |input| modifier.on_ime_input(input));
                 }
             }
             for handler in &node.interaction().ime_preview_handlers {
-                run_ime_input_for_node(
-                    &self.tree,
-                    &self.metadatas,
-                    node_id,
-                    &mut pending,
-                    window_requests,
-                    &mut self.focus_owner,
-                    client,
-                    handler.as_ref(),
-                );
+                context.run(node_id, handler.as_ref());
             }
         }
         for node_id in path.iter().rev().copied() {
@@ -2236,29 +2181,11 @@ impl ComponentTree {
             };
             for action in node.modifier.ordered_actions() {
                 if let OrderedModifierAction::ImeInput(modifier) = action {
-                    run_ime_input_for_node(
-                        &self.tree,
-                        &self.metadatas,
-                        node_id,
-                        &mut pending,
-                        window_requests,
-                        &mut self.focus_owner,
-                        client,
-                        |input| modifier.on_ime_input(input),
-                    );
+                    context.run(node_id, |input| modifier.on_ime_input(input));
                 }
             }
             for handler in &node.interaction().ime_handlers {
-                run_ime_input_for_node(
-                    &self.tree,
-                    &self.metadatas,
-                    node_id,
-                    &mut pending,
-                    window_requests,
-                    &mut self.focus_owner,
-                    client,
-                    handler.as_ref(),
-                );
+                context.run(node_id, handler.as_ref());
             }
         }
     }
@@ -2427,7 +2354,6 @@ impl ComponentTree {
         }
     }
 
-    /// Computes the frame's render graph, window requests, and diagnostics.
     #[tracing::instrument(level = "debug", skip(self, params))]
     pub(crate) fn compute(
         &mut self,
@@ -2752,7 +2678,13 @@ impl ComponentTree {
             &mut cursor_position,
             modifiers,
         );
-        #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+        #[cfg(any(
+            target_os = "android",
+            target_os = "ios",
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "linux"
+        ))]
         let graph = graph.with_platform_input_blockers(
             self.pointer_index
                 .platform_view_input_blockers(&self.platform_view_order_paths(root_node)),
@@ -2940,7 +2872,13 @@ impl ComponentTree {
         self.accessibility_index.set_modal(&self.tree, root, modal);
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
     fn platform_view_order_paths(&self, root_node: indextree::NodeId) -> Vec<(u64, Vec<usize>)> {
         let mut views = Vec::new();
         for node_id in root_node.descendants(&self.tree) {
@@ -3353,7 +3291,7 @@ struct PointerNodePlan {
 struct PointerDispatchPlan {
     preorder: Vec<indextree::NodeId>,
     postorder: Vec<indextree::NodeId>,
-    nodes: HashMap<indextree::NodeId, Arc<PointerNodePlan>>,
+    nodes: HashMap<indextree::NodeId, Rc<PointerNodePlan>>,
 }
 
 struct PointerInputDispatchContext<'a> {
@@ -3362,7 +3300,7 @@ struct PointerInputDispatchContext<'a> {
     cursor_position: &'a mut Option<PxPosition>,
     pointer_changes: &'a mut [PointerChange],
     pointer_change_paths: &'a [Vec<u64>],
-    nodes: &'a HashMap<indextree::NodeId, Arc<PointerNodePlan>>,
+    nodes: &'a HashMap<indextree::NodeId, Rc<PointerNodePlan>>,
     active_pointer_paths: &'a HashMap<u64, Vec<u64>>,
     active_pointer_positions: &'a HashMap<u64, Option<PxPosition>>,
     modifiers: winit::keyboard::ModifiersState,
@@ -3549,10 +3487,10 @@ fn run_pointer_input_for_node<F>(
     {
         cursor_position_ref = &mut dummy_cursor_position;
     }
-    if let (Some(position), Some(bounds)) = (*cursor_position_ref, *event_clip_bounds) {
-        if !bounds.contains(position) {
-            cursor_position_ref = &mut dummy_cursor_position;
-        }
+    if let (Some(position), Some(bounds)) = (*cursor_position_ref, *event_clip_bounds)
+        && !bounds.contains(position)
+    {
+        cursor_position_ref = &mut dummy_cursor_position;
     }
     let mut selected_change_indices = Vec::new();
     let mut local_pointer_changes = Vec::new();
@@ -3751,69 +3689,69 @@ fn run_keyboard_input_for_node<F>(
     );
 }
 
-fn run_ime_input_for_node<F>(
-    tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
-    node_id: indextree::NodeId,
-    ime_events: &mut Vec<winit::event::Ime>,
-    window_requests: &mut WindowRequests,
-    focus_owner: &mut FocusOwner,
-    ime_client: Option<FocusHandleId>,
-    dispatch: F,
-) where
-    F: FnOnce(ImeInput<'_>),
-{
-    let Some(NodeInputContext {
-        local_to_window: transform,
-        abs_pos,
-        event_clip_rect: _,
-        node_computed_data,
-        instance_logic_id,
-        instance_key: _,
-        fn_name,
-        parent_id,
-        ..
-    }) = resolve_node_input_context(tree, metadatas, node_id)
-    else {
-        return;
-    };
-    #[cfg(not(feature = "profiling"))]
-    let _ = (parent_id, abs_pos);
+struct ImeInputDispatchContext<'a> {
+    tree: &'a ComponentNodeTree,
+    metadatas: &'a ComponentNodeMetaDatas,
+    ime_events: &'a mut Vec<winit::event::Ime>,
+    window_requests: &'a mut WindowRequests,
+    focus_owner: &'a mut FocusOwner,
+    client: Option<FocusHandleId>,
+}
 
-    #[cfg(feature = "profiling")]
-    let mut profiler_guard = Some(ProfilerScopeGuard::new(
-        ProfilerPhase::Input,
-        Some(node_id),
-        parent_id,
-        Some(fn_name),
-    ));
-    let replay_boundary_instance_key = nearest_replay_boundary_instance_key(node_id, tree);
-    let _node_ctx_guard =
-        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name);
-    let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
-    let _phase_guard = push_phase(RuntimePhase::Input);
-    let _focus_owner_guard = bind_focus_owner(focus_owner);
-    let input = ImeInput {
-        computed_data: node_computed_data,
-        ime_events,
-        ime_request: &mut window_requests.ime_request,
-    };
-    dispatch(input);
+impl ImeInputDispatchContext<'_> {
+    fn run(&mut self, node_id: NodeId, dispatch: impl FnOnce(ImeInput<'_>)) {
+        let Some(NodeInputContext {
+            local_to_window: transform,
+            abs_pos,
+            event_clip_rect: _,
+            node_computed_data,
+            instance_logic_id,
+            instance_key: _,
+            fn_name,
+            parent_id,
+            ..
+        }) = resolve_node_input_context(self.tree, self.metadatas, node_id)
+        else {
+            return;
+        };
+        #[cfg(not(feature = "profiling"))]
+        let _ = (parent_id, abs_pos);
 
-    #[cfg(feature = "profiling")]
-    {
-        let abs_tuple = (abs_pos.x_px().0, abs_pos.y_px().0);
-        if let Some(g) = &mut profiler_guard {
-            g.set_positions(Some(abs_tuple));
+        #[cfg(feature = "profiling")]
+        let mut profiler_guard = Some(ProfilerScopeGuard::new(
+            ProfilerPhase::Input,
+            Some(node_id),
+            parent_id,
+            Some(fn_name),
+        ));
+        let replay_boundary_instance_key = nearest_replay_boundary_instance_key(node_id, self.tree);
+        let _node_ctx_guard =
+            push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name);
+        let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
+        let _phase_guard = push_phase(RuntimePhase::Input);
+        let _focus_owner_guard = bind_focus_owner(self.focus_owner);
+        let input = ImeInput {
+            computed_data: node_computed_data,
+            ime_events: self.ime_events,
+            ime_request: &mut self.window_requests.ime_request,
+        };
+        dispatch(input);
+
+        #[cfg(feature = "profiling")]
+        {
+            let abs_tuple = (abs_pos.x_px().0, abs_pos.y_px().0);
+            if let Some(g) = &mut profiler_guard {
+                g.set_positions(Some(abs_tuple));
+            }
+            let _ = profiler_guard.take();
         }
-        let _ = profiler_guard.take();
+        attach_ime_position_if_needed(
+            self.window_requests,
+            transform,
+            self.client,
+            self.focus_owner.active_handle_id(),
+        );
     }
-    attach_ime_position_if_needed(
-        window_requests,
-        transform,
-        ime_client,
-        focus_owner.active_handle_id(),
-    );
 }
 
 fn dispatch_default_focus_keyboard_navigation(
@@ -4402,17 +4340,22 @@ fn layout_rect_in_space(
     None
 }
 
+#[derive(Clone, Copy)]
+struct InheritedGeometry {
+    transform: crate::LocalToWindow,
+    clip_bounds: Option<crate::FloatRect>,
+    opacity: f32,
+    has_shape_clipping: bool,
+}
+
 fn prepare_layout_metadata_for_node(
     node: &ComponentNode,
     metadata: &mut ComponentNodeMetaData,
-    parent_transform: crate::LocalToWindow,
+    parent: InheritedGeometry,
     is_root: bool,
-    parent_clip_bounds: Option<crate::FloatRect>,
-    current_opacity: f32,
-    parent_has_shape_clipping: bool,
     reuse_local_placement: bool,
 ) -> (Option<PreparedLayoutMetadata>, bool) {
-    metadata.has_shape_clipping = parent_has_shape_clipping || metadata.clip_region().is_some();
+    metadata.has_shape_clipping = parent.has_shape_clipping || metadata.clip_region().is_some();
     let rel_pos = match metadata.rel_position {
         Some(pos) => pos,
         None if is_root => PxPosition::ZERO,
@@ -4427,7 +4370,7 @@ fn prepare_layout_metadata_for_node(
             return (None, false);
         }
     };
-    let base_self_position = parent_transform.map_point(rel_pos);
+    let base_self_position = parent.transform.map_point(rel_pos);
     let cached_position = reuse_local_placement
         .then(|| {
             metadata
@@ -4438,7 +4381,7 @@ fn prepare_layout_metadata_for_node(
         .flatten();
     let local_position = if let Some(position) = cached_position {
         if let Some(transforms) = &mut metadata.input_transforms {
-            transforms.parent = parent_transform;
+            transforms.parent = parent.transform;
         }
         position
     } else {
@@ -4451,10 +4394,10 @@ fn prepare_layout_metadata_for_node(
         let (position, inputs) = node
             .modifier
             .resolve_placement(rel_pos, node.instance_logic_id);
-        metadata.set_input_transforms(parent_transform, inputs);
+        metadata.set_input_transforms(parent.transform, inputs);
         position
     };
-    let local_to_window = parent_transform.with_local_origin(local_position);
+    let local_to_window = parent.transform.with_local_origin(local_position);
     let self_position = local_to_window.translation();
     let child_scale = node.children_scale;
     let child_local_to_window = if child_scale == 1.0 {
@@ -4468,10 +4411,10 @@ fn prepare_layout_metadata_for_node(
             .expect("Composed child transform must remain finite and invertible")
     };
     metadata.local_to_window = Some(local_to_window);
-    let cumulative_opacity = current_opacity * metadata.opacity;
+    let cumulative_opacity = parent.opacity * metadata.opacity;
     metadata.base_abs_position = Some(base_self_position);
     metadata.abs_position = Some(self_position);
-    metadata.event_clip_bounds = parent_clip_bounds;
+    metadata.event_clip_bounds = parent.clip_bounds;
 
     let size = metadata
         .computed_data
@@ -4503,13 +4446,13 @@ fn prepare_layout_metadata_for_node(
                 local_to_window
                     .map_rect(crate::FloatRect::from_position_size(PxPosition::ZERO, size))
             });
-        Some(parent_clip_bounds.map_or(own_clip_bounds, |parent| {
+        Some(parent.clip_bounds.map_or(own_clip_bounds, |parent| {
             parent
                 .intersection(own_clip_bounds)
                 .unwrap_or(crate::FloatRect::ZERO)
         }))
     } else {
-        parent_clip_bounds
+        parent.clip_bounds
     };
     let prepared = PreparedLayoutMetadata {
         local_position,
@@ -4609,63 +4552,32 @@ fn populate_layers(
             id = parent;
         }
     }
-    fn visit(
-        tree: &ComponentNodeTree,
-        metadatas: &mut ComponentNodeMetaDatas,
-        dirty: &HashSet<indextree::NodeId>,
-        dirty_children: &HashMap<NodeId, HashSet<NodeId>>,
-        parent_transform: crate::LocalToWindow,
-        is_root: bool,
-        node_id: indextree::NodeId,
-        clip_bounds: Option<crate::FloatRect>,
-        current_opacity: f32,
-        parent_has_shape_clipping: bool,
-        inherited_order_changed: bool,
-        inherited_shape_clip_changed: bool,
-        inherited_changed: bool,
-        updates: &mut u64,
-    ) {
-        metadatas.geometry_visits += 1;
-        let Some(node) = tree.get(node_id).map(|node| node.get()) else {
-            return;
-        };
-        let self_dirty = dirty.contains(&node_id);
-        let (
-            previous,
-            was_hidden,
-            initialized,
-            paint_dirty,
-            prepared,
-            publishes_geometry,
-            size_changed,
-            own_shape_changed,
-        ) = if let Some(metadata) = metadatas.get_mut(&node_id) {
-            let initialized = metadata.geometry_initialized;
-            if initialized && !inherited_changed && !self_dirty {
+    struct LayoutVisit<'a> {
+        tree: &'a ComponentNodeTree,
+        metadatas: &'a mut ComponentNodeMetaDatas,
+        dirty: &'a mut HashSet<NodeId>,
+        dirty_children: &'a HashMap<NodeId, HashSet<NodeId>>,
+        root: NodeId,
+        updates: u64,
+    }
+
+    impl LayoutVisit<'_> {
+        fn visit(
+            &mut self,
+            node_id: NodeId,
+            parent: InheritedGeometry,
+            inherited_order_changed: bool,
+            inherited_shape_clip_changed: bool,
+            inherited_changed: bool,
+        ) {
+            let tree = self.tree;
+            let metadatas = &mut *self.metadatas;
+            metadatas.geometry_visits += 1;
+            let Some(node) = tree.get(node_id).map(|node| node.get()) else {
                 return;
-            }
-            let previous = metadata.prepared_layout;
-            let was_placed = metadata.abs_position.is_some();
-            let was_hidden = metadata.prepared_layout.is_none();
-            let paint_dirty = metadata.paint_dirty;
-            let (prepared, own_shape_changed) = prepare_layout_metadata_for_node(
-                node,
-                metadata,
-                parent_transform,
-                is_root,
-                clip_bounds,
-                current_opacity,
-                parent_has_shape_clipping,
-                initialized && !self_dirty,
-            );
-            let publishes_geometry = metadata.observes_geometry
-                || metadata.accessibility.is_some()
-                || metadata.clips_children
-                || !metadata.fragment.ops().is_empty();
-            let size_changed = metadata.observes_size
-                && (was_placed != prepared.is_some()
-                    || previous.map(|layout| layout.size) != prepared.map(|layout| layout.size));
-            (
+            };
+            let self_dirty = self.dirty.contains(&node_id);
+            let (
                 previous,
                 was_hidden,
                 initialized,
@@ -4674,155 +4586,173 @@ fn populate_layers(
                 publishes_geometry,
                 size_changed,
                 own_shape_changed,
-            )
-        } else {
-            (None, true, false, false, None, false, false, false)
-        };
-        *updates += 1;
-        if size_changed {
-            metadatas.size_changed.insert(node_id);
-        }
-        if initialized && was_hidden && prepared.is_none() && !self_dirty {
-            return;
-        }
-        let order_changed = metadatas.placement_order_dirty.remove(&node_id);
-        let order_changed = order_changed || inherited_order_changed;
-        if order_changed {
-            metadatas.placement_order_changed.insert(node_id);
-        }
-        let changed = inherited_changed
-            || !initialized
-            || prepared != previous
-            || order_changed
-            || own_shape_changed;
-        if changed && publishes_geometry {
-            metadatas.geometry_changed.insert(node_id);
-        }
-        if prepared.is_some() && paint_dirty {
-            metadatas.paint_dirty_nodes.insert(node_id);
-        }
-        if prepared.is_none() && node.role == NodeRole::Layout {
-            for descendant in node_id.descendants(tree) {
-                let size_hidden = if let Some(metadata) = metadatas.get_mut(&descendant) {
-                    let size_hidden = metadata.observes_size && metadata.abs_position.is_some();
-                    metadata.base_abs_position = None;
-                    metadata.abs_position = None;
-                    metadata.local_to_window = None;
-                    metadata.event_clip_bounds = None;
-                    size_hidden
-                } else {
-                    false
-                };
-                if size_hidden {
-                    metadatas.size_changed.insert(descendant);
+            ) = if let Some(metadata) = metadatas.get_mut(&node_id) {
+                let initialized = metadata.geometry_initialized;
+                if initialized && !inherited_changed && !self_dirty {
+                    return;
                 }
-                metadatas.geometry_changed.insert(descendant);
-            }
-            return;
-        }
-        let (transform, clip, opacity) = prepared.map_or(
-            (parent_transform, clip_bounds, current_opacity),
-            |prepared| {
+                let previous = metadata.prepared_layout;
+                let was_placed = metadata.abs_position.is_some();
+                let was_hidden = metadata.prepared_layout.is_none();
+                let paint_dirty = metadata.paint_dirty;
+                let (prepared, own_shape_changed) = prepare_layout_metadata_for_node(
+                    node,
+                    metadata,
+                    parent,
+                    node_id == self.root,
+                    initialized && !self_dirty,
+                );
+                let publishes_geometry = metadata.observes_geometry
+                    || metadata.accessibility.is_some()
+                    || metadata.clips_children
+                    || !metadata.fragment.ops().is_empty();
+                let size_changed = metadata.observes_size
+                    && (was_placed != prepared.is_some()
+                        || previous.map(|layout| layout.size)
+                            != prepared.map(|layout| layout.size));
                 (
-                    prepared.child_local_to_window,
-                    prepared.child_clip_bounds,
-                    prepared.cumulative_opacity,
+                    previous,
+                    was_hidden,
+                    initialized,
+                    paint_dirty,
+                    prepared,
+                    publishes_geometry,
+                    size_changed,
+                    own_shape_changed,
                 )
-            },
-        );
-        let has_shape_clipping = prepared.map_or(parent_has_shape_clipping, |prepared| {
-            prepared.has_shape_clipping
-        });
-        // Shape changes can invalidate descendant hit tests without changing
-        // their rectangular clip bounds or coordinate transforms.
-        let shape_clip_changed = inherited_shape_clip_changed || own_shape_changed;
-        let children_changed = !initialized
-            || order_changed
-            || shape_clip_changed
-            || match (previous, prepared) {
-                (Some(previous), Some(prepared)) => !previous.child_geometry_eq(&prepared),
-                (None, None) => false,
-                _ => true,
-            };
-        let mut visit_child = |child| {
-            visit(
-                tree,
-                metadatas,
-                dirty,
-                dirty_children,
-                transform,
-                false,
-                child,
-                clip,
-                opacity,
-                has_shape_clipping,
-                order_changed,
-                shape_clip_changed,
-                children_changed,
-                updates,
-            );
-        };
-        if children_changed {
-            if let Some(children) = node.layout_children.as_ref() {
-                for &child in children.iter() {
-                    visit_child(child);
-                }
             } else {
-                for &child in direct_layout_children(node_id, tree).iter() {
+                (None, true, false, false, None, false, false, false)
+            };
+            self.updates += 1;
+            if size_changed {
+                metadatas.size_changed.insert(node_id);
+            }
+            if initialized && was_hidden && prepared.is_none() && !self_dirty {
+                return;
+            }
+            let order_changed = metadatas.placement_order_dirty.remove(&node_id);
+            let order_changed = order_changed || inherited_order_changed;
+            if order_changed {
+                metadatas.placement_order_changed.insert(node_id);
+            }
+            let changed = inherited_changed
+                || !initialized
+                || prepared != previous
+                || order_changed
+                || own_shape_changed;
+            if changed && publishes_geometry {
+                metadatas.geometry_changed.insert(node_id);
+            }
+            if prepared.is_some() && paint_dirty {
+                metadatas.paint_dirty_nodes.insert(node_id);
+            }
+            if prepared.is_none() && node.role == NodeRole::Layout {
+                for descendant in node_id.descendants(tree) {
+                    let size_hidden = if let Some(metadata) = metadatas.get_mut(&descendant) {
+                        let size_hidden = metadata.observes_size && metadata.abs_position.is_some();
+                        metadata.base_abs_position = None;
+                        metadata.abs_position = None;
+                        metadata.local_to_window = None;
+                        metadata.event_clip_bounds = None;
+                        size_hidden
+                    } else {
+                        false
+                    };
+                    if size_hidden {
+                        metadatas.size_changed.insert(descendant);
+                    }
+                    metadatas.geometry_changed.insert(descendant);
+                }
+                return;
+            }
+            let child_geometry = prepared.map_or(parent, |prepared| InheritedGeometry {
+                transform: prepared.child_local_to_window,
+                clip_bounds: prepared.child_clip_bounds,
+                opacity: prepared.cumulative_opacity,
+                has_shape_clipping: prepared.has_shape_clipping,
+            });
+            // Shape changes can invalidate descendant hit tests without changing
+            // their rectangular clip bounds or coordinate transforms.
+            let shape_clip_changed = inherited_shape_clip_changed || own_shape_changed;
+            let children_changed = !initialized
+                || order_changed
+                || shape_clip_changed
+                || match (previous, prepared) {
+                    (Some(previous), Some(prepared)) => !previous.child_geometry_eq(&prepared),
+                    (None, None) => false,
+                    _ => true,
+                };
+            let dirty_children = self.dirty_children;
+            let mut visit_child = |child| {
+                self.visit(
+                    child,
+                    child_geometry,
+                    order_changed,
+                    shape_clip_changed,
+                    children_changed,
+                );
+            };
+            if children_changed {
+                if let Some(children) = node.layout_children.as_ref() {
+                    for &child in children.iter() {
+                        visit_child(child);
+                    }
+                } else {
+                    for &child in direct_layout_children(node_id, tree).iter() {
+                        visit_child(child);
+                    }
+                }
+            } else if let Some(children) = dirty_children.get(&node_id) {
+                for &child in children {
                     visit_child(child);
                 }
-            }
-        } else if let Some(children) = dirty_children.get(&node_id) {
-            for &child in children {
-                visit_child(child);
             }
         }
     }
-    let mut updates = 0;
-    visit(
+    let mut visit = LayoutVisit {
         tree,
         metadatas,
-        &dirty,
-        &dirty_children,
-        crate::LocalToWindow::IDENTITY,
-        true,
+        dirty: &mut dirty,
+        dirty_children: &dirty_children,
+        root: root_node,
+        updates: 0,
+    };
+    visit.visit(
         root_node,
-        None,
-        1.0,
+        InheritedGeometry {
+            transform: crate::LocalToWindow::IDENTITY,
+            clip_bounds: None,
+            opacity: 1.0,
+            has_shape_clipping: false,
+        },
         false,
         false,
         false,
-        false,
-        &mut updates,
     );
     // Anchors precede the popups they position, either in the main tree or
     // in an earlier popup.
     for &popup in popups {
-        let position = popup_position(tree, metadatas, popup, window_size);
-        if let Some(metadata) = metadatas.get_mut(&popup)
+        let position = popup_position(tree, visit.metadatas, popup, window_size);
+        if let Some(metadata) = visit.metadatas.get_mut(&popup)
             && metadata.rel_position != position
         {
             metadata.rel_position = position;
-            dirty.insert(popup);
+            visit.dirty.insert(popup);
         }
-        visit(
-            tree,
-            metadatas,
-            &dirty,
-            &dirty_children,
-            crate::LocalToWindow::IDENTITY,
-            false,
+        visit.visit(
             popup,
-            None,
-            1.0,
+            InheritedGeometry {
+                transform: crate::LocalToWindow::IDENTITY,
+                clip_bounds: None,
+                opacity: 1.0,
+                has_shape_clipping: false,
+            },
             false,
             false,
             false,
-            false,
-            &mut updates,
         );
     }
-    updates
+    visit.updates
 }
 
 #[cfg(test)]
@@ -7096,7 +7026,7 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         let mut tree = built_tree();
         let outer = emit(&mut tree, 2, NodeRole::Layout);
-        let group = emit(&mut tree, 3, NodeRole::Group);
+        emit(&mut tree, 3, NodeRole::Group);
         let first = leaf(&mut tree, 4);
         let second = leaf(&mut tree, 5);
         end_call(&mut tree, 3);
@@ -7108,23 +7038,19 @@ mod tests {
         );
 
         replay(&mut tree, 3, |tree| {
-            assert_eq!(emit(tree, 3, NodeRole::Group), group);
+            emit(tree, 3, NodeRole::Group);
             assert!(retain(tree, 5));
             assert!(retain(tree, 4));
             end_call(tree, 3);
         });
 
-        let actual = direct_layout_children(outer, tree.tree());
-        assert_eq!(actual.as_ref(), &[second, first]);
-        match (actual, direct_layout_children(group, tree.tree())) {
-            (node::LayoutChildren::Shared(outer), node::LayoutChildren::Shared(group)) => {
-                assert!(Arc::ptr_eq(&outer, &group));
-            }
-            _ => panic!("a single group child shares its wider layout children"),
-        }
+        assert_eq!(
+            direct_layout_children(outer, tree.tree()).as_ref(),
+            &[second, first]
+        );
     }
 }
 
 #[cfg(all(test, feature = "testing"))]
-#[path = "replay_journal_tests.rs"]
-mod replay_journal_tests;
+#[path = "component_tree_behavior_tests.rs"]
+mod component_tree_behavior_tests;

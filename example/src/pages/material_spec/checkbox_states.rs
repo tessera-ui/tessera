@@ -91,16 +91,13 @@ fn panel(dark: bool) {
                 .background(scheme.surface)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(
-                        I18N.format(
-                            "ui-value-checkbox-states",
-                            [(
-                                "v0",
-                                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                                    .into(),
-                            )],
-                        ),
-                    ),
+                    label: Some(I18N.format(
+                        "ui-value-checkbox-states",
+                        [(
+                            "v0",
+                            I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
+                        )],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -135,7 +132,7 @@ fn panel(dark: bool) {
 
 #[tessera]
 fn cell(dark: bool, column: usize, row: usize) {
-    let checked = remember(move || row % 3 == 0);
+    let checked = remember(move || row.is_multiple_of(3));
     let mixed = remember(move || row % 3 == 1);
     let visual_left = [110.0, 305.0, 501.0, 697.0, 890.0][column];
     let visual_top = match (column, row) {
@@ -161,20 +158,17 @@ fn cell(dark: bool, column: usize, row: usize) {
         .is_error(row >= 3)
         .disabled(column == 1)
         .presentation_state(presentation)
-        .accessibility_label(
-            I18N.format(
-                "ui-value-value-value-checkbox-state",
-                [
-                    (
-                        "v0",
-                        I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
-                            .into(),
-                    ),
-                    ("v1", I18N.text(&(COLUMNS[column])).into()),
-                    ("v2", I18N.text(&(ROWS[row])).into()),
-                ],
-            ),
-        )
+        .accessibility_label(I18N.format(
+            "ui-value-value-value-checkbox-state",
+            [
+                (
+                    "v0",
+                    I18N.text(if dark { "ui-dark" } else { "ui-light" }).into(),
+                ),
+                ("v1", I18N.text(COLUMNS[column]).into()),
+                ("v2", I18N.text(ROWS[row]).into()),
+            ],
+        ))
         .modifier(Modifier::new().offset(Dp(visual_left - 15.0), Dp(visual_top - 15.0)))
         .on_toggle(move |value| {
             checked.set(value);

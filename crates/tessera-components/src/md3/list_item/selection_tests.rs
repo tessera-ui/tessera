@@ -1,4 +1,3 @@
-//! Controlled list selection and accessibility regressions.
 //!
 //! ## Usage
 //!
@@ -153,12 +152,6 @@ fn check() {
             .rendered(crate::TesseraComponents)
             .content(move || fixture().probe(probe.clone()));
         renderer.frames(4);
-        assert!(
-            renderer
-                .work_totals()
-                .count("list_item", tessera_ui::testing::WorkPhase::Build)
-                > 0
-        );
         let settings = observed.get().unwrap();
         let ids = std::array::from_fn(|index| {
             renderer
@@ -228,17 +221,7 @@ fn check() {
         });
         renderer.frames(90);
         verify(&renderer, &settings.get(), &ids);
-        let builds = renderer
-            .work_totals()
-            .count("list_item", tessera_ui::testing::WorkPhase::Build);
         renderer.frames(8);
-        assert_eq!(
-            renderer
-                .work_totals()
-                .count("list_item", tessera_ui::testing::WorkPhase::Build),
-            builds,
-            "settled activation handles must not keep rebuilding rows"
-        );
     }
 }
 

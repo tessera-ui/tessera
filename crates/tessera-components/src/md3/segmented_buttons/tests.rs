@@ -1,4 +1,3 @@
-//! Segmented selection, responsive geometry, and live typography regressions.
 //!
 //! ## Usage
 //!

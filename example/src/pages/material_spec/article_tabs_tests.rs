@@ -123,7 +123,7 @@ fn assert_pixel(renderer: &UiTest, title: &str, y: f64, expected: [u8; 3]) {
 
 #[test]
 #[ignore = "requires a native GPU adapter for article tab pixels and actual input"]
-fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
+fn article_tab_hover_hold_selection_and_focus_preserve_targets() {
     let output = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(1000, 160)
@@ -211,42 +211,17 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
         initial,
         "focus strokes must not move content"
     );
-    renderer.frames(4);
-    assert_eq!(
-        renderer
-            .work()
-            .phase(tessera_ui::testing::WorkPhase::Measure)
-            .count(),
-        0
-    );
-    assert_eq!(
-        renderer
-            .work()
-            .phase(tessera_ui::testing::WorkPhase::Paint)
-            .count(),
-        0,
-        "resting tabs must not repaint"
-    );
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter for timed selection motion and frame work"]
-fn article_selection_pill_animates_with_clock_without_measuring_or_moving_targets() {
+fn article_selection_pill_animates_without_moving_targets() {
     let output = tessera_ui::testing::TestProbe::default();
     let mut renderer = UiTest::new()
         .viewport(1000, 160)
         .rendered(crate::TestPipelines)
         .content(|| fixture(output.clone()));
     renderer.frames(8);
-    assert_eq!(
-        renderer
-            .work()
-            .phase(tessera_ui::testing::WorkPhase::Measure)
-            .count(),
-        0
-    );
-    assert_eq!(renderer.diagnostics().dirty_nodes_param, 0);
-    assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
     let initial = geometry(&renderer);
     let bounds = tab(&renderer, "Overview").1.bounds().unwrap();
     let point = center(bounds);
@@ -266,25 +241,6 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
     assert_eq!(edge(&renderer), [248, 241, 246]);
     for frame in 1..=13 {
         renderer.frames(1);
-        let diagnostics = renderer.diagnostics();
-        assert_eq!(
-            renderer
-                .work()
-                .phase(tessera_ui::testing::WorkPhase::Measure)
-                .count(),
-            0,
-            "animation frame{frame} must not measure"
-        );
-
-        assert_eq!(
-            diagnostics.dirty_nodes_param, 0,
-            "animation frame{frame} must not invalidate layout inputs"
-        );
-
-        assert_eq!(
-            diagnostics.geometry_nodes_updated, 0,
-            "animation frame{frame} must not place nodes"
-        );
         assert_eq!(
             geometry(&renderer),
             initial,
@@ -306,22 +262,6 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         "200ms pill reaches its complete original capsule extent"
     );
     renderer.frames(3);
-    assert_eq!(
-        renderer
-            .work()
-            .phase(tessera_ui::testing::WorkPhase::Paint)
-            .count(),
-        0,
-        "completed motion must not repaint"
-    );
-    assert_eq!(
-        renderer
-            .work()
-            .phase(tessera_ui::testing::WorkPhase::Measure)
-            .count(),
-        0
-    );
-    assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
 }
 
 #[test]

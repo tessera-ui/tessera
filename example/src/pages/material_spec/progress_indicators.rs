@@ -446,24 +446,20 @@ fn configurations() {
                 [
                     (
                         "v0",
-                        I18N.text(
-                            &(if determinate.get() {
-                                "ui-determinate-7102"
-                            } else {
-                                "ui-indeterminate"
-                            }),
-                        )
+                        I18N.text(if determinate.get() {
+                            "ui-determinate-7102"
+                        } else {
+                            "ui-indeterminate"
+                        })
                         .into(),
                     ),
                     (
                         "v1",
-                        I18N.text(
-                            &(if thick.get() {
-                                "ui-thick"
-                            } else {
-                                "ui-default-7074"
-                            }),
-                        )
+                        I18N.text(if thick.get() {
+                            "ui-thick"
+                        } else {
+                            "ui-default-7074"
+                        })
                         .into(),
                     ),
                 ],

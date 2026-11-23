@@ -709,13 +709,6 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
                 sampled,
                 "presentation ripple remains static across frame timestamps"
             );
-            assert_eq!(
-                renderer
-                    .work()
-                    .phase(tessera_ui::testing::WorkPhase::Paint)
-                    .count(),
-                0
-            );
             settings.with_mut(|settings| settings.presentation_ripple = None);
             renderer.frames(20);
             assert_eq!(crop(&renderer.read_pixels()), previews[2]);

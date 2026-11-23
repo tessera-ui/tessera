@@ -1,162 +1,25 @@
-# 为 tessera 做贡献
+# 为 Tessera 做贡献
 
-[![English][contributing-en-badge]][contributing-en-url]
+[English](../CONTRIBUTING.md)
 
-[contributing-en-badge]: https://img.shields.io/badge/CONTRIBUTING-English-blue.svg?style=for-the-badge&logo=contributing
-[contributing-en-url]: ../CONTRIBUTING.md
+## 准备环境并验证改动
 
-感谢您对 `tessera` 的兴趣！我们欢迎任何形式的贡献，包括但不限于代码、文档、issue。
+1. 安装 [Rust](https://rustup.rs/)，运行 `git submodule update --init --recursive`，再运行 `git -C crates/tessera-cosmic-text lfs pull`（需要 [Git LFS](https://git-lfs.com/)）。常规清理不改动上游 fork。
+2. Linux 或 macOS 可使用 `nix develop`，也可手动安装平台依赖。Linux 需要 X11（`libx11`、`libxrandr`、`libxcursor`）或 Wayland（`wayland`、`libxkbcommon`）开发包；macOS 需要 Xcode Command Line Tools。
+3. 安装 [rust-script](https://rust-script.org/#installation)，然后在仓库根目录运行检查：
 
-## 开发工具
+   ```sh
+   rust-script scripts/check-imports.rs . --check
+   cargo test --workspace
+   ```
 
-如果您需要为 `tessera` 做代码贡献，除最新 stable rust 以外，强烈建议安装以下工具:
+Android 环境见 [CLI 指南](../crates/cargo-tessera/docs/README_zh-CN.md#android-构建)。打包与平台检查见[维护脚本](../scripts/README.md)。
 
-- [`rust-script`](https://rust-script.org/#installation) 我们用它来运行[一些 rust 脚本](../scripts)。对开发有帮助。
+## 提交改动
 
-## 代码贡献规范
+- 从短期分支向 `main` 提交 pull request。CI 通过后方可 squash merge。
+- 标题采用 [Conventional Commits](https://www.conventionalcommits.org/) 格式。破坏性变更在标题中加 `!`，并在描述中以 `BREAKING CHANGE:` 说明变更及迁移办法。
+- 遵循 [AGENTS.md](../AGENTS.md)。先更新英文文档，再同步翻译。
+- 贡献按 [MIT](../LICENSE-MIT) 或 [Apache-2.0](../LICENSE-APACHE) 授权，由接收者任选其一。只提交你有权按这些条款授权的内容。
 
-为了确保代码质量和一致性，保证仓库整洁，请遵循以下规范：
-
-## 入门
-
-您可以通过以下二种方式之一来设置您的开发环境：
-
-1. **手动设置**: 自行安装 Rust 和系统依赖。
-2. **Nix**: 在 Linux 和 macOS 上使用 `flake.nix` 提供的开发 shell。
-
-### 选项 A - 手动设置
-
-请按照下面对应您的操作系统的说明进行操作。
-
-#### 1. 安装 Rust
-
-首先，请访问 [rustup.rs](https://rustup.rs/) 按照官方指南安装 Rust 工具链。
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-#### 2. 安装系统依赖
-
-##### 针对 Linux
-
-对于已经有桌面环境的 Linux 用户，您大概率不需要这一步，以下内容是针对那些无桌面环境的用户。
-
-如果您目前没有桌面环境，您需要选择安装 X11 或 Wayland 的开发包。通常您只需要安装其中一套。
-
-- **使用 X11**:
-
-  - _Debian/Ubuntu_: `sudo apt install libx11-dev libxrandr-dev libxcursor-dev`
-  - _Arch/Manjaro_: `sudo pacman -S libx11 libxrandr libxcursor`
-  - _Fedora_: `sudo dnf install libX11-devel libXrandr-devel libXcursor-devel`
-
-- **使用 Wayland**:
-  - _Debian/Ubuntu_: `sudo apt install libwayland-dev libxkbcommon-dev`
-  - _Arch/Manjaro_: `sudo pacman -S wayland libxkbcommon`
-  - _Fedora_: `sudo dnf install wayland-devel libxkbcommon-devel`
-
-##### 针对 macOS
-
-如果您已经安装了 Xcode 命令行工具，则无需额外的系统依赖。
-
-##### 针对 Windows
-
-安装 Rust 后无需额外的依赖。所需的工具已包含在 Windows 的标准 Rust 安装中。
-
-#### 3. 安装 Vulkan SDK (可选)
-
-Vulkan SDK 是**可选的**。仅当您需要进行着色器验证或调试时才需要它。对于常规的 UI 开发，您可以跳过此步骤。
-
-如果您需要，可以从 [vulkan.lunarg.com](https://vulkan.lunarg.com/) 下载，运行安装程序，并按照其安装后的说明进行操作。
-
-### 选项 B - Nix 包管理器
-
-如果您安装了 [Nix](https://nixos.org/download.html)，您可以通过运行以下命令来获取一个包含所有依赖的开发环境：
-
-```bash
-nix develop            # 桌面开发 shell
-nix develop .#android  # 安卓开发 shell
-```
-
-### 代码使用的语言
-
-任何代码、包括在代码中的文档(如 `rustdoc` 注释)和注释都必须使用英语编写，除非功能上有必要专门指出这个词。
-
-### 代码检查
-
-- 请确保您的代码格式符合本项目规范，规则如下
-
-  - `rustfmt edition 2024` 默认规则
-  - 导入：std / 第三方 / `crate::` / `super::`/`self::` 分组，组间一个空行，组内排序，同根路径合并（由 `scripts/check-imports.rs` 强制执行）。
-
-- 格式化工具
-
-  - 在项目根目录运行以下命令修复导入并调用 `rustfmt`，包括 `cargo fmt` 会跳过的脚本文件；加 `--check` 仅检查不修改文件：
-
-    ```bash
-    rust-script scripts/check-imports.rs .
-    ```
-
-  - Nix 用户：在 `nix develop` 中输入 `fmt` 可从任意目录运行同一命令。
-
-### 提交规范
-
-所有更改都通过 pull request 进入 `main`：
-
-1. 从 `main` 创建一个短期分支，例如 `fix/android-icon`。
-2. 向 `main` 发起 pull request，CI 通过后才能合并。
-3. pull request 以 squash 方式合并：pull request 标题成为 `main` 上的提交标题，pull request 描述成为提交正文。
-
-- pull request 标题必须遵循 [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) 规范，例如 `fix(cargo-tessera): keep Android icons opaque`，CI 会检查。scope 可以省略，但建议用于标识更改的范围或功能。
-- **破坏性变更**：如果 pull request 引入了破坏性变更，请在标题中加上 `!`（如 `feat(tessera-build)!: ...`），并在 pull request 描述中包含 `BREAKING CHANGE:`。发布脚本从 squash 后的提交读取这些标记，自动触发**主版本号 (Major)** 更新。
-- 分支内的提交会被 squash，其提交信息格式不限。
-- 发起 pull request 前，请确保
-  - 您的代码通过了所有测试(`cargo test`)。
-  - 您已更新相关文档（如果适用）。
-  - 您的代码符合[代码检查规范](#代码检查)。
-
-## 文档贡献规范
-
-为了确保文档的清晰和一致性，保证项目的协作可能，请遵循以下规范：
-
-### 文档使用的语言
-
-任何文档内容，包括 README、Wiki 页面和其他文档，都必须至少有英语版本，且以英语版本为主。其他 i18n 版本可以在英语版本的基础上进行翻译，但必须确保英语版本始终存在，且其内容是最新的。
-
-注意，因为`cargo doc`生成的文档完全不支持 i18n，我们也不可能把所有版本的文档都放在代码里，所以请不要在代码中添加任何非英语的文档内容。
-
-### 文档翻译规范
-
-- 文档翻译必须基于英语版本进行，确保翻译内容与英语版本保持一致。
-- 英文版本的文档不需要加 i18n 后缀，其他语言版本的文档需要在文件名中添加对应的语言后缀，如 `README_zh-CN.md`。
-- 建议翻译过的文档不是直接放在英语版本所在目录，而是其相对目录下的`docs`文件夹中，除非必须这样做。
-
-### 文档格式
-
-最好能通过 markdown lint，不过我们并不强制要求。请确保文档内容清晰、易读，并且格式一致。
-
-### 文档提交
-
-- 对本仓库的 pull request 规范请查看[提交规范](#提交规范)
-- 对相关仓库，如官网、Wiki 等的提交，请遵循各自仓库的贡献指南。
-
-## 安卓构建特别说明
-
-安卓项目通过 `cargo tessera android` 进行初始化、构建与运行。
-
-- **先决条件**: 确保您已正确设置 Android SDK/NDK 和 Gradle 8.14 支持的 JDK（17 或 21），并且 `adb` 可用。
-- **初始化**: 先执行 `cargo tessera android init` 生成 Gradle 项目。
-- **运行与构建**:
-  - 运行：`cargo tessera android dev --device <device_id>`
-  - 构建：`cargo tessera android build --format apk`
-- **Nix 用户**: 安卓开发 shell (`nix develop .#android`) 已预配置 Android SDK/NDK、JDK 和 Rust 安卓目标。
-
-## 许可证
-
-我们默认您的贡献遵循项目的双许可证条款。本项目采用 [MIT 许可证](../LICENSE-MIT) 或 [Apache 许可证 2.0](../LICENSE-APACHE) 双许可证模式，您可以选择其中任意一种许可证。
-
-通过向本项目提交贡献，您同意您的贡献将在与项目相同的许可证条款下发布，即 MIT OR Apache-2.0 双许可证。这意味着：
-
-- 您的贡献将同时在 MIT 许可证和 Apache 许可证 2.0 下可用
-- 用户可以选择在这两个许可证中的任意一个下使用您的贡献
-- 您确认您有权在这些许可证条款下提供您的贡献
+维护者请参阅[发布指南](RELEASE_RULE_zh-CN.md)。

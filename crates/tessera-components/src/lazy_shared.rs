@@ -1,9 +1,3 @@
-//! Shared measurements and viewport bounds for lazy scrolling components.
-//!
-//! ## Usage
-//!
-//! Display long lists and grids in resizable windows on different displays.
-
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -198,11 +192,6 @@ impl MeasuredMain {
     }
 }
 
-/// Clamps the main-axis size a lazy component reports to its parent.
-///
-/// The reported size never exceeds the viewport, and is further limited by the
-/// parent constraint for the main axis, falling back to `fallback_limit` when
-/// the parent does not constrain that axis.
 pub(crate) fn clamp_reported_main(
     total_main: Px,
     viewport_span: Px,
