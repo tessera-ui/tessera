@@ -507,6 +507,58 @@ impl ComponentTree {
             previous.unwrap_or_else(|| crate::layout::DrawModifierHandle::new(draw));
     }
 
+    /// Marks the node emitted by the executing call as a popup root, keeping
+    /// the opening order of a reused popup.
+    pub(crate) fn set_emitted_popup(
+        &mut self,
+        position: Box<dyn crate::popup::ErasedPopupPosition>,
+    ) {
+        let emitted = self
+            .calls
+            .active
+            .last_mut()
+            .and_then(|call| call.emitted.as_mut())
+            .expect("popup configures the node emitted by the current component");
+        let id = emitted.id;
+        let sequence = emitted
+            .previous
+            .as_ref()
+            .and_then(|previous| previous.popup_sequence)
+            .unwrap_or_else(|| {
+                self.popup_sequence += 1;
+                self.popup_sequence
+            });
+        self.tree[id].get_mut().popup = Some(Box::new(crate::popup::PopupConfig {
+            position,
+            modal: false,
+            dismiss_on_outside_press: true,
+            dismiss_on_escape: true,
+            dismiss_on_back: true,
+            on_dismiss_request: None,
+            sequence,
+        }));
+        self.popups.insert(id);
+        if let Some(parent) = self.tree[id].parent() {
+            self.tree[parent].get_mut().layout_children_dirty = true;
+        }
+    }
+
+    pub(crate) fn configure_emitted_popup(
+        &mut self,
+        update: impl FnOnce(&mut crate::popup::PopupConfig),
+    ) {
+        let id = self
+            .executing_call_node()
+            .expect("popup setters configure the node emitted by the current component");
+        update(
+            self.tree[id]
+                .get_mut()
+                .popup
+                .as_mut()
+                .expect("the emitted node is a popup"),
+        );
+    }
+
     /// Returns the node emitted by the executing call, if any.
     pub(crate) fn executing_call_node(&self) -> Option<NodeId> {
         self.calls

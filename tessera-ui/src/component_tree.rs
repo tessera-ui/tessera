@@ -562,6 +562,22 @@ pub struct ComponentTree {
     /// after the runtime borrow is released.
     pending_globally_positioned_invocations:
         Vec<(GloballyPositionedHandler, node::GeometryObservation)>,
+    /// Nodes configured as popup roots; stale entries are pruned per frame.
+    popups: HashSet<NodeId>,
+    popup_sequence: u64,
+    popup_layers: PopupLayers,
+}
+
+/// Popup roots of the current frame in stacking order.
+#[derive(Default)]
+struct PopupLayers {
+    ordered: Vec<NodeId>,
+    /// The topmost placed modal popup; content outside it is blocked.
+    modal: Option<NodeId>,
+    back: HashMap<NodeId, crate::system_back::DismissRegistration>,
+    /// Open modal popups, outermost first, with the focus target to restore
+    /// when each closes.
+    modal_focus: Vec<(NodeId, Option<crate::focus::FocusHandleId>)>,
 }
 
 #[derive(Default)]
@@ -659,6 +675,7 @@ pub(crate) struct PreviousBuildNode {
     children_scale: f32,
     same_parent: bool,
     defer_consumer_change: bool,
+    popup_sequence: Option<u64>,
 }
 
 /// Build inputs of a node emitted by a layout or group primitive.
@@ -746,6 +763,9 @@ impl ComponentTree {
             observer_spaces: HashMap::default(),
             space_observers: HashMap::default(),
             pending_globally_positioned_invocations: Vec::new(),
+            popups: HashSet::default(),
+            popup_sequence: 0,
+            popup_layers: PopupLayers::default(),
         }
     }
 
@@ -786,6 +806,8 @@ impl ComponentTree {
         self.observer_spaces.clear();
         self.space_observers.clear();
         self.pending_globally_positioned_invocations.clear();
+        self.popups.clear();
+        self.popup_layers = PopupLayers::default();
     }
 
     /// Reset the entire component tree, including focus ownership state.
@@ -1105,6 +1127,7 @@ impl ComponentTree {
         let interaction = old.interaction.take();
         old.layout_coordinate_space = false;
         let previous_draw = std::mem::take(&mut old.draw_node);
+        let popup_sequence = old.popup.take().map(|popup| popup.sequence);
         let previous_policy = old.layout_policy_input.clone();
         if old.layout_policy_input.update_if_changed(input.policy) {
             old.layout_node = old
@@ -1121,7 +1144,13 @@ impl ComponentTree {
             children_scale: std::mem::replace(&mut old.children_scale, 1.0),
             same_parent,
             defer_consumer_change: false,
+            popup_sequence,
         };
+        if popup_sequence.is_some()
+            && let Some(parent) = self.tree[id].parent()
+        {
+            self.tree[parent].get_mut().layout_children_dirty = true;
+        }
         let metadata = self.metadatas.get_mut(&id);
         previous.defer_consumer_change =
             candidate.keeps_link && metadata.is_none() && !had_consumers;
@@ -1293,7 +1322,9 @@ impl ComponentTree {
             {
                 subtree_len = subtree_len.saturating_add(child.subtree_len);
             }
-            if child.role == NodeRole::Layout {
+            if child.popup.is_some() {
+                continue;
+            } else if child.role == NodeRole::Layout {
                 children.push(child_id);
             } else {
                 let descendants = direct_layout_children(child_id, &self.tree);
@@ -1413,7 +1444,7 @@ impl ComponentTree {
                         invalidation.children.clear();
                     }
                 }
-                if !visited.insert(id) {
+                if !visited.insert(id) || node.get().popup.is_some() {
                     break;
                 }
                 child = Some(key);
@@ -1748,7 +1779,8 @@ impl ComponentTree {
             &self.removed_frame_nodes,
         );
         self.pointer_work.0 = self.pointer_index.update(&self.tree, &self.metadatas) as u64;
-        self.pointer_index.begin_dispatch();
+        self.pointer_index
+            .begin_dispatch(self.popup_layers.modal, &self.popup_layers.ordered);
         self.active_pointer_paths.retain(|_, path| {
             path.last().is_some_and(|key| {
                 self.node_ids_by_instance_key.get(key).is_some_and(|id| {
@@ -1824,6 +1856,9 @@ impl ComponentTree {
         for change in pointer_changes {
             if matches!(&change.content, CursorEventContent::Pressed(_)) {
                 self.focus_owner.observe_pointer_press(change.timestamp);
+                if let Some(position) = change.resolved_position(final_position) {
+                    self.dismiss_popups_outside(position);
+                }
             }
             if matches!(change.content, CursorEventContent::Scroll(_))
                 && change.scroll_discrete.is_none()
@@ -1911,6 +1946,8 @@ impl ComponentTree {
                 active_pointer_paths: &self.active_pointer_paths,
                 active_pointer_positions: &self.active_pointer_positions,
                 modifiers,
+                modal: self.popup_layers.modal,
+                popups: &self.popup_layers.ordered,
                 window_requests: &mut *window_requests,
                 focus_owner: &mut self.focus_owner,
             };
@@ -1931,6 +1968,8 @@ impl ComponentTree {
                     active_pointer_paths: &self.active_pointer_paths,
                     active_pointer_positions: &self.active_pointer_positions,
                     modifiers,
+                    modal: self.popup_layers.modal,
+                    popups: &self.popup_layers.ordered,
                     window_requests: &mut *window_requests,
                     focus_owner: &mut self.focus_owner,
                 };
@@ -1957,6 +1996,8 @@ impl ComponentTree {
                 active_pointer_paths: &self.active_pointer_paths,
                 active_pointer_positions: &self.active_pointer_positions,
                 modifiers,
+                modal: self.popup_layers.modal,
+                popups: &self.popup_layers.ordered,
                 window_requests: &mut *window_requests,
                 focus_owner: &mut self.focus_owner,
             };
@@ -1977,6 +2018,8 @@ impl ComponentTree {
                     active_pointer_paths: &self.active_pointer_paths,
                     active_pointer_positions: &self.active_pointer_positions,
                     modifiers,
+                    modal: self.popup_layers.modal,
+                    popups: &self.popup_layers.ordered,
                     window_requests: &mut *window_requests,
                     focus_owner: &mut self.focus_owner,
                 };
@@ -2003,6 +2046,8 @@ impl ComponentTree {
                 active_pointer_paths: &self.active_pointer_paths,
                 active_pointer_positions: &self.active_pointer_positions,
                 modifiers,
+                modal: self.popup_layers.modal,
+                popups: &self.popup_layers.ordered,
                 window_requests: &mut *window_requests,
                 focus_owner: &mut self.focus_owner,
             };
@@ -2023,6 +2068,8 @@ impl ComponentTree {
                     active_pointer_paths: &self.active_pointer_paths,
                     active_pointer_positions: &self.active_pointer_positions,
                     modifiers,
+                    modal: self.popup_layers.modal,
+                    popups: &self.popup_layers.ordered,
                     window_requests: &mut *window_requests,
                     focus_owner: &mut self.focus_owner,
                 };
@@ -2084,12 +2131,20 @@ impl ComponentTree {
                 run_keyboard_input_for_node(&mut context, node_id, handler.as_ref());
             }
         }
-        dispatch_default_focus_keyboard_navigation(
+        let retry = dispatch_default_focus_keyboard_navigation(
             context.tree,
             context.keyboard_events,
             context.modifiers,
             context.focus_owner,
-        )
+        );
+        if events.iter().any(|event| {
+            event.state == winit::event::ElementState::Pressed
+                && event.physical_key
+                    == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape)
+        }) {
+            self.dismiss_popup_on_escape();
+        }
+        retry
     }
 
     fn dispatch_clipboard_action(&mut self, root_node: NodeId, request: QueuedClipboardAction) {
@@ -2508,6 +2563,7 @@ impl ComponentTree {
             &self.removed_frame_nodes,
         );
         self.focus_owner.commit_pending();
+        self.refresh_popup_layers();
 
         record_frame_stage(&mut stage_timer, "consumer_attachments");
         {
@@ -2538,6 +2594,22 @@ impl ComponentTree {
                     );
                 }
             }
+            let popup_constraint = Constraint::new(
+                AxisConstraint::at_most(screen_size.width),
+                AxisConstraint::at_most(screen_size.height),
+            );
+            for &popup in &self.popup_layers.ordered {
+                consumed_insets.set(crate::Insets::default());
+                if let Err(e) = measure_node(
+                    popup,
+                    &popup_constraint,
+                    &self.tree,
+                    &mut self.metadatas,
+                    Some(&layout_ctx),
+                ) {
+                    panic!("Popup node ({popup:?}) measurement failed: {e:?}.");
+                }
+            }
         }
 
         record_frame_stage(&mut stage_timer, "measure");
@@ -2547,8 +2619,16 @@ impl ComponentTree {
             dirty_paths.len() as u64,
             dirty_expand_ns,
         );
-        diagnostics_snapshot.geometry_nodes_updated =
-            populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
+        diagnostics_snapshot.geometry_nodes_updated = populate_layers(
+            root_node,
+            &self.popup_layers.ordered,
+            screen_size,
+            &self.tree,
+            &mut self.metadatas,
+        );
+        if self.refresh_popup_modality() {
+            self.apply_modal_change(root_node);
+        }
         self.defer_unplaced_layout_paths(measure_self_nodes.iter().copied(), false);
         self.defer_unplaced_layout_paths(
             layout_dirty_nodes.placement_self_nodes.iter().copied(),
@@ -2615,8 +2695,16 @@ impl ComponentTree {
         record_layout_commands(root_node, &self.tree, &mut self.metadatas);
         let record_cost = record_timer.elapsed();
         record_frame_stage(&mut stage_timer, "paint");
-        diagnostics_snapshot.geometry_nodes_updated +=
-            populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
+        diagnostics_snapshot.geometry_nodes_updated += populate_layers(
+            root_node,
+            &self.popup_layers.ordered,
+            screen_size,
+            &self.tree,
+            &mut self.metadatas,
+        );
+        if self.refresh_popup_modality() {
+            self.apply_modal_change(root_node);
+        }
         record_frame_stage(&mut stage_timer, "geometry_after_paint");
         tracing::debug!(
             target: "tessera_ui::frame_cost",
@@ -2710,6 +2798,144 @@ impl ComponentTree {
         )
     }
 
+    /// Orders the live popup roots.
+    fn refresh_popup_layers(&mut self) {
+        let tree = &self.tree;
+        self.popups.retain(|&id| {
+            tree.get(id).is_some_and(|node| !node.is_removed()) && is_popup(tree, id)
+        });
+        let mut keyed: Vec<_> = self
+            .popups
+            .iter()
+            .map(|&id| (layer_order_prefix(tree, id), id))
+            .collect();
+        keyed.sort_unstable();
+        self.popup_layers.ordered = keyed.into_iter().map(|(_, id)| id).collect();
+        self.frame_scene.set_popups(&self.popup_layers.ordered);
+        self.popup_layers
+            .back
+            .retain(|id, _| self.popups.contains(id));
+    }
+
+    /// Selects the topmost placed modal popup and synchronizes popup dismissal
+    /// through system back.
+    fn refresh_popup_modality(&mut self) -> bool {
+        let metadatas = &self.metadatas;
+        let placed = |id: &NodeId| {
+            metadatas
+                .get(id)
+                .is_some_and(|metadata| metadata.abs_position.is_some())
+        };
+        let modal = self.popup_layers.ordered.iter().rev().copied().find(|id| {
+            placed(id)
+                && self.tree[*id]
+                    .get()
+                    .popup
+                    .as_ref()
+                    .is_some_and(|popup| popup.modal)
+        });
+        for &id in &self.popup_layers.ordered {
+            let popup = self.tree[id].get().popup.as_ref().expect("popup root");
+            let callback = popup
+                .dismisses_on_back()
+                .then_some(popup.on_dismiss_request)
+                .flatten()
+                .filter(|_| placed(&id) && !blocked_by_modal(&self.tree, modal, id));
+            match (callback, self.popup_layers.back.get(&id)) {
+                (Some(callback), Some(registration)) => registration.set(Some(callback)),
+                (Some(callback), None) => {
+                    let registration = crate::system_back::DismissRegistration::new();
+                    registration.set(Some(callback));
+                    self.popup_layers.back.insert(id, registration);
+                }
+                (None, Some(registration)) => registration.set(None),
+                (None, None) => {}
+            }
+        }
+        let changed = modal != self.popup_layers.modal;
+        self.popup_layers.modal = modal;
+        changed
+    }
+
+    fn dismissible_popups(
+        &self,
+        dismisses: fn(&crate::popup::PopupConfig) -> bool,
+    ) -> impl DoubleEndedIterator<Item = (NodeId, crate::Callback)> + '_ {
+        self.popup_layers.ordered.iter().filter_map(move |&id| {
+            let config = self.tree.get(id)?.get().popup.as_ref()?;
+            self.metadatas.get(&id)?.abs_position?;
+            if !dismisses(config) || blocked_by_modal(&self.tree, self.popup_layers.modal, id) {
+                return None;
+            }
+            Some((id, config.on_dismiss_request?))
+        })
+    }
+
+    fn dismiss_popups_outside(&self, position: PxPosition) {
+        let callbacks: Vec<_> = self
+            .dismissible_popups(crate::popup::PopupConfig::dismisses_on_outside_press)
+            .rev()
+            .filter(|&(id, _)| {
+                pointer::PointerIndex::is_outside_popup(
+                    &self.tree,
+                    &self.metadatas,
+                    &self.popup_layers.ordered,
+                    id,
+                    position,
+                )
+            })
+            .map(|(_, callback)| callback)
+            .collect();
+        let _phase = push_phase(RuntimePhase::Input);
+        for callback in callbacks {
+            callback.call();
+        }
+    }
+
+    /// Offers an unhandled Escape press to the topmost dismissible popup.
+    fn dismiss_popup_on_escape(&self) -> bool {
+        let Some((_, callback)) = self
+            .dismissible_popups(crate::popup::PopupConfig::dismisses_on_escape)
+            .next_back()
+        else {
+            return false;
+        };
+        let _phase = push_phase(RuntimePhase::Input);
+        callback.call();
+        true
+    }
+
+    fn apply_modal_change(&mut self, root: NodeId) {
+        let modal = self.popup_layers.modal;
+        let saved = self.focus_owner.active_requestable();
+        self.focus_owner.set_modal_root(&self.tree, modal);
+        let tree = &self.tree;
+        let still_open = |id: NodeId| {
+            modal.is_some_and(|modal| modal.ancestors(tree).any(|ancestor| ancestor == id))
+        };
+        while let Some(&(closed, target)) = self.popup_layers.modal_focus.last() {
+            if still_open(closed) {
+                break;
+            }
+            self.popup_layers.modal_focus.pop();
+            if let Some(target) = target {
+                self.focus_owner.restore_unless_focused(target);
+            }
+        }
+        if let Some(modal) = modal
+            && self
+                .popup_layers
+                .modal_focus
+                .last()
+                .is_none_or(|&(top, _)| top != modal)
+        {
+            self.popup_layers.modal_focus.push((modal, saved));
+            self.focus_owner.focus_first_available();
+        }
+        self.focus_owner.commit_pending();
+        self.accessibility_index.set_modal(&self.tree, root, modal);
+    }
+
     #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     fn platform_view_order_paths(&self, root_node: indextree::NodeId) -> Vec<(u64, Vec<usize>)> {
         let mut views = Vec::new();
@@ -2726,12 +2952,7 @@ impl ComponentTree {
                     _ => None,
                 });
             for id in ids {
-                let mut order: Vec<_> = node_id
-                    .ancestors(&self.tree)
-                    .map(|ancestor| sibling_index(ancestor, &self.tree))
-                    .collect();
-                order.reverse();
-                views.push((id, order));
+                views.push((id, layer_order_path(&self.tree, node_id)));
             }
         }
         views
@@ -2865,7 +3086,7 @@ fn inside_shape_clips(
     {
         return true;
     }
-    node_id.ancestors(tree).all(|ancestor| {
+    layer_ancestors(tree, node_id).all(|ancestor| {
         let Some(metadata) = metadatas.get(&ancestor) else {
             return true;
         };
@@ -3141,6 +3362,8 @@ struct PointerInputDispatchContext<'a> {
     active_pointer_paths: &'a HashMap<u64, Vec<u64>>,
     active_pointer_positions: &'a HashMap<u64, Option<PxPosition>>,
     modifiers: winit::keyboard::ModifiersState,
+    modal: Option<indextree::NodeId>,
+    popups: &'a [indextree::NodeId],
     window_requests: &'a mut WindowRequests,
     focus_owner: &'a mut FocusOwner,
 }
@@ -3361,7 +3584,20 @@ fn run_pointer_input_for_node<F>(
             local_pointer_changes.push(local_change);
         }
     }
-    if owns_sample && propagation_blocked && local_pointer_changes.is_empty() {
+    if (owns_sample && propagation_blocked && local_pointer_changes.is_empty())
+        || (!owns_sample
+            && captured_position.is_none()
+            && cursor_position_ref.is_some_and(|position| {
+                pointer::pointer_occluded(
+                    dispatch_ctx.tree,
+                    dispatch_ctx.metadatas,
+                    dispatch_ctx.modal,
+                    dispatch_ctx.popups,
+                    node_id,
+                    position,
+                )
+            }))
+    {
         cursor_position_ref = &mut dummy_cursor_position;
     }
     let current_cursor_position = cursor_position_ref.map(|pos| transform.inverse_point(pos));
@@ -3816,7 +4052,7 @@ fn collect_dirty_layout_paths(
         while let Some(node_id) = current {
             let Some(node) = tree.get(node_id) else { break };
             let data = node.get();
-            current = node.parent();
+            current = node.parent().filter(|_| data.popup.is_none());
             if data.role != NodeRole::Layout && current.is_some() {
                 continue;
             }
@@ -3914,7 +4150,7 @@ fn record_layout_commands(
         let Some(node) = tree.get(node_id).filter(|node| !node.is_removed()) else {
             continue;
         };
-        let visible = node_id.ancestors(tree).all(|ancestor| {
+        let visible = layer_ancestors(tree, node_id).all(|ancestor| {
             tree[ancestor].get().role != NodeRole::Layout
                 || metadatas.get(&ancestor).is_some_and(|metadata| {
                     metadata.computed_data.is_some()
@@ -4047,10 +4283,90 @@ fn record_frame_stage(timer: &mut Option<Instant>, stage: &'static str) {
 }
 
 fn geometry_parent(tree: &ComponentNodeTree, node_id: NodeId) -> Option<NodeId> {
+    if is_popup(tree, node_id) {
+        return None;
+    }
+    popup_anchor(tree, node_id)
+}
+
+/// The nearest layout ancestor, or the build root.
+fn popup_anchor(tree: &ComponentNodeTree, node_id: NodeId) -> Option<NodeId> {
     node_id
         .ancestors(tree)
         .skip(1)
         .find(|&id| tree[id].get().role == NodeRole::Layout || tree[id].parent().is_none())
+}
+
+pub(crate) fn is_popup(tree: &ComponentNodeTree, node_id: NodeId) -> bool {
+    tree.get(node_id)
+        .is_some_and(|node| node.get().popup.is_some())
+}
+
+/// Ancestors of `node_id` up to and including the root of its layer, from
+/// the node upwards.
+pub(crate) fn layer_ancestors(
+    tree: &ComponentNodeTree,
+    node_id: NodeId,
+) -> impl Iterator<Item = NodeId> + '_ {
+    let mut done = false;
+    node_id.ancestors(tree).take_while(move |&id| {
+        if done {
+            return false;
+        }
+        done = is_popup(tree, id);
+        true
+    })
+}
+
+/// The popup roots containing `node_id`, outermost first.
+pub(crate) fn popup_chain(tree: &ComponentNodeTree, node_id: NodeId) -> SmallVec<[NodeId; 2]> {
+    let mut chain: SmallVec<[NodeId; 2]> = node_id
+        .ancestors(tree)
+        .filter(|&id| is_popup(tree, id))
+        .collect();
+    chain.reverse();
+    chain
+}
+
+/// Orders the layer containing `node_id` before positions within that layer.
+///
+/// Comparing `prefix ++ path` lexicographically places main content below
+/// every popup, a popup's content below the popups it declares, and sibling
+/// popups by modality and then opening order.
+pub(crate) fn layer_order_prefix(
+    tree: &ComponentNodeTree,
+    node_id: NodeId,
+) -> SmallVec<[usize; 4]> {
+    let mut prefix = SmallVec::new();
+    for popup in popup_chain(tree, node_id) {
+        let config = tree[popup].get().popup.as_ref().expect("popup root");
+        prefix.extend([
+            1,
+            usize::from(config.modal),
+            usize::try_from(config.sequence).unwrap_or(usize::MAX),
+        ]);
+    }
+    prefix.push(0);
+    prefix
+}
+
+/// The stacking order of `node_id`: its layer, then its sibling path within
+/// that layer. Later paths are drawn and hit-tested above earlier ones.
+pub(crate) fn layer_order_path(tree: &ComponentNodeTree, node_id: NodeId) -> Vec<usize> {
+    let mut path = layer_order_prefix(tree, node_id).to_vec();
+    let start = path.len();
+    path.extend(layer_ancestors(tree, node_id).map(|id| sibling_index(id, tree)));
+    path[start..].reverse();
+    path
+}
+
+/// Whether a modal popup blocks `node_id`.
+pub(crate) fn blocked_by_modal(
+    tree: &ComponentNodeTree,
+    modal: Option<NodeId>,
+    node_id: NodeId,
+) -> bool {
+    modal.is_some_and(|modal| !node_id.ancestors(tree).any(|id| id == modal))
 }
 
 fn layout_rect_in_space(
@@ -4207,8 +4523,53 @@ fn prepare_layout_metadata_for_node(
     (Some(prepared), shape_changed)
 }
 
+fn popup_position(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    popup: NodeId,
+    window_size: PxSize,
+) -> Option<PxPosition> {
+    let config = tree.get(popup)?.get().popup.as_ref()?;
+    let anchor = popup_anchor(tree, popup)?;
+    let anchor_metadata = metadatas.get(&anchor)?;
+    anchor_metadata.abs_position?;
+    let prepared = anchor_metadata.prepared_layout?;
+    let size = metadatas.get(&popup)?.computed_data?;
+    let anchor = crate::LayoutCoordinates {
+        local_size: prepared.size,
+        local_to_window: prepared.local_to_window,
+    };
+    let bounds = anchor.window_bounds();
+    let visible_anchor = anchor_metadata
+        .event_clip_bounds
+        .map_or(Some(bounds), |clip| clip.intersection(bounds))
+        .and_then(|bounds| {
+            bounds.intersection(crate::FloatRect::from_position_size(
+                PxPosition::ZERO,
+                window_size,
+            ))
+        });
+    Some(config.position.position(&crate::popup::PopupPositionInput {
+        anchor,
+        visible_anchor,
+        window_size,
+        popup_size: PxSize::new(size.width, size.height),
+    }))
+}
+
+#[cfg(test)]
 fn populate_layout_metadata(
     root_node: indextree::NodeId,
+    tree: &ComponentNodeTree,
+    metadatas: &mut ComponentNodeMetaDatas,
+) -> u64 {
+    populate_layers(root_node, &[], PxSize::default(), tree, metadatas)
+}
+
+fn populate_layers(
+    root_node: indextree::NodeId,
+    popups: &[NodeId],
+    window_size: PxSize,
     tree: &ComponentNodeTree,
     metadatas: &mut ComponentNodeMetaDatas,
 ) -> u64 {
@@ -4434,6 +4795,33 @@ fn populate_layout_metadata(
         false,
         &mut updates,
     );
+    // Anchors precede the popups they position, either in the main tree or
+    // in an earlier popup.
+    for &popup in popups {
+        let position = popup_position(tree, metadatas, popup, window_size);
+        if let Some(metadata) = metadatas.get_mut(&popup)
+            && metadata.rel_position != position
+        {
+            metadata.rel_position = position;
+            dirty.insert(popup);
+        }
+        visit(
+            tree,
+            metadatas,
+            &dirty,
+            &dirty_children,
+            crate::LocalToWindow::IDENTITY,
+            false,
+            popup,
+            None,
+            1.0,
+            false,
+            false,
+            false,
+            false,
+            &mut updates,
+        );
+    }
     updates
 }
 

@@ -75,6 +75,9 @@ pub(crate) mod pipeline_cache;
 mod pipeline_context;
 pub mod platform_view;
 pub mod plugin;
+pub mod popup;
+#[cfg(test)]
+mod popup_tests;
 #[cfg(feature = "profiling")]
 pub mod profiler;
 mod prop;

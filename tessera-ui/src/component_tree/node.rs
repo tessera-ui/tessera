@@ -77,6 +77,8 @@ pub(crate) struct ComponentNode {
     pub(crate) layout_policy_input: LayoutPolicyHandle,
     /// Draw modifier node used to record draw and compute commands.
     pub(crate) draw_node: crate::layout::DrawModifierHandle,
+    /// Present when this node roots a popup layer.
+    pub(crate) popup: Option<Box<crate::popup::PopupConfig>>,
 }
 
 impl ComponentNode {
@@ -99,6 +101,7 @@ impl ComponentNode {
             layout_node: None,
             layout_policy_input: LayoutPolicyHandle::default(),
             draw_node: crate::layout::DrawModifierHandle::default(),
+            popup: None,
         }
     }
 
@@ -433,6 +436,9 @@ pub(crate) fn direct_layout_children(node_id: NodeId, tree: &ComponentNodeTree) 
         let Some(node_ref) = tree.get(node_id) else {
             return;
         };
+        if node_ref.get().popup.is_some() {
+            return;
+        }
         if node_ref.get().role == NodeRole::Layout {
             output.push(node_id);
             return;

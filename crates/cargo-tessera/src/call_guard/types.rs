@@ -174,6 +174,7 @@ pub(crate) enum TesseraRuntimeApi {
     Key,
     Layout,
     Group,
+    Popup,
     RenderSlotNew,
     RenderSlotWithNew,
     RenderSlotRender,
