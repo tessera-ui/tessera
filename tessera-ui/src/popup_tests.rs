@@ -192,6 +192,7 @@ fn field_menu(log: Log, open: State<bool>, modal: bool) {
     popup(Below)
         .modal(modal)
         .on_dismiss_request(move || {
+            crate::focus::defer_keyboard_until_layout();
             dismissed.with_mut(|log| log.push("dismiss"));
             open.set(false);
         })

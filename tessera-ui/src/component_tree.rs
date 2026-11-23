@@ -2871,7 +2871,7 @@ impl ComponentTree {
         })
     }
 
-    fn dismiss_popups_outside(&self, position: PxPosition) {
+    fn dismiss_popups_outside(&mut self, position: PxPosition) {
         let callbacks: Vec<_> = self
             .dismissible_popups(crate::popup::PopupConfig::dismisses_on_outside_press)
             .rev()
@@ -2886,23 +2886,27 @@ impl ComponentTree {
             })
             .map(|(_, callback)| callback)
             .collect();
-        let _phase = push_phase(RuntimePhase::Input);
         for callback in callbacks {
-            callback.call();
+            self.dispatch_popup_dismissal(callback);
         }
     }
 
     /// Offers an unhandled Escape press to the topmost dismissible popup.
-    fn dismiss_popup_on_escape(&self) -> bool {
+    fn dismiss_popup_on_escape(&mut self) -> bool {
         let Some((_, callback)) = self
             .dismissible_popups(crate::popup::PopupConfig::dismisses_on_escape)
             .next_back()
         else {
             return false;
         };
-        let _phase = push_phase(RuntimePhase::Input);
-        callback.call();
+        self.dispatch_popup_dismissal(callback);
         true
+    }
+
+    fn dispatch_popup_dismissal(&mut self, callback: crate::Callback) {
+        let _phase = push_phase(RuntimePhase::Input);
+        let _focus = bind_focus_owner(&mut self.focus_owner);
+        callback.call();
     }
 
     fn apply_modal_change(&mut self, root: NodeId) {
